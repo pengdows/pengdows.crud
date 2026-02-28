@@ -20,11 +20,41 @@ riderModule.iml
 # Coverage
 TestResults/
 coverage-report/
+coverage-report-full/
+coveragereport*/
+coverage/
 
 .claude/
 mydb.sqlite
 coverage.json
 Untitled.json
-benchmarks/CrudBenchmarks/BenchmarkDotNet.Artifacts/
+benchmarks/CrudBenchmarks/mplconfig/
+benchmarks/**/*results*.txt
+benchmarks/**/*results*.md
+benchmarks/archive/
+*results*.txt
+*results*.csv
+*results*.html
+safety-vs-performance.txt
+test_*.cs
+coveragereport-history/
 
-BenchmarkDotNet.Artifacts/*.log
+BenchmarkDotNet.Artifacts/
+node_modules/
+temp-broken-tests/
+Artifacts/
+output.txt
+coverage-*.xml
+coverage-*.json
+artifacts/
+
+# Debug/scratch files
+debug_*.cs
+*.log
+
+# .NET SDK runtime artifacts
+.dotnet/
+*.DotSettings
+
+# Local MSBuild overrides (never commit)
+Directory.Build.user.props

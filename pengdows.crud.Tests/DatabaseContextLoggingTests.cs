@@ -3,6 +3,7 @@
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.fakeDb;
 using pengdows.crud.Tests.Logging;
@@ -24,26 +25,28 @@ public class DatabaseContextLoggingTests
         {
             ConnectionString = $"Data Source=file.db;EmulatedProduct={SupportedDatabase.Sqlite}",
             ProviderName = SupportedDatabase.Sqlite.ToString(),
-            DbMode = DbMode.Best,
+            DbMode = DbMode.Best
         };
 
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var ctx = new DatabaseContext(cfg, factory, loggerFactory);
 
         // Should log applying when called explicitly
-       // var good = new fakeDb.fakeDbConnection();
         var good = factory.CreateConnection();
-        ctx.ApplyPersistentConnectionSessionSettings(good);
+        ctx.ExecuteSessionSettings(good, false);
 
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("Applying persistent connection session settings"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information &&
+                 e.Message.Contains("Applying session settings"));
 
         // Now simulate failure on command to hit error path
         var badFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var bad = (fakeDbConnection)badFactory.CreateConnection();
         ConnectionFailureHelper.ConfigureConnectionFailure(bad, ConnectionFailureMode.FailOnCommand);
 
-        ctx.ApplyPersistentConnectionSessionSettings(bad);
+        ctx.ExecuteSessionSettings(bad, false);
 
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("Error setting session settings"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Error && e.Message.Contains("Failed to apply session settings"));
     }
 }

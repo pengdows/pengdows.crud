@@ -1,10 +1,9 @@
 #region
 
 using System.Data.Common;
-using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -14,7 +13,7 @@ namespace pengdows.crud.Tests;
 public class DatabaseContextUncoveredMethodsTests
 {
     [Fact]
-    public void ApplyConnectionSessionSettings_CallsDialectSettings()
+    public void ExecuteSessionSettings_CallsDialectSettings()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
         var config = new DatabaseContextConfiguration
@@ -28,10 +27,7 @@ public class DatabaseContextUncoveredMethodsTests
         using var connection = factory.CreateConnection();
         connection.Open();
 
-        var method = typeof(DatabaseContext).GetMethod("ApplyConnectionSessionSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-
-        method!.Invoke(context, new object[] { connection });
+        context.ExecuteSessionSettings(connection, false);
 
         Assert.True(true);
     }
@@ -81,7 +77,7 @@ public class DatabaseContextUncoveredMethodsTests
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.Sqlite)]
     [InlineData(SupportedDatabase.Oracle)]
-    public void ApplyConnectionSessionSettings_DifferentDialects_ExecutesWithoutError(SupportedDatabase database)
+    public void ExecuteSessionSettings_DifferentDialects_ExecutesWithoutError(SupportedDatabase database)
     {
         var factory = new fakeDbFactory(database.ToString());
         var config = new DatabaseContextConfiguration
@@ -95,10 +91,7 @@ public class DatabaseContextUncoveredMethodsTests
         using var connection = factory.CreateConnection();
         connection.Open();
 
-        var method = typeof(DatabaseContext).GetMethod("ApplyConnectionSessionSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-
-        method!.Invoke(context, new object[] { connection });
+        context.ExecuteSessionSettings(connection, false);
 
         Assert.True(true);
     }
@@ -125,8 +118,10 @@ public class DatabaseContextUncoveredMethodsTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
 
-        var method = typeof(DatabaseContext).GetConstructor(new[] { typeof(string), typeof(DbProviderFactory) });
-        var context = (DatabaseContext)method!.Invoke(new object[] { "Data Source=:memory:", factory });
+        // Constructor now has optional third parameter: (string, DbProviderFactory, string?)
+        var method = typeof(DatabaseContext).GetConstructor(
+            new[] { typeof(string), typeof(DbProviderFactory), typeof(string) });
+        var context = (DatabaseContext)method!.Invoke(new object?[] { "Data Source=:memory:", factory, null });
 
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Sqlite, context.Product);
@@ -140,8 +135,13 @@ public class DatabaseContextUncoveredMethodsTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
         var typeMap = new TypeMapRegistry();
 
-        var method = typeof(DatabaseContext).GetConstructor(new[] { typeof(string), typeof(DbProviderFactory), typeof(ITypeMapRegistry) });
-        var context = (DatabaseContext)method!.Invoke(new object[] { "Data Source=:memory:", factory, typeMap });
+        // Constructor now has optional fourth parameter: (string, DbProviderFactory, ITypeMapRegistry, string?)
+        var method = typeof(DatabaseContext).GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(string), typeof(DbProviderFactory), typeof(ITypeMapRegistry), typeof(string) },
+            null);
+        var context = (DatabaseContext)method!.Invoke(new object?[] { "Data Source=:memory:", factory, typeMap, null });
 
         Assert.NotNull(context);
         Assert.Same(typeMap, context.TypeMapRegistry);

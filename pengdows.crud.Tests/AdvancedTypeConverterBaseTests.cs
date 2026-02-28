@@ -1,5 +1,6 @@
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.converters;
 using Xunit;
 
@@ -9,7 +10,10 @@ public class AdvancedTypeConverterBaseTests
 {
     private sealed class PassthroughConverter : AdvancedTypeConverter<int>
     {
-        protected override object? ConvertToProvider(int value, SupportedDatabase provider) => value * 2;
+        protected override object? ConvertToProvider(int value, SupportedDatabase provider)
+        {
+            return value * 2;
+        }
 
         public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out int result)
         {
@@ -62,6 +66,6 @@ public class AdvancedTypeConverterBaseTests
     public void TryConvertFromProvider_DefaultBehavior()
     {
         var converter = new PassthroughConverter();
-        Assert.False(converter.TryConvertFromProvider("bad", SupportedDatabase.Sqlite, out var _));
+        Assert.False(converter.TryConvertFromProvider("bad", SupportedDatabase.Sqlite, out _));
     }
 }

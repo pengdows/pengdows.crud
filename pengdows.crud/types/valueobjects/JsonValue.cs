@@ -1,4 +1,24 @@
-using System;
+// =============================================================================
+// FILE: JsonValue.cs
+// PURPOSE: Immutable value object for JSON storage in databases.
+//
+// AI SUMMARY:
+// - Represents JSON data for database storage with lazy serialization.
+// - Readonly struct implementing IEquatable<JsonValue>.
+// - Constructors accept: string (raw JSON), JsonDocument, or JsonElement.
+// - Conversion methods:
+//   * AsString(): Returns JSON as string (lazy serializes if from document/element)
+//   * AsDocument(): Returns JsonDocument (lazy parses if from string)
+//   * AsElement(): Returns JsonElement (clones to avoid disposal issues)
+// - Factory methods:
+//   * Parse(): Validates and creates from JSON string
+//   * FromObject<T>(): Serializes any object to JsonValue
+// - ToObject<T>(): Deserializes JsonValue back to typed object.
+// - Implicit conversions to/from string, JsonDocument, JsonElement.
+// - Optimized for PostgreSQL jsonb, MySQL JSON, SQL Server JSON support.
+// - Thread-safe and immutable (though JsonDocument needs care with disposal).
+// =============================================================================
+
 using System.Text.Json;
 
 namespace pengdows.crud.types.valueobjects;
@@ -40,13 +60,19 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public string AsString()
     {
         if (_rawJson != null)
+        {
             return _rawJson;
+        }
 
         if (_document != null)
+        {
             return JsonSerializer.Serialize(_document.RootElement);
+        }
 
         if (_element.HasValue)
+        {
             return JsonSerializer.Serialize(_element.Value);
+        }
 
         return "null";
     }
@@ -57,9 +83,11 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public JsonDocument AsDocument()
     {
         if (_document != null)
+        {
             return _document;
+        }
 
-        var json = _rawJson ?? (_element?.GetRawText()) ?? "null";
+        var json = _rawJson ?? _element?.GetRawText() ?? "null";
         return JsonDocument.Parse(json);
     }
 
@@ -69,7 +97,9 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public JsonElement AsElement()
     {
         if (_element.HasValue)
+        {
             return _element.Value;
+        }
 
         using var doc = AsDocument();
         return doc.RootElement.Clone();
@@ -81,7 +111,9 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     public static JsonValue Parse(string jsonText)
     {
         if (string.IsNullOrWhiteSpace(jsonText))
+        {
             return new JsonValue("null");
+        }
 
         // Validate by parsing
         using var doc = JsonDocument.Parse(jsonText);
@@ -106,13 +138,30 @@ public readonly struct JsonValue : IEquatable<JsonValue>
         return element.Deserialize<T>(options) ?? throw new InvalidOperationException("Deserialization returned null");
     }
 
-    public static implicit operator JsonValue(string jsonText) => new(jsonText);
-    public static implicit operator JsonValue(JsonDocument document) => new(document);
-    public static implicit operator JsonValue(JsonElement element) => new(element);
+    public static implicit operator JsonValue(string jsonText)
+    {
+        return new JsonValue(jsonText);
+    }
 
-    public static implicit operator string(JsonValue jsonValue) => jsonValue.AsString();
+    public static implicit operator JsonValue(JsonDocument document)
+    {
+        return new JsonValue(document);
+    }
 
-    public override string ToString() => AsString();
+    public static implicit operator JsonValue(JsonElement element)
+    {
+        return new JsonValue(element);
+    }
+
+    public static implicit operator string(JsonValue jsonValue)
+    {
+        return jsonValue.AsString();
+    }
+
+    public override string ToString()
+    {
+        return AsString();
+    }
 
     public bool Equals(JsonValue other)
     {
@@ -130,6 +179,13 @@ public readonly struct JsonValue : IEquatable<JsonValue>
         return AsString().GetHashCode(StringComparison.Ordinal);
     }
 
-    public static bool operator ==(JsonValue left, JsonValue right) => left.Equals(right);
-    public static bool operator !=(JsonValue left, JsonValue right) => !left.Equals(right);
+    public static bool operator ==(JsonValue left, JsonValue right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(JsonValue left, JsonValue right)
+    {
+        return !left.Equals(right);
+    }
 }

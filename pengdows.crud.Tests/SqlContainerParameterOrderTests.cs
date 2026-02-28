@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -78,7 +79,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var wrapped = container.WrapForStoredProc(ExecutionType.Read);
 
         // Expect SELECT form with dialect-specific marker, preserving add order
-        Assert.Equal("SELECT * FROM \"my_proc\"(:b, :a, :c)", wrapped);
+        Assert.Equal("SELECT * FROM \"my_proc\"(@b, @a, @c)", wrapped);
     }
 
     private sealed class PositionalDialect : SqlDialect
@@ -86,14 +87,18 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         public override string ParameterMarker => "?";
         public override bool SupportsNamedParameters => false;
         public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
-        public PositionalDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<SqlDialect>.Instance) { }
+
+        public PositionalDialect() : base(new fakeDbFactory(SupportedDatabase.Unknown), NullLogger<SqlDialect>.Instance)
+        {
+        }
     }
 
     [Fact]
     public async Task PositionalDialect_BindsByParamSequence()
     {
         var dialect = new PositionalDialect();
-        var dummyConn = new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
+        var dummyConn =
+            new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
         dialect.DetectDatabaseInfo(dummyConn);
         var dsi = new DataSourceInformation(dialect);
         var ctx = new Mock<IDatabaseContext>();
@@ -106,8 +111,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
         using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");
-        var rendered = container.RenderParams(container.Query.ToString());
-        container.Query.Clear().Append(rendered);
+        // Leave {P} placeholders — the execution path renders them via RenderParams
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);
         pA.ParameterName = "a";
         var pB = dialect.CreateDbParameter("b", DbType.Int32, 2);
@@ -115,7 +119,8 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         container.AddParameter(pA); // intentionally add out of encounter order
         container.AddParameter(pB);
 
-        using var tracked = new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
+        using var tracked =
+            new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
@@ -126,7 +131,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task.ConfigureAwait(false);
+        var cmd = await task;
         try
         {
             Assert.Equal(2, container.ParamSequence.Count);
@@ -162,7 +167,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task.ConfigureAwait(false);
+        var cmd = await task;
         try
         {
             Assert.Equal("a", cmd.Parameters[0].ParameterName);

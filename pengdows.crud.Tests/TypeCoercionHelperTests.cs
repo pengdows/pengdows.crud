@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using pengdows.crud.enums;
-using pengdows.crud.types.valueobjects;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -22,7 +22,7 @@ public class TypeCoercionHelperTests
     private sealed class TestColumnInfo : IColumnInfo
     {
         public string Name { get; init; } = "Test";
-        public PropertyInfo PropertyInfo { get; init; }
+        public PropertyInfo PropertyInfo { get; init; } = typeof(TestColumnInfo).GetProperty(nameof(Name))!;
         public bool IsId { get; init; }
         public DbType DbType { get; set; }
         public bool IsNonUpdateable { get; set; }
@@ -30,10 +30,12 @@ public class TypeCoercionHelperTests
         public bool IsEnum { get; set; }
         public Type? EnumType { get; set; }
         public Type? EnumUnderlyingType { get; set; }
+        public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
         public bool IsIdIsWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
+        public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
         public bool IsCreatedBy { get; set; }
@@ -41,10 +43,17 @@ public class TypeCoercionHelperTests
         public bool IsLastUpdatedBy { get; set; }
         public bool IsLastUpdatedOn { get; set; }
         public int Ordinal { get; set; }
-        public object? MakeParameterValueFromField<T>(T objectToCreate) => null;
+
+        public object? MakeParameterValueFromField<T>(T objectToCreate)
+        {
+            return null;
+        }
     }
 
-    private static PropertyInfo GetProperty<T>(string name) => typeof(T).GetProperty(name)!;
+    private static PropertyInfo GetProperty<T>(string name)
+    {
+        return typeof(T).GetProperty(name)!;
+    }
 
     private class EnumHolder
     {
@@ -92,8 +101,12 @@ public class TypeCoercionHelperTests
 
         Assert.Equal(guid, TypeCoercionHelper.Coerce(guid.ToString(), typeof(string), typeof(Guid), options));
         Assert.Equal(guid, TypeCoercionHelper.Coerce(guid.ToByteArray(), typeof(byte[]), typeof(Guid), options));
-        Assert.Equal(guid, TypeCoercionHelper.Coerce(new ReadOnlyMemory<byte>(guid.ToByteArray()), typeof(ReadOnlyMemory<byte>), typeof(Guid), options));
-        Assert.Equal(guid, TypeCoercionHelper.Coerce(new ArraySegment<byte>(guid.ToByteArray()), typeof(ArraySegment<byte>), typeof(Guid), options));
+        Assert.Equal(guid,
+            TypeCoercionHelper.Coerce(new ReadOnlyMemory<byte>(guid.ToByteArray()), typeof(ReadOnlyMemory<byte>),
+                typeof(Guid), options));
+        Assert.Equal(guid,
+            TypeCoercionHelper.Coerce(new ArraySegment<byte>(guid.ToByteArray()), typeof(ArraySegment<byte>),
+                typeof(Guid), options));
     }
 
     [Fact]
@@ -110,12 +123,14 @@ public class TypeCoercionHelperTests
     [Fact]
     public void CoerceDateTimeOffset_UsesPolicy()
     {
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument, SupportedDatabase.SqlServer);
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+            SupportedDatabase.SqlServer);
         var dt = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Unspecified);
         var dto = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
         Assert.Equal(DateTimeKind.Utc, dto.UtcDateTime.Kind);
 
-        var options2 = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.SqlServer);
+        var options2 = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+            SupportedDatabase.SqlServer);
         var dto2 = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options2)!;
         Assert.Equal(TimeSpan.Zero, dto2.Offset);
     }

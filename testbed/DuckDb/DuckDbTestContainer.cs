@@ -5,15 +5,17 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.DuckDb;
 
 public class DuckDbTestContainer : TestContainer
 {
     private string? _connectionString;
+    private string? _dbFilePath;
 
     public override Task StartAsync()
     {
-        _connectionString = "Data Source=:memory:";
+        _dbFilePath = Path.Combine(Path.GetTempPath(), $"pengdows.integration.duckdb.{Guid.NewGuid():N}.db");
+        _connectionString = $"Data Source={_dbFilePath}";
         return Task.CompletedTask;
     }
 
@@ -26,8 +28,27 @@ public class DuckDbTestContainer : TestContainer
 
         var context = new DatabaseContext(
             _connectionString,
-            DuckDBClientFactory.Instance,
-            null!);
+            DuckDBClientFactory.Instance);
         return Task.FromResult<IDatabaseContext>(context);
+    }
+
+    protected override ValueTask DisposeAsyncCore()
+    {
+        if (!string.IsNullOrWhiteSpace(_dbFilePath))
+        {
+            try
+            {
+                if (File.Exists(_dbFilePath))
+                {
+                    File.Delete(_dbFilePath);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup; ignore failures
+            }
+        }
+
+        return ValueTask.CompletedTask;
     }
 }

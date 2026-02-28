@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -82,11 +83,11 @@ public class ConnectionBreakingExamples
     }
 
     [Fact]
-    public async Task Example_EntityHelperWithConnectionFailures()
+    public async Task Example_TableGatewayWithConnectionFailures()
     {
-        // Test how EntityHelper handles connection failures
+        // Test how TableGateway handles connection failures
         await using var context = ConnectionFailureHelper.CreateFailOnOpenContext();
-        var helper = new EntityHelper<TestEntity, long>(context);
+        var helper = new TableGateway<TestEntity, long>(context);
 
         // Operations will fail due to connection issues
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -104,7 +105,7 @@ public class ConnectionBreakingExamples
     }
 
     [Fact]
-    public async Task Example_CommandExecutionFailures()
+    public void Example_CommandExecutionFailures()
     {
         // Connection works, but commands fail to execute
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -193,19 +194,22 @@ public class ConnectionBreakingExamples
             SupportedDatabase.DuckDB,
             ConnectionFailureMode.FailAfterCount,
             ConnectionFailureHelper.CommonExceptions.NetworkError,
-            failAfterCount: 4);
+            4);
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
 
         // Connection will work for first 3 operations, then fail with NetworkError
         var conn1 = context.GetConnection(ExecutionType.Read);
-        conn1.Open(); conn1.Close(); // 1st
+        conn1.Open();
+        conn1.Close(); // 1st
 
         var conn2 = context.GetConnection(ExecutionType.Read);
-        conn2.Open(); conn2.Close(); // 2nd
+        conn2.Open();
+        conn2.Close(); // 2nd
 
         var conn3 = context.GetConnection(ExecutionType.Read);
-        conn3.Open(); conn3.Close(); // 3rd
+        conn3.Open();
+        conn3.Close(); // 3rd
 
         // 4th connection should fail with NetworkError
         var networkException = Assert.Throws<InvalidOperationException>(() =>
@@ -221,10 +225,7 @@ public class ConnectionBreakingExamples
 [Table("test_entities")]
 internal class TestEntity
 {
-    [Id]
-    [Column("id", DbType.Int64)]
-    public long Id { get; set; }
+    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-    [Column("name", DbType.String)]
-    public string Name { get; set; } = "";
+    [Column("name", DbType.String)] public string Name { get; set; } = "";
 }

@@ -1,0 +1,30 @@
+<Project>
+    <!--
+      Local developer overrides: copy Directory.Build.user.props.template to
+      Directory.Build.user.props (gitignored) and set properties there instead of
+      editing this file.  Alternatively, pass -p:SkipVerifyNoVendor=true on the
+      dotnet command line.
+    -->
+    <Import Project="Directory.Build.user.props" Condition="Exists('Directory.Build.user.props')" />
+
+    <PropertyGroup>
+        <!--
+          Skip the "no vendor" verification step that checks for vendored dependencies.
+          Set this to true when the verify-novendor tool or its .NET 8 dependencies are unavailable
+          (e.g., early local development or machines that cannot install .NET 8). Set to false on CI
+          so that the verification step always runs and catches vendored files.
+          Override locally via Directory.Build.user.props or -p:SkipVerifyNoVendor=true.
+        -->
+        <SkipVerifyNoVendor Condition="'$(SkipVerifyNoVendor)' == ''">false</SkipVerifyNoVendor>
+        <!--
+          Skip public API/interface validation during the build.
+          Set this to true for local experimentation or when InterfaceApiCheck cannot run.
+          Keep it false on release/CI so interface-breaking changes are validated.
+          Override locally via Directory.Build.user.props or -p:SkipInterfaceValidation=true.
+        -->
+        <SkipInterfaceValidation Condition="'$(SkipInterfaceValidation)' == ''">false</SkipInterfaceValidation>
+        <Version>2.0.0</Version>
+        <AssemblyVersion>2.0.0.0</AssemblyVersion>
+        <FileVersion>2.0.0.0</FileVersion>
+    </PropertyGroup>
+</Project>

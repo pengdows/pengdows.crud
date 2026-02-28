@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -46,10 +46,10 @@ public class OracleDialectAdvancedTests
     [Fact]
     public void MaxParameterLimit_Should_Return_Expected_Value()
     {
-        // Oracle supports a high number of bind variables per statement.
-        // We standardize on 64,000 to reflect modern Oracle limits and provider behavior.
+        // Oracle's bind variable limit is 65,535 — the hard ceiling imposed by Oracle's
+        // internal 16-bit slot index for bind variables.
         Assert.True(_dialect.MaxParameterLimit > 0);
-        Assert.True(_dialect.MaxParameterLimit <= 64000);
+        Assert.Equal(65535, _dialect.MaxParameterLimit);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class OracleDialectAdvancedTests
     public void CreateDbParameter_With_Null_Value_Should_Set_DBNull()
     {
         // Act
-        var param = _dialect.CreateDbParameter("null_param", DbType.String, null);
+        var param = _dialect.CreateDbParameter<string?>("null_param", DbType.String, null);
 
         // Assert
         Assert.Equal("null_param", param.ParameterName);
@@ -107,9 +107,9 @@ public class OracleDialectAdvancedTests
         var result1 = _dialect.IsUniqueViolation(uniqueViolationException);
         var result2 = _dialect.IsUniqueViolation(otherException);
 
-        // Assert - Method should handle exceptions gracefully
-        Assert.True(result1 || !result1); // Method should not throw
-        Assert.True(result2 || !result2); // Method should not throw
+        // InvalidOperationException is not a DbException → base class returns false for both
+        Assert.False(result1);
+        Assert.False(result2);
     }
 
     [Fact]
@@ -156,7 +156,8 @@ public class OracleDialectAdvancedTests
     public void GetConnectionSessionSettings_Should_Return_Oracle_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string
@@ -362,7 +363,7 @@ public class OracleDialectAdvancedTests
         var boolParam = _dialect.CreateDbParameter("bool_param", DbType.Boolean, true);
 
         Assert.NotNull(boolParam);
-        Assert.Equal(DbType.Boolean, boolParam.DbType);
+        Assert.Equal(DbType.Int16, boolParam.DbType);
     }
 
     [Fact]
@@ -414,7 +415,7 @@ public class OracleDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
         Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
@@ -425,21 +426,10 @@ public class OracleDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
         Assert.Contains("ALTER SESSION SET READ ONLY", settings);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Base_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
-        Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
     }
 
     [Fact]
@@ -449,7 +439,7 @@ public class OracleDialectAdvancedTests
         var context = new DatabaseContext("test", _factory);
 
         // Should not throw for non-Oracle connections
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: false);
+        _dialect.ApplyConnectionSettings(connection, context, false);
 
         Assert.True(true); // Verify no exceptions thrown
     }
@@ -463,7 +453,7 @@ public class OracleDialectAdvancedTests
         Assert.False(_dialect.PrepareStatements);
         Assert.True(_dialect.RequiresStoredProcParameterNameMatch);
         Assert.Equal(ProcWrappingStyle.Oracle, _dialect.ProcWrappingStyle);
-        Assert.Equal(64000, _dialect.MaxParameterLimit);
+        Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(1024, _dialect.MaxOutputParameters);
         Assert.Equal(30, _dialect.ParameterNameMaxLength);
     }
@@ -595,11 +585,11 @@ public class OracleDialectAdvancedTests
     [Fact]
     public void Guid_Type_Handling_Should_Work_With_Oracle()
     {
-        // Oracle typically stores GUIDs as RAW(16) or VARCHAR2(36)
+        // Oracle stores GUIDs as VARCHAR2(36)
         var guidValue = Guid.NewGuid();
         var guidParam = _dialect.CreateDbParameter("guid_param", DbType.Guid, guidValue);
 
-        Assert.Equal(DbType.Guid, guidParam.DbType);
-        Assert.Equal(guidValue, guidParam.Value);
+        Assert.Equal(DbType.String, guidParam.DbType);
+        Assert.Equal(guidValue.ToString("D"), guidParam.Value);
     }
 }

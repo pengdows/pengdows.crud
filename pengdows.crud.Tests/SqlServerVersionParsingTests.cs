@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -29,4 +29,3 @@ public class SqlServerVersionParsingTests
         }
     }
 }
-

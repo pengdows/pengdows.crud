@@ -19,7 +19,7 @@ public class OrderedDictionaryTests
     {
         var dict = new OrderedDictionary<string, int>();
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
         Assert.False(dict.IsReadOnly);
     }
 
@@ -28,7 +28,7 @@ public class OrderedDictionaryTests
     {
         var dict = new OrderedDictionary<string, int>(100);
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class OrderedDictionaryTests
     public void Constructor_WithLargeCapacity_CreatesEmptyDictionary()
     {
         var dict = new OrderedDictionary<string, int>(100_000);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class OrderedDictionaryTests
 
         dict.Add("key1", 100);
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(100, dict["key1"]);
     }
 
@@ -107,7 +107,7 @@ public class OrderedDictionaryTests
 
         dict["key1"] = 100;
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(100, dict["key1"]);
     }
 
@@ -167,7 +167,7 @@ public class OrderedDictionaryTests
         var result = dict.TryAdd("key1", 100);
 
         Assert.True(result);
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(100, dict["key1"]);
     }
 
@@ -192,7 +192,7 @@ public class OrderedDictionaryTests
         var result = dict.Remove("key1");
 
         Assert.True(result);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
         Assert.False(dict.ContainsKey("key1"));
     }
 
@@ -216,7 +216,7 @@ public class OrderedDictionaryTests
 
         Assert.True(result);
         Assert.Equal(100, value);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class OrderedDictionaryTests
 
         dict.Clear();
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
         Assert.False(dict.ContainsKey("key1"));
         Assert.False(dict.ContainsKey("key2"));
     }
@@ -251,7 +251,7 @@ public class OrderedDictionaryTests
         var keys = new[] { "third", "first", "second", "fourth" };
         var values = new[] { 3, 1, 2, 4 };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], values[i]);
         }
@@ -363,7 +363,7 @@ public class OrderedDictionaryTests
         var result = dict.Remove(new KeyValuePair<string, int>("key1", 100));
 
         Assert.True(result);
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -375,7 +375,7 @@ public class OrderedDictionaryTests
         var result = dict.Remove(new KeyValuePair<string, int>("key1", 200));
 
         Assert.False(result);
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(100, dict["key1"]);
     }
 
@@ -452,7 +452,7 @@ public class OrderedDictionaryTests
 
         dict.EnsureCapacity(1000);
 
-        for (int i = 0; i < 500; i++)
+        for (var i = 0; i < 500; i++)
         {
             dict.Add($"key{i}", i);
         }
@@ -476,7 +476,7 @@ public class OrderedDictionaryTests
 
         dict.TrimExcess();
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(1, dict["key1"]);
     }
 
@@ -487,7 +487,7 @@ public class OrderedDictionaryTests
 
         dict.TrimExcess();
 
-        Assert.Equal(0, dict.Count);
+        Assert.Empty(dict);
     }
 
     [Fact]
@@ -511,7 +511,7 @@ public class OrderedDictionaryTests
         var keys = new[] { "zebra", "alpha", "beta" };
         var expectedValues = new[] { 5, 5, 4 };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], expectedValues[i]);
         }
@@ -561,14 +561,14 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int itemCount = 10000;
 
-        for (int i = 0; i < itemCount; i++)
+        for (var i = 0; i < itemCount; i++)
         {
             dict.Add($"key{i}", i);
         }
 
         Assert.Equal(itemCount, dict.Count);
 
-        for (int i = 0; i < itemCount; i++)
+        for (var i = 0; i < itemCount; i++)
         {
             Assert.Equal(i, dict[$"key{i}"]);
         }
@@ -582,7 +582,7 @@ public class OrderedDictionaryTests
     public void LargeInserts_DoNotThrow_AndMaintainOrder()
     {
         var dict = new OrderedDictionary<string, int>();
-        for (int i = 0; i < 70_000; i++)
+        for (var i = 0; i < 70_000; i++)
         {
             dict.Add($"key{i}", i);
         }
@@ -696,12 +696,12 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int iterations = 1000;
 
-        for (int i = 0; i < iterations; i++)
+        for (var i = 0; i < iterations; i++)
         {
             dict.Add($"key{i}", i);
         }
 
-        for (int i = 0; i < iterations; i += 2)
+        for (var i = 0; i < iterations; i += 2)
         {
             dict.Remove($"key{i}");
         }
@@ -722,7 +722,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>(4);
         var keys = new[] { "a", "b", "c", "d", "e", "f", "g", "h" };
 
-        for (int i = 0; i < keys.Length; i++)
+        for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], i);
         }
@@ -742,7 +742,7 @@ public class OrderedDictionaryTests
 
         dict.Add("test", 42);
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.Equal(42, dict["test"]);
     }
 
@@ -765,7 +765,7 @@ public class OrderedDictionaryTests
         IReadOnlyDictionary<string, int> dict = new OrderedDictionary<string, int>();
         ((IDictionary<string, int>)dict).Add("key1", 100);
 
-        Assert.Equal(1, dict.Count);
+        Assert.Single(dict);
         Assert.True(dict.ContainsKey("key1"));
         Assert.Equal(100, dict["key1"]);
         Assert.Single(dict.Keys);
@@ -909,7 +909,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>(2);
         var expectedPairs = new List<KeyValuePair<string, int>>();
 
-        for (int i = 0; i < 100; i++)
+        for (var i = 0; i < 100; i++)
         {
             var key = $"key{i}";
             dict.Add(key, i);
@@ -1002,7 +1002,7 @@ public class OrderedDictionaryTests
         var dict = new OrderedDictionary<string, int>();
         const int testCount = 5000;
 
-        for (int i = 0; i < testCount; i++)
+        for (var i = 0; i < testCount; i++)
         {
             dict.Add($"key{i}", i);
         }

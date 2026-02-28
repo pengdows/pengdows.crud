@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -24,12 +27,13 @@ public class SqlServerDialectSettingsTests
             _reader = reader;
         }
 
-        public override string CommandText { get; set; }
+        [AllowNull] public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
         public override bool DesignTimeVisible { get; set; }
         public override UpdateRowSource UpdatedRowSource { get; set; }
 
+        [AllowNull]
         protected override DbConnection DbConnection
         {
             get => _connection;
@@ -38,16 +42,35 @@ public class SqlServerDialectSettingsTests
 
         protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
 
-        protected override DbTransaction DbTransaction { get; set; }
+        protected override DbTransaction? DbTransaction { get; set; }
 
-        public override void Cancel() { }
-        public override int ExecuteNonQuery() => 0;
-        public override object ExecuteScalar() => null;
-        public override void Prepare() { }
+        public override void Cancel()
+        {
+        }
 
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _reader;
+        public override int ExecuteNonQuery()
+        {
+            return 0;
+        }
 
-        protected override DbParameter CreateDbParameter() => new fakeDbParameter();
+        public override object ExecuteScalar()
+        {
+            return DBNull.Value;
+        }
+
+        public override void Prepare()
+        {
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            return _reader;
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private sealed class UserOptionsConnection : fakeDbConnection
@@ -60,7 +83,10 @@ public class SqlServerDialectSettingsTests
             _reader = new fakeDbDataReader(rows);
         }
 
-        protected override DbCommand CreateDbCommand() => new UserOptionsCommand(this, _reader);
+        protected override DbCommand CreateDbCommand()
+        {
+            return new UserOptionsCommand(this, _reader);
+        }
     }
 
     private static ITrackedConnection BuildConnection(IEnumerable<Dictionary<string, object>> rows)
@@ -83,7 +109,7 @@ public class SqlServerDialectSettingsTests
     }
 
     [Fact]
-    public async Task GetConnectionSessionSettings_OptimalSettings_ReturnsEmpty()
+    public async Task GetConnectionSessionSettings_OptimalSettings_StillEnforcesBaseline()
     {
         var rows = new[]
         {
@@ -101,7 +127,37 @@ public class SqlServerDialectSettingsTests
         await dialect.DetectDatabaseInfoAsync(conn);
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
-        Assert.Equal(string.Empty, settings);
+
+        // Even when all settings are already optimal, the full baseline is enforced
+        // to protect against pooled connection drift
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+        Assert.Contains("SET ANSI_NULLS ON", settings);
+        Assert.Contains("SET ARITHABORT ON", settings);
+    }
+
+    [Fact]
+    public async Task GetConnectionSessionSettings_LowercaseKeys_StillEnforcesBaseline()
+    {
+        var rows = new[]
+        {
+            new Dictionary<string, object> { { "ansi_nulls", "SET" } },
+            new Dictionary<string, object> { { "ansi_padding", "SET" } },
+            new Dictionary<string, object> { { "ansi_warnings", "SET" } },
+            new Dictionary<string, object> { { "arithabort", "SET" } },
+            new Dictionary<string, object> { { "concat_null_yields_null", "SET" } },
+            new Dictionary<string, object> { { "quoted_identifier", "SET" } },
+            new Dictionary<string, object> { { "numeric_roundabort", "OFF" } }
+        };
+        await using var conn = BuildConnection(rows);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+
+        // Even with lowercase keys, baseline is enforced
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+        Assert.Contains("SET ANSI_NULLS ON", settings);
     }
 
     [Fact]

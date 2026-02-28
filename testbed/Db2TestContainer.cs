@@ -1,4 +1,3 @@
-using System.Data.Common;
 using DotNet.Testcontainers.Builders;
 using pengdows.crud;
 using IContainer = DotNet.Testcontainers.Containers.IContainer;

@@ -1,8 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -76,8 +75,8 @@ public class TransactionCriticalPathTests
         using var context = new DatabaseContext("Host=localhost;Database=test", factory);
 
         using var transaction = context.BeginTransaction();
-        await transaction.SavepointAsync("sp_test").ConfigureAwait(false);
-        await transaction.RollbackToSavepointAsync("sp_test").ConfigureAwait(false);
+        await transaction.SavepointAsync("sp_test");
+        await transaction.RollbackToSavepointAsync("sp_test");
         transaction.Commit();
 
         Assert.True(transaction.WasCommitted);

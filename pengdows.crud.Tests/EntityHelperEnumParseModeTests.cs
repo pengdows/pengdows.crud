@@ -4,25 +4,41 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
+public class TableGatewayEnumParseModeTests : SqlLiteContextTestBase
 {
     [Table("EnumModes")]
     private class EnumModeEntity
     {
-        [Id(false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
-        [EnumColumn(typeof(Color))] [Column("ColorText", DbType.String)] public Color? ColorText { get; set; }
-        [EnumColumn(typeof(Color))] [Column("ColorNum", DbType.Int32)] public Color ColorNum { get; set; }
-    }
-    private enum Color { Red, Green, Blue }
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
 
-    public EntityHelperEnumParseModeTests()
+        [EnumColumn(typeof(Color))]
+        [Column("ColorText", DbType.String)]
+        public Color? ColorText { get; set; }
+
+        [EnumColumn(typeof(Color))]
+        [Column("ColorNum", DbType.Int32)]
+        public Color ColorNum { get; set; }
+    }
+
+    private enum Color
+    {
+        Red,
+        Green,
+        Blue
+    }
+
+    public TableGatewayEnumParseModeTests()
     {
         TypeMap.Register<EnumModeEntity>();
     }
@@ -30,7 +46,8 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     [Fact]
     public void SetNullAndLog_InvalidString_SetsNull()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+        var helper =
+            new TableGateway<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -40,7 +57,7 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
                 ["ColorNum"] = 5 // invalid numeric but will be handled below
             }
         };
-        using var reader = new EntityHelperConverterTests.FakeTrackedReader(rows);
+        using var reader = new TableGatewayConverterTests.FakeTrackedReader(rows);
         reader.Read();
         var e = helper.MapReaderToObject(reader);
         Assert.Null(e.ColorText);
@@ -49,7 +66,8 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
     [Fact]
     public void SetDefaultValue_InvalidNumeric_SetsDefault()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
+        var helper =
+            new TableGateway<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -58,28 +76,27 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
                 ["ColorNum"] = 12345
             }
         };
-        using var reader = new EntityHelperConverterTests.FakeTrackedReader(rows);
+        using var reader = new TableGatewayConverterTests.FakeTrackedReader(rows);
         reader.Read();
         var e = helper.MapReaderToObject(reader);
-        Assert.Equal(default(Color), e.ColorNum);
+        Assert.Equal(default, e.ColorNum);
     }
 
     [Fact]
-    public void ReplaceDialectTokens_ReplacesMarkers()
+    public void ReplaceNeutralTokens_ReplacesMarkers()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context);
-        var sql = "@p SELECT \"Name\" FROM \"T\" WHERE \"Id\"=@id";
-        var replaced = helper.ReplaceDialectTokens(sql, "[", "]", ":");
-        Assert.Contains(":p", replaced);
-        Assert.Contains("[Name]", replaced);
-        Assert.Contains("[T]", replaced);
-        Assert.Contains(":id", replaced);
+        var helper = new TableGateway<EnumModeEntity, int>(Context);
+        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var replaced = dialect.ReplaceNeutralTokens("{Q}Name{q} FROM {Q}T{q} WHERE {Q}Id{q}={S}id");
+        var expected =
+            $"{dialect.WrapObjectName("Name")} FROM {dialect.WrapObjectName("T")} WHERE {dialect.WrapObjectName("Id")}={dialect.ParameterMarker}id";
+        Assert.Equal(expected, replaced);
     }
 
     [Fact]
     public void Throw_InvalidNumericEnum_Throws()
     {
-        var helper = new EntityHelper<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.Throw);
+        var helper = new TableGateway<EnumModeEntity, int>(Context, enumParseBehavior: EnumParseFailureMode.Throw);
         var rows = new[]
         {
             new Dictionary<string, object>
@@ -88,7 +105,7 @@ public class EntityHelperEnumParseModeTests : SqlLiteContextTestBase
                 ["ColorNum"] = 9999
             }
         };
-        using var reader = new EntityHelperConverterTests.FakeTrackedReader(rows);
+        using var reader = new TableGatewayConverterTests.FakeTrackedReader(rows);
         reader.Read();
         Assert.Throws<ArgumentException>(() => helper.MapReaderToObject(reader));
     }

@@ -1,76 +1,158 @@
+// =============================================================================
+// FILE: SqlDialect.cs
+// PURPOSE: Abstract base class for all database-specific SQL dialects.
+//
+// AI SUMMARY:
+// - Base class that all specific dialects (SqlServerDialect, etc.) inherit from.
+// - Implements ISqlDialect interface with common SQL generation logic.
+// - Key responsibilities:
+//   * Parameter creation and naming (MakeParameterName, CreateDbParameter)
+//   * Identifier quoting (WrapObjectName) - overridden by specific dialects
+//   * Feature detection (SupportsMerge, SupportsInsertOnConflict, etc.)
+//   * Type conversions for provider-specific quirks
+//   * Database version detection (DetectDatabaseInfoAsync)
+// - Performance optimizations:
+//   * Caches wrapped names and parameter names
+//   * Pools DbParameter instances to reduce allocations
+//   * Pre-compiled type conversion delegates
+//   * Pooled parameter name generation
+// - Abstract properties for dialect-specific behavior:
+//   * DatabaseType, ParameterMarker, QuotePrefix/Suffix
+// - Session settings application via ApplySessionSettingsAsync().
+// - MERGE/UPSERT SQL generation helpers.
+// =============================================================================
+
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
+using System.Globalization;
 using System.Data;
 using System.Data.Common;
-using System.Text;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.types;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Base SQL dialect implementing standard SQL behaviors with feature detection
+/// Abstract base class implementing common SQL dialect functionality.
 /// </summary>
-public abstract class SqlDialect:ISqlDialect
+/// <remarks>
+/// <para>
+/// This class provides the foundation for all database-specific dialects,
+/// implementing common SQL generation logic and exposing abstract properties
+/// for database-specific customization.
+/// </para>
+/// <para>
+/// <strong>Key Features:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>Parameter creation with dialect-specific markers (@, :, ?, $)</description></item>
+/// <item><description>Identifier quoting for reserved words and special characters</description></item>
+/// <item><description>Feature detection (MERGE, ON CONFLICT, stored procedures)</description></item>
+/// <item><description>Type conversion for provider-specific quirks</description></item>
+/// </list>
+/// <para>
+/// <strong>Performance:</strong> Uses caching extensively for wrapped names,
+/// parameter names, and type conversions to minimize allocations.
+/// </para>
+/// </remarks>
+/// <seealso cref="ISqlDialect"/>
+/// <seealso cref="SqlDialectFactory"/>
+internal abstract class SqlDialect : ISqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
 
-    // Performance optimization: Cache frequently used parameter names to avoid repeated string operations
-    private readonly ConcurrentDictionary<string, string> _trimmedNameCache = new();
     private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
-    private static readonly ConcurrentQueue<StringBuilder> _wrapNameBuilderPool = new();
-    private const int MaxPooledWrapBuilderCapacity = 512;
-
-    // Pre-compiled parameter marker trimming for faster string operations
-    private static readonly char[] _parameterMarkers = { '@', ':', '?', '$' };
 
     // Performance: Static parameter name pool to avoid allocations
-    private static readonly char[] ValidNameChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
-    private static readonly string[] ParameterNamePool = GenerateParameterNamePool();
-    private static int _parameterNamePoolIndex;
+    private static readonly char[] ValidNameChars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".ToCharArray();
 
-    // Type conversion delegates for hot paths - compiled once, reused everywhere
-    private static readonly ConcurrentDictionary<DbType, Action<DbParameter, object?>> _typeConversionCache = new();
+    // Performance: Static counter for deterministic parameter naming.
+    // uint avoids negative values on overflow; no modulo so names stay unique across 2^32 calls.
+    private static uint _parameterNamePoolIndex;
 
     // Precompiled common type conversions to avoid repeated pattern matching
-    private static readonly Dictionary<DbType, Action<DbParameter, object?>> _commonConversions = new()
-    {
-        [DbType.Guid] = static (p, v) =>
+    private static readonly IReadOnlyDictionary<DbType, Action<DbParameter, object?>> _commonConversions =
+        new Dictionary<DbType, Action<DbParameter, object?>>
         {
-            p.DbType = DbType.String;
-            if (v is Guid guid)
+            [DbType.Guid] = static (p, v) =>
             {
-                p.Value = guid.ToString();
-                p.Size = 36;
-            }
-        },
-        [DbType.Boolean] = static (p, v) =>
-        {
-            p.DbType = DbType.Int16;
-            if (v is bool b)
+                p.DbType = DbType.String;
+                if (v is Guid guid)
+                {
+                    // Use string.Create with Guid.TryFormat to avoid allocations
+                    p.Value = string.Create(36, guid, static (span, g) =>
+                    {
+                        g.TryFormat(span, out _, "D"); // "D" format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+                    });
+                    p.Size = 36;
+                }
+            },
+            [DbType.Boolean] = static (p, v) =>
             {
-                p.Value = b ? (short)1 : (short)0;
-            }
-        },
-        [DbType.DateTimeOffset] = static (p, v) =>
-        {
-            p.DbType = DbType.DateTime;
-            if (v is DateTimeOffset dto)
+                p.DbType = DbType.Int16;
+                if (v is bool b)
+                {
+                    p.Value = b ? (short)1 : (short)0;
+                }
+            },
+            [DbType.DateTimeOffset] = static (p, v) =>
             {
-                p.Value = dto.DateTime;
+                p.DbType = DbType.DateTime;
+                if (v is DateTimeOffset dto)
+                {
+                    p.Value = dto.UtcDateTime;
+                }
             }
-        }
-    };
+        };
 
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
     private const int MaxPoolSize = 100; // Prevent unbounded growth
+
+    /// <summary>
+    /// Provider-specific parameter property names that need special handling
+    /// during pooling (reset) and cloning (copy). Shared with SqlContainer.
+    /// </summary>
+    internal static readonly string[] ProviderSpecificPropertyNames =
+    {
+        "NpgsqlDbType",
+        "DataTypeName",
+        "SqlDbType",
+        "UdtTypeName",
+        "OracleDbType",
+        "MySqlDbType"
+    };
+
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter>> ProviderSpecificResetters = new();
+
+    private static readonly Action<DbParameter> NoopReset = static _ => { };
+
+    /// <summary>
+    /// CLR types that are never registered in AdvancedTypeRegistry across any supported dialect.
+    /// Checking this set eliminates a ConcurrentDictionary lookup per parameter for the common case.
+    /// NOTE: bool, Guid, DateTime, DateTimeOffset are intentionally excluded — dialects register
+    /// them in AdvancedTypeRegistry (e.g. Oracle maps bool→Int16, Guid→VARCHAR2).
+    /// </summary>
+    private static readonly FrozenSet<Type> s_primitiveClrTypes = new HashSet<Type>
+    {
+        typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong),
+        typeof(float), typeof(double), typeof(decimal),
+        typeof(char), typeof(string)
+    }.ToFrozenSet();
+
     protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
@@ -83,7 +165,9 @@ public abstract class SqlDialect:ISqlDialect
     /// <summary>
     /// Gets the detected database product information. Call DetectDatabaseInfo first.
     /// </summary>
-    public IDatabaseProductInfo ProductInfo => _productInfo ?? throw new InvalidOperationException("Database info not detected. Call DetectDatabaseInfo first.");
+    public IDatabaseProductInfo ProductInfo => _productInfo ??
+                                               throw new InvalidOperationException(
+                                                   "Database info not detected. Call DetectDatabaseInfo first.");
 
     /// <summary>
     /// Whether database info has been detected
@@ -93,8 +177,17 @@ public abstract class SqlDialect:ISqlDialect
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
-    public virtual string ParameterMarkerAt(int ordinal) => ParameterMarker;
+
+    public virtual string ParameterMarkerAt(int ordinal)
+    {
+        return ParameterMarker;
+    }
+
     public virtual bool SupportsNamedParameters => true;
+
+    // Named-parameter providers allow the same @name to appear multiple times in SQL
+    // with a single parameter object. Override to false for positional providers.
+    public virtual bool SupportsRepeatedNamedParameters => SupportsNamedParameters;
 
     public virtual string RenderJsonArgument(string parameterMarker, IColumnInfo column)
     {
@@ -110,9 +203,103 @@ public abstract class SqlDialect:ISqlDialect
     }
 
     public virtual bool SupportsSetValuedParameters => false;
-    public virtual int MaxParameterLimit => 255;
+    public virtual int MaxParameterLimit => 2000;
+
+    /// <inheritdoc />
+    public virtual int MaxRowsPerBatch => 1000;
+
+    /// <inheritdoc />
+    public virtual bool SupportsBatchInsert => true;
+
+    /// <inheritdoc />
+    public virtual bool SupportsBatchUpdate => false;
+
+    /// <inheritdoc />
+    public virtual void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        throw new NotSupportedException($"{DatabaseType} does not support optimized batch updates.");
+    }
+
+    /// <inheritdoc />
+    public virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query)
+    {
+        BuildBatchInsertSql(tableName, columnNames, rowCount, query, null);
+    }
+
+    /// <summary>
+    /// Specialized multi-row insert with optional value inspection for NULL inlining.
+    /// </summary>
+    public virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        if (string.IsNullOrWhiteSpace(tableName))
+        {
+            throw new ArgumentException("Table name cannot be null or empty.", nameof(tableName));
+        }
+
+        if (columnNames == null || columnNames.Count == 0)
+        {
+            throw new ArgumentException("Column names cannot be null or empty.", nameof(columnNames));
+        }
+
+        if (rowCount <= 0)
+        {
+            throw new ArgumentException("Row count must be greater than zero.", nameof(rowCount));
+        }
+
+        query.Append("INSERT INTO ");
+        query.Append(tableName);
+        query.Append(" (");
+
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(columnNames[i]);
+        }
+
+        query.Append(") VALUES ");
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (row > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append('(');
+            for (var col = 0; col < columnNames.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+
+            query.Append(')');
+        }
+    }
+
     public virtual int MaxOutputParameters => 0;
-    public virtual int ParameterNameMaxLength => 18;
+    public virtual int ParameterNameMaxLength => 128;
     public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
     /// <summary>
@@ -122,16 +309,30 @@ public abstract class SqlDialect:ISqlDialect
         IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 
     // SQL standard defaults - can be overridden for database-specific behavior
-    public virtual string QuotePrefix => "\"";  // SQL-92 standard
-    public virtual string QuoteSuffix => "\"";   // SQL-92 standard
+    public virtual string QuotePrefix => "\""; // SQL-92 standard
+    public virtual string QuoteSuffix => "\""; // SQL-92 standard
     public virtual string CompositeIdentifierSeparator => "."; // SQL-92 standard
     public virtual bool PrepareStatements => false;
+
+    // Overridden by MySqlDialect to veto prepare after error 1461 fires, even when ForceManualPrepare is set.
+    public virtual bool IsPrepareExhausted => false;
 
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// Controls whether the common type coercions (Guid → string, bool → Int16,
+    /// DateTimeOffset → UtcDateTime) are applied during parameter creation.
+    /// <para>
+    /// Defaults to <c>!SupportsNamedParameters</c> so positional providers (ODBC-style)
+    /// always get conversions. Named-parameter dialects that require the same coercions
+    /// (e.g., a vendor driver that rejects <see cref="System.Data.DbType.Guid"/> natively)
+    /// can override this to <c>true</c>.
+    /// </para>
+    /// </summary>
+    protected virtual bool NeedsCommonConversions => !SupportsNamedParameters;
+
     // Feature support based on SQL standards and database capabilities
-    public virtual bool SupportsIntegrityConstraints => MaxSupportedStandard >= SqlStandardLevel.Sql89;
     public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsSubqueries => MaxSupportedStandard >= SqlStandardLevel.Sql92;
@@ -175,13 +376,40 @@ public abstract class SqlDialect:ISqlDialect
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
+    public virtual bool SupportsDropTableIfExists => true;
+
+    /// <summary>
+    /// Gets the SQL statement to create a savepoint with the given name.
+    /// Override for databases with non-standard syntax (e.g., SQL Server uses SAVE TRANSACTION).
+    /// </summary>
+    public virtual string GetSavepointSql(string name)
+    {
+        return $"SAVEPOINT {WrapObjectName(name)}";
+    }
+
+    /// <summary>
+    /// Gets the SQL statement to rollback to a savepoint with the given name.
+    /// Override for databases with non-standard syntax (e.g., SQL Server uses ROLLBACK TRANSACTION).
+    /// </summary>
+    public virtual string GetRollbackToSavepointSql(string name)
+    {
+        return $"ROLLBACK TO SAVEPOINT {WrapObjectName(name)}";
+    }
+
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
 
     /// <summary>
+    /// Indicates whether MERGE UPDATE SET clause requires table alias prefix on target columns.
+    /// SQL Server, Oracle: true (allows `UPDATE SET t.col = value`)
+    /// PostgreSQL: false (requires `UPDATE SET col = value`, will error with alias prefix)
+    /// </summary>
+    public virtual bool MergeUpdateRequiresTargetAlias => true; // SQL-92 MERGE allows it (SQL Server, Oracle)
+
+    /// <summary>
     /// Indicates whether this dialect represents an unknown database using the SQL-92 fallback.
     /// </summary>
-    public bool IsFallbackDialect => ProductInfo.DatabaseType == SupportedDatabase.Unknown;
+    public bool IsFallbackDialect => DatabaseType == SupportedDatabase.Unknown;
 
     /// <summary>
     /// Returns a warning if the SQL-92 fallback dialect is in use.
@@ -218,6 +446,31 @@ public abstract class SqlDialect:ISqlDialect
     /// </summary>
     public bool HasBasicCompatibility => MaxSupportedStandard >= SqlStandardLevel.Sql92;
 
+    public virtual string WrapSimpleName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        var prefix = QuotePrefix;
+        var suffix = QuoteSuffix;
+        
+        // Fast path for clean identifiers: if it doesn't contain the quote char, simple concat.
+        // We only care about the suffix char (the closer), as that's the one that breaks the string.
+        var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
+        if (quoteChar == 0 || name.IndexOf(quoteChar) < 0)
+        {
+            return prefix + name + suffix;
+        }
+
+        var builder = SbLite.Create(stackalloc char[name.Length + prefix.Length + suffix.Length + 4]);
+        builder.Append(prefix);
+        AppendWithEscaping(ref builder, name.AsSpan(), prefix.AsSpan(), suffix.AsSpan());
+        builder.Append(suffix);
+        return builder.ToString();
+    }
+
     public virtual string WrapObjectName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -242,87 +495,65 @@ public abstract class SqlDialect:ISqlDialect
         var suffix = QuoteSuffix;
         var separator = CompositeIdentifierSeparator;
 
-        var builder = RentWrapBuilder(identifier.Length + ((prefix.Length + suffix.Length) << 1));
-        try
+        var capacityHint = identifier.Length + ((prefix.Length + suffix.Length) << 1);
+        var stackSize = capacityHint > SbLite.DefaultStack ? capacityHint : SbLite.DefaultStack;
+        var builder = SbLite.Create(stackalloc char[stackSize]);
+        var separatorSpan = separator.AsSpan();
+        var prefixSpan = prefix.AsSpan();
+        var suffixSpan = suffix.AsSpan();
+        var value = identifier.AsSpan();
+        var hasSeparator = separatorSpan.Length > 0;
+
+        var consumed = 0;
+        var wroteSegment = false;
+
+        while (consumed < value.Length)
         {
-            var separatorSpan = separator.AsSpan();
-            var prefixSpan = prefix.AsSpan();
-            var suffixSpan = suffix.AsSpan();
-            var value = identifier.AsSpan();
-            var hasSeparator = separatorSpan.Length > 0;
+            var remaining = value.Slice(consumed);
+            var separatorIndex = hasSeparator ? IndexOf(remaining, separatorSpan) : -1;
 
-            var consumed = 0;
-            var wroteSegment = false;
-
-            while (consumed < value.Length)
+            ReadOnlySpan<char> segment;
+            if (separatorIndex >= 0)
             {
-                var remaining = value.Slice(consumed);
-                var separatorIndex = hasSeparator ? IndexOf(remaining, separatorSpan) : -1;
+                segment = remaining.Slice(0, separatorIndex);
+                consumed += separatorIndex + separatorSpan.Length;
+            }
+            else
+            {
+                segment = remaining;
+                consumed = value.Length;
+            }
 
-                ReadOnlySpan<char> segment;
-                if (separatorIndex >= 0)
-                {
-                    segment = remaining.Slice(0, separatorIndex);
-                    consumed += separatorIndex + separatorSpan.Length;
-                }
-                else
-                {
-                    segment = remaining;
-                    consumed = value.Length;
-                }
+            segment = TrimWhitespace(segment);
+            if (segment.Length == 0)
+            {
+                continue;
+            }
 
-                segment = TrimWhitespace(segment);
-                if (segment.Length == 0)
-                {
-                    continue;
-                }
+            if (wroteSegment)
+            {
+                builder.Append(separator);
+            }
 
-                if (wroteSegment)
-                {
-                    builder.Append(separator);
-                }
-
+            // IDEMPOTENCY: If segment is already wrapped in prefix/suffix, leave it alone.
+            if (segment.Length >= (prefixSpan.Length + suffixSpan.Length) &&
+                segment.StartsWith(prefixSpan) && 
+                segment.EndsWith(suffixSpan))
+            {
+                builder.Append(segment);
+            }
+            else
+            {
                 builder.Append(prefix);
-                AppendWithoutQuotes(builder, segment, prefixSpan, suffixSpan);
+                AppendWithEscaping(ref builder, segment, prefixSpan, suffixSpan);
                 builder.Append(suffix);
-
-                wroteSegment = true;
             }
 
-            var result = wroteSegment ? builder.ToString() : string.Empty;
-            return result;
-        }
-        finally
-        {
-            ReturnWrapBuilder(builder);
-        }
-    }
-
-    private static StringBuilder RentWrapBuilder(int capacityHint)
-    {
-        if (_wrapNameBuilderPool.TryDequeue(out var builder))
-        {
-            if (capacityHint > builder.Capacity)
-            {
-                builder.EnsureCapacity(capacityHint);
-            }
-
-            builder.Clear();
-            return builder;
+            wroteSegment = true;
         }
 
-        return new StringBuilder(capacityHint < 64 ? 64 : capacityHint);
-    }
-
-    private static void ReturnWrapBuilder(StringBuilder builder)
-    {
-        if (builder.Capacity > MaxPooledWrapBuilderCapacity)
-        {
-            return;
-        }
-
-        builder.Clear();
-        _wrapNameBuilderPool.Enqueue(builder);
+        var result = wroteSegment ? builder.ToString() : string.Empty;
+        return result;
     }
 
     protected static string BuildSessionSettingsScript(
@@ -335,7 +566,7 @@ public abstract class SqlDialect:ISqlDialect
             return string.Empty;
         }
 
-        var builder = new StringBuilder();
+        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         foreach (var kvp in expected)
         {
             current.TryGetValue(kvp.Key, out var currentValue);
@@ -396,6 +627,35 @@ public abstract class SqlDialect:ISqlDialect
         IReadOnlyDictionary<string, string> Snapshot,
         bool UsedFallback);
 
+    /// <summary>
+    /// Logs session settings detection results in a standardized format.
+    /// Called by dialect overrides after evaluating session settings.
+    /// </summary>
+    protected void LogSessionSettingsResult(in SessionSettingsResult result, string dialectName)
+    {
+        var snapshotParts = new string[result.Snapshot.Count];
+        var i = 0;
+        foreach (var kv in result.Snapshot)
+        {
+            snapshotParts[i++] = $"{kv.Key}={kv.Value}";
+        }
+
+        var snapshot = string.Join(", ", snapshotParts);
+
+        if (!string.IsNullOrWhiteSpace(result.Settings))
+        {
+            Logger.LogInformation(
+                "{Dialect} session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
+                dialectName, snapshot, result.Settings);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "{Dialect} session settings detected: {CurrentSettings}. No changes required (already compliant)",
+                dialectName, snapshot);
+        }
+    }
+
     private static ReadOnlySpan<char> TrimWhitespace(ReadOnlySpan<char> span)
     {
         var start = 0;
@@ -414,25 +674,23 @@ public abstract class SqlDialect:ISqlDialect
         return start > end ? ReadOnlySpan<char>.Empty : span.Slice(start, end - start + 1);
     }
 
-    private static void AppendWithoutQuotes(StringBuilder builder, ReadOnlySpan<char> value, ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
+    private static void AppendWithEscaping(ref StringBuilderLite builder, ReadOnlySpan<char> value,
+        ReadOnlySpan<char> prefix, ReadOnlySpan<char> suffix)
     {
-        var index = 0;
-        while (index < value.Length)
+        // SQL standard escaping: double the quote char inside the identifier.
+        // We only escape the suffix char (the closer), as that's the one that breaks the string.
+        // For "[" prefix, suffix is "]". For most, prefix=suffix="\"".
+        var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
+
+        for (var i = 0; i < value.Length; i++)
         {
-            if (!prefix.IsEmpty && StartsWith(value, prefix, index))
+            var c = value[i];
+            builder.Append(c);
+            
+            if (quoteChar != 0 && c == quoteChar)
             {
-                index += prefix.Length;
-                continue;
+                builder.Append(c); // Double it
             }
-
-            if (!suffix.IsEmpty && StartsWith(value, suffix, index))
-            {
-                index += suffix.Length;
-                continue;
-            }
-
-            builder.Append(value[index]);
-            index++;
         }
     }
 
@@ -482,8 +740,8 @@ public abstract class SqlDialect:ISqlDialect
         }
 
         parameterName = parameterName.Replace("@", string.Empty)
-                                     .Replace(":", string.Empty)
-                                     .Replace("?", string.Empty);
+            .Replace(":", string.Empty)
+            .Replace("?", string.Empty);
 
         return string.Concat(ParameterMarker, parameterName);
     }
@@ -495,29 +753,165 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual string UpsertIncomingColumn(string columnName)
     {
-        return $"EXCLUDED.{WrapObjectName(columnName)}";
+        throw new NotSupportedException(
+            $"UpsertIncomingColumn is dialect-specific. Override required for {DatabaseType}.");
     }
 
+    /// <summary>
+    /// Optional alias used to reference the incoming row during upsert operations.
+    /// </summary>
     public virtual string? UpsertIncomingAlias => null;
+
+    /// <summary>
+    /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
+    /// </summary>
+    public virtual string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames)
+    {
+        if (columns == null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (parameterNames == null)
+        {
+            throw new ArgumentNullException(nameof(parameterNames));
+        }
+
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var values = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var names = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                values.Append(", ");
+                names.Append(", ");
+            }
+
+            var placeholder = MakeParameterName(parameterNames[i]);
+            if (columns[i].IsJsonType)
+            {
+                placeholder = RenderJsonArgument(placeholder, columns[i]);
+            }
+
+            values.Append(placeholder);
+            names.Append(WrapObjectName(columns[i].Name));
+        }
+
+        return string.Concat("USING (VALUES (", values.ToString(), ")) AS s (", names.ToString(), ")");
+    }
+
+    /// <summary>
+    /// Formats the MERGE ON clause predicate for the dialect.
+    /// </summary>
+    public virtual string RenderMergeOnClause(string predicate)
+    {
+        if (predicate == null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        return predicate;
+    }
+
+    private static void ResetProviderSpecificMetadata(DbParameter parameter)
+    {
+        var resetter = ProviderSpecificResetters.GetOrAdd(parameter.GetType(), BuildProviderSpecificResetter);
+        resetter(parameter);
+    }
+
+    private static Action<DbParameter> BuildProviderSpecificResetter(Type parameterType)
+    {
+        List<ProviderPropertyReset>? resets = null;
+        foreach (var propertyName in ProviderSpecificPropertyNames)
+        {
+            var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanWrite || property.GetIndexParameters().Length != 0)
+            {
+                continue;
+            }
+
+            resets ??= new List<ProviderPropertyReset>();
+            var defaultValue = property.PropertyType.IsValueType
+                ? Activator.CreateInstance(property.PropertyType)
+                : null;
+            resets.Add(new ProviderPropertyReset(property, defaultValue));
+        }
+
+        if (resets == null)
+        {
+            return NoopReset;
+        }
+
+        var resetArray = resets.ToArray();
+        return parameter =>
+        {
+            foreach (var reset in resetArray)
+            {
+                try
+                {
+                    reset.Property.SetValue(parameter, reset.DefaultValue);
+                }
+                catch
+                {
+                    // Ignore provider-specific reset failures; pooled parameters should remain usable.
+                }
+            }
+        };
+    }
+
+    private readonly struct ProviderPropertyReset
+    {
+        public ProviderPropertyReset(PropertyInfo property, object? defaultValue)
+        {
+            Property = property;
+            DefaultValue = defaultValue;
+        }
+
+        public PropertyInfo Property { get; }
+        public object? DefaultValue { get; }
+    }
 
     /// <summary>
     /// Get a parameter from the pool or create a new one. For internal use by hot paths.
     /// </summary>
-    private DbParameter GetPooledParameter()
+    private DbParameter GetPooledParameter(out bool pooled)
     {
-        if (_parameterPool.TryDequeue(out var pooled))
+        if (_parameterPool.TryDequeue(out var param))
         {
-            // Reset pooled parameter to clean state
-            pooled.ParameterName = string.Empty;
-            pooled.Value = null;
-            pooled.DbType = DbType.Object;
-            pooled.Direction = ParameterDirection.Input;
-            pooled.Size = 0;
-            pooled.Precision = 0;
-            pooled.Scale = 0;
-            return pooled;
+            pooled = true;
+            // Reset pooled parameter to clean state.
+            // IMPORTANT: ResetProviderSpecificMetadata must be called BEFORE ResetDbType.
+            // Setting NpgsqlDbType=0 via reflection marks it as "explicitly set" internally;
+            // ResetDbType() clears that flag. If called in the wrong order, Npgsql will
+            // attempt to resolve NpgsqlDbType=0 and throw ArgumentOutOfRangeException.
+            ResetProviderSpecificMetadata(param);
+            try
+            {
+                param.ResetDbType();
+            }
+            catch
+            {
+                // Ignore providers that don't support ResetDbType.
+            }
+
+            param.ParameterName = string.Empty;
+            param.Value = null;
+            param.DbType = DbType.Object;
+            param.Direction = ParameterDirection.Input;
+            param.Size = 0;
+            param.Precision = 0;
+            param.Scale = 0;
+            return param;
         }
 
+        pooled = false;
         return Factory.CreateParameter() ?? throw new InvalidOperationException("Failed to create parameter.");
     }
 
@@ -528,31 +922,39 @@ public abstract class SqlDialect:ISqlDialect
     {
         if (_parameterPool.Count < MaxPoolSize)
         {
+            // Clear value eagerly to avoid holding references to potentially large
+            // objects (strings, byte arrays, etc.) while the parameter sits in the pool.
+            parameter.Value = DBNull.Value;
             _parameterPool.Enqueue(parameter);
         }
         // If pool is full, let it get garbage collected
     }
 
+    [SuppressMessage("Security", "cs/exposure-of-private-information",
+        Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
+                        "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        var parameter = GetPooledParameter();
+        var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
+        var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
+        var parameter = GetPooledParameter(out var pooled);
 
+        // Treat empty/whitespace names as null (auto-generate)
         if (string.IsNullOrWhiteSpace(name))
         {
-            name = GenerateRandomName(5, ParameterNameMaxLength);
+            name = null;
         }
-        else if (SupportsNamedParameters)
+
+        // Strip dialect-specific parameter prefixes (@, :, ?, $) if present.
+        // Fast path: check first char before doing any allocation. Skip entirely if clean.
+        if (name != null)
         {
-            // Strip parameter marker prefix if present, then validate the remaining name
-            var nameToValidate = name;
-            if (name.Length > 0 && (name[0] == '@' || name[0] == ':' || name[0] == '?' || name[0] == '$'))
+            if (name.Length > 0 && name[0] is '@' or ':' or '?' or '$')
             {
-                nameToValidate = name.Substring(1);
-                name = nameToValidate; // Use the stripped name
+                name = name.TrimStart('@', ':', '?', '$');
             }
 
-            // Validate that parameter names only contain alphanumeric characters and underscores
-            if (!IsValidParameterName(nameToValidate))
+            if (!IsValidParameterName(name))
             {
                 throw new ArgumentException(
                     $"Parameter name '{name}' contains invalid characters. Only alphanumeric characters and underscores are allowed.",
@@ -560,63 +962,133 @@ public abstract class SqlDialect:ISqlDialect
             }
         }
 
-        parameter.ParameterName = name;
+        parameter.ParameterName = name ?? GenerateParameterName();
 
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
-        var runtimeType = ResolveClrType(value);
-        var handled = runtimeType != null &&
+
+        // Resolve CLR type first (uses typeof(T) — no boxing for value types).
+        // Then validate using the pre-resolved type to avoid boxing T into object?.
+        var runtimeType = valueIsNull ? null : ResolveClrType(value);
+
+        if (!valueIsNull)
+        {
+            // Validate CLR type compatibility with DbType before setting the value.
+            // Catches mismatches early with clear messages instead of deferring to
+            // provider-specific errors at execution time.
+            // Pass runtimeType (already resolved) to avoid boxing value types.
+            DbTypeValidator.Validate(type, runtimeType);
+        }
+
+        // Fast path: well-known primitive CLR types are never registered in AdvancedTypeRegistry.
+        // Skip the IsMappedType() ConcurrentDictionary lookup for the common case.
+        // PrepareParameterValue is still called — some dialects transform primitives
+        // (e.g. Oracle converts Guid→string and bool→NUMBER via PrepareParameterValue).
+        bool handled;
+        if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
+        {
+            // Primitive fast path: skip AdvancedTypes lookup, go straight to PrepareParameterValue.
+            handled = false;
+        }
+        else
+        {
+            handled = runtimeType != null &&
                       AdvancedTypes.IsMappedType(runtimeType) &&
                       AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
+        }
 
         if (!handled)
         {
             parameter.DbType = type;
-            parameter.Value = valueIsNull ? DBNull.Value : value!;
+            var preparedValue = PrepareParameterValue(value, type);
+            parameter.Value = preparedValue ?? DBNull.Value;
         }
 
+        // Positional providers use "?" placeholders — parameter names must be blank.
         if (!SupportsNamedParameters)
         {
             parameter.ParameterName = string.Empty;
-
-            if (!handled && !valueIsNull && _commonConversions.TryGetValue(parameter.DbType, out var converter))
-            {
-                converter(parameter, value);
-            }
         }
 
-        if (!handled && !valueIsNull)
+        // Apply common type coercions (Guid→string, bool→int16, DateTimeOffset→UtcDateTime).
+        // Controlled by NeedsCommonConversions so dialects can opt in independently of
+        // whether they use named or positional parameters.
+        if (!handled && !valueIsNull && NeedsCommonConversions &&
+            _commonConversions.TryGetValue(parameter.DbType, out var converter))
+        {
+            converter(parameter, value);
+        }
+
+        if (!valueIsNull)
         {
             if (value is string s && (parameter.DbType == DbType.String || parameter.DbType == DbType.AnsiString ||
-                                      parameter.DbType == DbType.StringFixedLength || parameter.DbType == DbType.AnsiStringFixedLength))
+                                      parameter.DbType == DbType.StringFixedLength ||
+                                      parameter.DbType == DbType.AnsiStringFixedLength))
             {
                 parameter.Size = Math.Max(s.Length, 1);
             }
-            else if (parameter.DbType == DbType.Decimal && value is decimal dec)
-            {
-                var (prec, scale) = DecimalHelpers.Infer(dec);
-                parameter.Precision = (byte)prec;
-                parameter.Scale = (byte)scale;
-            }
+        }
+
+        // Microsoft.Data.SqlClient 6.x validates that the decimal value fits
+        // within the parameter's declared Precision/Scale before sending to the
+        // server.  When Precision=0, SqlClient treats the parameter as DECIMAL(1,0)
+        // (the minimum valid SQL decimal), which rejects any value requiring more
+        // than one significant digit (e.g. 10, 19.99, 100).
+        //
+        // Fix: always set Precision to at least 18 (the standard SQL Server
+        // DECIMAL column precision) so any value that fits in a typical column
+        // is accepted.  Scale is set to the value's natural fractional digits
+        // (e.g. 2 for 19.99m, 0 for 10m) so no silent rounding occurs.
+        //
+        // Using Precision=18 is the industry convention (used by Dapper, EF Core).
+        // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
+        // accept DECIMAL(18,S) parameters for columns declared with P≤18.
+        if (!valueIsNull && parameter.DbType == DbType.Decimal && value is decimal dec)
+        {
+            var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
+            parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
+            parameter.Scale = (byte)inferredScale;
+        }
+
+        if (traceTimings)
+        {
+            var elapsedUs = TicksToMicroseconds(Stopwatch.GetTimestamp() - start);
+            Logger.LogDebug(
+                "DbParameter timing pooled={Pooled} dbType={DbType} handled={Handled} elapsed={ElapsedUs:0.000}us",
+                pooled,
+                type,
+                handled,
+                elapsedUs);
         }
 
         return parameter;
     }
 
+    private static bool IsParameterTimingEnabled()
+    {
+        var value = Environment.GetEnvironmentVariable("PENGDOWS_PARAM_TIMING");
+        return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static double TicksToMicroseconds(long ticks)
+    {
+        if (ticks <= 0)
+        {
+            return 0d;
+        }
+
+        return ticks * 1_000_000d / Stopwatch.Frequency;
+    }
+
     private static Type? ResolveClrType<T>(T value)
     {
-        if (value is not null)
-        {
-            return value.GetType();
-        }
-
         var type = typeof(T);
-        if (type == typeof(object))
+        if (type != typeof(object))
         {
-            return null;
+            return Nullable.GetUnderlyingType(type) ?? type;
         }
 
-        return Nullable.GetUnderlyingType(type) ?? type;
+        return value?.GetType();
     }
 
     public virtual DbParameter CreateDbParameter(string? name, DbType type, object? value)
@@ -629,8 +1101,30 @@ public abstract class SqlDialect:ISqlDialect
         return CreateDbParameter(null, type, value);
     }
 
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, int value)
+        => CreateDbParameter<int>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, long value)
+        => CreateDbParameter<long>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, string value)
+        => CreateDbParameter<string>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, Guid value)
+        => CreateDbParameter<Guid>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, DateTime value)
+        => CreateDbParameter<DateTime>(name, dbType, value);
+
+    public virtual DbParameter CreateDbParameter(string? name, DbType dbType, DateTimeOffset value)
+        => CreateDbParameter<DateTimeOffset>(name, dbType, value);
+
+
     // Methods for database-specific operations
-    public virtual string GetVersionQuery() => string.Empty;
+    public virtual string GetVersionQuery()
+    {
+        return string.Empty;
+    }
 
     public virtual string GetDatabaseVersion(ITrackedConnection connection)
     {
@@ -677,12 +1171,6 @@ public abstract class SqlDialect:ISqlDialect
             SupportsNamedParameters);
     }
 
-    [Obsolete("Use GetConnectionSessionSettings(IDatabaseContext,bool).")]
-    public virtual string GetConnectionSessionSettings()
-    {
-        return string.Empty;
-    }
-
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
         return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
@@ -690,22 +1178,42 @@ public abstract class SqlDialect:ISqlDialect
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
     {
-        var connectionString = context.ConnectionString;
+        ApplyConnectionSettingsCore(connection, context, readOnly, null);
+    }
 
-        // Apply read-only connection string modification if supported
-        if (readOnly)
+    internal virtual void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
+    {
+        var connectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
+            ? context.ConnectionString
+            : connectionStringOverride;
+
+        if (readOnly && !ConnectionStringHasReadOnlyParameter(connectionString))
         {
-            var readOnlyParam = GetReadOnlyConnectionParameter();
-            if (!string.IsNullOrEmpty(readOnlyParam))
-            {
-                connectionString = BuildReadOnlyConnectionString(connectionString, readOnlyParam);
-            }
+            connectionString = GetReadOnlyConnectionString(connectionString);
         }
 
         connection.ConnectionString = connectionString;
-
-        // Hook for database-specific connection configuration
         ConfigureProviderSpecificSettings(connection, context, readOnly);
+    }
+
+    internal virtual string GetReadOnlyConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        var readOnlyParam = GetReadOnlyConnectionParameter();
+        if (string.IsNullOrEmpty(readOnlyParam))
+        {
+            return connectionString;
+        }
+
+        return BuildReadOnlyConnectionString(connectionString, readOnlyParam);
     }
 
     /// <summary>
@@ -716,16 +1224,79 @@ public abstract class SqlDialect:ISqlDialect
         return ex is NotSupportedException or InvalidOperationException;
     }
 
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    public virtual void ApplyConnectionSettings(IDbConnection connection)
-    {
-    }
-
     public virtual void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
     }
 
+    public virtual ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Returns SQL to reset the session back to read-write after a read-only transaction completes.
+    /// Dialects that set session-scoped read-only state in <see cref="TryEnterReadOnlyTransaction"/>
+    /// should override this to provide the corresponding reset statement.
+    /// </summary>
+    internal virtual string? GetReadOnlyTransactionResetSql()
+    {
+        return null;
+    }
+
+    /// <summary>
+    /// Attempts to execute a read-only SQL statement within a transaction context.
+    /// Swallows any exceptions and logs them at Debug level.
+    /// Used by Oracle and MariaDB to set read-only session state.
+    /// </summary>
+    protected void TryExecuteReadOnlySql(ITransactionContext transaction, string sql, string dialectName)
+    {
+        try
+        {
+            if (transaction is TransactionContext tx)
+            {
+                tx.ExecuteSessionNonQuery(sql);
+                return;
+            }
+
+            using var sc = transaction.CreateSqlContainer(sql);
+            sc.ExecuteNonQueryAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+        }
+    }
+
+    /// <summary>
+    /// Async version of <see cref="TryExecuteReadOnlySql"/>.
+    /// </summary>
+    protected async ValueTask TryExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
+        string dialectName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (transaction is TransactionContext tx)
+            {
+                await tx.ExecuteSessionNonQueryAsync(sql).ConfigureAwait(false);
+                return;
+            }
+
+            await using var sc = transaction.CreateSqlContainer(sql);
+            await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+        }
+    }
+
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)
+    {
+        return false;
+    }
+
+    public virtual bool IsSnapshotIsolationOn(ITrackedConnection connection)
     {
         return false;
     }
@@ -750,7 +1321,38 @@ public abstract class SqlDialect:ISqlDialect
             var versionString = await GetDatabaseVersionAsync(connection);
             var productName = await GetProductNameAsync(connection) ?? ExtractProductNameFromVersion(versionString);
             var parsedVersion = ParseVersion(versionString);
-            var databaseType = InferDatabaseTypeFromInfo(productName, versionString);
+
+            // Enrich version string with schema DataSourceProductVersion for more accurate inference.
+            // Real drivers report meaningful version strings; fakeDb returns literal "version()" which
+            // lacks product markers. The schema DataSourceProductVersion (e.g. "11.7.2-MariaDB-ubu2404")
+            // provides a reliable fallback.
+            string? schemaProductVersion = null;
+            try
+            {
+                var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                if (schema.Rows.Count > 0)
+                    schemaProductVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+            }
+            catch
+            {
+                // Schema may not be available for all connections; fall back to runtime version string.
+            }
+
+            var versionForInference = !string.IsNullOrEmpty(schemaProductVersion) &&
+                                      !versionString.Contains(schemaProductVersion,
+                                          StringComparison.OrdinalIgnoreCase)
+                ? $"{versionString} {schemaProductVersion}"
+                : versionString;
+
+            // Use dialect's virtual method first so subclasses can express their own intent.
+            // If it falls through to DatabaseType (the default), fall back to the centralized
+            // detection service which uses factory type names and schema metadata.
+            var databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
+            if (databaseType == DatabaseType)
+            {
+                databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+            }
+
             var standardCompliance = DetermineStandardCompliance(parsedVersion);
 
             _productInfo = new DatabaseProductInfo
@@ -762,7 +1364,8 @@ public abstract class SqlDialect:ISqlDialect
                 StandardCompliance = standardCompliance
             };
 
-            Logger.LogInformation("Detected database: {ProductName} {Version} (SQL Standard: {Standard})", productName, versionString, standardCompliance);
+            Logger.LogInformation("Detected database: {ProductName} {Version} (SQL Standard: {Standard})", productName,
+                versionString, standardCompliance);
             return _productInfo;
         }
         catch (Exception ex)
@@ -825,6 +1428,7 @@ public abstract class SqlDialect:ISqlDialect
                 ? readOnlySettings
                 : $"{baseSettings}\n{readOnlySettings}";
         }
+
         return baseSettings;
     }
 
@@ -837,6 +1441,22 @@ public abstract class SqlDialect:ISqlDialect
     protected virtual string BuildReadOnlyConnectionString(string connectionString, string readOnlyParameter)
     {
         return $"{connectionString};{readOnlyParameter}";
+    }
+
+    private bool ConnectionStringHasReadOnlyParameter(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        var readOnlyParam = GetReadOnlyConnectionParameter();
+        if (string.IsNullOrWhiteSpace(readOnlyParam))
+        {
+            return false;
+        }
+
+        return connectionString.IndexOf(readOnlyParam, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     /// <summary>
@@ -896,9 +1516,20 @@ public abstract class SqlDialect:ISqlDialect
     /// <param name="connection">Database connection to configure</param>
     /// <param name="context">Database context</param>
     /// <param name="readOnly">Whether this is a read-only connection</param>
-    public virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public virtual void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,
+        bool readOnly)
     {
         // Default implementation does nothing - override in derived classes
+    }
+
+    /// <summary>
+    /// Prepares a connection string with provider-specific settings that must be present
+    /// before the DataSource is created (e.g. auto-prepare, multiplexing).
+    /// Override in dialect subclasses; base is a no-op.
+    /// </summary>
+    internal virtual string PrepareConnectionStringForDataSource(string connectionString)
+    {
+        return connectionString;
     }
 
     // Async convenience for tests; default is no-op
@@ -1057,6 +1688,11 @@ public abstract class SqlDialect:ISqlDialect
             return SupportedDatabase.MariaDb;
         }
 
+        if (combined.Contains("aurora") && combined.Contains("mysql"))
+        {
+            return SupportedDatabase.AuroraMySql;
+        }
+
         if (combined.Contains("mysql"))
         {
             return SupportedDatabase.MySql;
@@ -1065,6 +1701,11 @@ public abstract class SqlDialect:ISqlDialect
         if (combined.Contains("cockroach"))
         {
             return SupportedDatabase.CockroachDb;
+        }
+
+        if (combined.Contains("aurora") && (combined.Contains("npgsql") || combined.Contains("postgres")))
+        {
+            return SupportedDatabase.AuroraPostgreSql;
         }
 
         if (combined.Contains("npgsql") || combined.Contains("postgres"))
@@ -1119,51 +1760,37 @@ public abstract class SqlDialect:ISqlDialect
 
         if (!string.IsNullOrWhiteSpace(versionString))
         {
-            Logger.LogWarning("Unable to parse database version '{Version}' for {DatabaseType}; falling back to default SQL compliance.", versionString, DatabaseType);
+            Logger.LogWarning(
+                "Unable to parse database version '{Version}' for {DatabaseType}; falling back to default SQL compliance.",
+                versionString, DatabaseType);
         }
 
         return null;
     }
 
     /// <summary>
-    /// Pre-generates a pool of parameter names for high-performance parameter creation.
-    /// </summary>
-    private static string[] GenerateParameterNamePool()
-    {
-        const int poolSize = 1000; // Enough for most queries
-        const int nameLength = 5;
-        var pool = new string[poolSize];
-
-        const int firstCharMax = 52; // a-zA-Z
-        var anyOtherMax = ValidNameChars.Length;
-
-        Span<char> buffer = stackalloc char[nameLength];
-        for (int p = 0; p < poolSize; p++)
-        {
-            buffer[0] = ValidNameChars[Random.Shared.Next(firstCharMax)];
-            for (var i = 1; i < nameLength; i++)
-            {
-                buffer[i] = ValidNameChars[Random.Shared.Next(anyOtherMax)];
-            }
-            pool[p] = new string(buffer);
-        }
-
-        return pool;
-    }
-
-    /// <summary>
-    /// Fast validation that parameter names only contain alphanumeric characters and underscores.
+    /// Fast validation that parameter names start with a letter and contain only
+    /// alphanumeric characters and underscores. This aligns with <see cref="ParameterNamePattern"/>.
     /// No parameter markers (@, :, ?, $) are allowed.
     /// </summary>
     private static bool IsValidParameterName(string name)
     {
         if (string.IsNullOrEmpty(name))
-            return false;
-
-        // Fast path: check each character is alphanumeric or underscore
-        for (int i = 0; i < name.Length; i++)
         {
-            char c = name[i];
+            return false;
+        }
+
+        // First character must be [a-zA-Z] — matches ParameterNamePattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        var first = name[0];
+        if (!((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')))
+        {
+            return false;
+        }
+
+        // Remaining characters: alphanumeric or underscore
+        for (var i = 1; i < name.Length; i++)
+        {
+            var c = name[i];
             if (!((c >= 'a' && c <= 'z') ||
                   (c >= 'A' && c <= 'Z') ||
                   (c >= '0' && c <= '9') ||
@@ -1181,15 +1808,15 @@ public abstract class SqlDialect:ISqlDialect
         return ParseVersion(versionString)?.Major;
     }
 
+    public string GenerateParameterName()
+    {
+        // No modulo — uint wraps at 2^32 which is effectively collision-free in practice.
+        var index = Interlocked.Increment(ref _parameterNamePoolIndex);
+        return string.Concat("p", index.ToString(CultureInfo.InvariantCulture));
+    }
+
     public string GenerateRandomName(int length, int parameterNameMaxLength)
     {
-        // Fast path: Use pre-generated name from pool if length matches
-        if (length == 5 && parameterNameMaxLength >= 5)
-        {
-            var index = Interlocked.Increment(ref _parameterNamePoolIndex);
-            return ParameterNamePool[index % ParameterNamePool.Length];
-        }
-
         // Slow path: Generate on demand for non-standard lengths
         var len = Math.Min(Math.Max(length, 2), parameterNameMaxLength);
         Span<char> buffer = stackalloc char[len];
@@ -1205,6 +1832,11 @@ public abstract class SqlDialect:ISqlDialect
         return new string(buffer);
     }
 
+    public virtual object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        return value;
+    }
+
     /// <summary>
     /// Gets the database-specific query for retrieving the last inserted identity value.
     /// This is a fallback method - prefer using RETURNING/OUTPUT clauses when supported.
@@ -1213,7 +1845,18 @@ public abstract class SqlDialect:ISqlDialect
     public virtual string GetLastInsertedIdQuery()
     {
         throw new NotSupportedException($"GetLastInsertedIdQuery not implemented for {DatabaseType}. " +
-            $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+                                        $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+    }
+
+    /// <summary>
+    /// Gets the SQL query to retrieve the next value from a sequence.
+    /// Default implementation is for Oracle; override for other sequence-supporting databases.
+    /// </summary>
+    /// <param name="sequenceName">The name of the sequence.</param>
+    /// <returns>The SQL query text.</returns>
+    public virtual string GetSequenceNextValQuery(string sequenceName)
+    {
+        return $"SELECT {WrapObjectName(sequenceName)}.NEXTVAL FROM DUAL";
     }
 
     /// <summary>
@@ -1256,6 +1899,7 @@ public abstract class SqlDialect:ISqlDialect
             return DatabaseType switch
             {
                 SupportedDatabase.SqlServer => GeneratedKeyPlan.OutputInserted,
+                SupportedDatabase.Firebird => GeneratedKeyPlan.Returning,
                 _ => GeneratedKeyPlan.Returning
             };
         }
@@ -1277,12 +1921,12 @@ public abstract class SqlDialect:ISqlDialect
     {
         return DatabaseType switch
         {
-            SupportedDatabase.MySql => true,       // LAST_INSERT_ID() is per-connection safe
-            SupportedDatabase.MariaDb => true,     // LAST_INSERT_ID() is per-connection safe
-            SupportedDatabase.Sqlite => true,      // last_insert_rowid() is per-connection safe
-            SupportedDatabase.SqlServer => true,   // SCOPE_IDENTITY() is per-batch/scope safe
+            SupportedDatabase.MySql => true, // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.MariaDb => true, // LAST_INSERT_ID() is per-connection safe
+            SupportedDatabase.Sqlite => true, // last_insert_rowid() is per-connection safe
+            SupportedDatabase.SqlServer => true, // SCOPE_IDENTITY() is per-batch/scope safe
             SupportedDatabase.PostgreSql => false, // lastval() can point at wrong sequence
-            SupportedDatabase.DuckDB => false,     // prefer RETURNING over lastval()
+            SupportedDatabase.DuckDB => false, // prefer RETURNING over lastval()
             _ => false
         };
     }
@@ -1345,7 +1989,7 @@ public abstract class SqlDialect:ISqlDialect
         };
 
         var query = $"{selectClause} FROM {WrapObjectName(tableName)} WHERE " +
-                   string.Join(" AND ", whereConditions);
+                    string.Join(" AND ", whereConditions);
 
         // For databases that support ORDER BY with identity columns, get the most recent
         if (SupportsIdentityColumns && DatabaseType != SupportedDatabase.Oracle)
@@ -1379,11 +2023,17 @@ public abstract class SqlDialect:ISqlDialect
             SupportedDatabase.PostgreSql => $" RETURNING {idColumnWrapped}",
             SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
             SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.Oracle => $" RETURNING {idColumnWrapped} INTO ?",
             SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
             _ => string.Empty
+            // Oracle is handled by OracleDialect.RenderInsertReturningClause override.
+            // Oracle RETURNING INTO requires an output parameter, not an inline placeholder.
         };
     }
+
+    /// <summary>
+    /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
+    /// </summary>
+    public virtual bool InsertReturningClauseBeforeValues => false;
 
     // Connection pooling properties - safe defaults for SQL-92 compatibility
     /// <summary>
@@ -1410,6 +2060,18 @@ public abstract class SqlDialect:ISqlDialect
     /// </summary>
     public virtual string? MaxPoolSizeSettingName => null;
 
+    /// <summary>
+    /// The connection string parameter name for application/client identification.
+    /// Used for telemetry and connection tagging in database monitoring tools.
+    /// Default: null (not supported), override in provider-specific dialects.
+    /// </summary>
+    public virtual string? ApplicationNameSettingName => null;
+
+    // Dialect defaults used when pool settings are not discoverable from the connection string.
+    // These are intentionally internal (not part of the public API surface).
+    internal const int FallbackMaxPoolSize = 100;
+    internal virtual int DefaultMaxPoolSize => FallbackMaxPoolSize;
+
     // ---- Legacy utility helpers (kept for test compatibility) ----
     public virtual bool SupportsIdentityColumns => false;
     public virtual bool SupportsReturningClause => SupportsInsertReturning;
@@ -1421,6 +2083,7 @@ public abstract class SqlDialect:ISqlDialect
         {
             return IsUniqueViolation(dbEx);
         }
+
         return false;
     }
 
@@ -1438,6 +2101,7 @@ public abstract class SqlDialect:ISqlDialect
         {
             return false;
         }
+
         return int.TryParse(match.Groups[1].Value, out major);
     }
 
@@ -1461,6 +2125,7 @@ public abstract class SqlDialect:ISqlDialect
                 return false;
             }
         }
+
         return true;
     }
 
@@ -1471,11 +2136,12 @@ public abstract class SqlDialect:ISqlDialect
             return 2;
         }
 
-        var candidate = (min % 2 == 0) ? min + 1 : min;
+        var candidate = min % 2 == 0 ? min + 1 : min;
         while (!IsPrime(candidate))
         {
             candidate += 2;
         }
+
         return candidate;
     }
 }

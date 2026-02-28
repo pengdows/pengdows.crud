@@ -2,6 +2,7 @@
 
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
 using Xunit;
 
@@ -20,9 +21,9 @@ public class UnsupportedProcWrappingStrategyTests
         var args = "arg1, arg2";
 
         // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() => 
+        var exception = Assert.Throws<NotSupportedException>(() =>
             strategy.Wrap(procName, ExecutionType.Read, args));
-        
+
         Assert.Equal("Stored procedures are not supported by this database.", exception.Message);
     }
 
@@ -35,9 +36,9 @@ public class UnsupportedProcWrappingStrategyTests
         var args = "arg1, arg2";
 
         // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() => 
+        var exception = Assert.Throws<NotSupportedException>(() =>
             strategy.Wrap(procName, ExecutionType.Write, args));
-        
+
         Assert.Equal("Stored procedures are not supported by this database.", exception.Message);
     }
 
@@ -52,9 +53,9 @@ public class UnsupportedProcWrappingStrategyTests
         var strategy = new UnsupportedProcWrappingStrategy();
 
         // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() => 
+        var exception = Assert.Throws<NotSupportedException>(() =>
             strategy.Wrap(procName, ExecutionType.Read, args));
-        
+
         Assert.Equal("Stored procedures are not supported by this database.", exception.Message);
     }
 
@@ -65,9 +66,9 @@ public class UnsupportedProcWrappingStrategyTests
         var strategy = new UnsupportedProcWrappingStrategy();
 
         // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() => 
+        var exception = Assert.Throws<NotSupportedException>(() =>
             strategy.Wrap(null!, ExecutionType.Read, "args"));
-        
+
         Assert.Equal("Stored procedures are not supported by this database.", exception.Message);
     }
 
@@ -78,9 +79,9 @@ public class UnsupportedProcWrappingStrategyTests
         var strategy = new UnsupportedProcWrappingStrategy();
 
         // Act & Assert
-        var exception = Assert.Throws<NotSupportedException>(() => 
+        var exception = Assert.Throws<NotSupportedException>(() =>
             strategy.Wrap("ProcName", ExecutionType.Read, null!));
-        
+
         Assert.Equal("Stored procedures are not supported by this database.", exception.Message);
     }
 }

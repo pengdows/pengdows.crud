@@ -1,16 +1,50 @@
+// =============================================================================
+// FILE: DuckDbDialect.cs
+// PURPOSE: DuckDB specific dialect implementation for analytical workloads.
+//
+// AI SUMMARY:
+// - Supports DuckDB 0.8+ with modern analytical SQL features.
+// - Key features:
+//   * MERGE statement support (DuckDB 1.4+)
+//   * Parameter marker: $ (dollar sign)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 65535 (theoretical limit)
+//   * Excellent SQL standard compliance
+// - MERGE RETURNING support in DuckDB 1.4+.
+// - DuckDB MERGE does not allow table alias on UPDATE SET left side.
+// - Embedded analytics database with columnar storage.
+// - Handles in-memory and file-based connections.
+// - Connection mode similar to SQLite handling.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// DuckDB dialect with modern analytical SQL features and excellent standard compliance
+/// DuckDB dialect with modern analytical SQL features.
 /// </summary>
-public class DuckDbDialect : SqlDialect
+/// <remarks>
+/// <para>
+/// Supports DuckDB 0.8 and later with excellent SQL standard compliance.
+/// Optimized for analytical/OLAP workloads with columnar storage.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses MERGE statement (DuckDB 1.4+).
+/// Note: MERGE UPDATE SET cannot use table alias on left side.
+/// </para>
+/// <para>
+/// <strong>Connection Modes:</strong> Similar to SQLite, uses SingleConnection
+/// or SingleWriter mode based on connection string.
+/// </para>
+/// </remarks>
+internal class DuckDbDialect : SqlDialect
 {
     internal DuckDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
@@ -19,18 +53,27 @@ public class DuckDbDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
     public override string ParameterMarker => "$";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: DuckDB practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+
     // IMMUTABLE: DuckDB identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
-    
+
     // DuckDB supports prepare for modest performance gains
     public override bool PrepareStatements => true;
 
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
     public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
+
+    // DuckDB MERGE does NOT allow table alias on left side of UPDATE SET
+    // Correct: UPDATE SET col = value
+    // Error:   UPDATE SET t.col = value  -- "SET columns cannot be qualified"
+    public override bool MergeUpdateRequiresTargetAlias => false;
+
     public override bool SupportsInsertOnConflict => true; // ON CONFLICT support
     public override bool SupportsJsonTypes => true; // Excellent JSON support
     public override bool SupportsArrayTypes => true; // Strong array support
@@ -43,29 +86,42 @@ public class DuckDbDialect : SqlDialect
     public override bool SupportsRowPatternMatching => false; // Not yet supported
     public override bool SupportsMultidimensionalArrays => true; // Nested structures
     public override bool SupportsInsertReturning => true; // DuckDB supports RETURNING clause
+    public override bool SupportsSavepoints => false; // Skip savepoint support until DuckDB driver reliably allows it
 
     // Database encryption support (DuckDB 1.4.0+)
     public virtual bool SupportsEncryption => IsVersionAtLeast(1, 4); // AES-256-GCM encryption with ATTACH
 
     // FILL window function support (DuckDB 1.4.0+)
-    public virtual bool SupportsFillWindowFunction => IsVersionAtLeast(1, 4); // FILL() window function for interpolation
-
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
+    public virtual bool SupportsFillWindowFunction =>
+        IsVersionAtLeast(1, 4); // FILL() window function for interpolation
 
     public override string GetLastInsertedIdQuery()
     {
         return "SELECT lastval()"; // DuckDB supports lastval() like PostgreSQL
     }
 
-    public override string GetVersionQuery() => "SELECT version()";
-
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
+    public override string UpsertIncomingColumn(string columnName)
     {
-        var cs = context.ConnectionString;
-        if (readOnly && !IsMemoryConnection(cs))
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
+    public override string GetVersionQuery()
+    {
+        return "SELECT version()";
+    }
+
+    internal override void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
+    {
+        var cs = string.IsNullOrWhiteSpace(connectionStringOverride)
+            ? context.ConnectionString
+            : connectionStringOverride;
+
+        if (readOnly && !IsMemoryDatabase(cs) &&
+            cs.IndexOf("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase) < 0)
         {
             cs = $"{cs};access_mode=READ_ONLY";
         }
@@ -77,26 +133,48 @@ public class DuckDbDialect : SqlDialect
         connection.ConnectionString = cs;
     }
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        return readOnly ? "PRAGMA read_only = 1;" : string.Empty;
-    }
-
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
-    {
-        return string.Empty;
-    }
-
-    private static bool IsMemoryConnection(string connectionString)
+    internal override string GetReadOnlyConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            return false;
+            return connectionString;
         }
 
-        return connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase);
+        return IsMemoryDatabase(connectionString)
+            ? connectionString
+            : $"{connectionString};access_mode=READ_ONLY";
     }
+
+    private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
+    private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
+    private const string ReadWriteSessionSetting = "SET access_mode = 'read_write';";
+
+    public override string? GetReadOnlyConnectionParameter()
+    {
+        return ReadOnlyConnectionParam;
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return ReadOnlySessionSetting;
+    }
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
+    }
+
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "DuckDB", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return ReadWriteSessionSetting;
+    }
+
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         // Try SELECT version() first
@@ -178,10 +256,10 @@ public class DuckDbDialect : SqlDialect
 
         // DuckDB specific parsing for format like "v1.0.0" or "DuckDB v0.9.2"
         var duckDbMatch = Regex.Match(
-            versionString, 
-            @"(?:DuckDB\s+)?v?(\d+)\.(\d+)\.(\d+)(?:-\w+)?", 
+            versionString,
+            @"(?:DuckDB\s+)?v?(\d+)\.(\d+)\.(\d+)(?:-\w+)?",
             RegexOptions.IgnoreCase);
-            
+
         if (duckDbMatch.Success)
         {
             if (int.TryParse(duckDbMatch.Groups[1].Value, out var major) &&
@@ -197,8 +275,8 @@ public class DuckDbDialect : SqlDialect
 
     public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
     {
-        bool selectFailed = false;
-        bool pragmaFailed = false;
+        var selectFailed = false;
+        var pragmaFailed = false;
 
         try
         {
@@ -209,6 +287,7 @@ public class DuckDbDialect : SqlDialect
             {
                 return s;
             }
+
             // If SELECT returned null/empty, tests expect an empty string, not a pragma fallback
             return string.Empty;
         }
@@ -247,13 +326,15 @@ public class DuckDbDialect : SqlDialect
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var parameter = base.CreateDbParameter(name, type, value);
-        
+
         // DuckDB specific parameter handling
         if (type == DbType.Guid && value is Guid guidValue)
         {
             // DuckDB handles GUIDs as strings in UUID format
             parameter.DbType = DbType.String;
-            parameter.Value = guidValue.ToString();
+            // Use string.Create with Guid.TryFormat to avoid allocations
+            parameter.Value =
+                string.Create(36, guidValue, static (span, guid) => { guid.TryFormat(span, out _, "D"); });
         }
         else if (type == DbType.Boolean && value is bool boolValue)
         {
@@ -275,4 +356,5 @@ public class DuckDbDialect : SqlDialect
     public override string? PoolingSettingName => null;
     public override string? MinPoolSizeSettingName => null;
     public override string? MaxPoolSizeSettingName => null;
+    internal override int DefaultMaxPoolSize => int.MaxValue;
 }

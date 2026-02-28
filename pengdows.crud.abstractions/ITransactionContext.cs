@@ -1,8 +1,5 @@
-#region
-
 using System.Data;
-
-#endregion
+using System.Threading;
 
 namespace pengdows.crud;
 
@@ -12,6 +9,11 @@ namespace pengdows.crud;
 /// </summary>
 public interface ITransactionContext : IDatabaseContext
 {
+    /// <summary>
+    /// Identifier for the current transaction.
+    /// </summary>
+    Guid TransactionId { get; }
+
     /// <summary>
     /// Indicates whether the transaction has been committed.
     /// </summary>
@@ -38,9 +40,21 @@ public interface ITransactionContext : IDatabaseContext
     void Commit();
 
     /// <summary>
+    /// Commits the transaction asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task CommitAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Rolls back the transaction.
     /// </summary>
     void Rollback();
+
+    /// <summary>
+    /// Rolls back the transaction asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task RollbackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a named savepoint within the transaction scope.

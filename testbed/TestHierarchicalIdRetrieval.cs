@@ -1,7 +1,10 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Data.Sqlite;
+using pengdows.crud.infrastructure;
+
+namespace testbed;
 
 public static class HierarchicalIdRetrievalDemo
 {
@@ -14,16 +17,16 @@ public static class HierarchicalIdRetrievalDemo
         var factory = SqliteFactory.Instance;
 
         // Test all database types and their strategy selection
-        var dialects = new Dictionary<string, SqlDialect>
+        var dialects = new Dictionary<string, ISqlDialect>
         {
-            {"PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger)},
-            {"SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger)},
-            {"MySQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger)},
-            {"MariaDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MariaDb, factory, logger)},
-            {"SQLite", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite, factory, logger)},
-            {"Oracle", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger)},
-            {"Firebird", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Firebird, factory, logger)},
-            {"DuckDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.DuckDB, factory, logger)}
+            { "PostgreSQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger) },
+            { "SQL Server", SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger) },
+            { "MySQL", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger) },
+            { "MariaDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.MariaDb, factory, logger) },
+            { "SQLite", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite, factory, logger) },
+            { "Oracle", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger) },
+            { "Firebird", SqlDialectFactory.CreateDialectForType(SupportedDatabase.Firebird, factory, logger) },
+            { "DuckDB", SqlDialectFactory.CreateDialectForType(SupportedDatabase.DuckDB, factory, logger) }
         };
 
         Console.WriteLine("📊 Strategy Selection by Database:");
@@ -51,18 +54,19 @@ public static class HierarchicalIdRetrievalDemo
 
         // Demonstrate RETURNING clause
         var postgres = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, logger);
-        Console.WriteLine($"PostgreSQL RETURNING: {postgres.GetInsertReturningClause("user_id")}");
+        Console.WriteLine($"PostgreSQL RETURNING: {postgres.RenderInsertReturningClause("user_id")}");
 
         // Demonstrate OUTPUT clause
         var sqlServer = SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer, factory, logger);
-        Console.WriteLine($"SQL Server OUTPUT:   {sqlServer.GetInsertReturningClause("user_id")}");
+        Console.WriteLine($"SQL Server OUTPUT:   {sqlServer.RenderInsertReturningClause("user_id")}");
 
         // Demonstrate session function
         var mysql = SqlDialectFactory.CreateDialectForType(SupportedDatabase.MySql, factory, logger);
         Console.WriteLine($"MySQL Session Func:  {mysql.GetLastInsertedIdQuery()}");
 
         // Demonstrate correlation token
-        Console.WriteLine($"Correlation Token:   {postgres.GetCorrelationTokenLookupQuery("users", "id", "insert_token", ":token")}");
+        Console.WriteLine(
+            $"Correlation Token:   {postgres.GetCorrelationTokenLookupQuery("users", "id", "insert_token", ":token")}");
 
         // Demonstrate Oracle sequence handling
         var oracle = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Oracle, factory, logger);

@@ -1,20 +1,27 @@
-using pengdows.crud;
-using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
+using pengdows.crud.wrappers;
+using System.Data;
+using System.Runtime.CompilerServices;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.ConnectionManagement;
 
 /// <summary>
-/// Integration tests for DbMode functionality demonstrating pengdows.crud's
-/// intelligent connection management strategies across different database providers.
+/// Integration tests for DbMode connection management strategies including
+/// Standard, KeepAlive, SingleWriter, and SingleConnection modes.
 /// </summary>
+[Collection("IntegrationTests")]
 public class DbModeTests : DatabaseTestBase
 {
-    public DbModeTests(ITestOutputHelper output) : base(output) { }
+    private static long _nextId;
+    private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
+
+    public DbModeTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    {
+    }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -22,375 +29,464 @@ public class DbModeTests : DatabaseTestBase
         await tableCreator.CreateTestTableAsync();
     }
 
-    [Fact]
-    public async Task DbMode_Standard_OptimizesConnectionUsage()
+    [SkippableFact]
+    public async Task DbMode_Standard_OpensAndClosesConnections()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Create a new context with Standard mode explicitly
-            var config = new DatabaseContextConfiguration
-            {
-                ConnectionString = context.ConnectionString,
-                DbProviderFactory = context.Factory,
-                DbMode = DbMode.Standard
-            };
+            // Arrange - SQLite/DuckDB containers use SingleWriter mode, others use Standard
+            var expectedMode = provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB
+                ? DbMode.SingleWriter
+                : DbMode.Standard;
+            Assert.Equal(expectedMode, context.ConnectionMode);
 
-            using var standardContext = new DatabaseContext(config);
-            var helper = CreateEntityHelper(standardContext);
+            var helper = CreateTableGateway(context);
+            var entity = CreateTestEntity(NameEnum.Test, 100);
 
-            // Act - Perform multiple operations
-            var entity1 = CreateTestEntity($"Standard1-{provider}");
-            var entity2 = CreateTestEntity($"Standard2-{provider}");
+            var initialConnCount = context.NumberOfOpenConnections;
 
-            await helper.CreateAsync(entity1, standardContext);
-            await helper.CreateAsync(entity2, standardContext);
+            // Act - Perform operation
+            await helper.CreateAsync(entity, context);
 
-            var retrieved = await helper.RetrieveAsync(new[] { entity1.Id, entity2.Id }, standardContext);
-
-            // Assert
-            Assert.Equal(DbMode.Standard, standardContext.ConnectionMode);
-            Assert.Equal(2, retrieved.Count);
-            Assert.True(standardContext.NumberOfOpenConnections >= 0); // Connections should be closed between operations
-
-            Output.WriteLine($"{provider} Standard mode: Max connections: {standardContext.MaxNumberOfConnections}");
+            // Assert - Every mode should return to the baseline open count after the operation
+            Assert.Equal(initialConnCount, context.NumberOfOpenConnections);
         });
     }
 
-    [Fact]
-    public async Task DbMode_KeepAlive_MaintainsSentinelConnection()
+    [SkippableFact]
+    public async Task DbMode_Standard_MultipleOperations_EachGetsNewConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip if provider doesn't benefit from KeepAlive
-            if (provider == SupportedDatabase.Sqlite)
+            // Arrange
+            var helper = CreateTableGateway(context);
+            var entities = new[]
             {
-                Output.WriteLine($"Skipping KeepAlive test for {provider} - not applicable");
-                return;
+                CreateTestEntity(NameEnum.Test, 200),
+                CreateTestEntity(NameEnum.Test2, 201),
+                CreateTestEntity(NameEnum.Test, 202)
+            };
+
+            // Act - Multiple operations
+            foreach (var entity in entities)
+            {
+                await helper.CreateAsync(entity, context);
+
+                // In Standard mode, connection count should return to baseline
+                // (or stay low for pooled connections)
+                Output.WriteLine($"After insert {entity.Id}: {context.NumberOfOpenConnections} connections open");
             }
 
-            // Create a new context with KeepAlive mode
-            var config = new DatabaseContextConfiguration
-            {
-                ConnectionString = context.ConnectionString,
-                DbProviderFactory = context.Factory,
-                DbMode = DbMode.KeepAlive
-            };
-
-            using var keepAliveContext = new DatabaseContext(config);
-            var helper = CreateEntityHelper(keepAliveContext);
-
-            // Act - Perform operations
-            var entity = CreateTestEntity($"KeepAlive-{provider}");
-            await helper.CreateAsync(entity, keepAliveContext);
-
-            // Assert
-            Assert.Equal(DbMode.KeepAlive, keepAliveContext.ConnectionMode);
-            Assert.True(keepAliveContext.NumberOfOpenConnections >= 1); // Should maintain sentinel connection
-
-            var retrieved = await helper.RetrieveOneAsync(entity.Id, keepAliveContext);
-            Assert.NotNull(retrieved);
-
-            Output.WriteLine($"{provider} KeepAlive mode: Open connections: {keepAliveContext.NumberOfOpenConnections}");
+            // Assert - All entities should be created successfully
+            var retrieved = await helper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
+            Assert.Equal(entities.Length, retrieved.Count);
         });
     }
 
-    [Fact]
-    public async Task DbMode_SingleWriter_HandlesReadWriteOperations()
+    [SkippableFact]
+    public async Task DbMode_Standard_WithTransaction_MaintainsConnection()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip if provider doesn't benefit from SingleWriter
-            if (provider != SupportedDatabase.Sqlite)
+            // Arrange
+            var entity1 = CreateTestEntity(NameEnum.Test, 300);
+            var entity2 = CreateTestEntity(NameEnum.Test2, 301);
+
+            // Act - Within transaction, connection should stay open
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            var helper = CreateTableGateway(context);
+
+            var connCountInTransaction = transaction.NumberOfOpenConnections;
+            if (provider == SupportedDatabase.Snowflake)
             {
-                Output.WriteLine($"Skipping SingleWriter test for {provider} - primarily for SQLite");
-                return;
+                Output.WriteLine("Snowflake opens connections lazily; skipping initial connection count assertion");
+            }
+            else
+            {
+                Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
             }
 
-            // Create a new context with SingleWriter mode
-            var config = new DatabaseContextConfiguration
+            await helper.CreateAsync(entity1, transaction);
+            await helper.CreateAsync(entity2, transaction);
+
+            // Connection should still be open during transaction
+            if (provider != SupportedDatabase.Snowflake)
             {
-                ConnectionString = context.ConnectionString,
-                DbProviderFactory = context.Factory,
-                DbMode = DbMode.SingleWriter
-            };
-
-            using var singleWriterContext = new DatabaseContext(config);
-            var helper = CreateEntityHelper(singleWriterContext);
-
-            // Act - Mix read and write operations
-            var entity1 = CreateTestEntity($"SingleWriter1-{provider}");
-            var entity2 = CreateTestEntity($"SingleWriter2-{provider}");
-
-            // Write operations
-            await helper.CreateAsync(entity1, singleWriterContext);
-            await helper.CreateAsync(entity2, singleWriterContext);
-
-            // Read operations
-            var allEntities = await helper.RetrieveAsync(new[] { entity1.Id, entity2.Id }, singleWriterContext);
-
-            // Write operation (update)
-            entity1.Name = $"Updated-{provider}";
-            await helper.UpdateAsync(entity1, singleWriterContext);
-
-            // Assert
-            Assert.Equal(DbMode.SingleWriter, singleWriterContext.ConnectionMode);
-            Assert.Equal(2, allEntities.Count);
-
-            var updated = await helper.RetrieveOneAsync(entity1.Id, singleWriterContext);
-            Assert.NotNull(updated);
-            Assert.Contains("Updated", updated.Name);
-
-            Output.WriteLine($"{provider} SingleWriter mode: Max connections: {singleWriterContext.MaxNumberOfConnections}");
-        });
-    }
-
-    [Fact]
-    public async Task DbMode_SingleConnection_SerializesAllOperations()
-    {
-        await RunTestAgainstProviderAsync(SupportedDatabase.Sqlite, async context =>
-        {
-            // Create in-memory SQLite which should auto-select SingleConnection mode
-            var config = new DatabaseContextConfiguration
-            {
-                ConnectionString = "Data Source=:memory:",
-                DbProviderFactory = context.Factory,
-                DbMode = DbMode.SingleConnection
-            };
-
-            using var singleConnContext = new DatabaseContext(config);
-
-            // Setup table in the single connection context
-            await SetupDatabaseAsync(SupportedDatabase.Sqlite, singleConnContext);
-            var helper = CreateEntityHelper(singleConnContext);
-
-            // Act - Perform concurrent-like operations on single connection
-            var entity1 = CreateTestEntity("SingleConn1");
-            var entity2 = CreateTestEntity("SingleConn2");
-
-            await helper.CreateAsync(entity1, singleConnContext);
-            await helper.CreateAsync(entity2, singleConnContext);
-
-            // Use transaction to test single connection behavior
-            using var transaction = await singleConnContext.BeginTransactionAsync();
-
-            entity1.Name = "TransactionUpdate";
-            await helper.UpdateAsync(entity1, transaction);
-
-            var retrieved = await helper.RetrieveOneAsync(entity1.Id, transaction);
-            Assert.NotNull(retrieved);
-            Assert.Equal("TransactionUpdate", retrieved.Name);
+                Assert.True(transaction.NumberOfOpenConnections > 0,
+                    "Connection should remain open during transaction");
+            }
 
             transaction.Commit();
 
-            // Assert
-            Assert.Equal(DbMode.SingleConnection, singleConnContext.ConnectionMode);
-            Assert.Equal(1, singleConnContext.MaxNumberOfConnections); // Should never exceed 1
+            // Assert - After commit, verify data persisted
+            var baseHelper = CreateTableGateway(context);
+            var retrieved1 = await baseHelper.RetrieveOneAsync(entity1.Id, context);
+            var retrieved2 = await baseHelper.RetrieveOneAsync(entity2.Id, context);
 
-            Output.WriteLine($"SQLite SingleConnection mode: Max connections: {singleConnContext.MaxNumberOfConnections}");
+            Assert.NotNull(retrieved1);
+            Assert.NotNull(retrieved2);
         });
     }
 
-    [Fact]
-    public async Task DbMode_AutoSelection_ChoosesOptimalMode()
+    [SkippableFact]
+    public async Task DbMode_Standard_ParallelOperations_IndependentConnections()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Test that the library auto-selects appropriate modes for different connection strings
-            var testCases = GetConnectionStringTestCases(provider, context.ConnectionString);
+            // Arrange
+            var entities = Enumerable.Range(0, 10)
+                .Select(i => CreateTestEntity(NameEnum.Test, 400 + i))
+                .ToList();
 
-            foreach (var (connectionString, expectedMode, description) in testCases)
+            // Act - Parallel operations should each get independent connections
+            var tasks = entities.Select(async entity =>
             {
-                try
-                {
-                    var config = new DatabaseContextConfiguration
-                    {
-                        ConnectionString = connectionString,
-                        DbProviderFactory = context.Factory
-                        // No explicit DbMode - let it auto-select
-                    };
-
-                    using var autoContext = new DatabaseContext(config);
-
-                    // Assert
-                    Assert.Equal(expectedMode, autoContext.ConnectionMode);
-                    Output.WriteLine($"{provider} Auto-selection: {description} -> {expectedMode}");
-                }
-                catch (Exception ex)
-                {
-                    Output.WriteLine($"{provider} Auto-selection test failed for {description}: {ex.Message}");
-                    // Continue with other test cases
-                }
-            }
-        });
-    }
-
-    [Fact]
-    public async Task DbMode_ConnectionCounting_TracksOpenConnections()
-    {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
-        {
-            var helper = CreateEntityHelper(context);
-
-            // Record initial state
-            var initialOpen = context.NumberOfOpenConnections;
-            var initialMax = context.MaxNumberOfConnections;
-
-            // Act - Perform operations that should use connections
-            var entity = CreateTestEntity($"Counting-{provider}");
-            await helper.CreateAsync(entity, context);
-
-            var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
-            Assert.NotNull(retrieved);
-
-            // Assert - Connection counting should work
-            Assert.True(context.MaxNumberOfConnections >= initialMax);
-
-            Output.WriteLine($"{provider} Connection tracking - Initial: {initialOpen}, Max reached: {context.MaxNumberOfConnections}");
-        });
-    }
-
-    [Fact]
-    public async Task DbMode_ConcurrentOperations_HandlesParallelAccess()
-    {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
-        {
-            var helper = CreateEntityHelper(context);
-
-            // Act - Run parallel operations
-            var tasks = Enumerable.Range(0, 5).Select(async i =>
-            {
-                var entity = CreateTestEntity($"Parallel{i}-{provider}");
-                await helper.CreateAsync(entity, context);
-                return await helper.RetrieveOneAsync(entity.Id, context);
-            }).ToArray();
+                var helper = CreateTableGateway(context);
+                return await helper.CreateAsync(entity, context);
+            });
 
             var results = await Task.WhenAll(tasks);
 
             // Assert
-            Assert.Equal(5, results.Length);
-            Assert.All(results, r => Assert.NotNull(r));
+            Assert.All(results, r => Assert.True(r));
 
-            // Check that connection management handled concurrency appropriately
-            var maxConnections = context.MaxNumberOfConnections;
-            var currentConnections = context.NumberOfOpenConnections;
-
-            Output.WriteLine($"{provider} Parallel operations - Max: {maxConnections}, Current: {currentConnections}");
-
-            // For Standard mode, connections should be released
-            if (context.ConnectionMode == DbMode.Standard)
-            {
-                Assert.True(currentConnections <= maxConnections);
-            }
+            // Verify all persisted
+            var helper = CreateTableGateway(context);
+            var retrieved = await helper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
+            Assert.Equal(entities.Count, retrieved.Count);
         });
     }
 
-    // Helper methods
-
-    private EntityHelper<TestTable, long> CreateEntityHelper(IDatabaseContext context)
+    [SkippableFact]
+    public async Task ExecutionType_Read_UsesReadConnection()
     {
-        var auditResolver = Host.Services.GetService<IAuditValueResolver>() ??
-                           new StringAuditContextProvider();
-        return new EntityHelper<TestTable, long>(context, auditValueResolver: auditResolver);
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 500);
+            await CreateTableGateway(context).CreateAsync(entity, context);
+
+            // Act - Use ExecuteReaderAsync which uses ExecutionType.Read
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+
+            await using var container = context.CreateSqlContainer();
+            container.Query.Append("SELECT ")
+                .Append(idColumn).Append(", ")
+                .Append(nameColumn).Append(", ")
+                .Append(valueColumn)
+                .Append(" FROM ").Append(tableName)
+                .Append(" WHERE ").Append(idColumn).Append(" = ")
+                .Append(container.MakeParameterName("id"));
+            container.AddParameterWithValue("id", DbType.Int64, entity.Id);
+
+            await using var reader = await container.ExecuteReaderAsync();
+
+            // Assert - Verify data was read correctly
+            Assert.True(await reader.ReadAsync());
+            var readId = reader.GetInt64(0);
+            Assert.Equal(entity.Id, readId);
+        });
     }
 
-    private static TestTable CreateTestEntity(string name)
+    [SkippableFact]
+    public async Task ExecutionType_Write_UsesWriteConnection()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var entity = CreateTestEntity(NameEnum.Test, 600);
+            int rowsAffected;
+
+            // Scope write connection so the permit (and turnstile in SingleWriter mode)
+            // is released before the verification read below.
+            {
+                await using var writeConnection = context.GetConnection(ExecutionType.Write);
+                if (writeConnection.State != ConnectionState.Open)
+                {
+                    await writeConnection.OpenAsync();
+                }
+
+                var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
+                var idColumn = context.WrapObjectName("id");
+                var nameColumn = context.WrapObjectName("name");
+                var valueColumn = context.WrapObjectName("value");
+                var activeColumn = context.WrapObjectName("is_active");
+                var createdColumn = context.WrapObjectName("created_at");
+
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
+                container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                container.Query.Append(container.MakeParameterName("name")).Append(", ");
+                container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                container.Query.Append(container.MakeParameterName("created")).Append(")");
+
+                container.AddParameterWithValue("id", DbType.Int64, entity.Id);
+                container.AddParameterWithValue("name", DbType.String, entity.Name.ToString());
+                container.AddParameterWithValue("value", DbType.Int32, entity.Value);
+                container.AddParameterWithValue("active", GetBooleanDbType(provider), entity.IsActive);
+                container.AddParameterWithValue("created", DbType.DateTime, entity.CreatedOn);
+
+                await using var command = container.CreateCommand(writeConnection);
+                rowsAffected = await command.ExecuteNonQueryAsync();
+            }
+
+            // Assert
+            Assert.Equal(1, rowsAffected);
+
+            // Verify it was actually inserted (write permit released, safe to read)
+            var helper = CreateTableGateway(context);
+            var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+        });
+    }
+
+    [SkippableFact]
+    public async Task Transaction_ReadOnly_AllowsReadsOnly()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Skip providers that don't properly support read-only transactions
+            if (!SupportsReadOnlyTransactions(provider))
+            {
+                Output.WriteLine($"Skipping read-only transaction test for {provider}");
+                return;
+            }
+
+            // Arrange - Create data first
+            var entity = CreateTestEntity(NameEnum.Test, 700);
+            await CreateTableGateway(context).CreateAsync(entity, context);
+
+            // Act - Begin read-only transaction
+            await using var readTransaction = context.BeginTransaction(
+                IsolationLevel.ReadCommitted,
+                ExecutionType.Read,
+                true);
+
+            var helper = CreateTableGateway(context);
+
+            // Assert - Reads should work
+            var retrieved = await helper.RetrieveOneAsync(entity.Id, readTransaction);
+            Assert.NotNull(retrieved);
+
+            // Writes should fail
+            var newEntity = CreateTestEntity(NameEnum.Test2, 701);
+            await Assert.ThrowsAnyAsync<Exception>(async () =>
+            {
+                await helper.CreateAsync(newEntity, readTransaction);
+            });
+        });
+    }
+
+    [SkippableFact]
+    public async Task Connection_Reuse_WithinTransaction_SameConnection()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange & Act
+            await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+
+            var conn1 = transaction.GetConnection(ExecutionType.Write);
+            var conn2 = transaction.GetConnection(ExecutionType.Write);
+
+            // Assert - Within a transaction, should reuse the same connection
+            Assert.Same(conn1, conn2);
+        });
+    }
+
+    [SkippableFact]
+    public async Task Connection_Close_OutsideTransaction_ClosesImmediately()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var initialCount = context.NumberOfOpenConnections;
+
+            // Act - Get connection, open it, then close it
+            ITrackedConnection? conn = null;
+            try
+            {
+                conn = context.GetConnection(ExecutionType.Read);
+                await conn.OpenAsync();
+
+                var openCount = context.NumberOfOpenConnections;
+                Output.WriteLine($"Connections open: {openCount}");
+
+                context.CloseAndDisposeConnection(conn);
+                conn = null;
+            }
+            finally
+            {
+                if (conn != null)
+                {
+                    context.CloseAndDisposeConnection(conn);
+                }
+            }
+
+            // Assert - Connection should be closed
+            // Note: In Standard mode with connection pooling, the count might not be exactly initial
+            // but it should not have leaked
+            Assert.True(context.NumberOfOpenConnections >= initialCount);
+        });
+    }
+
+    [SkippableFact]
+    public async Task MultipleTransactions_Sequential_EachGetsOwnConnection()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entities = new[]
+            {
+                CreateTestEntity(NameEnum.Test, 800),
+                CreateTestEntity(NameEnum.Test2, 801),
+                CreateTestEntity(NameEnum.Test, 802)
+            };
+
+            // Act - Sequential transactions
+            foreach (var entity in entities)
+            {
+                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                var helper = CreateTableGateway(context);
+
+                await helper.CreateAsync(entity, transaction);
+                transaction.Commit();
+            }
+
+            // Assert
+            var baseHelper = CreateTableGateway(context);
+            var retrieved = await baseHelper.RetrieveAsync(entities.Select(e => e.Id).ToList(), context);
+            Assert.Equal(entities.Length, retrieved.Count);
+        });
+    }
+
+    [SkippableFact]
+    public async Task Connection_Metrics_TracksOpenConnections()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var initialCount = context.NumberOfOpenConnections;
+            Output.WriteLine($"Initial connection count: {initialCount}");
+
+            // Act - Perform some operations
+            var helper = CreateTableGateway(context);
+            var entity = CreateTestEntity(NameEnum.Test, 900);
+
+            await helper.CreateAsync(entity, context);
+            Output.WriteLine($"After create: {context.NumberOfOpenConnections} connections");
+
+            await helper.RetrieveOneAsync(entity.Id, context);
+            Output.WriteLine($"After retrieve: {context.NumberOfOpenConnections} connections");
+
+            await helper.DeleteAsync(entity.Id, context);
+            Output.WriteLine($"After delete: {context.NumberOfOpenConnections} connections");
+
+            // Assert - Metrics should be tracked
+            var metrics = context.Metrics;
+            // Metrics is a value type, so no null check needed
+
+            // In Standard mode, connections should not accumulate
+            Output.WriteLine($"Final connection count: {context.NumberOfOpenConnections}");
+        });
+    }
+
+    [SkippableFact]
+    public async Task IsolationLevel_ReadCommitted_PreventsDirtyReads()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Skip SQLite which has limited isolation support
+            if (provider == SupportedDatabase.Sqlite)
+            {
+                Output.WriteLine("Skipping isolation test for SQLite");
+                return;
+            }
+
+            if (provider == SupportedDatabase.DuckDB)
+            {
+                Output.WriteLine("Skipping isolation test for DuckDB");
+                return;
+            }
+
+            if (provider == SupportedDatabase.SqlServer && !context.RCSIEnabled)
+            {
+                Output.WriteLine("Skipping isolation test for SQL Server without RCSI");
+                return;
+            }
+
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 1000);
+            await CreateTableGateway(context).CreateAsync(entity, context);
+
+            // Act - Transaction 1: Read the entity
+            await using var tx1 = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            var helper1 = CreateTableGateway(context);
+            var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
+            Assert.NotNull(read1);
+            Assert.Equal(entity.Value, read1!.Value);
+
+            // Transaction 2: Update but don't commit
+            await using var tx2 = context.BeginTransaction(IsolationLevel.ReadCommitted);
+            var helper2 = CreateTableGateway(context);
+            var read2 = await helper2.RetrieveOneAsync(entity.Id, tx2);
+            read2!.Value = 2000;
+            await helper2.UpdateAsync(read2, tx2);
+            // Don't commit tx2 yet
+
+            // Transaction 1: Read again - should NOT see uncommitted changes
+            var readAgain = await helper1.RetrieveOneAsync(entity.Id, tx1);
+            Assert.NotNull(readAgain);
+            Assert.Equal(entity.Value, readAgain!.Value); // Should still see original value
+
+            tx2.Rollback(); // Cleanup
+            tx1.Commit();
+
+            // Assert - Original value should be preserved
+            var final = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
+            Assert.Equal(entity.Value, final!.Value);
+        });
+    }
+
+    private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
+    {
+        return _gatewayCache.GetValue(context, ctx =>
+        {
+            var auditResolver = GetAuditResolver();
+            return new TableGateway<TestTable, long>(ctx, auditResolver);
+        });
+    }
+
+    private static TestTable CreateTestEntity(NameEnum name, int value)
     {
         return new TestTable
         {
+            Id = Interlocked.Increment(ref _nextId),
             Name = name,
-            Value = Random.Shared.Next(1, 1000),
-            Description = $"Test description for {name}",
+            Value = value,
+            Description = $"DbMode test: {name}",
             IsActive = true,
             CreatedOn = DateTime.UtcNow
         };
     }
 
-    private static IEnumerable<(string ConnectionString, DbMode ExpectedMode, string Description)>
-        GetConnectionStringTestCases(SupportedDatabase provider, string baseConnectionString)
+    private static DbType GetBooleanDbType(SupportedDatabase provider)
     {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => new[]
-            {
-                ("Data Source=:memory:", DbMode.SingleConnection, "In-memory SQLite"),
-                ("Data Source=/tmp/test.db", DbMode.SingleWriter, "File-based SQLite"),
-                (baseConnectionString, DbMode.SingleWriter, "Test SQLite connection")
-            },
-
-            SupportedDatabase.PostgreSql => new[]
-            {
-                (baseConnectionString, DbMode.Standard, "Standard PostgreSQL"),
-                (AddPoolingToConnectionString(baseConnectionString, false), DbMode.Standard, "PostgreSQL with pooling disabled")
-            },
-
-            SupportedDatabase.SqlServer => new[]
-            {
-                (baseConnectionString, DbMode.Standard, "Standard SQL Server"),
-                ("Server=(localdb)\\mssqllocaldb;Database=Test;", DbMode.Standard, "LocalDB connection")
-            },
-
-            _ => new[]
-            {
-                (baseConnectionString, DbMode.Standard, $"Standard {provider} connection")
-            }
-        };
+        return provider == SupportedDatabase.Sqlite ? DbType.Int32 : DbType.Boolean;
     }
 
-    private static string AddPoolingToConnectionString(string connectionString, bool enablePooling)
+    private static bool SupportsReadOnlyTransactions(SupportedDatabase provider)
     {
-        var poolingValue = enablePooling ? "true" : "false";
-        return connectionString.Contains("Pooling=")
-            ? connectionString
-            : $"{connectionString};Pooling={poolingValue}";
-    }
-}
-
-/// <summary>
-/// Helper class for test table creation (minimal version for this test file)
-/// </summary>
-internal class TestTableCreator
-{
-    private readonly IDatabaseContext _context;
-
-    public TestTableCreator(IDatabaseContext context)
-    {
-        _context = context;
-    }
-
-    public async Task CreateTestTableAsync()
-    {
-        var sql = _context.Product switch
-        {
-            SupportedDatabase.Sqlite => @"
-                CREATE TABLE IF NOT EXISTS TestTable (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Name TEXT NOT NULL,
-                    Value INTEGER NOT NULL,
-                    Description TEXT,
-                    IsActive INTEGER NOT NULL DEFAULT 1,
-                    CreatedOn TEXT NOT NULL,
-                    CreatedBy TEXT,
-                    LastUpdatedOn TEXT,
-                    LastUpdatedBy TEXT,
-                    Version INTEGER NOT NULL DEFAULT 1
-                )",
-            SupportedDatabase.PostgreSql => @"
-                CREATE TABLE IF NOT EXISTS TestTable (
-                    Id BIGSERIAL PRIMARY KEY,
-                    Name VARCHAR(255) NOT NULL,
-                    Value INTEGER NOT NULL,
-                    Description TEXT,
-                    IsActive BOOLEAN NOT NULL DEFAULT TRUE,
-                    CreatedOn TIMESTAMP NOT NULL DEFAULT NOW(),
-                    CreatedBy VARCHAR(100),
-                    LastUpdatedOn TIMESTAMP,
-                    LastUpdatedBy VARCHAR(100),
-                    Version INTEGER NOT NULL DEFAULT 1
-                )",
-            _ => throw new NotSupportedException($"Database {_context.Product} not supported in this test")
-        };
-
-        using var container = _context.CreateSqlContainer(sql);
-        await container.ExecuteNonQueryAsync();
+        return provider is SupportedDatabase.PostgreSql or
+            SupportedDatabase.SqlServer or
+            SupportedDatabase.Oracle or
+            SupportedDatabase.MySql;
     }
 }

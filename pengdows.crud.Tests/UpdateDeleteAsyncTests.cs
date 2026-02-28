@@ -11,12 +11,12 @@ namespace pengdows.crud.Tests;
 
 public class UpdateDeleteAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
 {
-    private readonly EntityHelper<TestEntity, int> helper;
+    private readonly TableGateway<TestEntity, int> helper;
 
     public UpdateDeleteAsyncTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
     }
 
     public new async Task InitializeAsync()
@@ -135,7 +135,7 @@ public class UpdateDeleteAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
         await helper.CreateAsync(e, Context);
         var loaded = await helper.RetrieveOneAsync(e);
         Assert.NotNull(loaded);
-        var sc = await helper.BuildUpdateAsync(loaded!, loadOriginal: false);
+        var sc = await helper.BuildUpdateAsync(loaded!, false);
         var sql = sc.Query.ToString();
         Assert.Contains(Context.WrapObjectName("LastUpdatedOn"), sql);
     }

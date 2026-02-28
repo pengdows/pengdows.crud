@@ -1,17 +1,16 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperJsonEgressTests
+public class TableGatewayJsonEgressTests
 {
     [Fact]
     public void BuildCreate_PostgresJsonColumn_AppendsJsonCast()
@@ -19,8 +18,9 @@ public class EntityHelperJsonEgressTests
         var registry = new TypeMapRegistry();
         registry.Register<JsonEntity>();
 
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), registry);
-        var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), registry);
+        var helper = new TableGateway<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
         var container = helper.BuildCreate(entity, ctx);
@@ -39,8 +39,9 @@ public class EntityHelperJsonEgressTests
         var registry = new TypeMapRegistry();
         registry.Register<JsonEntity>();
 
-        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), registry);
-        var helper = new EntityHelper<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), registry);
+        var helper = new TableGateway<JsonEntity, int>(ctx, new StubAuditValueResolver("tester"));
         var entity = new JsonEntity { Payload = new SamplePayload { Message = "hi" } };
 
         var container = helper.BuildCreate(entity, ctx);
@@ -59,15 +60,13 @@ public class EntityHelperJsonEgressTests
         var field = typeof(SqlContainer).GetField("_parameters", BindingFlags.Instance | BindingFlags.NonPublic);
         var dictionary = (IDictionary<string, DbParameter>)field!.GetValue(sqlContainer)!;
 
-        return Assert.Single(dictionary.Values.Where(p => p.Value is string text && text == expectedJson));
+        return Assert.Single(dictionary.Values, p => p.Value is string text && text == expectedJson);
     }
 
     [Table("JsonEntities")]
     private class JsonEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Json]
         [Column("Payload", DbType.String)]

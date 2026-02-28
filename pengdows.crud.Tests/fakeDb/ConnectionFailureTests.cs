@@ -4,6 +4,7 @@ using System;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -122,6 +123,21 @@ public class ConnectionFailureTests
         connection.Open();
 
         Assert.Throws<InvalidOperationException>(() => connection.BeginTransaction());
+    }
+
+    [Fact]
+    public void fakeDbConnection_SetFailOnClose_Dispose_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.SetFailOnClose(new InvalidOperationException("boom"));
+        connection.Open();
+
+        var exception = Record.Exception(() => connection.Dispose());
+
+        Assert.Null(exception);
+        Assert.Equal(1, connection.DisposeCount);
+        Assert.Equal(0, connection.CloseCount);
     }
 
     [Fact]

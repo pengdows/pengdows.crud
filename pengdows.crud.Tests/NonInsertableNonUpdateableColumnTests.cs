@@ -10,7 +10,7 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     public void BuildCreate_SkipsNonInsertableColumn()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
         var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
 
         var container = helper.BuildCreate(entity);
@@ -26,7 +26,7 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     public async Task BuildUpdate_SkipsNonUpdateableColumn()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
         var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
 
         var sc = await helper.BuildUpdateAsync(entity);
@@ -39,14 +39,31 @@ public class NonInsertableNonUpdateableColumnTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public void BuildUpsert_SkipsNonInsertableColumn()
+    {
+        TypeMap.Register<NonInsertableColumnEntity>();
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
+        var entity = new NonInsertableColumnEntity { Id = 1, Name = "Foo", Secret = "Bar" };
+
+        using var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+
+        var columnSecret = Context.WrapObjectName("Secret");
+        var columnName = Context.WrapObjectName("Name");
+        Assert.DoesNotContain(columnSecret, sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(columnName, sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task BuildUpdateAsync_OnlyNonUpdateableChanged_Throws()
     {
         TypeMap.Register<NonInsertableColumnEntity>();
-        var helper = new EntityHelper<NonInsertableColumnEntity, int>(Context);
+        var helper = new TableGateway<NonInsertableColumnEntity, int>(Context);
 
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
-        var createTableSql = $"CREATE TABLE IF NOT EXISTS {qp}NonInsertableColumnEntity{qs} ({qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT, {qp}Name{qs} TEXT, {qp}Secret{qs} TEXT)";
+        var createTableSql =
+            $"CREATE TABLE IF NOT EXISTS {qp}NonInsertableColumnEntity{qs} ({qp}Id{qs} INTEGER PRIMARY KEY AUTOINCREMENT, {qp}Name{qs} TEXT, {qp}Secret{qs} TEXT)";
         var tableContainer = Context.CreateSqlContainer();
         tableContainer.Query.Append(createTableSql);
         await tableContainer.ExecuteNonQueryAsync();

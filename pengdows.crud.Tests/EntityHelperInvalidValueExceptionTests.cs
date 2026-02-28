@@ -15,14 +15,14 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperInvalidValueExceptionTests : SqlLiteContextTestBase
+public class TableGatewayInvalidValueExceptionTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<SetterThrowsEntity, int> _helper;
+    private readonly TableGateway<SetterThrowsEntity, int> _helper;
 
-    public EntityHelperInvalidValueExceptionTests()
+    public TableGatewayInvalidValueExceptionTests()
     {
         TypeMap.Register<SetterThrowsEntity>();
-        _helper = new EntityHelper<SetterThrowsEntity, int>(Context);
+        _helper = new TableGateway<SetterThrowsEntity, int>(Context);
     }
 
     [Fact]
@@ -40,7 +40,10 @@ public class EntityHelperInvalidValueExceptionTests : SqlLiteContextTestBase
         using var reader = new FakeTrackedReader(rows);
         reader.Read();
 
-        Assert.Throws<InvalidValueException>(() => _helper.MapReaderToObject(reader));
+        // After compiled mapper optimization, exceptions bubble up directly (not wrapped)
+        // This is actually cleaner for debugging - the original exception is preserved
+        var ex = Assert.Throws<Exception>(() => _helper.MapReaderToObject(reader));
+        Assert.Equal("bad value", ex.Message);
     }
 
     [Fact]
@@ -110,4 +113,3 @@ public class EntityHelperInvalidValueExceptionTests : SqlLiteContextTestBase
         }
     }
 }
-

@@ -1,7 +1,76 @@
+// =============================================================================
+// FILE: Uuid7Optimized.cs
+// PURPOSE: High-performance, RFC 9562-compliant UUIDv7 generator with
+//          configurable clock modes and thread-local state for lock-free operation.
+//
+// AI SUMMARY:
+// - Generates time-sortable UUIDs following RFC 9562 (UUIDv7 specification).
+// - Key advantages of UUIDv7 over UUIDv4:
+//   * Chronologically sortable (great for database indexes)
+//   * Contains timestamp (useful for debugging/auditing)
+//   * No index fragmentation issues like random UUIDs
+// - Performance optimizations:
+//   * Thread-local counters eliminate CAS contention
+//   * Buffered random bytes reduce syscall overhead
+//   * Lock-free design for high throughput
+// - Clock modes for different deployment scenarios:
+//   * PtpSynced - Tight tolerance for PTP-synchronized clusters
+//   * NtpSynced - Standard NTP environments (default)
+//   * SingleInstance - Single-writer services
+// - Throughput: Up to 4096 IDs per millisecond per thread.
+// - Clock drift handling: Bounded backward drift with logical clock fallback.
+// - TryNewUuid7() provides non-blocking generation for latency-sensitive code.
+// =============================================================================
+
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace pengdows.crud;
+
+/// <summary>
+/// Clock synchronization mode for UUID7 generation.
+/// Affects drift tolerance and wait behavior.
+/// </summary>
+public enum Uuid7ClockMode
+{
+    /// <summary>
+    /// PTP/PHC disciplined clocks (±0.1–1.0 ms accuracy).
+    /// Tight skew tolerance, shorter spin waits, prefer fail-fast on burst.
+    /// Ideal for: PTP-synced clusters (EKS Nitro, on-prem PTP).
+    /// </summary>
+    PtpSynced,
+
+    /// <summary>
+    /// Standard NTP synchronization (±1–10 ms accuracy).
+    /// Conservative skew tolerance, longer spin waits, blocking on burst.
+    /// Ideal for: Most cloud environments with good NTP.
+    /// </summary>
+    NtpSynced,
+
+    /// <summary>
+    /// Single process/instance generating all writes.
+    /// Generous skew tolerance, no cross-node ordering concerns.
+    /// Ideal for: Single-writer services, embedded systems.
+    /// </summary>
+    SingleInstance
+}
+
+/// <summary>
+/// Configuration options for UUID7 generation behavior.
+/// </summary>
+/// <param name="Mode">Clock synchronization mode (PTP, NTP, or single instance)</param>
+/// <param name="MaxNegativeSkewMs">Maximum backward clock drift tolerated before using logical clock (ms)</param>
+/// <param name="MaxSpinCount">Maximum spin-wait cycles before sleeping on counter overflow</param>
+/// <param name="SleepMs">Sleep duration when spin limit exceeded (ms)</param>
+/// <param name="FailFastOnBurst">If true, TryNewUuid7 returns false on counter overflow instead of blocking</param>
+public sealed record Uuid7Options(
+    Uuid7ClockMode Mode = Uuid7ClockMode.NtpSynced,
+    int MaxNegativeSkewMs = 5,
+    int MaxSpinCount = 128,
+    int SleepMs = 1,
+    bool FailFastOnBurst = false
+);
 
 /// <summary>
 /// Production-ready UUIDv7 generator implementing RFC 9562 with optimizations for high throughput.
@@ -12,13 +81,14 @@ namespace pengdows.crud;
 /// - Buffered randomness to reduce syscall overhead
 /// - Bounded clock drift handling
 /// - Monotonic ordering within process scope (up to 4096 IDs/ms per thread)
+/// - Configurable clock modes (PTP, NTP, SingleInstance) for different deployment scenarios
 ///
 /// Monotonicity scope: Within a process, per logical clock. Not guaranteed across machines.
 /// Throughput limit: 4096 IDs/ms per thread. Multiple threads can each generate 4096 IDs/ms independently.
 /// If multiple threads exhaust counters simultaneously, each waits independently.
 /// Clock rollback: Bounded drift with logical clock fallback.
 /// </summary>
-public static class Uuid7Optimized
+public static partial class Uuid7Optimized
 {
     /// <summary>
     /// Thread-local state for lock-free UUID generation
@@ -27,6 +97,8 @@ public static class Uuid7Optimized
     {
         public long LastMs;
         public int Counter; // 0..4095
+        public ushort RandA; // 12-bit rand_a
+        public ulong RandB; // 62-bit rand_b
         public readonly byte[] RandomBuffer = new byte[1024]; // Buffered random bytes - larger buffer for fewer refills
         public int RandomIndex;
 
@@ -42,16 +114,94 @@ public static class Uuid7Optimized
     // Global epoch for cross-thread monotonicity hints
     private static long _globalEpochMs;
 
-    // Clock drift policy
-    private const long MaxNegativeSkewMs = 32; // Allow 32ms backward drift
+    // Configurable options (defaults to NTP mode)
+    private static Uuid7Options _opts = DefaultsFor(Uuid7ClockMode.NtpSynced);
 
-    // Counter limits
+    // Counter limits (immutable)
     private const int CounterBits = 12;
     private const int CounterMax = (1 << CounterBits) - 1; // 4095
+    private const ushort RandAMask = 0x0FFF;
+    private const ulong RandBMask = (1UL << 62) - 1;
 
-    // Bounded wait parameters
-    private const int MaxSpinCount = 128;
-    private const int SleepMs = 1;
+    /// <summary>
+    /// Configure UUID7 generation behavior based on clock synchronization mode.
+    /// Call this at application startup before generating any UUIDs.
+    /// </summary>
+    /// <param name="options">Configuration options, or null to use NTP defaults</param>
+    public static void Configure(Uuid7Options? options = null)
+    {
+        if (options is null)
+        {
+            _opts = DefaultsFor(Uuid7ClockMode.NtpSynced);
+            return;
+        }
+
+        // Get defaults for the mode
+        var defaults = DefaultsFor(options.Mode);
+
+        // Detect if user provided explicit non-default values
+        // Record defaults: MaxNegativeSkewMs=5, MaxSpinCount=128, SleepMs=1, FailFastOnBurst=false
+        var usedRecordDefaults =
+            options.MaxNegativeSkewMs == 5 &&
+            options.MaxSpinCount == 128 &&
+            options.SleepMs == 1 &&
+            options.FailFastOnBurst == false;
+
+        // If user only specified Mode (using record defaults for everything else),
+        // give them mode-specific defaults
+        if (usedRecordDefaults)
+        {
+            _opts = defaults;
+            return;
+        }
+
+        // User specified custom values - apply mode-specific clamping
+        _opts = new Uuid7Options(
+            options.Mode,
+            options.Mode switch
+            {
+                Uuid7ClockMode.PtpSynced => Math.Min(options.MaxNegativeSkewMs, 1),
+                Uuid7ClockMode.SingleInstance => options.MaxNegativeSkewMs,
+                _ => Math.Max(options.MaxNegativeSkewMs, 5)
+            },
+            options.Mode switch
+            {
+                Uuid7ClockMode.PtpSynced => Math.Min(options.MaxSpinCount, 64),
+                Uuid7ClockMode.SingleInstance => options.MaxSpinCount,
+                _ => Math.Max(options.MaxSpinCount, 128)
+            },
+            options.SleepMs,
+            options.FailFastOnBurst
+        );
+    }
+
+    /// <summary>
+    /// Get default options for a given clock mode
+    /// </summary>
+    private static Uuid7Options DefaultsFor(Uuid7ClockMode mode)
+    {
+        return mode switch
+        {
+            Uuid7ClockMode.PtpSynced => new Uuid7Options(
+                mode,
+                1,
+                64,
+                1,
+                true),
+            Uuid7ClockMode.SingleInstance => new Uuid7Options(
+                mode,
+                32,
+                128,
+                1,
+                false),
+            _ => new Uuid7Options(
+                mode,
+                5,
+                128,
+                1,
+                false)
+        };
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long UnixTimeMs()
@@ -80,6 +230,7 @@ public static class Uuid7Optimized
             // New millisecond: reset counter and update global epoch
             tls.LastMs = usedMs;
             tls.Counter = 0;
+            ReseedRandomState(tls);
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
 
@@ -90,12 +241,19 @@ public static class Uuid7Optimized
             usedMs = BoundedWaitNextMs(usedMs);
             tls.LastMs = usedMs;
             tls.Counter = 0;
+            ReseedRandomState(tls);
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
 
-        var sequence = tls.Counter++;
+        var randA = tls.RandA;
+        var randB = tls.RandB;
+        tls.Counter++;
+        if (!IncrementRandState(tls))
+        {
+            tls.Counter = CounterMax + 1;
+        }
 
-        return BuildSpecCompliantGuid(usedMs, sequence, tls, rfc);
+        return BuildSpecCompliantGuid(usedMs, randA, randB, rfc);
     }
 
     /// <summary>
@@ -117,6 +275,7 @@ public static class Uuid7Optimized
         {
             tls.LastMs = usedMs;
             tls.Counter = 0;
+            ReseedRandomState(tls);
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
 
@@ -126,8 +285,15 @@ public static class Uuid7Optimized
             return false; // Caller decides to backoff/yield
         }
 
-        var sequence = tls.Counter++;
-        result = BuildSpecCompliantGuid(usedMs, sequence, tls, rfc);
+        var randA = tls.RandA;
+        var randB = tls.RandB;
+        tls.Counter++;
+        if (!IncrementRandState(tls))
+        {
+            tls.Counter = CounterMax + 1;
+        }
+
+        result = BuildSpecCompliantGuid(usedMs, randA, randB, rfc);
         return true;
     }
 
@@ -170,6 +336,7 @@ public static class Uuid7Optimized
         {
             tls.LastMs = usedMs;
             tls.Counter = 0;
+            ReseedRandomState(tls);
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
 
@@ -178,11 +345,19 @@ public static class Uuid7Optimized
             usedMs = BoundedWaitNextMs(usedMs);
             tls.LastMs = usedMs;
             tls.Counter = 0;
+            ReseedRandomState(tls);
             InterlockedMax(ref _globalEpochMs, usedMs);
         }
 
-        var sequence = tls.Counter++;
-        BuildRfcBytes(usedMs, sequence, tls, rfc);
+        var randA = tls.RandA;
+        var randB = tls.RandB;
+        tls.Counter++;
+        if (!IncrementRandState(tls))
+        {
+            tls.Counter = CounterMax + 1;
+        }
+
+        BuildRfcBytes(usedMs, randA, randB, rfc);
         rfc.CopyTo(dest);
     }
 
@@ -198,7 +373,7 @@ public static class Uuid7Optimized
         // Clock went backward
         var drift = lastMs - nowMs;
 
-        if (drift > MaxNegativeSkewMs)
+        if (drift > _opts.MaxNegativeSkewMs)
         {
             // Large backward jump: use logical clock
             return Math.Max(lastMs, globalEpoch);
@@ -215,7 +390,7 @@ public static class Uuid7Optimized
 
         do
         {
-            if (spinCount < MaxSpinCount)
+            if (spinCount < _opts.MaxSpinCount)
             {
                 if (spinCount < 64)
                 {
@@ -229,11 +404,12 @@ public static class Uuid7Optimized
                 {
                     Thread.SpinWait(10);
                 }
+
                 spinCount++;
             }
             else
             {
-                Thread.Sleep(SleepMs);
+                Thread.Sleep(_opts.SleepMs);
                 spinCount = 0; // Reset spin count after sleep
             }
 
@@ -272,9 +448,38 @@ public static class Uuid7Optimized
         tls.RandomIndex += dest.Length;
     }
 
-    private static Guid BuildSpecCompliantGuid(long timestampMs, int sequence, V7ThreadState tls, Span<byte> rfc)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ReseedRandomState(V7ThreadState tls)
     {
-        BuildRfcBytes(timestampMs, sequence, tls, rfc);
+        Span<byte> random = stackalloc byte[10];
+        FillRandomSpan(random, tls);
+
+        tls.RandA = (ushort)(((random[0] << 8) | random[1]) & RandAMask);
+        tls.RandB = BinaryPrimitives.ReadUInt64BigEndian(random.Slice(2, 8)) & RandBMask;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IncrementRandState(V7ThreadState tls)
+    {
+        if (tls.RandB < RandBMask)
+        {
+            tls.RandB++;
+            return true;
+        }
+
+        if (tls.RandA < RandAMask)
+        {
+            tls.RandB = 0;
+            tls.RandA++;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static Guid BuildSpecCompliantGuid(long timestampMs, ushort randA, ulong randB, Span<byte> rfc)
+    {
+        BuildRfcBytes(timestampMs, randA, randB, rfc);
 
         // Convert RFC layout to .NET Guid byte order (mixed-endian)
         Span<byte> guidBytes = stackalloc byte[16];
@@ -306,36 +511,34 @@ public static class Uuid7Optimized
         return new Guid(guidBytes);
     }
 
-    private static void BuildRfcBytes(long timestampMs, int sequence, V7ThreadState tls, Span<byte> rfc)
+    private static void BuildRfcBytes(long timestampMs, ushort randA, ulong randB, Span<byte> rfc)
     {
         // 1. Build RFC 4122 layout (big-endian timestamp)
 
         // Timestamp: 48-bit big-endian (rfc[0..5])
-        rfc[0] = (byte)((timestampMs >> 40) & 0xFF);
-        rfc[1] = (byte)((timestampMs >> 32) & 0xFF);
-        rfc[2] = (byte)((timestampMs >> 24) & 0xFF);
-        rfc[3] = (byte)((timestampMs >> 16) & 0xFF);
-        rfc[4] = (byte)((timestampMs >> 8) & 0xFF);
-        rfc[5] = (byte)(timestampMs & 0xFF);
+        var ts = (ulong)timestampMs;
+        rfc[0] = (byte)((ts >> 40) & 0xFF);
+        rfc[1] = (byte)((ts >> 32) & 0xFF);
+        rfc[2] = (byte)((ts >> 24) & 0xFF);
+        rfc[3] = (byte)((ts >> 16) & 0xFF);
+        rfc[4] = (byte)((ts >> 8) & 0xFF);
+        rfc[5] = (byte)(ts & 0xFF);
 
-        // time_hi_and_version: version=7 (0b0111) + 12-bit rand_a (monotonic sequence)
-        var randA = (ushort)(sequence & 0x0FFF);
+        // time_hi_and_version: version=7 (0b0111) + 12-bit rand_a (monotonic field)
+        randA &= RandAMask;
         rfc[6] = (byte)(0x70 | ((randA >> 8) & 0x0F)); // Version 7 + upper 4 bits of sequence
         rfc[7] = (byte)(randA & 0xFF); // Lower 8 bits of sequence
 
-        // rand_b: 62 random bits with RFC 4122 variant (10xxxxxx in byte 8)
-        Span<byte> randomBytes = stackalloc byte[8];
-        FillRandomSpan(randomBytes, tls);
-
-        // Set variant bits (10xxxxxx) while preserving 6 random bits
-        rfc[8] = (byte)((randomBytes[0] & 0x3F) | 0x80); // variant + 6 random bits
-        rfc[9] = randomBytes[1];
-        rfc[10] = randomBytes[2];
-        rfc[11] = randomBytes[3];
-        rfc[12] = randomBytes[4];
-        rfc[13] = randomBytes[5];
-        rfc[14] = randomBytes[6];
-        rfc[15] = randomBytes[7];
+        // rand_b: 62-bit field with RFC 4122 variant (10xxxxxx in byte 8)
+        randB &= RandBMask;
+        rfc[8] = (byte)(0x80 | ((randB >> 56) & 0x3F)); // variant + top 6 bits
+        rfc[9] = (byte)((randB >> 48) & 0xFF);
+        rfc[10] = (byte)((randB >> 40) & 0xFF);
+        rfc[11] = (byte)((randB >> 32) & 0xFF);
+        rfc[12] = (byte)((randB >> 24) & 0xFF);
+        rfc[13] = (byte)((randB >> 16) & 0xFF);
+        rfc[14] = (byte)((randB >> 8) & 0xFF);
+        rfc[15] = (byte)(randB & 0xFF);
     }
 
     /// <summary>
@@ -351,5 +554,8 @@ public static class Uuid7Optimized
     /// <summary>
     /// Get global epoch for diagnostics
     /// </summary>
-    public static long GetGlobalEpoch() => Volatile.Read(ref _globalEpochMs);
+    public static long GetGlobalEpoch()
+    {
+        return Volatile.Read(ref _globalEpochMs);
+    }
 }

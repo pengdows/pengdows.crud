@@ -1,11 +1,40 @@
+// =============================================================================
+// FILE: SqlContainer.cs
+// PURPOSE: The core SQL query builder and executor that handles parameterized
+//          queries, stored procedures, and connection management.
+//
+// AI SUMMARY:
+// - This is the primary class for building and executing SQL statements.
+// - Created via IDatabaseContext.CreateSqlContainer() - not directly instantiated.
+// - Key features:
+//   * Query property (SqlQueryBuilder) for building SQL dynamically
+//   * AddParameterWithValue/CreateDbParameter for safe parameterization
+//   * ExecuteNonQueryAsync/ExecuteScalarRequiredAsync/ExecuteScalarOrNullAsync/TryExecuteScalarAsync/ExecuteReaderAsync
+//   * WrapObjectName for dialect-specific identifier quoting
+//   * MakeParameterName for dialect-specific parameter naming (@p, :p, ?)
+// - Manages parameter ordering for positional parameter databases (Oracle, ODBC).
+// - Uses StringBuilderLite for efficient SQL construction with zero allocations.
+// - Implements IDisposable/IAsyncDisposable for cleanup.
+// - Thread-safe for building (not for concurrent modification).
+// - Internally uses dialects (ISqlDialect) for database-specific SQL generation.
+// - Stored procedure wrapping via IProcWrappingStrategy for cross-database compat.
+// - Tracks whether WHERE clause was appended (HasWhereAppended) for convenience.
+// - Limits max parameters per query (MaxParameterLimit) to prevent SQL errors.
+// =============================================================================
+
 #region
 
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
-using System.Text;
-using System.Text.RegularExpressions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
@@ -13,22 +42,164 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.@internal;
 
 #endregion
 
 namespace pengdows.crud;
 
-public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider
+/// <summary>
+/// A SQL query builder and executor that provides parameterized, database-agnostic SQL operations.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Creation:</strong> Always create instances via <see cref="IDatabaseContext.CreateSqlContainer"/>
+/// rather than direct instantiation.
+/// </para>
+/// <para>
+/// <strong>Query Building:</strong> Use the <see cref="Query"/> property (SqlQueryBuilder) to build SQL
+/// dynamically. Use <see cref="AddParameterWithValue{T}"/> to add parameters safely.
+/// </para>
+/// <para>
+/// <strong>Execution:</strong> Choose the appropriate execution method:
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="ExecuteNonQueryAsync"/> - INSERT, UPDATE, DELETE returning row count</description></item>
+/// <item><description><see cref="ExecuteScalarRequiredAsync{T}"/>, <see cref="ExecuteScalarOrNullAsync{T}"/>, <see cref="TryExecuteScalarAsync{T}"/> - Single value queries (COUNT, MAX, etc.)</description></item>
+/// <item><description><see cref="ExecuteReaderAsync"/> - Multi-row result sets</description></item>
+/// </list>
+/// <para>
+/// <strong>Parameter Naming:</strong> Use <see cref="MakeParameterName(string)"/> to generate
+/// database-appropriate parameter markers (@param for SQL Server, :param for Oracle, etc.).
+/// </para>
+/// <para>
+/// <strong>Identifier Quoting:</strong> Use <see cref="WrapObjectName"/> to quote table/column names
+/// appropriately for the target database ("name" for most, [name] for SQL Server).
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// using var container = context.CreateSqlContainer();
+/// container.Query.Append("SELECT * FROM ");
+/// container.Query.Append(container.WrapObjectName("users"));
+/// container.Query.Append(" WHERE ");
+/// container.Query.Append(container.WrapObjectName("email"));
+/// container.Query.Append(" = ");
+/// var emailParam = container.AddParameterWithValue("email", DbType.String, "user@example.com");
+/// container.Query.Append(container.MakeParameterName(emailParam));
+///
+/// await using var reader = await container.ExecuteReaderAsync();
+/// while (await reader.ReadAsync())
+/// {
+///     // Process rows
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="ISqlContainer"/>
+/// <seealso cref="IDatabaseContext.CreateSqlContainer"/>
+/// <seealso cref="TableGateway{TEntity,TRowID}"/>
+public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
+    private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>>
+        ProviderSpecificCopiers = new();
+
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
     private readonly ILogger<ISqlContainer> _logger;
-    private readonly IDictionary<string, DbParameter> _parameters = new OrderedDictionary<string, DbParameter>();
+
+    private readonly IDictionary<string, DbParameter> _parameters =
+        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>(ParameterNameComparer.Instance);
+
+    private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
+        new(ParameterReferenceComparer.Instance);
+
+    private sealed class ParameterNameComparer : IEqualityComparer<string>
+    {
+        public static ParameterNameComparer Instance { get; } = new();
+
+        public bool Equals(string? x, string? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return NormalizedSpan(x).SequenceEqual(NormalizedSpan(y));
+        }
+
+        public int GetHashCode(string obj)
+        {
+            var normalized = NormalizedSpan(obj);
+            var hash = new HashCode();
+            foreach (var ch in normalized)
+            {
+                hash.Add(ch);
+            }
+
+            return hash.ToHashCode();
+        }
+
+        private static ReadOnlySpan<char> NormalizedSpan(string value)
+        {
+            return StripParameterPrefix(value);
+        }
+    }
+
+    private static ReadOnlySpan<char> StripParameterPrefix(string parameterName)
+    {
+        if (parameterName.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return parameterName[0] switch
+        {
+            '@' or ':' or '?' or '$' => parameterName.AsSpan(1),
+            _ => parameterName.AsSpan()
+        };
+    }
+
+    private static string NormalizeParameterName(string parameterName)
+    {
+        if (string.IsNullOrEmpty(parameterName))
+        {
+            return parameterName;
+        }
+
+        var normalized = StripParameterPrefix(parameterName);
+        return normalized.Length == parameterName.Length ? parameterName : normalized.ToString();
+    }
+
     private int _outputParameterCount;
     private int _nextParameterId = -1;
     internal List<string> ParamSequence { get; } = new();
+    private Dictionary<string, string>? _renderedParameterMap;
+
+    // Performance optimization: cache rendered command text to avoid repeated Query.ToString() calls
+    private string? _cachedCommandText;
+    private int _cachedCommandTextVersion = -1;
+    private readonly SqlQueryBuilder _query;
+    private int _activeReaders;
+    private int _deferParameterPooling;
+
+    private MetricsCollector? GetMetricsCollector(ExecutionType executionType)
+    {
+        var accessor = _context as IMetricsCollectorAccessor;
+        if (accessor == null)
+        {
+            return null;
+        }
+
+        return accessor.GetMetricsCollector(executionType) ?? accessor.MetricsCollector;
+    }
 
     private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
     {
@@ -43,39 +214,28 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _context = context;
         _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
         _logger = logger ?? NullLogger<ISqlContainer>.Instance;
-        Query = StringBuilderPool.Get(query);
+        _query = new SqlQueryBuilder(query);
     }
 
-    // Legacy constructor kept for binary compatibility but made unreachable to callers.
-    // Any attempt to call this directly will fail at compile time.
-    [Obsolete("Do not construct SqlContainer directly. Use IDatabaseContext.CreateSqlContainer(...) instead.", true)]
-    internal SqlContainer(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
-        : this(
-            context,
-            (context as ISqlDialectProvider)?.Dialect
-                ?? throw new InvalidOperationException(
-                    "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect."),
-            query,
-            logger)
-    {
-    }
 
     // Internal factory used by DatabaseContext/TransactionContext
-    internal static SqlContainer Create(IDatabaseContext context, string? query = "", ILogger<ISqlContainer>? logger = null)
+    internal static SqlContainer Create(IDatabaseContext context, string? query = "",
+        ILogger<ISqlContainer>? logger = null)
     {
-        var dialect = (context as ISqlDialectProvider)?.Dialect
+        var dialect = context.Dialect
                       ?? throw new InvalidOperationException(
-                          "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
+                          "IDatabaseContext must expose a non-null Dialect.");
         return new SqlContainer(context, dialect, query, logger);
     }
 
     // Test support: allow explicit dialect for specialized scenarios
-    internal static SqlContainer CreateForDialect(IDatabaseContext context, ISqlDialect dialect, string? query = "", ILogger<ISqlContainer>? logger = null)
+    internal static SqlContainer CreateForDialect(IDatabaseContext context, ISqlDialect dialect, string? query = "",
+        ILogger<ISqlContainer>? logger = null)
     {
         return new SqlContainer(context, dialect, query, logger);
     }
 
-    public StringBuilder Query { get; }
+    public ISqlQueryBuilder Query => _query;
 
     public int ParameterCount => _parameters.Count;
 
@@ -105,16 +265,205 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal string RenderParams(string sql)
     {
         ParamSequence.Clear();
-        return Regex.Replace(sql, "\\{P\\}([A-Za-z_][A-Za-z0-9_]*)", m =>
-        {
-            var name = m.Groups[1].Value;
-            ParamSequence.Add(name);
-            return _dialect.SupportsNamedParameters
-                ? string.Concat(_dialect.ParameterMarker, name)
-                : _dialect.ParameterMarker;
-        });
+        _renderedParameterMap?.Clear();
+
+        return _dialect.SupportsNamedParameters && !_dialect.SupportsRepeatedNamedParameters
+            ? RenderParamsDeduplicating(sql)
+            : RenderParamsSimple(sql);
     }
 
+    // True for [A-Za-z_] — valid first char of a {P} parameter name.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsIdentStart(char c) =>
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+
+    // True for [A-Za-z0-9_] — valid continuation char of a {P} parameter name.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsIdentContinue(char c) =>
+        IsIdentStart(c) || (c >= '0' && c <= '9');
+
+    /// <summary>
+    /// Scans <paramref name="sql"/> for <c>{P}NAME</c> placeholders and replaces each with
+    /// the dialect's parameter marker (e.g. <c>@NAME</c> for SQLite/SQL Server, <c>:NAME</c>
+    /// for PostgreSQL, <c>?</c> for positional providers).
+    /// Used for all dialects that allow the same named parameter to appear multiple times
+    /// in one statement (virtually all except Oracle).
+    /// Avoids Regex overhead: no Match/Group allocations, no per-match string.Concat.
+    /// </summary>
+    private string RenderParamsSimple(string sql)
+    {
+        var span = sql.AsSpan();
+        var cursor = 0;
+        SqlQueryBuilder? sb = null;
+        try
+        {
+            while (cursor < sql.Length)
+            {
+                var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+                if (relIdx < 0) break;
+
+                var matchStart = cursor + relIdx;
+                var nameStart = matchStart + 3; // skip past "{P}"
+
+                // Not a valid identifier start — emit "{P}" literally and continue scanning
+                if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+                {
+                    sb ??= new SqlQueryBuilder(sql.Length + 32);
+                    sb.Append(span[cursor..(nameStart)]);
+                    cursor = nameStart;
+                    continue;
+                }
+
+                // Scan to end of identifier: [A-Za-z_][A-Za-z0-9_]*
+                var nameEnd = nameStart + 1;
+                while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                    nameEnd++;
+
+                sb ??= new SqlQueryBuilder(sql.Length + 32);
+                sb.Append(span[cursor..matchStart]); // literal text before {P}NAME
+
+                var name = sql[nameStart..nameEnd];
+                ParamSequence.Add(name);
+
+                sb.Append(_dialect.MakeParameterName(name));
+
+                cursor = nameEnd;
+            }
+
+            if (sb == null)
+                return sql; // no placeholders found — return original without allocation
+
+            if (cursor < sql.Length)
+                sb.Append(span[cursor..]);
+
+            return sb.ToString();
+        }
+        finally
+        {
+            sb?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Oracle-specific rendering path: repeated uses of the same <c>{P}NAME</c> in one
+    /// statement are rewritten to unique names (<c>:p</c>, <c>:p_2</c>, <c>:p_3</c>, …)
+    /// because Oracle's ODP.NET treats each bind position as a distinct parameter slot.
+    /// Maintains <see cref="_renderedParameterMap"/> for the original→rendered name mapping
+    /// so <c>AddParametersToCommand</c> can clone parameters correctly.
+    /// Avoids Regex overhead: no Match/Group allocations, no per-match string.Concat.
+    /// </summary>
+    private string RenderParamsDeduplicating(string sql)
+    {
+        var span = sql.AsSpan();
+        var cursor = 0;
+        SqlQueryBuilder? sb = null;
+        Dictionary<string, int>? counts = null;
+        HashSet<string>? usedNames = null;
+
+        try
+        {
+        while (cursor < sql.Length)
+        {
+            var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+            if (relIdx < 0) break;
+
+            var matchStart = cursor + relIdx;
+            var nameStart = matchStart + 3;
+
+            if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+            {
+                sb ??= new SqlQueryBuilder(sql.Length + 32);
+                sb.Append(span[cursor..nameStart]);
+                cursor = nameStart;
+                continue;
+            }
+
+            var nameEnd = nameStart + 1;
+            while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                nameEnd++;
+
+            sb ??= new SqlQueryBuilder(sql.Length + 32);
+            sb.Append(span[cursor..matchStart]);
+
+            var name = sql[nameStart..nameEnd];
+            counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
+            counts.TryGetValue(name, out var count);
+            count++;
+            counts[name] = count;
+
+            var rendered = count == 1
+                ? name
+                : MakeDuplicateParameterName(name, count,
+                    usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
+
+            usedNames?.Add(rendered);
+            ParamSequence.Add(rendered);
+
+            if (!string.Equals(rendered, name, StringComparison.Ordinal))
+            {
+                _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
+                _renderedParameterMap[rendered] = name;
+            }
+
+            sb.Append(_dialect.MakeParameterName(rendered));
+
+            cursor = nameEnd;
+        }
+
+        if (sb == null)
+            return sql;
+
+        if (cursor < sql.Length)
+            sb.Append(span[cursor..]);
+
+        return sb.ToString();
+        }
+        finally
+        {
+            sb?.Dispose();
+        }
+    }
+
+    private string MakeDuplicateParameterName(string baseName, int occurrence, HashSet<string> usedNames)
+    {
+        var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
+        var attempt = occurrence;
+
+        while (true)
+        {
+            var suffix = "_" + attempt.ToString(CultureInfo.InvariantCulture);
+            if (suffix.Length >= maxLength)
+            {
+                return GenerateUniqueParameterName(usedNames);
+            }
+
+            var maxBaseLength = maxLength - suffix.Length;
+            var trimmed = baseName.Length > maxBaseLength ? baseName[..maxBaseLength] : baseName;
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                trimmed = "p";
+            }
+
+            var candidate = string.Concat(trimmed, suffix);
+            if (!usedNames.Contains(candidate) && !_parameters.ContainsKey(candidate))
+            {
+                return candidate;
+            }
+
+            attempt++;
+        }
+    }
+
+    private string GenerateUniqueParameterName(HashSet<string> usedNames)
+    {
+        string name;
+        do
+        {
+            name = GenerateParameterName();
+        } while (usedNames.Contains(name) || _parameters.ContainsKey(name));
+
+        return name;
+    }
 
 
     public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -138,6 +487,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (string.IsNullOrEmpty(parameter.ParameterName))
         {
             parameter.ParameterName = GenerateParameterName();
+        }
+        else
+        {
+            // Strip any dialect prefix (@, :, ?, $) — parameters must be stored without prefix
+            parameter.ParameterName = NormalizeParameterName(parameter.ParameterName);
         }
 
         var isOutput = parameter.Direction switch
@@ -203,31 +557,24 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return AddParameterWithValue(name, type, value, ParameterDirection.Input);
     }
 
-    private string NormalizeParameterName(string parameterName)
+    private static bool TryBuildAlternateParameterName(string parameterName, out string alternateName)
     {
-        // Normalize so lookups work with or without a leading marker
-        // (e.g., @p0, :p0, ?p0, $p0 -> p0) for named providers.
-        return _dialect.SupportsNamedParameters
-            ? parameterName.TrimStart('@', ':', '?', '$')
-            : parameterName;
-    }
-
-    private static bool TryBuildAlternateParameterName(string normalizedName, out string alternateName)
-    {
-        if (normalizedName.Length < 2)
+        var normalizedSpan = StripParameterPrefix(parameterName);
+        var normalized = normalizedSpan.ToString();
+        if (normalized.Length < 2)
         {
             alternateName = string.Empty;
             return false;
         }
 
-        var prefix = normalizedName[0];
+        var prefix = normalized[0];
         if (prefix != 'p' && prefix != 'w')
         {
             alternateName = string.Empty;
             return false;
         }
 
-        alternateName = string.Create(normalizedName.Length, normalizedName, static (span, source) =>
+        alternateName = string.Create(normalized.Length, normalized, static (span, source) =>
         {
             span[0] = source[0] == 'p' ? 'w' : 'p';
             source.AsSpan(1).CopyTo(span.Slice(1));
@@ -238,13 +585,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void SetParameterValue(string parameterName, object? newValue)
     {
-        var normalizedName = NormalizeParameterName(parameterName);
-        if (!_parameters.TryGetValue(normalizedName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
         {
             // Allow cross-prefix lookup between pN and wN for tests that use a different
             // prefix when asserting parameter values vs where they were created.
             if (_dialect.SupportsNamedParameters &&
-                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                TryBuildAlternateParameterName(parameterName, out var alternate) &&
                 _parameters.TryGetValue(alternate, out parameter))
             {
                 // proceed with found alternate
@@ -255,24 +601,36 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
         }
 
+        // Allow dialect to transform value
+        var preparedValue = _dialect.PrepareParameterValue(newValue, parameter.DbType);
+
         // If switching to an array value on providers that support set-valued parameters
         // (e.g., PostgreSQL ANY(@p)), coerce DbType to Object so the provider
         // can infer the correct array type during preparation.
-        if (newValue is Array && _dialect.SupportsSetValuedParameters)
+        if (preparedValue is Array && _dialect.SupportsSetValuedParameters)
         {
             parameter.DbType = DbType.Object;
         }
 
-        parameter.Value = newValue;
+        parameter.Value = preparedValue ?? DBNull.Value;
+
+        // Update Size for string parameters to match the new value length,
+        // preventing truncation when cloned templates had shorter initial values.
+        if (preparedValue is string str && parameter.Size > 0)
+        {
+            parameter.Size = Math.Max(str.Length, 1);
+        }
+
+        // Do not adjust Precision/Scale for decimal parameters here.
+        // See SqlDialect.CreateDbParameter for the rationale.
     }
 
     public object? GetParameterValue(string parameterName)
     {
-        var normalizedName = NormalizeParameterName(parameterName);
-        if (!_parameters.TryGetValue(normalizedName, out var parameter))
+        if (!_parameters.TryGetValue(parameterName, out var parameter))
         {
             if (_dialect.SupportsNamedParameters &&
-                TryBuildAlternateParameterName(normalizedName, out var alternate) &&
+                TryBuildAlternateParameterName(parameterName, out var alternate) &&
                 _parameters.TryGetValue(alternate, out parameter))
             {
                 // proceed with found alternate
@@ -296,31 +654,270 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
 
-
     public DbCommand CreateCommand(ITrackedConnection conn)
+    {
+        var dbCommand = CreateRawCommand(conn);
+
+        if (_query.Length == 0)
+        {
+            return dbCommand;
+        }
+
+        // Mirror the normal execution path so manually-created commands are usable.
+        var cmdText = _query.ToString();
+        if (cmdText.Contains("{P}"))
+        {
+            cmdText = RenderParams(cmdText);
+        }
+        else if (ParamSequence.Count > 0)
+        {
+            // No {P} placeholders — clear any stale sequence from a previous render
+            // so AddParametersToCommand doesn't bind using an outdated mapping.
+            ParamSequence.Clear();
+            _renderedParameterMap?.Clear();
+        }
+
+        dbCommand.CommandType = CommandType.Text;
+        dbCommand.CommandText = cmdText;
+
+        if (_parameters.Count > _context.MaxParameterLimit)
+        {
+            throw new InvalidOperationException(
+                $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
+        }
+
+        AddParametersToCommand(dbCommand);
+
+        return dbCommand;
+    }
+
+    private DbCommand CreateRawCommand(ITrackedConnection conn)
     {
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
         {
-            cmd.Transaction = (transactionContext.Transaction as DbTransaction)
+            cmd.Transaction = transactionContext.Transaction as DbTransaction
                               ?? throw new InvalidOperationException("Transaction is not a transaction");
         }
 
-        return (cmd as DbCommand)
+        return cmd as DbCommand
                ?? throw new InvalidOperationException("Command is not a DbCommand");
+    }
+
+    private void AddParametersToCommand(DbCommand dbCommand)
+    {
+        if (_parameters.Count == 0)
+        {
+            return;
+        }
+
+        if (_context.SupportsNamedParameters && _context.SupportsRepeatedNamedParameters)
+        {
+            // Named provider that supports repeated placeholders — each parameter
+            // appears once and the provider resolves duplicate references in SQL.
+            foreach (var param in _parameters.Values)
+            {
+                dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
+            }
+
+            return;
+        }
+
+        if (_context.SupportsNamedParameters && ParamSequence.Count == 0)
+        {
+            // Named provider but no ParamSequence recorded (e.g., manual SQL).
+            // Fall back to adding all parameters once.
+            foreach (var param in _parameters.Values)
+            {
+                dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
+            }
+
+            return;
+        }
+
+        // Positional path or named provider that does NOT support repeated placeholders:
+        // ParamSequence may reference the same name multiple times (e.g., a value used
+        // in both SET and WHERE). Each occurrence needs its own DbParameter instance
+        // because ADO.NET providers reject adding the same object twice.
+        HashSet<string>? seenSource = null;
+        foreach (var renderedName in ParamSequence)
+        {
+            var sourceName = renderedName;
+            if (_renderedParameterMap != null &&
+                _renderedParameterMap.TryGetValue(renderedName, out var originalName))
+            {
+                sourceName = originalName;
+            }
+
+            if (!_parameters.TryGetValue(sourceName, out var param))
+            {
+                continue;
+            }
+
+            seenSource ??= new HashSet<string>(ParameterNameComparer.Instance);
+            var isFirst = seenSource.Add(sourceName);
+            var sameName = ParameterNameComparer.Instance.Equals(renderedName, sourceName);
+            if (isFirst && sameName)
+            {
+                // First occurrence — use the original parameter
+                dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
+            }
+            else
+            {
+                // Duplicate occurrence (or renamed placeholder) — clone the parameter preserving metadata
+                var cloneName = _context.SupportsNamedParameters ? renderedName : null;
+                var clone = CreateParameterClone(param, cloneName);
+                dbCommand.Parameters.Add(clone);
+                RegisterParameterOwner(clone, dbCommand.Parameters);
+            }
+        }
+    }
+
+    private DbParameter CreateParameterClone(DbParameter source, string? nameOverride)
+    {
+        // Re-materialize through the dialect factory. This goes through the same
+        // AdvancedTypeRegistry / _commonConversions path as the original, so
+        // provider-specific configuration (OracleDbType, NpgsqlDbType, etc.) is
+        // applied by the dialect — no ICloneable dependency needed.
+        var clone = _dialect.CreateDbParameter<object?>(nameOverride, source.DbType, source.Value);
+        clone.Direction = source.Direction;
+        clone.Size = source.Size;
+        clone.Precision = source.Precision;
+        clone.Scale = source.Scale;
+        if (!string.IsNullOrEmpty(source.SourceColumn))
+        {
+            clone.SourceColumn = source.SourceColumn;
+        }
+
+        clone.SourceVersion = source.SourceVersion;
+        clone.IsNullable = source.IsNullable;
+        clone.SourceColumnNullMapping = source.SourceColumnNullMapping;
+
+        // Copy provider-specific properties (OracleDbType, NpgsqlDbType, etc.)
+        // that CreateDbParameter may not re-derive if the CLR type is not
+        // registered in AdvancedTypeRegistry.
+        CopyProviderSpecificProperties(source, clone);
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Copies provider-specific properties from source to target using cached
+    /// reflection. The source's values unconditionally overwrite the target so
+    /// that explicitly-set provider properties (e.g., OracleDbType) survive cloning.
+    /// </summary>
+    private static void CopyProviderSpecificProperties(DbParameter source, DbParameter target)
+    {
+        var sourceType = source.GetType();
+        var targetType = target.GetType();
+
+        // Only copy if both parameters are the same provider type
+        if (sourceType != targetType)
+        {
+            return;
+        }
+
+        var copier = ProviderSpecificCopiers.GetOrAdd(sourceType, BuildProviderSpecificCopier);
+        copier(source, target);
+    }
+
+    private static Action<DbParameter, DbParameter> BuildProviderSpecificCopier(Type parameterType)
+    {
+        List<PropertyInfo>? properties = null;
+        foreach (var propertyName in SqlDialect.ProviderSpecificPropertyNames)
+        {
+            var property = parameterType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanRead || !property.CanWrite ||
+                property.GetIndexParameters().Length != 0)
+            {
+                continue;
+            }
+
+            properties ??= new List<PropertyInfo>();
+            properties.Add(property);
+        }
+
+        if (properties == null)
+        {
+            return static (_, _) => { };
+        }
+
+        var propArray = properties.ToArray();
+        return (source, target) =>
+        {
+            foreach (var prop in propArray)
+            {
+                try
+                {
+                    var sourceValue = prop.GetValue(source);
+                    prop.SetValue(target, sourceValue);
+                }
+                catch
+                {
+                    // Ignore failures — provider may reject certain values in some states.
+                }
+            }
+        };
+    }
+
+    private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
+    {
+        _parameterOwners[parameter] = owner;
+    }
+
+    private void RemoveParameterFromOwner(DbParameter parameter)
+    {
+        if (!_parameterOwners.TryGetValue(parameter, out var owner))
+        {
+            return;
+        }
+
+        try
+        {
+            if (owner?.Contains(parameter) == true)
+            {
+                owner.Remove(parameter);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException)
+        {
+            // Already removed or not owned, ignore.
+        }
+        finally
+        {
+            _parameterOwners.Remove(parameter);
+        }
+    }
+
+    private sealed class ParameterReferenceComparer : IEqualityComparer<DbParameter>
+    {
+        public static ParameterReferenceComparer Instance { get; } = new();
+
+        public bool Equals(DbParameter? x, DbParameter? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(DbParameter obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
     public void Clear()
     {
-        Query.Clear();
+        _query.Clear();
         ReturnParametersToPool();
         _outputParameterCount = 0;
         ParamSequence.Clear();
+        _renderedParameterMap?.Clear();
+
+        // Invalidate cached command text when query is cleared
+        _cachedCommandText = null;
+        _cachedCommandTextVersion = -1;
     }
 
-    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false)
+    public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true,
+        bool captureReturn = false)
     {
-        var procName = Query.ToString().Trim();
+        var procName = _query.ToString().Trim();
 
         if (string.IsNullOrWhiteSpace(procName))
         {
@@ -366,283 +963,472 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (_context.SupportsNamedParameters)
             {
                 // Trust that dev has set correct names
-                return string.Join(", ", _parameters.Values.Select(p => _context.MakeParameterName(p)));
+                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                var index = 0;
+                foreach (var param in _parameters.Values)
+                {
+                    if (index++ > 0)
+                    {
+                        sb.Append(", ");
+                    }
+
+                    sb.Append(_context.MakeParameterName(param));
+                }
+
+                return sb.ToString();
             }
 
-            return string.Join(", ", Enumerable.Repeat("?", _parameters.Count));
+            if (_parameters.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var positional = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+            for (var i = 0; i < _parameters.Count; i++)
+            {
+                if (i > 0)
+                {
+                    positional.Append(", ");
+                }
+
+                positional.Append('?');
+            }
+
+            return positional.ToString();
         }
     }
 
     // Overload without defaults to avoid ambiguity with the 3-arg version
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters)
     {
-        return WrapForStoredProc(executionType, includeParameters, captureReturn: false);
+        return WrapForStoredProc(executionType, includeParameters, false);
     }
 
     public string WrapForCreateWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     public string WrapForUpdateWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     public string WrapForDeleteWithReturn(bool includeParameters = true)
     {
-        return WrapForStoredProc(ExecutionType.Write, includeParameters, captureReturn: true);
+        return WrapForStoredProc(ExecutionType.Write, includeParameters, true);
     }
 
     private string GenerateParameterName()
     {
         var maxLength = Math.Max(1, _context.DataSourceInfo.ParameterNameMaxLength);
         const string basePrefix = "p";
-        var prefix = basePrefix;
 
-        if (maxLength <= prefix.Length)
+        if (maxLength <= basePrefix.Length)
         {
-            return prefix[..maxLength];
+            return basePrefix[..maxLength];
         }
 
-        var available = maxLength - prefix.Length;
+        var available = maxLength - basePrefix.Length;
         var next = Interlocked.Increment(ref _nextParameterId);
-        var suffix = next.ToString("x", CultureInfo.InvariantCulture);
 
-        if (suffix.Length > available)
+        // Use string.Create to avoid allocations
+        return string.Create(maxLength, (next, available, basePrefix.Length), static (span, state) =>
         {
-            suffix = suffix[^available..];
-        }
-        else if (suffix.Length < available)
-        {
-            suffix = suffix.PadLeft(available, '0');
-        }
+            var (counter, availableSpace, prefixLen) = state;
 
-        return prefix + suffix;
+            // Write prefix
+            "p".AsSpan().CopyTo(span);
+
+            // Format counter as hex into stack buffer
+            Span<char> hexBuffer = stackalloc char[16]; // Max hex digits for long
+            counter.TryFormat(hexBuffer, out var written, "x", CultureInfo.InvariantCulture);
+            var hexSpan = hexBuffer[..written];
+
+            if (hexSpan.Length > availableSpace)
+            {
+                // Truncate from left (take last N chars)
+                hexSpan[(hexSpan.Length - availableSpace)..].CopyTo(span[prefixLen..]);
+            }
+            else if (hexSpan.Length < availableSpace)
+            {
+                // Pad with zeros on the left
+                var paddingCount = availableSpace - hexSpan.Length;
+                span.Slice(prefixLen, paddingCount).Fill('0');
+                hexSpan.CopyTo(span[(prefixLen + paddingCount)..]);
+            }
+            else
+            {
+                // Exact fit
+                hexSpan.CopyTo(span[prefixLen..]);
+            }
+        });
     }
 
-    public async Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
+    public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteNonQueryAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteNonQueryAsync(ExecutionType.Write, commandType, CancellationToken.None);
     }
 
-    public async Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
+    public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
     {
-        // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
-        if (_context is DatabaseContext dbContext &&
-            dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
+        return ExecuteNonQueryAsync(ExecutionType.Write, commandType, cancellationToken);
+    }
+
+    public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text)
+    {
+        return ExecuteNonQueryAsync(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        if (executionType == ExecutionType.Write)
         {
-            throw new NotSupportedException("Write operations are not supported in read-only mode.");
+            // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
+            if (_context.ReadWriteMode == ReadWriteMode.ReadOnly)
+            {
+                throw new NotSupportedException("Write operations are not supported in read-only mode.");
+            }
+
+            _context.AssertIsWriteConnection();
+        }
+        else
+        {
+            _context.AssertIsReadConnection();
         }
 
-        _context.AssertIsWriteConnection();
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        var metrics = GetMetricsCollector(executionType);
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Write, isTransaction);
-            // Guard: in SingleWriter mode, writes must target the writer connection
-            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
-            {
-                if (!ReferenceEquals(conn, dc.PersistentConnection))
-                {
-                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
-                }
-            }
-            // In SingleWriter mode, providers may still allow ephemeral write connections depending on implementation.
-            // Do not enforce strict persistent-connection usage here; let strategy/context manage it.
+            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
+            conn = GetConnection(executionType, isShared);
+            // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
+            // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
+                .ConfigureAwait(false);
+            var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            metrics?.CommandSucceeded(startTimestamp, result);
+            metrics?.RecordRowsAffected(result);
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            metrics?.CommandFailed(startTimestamp);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+            }
 
-            return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            throw;
         }
         finally
         {
-            Cleanup(cmd, conn, ExecutionType.Write);
+            Cleanup(cmd, conn);
         }
     }
 
-    public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
+    // ── ExecuteScalarRequiredAsync ─────────────────────────────────────────────
+    // Throws if no rows. Throws if null/DBNull and T is a non-nullable value type.
+
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteScalarAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+        return await ExecuteScalarRequiredAsync<T>(ExecutionType.Read, commandType, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
-    public async Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType,
+        CancellationToken cancellationToken)
     {
-        _context.AssertIsReadConnection();
-
-        await using var reader = await ExecuteReaderAsync(commandType, cancellationToken).ConfigureAwait(false);
-        if (await reader.ReadAsync().ConfigureAwait(false))
-        {
-            var value = reader.GetValue(0); // always returns object
-            if (typeof(T) == typeof(object))
-            {
-                return (T?)value;
-            }
-            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType, DefaultCoercionOptions);
-        }
-
-        // Return default for nullable types, throw for non-nullable types (following ADO.NET ExecuteScalar behavior)
-        var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
-        if (isNullable)
-        {
-            return default(T);
-        }
-
-        throw new InvalidOperationException("ExecuteScalarAsync expected at least one row but found none.");
+        return await ExecuteScalarRequiredAsync<T>(ExecutionType.Read, commandType, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    // Write-path scalar execution (e.g., INSERT ... RETURNING / OUTPUT)
-    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType = CommandType.Text)
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
     {
-        return await ExecuteScalarWriteAsync<T>(commandType, CancellationToken.None).ConfigureAwait(false);
+        return await ExecuteScalarRequiredAsync<T>(executionType, commandType, CancellationToken.None)
+            .ConfigureAwait(false);
     }
 
-    public async Task<T?> ExecuteScalarWriteAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    public async ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
     {
-        // Check for explicit read-only mode
-        if (_context is DatabaseContext dbContext && dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
-        {
-            throw new NotSupportedException("Write operations are not supported in read-only mode.");
-        }
+        var result = await ExecuteScalarCore<T>(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
 
-        _context.AssertIsWriteConnection();
-        ITrackedConnection? conn = null;
-        DbCommand? cmd = null;
-        try
+        switch (result.Status)
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Write, isTransaction);
-            if (!isTransaction && _context.ConnectionMode == DbMode.SingleWriter && _context is DatabaseContext dc)
-            {
-                if (!ReferenceEquals(conn, dc.PersistentConnection))
-                {
-                    throw new InvalidOperationException("Write operations must use the writer connection in SingleWriter mode.");
-                }
-            }
-            // Do not enforce persistent connection for SingleWriter here; strategy/context will manage it.
-            await using var connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Write, cancellationToken).ConfigureAwait(false);
+            case ScalarStatus.None:
+                throw new InvalidOperationException("Query returned no rows.");
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (result is null || result is DBNull)
+            case ScalarStatus.Null:
             {
                 var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
-                return isNullable ? default : throw new InvalidOperationException("ExecuteScalarWriteAsync expected a value but found none.");
+                if (!isNullable)
+                {
+                    throw new InvalidOperationException(
+                        $"Query returned a null value but the target type {typeof(T).Name} is non-nullable.");
+                }
+
+                return default!;
             }
 
-            if (typeof(T) == typeof(object))
-            {
-                return (T?)result;
-            }
+            case ScalarStatus.Value:
+                return result.Value!;
 
-            var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            return (T?)TypeCoercionHelper.Coerce(result, result.GetType(), targetType, DefaultCoercionOptions);
+            default:
+                throw new InvalidOperationException($"Unexpected ScalarStatus: {result.Status}");
         }
-        finally
+    }
+
+    // ── ExecuteScalarOrNullAsync ─────────────────────────────────────────────
+    // Returns null for no rows or DBNull. Never throws for data absence.
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text)
+    {
+        return ExecuteScalarOrNullAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType, CancellationToken cancellationToken)
+    {
+        return ExecuteScalarOrNullAsync<T>(ExecutionType.Read, commandType, cancellationToken);
+    }
+
+    public ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return ExecuteScalarOrNullAsync<T>(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        var result = await ExecuteScalarCore<T>(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
+        return result.Value;
+    }
+
+    // ── TryExecuteScalarAsync ───────────────────────────────────────────────
+    // Returns ScalarResult<T> with unambiguous Status. Never throws for data absence.
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)
+    {
+        return TryExecuteScalarAsync<T>(ExecutionType.Read, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return TryExecuteScalarAsync<T>(ExecutionType.Read, commandType, cancellationToken);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return TryExecuteScalarAsync<T>(executionType, commandType, CancellationToken.None);
+    }
+
+    public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteScalarCore<T>(executionType, commandType, cancellationToken);
+    }
+
+    // ── Core scalar implementation ──────────────────────────────────────────
+    // Reader-based: uses ExecuteReaderAsync, reads exactly one row/one column.
+    // Never calls provider ExecuteScalar (avoids TimesTen/ODBC quirks).
+
+    private async ValueTask<ScalarResult<T>> ExecuteScalarCore<T>(
+        ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken)
+    {
+        if (executionType == ExecutionType.Write &&
+            _context.ReadWriteMode == ReadWriteMode.ReadOnly)
         {
-            Cleanup(cmd, conn, ExecutionType.Write);
+            throw new NotSupportedException("Write operations are not supported in read-only mode.");
         }
+
+        await using var reader = await ExecuteReaderAsync(executionType, commandType, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync().ConfigureAwait(false))
+        {
+            return new ScalarResult<T>(ScalarStatus.None, default);
+        }
+
+        var value = reader.GetValue(0);
+
+        if (Utils.IsNullOrDbNull(value))
+        {
+            return new ScalarResult<T>(ScalarStatus.Null, default);
+        }
+
+        if (typeof(T) == typeof(object))
+        {
+            return new ScalarResult<T>(ScalarStatus.Value, (T)value);
+        }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        var coerced = (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType,
+            DefaultCoercionOptions);
+        return new ScalarResult<T>(ScalarStatus.Value, coerced);
     }
 
-    public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text)
     {
-        return await ExecuteReaderAsync(commandType, CancellationToken.None).ConfigureAwait(false);
+        return ExecuteReaderAsync(ExecutionType.Read, commandType, CancellationToken.None);
     }
 
-    public async Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken)
     {
-        _context.AssertIsReadConnection();
+        return ExecuteReaderAsync(ExecutionType.Read, commandType, cancellationToken);
+    }
 
-        ITrackedConnection conn;
+    public ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType,
+        CommandType commandType = CommandType.Text)
+    {
+        return ExecuteReaderAsync(executionType, commandType, CancellationToken.None);
+    }
+
+    public async ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken)
+    {
+        return await ExecuteReaderAsyncInternal(executionType, commandType, cancellationToken, singleRow: false)
+            .ConfigureAwait(false);
+    }
+
+    // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
+    public ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
+    {
+        return ExecuteReaderSingleRowAsync(ExecutionType.Read, cancellationToken);
+    }
+
+    public async ValueTask<ITrackedReader> ExecuteReaderSingleRowAsync(ExecutionType executionType,
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteReaderAsyncInternal(executionType, CommandType.Text, cancellationToken, singleRow: true)
+            .ConfigureAwait(false);
+    }
+
+    private async ValueTask<ITrackedReader> ExecuteReaderAsyncInternal(
+        ExecutionType executionType,
+        CommandType commandType,
+        CancellationToken cancellationToken,
+        bool singleRow)
+    {
+        if (executionType == ExecutionType.Write)
+        {
+            _context.AssertIsWriteConnection();
+        }
+        else
+        {
+            _context.AssertIsReadConnection();
+        }
+
+        ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        ILockerAsync? connectionLocker = null;
+        var metrics = GetMetricsCollector(executionType);
+        var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        var lockTransferred = false;
         try
         {
             await using var contextLocker = _context.GetLock();
             await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Read, isTransaction);
-            var connectionLocker = conn.GetLock();
+            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
+            conn = GetConnection(executionType, isShared);
+            connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, commandType, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
+            cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
+                .ConfigureAwait(false);
 
             // unless the databaseContext is in a transaction or SingleConnection mode,
             // a new connection is returned for every READ operation, therefore, we
             // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var isReadOnlyConnection = _context.IsReadOnlyConnection;
-            var behavior = (isTransaction || isSingleConnection)
-                ? CommandBehavior.Default
-                : CommandBehavior.CloseConnection;
-            //behavior |= CommandBehavior.SingleResult;
+            var behavior = isTransaction || isSingleConnection
+                ? (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default)
+                : (singleRow
+                    ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
+                    : CommandBehavior.CloseConnection);
 
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
             // otherwise, we will have the connection set to autoclose so that we
             //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
-            var trackedReader = new TrackedReader(
-                dr,
-                conn,
-                connectionLocker,
-                behavior == CommandBehavior.CloseConnection,
-                cmd);
-            cmd = null;
-            return trackedReader;
-        }
-        finally
-        {
-            //no matter what we do NOT close the underlying connection
-            //or dispose it here—the reader manages command disposal.
-            Cleanup(null, null, ExecutionType.Read);
-        }
-    }
-
-    // Optimized single-row reader to hint providers/ADO.NET for minimal result shape
-    public async Task<ITrackedReader> ExecuteReaderSingleRowAsync(CancellationToken cancellationToken = default)
-    {
-        _context.AssertIsReadConnection();
-
-        ITrackedConnection conn;
-        DbCommand? cmd = null;
-        try
-        {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            var isTransaction = _context is ITransactionContext;
-            conn = _context.GetConnection(ExecutionType.Read, isTransaction);
-            var connectionLocker = conn.GetLock();
-            await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            cmd = await PrepareAndCreateCommandAsync(conn, CommandType.Text, ExecutionType.Read, cancellationToken).ConfigureAwait(false);
-
-            var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var behavior = (isTransaction || isSingleConnection)
-                ? CommandBehavior.SingleRow
-                : (CommandBehavior.CloseConnection | CommandBehavior.SingleRow);
-
-            var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
+            metrics?.CommandSucceeded(startTimestamp, 0);
+            Interlocked.Increment(ref _activeReaders);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
-                cmd);
+                cmd,
+                metrics,
+                this);
             cmd = null;
+            lockTransferred = true; // TrackedReader now owns the lock
             return trackedReader;
+        }
+        catch (OperationCanceledException)
+        {
+            metrics?.CommandCancelled(startTimestamp);
+            throw;
+        }
+        catch (Exception ex) when (IsTimeout(ex))
+        {
+            metrics?.CommandTimedOut(startTimestamp);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            metrics?.CommandFailed(startTimestamp);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+            }
+
+            throw;
         }
         finally
         {
-            // Command lifetime is managed by the returned reader for read operations.
-            Cleanup(null, null, ExecutionType.Read);
+            // If lock wasn't transferred to TrackedReader, release it here
+            if (!lockTransferred && connectionLocker != null)
+            {
+                try
+                {
+                    await connectionLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore disposal errors in finally block
+                }
+            }
+
+            // On success (lockTransferred), TrackedReader owns the connection — pass null.
+            // On failure, pass the actual connection so Cleanup can dispose it.
+            Cleanup(cmd, lockTransferred ? null : conn);
         }
     }
 
@@ -650,13 +1436,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         if (list != null)
         {
-            foreach (var p in list.OfType<DbParameter>())
+            foreach (var p in list)
             {
                 AddParameter(p);
             }
         }
     }
 
+    public void AddParameters(IList<DbParameter> list)
+    {
+        if (list == null) return;
+        
+        // Optimize for the common case of monolithic binders
+        for (var i = 0; i < list.Count; i++)
+        {
+            AddParameter(list[i]);
+        }
+    }
 
     private async Task<DbCommand> PrepareAndCreateCommandAsync(
         ITrackedConnection conn,
@@ -664,68 +1460,149 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ExecutionType executionType,
         CancellationToken cancellationToken)
     {
+        var traceTimings = _logger.IsEnabled(LogLevel.Debug);
+        long tStart = 0;
+        long tOpened = 0;
+        long tCmdText = 0;
+        long tCmdCreated = 0;
+        long tParamsAdded = 0;
+        long tPrepared = 0;
+        if (traceTimings)
+        {
+            tStart = Stopwatch.GetTimestamp();
+        }
+
         if (commandType == CommandType.TableDirect)
         {
             throw new NotSupportedException("TableDirect isn't supported.");
         }
 
-        if (Query.Length == 0)
+        if (_query.Length == 0)
         {
             throw new InvalidOperationException("SQL query is empty.");
         }
 
         await OpenConnectionAsync(conn, cancellationToken).ConfigureAwait(false);
-        var cmd = CreateCommand(conn);
-        cmd.CommandType = CommandType.Text;
-
-        // Compute command text once to avoid double ToString() and guard logging
-        var cmdText = (commandType == CommandType.StoredProcedure)
-            ? WrapForStoredProc(executionType, includeParameters: true)
-            : Query.ToString();
-
-        if (_logger.IsEnabled(LogLevel.Information))
+        if (traceTimings)
         {
-            _logger.LogInformation("Executing SQL: {Sql}", cmdText);
-        }
-        if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
-        {
-            var paramDump = string.Join(", ",
-                _parameters.Values.Select(p => $"{p.ParameterName}={p.Value ?? "NULL"}"));
-            _logger.LogDebug("Parameters: {Parameters}", paramDump);
-        }
-        cmd.CommandText = cmdText;
-        if (_parameters.Count > _context.MaxParameterLimit)
-        {
-            throw new InvalidOperationException(
-                $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
+            tOpened = Stopwatch.GetTimestamp();
         }
 
-        if (_context.SupportsNamedParameters)
+        // Performance optimization: cache command text to avoid repeated Query.ToString() calls
+        string cmdText;
+        if (commandType == CommandType.StoredProcedure)
         {
-            var unique = new HashSet<DbParameter>();
-            foreach (var param in _parameters.Values)
-            {
-                if (!unique.Add(param))
-                {
-                    continue;
-                }
-                // Preserve normalized names expected by tests (no marker in ParameterName)
-                cmd.Parameters.Add(param);
-            }
+            cmdText = WrapForStoredProc(executionType, true);
+        }
+        else if (_cachedCommandText != null && _cachedCommandTextVersion == _query.Version)
+        {
+            // Reuse cached command text - huge win for template reuse patterns
+            cmdText = _cachedCommandText;
         }
         else
         {
-            foreach (var name in ParamSequence)
+            // Render and cache the command text
+            cmdText = _query.ToString();
+
+            // For non-stored-proc queries, render parameter placeholders
+            // This is CRITICAL for positional-parameter providers (MySQL, SQLite, etc.)
+            // RenderParams() populates ParamSequence and replaces {P}name with ? or @name
+            if (cmdText.Contains("{P}"))
             {
-                if (_parameters.TryGetValue(name, out var param))
-                {
-                    cmd.Parameters.Add(param);
-                }
+                cmdText = RenderParams(cmdText);
             }
+            else if (ParamSequence.Count > 0)
+            {
+                // No {P} placeholders — clear any stale sequence from a previous render
+                // so AddParametersToCommand doesn't bind using an outdated mapping.
+                ParamSequence.Clear();
+                _renderedParameterMap?.Clear();
+            }
+
+            // Cache the rendered command text for reuse
+            _cachedCommandText = cmdText;
+            _cachedCommandTextVersion = _query.Version;
+        }
+
+        if (traceTimings)
+        {
+            tCmdText = Stopwatch.GetTimestamp();
+        }
+
+        var cmd = CreateRawCommand(conn);
+        if (traceTimings)
+        {
+            tCmdCreated = Stopwatch.GetTimestamp();
+        }
+
+        // Stored procedures are wrapped into provider-specific text (EXEC/CALL/etc.)
+        // so we always execute as CommandType.Text for consistent behavior across providers.
+        cmd.CommandType = CommandType.Text;
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Executing SQL: {Sql}", cmdText);
+        }
+
+        if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))
+        {
+            // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
+            // Log only metadata: name, type, direction
+            using var paramDump = new SqlQueryBuilder();
+            var index = 0;
+            foreach (var param in _parameters.Values)
+            {
+                if (index++ > 0)
+                {
+                    paramDump.Append(", ");
+                }
+
+                var dirInfo = param.Direction != ParameterDirection.Input ? $" {param.Direction}" : "";
+                paramDump.Append(param.ParameterName);
+                paramDump.Append(':');
+                paramDump.Append(param.DbType.ToString());
+                paramDump.Append(dirInfo);
+            }
+
+            _logger.LogDebug("Parameters: {Parameters}", paramDump.ToString());
+        }
+
+        cmd.CommandText = cmdText;
+        // Bind parameters consistently with CreateCommand
+        AddParametersToCommand(cmd);
+
+        if (traceTimings)
+        {
+            tParamsAdded = Stopwatch.GetTimestamp();
         }
 
         // Apply per-text prepare logic
-        MaybePrepareCommand(cmd, conn);
+        MaybePrepareCommand(cmd, conn, executionType);
+        if (traceTimings)
+        {
+            tPrepared = Stopwatch.GetTimestamp();
+        }
+
+        if (traceTimings)
+        {
+            var openUs = TicksToMicroseconds(tOpened - tStart);
+            var textUs = TicksToMicroseconds(tCmdText - tOpened);
+            var cmdUs = TicksToMicroseconds(tCmdCreated - tCmdText);
+            var paramsUs = TicksToMicroseconds(tParamsAdded - tCmdCreated);
+            var prepareUs = TicksToMicroseconds(tPrepared - tParamsAdded);
+            var totalUs = TicksToMicroseconds(tPrepared - tStart);
+            _logger.LogDebug(
+                "SQL timing [{ExecutionType}/{CommandType}] params={ParamCount} open={OpenUs:0.000}us text={TextUs:0.000}us cmd={CmdUs:0.000}us params={ParamsUs:0.000}us prepare={PrepareUs:0.000}us total={TotalUs:0.000}us",
+                executionType,
+                commandType,
+                _parameters.Count,
+                openUs,
+                textUs,
+                cmdUs,
+                paramsUs,
+                prepareUs,
+                totalUs);
+        }
 
         return cmd;
     }
@@ -734,7 +1611,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// Applies prepare logic: prepares once per connection per SQL text,
     /// with fallback to disable prepare on provider failures.
     /// </summary>
-    private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn)
+    private void MaybePrepareCommand(DbCommand cmd, ITrackedConnection conn, ExecutionType executionType)
     {
         var shouldPrepare = ComputeEffectivePrepareSettings();
 
@@ -752,13 +1629,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         try
         {
             cmd.Prepare();
-            conn.LocalState.MarkShapePrepared(sqlText);
+            GetMetricsCollector(executionType)?.RecordPreparedStatement();
+            var (added, evicted) = conn.LocalState.MarkShapePrepared(sqlText);
+            if (added)
+            {
+                GetMetricsCollector(executionType)?.RecordStatementCached();
+                if (evicted > 0)
+                {
+                    GetMetricsCollector(executionType)?.RecordStatementEvicted(evicted);
+                }
+            }
         }
         catch (Exception ex)
         {
             if (_dialect.ShouldDisablePrepareOn(ex))
             {
-                conn.LocalState.PrepareDisabled = true;
+                conn.LocalState.DisablePrepare();
                 _logger?.LogDebug(ex,
                     "Disabled prepare for connection due to provider exception: {ExceptionType}",
                     ex.GetType().Name);
@@ -775,6 +1661,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// </summary>
     private bool ComputeEffectivePrepareSettings()
     {
+        // Hard veto from dialect (e.g. MySQL max_prepared_stmt_count exhaustion).
+        // Overrides ForceManualPrepare — retrying after server exhaustion only makes things worse.
+        if (_dialect.IsPrepareExhausted)
+        {
+            return false;
+        }
+
         // Check if prepare is hard-disabled via configuration
         if (_context.DisablePrepare == true)
         {
@@ -798,40 +1691,98 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return Task.CompletedTask;
     }
 
-    private Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
+    private static bool IsTimeout(Exception exception)
     {
-        if (conn.State != ConnectionState.Open)
-        {
-            return conn.OpenAsync(cancellationToken);
-        }
-
-        return Task.CompletedTask;
+        return exception is TimeoutException ||
+               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void Cleanup(DbCommand? cmd, ITrackedConnection? conn, ExecutionType executionType)
+    private static bool ShouldUseSharedConnection(IDatabaseContext context, ExecutionType executionType,
+        bool isTransaction)
+    {
+        if (isTransaction)
+        {
+            return true;
+        }
+
+        return context.ConnectionMode switch
+        {
+            DbMode.SingleConnection => true,
+            _ => false
+        };
+    }
+
+    private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
+    {
+        if (_context is not IInternalConnectionProvider provider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        return provider.GetConnection(executionType, isShared);
+    }
+
+    private static double TicksToMicroseconds(long ticks)
+    {
+        if (ticks <= 0)
+        {
+            return 0d;
+        }
+
+        return ticks * 1_000_000d / Stopwatch.Frequency;
+    }
+
+    private async Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
+    {
+        if (conn.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (_context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private void Cleanup(DbCommand? cmd, ITrackedConnection? conn)
     {
         if (cmd != null)
         {
             try
             {
                 cmd.Parameters?.Clear();
-               try{ cmd.Connection = null;}
-               catch { /* ignore */ }
+                try
+                {
+                    cmd.Connection = null;
+                }
+                catch
+                {
+                    /* ignore */
+                }
+
                 cmd.Dispose();
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Command disposal failed: {ex.Message}");
+                _logger.LogWarning(ex, "Command disposal failed");
                 // We're intentionally not retrying here anymore — disposal failure is generally harmless in this case
             }
         }
 
-        // Don't dispose read connections — they are left open until the reader disposes
-        if (executionType == ExecutionType.Read)
-        {
-            return;
-        }
-
+        // For reads, the TrackedReader owns the connection on success (conn will be null here).
+        // For writes, or if a read failed before TrackedReader took ownership (conn is non-null),
+        // we must dispose the connection to prevent leaks.
         if (_context is not TransactionContext && conn is not null)
         {
             _context.CloseAndDisposeConnection(conn);
@@ -849,50 +1800,103 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var targetContext = context ?? _context;
 
         // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = (targetContext as ISqlDialectProvider)?.Dialect
-                            ?? _dialect;
+        var targetDialect = targetContext.Dialect ?? _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
-        // Copy the SQL query content to the pooled StringBuilder
-        clone.Query.Clear();
-        clone.Query.Append(Query);
+        // OPTIMIZATION: Share cached command text instead of re-rendering
+        // This is a massive win for template cloning patterns - avoids Query.ToString() on every clone
+        var canShareCache = _cachedCommandText != null && _cachedCommandTextVersion == _query.Version;
+        if (canShareCache)
+        {
+            // Template has been rendered - share the immutable command text
+            clone._cachedCommandText = _cachedCommandText;
+            clone._cachedCommandTextVersion = _cachedCommandTextVersion;
+        }
+        else
+        {
+            clone._cachedCommandText = null;
+            clone._cachedCommandTextVersion = -1;
+        }
+
+        // Copy query text and version
+        clone._query.CopyFrom(_query);
 
         // Copy the WHERE flag
         clone.HasWhereAppended = HasWhereAppended;
 
         // Clone all parameters with the same names and types but allow value updates
-        // Use the target context's dialect for parameter creation
         foreach (var kvp in _parameters)
         {
-            var originalParam = kvp.Value;
-            var clonedParam = clone._dialect.CreateDbParameter(
-                originalParam.ParameterName,
-                originalParam.DbType,
-                originalParam.Value);
-
-            // Preserve parameter properties
-            clonedParam.Direction = originalParam.Direction;
-            clonedParam.Size = originalParam.Size;
-            clonedParam.Scale = originalParam.Scale;
-            clonedParam.Precision = originalParam.Precision;
-
-            clone.AddParameter(clonedParam);
+            clone.AddParameter(CloneParameter(kvp.Value, clone._dialect));
         }
 
-        // Copy parameter sequence for rendering
-        clone.ParamSequence.AddRange(ParamSequence);
+        // Copy parameter sequence for rendering (reuse cached if available)
+        if (ParamSequence.Count > 0)
+        {
+            clone.ParamSequence.AddRange(ParamSequence);
+        }
+
+        if (_renderedParameterMap is { Count: > 0 })
+        {
+            clone._renderedParameterMap = new Dictionary<string, string>(_renderedParameterMap,
+                ParameterNameComparer.Instance);
+        }
+
         clone._outputParameterCount = _outputParameterCount;
+        clone._nextParameterId = _nextParameterId;
 
         return clone;
     }
 
+    private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
+    {
+        var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+
+        // Only set non-default properties to avoid unnecessary provider overhead
+        if (param.Direction != ParameterDirection.Input)
+        {
+            cloned.Direction = param.Direction;
+        }
+
+        if (param.Size > 0)
+        {
+            cloned.Size = param.Size;
+        }
+
+        if (param.Scale > 0)
+        {
+            cloned.Scale = param.Scale;
+        }
+
+        if (param.Precision > 0)
+        {
+            cloned.Precision = param.Precision;
+        }
+
+        CopyProviderSpecificProperties(param, cloned);
+
+        return cloned;
+    }
+
+    /// <summary>
+    /// Internal method to reset execution state for container reuse.
+    /// Preserves query and parameters but clears execution-specific state.
+    /// Used for high-performance pooling scenarios.
+    /// </summary>
+    internal void Reset()
+    {
+        // Don't clear ParamSequence or cached command text - those are reusable
+        // Just reset output parameter count
+        _outputParameterCount = 0;
+
+        // Note: Query, parameters, HasWhereAppended, and cached command text are preserved
+        // This allows the container to be reused with the same query/parameters
+    }
+
     protected override void DisposeManaged()
     {
-        // Dispose managed resources here (clear parameters and return the builder to pool)
-        ReturnParametersToPool();
-        _outputParameterCount = 0;
-        ParamSequence.Clear();
-        StringBuilderPool.Return(Query);
+        Clear();
+        _query.Dispose();
     }
 
     private void ReturnParametersToPool()
@@ -900,17 +1904,39 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (_parameters.Count == 0)
         {
             _parameters.Clear();
+            _parameterOwners.Clear();
             return;
         }
 
-        if (_dialect is SqlDialect sqlDialect)
+        if (_activeReaders > 0)
         {
-            foreach (var parameter in _parameters.Values)
+            Volatile.Write(ref _deferParameterPooling, 1);
+            _logger.LogWarning(
+                "SqlContainer disposed while {ActiveReaders} reader(s) still active; skipping parameter pooling.",
+                _activeReaders);
+            return;
+        }
+
+        foreach (var parameter in _parameters.Values)
+        {
+            RemoveParameterFromOwner(parameter);
+            if (_dialect is SqlDialect sqlDialect)
             {
                 sqlDialect.ReturnParameterToPool(parameter);
             }
         }
 
         _parameters.Clear();
+        _parameterOwners.Clear();
+        Volatile.Write(ref _deferParameterPooling, 0);
+    }
+
+    void IReaderLifetimeListener.OnReaderDisposed()
+    {
+        var remaining = Interlocked.Decrement(ref _activeReaders);
+        if (remaining == 0 && Volatile.Read(ref _deferParameterPooling) == 1)
+        {
+            ReturnParametersToPool();
+        }
     }
 }

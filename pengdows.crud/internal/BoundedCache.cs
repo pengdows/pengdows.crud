@@ -1,58 +1,131 @@
+// =============================================================================
+// FILE: BoundedCache.cs
+// PURPOSE: Thread-safe bounded LRU cache with automatic eviction.
+//
+// AI SUMMARY:
+// - Generic bounded cache with configurable max size.
+// - Thread-safe: uses ConcurrentDictionary with per-entry Lazy and LRU timestamps.
+// - LRU eviction: least-recently-accessed entries removed when capacity exceeded.
+// - Key methods:
+//   * GetOrAdd(key, factory) - retrieves or creates entry; factory runs at most once per key
+//   * TryGet(key, out value) - retrieves and touches entry for LRU ordering
+//   * Clear() - removes all entries
+// - Lazy<TValue> with ExecutionAndPublication ensures the value factory executes
+//   exactly once per key, even when multiple threads race on the same missing key.
+// - Eviction is a linear scan for the entry with the lowest access timestamp;
+//   cache sizes are 32-512, so this is sub-microsecond.
+// - Used internally for caching compiled accessors, type info, reader plans, etc.
+// =============================================================================
+
 using System.Collections.Concurrent;
-using System.Threading;
 
 namespace pengdows.crud.@internal;
 
 internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
 {
     private readonly int _max;
-    private readonly ConcurrentDictionary<TKey, TValue> _map = new();
-    private readonly ConcurrentQueue<TKey> _order = new();
-    private int _count;
+    private readonly ConcurrentDictionary<TKey, CacheEntry> _map = new();
+    private long _clock;
 
     public BoundedCache(int max)
     {
         _max = Math.Max(1, max);
     }
 
-    public TValue GetOrAdd(TKey key, Func<TKey, TValue> factory)
+    public int Capacity => _max;
+
+    private sealed class CacheEntry
     {
-        if (_map.TryGetValue(key, out var v))
+        private readonly Lazy<TValue> _value;
+        public long LastAccess;
+
+        public CacheEntry(Func<TValue> factory, long initialAccess)
         {
-            return v;
+            _value = new Lazy<TValue>(factory, LazyThreadSafetyMode.ExecutionAndPublication);
+            LastAccess = initialAccess;
         }
 
-        var created = factory(key);
-        if (_map.TryAdd(key, created))
-        {
-            _order.Enqueue(key);
-            Interlocked.Increment(ref _count);
+        public TValue Value => _value.Value;
+    }
 
-            // Evict entries if we're over the limit
-            while (Volatile.Read(ref _count) > _max && _order.TryDequeue(out var old))
+    public TValue GetOrAdd(TKey key, Func<TKey, TValue> factory)
+    {
+        // Fast path: key already cached — touch and return
+        if (_map.TryGetValue(key, out var existing))
+        {
+            Volatile.Write(ref existing.LastAccess, Interlocked.Increment(ref _clock));
+            return existing.Value;
+        }
+
+        // Miss: create entry.  ConcurrentDictionary may discard our CacheEntry if
+        // another thread wins the race; the Lazy inside the *kept* entry guarantees
+        // the value factory runs exactly once regardless.
+        //
+        // Poisoned-Lazy note: if the factory throws, Lazy<T> with ExecutionAndPublication
+        // caches the exception and re-throws it on every subsequent access to .Value for
+        // that entry. The poisoned entry stays in the map until it is evicted by LRU.
+        // Callers should ensure their factory does not throw for transient errors; use a
+        // try/catch inside the factory and return a sentinel value if recovery is needed.
+        var tick = Interlocked.Increment(ref _clock);
+        var entry = _map.GetOrAdd(key, k => new CacheEntry(() => factory(k), tick));
+
+        // Touch the returned entry (might be one another thread inserted)
+        Volatile.Write(ref entry.LastAccess, Interlocked.Increment(ref _clock));
+
+        // Evict LRU entries until we are within capacity
+        while (_map.Count > _max)
+        {
+            if (!EvictLeastRecentlyUsed())
             {
-                if (_map.TryRemove(old, out _))
-                {
-                    Interlocked.Decrement(ref _count);
-                }
+                break; // safety: nothing left to evict
             }
         }
 
-        return created;
+        return entry.Value;
     }
 
     public bool TryGet(TKey key, out TValue v)
     {
-        return _map.TryGetValue(key, out v!);
+        if (_map.TryGetValue(key, out var entry))
+        {
+            Volatile.Write(ref entry.LastAccess, Interlocked.Increment(ref _clock));
+            v = entry.Value;
+            return true;
+        }
+
+        v = default!;
+        return false;
     }
 
     public void Clear()
     {
-        while (_order.TryDequeue(out _))
+        _map.Clear();
+        Interlocked.Exchange(ref _clock, 0);
+    }
+
+    /// <summary>
+    /// Scans all entries for the one with the lowest LastAccess timestamp and removes it.
+    /// Cache sizes are small (32-512), so a linear scan is faster than maintaining a
+    /// secondary data structure.
+    /// </summary>
+    /// <returns>True if an entry was successfully removed.</returns>
+    private bool EvictLeastRecentlyUsed()
+    {
+        var found = false;
+        TKey minKey = default!;
+        var minAccess = long.MaxValue;
+
+        foreach (var kv in _map)
         {
+            var access = Volatile.Read(ref kv.Value.LastAccess);
+            if (access < minAccess)
+            {
+                minAccess = access;
+                minKey = kv.Key;
+                found = true;
+            }
         }
 
-        _map.Clear();
-        Interlocked.Exchange(ref _count, 0);
+        return found && _map.TryRemove(minKey, out _);
     }
 }

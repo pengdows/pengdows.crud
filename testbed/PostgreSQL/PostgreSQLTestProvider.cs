@@ -4,7 +4,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.PostgreSQL;
 
 public class PostgreSQLTestProvider
     : TestProvider
@@ -33,7 +33,7 @@ public class PostgreSQLTestProvider
             // Table did not exist, ignore
         }
 
-        sqlContainer.Query.Clear();
+        sqlContainer.Clear();
         sqlContainer.Query.AppendFormat(@"
 -- Create table
 CREATE TABLE {0}test_table{1} (

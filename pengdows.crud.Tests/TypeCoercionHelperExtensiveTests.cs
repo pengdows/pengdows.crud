@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
 using Xunit;
 using Xunit.Abstractions;
@@ -16,7 +17,7 @@ using Xunit.Abstractions;
 namespace pengdows.crud.Tests;
 
 [Collection("TypeRegistry")]
-public class TypeCoercionHelperExtensiveTests
+public class TypeCoercionHelperExtensiveTests : IDisposable
 {
     private readonly ITestOutputHelper _output;
     private readonly TestLogger _logger;
@@ -26,6 +27,12 @@ public class TypeCoercionHelperExtensiveTests
         _output = output;
         _logger = new TestLogger(_output);
         TypeCoercionHelper.Logger = _logger;
+    }
+
+    public void Dispose()
+    {
+        // Reset to NullLogger to avoid stale ITestOutputHelper references
+        TypeCoercionHelper.Logger = NullLogger.Instance;
     }
 
     #region Logger Testing
@@ -58,7 +65,7 @@ public class TypeCoercionHelperExtensiveTests
     public void TypeCoercionOptions_DefaultValues()
     {
         var options = TypeCoercionOptions.Default;
-        
+
         Assert.Equal(TimeMappingPolicy.PreferDateTimeOffset, options.TimePolicy);
         Assert.Equal(JsonPassThrough.PreferDocument, options.JsonPreference);
         Assert.Equal(SupportedDatabase.Unknown, options.Provider);
@@ -68,11 +75,12 @@ public class TypeCoercionHelperExtensiveTests
     public void TypeCoercionOptions_CustomValues()
     {
         var options = new TypeCoercionOptions(
-            TimeMappingPolicy.ForceUtcDateTime, 
-            JsonPassThrough.PreferText, 
+            TimeMappingPolicy.ForceUtcDateTime,
+            JsonPassThrough.PreferText,
             SupportedDatabase.PostgreSql);
-        
+
         Assert.Equal(TimeMappingPolicy.ForceUtcDateTime, options.TimePolicy);
+        Assert.NotEqual(TypeCoercionOptions.Default.TimePolicy, options.TimePolicy);
         Assert.Equal(JsonPassThrough.PreferText, options.JsonPreference);
         Assert.Equal(SupportedDatabase.PostgreSql, options.Provider);
     }
@@ -156,7 +164,7 @@ public class TypeCoercionHelperExtensiveTests
     [Fact]
     public void CoerceGuid_FromInvalidString_ThrowsException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce("invalid-guid", typeof(string), typeof(Guid)));
     }
 
@@ -164,7 +172,7 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceGuid_FromWrongSizeByteArray_ThrowsException()
     {
         var bytes = new byte[8]; // Wrong size
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce(bytes, typeof(byte[]), typeof(Guid)));
     }
 
@@ -257,14 +265,14 @@ public class TypeCoercionHelperExtensiveTests
     [Fact]
     public void CoerceBoolean_FromInvalidChar_ThrowsException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce('x', typeof(char), typeof(bool)));
     }
 
     [Fact]
     public void CoerceBoolean_FromInvalidString_ThrowsException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce("invalid", typeof(string), typeof(bool)));
     }
 
@@ -284,9 +292,10 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceDateTimeOffset_FromDateTime_PreferDateTimeOffset()
     {
         var dt = DateTime.UtcNow;
-        var options = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+        var options = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+            SupportedDatabase.Unknown);
         var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
-        
+
         Assert.Equal(dt, result.UtcDateTime);
     }
 
@@ -294,9 +303,10 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceDateTimeOffset_FromDateTime_ForceUtc()
     {
         var dt = DateTime.Now; // Local time
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+            SupportedDatabase.Unknown);
         var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
-        
+
         Assert.Equal(TimeSpan.Zero, result.Offset);
     }
 
@@ -305,7 +315,7 @@ public class TypeCoercionHelperExtensiveTests
     {
         var dateString = "2023-01-01T12:00:00Z";
         var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dateString, typeof(string), typeof(DateTimeOffset))!;
-        
+
         Assert.Equal(new DateTimeOffset(2023, 1, 1, 12, 0, 0, TimeSpan.Zero), result);
     }
 
@@ -313,16 +323,18 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceDateTimeOffset_FromDateTimeString_ParsesCorrectly()
     {
         var dateString = "2023-01-01T12:00:00Z"; // Explicit UTC timestamp
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
-        var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dateString, typeof(string), typeof(DateTimeOffset), options)!;
-        
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+            SupportedDatabase.Unknown);
+        var result =
+            (DateTimeOffset)TypeCoercionHelper.Coerce(dateString, typeof(string), typeof(DateTimeOffset), options)!;
+
         Assert.Equal(TimeSpan.Zero, result.Offset);
     }
 
     [Fact]
     public void CoerceDateTimeOffset_FromInvalidString_ThrowsException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce("invalid-date", typeof(string), typeof(DateTimeOffset)));
     }
 
@@ -330,9 +342,10 @@ public class TypeCoercionHelperExtensiveTests
     public void CoerceDateTime_FromDateTime_ConvertedToUtc()
     {
         var dt = DateTime.Now; // Local time
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+            SupportedDatabase.Unknown);
         var result = (DateTime)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTime), options)!;
-        
+
         // With ForceUtcDateTime policy, should convert to UTC
         Assert.Equal(DateTimeKind.Utc, result.Kind);
     }
@@ -342,7 +355,7 @@ public class TypeCoercionHelperExtensiveTests
     {
         var dto = DateTimeOffset.Now;
         var result = (DateTime)TypeCoercionHelper.Coerce(dto, typeof(DateTimeOffset), typeof(DateTime))!;
-        
+
         Assert.Equal(DateTimeKind.Utc, result.Kind);
         Assert.Equal(dto.UtcDateTime, result);
     }
@@ -352,14 +365,14 @@ public class TypeCoercionHelperExtensiveTests
     {
         var dateString = "2023-01-01T12:00:00+05:00";
         var result = (DateTime)TypeCoercionHelper.Coerce(dateString, typeof(string), typeof(DateTime))!;
-        
+
         Assert.Equal(DateTimeKind.Utc, result.Kind);
     }
 
     [Fact]
     public void CoerceDateTime_FromInvalidString_ThrowsException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce("invalid-date", typeof(string), typeof(DateTime)));
     }
 
@@ -396,10 +409,10 @@ public class TypeCoercionHelperExtensiveTests
     {
         var inet = new Inet(System.Net.IPAddress.Parse("192.168.1.1"));
         var inetString = "192.168.1.1";
-        
+
         // This should use the InetConverter from AdvancedTypeRegistry
         var result = TypeCoercionHelper.Coerce(inetString, typeof(string), typeof(Inet));
-        
+
         // The converter should convert the string to an Inet object
         Assert.NotNull(result);
         Assert.IsType<Inet>(result);
@@ -462,14 +475,14 @@ public class TypeCoercionHelperExtensiveTests
     [Fact]
     public void CoerceEnum_FromInvalidString_ThrowsByDefault()
     {
-        Assert.Throws<ArgumentException>(() => 
+        Assert.Throws<ArgumentException>(() =>
             TypeCoercionHelper.Coerce("Invalid", typeof(string), typeof(TestEnum)));
     }
 
     [Fact]
     public void CoerceEnum_FromInvalidNumeric_ThrowsByDefault()
     {
-        Assert.Throws<ArgumentException>(() => 
+        Assert.Throws<ArgumentException>(() =>
             TypeCoercionHelper.Coerce(999, typeof(int), typeof(TestEnum)));
     }
 
@@ -499,7 +512,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(JsonDocument));
         var json = "{\"name\":\"test\"}";
         var result = (JsonDocument)TypeCoercionHelper.Coerce(json, typeof(string), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -509,7 +522,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(JsonElement));
         var json = "{\"name\":\"test\"}";
         var result = (JsonElement)TypeCoercionHelper.Coerce(json, typeof(string), columnInfo)!;
-        
+
         Assert.Equal("test", result.GetProperty("name").GetString());
     }
 
@@ -519,7 +532,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(JsonNode));
         var json = "{\"name\":\"test\"}";
         var result = (JsonNode)TypeCoercionHelper.Coerce(json, typeof(string), columnInfo)!;
-        
+
         Assert.Equal("test", result!["name"]!.GetValue<string>());
     }
 
@@ -529,7 +542,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(string));
         var doc = JsonDocument.Parse("{\"name\":\"test\"}");
         var result = (string)TypeCoercionHelper.Coerce(doc, typeof(JsonDocument), columnInfo)!;
-        
+
         Assert.Contains("test", result);
     }
 
@@ -539,7 +552,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(ReadOnlyMemory<char>));
         var json = "{\"name\":\"test\"}";
         var result = (ReadOnlyMemory<char>)TypeCoercionHelper.Coerce(json, typeof(string), columnInfo)!;
-        
+
         Assert.Contains("test", new string(result.Span));
     }
 
@@ -550,7 +563,7 @@ public class TypeCoercionHelperExtensiveTests
         var json = "{\"name\":\"test\"}";
         var bytes = Encoding.UTF8.GetBytes(json);
         var result = (JsonDocument)TypeCoercionHelper.Coerce(bytes, typeof(byte[]), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -562,7 +575,7 @@ public class TypeCoercionHelperExtensiveTests
         var bytes = Encoding.UTF8.GetBytes(json);
         var segment = new ArraySegment<byte>(bytes);
         var result = (JsonDocument)TypeCoercionHelper.Coerce(segment, typeof(ArraySegment<byte>), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -573,7 +586,7 @@ public class TypeCoercionHelperExtensiveTests
         var json = "{\"name\":\"test\"}";
         var memory = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(json));
         var result = (JsonDocument)TypeCoercionHelper.Coerce(memory, typeof(ReadOnlyMemory<byte>), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -584,7 +597,7 @@ public class TypeCoercionHelperExtensiveTests
         var json = "{\"name\":\"test\"}";
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
         var result = (JsonDocument)TypeCoercionHelper.Coerce(stream, typeof(Stream), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -595,7 +608,7 @@ public class TypeCoercionHelperExtensiveTests
         var json = "{\"name\":\"test\"}";
         var chars = json.ToCharArray();
         var result = (JsonDocument)TypeCoercionHelper.Coerce(chars, typeof(char[]), columnInfo)!;
-        
+
         Assert.Equal("test", result.RootElement.GetProperty("name").GetString());
     }
 
@@ -605,7 +618,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(JsonDocument));
         var bytes = Array.Empty<byte>();
         var result = (JsonDocument)TypeCoercionHelper.Coerce(bytes, typeof(byte[]), columnInfo)!;
-        
+
         Assert.Equal(JsonValueKind.Null, result.RootElement.ValueKind);
     }
 
@@ -615,7 +628,7 @@ public class TypeCoercionHelperExtensiveTests
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
         var json = "{\"Name\":\"test\",\"Value\":42}";
         var result = (TestJsonObject)TypeCoercionHelper.Coerce(json, typeof(string), columnInfo)!;
-        
+
         Assert.Equal("test", result.Name);
         Assert.Equal(42, result.Value);
     }
@@ -625,7 +638,7 @@ public class TypeCoercionHelperExtensiveTests
     {
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
         var result = TypeCoercionHelper.Coerce("", typeof(string), columnInfo);
-        
+
         Assert.Null(result);
     }
 
@@ -634,7 +647,7 @@ public class TypeCoercionHelperExtensiveTests
     {
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
         var result = TypeCoercionHelper.Coerce("   ", typeof(string), columnInfo);
-        
+
         Assert.Null(result);
     }
 
@@ -643,8 +656,8 @@ public class TypeCoercionHelperExtensiveTests
     {
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
         using var stream = new MemoryStream();
-        
-        Assert.Throws<JsonException>(() => 
+
+        Assert.Throws<JsonException>(() =>
             TypeCoercionHelper.Coerce(stream, typeof(Stream), columnInfo));
     }
 
@@ -671,7 +684,7 @@ public class TypeCoercionHelperExtensiveTests
     [Fact]
     public void GetJsonText_WithNull_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => 
+        Assert.Throws<ArgumentNullException>(() =>
             TypeCoercionHelper.GetJsonText(null!));
     }
 
@@ -704,7 +717,7 @@ public class TypeCoercionHelperExtensiveTests
     [Fact]
     public void Coerce_ChangeTypeFails_ThrowsInvalidCastException()
     {
-        Assert.Throws<InvalidCastException>(() => 
+        Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce("not-a-number", typeof(string), typeof(int)));
     }
 
@@ -728,7 +741,7 @@ public class TypeCoercionHelperExtensiveTests
     {
         var testPropertyInfo = new TestPropertyInfo();
         testPropertyInfo.PropertyTypeToSet = propertyType;
-        
+
         return new TestColumnInfo
         {
             PropertyInfo = testPropertyInfo,
@@ -748,10 +761,12 @@ public class TypeCoercionHelperExtensiveTests
         public bool IsEnum { get; set; }
         public Type? EnumType { get; set; }
         public Type? EnumUnderlyingType { get; set; }
+        public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
         public bool IsIdIsWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
+        public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
         public bool IsCreatedBy { get; set; }
@@ -759,30 +774,75 @@ public class TypeCoercionHelperExtensiveTests
         public bool IsLastUpdatedBy { get; set; }
         public bool IsLastUpdatedOn { get; set; }
         public int Ordinal { get; set; }
-        public object? MakeParameterValueFromField<T>(T objectToCreate) => null;
+
+        public object? MakeParameterValueFromField<T>(T objectToCreate)
+        {
+            return null;
+        }
     }
 
     private sealed class TestPropertyInfo : PropertyInfo
     {
         private Type _propertyType = typeof(object);
         public override Type PropertyType => _propertyType;
-        public Type PropertyTypeToSet { set => _propertyType = value; }
+
+        public Type PropertyTypeToSet
+        {
+            set => _propertyType = value;
+        }
+
         public override PropertyAttributes Attributes => PropertyAttributes.None;
         public override bool CanRead => true;
         public override bool CanWrite => true;
         public override string Name => "TestProperty";
         public override Type DeclaringType => typeof(object);
         public override Type ReflectedType => typeof(object);
-        
-        public override MethodInfo[] GetAccessors(bool nonPublic) => Array.Empty<MethodInfo>();
-        public override MethodInfo GetGetMethod(bool nonPublic) => null!;
-        public override ParameterInfo[] GetIndexParameters() => Array.Empty<ParameterInfo>();
-        public override MethodInfo GetSetMethod(bool nonPublic) => null!;
-        public override object GetValue(object? obj, BindingFlags invokeAttr, Binder? binder, object?[]? index, System.Globalization.CultureInfo? culture) => null!;
-        public override void SetValue(object? obj, object? value, BindingFlags invokeAttr, Binder? binder, object?[]? index, System.Globalization.CultureInfo? culture) { }
-        public override object[] GetCustomAttributes(Type attributeType, bool inherit) => Array.Empty<object>();
-        public override object[] GetCustomAttributes(bool inherit) => Array.Empty<object>();
-        public override bool IsDefined(Type attributeType, bool inherit) => false;
+
+        public override MethodInfo[] GetAccessors(bool nonPublic)
+        {
+            return Array.Empty<MethodInfo>();
+        }
+
+        public override MethodInfo GetGetMethod(bool nonPublic)
+        {
+            return null!;
+        }
+
+        public override ParameterInfo[] GetIndexParameters()
+        {
+            return Array.Empty<ParameterInfo>();
+        }
+
+        public override MethodInfo GetSetMethod(bool nonPublic)
+        {
+            return null!;
+        }
+
+        public override object GetValue(object? obj, BindingFlags invokeAttr, Binder? binder, object?[]? index,
+            System.Globalization.CultureInfo? culture)
+        {
+            return null!;
+        }
+
+        public override void SetValue(object? obj, object? value, BindingFlags invokeAttr, Binder? binder,
+            object?[]? index, System.Globalization.CultureInfo? culture)
+        {
+        }
+
+        public override object[] GetCustomAttributes(Type attributeType, bool inherit)
+        {
+            return Array.Empty<object>();
+        }
+
+        public override object[] GetCustomAttributes(bool inherit)
+        {
+            return Array.Empty<object>();
+        }
+
+        public override bool IsDefined(Type attributeType, bool inherit)
+        {
+            return false;
+        }
     }
 
     private sealed class TestJsonObject
@@ -802,22 +862,43 @@ public class TypeCoercionHelperExtensiveTests
             _output = output;
         }
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
         {
-            if (!IsEnabled(logLevel)) return;
-            
+            return NullScope.Instance;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel >= LogLevel;
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (!IsEnabled(logLevel))
+            {
+                return;
+            }
+
             var message = formatter(state, exception);
             Messages.Add(message);
-            _output.WriteLine($"[{logLevel}] {message}");
+            try
+            {
+                _output.WriteLine($"[{logLevel}] {message}");
+            }
+            catch (InvalidOperationException)
+            {
+                // Some runners (coverage) may not expose the active test context; swallow.
+            }
         }
 
         private sealed class NullScope : IDisposable
         {
             public static NullScope Instance { get; } = new();
-            public void Dispose() { }
+
+            public void Dispose()
+            {
+            }
         }
     }
 

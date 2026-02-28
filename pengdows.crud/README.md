@@ -1,6 +1,7 @@
 # pengdows.crud
 
-**pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
+**pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who
+want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
 
 > No LINQ. No tracking. No surprises.
 
@@ -8,7 +9,8 @@
 
 ## 🔍 Why pengdows.crud?
 
-- Built by a dev who actually **writes SQL**, understands **ACID**, and doesn’t want ORMs rewriting queries behind their back.
+- Built by a dev who actually **writes SQL**, understands **ACID**, and doesn’t want ORMs rewriting queries behind their
+  back.
 - Works **across databases** using consistent, standards-compliant behavior.
 - Handles **parameterization**, **enums**, **JSON**, **audit fields**, and **transactions**—out of the box.
 - Offers full **dependency injection**, fine-grained **connection control**, and true **multi-tenancy**.
@@ -17,12 +19,15 @@
 
 ## ✅ Key Features
 
-- `EntityHelper<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
+> Starting with v2.0, `TableGateway<TEntity, TRowID>` is the canonical CRUD gateway. The legacy `EntityHelper` alias has
+> been removed.
+
+- `TableGateway<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
 - Full support for:
-  - Enums
-  - JSON
-  - GUIDs
-  - UTC timestamps
+    - Enums
+    - JSON
+    - GUIDs
+    - UTC timestamps
 - Built-in **audit tracking** per entity and per field.
 - **Safe SQL generation** with strict parameterization (`@`, `:`, or `?` depending on provider).
 - Connection lifecycle modes: `New`, `Shared`, `KeepAlive`.
@@ -43,7 +48,8 @@ Tested and tuned for:
 - Firebird
 - CockroachDB
 
-> All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
+> All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and
+`GetSchema("DataSourceInformation")`.
 
 ---
 
@@ -66,11 +72,13 @@ Want support? Ask the vendor to ship a **real** ADO.NET provider.
 ## 🚫 Not an ORM — On Purpose
 
 `pengdows.crud` doesn't:
+
 - Track entities
 - Auto-generate complex queries
 - Obfuscate SQL
 
 Instead, it helps you write **real SQL** that's:
+
 - **Predictable**
 - **Testable**
 - **Secure**
@@ -90,28 +98,27 @@ Instead, it helps you write **real SQL** that's:
 
 ## 🔬 Tool Comparison
 
-| Feature                     | pengdows.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
-|----------------------------|---------------|-------------|--------|---------|------------|
-| Provider-Agnostic SQL      | ✅            | ⚠️ Manual   | ⚠️     | ⚠️     | ⚠️         |
-| Safe Parameterization      | ✅            | ❌ Risky    | ⚠️     | ✅     | ✅         |
-| Audit Field Support        | ✅ Built-in   | ❌          | ❌     | ⚠️     | ⚠️         |
-| Change Tracking            | ❌ Explicit   | ❌          | ❌     | ✅     | ✅         |
-| LINQ                       | ❌            | ❌          | ❌     | ✅     | ⚠️         |
-| Strong Typing              | ✅            | ⚠️ Manual   | ⚠️     | ✅     | ✅         |
-| Multi-tenancy              | ✅ Opt-in     | ❌          | ❌     | ⚠️     | ⚠️         |
-| Async/Await Support        | ✅ Fully      | ⚠️ Provider | ✅     | ✅     | ⚠️         |
-| Transaction Scoping        | ✅ Layered    | ❌          | ❌     | ✅     | ✅         |
-| Testability                | ✅ Interfaces | ❌          | ⚠️     | ⚠️     | ⚠️         |
-| Migration Tooling          | ❌ By Design  | ❌          | ❌     | ✅     | ✅         |
+| Feature               | pengdows.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
+|-----------------------|---------------|-------------|--------|---------|------------|
+| Provider-Agnostic SQL | ✅             | ⚠️ Manual   | ⚠️     | ⚠️      | ⚠️         |
+| Safe Parameterization | ✅             | ❌ Risky     | ⚠️     | ✅       | ✅          |
+| Audit Field Support   | ✅ Built-in    | ❌           | ❌      | ⚠️      | ⚠️         |
+| Change Tracking       | ❌ Explicit    | ❌           | ❌      | ✅       | ✅          |
+| LINQ                  | ❌             | ❌           | ❌      | ✅       | ⚠️         |
+| Strong Typing         | ✅             | ⚠️ Manual   | ⚠️     | ✅       | ✅          |
+| Multi-tenancy         | ✅ Opt-in      | ❌           | ❌      | ⚠️      | ⚠️         |
+| Async/Await Support   | ✅ Fully       | ⚠️ Provider | ✅      | ✅       | ⚠️         |
+| Transaction Scoping   | ✅ Layered     | ❌           | ❌      | ✅       | ✅          |
+| Testability           | ✅ Interfaces  | ❌           | ⚠️     | ⚠️      | ⚠️         |
+| Migration Tooling     | ❌ By Design   | ❌           | ❌      | ✅       | ✅          |
 
 ---
 
-## 📚 Documentation
-
+-## 📚 Documentation
 
 Topics include:
 
-- `EntityHelper<TEntity, TRowID>`
+- `TableGateway<TEntity, TRowID>`: CRUD entry point (EntityHelper alias removed in v2.0)
 - `SqlContainer`
 - `DbMode` and connection management
 - Audit and UTC logging
@@ -133,5 +140,5 @@ using System.Data.SqlClient;
 using pengdows.crud;
 
 var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<MyEntity, long>(db);
+var helper = new TableGateway<MyEntity, long>(db);
 ```

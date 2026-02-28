@@ -1,10 +1,57 @@
-using System;
+// =============================================================================
+// FILE: SpatialConverter.cs
+// PURPOSE: Base class for spatial type converters (Geometry and Geography).
+//
+// AI SUMMARY:
+// - Abstract base for GeometryConverter and GeographyConverter.
+// - Supports WKB/EWKB, WKT/EWKT, and GeoJSON formats with SRID handling.
+// - ConvertToProvider(): Creates provider-specific spatial objects:
+//   * SQL Server: SqlGeometry/SqlGeography via reflection
+//   * PostgreSQL: byte[] (EWKB) or string (WKT/GeoJSON)
+//   * MySQL: byte[] (WKB) or UTF-8 encoded WKT
+//   * Oracle: Requires ProviderValue to be set with SDO_GEOMETRY
+// - TryConvertFromProvider(): Converts database values back to TSpatial:
+//   * byte[]/ReadOnlyMemory<byte>/ArraySegment<byte> -> WKB parsing
+//   * string -> WKT or GeoJSON (auto-detected by leading '{')
+//   * Provider-specific types via reflection (SqlGeometry, NpgsqlTypes)
+// - Abstract methods for subclasses:
+//   * FromBinary(), FromTextInternal(), FromGeoJsonInternal(), WrapWithProvider()
+// - Thread-safe: Converter instances and spatial value objects are immutable.
+// =============================================================================
+
 using System.Text;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.converters;
 
+/// <summary>
+/// Base converter for spatial data types supporting Well-Known Binary (WKB), Well-Known Text (WKT), and GeoJSON formats.
+/// Provides cross-database spatial type conversion with SRID (Spatial Reference Identifier) support.
+/// </summary>
+/// <typeparam name="TSpatial">The spatial value object type (Geometry or Geography).</typeparam>
+/// <remarks>
+/// <para><strong>Provider-specific behavior:</strong></para>
+/// <list type="bullet">
+/// <item><description><strong>SQL Server:</strong> Uses Microsoft.SqlServer.Types (SqlGeometry/SqlGeography). Supports WKB, WKT, SRID.</description></item>
+/// <item><description><strong>PostgreSQL:</strong> Uses PostGIS extension. Supports EWKB (Extended WKB with SRID), EWKT, WKB, WKT. Requires PostGIS installed.</description></item>
+/// <item><description><strong>CockroachDB:</strong> PostGIS-compatible spatial types.</description></item>
+/// <item><description><strong>MySQL:</strong> Uses native spatial types (GEOMETRY, POINT, etc.) with WKB format.</description></item>
+/// <item><description><strong>Oracle:</strong> Uses SDO_GEOMETRY type. Requires provider-specific objects via WithProviderValue().</description></item>
+/// </list>
+/// <para><strong>Supported input formats from database:</strong></para>
+/// <list type="bullet">
+/// <item><description>byte[] → WKB (Well-Known Binary) or EWKB (Extended WKB with SRID prefix)</description></item>
+/// <item><description>string → WKT (Well-Known Text) like "POINT(1 2)" or EWKT like "SRID=4326;POINT(1 2)"</description></item>
+/// <item><description>Provider-specific types → Automatic detection and conversion (SqlGeometry, PostGIS types, etc.)</description></item>
+/// </list>
+/// <para><strong>Output formats to database:</strong> Automatically selects optimal format per provider
+/// (EWKB for PostgreSQL, provider types for SQL Server/Oracle, WKB for MySQL).</para>
+/// <para><strong>SRID handling:</strong> Spatial Reference System Identifier specifies coordinate system.
+/// Default is 0 (unspecified). Common: 4326 (WGS84 lat/lon for GPS), 3857 (Web Mercator).</para>
+/// <para><strong>Thread safety:</strong> Converter instances are thread-safe. Spatial value objects are immutable and thread-safe.</para>
+/// </remarks>
 internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpatial>
     where TSpatial : SpatialValue
 {
@@ -20,7 +67,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             SupportedDatabase.SqlServer => CreateSqlServerSpatial(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgresSpatial(value),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSpatial(value),
-            SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException("Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
+            SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
+                "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
             _ => ExtractDefaultSpatial(value)
         };
     }
@@ -50,6 +98,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                         result = specific;
                         return true;
                     }
+
                     result = default!;
                     return false;
             }
@@ -74,7 +123,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         var targetType = typeof(Geometry).IsAssignableFrom(value.GetType()) ? sqlGeometryType : sqlGeographyType;
         if (targetType == null)
         {
-            throw new InvalidOperationException("Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
+            throw new InvalidOperationException(
+                "Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
         }
 
         var methodName = !value.WellKnownBinary.IsEmpty ? "STGeomFromWKB" : "STGeomFromText";
@@ -90,7 +140,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
         if (sqlBytesType == null || sqlCharsType == null || sqlStringType == null || sqlIntType == null)
         {
-            throw new InvalidOperationException("SQL Server spatial conversion requires System.Data.SqlTypes and Microsoft.SqlServer.Types assemblies.");
+            throw new InvalidOperationException(
+                "SQL Server spatial conversion requires System.Data.SqlTypes and Microsoft.SqlServer.Types assemblies.");
         }
 
         if (!value.WellKnownBinary.IsEmpty)
@@ -98,7 +149,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             var ctor = sqlBytesType.GetConstructor(new[] { typeof(byte[]) });
             var sqlBytes = ctor?.Invoke(new object[] { value.WellKnownBinary.ToArray() });
             var srid = Activator.CreateInstance(sqlIntType, value.Srid);
-            return targetType.GetMethod(methodName, new[] { sqlBytesType, sqlIntType })?.Invoke(null, new[] { sqlBytes!, srid! });
+            return targetType.GetMethod(methodName, new[] { sqlBytesType, sqlIntType })
+                ?.Invoke(null, new[] { sqlBytes!, srid! });
         }
 
         var text = value.WellKnownText ?? value.GeoJson;
@@ -111,7 +163,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         var sqlChars = sqlCharsCtor?.Invoke(new object[] { text.ToCharArray() });
         var sridValue = Activator.CreateInstance(sqlIntType, value.Srid);
 
-        return targetType.GetMethod(methodName, new[] { sqlCharsType, sqlIntType })?.Invoke(null, new[] { sqlChars!, sridValue! });
+        return targetType.GetMethod(methodName, new[] { sqlCharsType, sqlIntType })
+            ?.Invoke(null, new[] { sqlChars!, sridValue! });
     }
 
     private object? CreatePostgresSpatial(SpatialValue value)
@@ -194,7 +247,9 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                 {
                     var sridProp = type.GetProperty("STSrid");
                     var sridValue = sridProp?.GetValue(value);
-                    var srid = sridValue != null ? Convert.ToInt32(sridValue, System.Globalization.CultureInfo.InvariantCulture) : 4326;
+                    var srid = sridValue != null
+                        ? Convert.ToInt32(sridValue, System.Globalization.CultureInfo.InvariantCulture)
+                        : 4326;
                     var spatial = FromBinary(bytes, provider);
                     return WrapWithProvider(spatial, value);
                 }

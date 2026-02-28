@@ -1,9 +1,6 @@
-#region
-
 using System.Data;
 using pengdows.crud.enums;
-
-#endregion
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.isolation;
 
@@ -16,6 +13,12 @@ public interface IIsolationResolver
     /// Maps an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/>.
     /// </summary>
     IsolationLevel Resolve(IsolationProfile profile);
+
+    /// <summary>
+    /// Maps an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> and
+    /// surfaces whether the mapping had to be degraded for the current database capabilities.
+    /// </summary>
+    IsolationResolution ResolveWithDetail(IsolationProfile profile);
 
     /// <summary>
     /// Validates that the supplied isolation level is supported.

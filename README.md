@@ -120,21 +120,23 @@ var context = new DatabaseContext(connectionString, factory);
 // Get real-time snapshot
 var metrics = context.Metrics;
 
-Console.WriteLine($"Current connections: {metrics.CurrentOpenConnections}");
-Console.WriteLine($"Max connections: {metrics.MaxOpenConnections}");
-Console.WriteLine($"Avg command duration: {metrics.AverageCommandDuration}ms");
-Console.WriteLine($"P95 latency: {metrics.CommandDurationP95}ms");
-Console.WriteLine($"P99 latency: {metrics.CommandDurationP99}ms");
-Console.WriteLine($"Failed commands: {metrics.TotalCommandsFailed}");
-Console.WriteLine($"Rows read: {metrics.TotalRowsRead}");
+Console.WriteLine($"Current connections: {metrics.ConnectionsCurrent}");
+Console.WriteLine($"Peak open connections: {metrics.PeakOpenConnections}");
+Console.WriteLine($"Avg command duration: {metrics.AvgCommandMs}ms");
+Console.WriteLine($"P95 latency: {metrics.P95CommandMs}ms");
+Console.WriteLine($"P99 latency: {metrics.P99CommandMs}ms");
+Console.WriteLine($"Failed commands: {metrics.CommandsFailed}");
+Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
+Console.WriteLine($"Read connections: {metrics.Read.ConnectionsCurrent}");
+Console.WriteLine($"Write connections: {metrics.Write.ConnectionsCurrent}");
 
 // Subscribe to metrics updates
 context.MetricsUpdated += (sender, m) =>
 {
-    if (m.AverageCommandDuration > 1000)
+    if (m.AvgCommandMs > 1000)
         _logger.LogWarning("Slow queries detected!");
 
-    if (m.CurrentOpenConnections > 50)
+    if (m.ConnectionsCurrent > 50)
         _logger.LogWarning("High connection count!");
 };
 ```
@@ -147,6 +149,7 @@ context.MetricsUpdated += (sender, m) =>
 - Row operations (total read, total affected)
 - Prepared statement cache (cached, evicted, total)
 - Transaction tracking (active, max, average duration)
+- Read/write split metrics (per-role counts and timings)
 
 **Neither EF Core nor Dapper has built-in metrics.**
 
@@ -191,7 +194,7 @@ var ctx = new DatabaseContext(localDbConnectionString, SqlClientFactory.Instance
 
 // SQLite file - SingleWriter mode (auto-detected)
 var ctx = new DatabaseContext("Data Source=mydb.db", SqliteFactory.Instance);
-// One pinned write connection, ephemeral read connections
+// Per-operation connections with a single-writer permit
 // Prevents SQLITE_BUSY errors
 
 // SQLite :memory: - SingleConnection mode (REQUIRED, auto-detected)
@@ -205,6 +208,12 @@ var ctx = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance);
 - Handles `:memory:` correctly (each connection = separate database)
 - LocalDB unload prevention
 - Optimal connection pooling per database type
+
+#### Shared connection locking & timeouts
+`SingleWriter` and `SingleConnection` (and the sentinel connection kept open in `KeepAlive`) rely on `RealAsyncLocker` to serialize access to the pinned connection. The lock has a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`), and if an operation cannot grab the shared lock within that window a `ModeContentionException` is thrown with a contention snapshot. You can tune or disable the timeout to match your workload; the lock statistics remain available for logging/metrics so you can detect backpressure before it impacts throughput.
+
+#### Connection pool governance
+`DatabaseContext` installs lightweight `PoolGovernor` instances for the read and write pools in every mode except `SingleConnection`, enforcing a `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`). Each governor tracks active requests and hands out `PoolSlot` tokens before opening provider connections; the KeepAlive sentinel retains its slot while pinned. If the governor cannot deliver a slot within the timeout, a `PoolSaturatedException` is raised along with a snapshot of the queue and slot counts, so you fail fast instead of exhausting the provider pool. Override `MaxConcurrentReads`/`MaxConcurrentWrites` (legacy `ReadPoolSize`/`WritePoolSize`) to tune effective limits.
 
 **Neither EF Core nor Dapper has connection strategy abstraction.**
 
@@ -246,9 +255,10 @@ var orders = await helper.RetrieveAsync(new[] { 1, 2, 3, ..., 1000 });
 
 ---
 
-## ✅ Core Features
+-## ✅ Core Features
 
-- **`EntityHelper<TEntity, TRowID>`**: Automatic CRUD with SQL customization points
+> **Note:** Version 2.0 removes the legacy compatibility alias; use `TableGateway<TEntity, TRowID>` directly for CRUD.
+- **`TableGateway<TEntity, TRowID>`**: Automatic CRUD with SQL customization points
 - **`SqlContainer`**: Safe SQL composition with parameterization
 - **Flexible audit tracking**: Choose which fields (CreatedBy/On, LastUpdatedBy/On), their types (string, int, Guid), and how to populate them
 - **Automatic optimistic locking**: Version fields with automatic increment and concurrency conflict detection
@@ -277,6 +287,19 @@ Tested and tuned for:
 - **DuckDB**
 
 > All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
+
+
+### Default Pool Sizes (Provider vs Practical)
+
+| SupportedDatabase | Default Max Pool Size (provider) | Practical / Recommended Max Pool Size | Key Practical Limits & Advice |
+|-------------------|----------------------------------|---------------------------------------|-------------------------------|
+| SqlServer (Microsoft.Data.SqlClient) | 100 | 50-200 (often 100-150 safe) | Per app instance rarely >200; total server connections limited by memory (approx 10-20 KB per conn + query plans). Rule of thumb: 2-4x CPU cores per app instance, or 100-300 total cluster-wide. Large pools (>500) often cause context switching thrash on DB server. |
+| PostgreSql (Npgsql) | 100 (since ~3.1) | 20-100 per app instance (often 30-80 optimal) | Strong consensus: 2-4x CPU cores on the DB server. Each conn ~1-3 MB RAM on Postgres side. >100-150 often overloads small/medium instances. Use PgBouncer if >50-100 needed per app; set app pool to 20-50 and let PgBouncer multiplex. |
+| MySql / MariaDb (MySqlConnector / MySql.Data) | 100 | 50-200 (often 100-150) | Similar to SqlServer: 100 is safe default. Threads are lighter than Postgres but still ~1-2 MB per conn. Practical ceiling often 200-500 before thread contention or memory pressure. ProxySQL or MySQL Router recommended beyond ~200. |
+| Oracle (Oracle.ManagedDataAccess) | 100 | 50-200 | Sessions are heavier (few MB each). Practical max often 100-300 before session/memory limits kick in. Enterprise tuning often caps at 100-150 per instance. |
+| Sqlite (Microsoft.Data.Sqlite) | Effectively unlimited (pooling enabled by default since v6, no hard max) | 1-20 (or unlimited for in-memory) | Single-writer lock means >1-4 concurrent writers kills perf. Practical: keep pool small (5-20) or disable pooling for high concurrency. In-memory/shared can handle more, but still file-lock limited on disk. |
+| DuckDb (.NET DuckDB) | Effectively unlimited (no hard pool limit in most impls) | 1-8 (or up to threads count) | Embedded: connection creation is cheap. Practical: single connection often best; multiple only if parallelizing queries. Limit to CPU cores or threads setting. No real pool exhaustion; bottleneck is CPU/RAM for queries, not connections. |
+| Sql92 fallback / unknown | 100 | 50-100 | Conservative defaults for generic relational DBs. |
 
 ---
 
@@ -350,6 +373,27 @@ Instead, it helps you write **real SQL** that's:
 
 ---
 
+## 📚 Documentation
+
+Topics include:
+
+- **Multi-tenancy**: `TenantContextRegistry`, mixing database types per tenant
+- **Advanced types**: Spatial, network, intervals, ranges, LOBs, JSON
+- **Metrics**: Real-time observability and performance tracking
+- **Streaming**: Memory-efficient `IAsyncEnumerable<T>` operations
+- **Connection strategies**: Standard, KeepAlive, SingleWriter, SingleConnection
+- **TableGateway**: CRUD operations with SQL customization (replaces the older TableGateway alias)
+- **SqlContainer**: Safe SQL composition and parameterization
+- **DbMode**: Connection lifecycle management
+- **Audit tracking**: Automatic CreatedBy/On, LastUpdatedBy/On
+- **Transaction scopes**: IsolationProfile, transaction management
+- **Type coercion**: CLR to database type mapping
+- **Primary vs. pseudokeys**: Separating logical IDs from physical keys
+- **Dialect system**: Database-specific SQL generation and feature detection
+- **Testing**: fakeDb provider and Testcontainers integration
+
+---
+
 ## 🛠️ Getting Started
 
 ### Installation
@@ -370,17 +414,112 @@ dotnet add package pengdows.crud.fakeDb
 using System.Data.SqlClient;
 using pengdows.crud;
 
-var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new EntityHelper<MyEntity, long>(db);
+var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
 
-// Create, retrieve, update, delete - all automatically
-await helper.CreateAsync(entity);
-var found = await helper.RetrieveOneAsync(entity.Id);
-await helper.UpdateAsync(found);
-await helper.DeleteAsync(found.Id);
+// Execute raw SQL
+var sc = context.CreateSqlContainer();
+sc.Query.Append("SELECT CURRENT_TIMESTAMP");
+var dt = sc.ExecuteScalar<DateTime>();
 ```
 
-See the [full README in version 1.1](../1.1/README.md) for comprehensive examples including multi-tenancy setup, advanced types, metrics, streaming, and more.
+### Entity Mapping
+
+```csharp
+using System.Data;
+using pengdows.crud;
+
+[Table("users")]
+public class User
+{
+    [Id]
+    [Column("id", DbType.Int64)]
+    public long Id { get; set; }
+
+    [PrimaryKey(1)]
+    [Column("email", DbType.String)]
+    public string Email { get; set; }
+
+    [Column("name", DbType.String)]
+    public string Name { get; set; }
+
+    [Column("status", DbType.String)]
+    [EnumColumn(typeof(UserStatus))]
+    public UserStatus Status { get; set; }
+
+    [CreatedOn]
+    public DateTime CreatedAt { get; set; }
+
+    [LastUpdatedOn]
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public enum UserStatus { Active, Inactive, Suspended }
+
+var context = new DatabaseContext("connection-string", SqlClientFactory.Instance);
+var helper = new TableGateway<User, long>(context);
+
+// Create
+var user = new User { Email = "john@example.com", Name = "John", Status = UserStatus.Active };
+await helper.CreateAsync(user);  // user.Id populated, CreatedAt set automatically
+
+// Retrieve
+var found = await helper.RetrieveOneAsync(user.Id);
+
+// Update
+found.Name = "John Doe";
+await helper.UpdateAsync(found);  // UpdatedAt set automatically
+
+// Delete
+await helper.DeleteAsync(found.Id);
+
+// Stream large result sets
+await foreach (var u in helper.RetrieveStreamAsync(userIds))
+{
+    await ProcessUserAsync(u);
+}
+```
+
+### Multi-Tenancy Setup
+
+```csharp
+// appsettings.json
+{
+  "MultiTenant": {
+    "Tenants": [
+      {
+        "Name": "enterprise-client",
+        "DatabaseContextConfiguration": {
+          "ConnectionString": "Server=sql.azure.com;Database=enterprise;",
+          "ProviderName": "System.Data.SqlClient",
+          "DbMode": "Standard"
+        }
+      },
+      {
+        "Name": "startup-client",
+        "DatabaseContextConfiguration": {
+          "ConnectionString": "Host=localhost;Database=startup;",
+          "ProviderName": "Npgsql",
+          "DbMode": "Standard"
+        }
+      }
+    ]
+  }
+}
+
+// Startup.cs
+services.AddMultiTenancy(configuration);
+
+// Register database factories
+services.AddKeyedSingleton<DbProviderFactory>("System.Data.SqlClient",
+    (_, _) => SqlClientFactory.Instance);
+services.AddKeyedSingleton<DbProviderFactory>("Npgsql",
+    (_, _) => NpgsqlFactory.Instance);
+
+// Usage
+var registry = services.GetRequiredService<ITenantContextRegistry>();
+var enterpriseCtx = registry.GetContext("enterprise-client");  // SQL Server
+var startupCtx = registry.GetContext("startup-client");        // PostgreSQL
+```
 
 ### Flexible Audit Tracking
 
@@ -516,8 +655,8 @@ public class HttpAuditResolver : IAuditValueResolver
 // Register in DI
 builder.Services.AddScoped<IAuditValueResolver, HttpAuditResolver>();
 
-// EntityHelper uses it automatically
-var helper = new EntityHelper<Order, int>(context, auditResolver);
+// TableGateway uses it automatically
+var helper = new TableGateway<Order, int>(context, auditResolver);
 await helper.CreateAsync(order, context);
 // CreatedBy and LastUpdatedBy automatically populated from HTTP context!
 ```
@@ -569,6 +708,27 @@ if (rowsAffected == 0)
 - **`int`, `long`** - Auto-incremented (SET version = version + 1)
 - **`byte[]`** - Database-managed (SQL Server ROWVERSION/timestamp)
 - **Nullable types** - `int?` for distinguishing new vs updated records
+
+### Transactions
+
+```csharp
+public class OrderService
+{
+    private readonly DatabaseContext _context;
+    private readonly ITableGateway<Order, int> _orderHelper;
+
+    public async Task ProcessOrderAsync(Order order)
+    {
+        // Create transaction per operation
+        using var tx = _context.BeginTransaction();
+
+        await _orderHelper.CreateAsync(order, tx);
+        await UpdateInventoryAsync(order, tx);
+
+        await tx.CommitAsync();
+    }
+}
+```
 
 ---
 ## ⚡ Advanced Features
@@ -710,7 +870,7 @@ public class Order
 }
 
 // Create helper with enum failure mode
-var helper = new EntityHelper<Order, int>(context)
+var helper = new TableGateway<Order, int>(context)
 {
     EnumParseFailureMode = EnumParseFailureMode.SetNullAndLog  // Don't throw on unknown values
 };
@@ -751,31 +911,26 @@ var context = new DatabaseContext(connectionString, factory, options: new Databa
 context.MetricsUpdated += (sender, m) =>
 {
     // SLA violation detection
-    if (m.CommandDurationP95 > 500)
-        _logger.LogWarning("P95 latency {P95}ms exceeds 500ms SLA", m.CommandDurationP95);
+    if (m.P95CommandMs > 500)
+        _logger.LogWarning("P95 latency {P95}ms exceeds 500ms SLA", m.P95CommandMs);
 
-    if (m.CommandDurationP99 > 1000)
-        _logger.LogError("P99 latency {P99}ms exceeds 1s SLA", m.CommandDurationP99);
+    if (m.P99CommandMs > 1000)
+        _logger.LogError("P99 latency {P99}ms exceeds 1s SLA", m.P99CommandMs);
 
     // Connection leak detection
     if (m.LongLivedConnections > 5)
         _logger.LogWarning("{Count} connections held > {Threshold}s",
             m.LongLivedConnections, m.LongLivedConnectionThreshold);
-
-    // Pool exhaustion warning
-    if (m.CurrentOpenConnections > m.MaxOpenConnections * 0.8)
-        _logger.LogWarning("Pool 80% full: {Current}/{Max}",
-            m.CurrentOpenConnections, m.MaxOpenConnections);
 };
 
 // Poll metrics anytime
 var metrics = context.Metrics;
-Console.WriteLine($"P95: {metrics.CommandDurationP95}ms");
-Console.WriteLine($"P99: {metrics.CommandDurationP99}ms");
-Console.WriteLine($"Avg: {metrics.AverageCommandDuration}ms");
-Console.WriteLine($"Failed: {metrics.TotalCommandsFailed}");
-Console.WriteLine($"Timed out: {metrics.TotalCommandsTimedOut}");
-Console.WriteLine($"Rows read: {metrics.TotalRowsRead}");
+Console.WriteLine($"P95: {metrics.P95CommandMs}ms");
+Console.WriteLine($"P99: {metrics.P99CommandMs}ms");
+Console.WriteLine($"Avg: {metrics.AvgCommandMs}ms");
+Console.WriteLine($"Failed: {metrics.CommandsFailed}");
+Console.WriteLine($"Timed out: {metrics.CommandsTimedOut}");
+Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
 ```
 
 **23+ tracked metrics:** Connections (current, max, reused, long-lived), commands (total, failed, timed-out, cancelled), latency (avg, P95, P99), rows (read, affected), prepared statements (cached, evicted), transactions (active, max, avg duration).
@@ -824,7 +979,7 @@ var context = new DatabaseContext(connectionString, factory, options: new Databa
 **Real-world problem:** Added a column to database. Don't want to update every entity immediately.
 
 ```csharp
-var helper = new EntityHelper<User, long>(context)
+var helper = new TableGateway<User, long>(context)
 {
     MapperOptions = new MapperOptions
     {
@@ -986,7 +1141,7 @@ var clonedQuery = pgQuery.Clone(mysqlContext);  // BROKEN!
 
 ```csharp
 // Register custom converter for PostgreSQL point type
-context.TypeMapRegistry.AdvancedTypeRegistry.RegisterConverter<Point>(
+pengdows.crud.types.AdvancedTypeRegistry.Shared.RegisterConverter<Point>(
     from: (dbValue) => {
         if (dbValue is string str)
         {
@@ -1028,31 +1183,10 @@ var retrieved = await helper.RetrieveOneAsync(location.Id);
 
 **What it is:** Per-physical-connection state tracking for prepare behavior.
 
-```csharp
-using var conn = context.GetConnection(ExecutionType.Write);
-var localState = conn.LocalState;
+**Important:** Direct connection access is internal-only. Connection-local state is not part of the public API.
 
-// Check if prepare disabled (e.g., due to prior failure)
-if (localState.IsPrepareDisabled)
-    _logger.LogWarning("Prepare disabled for this connection");
-
-// Check prepared statement cache
-if (localState.IsAlreadyPreparedForShape(sqlShapeHash))
-{
-    // Cache hit
-}
-else
-{
-    // Cache miss - will prepare
-    localState.MarkShapePrepared(sqlShapeHash);
-}
-
-// Cache: 32 shapes (LRU), persists across operations on same connection
-```
-
-**When it matters:** Debugging prepare failures. Understanding why prepare was disabled.
-
-**When to skip:** Production code. This is a diagnostic tool.
+**Use instead:** `DatabaseContext.Metrics` and `MetricsUpdated` for diagnostics, or add instrumentation inside the
+connection strategies when debugging the library itself.
 
 ---
 
@@ -1112,16 +1246,138 @@ if (warning != null)
 
 **`DatabaseContext` is a singleton execution coordinator**, NOT a scoped per-request context.
 
+| Aspect | EF Core DbContext | pengdows.crud DatabaseContext |
+|--------|-------------------|-------------------------------|
+| **Lifetime** | Scoped (per request) | **Singleton (per connection string)** |
+| **Thread Safety** | NOT thread-safe | **Thread-safe (concurrent callers supported)** |
+| **Change Tracking** | Yes | **No** |
+| **State Management** | Tracks entities | **Stateless** |
+| **Connections** | One per context | **Strategy-based (Standard/KeepAlive/SingleWriter/SingleConnection)** |
+
+### Correct Registration
+
 ```csharp
 // ✅ CORRECT: Singleton per connection string
 services.AddSingleton<DatabaseContext>(sp =>
     new DatabaseContext(connectionString, NpgsqlFactory.Instance));
 
+// Multi-tenant: one singleton per tenant
+services.AddKeyedSingleton<DatabaseContext>("tenant1", sp =>
+    new DatabaseContext(tenant1ConnectionString, SqliteFactory.Instance));
+
 // ❌ WRONG: Do NOT use scoped lifetime
 services.AddScoped<DatabaseContext>(sp => ...);  // Breaks persistent connection modes!
 ```
 
-**Why singleton?** Because DatabaseContext is thread-safe, stateless, and manages connection strategies. It's fundamentally different from EF's DbContext.
+**Why singleton?**
+
+- **Required for persistent modes** (SingleWriter, SingleConnection): These maintain pinned connections. Multiple contexts = multiple connections = errors.
+- **Works with Standard mode**: Provider manages pooling. Singleton avoids repeated initialization.
+- **Thread-safe**: Concurrent operations serialize at connection lock, not context lock.
+
+### TransactionContext
+
+**NOT registered in DI.** Create via `context.BeginTransaction()`:
+
+```csharp
+public class OrderService
+{
+    private readonly DatabaseContext _context;  // Injected singleton
+
+    public async Task ProcessOrderAsync(Order order)
+    {
+        // Create transaction per operation
+        using var tx = _context.BeginTransaction();
+
+        await _orderHelper.CreateAsync(order, tx);
+
+        tx.Commit();  // Dispose releases connection lock
+    }
+}
+```
+
+**Key points:**
+- Created per operation, not per request
+- Holds connection lock for its lifetime
+- Dispose promptly (use `using` or `await using`)
+- Do NOT create long-lived transactions
+
+---
+
+## 🧪 Testing
+
+### Unit Tests (No Database Required)
+
+```csharp
+using pengdows.crud.fakeDb;
+
+// fakeDb is a COMPLETE ADO.NET provider implementation
+var factory = new FakeDbFactory(SupportedDatabase.PostgreSql);
+var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+var helper = new TableGateway<Order, int>(context);
+
+// Test SQL generation
+var container = helper.BuildCreate(order);
+Assert.Contains("INSERT INTO orders", container.Query.ToString());
+Assert.Equal(3, container.Parameters.Count);
+
+// Test error handling
+var connection = (FakeDbConnection)factory.CreateConnection();
+connection.SetFailOnOpen();
+await Assert.ThrowsAsync<InvalidOperationException>(() =>
+    helper.CreateAsync(order, context));
+
+// Test result mapping
+connection.EnqueueScalarResult(42);
+var result = await container.ExecuteScalarAsync<int>();
+Assert.Equal(42, result);
+```
+
+**2,951+ tests run in ~6 seconds** using fakeDb.
+
+### Integration Tests (Real Databases)
+
+```csharp
+using Testcontainers.PostgreSql;
+
+// Spin up real PostgreSQL in Docker
+var postgres = new PostgreSqlBuilder()
+    .WithImage("postgres:15-alpine")
+    .Build();
+await postgres.StartAsync();
+
+var ctx = new DatabaseContext(postgres.GetConnectionString(),
+    NpgsqlDataSource.Create(postgres.GetConnectionString()));
+
+// Test against REAL PostgreSQL
+var helper = new TableGateway<Order, int>(ctx);
+await helper.CreateAsync(order, ctx);
+
+var retrieved = await helper.RetrieveOneAsync(order.Id, ctx);
+Assert.Equal(order.Total, retrieved.Total);
+```
+
+---
+
+## 🧪 Running Tests Inside Docker
+
+Execute the full test suite inside a disposable Docker container:
+
+```bash
+./tools/run-tests-in-container.sh
+```
+
+Override image or pass custom arguments:
+
+```bash
+# Use different SDK build
+./tools/run-tests-in-container.sh --image mcr.microsoft.com/dotnet/sdk:8.0.201
+
+# Run specific project
+./tools/run-tests-in-container.sh -- dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj
+```
+
+> Docker must be installed and running. Container is ephemeral—every invocation starts fresh.
 
 ---
 
@@ -1161,8 +1417,26 @@ services.AddScoped<DatabaseContext>(sp => ...);  // Breaks persistent connection
 - **Reader mapping**: 5.7x faster than pure reflection (compiled property setters)
 - **Set-valued parameters**: 1 parameter instead of 1000 on PostgreSQL/SQL Server
 - **Prepared statement caching**: Eliminates repeated SQL parsing
-- **Zero allocation** in hot paths via StringBuilderPool and BoundedCache
+- **Zero allocation** in hot paths via `StringBuilderLite` and BoundedCache
 - **Streaming**: Process millions of rows with constant memory usage
+
+Benchmark suite included: `benchmarks/CrudBenchmarks/`
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**TDD is mandatory in version 1.1**: Write tests first, then implementation.
+
+**Minimum test coverage**: 83% (CI enforced), target 90%.
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 

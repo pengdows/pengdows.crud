@@ -11,8 +11,16 @@ public class AuditValueResolverTests
     private class TestResolver : crud.AuditValueResolver
     {
         private readonly IAuditValues _values;
-        public TestResolver(IAuditValues values) => _values = values;
-        public override IAuditValues Resolve() => _values;
+
+        public TestResolver(IAuditValues values)
+        {
+            _values = values;
+        }
+
+        public override IAuditValues Resolve()
+        {
+            return _values;
+        }
     }
 
     [Fact]
@@ -33,4 +41,3 @@ public class AuditValueResolverTests
         Assert.Same(expected, result);
     }
 }
-

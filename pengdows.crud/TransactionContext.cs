@@ -1,7 +1,30 @@
-#region
+// =============================================================================
+// FILE: TransactionContext.cs
+// PURPOSE: Represents an active database transaction with commit/rollback
+//          control, savepoint support, and automatic cleanup.
+//
+// AI SUMMARY:
+// - Created via DatabaseContext.BeginTransaction() - not directly instantiated.
+// - Holds a pinned connection for the duration of the transaction.
+// - Implements IDatabaseContext so it can be used with TableGateway/SqlContainer.
+// - Key features:
+//   * Commit() / Rollback() for explicit transaction control
+//   * SavepointAsync() / RollbackToSavepointAsync() for partial rollbacks
+//   * Auto-rollback on disposal if not committed
+//   * Isolation level enforcement (promotes to minimum safe level)
+//   * Read-only transaction support
+// - Thread-safe: uses internal locks for concurrent access.
+// - NOT for use with TransactionScope - pengdows.crud uses its own model.
+// - Metrics: tracks transaction duration and commit/rollback counts.
+// - CockroachDB note: forces Serializable isolation (only level supported).
+// - All database operations within a TransactionContext use the same connection,
+//   which is the key difference from non-transactional operations.
+// =============================================================================
 
+using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -9,28 +32,140 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-
-#endregion
+using pengdows.crud.@internal;
+using pengdows.crud.metrics;
 
 namespace pengdows.crud;
 
-public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, IContextIdentity, ISqlDialectProvider
+/// <summary>
+/// Represents an active database transaction with commit/rollback control and savepoint support.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Creation:</strong> Always create via <see cref="IDatabaseContext.BeginTransaction"/>
+/// rather than direct instantiation.
+/// </para>
+/// <para>
+/// <strong>Behavior:</strong> The transaction holds a pinned database connection for its entire
+/// lifetime. All operations performed through this context use that same connection.
+/// </para>
+/// <para>
+/// <strong>Cleanup:</strong> If the transaction is disposed without calling <see cref="ITransactionContext.Commit"/>,
+/// it will be automatically rolled back.
+/// </para>
+/// <para>
+/// <strong>Savepoints:</strong> Use <see cref="ITransactionContext.SavepointAsync"/> and
+/// <see cref="ITransactionContext.RollbackToSavepointAsync"/> for partial rollback scenarios.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// await using var tx = await context.BeginTransaction();
+/// try
+/// {
+///     await gateway.CreateAsync(entity1);
+///     await gateway.CreateAsync(entity2);
+///     await tx.Commit();
+/// }
+/// catch
+/// {
+///     // Auto-rollback on dispose if Commit() wasn't called
+///     throw;
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="ITransactionContext"/>
+/// <seealso cref="IDatabaseContext.BeginTransaction"/>
+public class TransactionContext : ContextBase, ITransactionContext, IContextIdentity, ISqlDialectProvider,
+    IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _userLock;
+    private readonly ReusableAsyncLocker _reusableLocker;
     private readonly SemaphoreSlim _completionLock;
     private readonly IDbTransaction _transaction;
     private readonly IsolationLevel _resolvedIsolationLevel;
     private readonly bool _isReadOnly;
+    private readonly MetricsCollector? _metricsCollector;
+    private readonly MetricsCollector? _readMetricsCollector;
+    private readonly MetricsCollector? _writeMetricsCollector;
+    private readonly long _transactionMetricsStart;
+    private int _metricsCompleted;
 
     private int _committed; // 0 = no, 1 = yes
     private int _rolledBack; // 0 = no, 1 = yes
     private int _completedState;
 
+    /// <inheritdoc/>
     public Guid RootId { get; }
+
+    /// <summary>
+    /// Common initialization shared by sync and async creation paths.
+    /// Returns the resolved execution type, isolation level, and connection provider.
+    /// </summary>
+    private static (ExecutionType executionType, IsolationLevel isolationLevel, IInternalConnectionProvider provider)
+        ResolveCreationParameters(
+            IDatabaseContext context,
+            IsolationLevel isolationLevel,
+            ExecutionType? executionType,
+            bool isReadOnly)
+    {
+        executionType ??= context.IsReadOnlyConnection || isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+
+        if ((context.IsReadOnlyConnection || isReadOnly) && executionType != ExecutionType.Read)
+        {
+            throw new NotSupportedException("DatabaseContext is read-only");
+        }
+
+        if (context.Product == SupportedDatabase.CockroachDb)
+        {
+            isolationLevel = IsolationLevel.Serializable;
+        }
+
+        if (context is not IInternalConnectionProvider connectionProvider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        return (executionType.Value, isolationLevel, connectionProvider);
+    }
+
+    /// <summary>
+    /// Initializes fields common to both sync and async creation.
+    /// </summary>
+    private TransactionContext(
+        IDatabaseContext context,
+        ITrackedConnection connection,
+        IDbTransaction transaction,
+        IsolationLevel isolationLevel,
+        bool isReadOnly,
+        ILogger<TransactionContext>? logger)
+    {
+        _logger = logger ?? new NullLogger<TransactionContext>();
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _isReadOnly = isReadOnly;
+        _dialect = context.Dialect ??
+                   throw new InvalidOperationException("IDatabaseContext must expose a non-null Dialect.");
+        RootId = ((IContextIdentity)_context).RootId;
+        var metricsAccessor = context as IMetricsCollectorAccessor;
+        _metricsCollector = metricsAccessor?.MetricsCollector;
+        _readMetricsCollector = metricsAccessor?.ReadMetricsCollector;
+        _writeMetricsCollector = metricsAccessor?.WriteMetricsCollector;
+        if (_metricsCollector != null)
+        {
+            _transactionMetricsStart = _metricsCollector.TransactionStarted();
+        }
+
+        _connection = connection;
+        _transaction = transaction;
+        _resolvedIsolationLevel = isolationLevel;
+        _userLock = new SemaphoreSlim(1, 1);
+        _reusableLocker = new ReusableAsyncLocker(_userLock);
+        _completionLock = new SemaphoreSlim(1, 1);
+    }
 
     private TransactionContext(
         IDatabaseContext context,
@@ -38,73 +173,168 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         ExecutionType? executionType = null,
         bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
+        : this(context,
+            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType, isReadOnly,
+                out var transaction),
+            transaction,
+            isolationLevel,
+            isReadOnly,
+            logger)
     {
-        _logger = logger ?? new NullLogger<TransactionContext>();
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _isReadOnly = isReadOnly;
-        var provider = context as ISqlDialectProvider
-                       ?? throw new InvalidOperationException(
-                           "IDatabaseContext must implement ISqlDialectProvider and expose a non-null Dialect.");
-        _dialect = provider.Dialect;
-        RootId = ((IContextIdentity)_context).RootId;
-
-        executionType ??= (_context.IsReadOnlyConnection || _isReadOnly) ? ExecutionType.Read : ExecutionType.Write;
-
-        if ((_context.IsReadOnlyConnection || _isReadOnly) && executionType != ExecutionType.Read)
-        {
-            throw new NotSupportedException("DatabaseContext is read-only");
-        }
-
-        if (_context.Product == SupportedDatabase.CockroachDb)
-        {
-            isolationLevel = IsolationLevel.Serializable;
-        }
-
-        // Defer all connection routing to the configured connection strategy.
-        // The strategy (and DatabaseContext helpers it uses) handle in-memory,
-        // SingleConnection, and SingleWriter cases.
-        _connection = _context.GetConnection(executionType.Value, true);
-        EnsureConnectionIsOpen();
-        _userLock = new SemaphoreSlim(1, 1);
-        _completionLock = new SemaphoreSlim(1, 1);
-
-        _resolvedIsolationLevel = isolationLevel;
-
-        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
-        // but preserve the resolved isolation level for reporting and logic.
-        _transaction = _context.Product == SupportedDatabase.DuckDB
-            ? _connection.BeginTransaction()
-            : _connection.BeginTransaction(isolationLevel);
-
         if (_isReadOnly)
         {
-            _dialect.TryEnterReadOnlyTransaction(this);
+            try
+            {
+                _dialect.TryEnterReadOnlyTransaction(this);
+            }
+            catch
+            {
+                _transaction.Rollback();
+                _context.CloseAndDisposeConnection(_connection);
+                throw;
+            }
         }
     }
 
+    /// <summary>
+    /// Helper for the sync constructor chain — resolves parameters, gets connection,
+    /// opens it, and begins the transaction. Returns the connection; outputs the transaction.
+    /// </summary>
+    private static ITrackedConnection CreateConnectionAndTransaction(
+        IDatabaseContext context,
+        ref IsolationLevel isolationLevel,
+        ref ExecutionType? executionType,
+        bool isReadOnly,
+        out IDbTransaction transaction)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+        executionType = resolvedExecType;
+        isolationLevel = resolvedIsolation;
+
+        // isShared=false: The TransactionContext's own _userLock serializes all operations
+        // on this pinned connection. A second lock on the connection itself would be redundant
+        // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        OpenConnectionWithOptionalLock(context, connection);
+
+        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
+        // but preserve the resolved isolation level for reporting and logic.
+        transaction = context.Product == SupportedDatabase.DuckDB
+            ? connection.BeginTransaction()
+            : connection.BeginTransaction(resolvedIsolation);
+
+        return connection;
+    }
+
+    private static void OpenConnectionWithOptionalLock(IDatabaseContext context, ITrackedConnection connection)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            using var openLock = dbContext.GetConnectionOpenLock();
+            openLock.Lock();
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            return;
+        }
+
+        connection.Open();
+    }
+
+    /// <inheritdoc/>
     public Guid TransactionId { get; } = Guid.NewGuid();
+
     internal IDbTransaction Transaction => _transaction;
 
+    /// <inheritdoc/>
     public bool WasCommitted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
-                                 && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
+                                && Interlocked.CompareExchange(ref _committed, 0, 0) != 0;
+
+    /// <inheritdoc/>
     public bool WasRolledBack => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0
-                                  && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
+                                 && Interlocked.CompareExchange(ref _rolledBack, 0, 0) != 0;
+
+    /// <inheritdoc/>
     public bool IsCompleted => Interlocked.CompareExchange(ref _completedState, 0, 0) != 0;
+
+    /// <inheritdoc/>
     public IsolationLevel IsolationLevel => _resolvedIsolationLevel;
 
+    /// <inheritdoc/>
     public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
-    public SupportedDatabase Product => _context.Product;
-    public long MaxNumberOfConnections => _context.MaxNumberOfConnections;
-    public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
-    public bool RCSIEnabled => _context.RCSIEnabled;
-    public string ConnectionString => _context.ConnectionString;
-    public int MaxParameterLimit => _context.MaxParameterLimit;
-    public int MaxOutputParameters => (_dialect as SqlDialect)?.MaxOutputParameters ?? 0;
-    public DbMode ConnectionMode => DbMode.SingleConnection;
-    public ITypeMapRegistry TypeMapRegistry => _context.TypeMapRegistry;
-    public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
-    public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
 
+    /// <inheritdoc/>
+    public SupportedDatabase Product => _context.Product;
+
+    /// <inheritdoc/>
+    public long PeakOpenConnections => _context.PeakOpenConnections;
+
+    /// <inheritdoc/>
+    public bool IsReadOnlyConnection => _context.IsReadOnlyConnection || _isReadOnly;
+
+    /// <inheritdoc/>
+    public bool RCSIEnabled => _context.RCSIEnabled;
+
+    /// <inheritdoc/>
+    public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+
+    /// <inheritdoc/>
+    public string ConnectionString => _context.ConnectionString;
+
+    /// <inheritdoc/>
+    public string Name
+    {
+        get => _context.Name;
+        set => _context.Name = value;
+    }
+
+    /// <inheritdoc/>
+    public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
+
+    /// <inheritdoc/>
+    public DbDataSource? DataSource => _context.DataSource;
+
+    /// <inheritdoc/>
+    public int MaxParameterLimit => _context.MaxParameterLimit;
+
+    /// <inheritdoc/>
+    public DbMode ConnectionMode => _context.ConnectionMode;
+
+    ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>
+        (_context as ITypeMapAccessor)?.TypeMapRegistry ??
+        throw new InvalidOperationException("IDatabaseContext must expose a TypeMapRegistry.");
+
+    /// <inheritdoc/>
+    public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
+
+    /// <inheritdoc/>
+    public string SessionSettingsPreamble => _context.Dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
+
+    /// <inheritdoc/>
+    public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
+
+    /// <inheritdoc/>
+    public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
+
+    /// <inheritdoc/>
+    public DatabaseMetrics Metrics => _context.Metrics;
+
+    /// <inheritdoc/>
+    public event EventHandler<DatabaseMetrics> MetricsUpdated
+    {
+        add => _context.MetricsUpdated += value;
+        remove => _context.MetricsUpdated -= value;
+    }
+
+    /// <inheritdoc/>
     public ILockerAsync GetLock()
     {
         ThrowIfDisposed();
@@ -113,118 +343,166 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        return new RealAsyncLocker(_userLock);
+        return _reusableLocker;
     }
 
-    public ISqlContainer CreateSqlContainer(string? query = null)
+    protected override void ValidateCanCreateContainer()
     {
         if (IsCompleted)
         {
             throw new InvalidOperationException("Cannot create a SQL container because the transaction is completed.");
         }
+    }
 
-        // Try to reuse the parent context's logger factory if available so tests can capture logs
-        ILogger<ISqlContainer>? logger = null;
-        if (_context is DatabaseContext dbCtx)
+    protected override ILogger<ISqlContainer>? ResolveSqlContainerLogger()
+    {
+        return _context is DatabaseContext dbCtx ? dbCtx.CreateSqlContainerLogger() : null;
+    }
+
+    internal void ExecuteSessionNonQuery(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
         {
-            logger = dbCtx.CreateSqlContainerLogger();
+            return;
         }
-        return SqlContainer.Create(this, query, logger);
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
     }
 
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
+    internal async Task ExecuteSessionNonQueryAsync(string sql)
     {
-        var p = _context.CreateDbParameter(name, type, value);
-        p.Direction = direction;
-        return p;
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
     }
 
-    // Back-compat overloads (interface surface)
-    public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    private void TryResetReadOnlySession()
     {
-        return _context.CreateDbParameter(name, type, value);
+        if (_isReadOnly && _dialect is SqlDialect sd)
+        {
+            var resetSql = sd.GetReadOnlyTransactionResetSql();
+            if (!string.IsNullOrEmpty(resetSql))
+            {
+                try
+                {
+                    ExecuteSessionNonQuery(resetSql);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                }
+            }
+        }
     }
 
-    public DbParameter CreateDbParameter<T>(DbType type, T value,
-        ParameterDirection direction = ParameterDirection.Input)
+    private async Task TryResetReadOnlySessionAsync()
     {
-        var p = _context.CreateDbParameter(type, value);
-        p.Direction = direction;
-        return p;
+        if (_isReadOnly && _dialect is SqlDialect sd)
+        {
+            var resetSql = sd.GetReadOnlyTransactionResetSql();
+            if (!string.IsNullOrEmpty(resetSql))
+            {
+                try
+                {
+                    await ExecuteSessionNonQueryAsync(resetSql).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                }
+            }
+        }
     }
 
-    // Back-compat overload (interface surface)
-    public DbParameter CreateDbParameter<T>(DbType type, T value)
-    {
-        return _context.CreateDbParameter(type, value);
-    }
-
-    public ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
+    /// <inheritdoc/>
+    internal ITrackedConnection GetConnection(ExecutionType type, bool isShared = false)
     {
         return _connection;
     }
 
-    public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
+    ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.GenerateRandomName(length, parameterNameMaxLength);
+        return GetConnection(executionType, isShared);
     }
 
+    /// <inheritdoc/>
     public void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
     }
 
+    /// <inheritdoc/>
     public void AssertIsWriteConnection()
     {
         if (_isReadOnly)
         {
             throw new InvalidOperationException("Transaction is read-only.");
         }
+
         _context.AssertIsWriteConnection();
     }
 
-    public string QuotePrefix => _dialect.QuotePrefix;
-
-    public string QuoteSuffix => _dialect.QuoteSuffix;
-
-    public bool SupportsInsertReturning => _dialect.SupportsInsertReturning;
-
+    /// <inheritdoc/>
     public bool? ForceManualPrepare => _context.ForceManualPrepare;
 
+    /// <inheritdoc/>
     public bool? DisablePrepare => _context.DisablePrepare;
 
-    public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
+    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
 
-    public string WrapObjectName(string name)
+    MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType)
     {
-        return _dialect.WrapObjectName(name);
+        return executionType == ExecutionType.Read ? _readMetricsCollector : _writeMetricsCollector;
     }
 
-    public string MakeParameterName(DbParameter dbParameter)
-    {
-        return _dialect.MakeParameterName(dbParameter);
-    }
-
-    public string MakeParameterName(string parameterName)
-    {
-        return _dialect.MakeParameterName(parameterName);
-    }
-
+    /// <inheritdoc/>
     public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType, bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile,
+        ExecutionType executionType, bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType, bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
+        bool? readOnly)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
+    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
+        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+    {
+        return Task.FromException<ITransactionContext>(
+            new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
+    }
+
+    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
+        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+    {
+        return Task.FromException<ITransactionContext>(
+            new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
+    }
+
+    /// <inheritdoc/>
     public void CloseAndDisposeConnection(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
@@ -241,6 +519,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         _context.CloseAndDisposeConnection(conn);
     }
 
+    /// <inheritdoc/>
     public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
@@ -257,6 +536,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         return _context.CloseAndDisposeConnectionAsync(conn);
     }
 
+    /// <inheritdoc/>
     public void Commit()
     {
         ThrowIfDisposed();
@@ -274,6 +554,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }, true, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public void Rollback()
     {
         ThrowIfDisposed();
@@ -290,6 +571,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }, false, cancellationToken);
     }
 
+    /// <inheritdoc/>
     public Task SavepointAsync(string name)
     {
         return SavepointAsync(name, default);
@@ -304,7 +586,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = _transaction;
-        cmd.CommandText = $"SAVEPOINT {name}";
+        cmd.CommandText = _dialect.GetSavepointSql(name);
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -315,6 +597,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
     }
 
+    /// <inheritdoc/>
     public Task RollbackToSavepointAsync(string name)
     {
         return RollbackToSavepointAsync(name, default);
@@ -329,7 +612,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = _transaction;
-        cmd.CommandText = $"ROLLBACK TO SAVEPOINT {name}";
+        cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -343,7 +626,7 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
         // Use internal completion lock only; do not contend with user lock
-        if (!_completionLock.Wait(TimeSpan.FromSeconds(30)))
+        if (!_completionLock.Wait(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan))
         {
             throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
         }
@@ -354,20 +637,32 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
         finally
         {
-            _completionLock.Release();
+            // Guard against ObjectDisposedException: if Dispose() races with this Release()
+            // it may have already called _completionLock.Dispose(). Swallowing the exception
+            // here is safe — the connection was already closed in CompleteTransaction.finally.
+            try { _completionLock.Release(); }
+            catch (ObjectDisposedException) { }
         }
     }
 
-    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted, CancellationToken cancellationToken = default)
+    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
+        CancellationToken cancellationToken = default)
     {
-        await _completionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("Transaction completion timed out waiting for internal lock.");
+        }
+
         try
         {
             await CompleteTransactionAsync(action, markCommitted).ConfigureAwait(false);
         }
         finally
         {
-            _completionLock.Release();
+            // Guard against ObjectDisposedException: same race as the sync path.
+            try { _completionLock.Release(); }
+            catch (ObjectDisposedException) { }
         }
     }
 
@@ -378,18 +673,30 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        action();
-
-        if (markCommitted)
+        try
         {
-            Interlocked.Exchange(ref _committed, 1);
-        }
-        else
-        {
-            Interlocked.Exchange(ref _rolledBack, 1);
-        }
+            action();
 
-        _context.CloseAndDisposeConnection(_connection);
+            if (markCommitted)
+            {
+                Interlocked.Exchange(ref _committed, 1);
+            }
+            else
+            {
+                Interlocked.Exchange(ref _rolledBack, 1);
+            }
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _completedState, 0);
+            throw;
+        }
+        finally
+        {
+            TryResetReadOnlySession();
+            _context.CloseAndDisposeConnection(_connection);
+            CompleteTransactionMetrics();
+        }
     }
 
     private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
@@ -399,30 +706,68 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
             throw new InvalidOperationException("Transaction already completed.");
         }
 
-        await action().ConfigureAwait(false);
-
-        if (markCommitted)
+        try
         {
-            Interlocked.Exchange(ref _committed, 1);
+            await action().ConfigureAwait(false);
+
+            if (markCommitted)
+            {
+                Interlocked.Exchange(ref _committed, 1);
+            }
+            else
+            {
+                Interlocked.Exchange(ref _rolledBack, 1);
+            }
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _completedState, 0);
+            throw;
+        }
+        finally
+        {
+            await TryResetReadOnlySessionAsync().ConfigureAwait(false);
+            await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+            CompleteTransactionMetrics();
+        }
+    }
+
+    private void CompleteTransactionMetrics()
+    {
+        if (_metricsCollector == null)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _metricsCompleted, 1) != 0)
+        {
+            return;
+        }
+
+        if (Volatile.Read(ref _committed) == 1)
+        {
+            _metricsCollector.TransactionCommitted(_transactionMetricsStart);
         }
         else
         {
-            Interlocked.Exchange(ref _rolledBack, 1);
+            _metricsCollector.TransactionRolledBack(_transactionMetricsStart);
         }
-
-        await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
     }
 
     // Kept for backward compatibility with existing internal calls
-    private Task RollbackAsync() => RollbackAsync(default);
+    private Task RollbackAsync()
+    {
+        return RollbackAsync(default);
+    }
 
     protected override void DisposeManaged()
     {
+        var shouldDisposeLock = true;
         if (!IsCompleted)
         {
             try
             {
-                // Attempt immediate rollback using internal completion lock
+                // Attempt immediate rollback using internal completion lock.
                 if (_completionLock.Wait(0))
                 {
                     try
@@ -431,11 +776,17 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
                     }
                     finally
                     {
-                        _completionLock.Release();
+                        try { _completionLock.Release(); }
+                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
                     }
                 }
                 else
                 {
+                    // Another thread is completing the transaction and still holds the lock.
+                    // It will close the connection via CompleteTransaction.finally.
+                    // Do NOT dispose _completionLock here — the other thread still holds it
+                    // and its Release() would throw ObjectDisposedException.
+                    shouldDisposeLock = false;
                     _logger.LogError("TransactionContext.Dispose could not acquire lock; skipping explicit rollback.");
                 }
             }
@@ -447,16 +798,21 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
 
         _transaction.Dispose();
         _userLock.Dispose();
-        _completionLock.Dispose();
+        if (shouldDisposeLock)
+        {
+            _completionLock.Dispose();
+        }
+        CompleteTransactionMetrics();
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        var shouldDisposeLock = true;
         if (!IsCompleted)
         {
             try
             {
-                // Avoid any wait on disposal to prevent hangs; rely on provider dispose if busy
+                // Avoid any wait on disposal to prevent hangs; rely on provider dispose if busy.
                 var acquired = _completionLock.Wait(0);
                 if (acquired)
                 {
@@ -470,12 +826,19 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
                     }
                     finally
                     {
-                        _completionLock.Release();
+                        try { _completionLock.Release(); }
+                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
                     }
                 }
                 else
                 {
-                    _logger.LogError("TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
+                    // Another thread is completing the transaction and still holds the lock.
+                    // It will close the connection via CompleteTransaction.finally.
+                    // Do NOT dispose _completionLock here — the other thread still holds it
+                    // and its Release() would throw ObjectDisposedException.
+                    shouldDisposeLock = false;
+                    _logger.LogError(
+                        "TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
                 }
             }
             catch (Exception ex)
@@ -494,18 +857,17 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         }
 
         _userLock.Dispose();
-        _completionLock.Dispose();
-    }
-
-    private void EnsureConnectionIsOpen()
-    {
-        if (_connection.State != ConnectionState.Open)
+        if (shouldDisposeLock)
         {
-            _connection.Open();
+            _completionLock.Dispose();
         }
+        CompleteTransactionMetrics();
     }
 
-    public ISqlDialect Dialect =>  _dialect;
+    protected override ISqlDialect DialectCore => _dialect;
+
+    /// <inheritdoc />
+    public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
 
     // Internal factory used by DatabaseContext
     internal static TransactionContext Create(
@@ -516,5 +878,69 @@ public class TransactionContext : SafeAsyncDisposableBase, ITransactionContext, 
         ILogger<TransactionContext>? logger = null)
     {
         return new TransactionContext(context, isolationLevel, executionType, isReadOnly, logger);
+    }
+
+    // Internal async factory used by DatabaseContext
+    internal static async Task<TransactionContext> CreateAsync(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+
+        var transaction = context.Product == SupportedDatabase.DuckDB
+            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+
+        if (isReadOnly)
+        {
+            try
+            {
+                await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Release the pinned connection and roll back — do NOT dispose the parent context,
+                // which is a singleton that must remain usable after a failed BeginTransactionAsync.
+                // (The sync constructor path only closes the connection; this matches that behaviour.)
+                await tx.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        return tx;
+    }
+
+    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+        ITrackedConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
 }

@@ -2,9 +2,11 @@
 
 using System;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -20,14 +22,19 @@ public class DatabaseContextConstructorTests
         // Arrange
         var connectionString = "Server=test;Database=testdb;";
         var providerName = "Microsoft.Data.SqlClient";
-        
+
         // Register the factory first (simulating real scenario)
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         DbProviderFactories.RegisterFactory(providerName, factory);
-        
+
         // Act
-        var context = new DatabaseContext(connectionString, providerName);
-        
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ProviderName = providerName
+        };
+        var context = new DatabaseContext(config, DbProviderFactories.GetFactory(providerName));
+
         // Assert
         Assert.NotNull(context);
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
@@ -41,13 +48,19 @@ public class DatabaseContextConstructorTests
         var connectionString = "Host=localhost;Database=testdb;";
         var providerName = "Npgsql";
         var typeMap = new TypeMapRegistry();
-        
+
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         DbProviderFactories.RegisterFactory(providerName, factory);
-        
+
         // Act
-        var context = new DatabaseContext(connectionString, providerName, typeMap);
-        
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ProviderName = providerName
+        };
+        var context = new DatabaseContext(config, DbProviderFactories.GetFactory(providerName),
+            NullLoggerFactory.Instance, typeMap);
+
         // Assert
         Assert.NotNull(context);
         Assert.Same(typeMap, context.TypeMapRegistry);
@@ -57,19 +70,26 @@ public class DatabaseContextConstructorTests
     public void Constructor_With_ConnectionString_And_ProviderName_With_All_Parameters_Should_Create_Context()
     {
         // Arrange
-        var connectionString = "Data Source=:memory:;";
+        var connectionString = "Data Source=file.db;";
         var providerName = "Microsoft.Data.Sqlite";
         var typeMap = new TypeMapRegistry();
         var mode = DbMode.SingleConnection;
-        var readWriteMode = ReadWriteMode.ReadOnly;
+        var readWriteMode = ReadWriteMode.ReadWrite;
         var loggerFactory = NullLoggerFactory.Instance;
-        
+
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         DbProviderFactories.RegisterFactory(providerName, factory);
-        
+
         // Act
-        var context = new DatabaseContext(connectionString, providerName, typeMap, mode, readWriteMode, loggerFactory);
-        
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ProviderName = providerName,
+            DbMode = mode,
+            ReadWriteMode = readWriteMode
+        };
+        var context = new DatabaseContext(config, DbProviderFactories.GetFactory(providerName), loggerFactory, typeMap);
+
         // Assert
         Assert.NotNull(context);
         Assert.Equal(mode, context.ConnectionMode);
@@ -81,12 +101,11 @@ public class DatabaseContextConstructorTests
     public void Constructor_With_Invalid_ProviderName_Should_Throw()
     {
         // Arrange
-        var connectionString = "Server=test;";
         var invalidProviderName = "NonExistent.Provider";
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => 
-            new DatabaseContext(connectionString, invalidProviderName));
+        Assert.Throws<ArgumentException>(() =>
+            DbProviderFactories.GetFactory(invalidProviderName));
     }
 
     [Fact]
@@ -95,10 +114,16 @@ public class DatabaseContextConstructorTests
         // Arrange
         string nullConnectionString = null!;
         var providerName = "System.Data.SqlClient";
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new DatabaseContext(nullConnectionString, providerName));
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = nullConnectionString,
+            ProviderName = providerName
+        };
+        Assert.Throws<ArgumentException>(() =>
+            new DatabaseContext(config, factory));
     }
 
     [Fact]
@@ -107,22 +132,27 @@ public class DatabaseContextConstructorTests
         // Arrange
         var emptyConnectionString = "";
         var providerName = "System.Data.SqlClient";
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentException>(() => 
-            new DatabaseContext(emptyConnectionString, providerName));
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = emptyConnectionString,
+            ProviderName = providerName
+        };
+        Assert.Throws<ArgumentException>(() =>
+            new DatabaseContext(config, factory));
     }
 
     [Fact]
     public void Constructor_With_Null_ProviderName_Should_Throw()
     {
         // Arrange
-        var connectionString = "Server=test;";
         string nullProviderName = null!;
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new DatabaseContext(connectionString, nullProviderName));
+        Assert.Throws<ArgumentNullException>(() =>
+            DbProviderFactories.GetFactory(nullProviderName));
     }
 
     [Fact]
@@ -136,14 +166,14 @@ public class DatabaseContextConstructorTests
             DbMode = DbMode.KeepAlive,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
-        
+
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var loggerFactory = NullLoggerFactory.Instance;
         var typeMap = new TypeMapRegistry();
-        
+
         // Act
         var context = new DatabaseContext(config, factory, loggerFactory, typeMap);
-        
+
         // Assert
         Assert.NotNull(context);
         // Users can force KeepAlive on full servers for testing (even though less functional)
@@ -161,11 +191,11 @@ public class DatabaseContextConstructorTests
             ConnectionString = "Server=test;",
             ProviderName = "Microsoft.Data.SqlClient"
         };
-        
+
         DbProviderFactory nullFactory = null!;
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
+        Assert.Throws<ArgumentNullException>(() =>
             new DatabaseContext(config, nullFactory, NullLoggerFactory.Instance));
     }
 
@@ -175,9 +205,9 @@ public class DatabaseContextConstructorTests
         // Arrange
         DatabaseContextConfiguration nullConfig = null!;
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        
+
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
+        Assert.Throws<ArgumentNullException>(() =>
             new DatabaseContext(nullConfig, factory, NullLoggerFactory.Instance));
     }
 
@@ -190,11 +220,11 @@ public class DatabaseContextConstructorTests
             ConnectionString = null!, // Missing connection string
             ProviderName = "Microsoft.Data.SqlClient"
         };
-        
+
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-        
+
         // Act & Assert
-        Assert.ThrowsAny<ArgumentException>(() => 
+        Assert.ThrowsAny<ArgumentException>(() =>
             new DatabaseContext(config, factory, NullLoggerFactory.Instance));
     }
 
@@ -202,14 +232,14 @@ public class DatabaseContextConstructorTests
     public void Constructor_With_Different_DbModes_Should_Create_Context()
     {
         // Test all DbMode values
-        var modes = new[] 
-        { 
-            DbMode.Standard, 
-            DbMode.KeepAlive, 
-            DbMode.SingleWriter, 
-            DbMode.SingleConnection 
+        var modes = new[]
+        {
+            DbMode.Standard,
+            DbMode.KeepAlive,
+            DbMode.SingleWriter,
+            DbMode.SingleConnection
         };
-        
+
         foreach (var mode in modes)
         {
             // Arrange
@@ -233,12 +263,12 @@ public class DatabaseContextConstructorTests
     public void Constructor_With_Different_ReadWriteModes_Should_Create_Context()
     {
         // Test all ReadWriteMode values
-        var modes = new[] 
-        { 
-            ReadWriteMode.ReadOnly, 
-            ReadWriteMode.ReadWrite 
+        var modes = new[]
+        {
+            ReadWriteMode.ReadOnly,
+            ReadWriteMode.ReadWrite
         };
-        
+
         foreach (var mode in modes)
         {
             // Arrange
@@ -248,10 +278,10 @@ public class DatabaseContextConstructorTests
                 ConnectionString = "Host=localhost;Database=test;",
                 ReadWriteMode = mode
             };
-            
+
             // Act
             var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-            
+
             // Assert
             Assert.NotNull(context);
             Assert.Equal(mode, context.ReadWriteMode);
@@ -267,17 +297,17 @@ public class DatabaseContextConstructorTests
         {
             ConnectionString = "Server=test;"
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         // Assert
         Assert.NotNull(context);
         Assert.Equal(DbMode.Standard, context.ConnectionMode); // Default
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode); // Default
         Assert.NotNull(context.TypeMapRegistry); // Should create default
         Assert.True(context.NumberOfOpenConnections >= 0);
-        Assert.True(context.MaxNumberOfConnections >= 0);
+        Assert.True(context.PeakOpenConnections >= 0);
     }
 
     [Fact]
@@ -290,10 +320,10 @@ public class DatabaseContextConstructorTests
         {
             ConnectionString = "Server=mysql;Database=test;"
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance, customTypeMap);
-        
+
         // Assert
         Assert.NotNull(context);
         Assert.Same(customTypeMap, context.TypeMapRegistry);
@@ -308,10 +338,10 @@ public class DatabaseContextConstructorTests
         {
             ConnectionString = "Data Source=oracle;"
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory);
-        
+
         // Assert
         Assert.NotNull(context);
         // Should not throw and should handle null logger gracefully
@@ -328,10 +358,10 @@ public class DatabaseContextConstructorTests
             DbMode = DbMode.SingleWriter,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         // Assert
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
@@ -344,15 +374,16 @@ public class DatabaseContextConstructorTests
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var complexConnectionString = "Host=localhost;Port=5432;Database=testdb;Username=user;Password=pass;Pooling=true;MinPoolSize=5;MaxPoolSize=100;";
+        var complexConnectionString =
+            "Host=localhost;Port=5432;Database=testdb;Username=user;Password=pass;Pooling=true;MinPoolSize=5;MaxPoolSize=100;";
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = complexConnectionString
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         // Assert
         Assert.NotNull(context);
         // Should handle complex connection strings without throwing
@@ -365,21 +396,22 @@ public class DatabaseContextConstructorTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = "Server=test;Database=testdb;EmulatedProduct=SqlServer", // Use SQL Server which forces Standard mode
+            ConnectionString =
+                "Server=test;Database=testdb;EmulatedProduct=SqlServer", // Use SQL Server which forces Standard mode
             DbMode = DbMode.Standard // Explicitly set Standard mode
         };
-        
+
         // Act
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         // Assert
         // For SQL Server in Standard mode, counters should be 0 after initialization connection is disposed
         Assert.Equal(0, context.NumberOfOpenConnections); // Should start at 0 after initialization reset
-        Assert.Equal(0, context.MaxNumberOfConnections); // Should start at 0 after initialization reset
+        Assert.Equal(0, context.PeakOpenConnections); // Should start at 0 after initialization reset
     }
 
     [Fact]
-    public void Constructor_Adds_Default_MinPoolSize_For_Standard_Mode_When_Missing()
+    public void Constructor_Does_Not_Add_Default_MinPoolSize_For_Standard_Mode_When_Missing()
     {
         // Arrange
         var config = new DatabaseContextConfiguration
@@ -396,8 +428,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
-        Assert.True(builder.ContainsKey("Min Pool Size"));
-        Assert.Equal("1", builder["Min Pool Size"].ToString());
+        Assert.False(builder.ContainsKey("Min Pool Size"));
     }
 
     [Fact]
@@ -423,9 +454,8 @@ public class DatabaseContextConstructorTests
     }
 
     [Fact]
-    public void Constructor_Skips_MinPoolSize_When_Pooling_Disabled()
+    public void Constructor_PoolingDisabled_ThrowsInvalidOperationException()
     {
-        // Arrange
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=test;Database=testdb;Pooling=false;",
@@ -435,18 +465,15 @@ public class DatabaseContextConstructorTests
 
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
 
-        // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-
-        // Assert
-        var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
-        Assert.False(builder.ContainsKey("Min Pool Size"));
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(config, factory, NullLoggerFactory.Instance));
     }
 
     private sealed class RejectingBuilderFactory : DbProviderFactory
     {
         private sealed class RejectingBuilder : DbConnectionStringBuilder
         {
+            [AllowNull]
             public override object this[string keyword]
             {
                 get => base[keyword];
@@ -457,7 +484,7 @@ public class DatabaseContextConstructorTests
                         throw new ArgumentException("Unrecognized keyword.");
                     }
 
-                    base[keyword] = value;
+                    base[keyword] = value ?? string.Empty;
                 }
             }
         }
@@ -492,5 +519,155 @@ public class DatabaseContextConstructorTests
 
         // Assert - the original connection string should be retained verbatim
         Assert.Equal(rawConnectionString, context.ConnectionString);
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_Should_Create_Context()
+    {
+        // Arrange
+        var connectionString = "Host=localhost;Database=testdb;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.PostgreSql);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString
+        };
+
+        // Act
+        var context = new DatabaseContext(config, dataSource, dataSource.Factory);
+
+        // Assert
+        Assert.NotNull(context);
+        Assert.Same(dataSource, context.DataSource);
+        Assert.Equal(DbMode.Standard, context.ConnectionMode);
+        Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode);
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_And_TypeMap_Should_Create_Context()
+    {
+        // Arrange
+        var connectionString = "Data Source=test.db;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.Sqlite);
+        var typeMap = new TypeMapRegistry();
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString
+        };
+
+        // Act
+        var context = new DatabaseContext(config, dataSource, dataSource.Factory, NullLoggerFactory.Instance, typeMap);
+
+        // Assert
+        Assert.NotNull(context);
+        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(typeMap, context.TypeMapRegistry);
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_And_All_Parameters_Should_Create_Context()
+    {
+        // Arrange
+        var connectionString = "Server=test;Database=testdb;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.SqlServer);
+        var typeMap = new TypeMapRegistry();
+        var mode = DbMode.KeepAlive;
+        var readWriteMode = ReadWriteMode.ReadOnly;
+        var loggerFactory = NullLoggerFactory.Instance;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            DbMode = mode,
+            ReadWriteMode = readWriteMode
+        };
+
+        // Act
+        var context = new DatabaseContext(config, dataSource, dataSource.Factory, loggerFactory, typeMap);
+
+        // Assert
+        Assert.NotNull(context);
+        Assert.Same(dataSource, context.DataSource);
+        Assert.Equal(mode, context.ConnectionMode);
+        Assert.Equal(readWriteMode, context.ReadWriteMode);
+        Assert.Same(typeMap, context.TypeMapRegistry);
+    }
+
+    [Fact]
+    public void Constructor_With_Null_DbDataSource_Should_Throw()
+    {
+        // Arrange
+        DbDataSource nullDataSource = null!;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;"
+        };
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            new DatabaseContext(config, nullDataSource, new fakeDbFactory(SupportedDatabase.PostgreSql),
+                NullLoggerFactory.Instance));
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_Should_Create_Connections_From_DataSource()
+    {
+        // Arrange
+        var connectionString = "Host=localhost;Database=testdb;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.PostgreSql);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString
+        };
+
+        // Act
+        using var context = new DatabaseContext(config, dataSource, dataSource.Factory, NullLoggerFactory.Instance);
+        using var connection = context.GetConnection(ExecutionType.Read);
+
+        // Assert
+        Assert.NotNull(connection);
+        // Connection string may be normalized (key casing, pooling defaults added)
+        Assert.Contains("localhost", connection.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("testdb", connection.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_Should_Detect_Dialect()
+    {
+        // Arrange
+        var connectionString = "Server=test;Database=testdb;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString
+        };
+
+        // Act
+        using var context = new DatabaseContext(config, dataSource, dataSource.Factory, NullLoggerFactory.Instance);
+
+        // Assert
+        Assert.NotNull(context.Dialect);
+        Assert.Equal(SupportedDatabase.SqlServer, context.Product);
+    }
+
+    [Fact]
+    public void Constructor_With_DbDataSource_Should_Initialize_Default_Values()
+    {
+        // Arrange
+        var connectionString = "Host=localhost;Database=test;";
+        var dataSource = new FakeDbDataSource(connectionString, SupportedDatabase.PostgreSql);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString
+        };
+
+        // Act
+        using var context = new DatabaseContext(config, dataSource, dataSource.Factory, NullLoggerFactory.Instance);
+
+        // Assert
+        Assert.NotNull(context);
+        Assert.Equal(DbMode.Standard, context.ConnectionMode); // Default
+        Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode); // Default
+        Assert.NotNull(context.TypeMapRegistry); // Should create default
+        Assert.True(context.NumberOfOpenConnections >= 0);
+        Assert.True(context.PeakOpenConnections >= 0);
     }
 }

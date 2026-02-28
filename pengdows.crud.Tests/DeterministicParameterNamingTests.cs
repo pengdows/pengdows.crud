@@ -3,7 +3,7 @@
 using System;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -14,17 +14,21 @@ public class DeterministicParameterNamingTests : IAsyncLifetime
 {
     private readonly TypeMapRegistry _typeMap;
     private readonly IDatabaseContext _context;
-    private readonly EntityHelper<IdentityTestEntity, int> _helper;
+    private readonly TableGateway<IdentityTestEntity, int> _helper;
 
     public DeterministicParameterNamingTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<IdentityTestEntity>();
-        _context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), _typeMap);
-        _helper = new EntityHelper<IdentityTestEntity, int>(_context);
+        _context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), _typeMap);
+        _helper = new TableGateway<IdentityTestEntity, int>(_context);
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task DisposeAsync()
     {

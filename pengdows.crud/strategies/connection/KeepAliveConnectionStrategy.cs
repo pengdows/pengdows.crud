@@ -1,8 +1,25 @@
+// =============================================================================
+// FILE: KeepAliveConnectionStrategy.cs
+// PURPOSE: Connection strategy that maintains a sentinel connection to prevent database unload.
+//
+// AI SUMMARY:
+// - Extends StandardConnectionStrategy with one additional persistent "sentinel" connection.
+// - Sentinel connection is NEVER used for operations - exists only to keep DB engine loaded.
+// - All actual work uses ephemeral connections (identical to Standard behavior).
+// - Prevents costly shutdown/reload cycles in embedded databases (LocalDB, SQLite WAL).
+// - PostInitialize() stores the sentinel connection on DatabaseContext.
+// - ReleaseConnection() skips disposal if connection is the sentinel.
+// - HandleDialectDetection() can use sentinel or create throwaway for detection.
+// - Thread-safe: Sentinel is read-only after initialization.
+// - Test extensions provide async convenience helpers for GetConnectionAsync/CloseConnectionAsync.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.strategies.connection;
@@ -32,7 +49,7 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DO NOT MODIFY: This strategy is specifically tuned for embedded database engine behavior
 /// </summary>
-public class KeepAliveConnectionStrategy : StandardConnectionStrategy
+internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
     internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
     {
@@ -45,11 +62,6 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 
@@ -68,9 +80,18 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
         catch
         {
             // Dispose and rethrow to avoid leaking partially initialized connections
-            try { conn.Dispose(); } catch { /* ignore */ }
+            try
+            {
+                conn.Dispose();
+            }
+            catch
+            {
+                /* ignore */
+            }
+
             throw;
         }
+
         return conn;
     }
 
@@ -91,23 +112,12 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        if (connection is IAsyncDisposable asyncDisposable)
-        {
-            return asyncDisposable.DisposeAsync();
-        }
-
-        connection.Dispose();
-        return ValueTask.CompletedTask;
+        return ReleaseNonPersistentConnectionAsync(connection, _context.PersistentConnection);
     }
 
     public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         var detectionTarget = initConnection ?? _context.PersistentConnection;
@@ -115,7 +125,8 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
         if (detectionTarget == null)
         {
-            detectionTarget = _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
+            detectionTarget =
+                _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
             ownsConnection = true;
         }
 
@@ -126,9 +137,14 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
                 detectionTarget.Open();
             }
 
-            var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
-            var dataSourceInfo = new DataSourceInformation(dialect);
-            return (dialect, dataSourceInfo);
+            if (factory != null)
+            {
+                var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
+                var dataSourceInfo = new DataSourceInformation(dialect);
+                return (dialect, dataSourceInfo);
+            }
+
+            return (null, null);
         }
         catch
         {
@@ -138,17 +154,24 @@ public class KeepAliveConnectionStrategy : StandardConnectionStrategy
         {
             if (ownsConnection && detectionTarget != null)
             {
-                try { detectionTarget.Dispose(); } catch { /* ignore */ }
+                try
+                {
+                    detectionTarget.Dispose();
+                }
+                catch
+                {
+                    /* ignore */
+                }
             }
         }
     }
-
 }
 
-public static class KeepAliveConnectionStrategyTestExtensions
+internal static class KeepAliveConnectionStrategyTestExtensions
 {
     // Convenience async helpers expected by tests
-    public static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _, DatabaseContext context, ExecutionType executionType, bool isShared)
+    internal static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _,
+        DatabaseContext context, ExecutionType executionType, bool isShared)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         var conn = strat.GetConnection(executionType, isShared);
@@ -156,7 +179,8 @@ public static class KeepAliveConnectionStrategyTestExtensions
         return Task.FromResult(conn);
     }
 
-    public static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection, DatabaseContext context)
+    internal static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection,
+        DatabaseContext context)
     {
         var strat = new KeepAliveConnectionStrategy(context);
         return strat.ReleaseConnectionAsync(connection).AsTask();

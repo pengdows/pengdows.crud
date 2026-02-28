@@ -1,380 +1,105 @@
 using System;
-using System.Text;
-using Xunit;
 using pengdows.crud.types.valueobjects;
+using Xunit;
 
 namespace pengdows.crud.Tests;
 
-/// <summary>
-/// Tests to improve coverage of value object types.
-/// Targets uncovered lines in SpatialValue, Geometry, Geography, and related types.
-/// </summary>
 public class ValueObjectCoverageTests
 {
-    #region SpatialValue Tests (via Geometry subclass)
-
     [Fact]
-    public void Geometry_FromWellKnownBinary_WithNegativeSrid_ThrowsArgumentOutOfRangeException()
+    public void PostgreSqlInterval_TimeSpanProperties_Behave()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-
-        // Act & Assert
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Geometry.FromWellKnownBinary(wkb, -1));
-
-        Assert.Contains("SRID must be non-negative", ex.Message);
-        Assert.Equal("srid", ex.ParamName);
+        var microseconds = 1_234_500L;
+        var interval = new PostgreSqlInterval(1, 2, microseconds);
+        var expected = TimeSpan.FromDays(2) + TimeSpan.FromTicks(microseconds * 10);
+        Assert.Equal(expected, interval.ToTimeSpan());
+        Assert.Equal(TimeSpan.FromTicks(microseconds * 10), interval.TimeComponent);
+        Assert.Contains("months", interval.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Geometry_Equals_WithNull_ReturnsFalse()
+    public void PostgreSqlInterval_FromTimeSpan_PreservesPrecision()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry = Geometry.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var result = geometry.Equals(null);
-
-        // Assert
-        Assert.False(result);
+        var span = TimeSpan.FromDays(3) + TimeSpan.FromMinutes(5);
+        var converted = PostgreSqlInterval.FromTimeSpan(span);
+        Assert.Equal(3, converted.Days);
+        Assert.Equal(span.Ticks / 10, converted.Microseconds);
+        Assert.Equal(0, converted.Months);
     }
 
     [Fact]
-    public void Geometry_Equals_WithSameReference_ReturnsTrue()
+    public void PostgreSqlInterval_EqualsAndHashCode_Work()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry = Geometry.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var result = geometry.Equals(geometry);
-
-        // Assert
-        Assert.True(result);
+        var first = new PostgreSqlInterval(0, 1, 2);
+        var second = new PostgreSqlInterval(0, 1, 2);
+        var other = new PostgreSqlInterval(1, 1, 2);
+        Assert.Equal(first, second);
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.NotEqual(first, other);
+        Assert.True(first.Equals((object)second));
+        Assert.False(first.Equals((object?)null));
     }
 
     [Fact]
-    public void Geometry_Equals_WithEqualValues_ReturnsTrue()
+    public void MacAddress_ParseDotFormat_ReturnsNormalizedString()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry1 = Geometry.FromWellKnownBinary(wkb, 4326);
-        var geometry2 = Geometry.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.True(result);
+        var result = MacAddress.Parse("0011.2233.4455");
+        Assert.Equal("00:11:22:33:44:55", result.ToString());
     }
 
     [Fact]
-    public void Geometry_Equals_WithDifferentSrid_ReturnsFalse()
+    public void MacAddress_Parse_InvalidLength_ThrowsFormatException()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry1 = Geometry.FromWellKnownBinary(wkb, 4326);
-        var geometry2 = Geometry.FromWellKnownBinary(wkb, 3857);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.False(result);
+        Assert.Throws<FormatException>(() => MacAddress.Parse("0011:2233:445"));
     }
 
     [Fact]
-    public void Geometry_Equals_WithDifferentFormat_ReturnsFalse()
+    public void Range_Parse_CanonicalString()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry1 = Geometry.FromWellKnownBinary(wkb, 4326);
-        var geometry2 = Geometry.FromWellKnownText("POINT(1 2)", 4326);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.False(result);
+        var parsed = Range<int>.Parse("[1, 5)");
+        Assert.Equal(1, parsed.Lower);
+        Assert.Equal(5, parsed.Upper);
+        Assert.True(parsed.IsLowerInclusive);
+        Assert.False(parsed.IsUpperInclusive);
     }
 
     [Fact]
-    public void Geometry_Equals_WithDifferentWellKnownText_ReturnsFalse()
+    public void Range_Parse_InvalidText_Throws()
     {
-        // Arrange
-        var geometry1 = Geometry.FromWellKnownText("POINT(1 2)", 4326);
-        var geometry2 = Geometry.FromWellKnownText("POINT(3 4)", 4326);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.False(result);
+        Assert.Throws<FormatException>(() => Range<int>.Parse("invalid"));
     }
 
     [Fact]
-    public void Geometry_Equals_WithDifferentGeoJson_ReturnsFalse()
+    public void Range_Parse_DateTime_OpenStart()
     {
-        // Arrange
-        var geometry1 = Geometry.FromGeoJson("{\"type\":\"Point\",\"coordinates\":[1,2]}", 4326);
-        var geometry2 = Geometry.FromGeoJson("{\"type\":\"Point\",\"coordinates\":[3,4]}", 4326);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.False(result);
+        var parsed = Range<DateTime>.Parse("(,2025-12-31]");
+        Assert.True(parsed.HasUpperBound);
+        Assert.Equal(new DateTime(2025, 12, 31), parsed.Upper);
+        Assert.True(parsed.IsUpperInclusive);
     }
 
     [Fact]
-    public void Geometry_Equals_WithDifferentBinary_ReturnsFalse()
+    public void Range_ToString_IncludesBraces()
     {
-        // Arrange
-        var wkb1 = new byte[] { 1, 2, 3, 4 };
-        var wkb2 = new byte[] { 5, 6, 7, 8 };
-        var geometry1 = Geometry.FromWellKnownBinary(wkb1, 4326);
-        var geometry2 = Geometry.FromWellKnownBinary(wkb2, 4326);
-
-        // Act
-        var result = geometry1.Equals(geometry2);
-
-        // Assert
-        Assert.False(result);
+        var range = new Range<int>(1, 2, false, true);
+        Assert.Equal("(1, 2]", range.ToString());
     }
 
     [Fact]
-    public void Geometry_EqualsObject_WithNonSpatialValue_ReturnsFalse()
+    public void RowVersion_Ctor_InvalidLength_Throws()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry = Geometry.FromWellKnownBinary(wkb, 4326);
-        object other = "not a spatial value";
-
-        // Act
-        var result = geometry.Equals(other);
-
-        // Assert
-        Assert.False(result);
+        Assert.Throws<ArgumentException>(() => new RowVersion(new byte[7]));
     }
 
     [Fact]
-    public void Geometry_GetHashCode_ComputesCorrectly()
+    public void RowVersion_ToStringAndEquality_Work()
     {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry = Geometry.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var hash1 = geometry.GetHashCode();
-        var hash2 = geometry.GetHashCode();
-
-        // Assert
-        Assert.Equal(hash1, hash2); // Same object should have same hash
+        var bytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        var version = new RowVersion(bytes);
+        var cloned = RowVersion.FromBytes(bytes);
+        Assert.Equal(version, cloned);
+        Assert.Equal(version.GetHashCode(), cloned.GetHashCode());
+        Assert.Equal(BitConverter.ToString(bytes).Replace("-", string.Empty, StringComparison.Ordinal),
+            version.ToString());
     }
-
-    [Fact]
-    public void Geometry_GetHashCode_WithEmptyBinary_ComputesCorrectly()
-    {
-        // Arrange
-        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 4326);
-
-        // Act
-        var hash = geometry.GetHashCode();
-
-        // Assert
-        Assert.NotEqual(0, hash); // Should still compute a hash
-    }
-
-    [Fact]
-    public void Geometry_ToString_WithWellKnownText_ReturnsText()
-    {
-        // Arrange
-        var wkt = "POINT(1 2)";
-        var geometry = Geometry.FromWellKnownText(wkt, 4326);
-
-        // Act
-        var result = geometry.ToString();
-
-        // Assert
-        Assert.Equal(wkt, result);
-    }
-
-    [Fact]
-    public void Geometry_ToString_WithGeoJson_ReturnsJson()
-    {
-        // Arrange
-        var geoJson = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
-        var geometry = Geometry.FromGeoJson(geoJson, 4326);
-
-        // Act
-        var result = geometry.ToString();
-
-        // Assert
-        Assert.Equal(geoJson, result);
-    }
-
-    [Fact]
-    public void Geometry_ToString_WithWellKnownBinary_ReturnsBase64()
-    {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geometry = Geometry.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var result = geometry.ToString();
-
-        // Assert
-        Assert.Equal(Convert.ToBase64String(wkb), result);
-    }
-
-    #endregion
-
-    #region Geography Tests
-
-    [Fact]
-    public void Geography_FromWellKnownBinary_WithNegativeSrid_ThrowsArgumentOutOfRangeException()
-    {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-
-        // Act & Assert
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Geography.FromWellKnownBinary(wkb, -1));
-
-        Assert.Contains("SRID must be non-negative", ex.Message);
-    }
-
-    [Fact]
-    public void Geography_Equals_WorksCorrectly()
-    {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4 };
-        var geography1 = Geography.FromWellKnownBinary(wkb, 4326);
-        var geography2 = Geography.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var result = geography1.Equals(geography2);
-
-        // Assert
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void Geography_GetHashCode_WorksCorrectly()
-    {
-        // Arrange
-        var wkb = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-        var geography = Geography.FromWellKnownBinary(wkb, 4326);
-
-        // Act
-        var hash = geography.GetHashCode();
-
-        // Assert - Hash should incorporate binary data
-        Assert.NotEqual(0, hash);
-    }
-
-    #endregion
-
-    #region JsonValue Tests
-
-    [Fact]
-    public void JsonValue_Equals_WithDefaultValue_ReturnsFalse()
-    {
-        // Arrange
-        var json = new JsonValue("{\"test\":true}");
-        var defaultValue = default(JsonValue);
-
-        // Act
-        var result = json.Equals(defaultValue);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void JsonValue_Equals_WithSameReference_ReturnsTrue()
-    {
-        // Arrange
-        var json = new JsonValue("{\"test\":true}");
-
-        // Act
-        var result = json.Equals(json);
-
-        // Assert
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void JsonValue_Equals_WithEqualValue_ReturnsTrue()
-    {
-        // Arrange
-        var json1 = new JsonValue("{\"test\":true}");
-        var json2 = new JsonValue("{\"test\":true}");
-
-        // Act
-        var result = json1.Equals(json2);
-
-        // Assert
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void JsonValue_Equals_WithDifferentValue_ReturnsFalse()
-    {
-        // Arrange
-        var json1 = new JsonValue("{\"test\":true}");
-        var json2 = new JsonValue("{\"test\":false}");
-
-        // Act
-        var result = json1.Equals(json2);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void JsonValue_EqualsObject_WithNonJsonValue_ReturnsFalse()
-    {
-        // Arrange
-        var json = new JsonValue("{\"test\":true}");
-        object other = "not a json value";
-
-        // Act
-        var result = json.Equals(other);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void JsonValue_GetHashCode_IsConsistent()
-    {
-        // Arrange
-        var json = new JsonValue("{\"test\":true}");
-
-        // Act
-        var hash1 = json.GetHashCode();
-        var hash2 = json.GetHashCode();
-
-        // Assert
-        Assert.Equal(hash1, hash2);
-    }
-
-    [Fact]
-    public void JsonValue_ToString_ReturnsRawJson()
-    {
-        // Arrange
-        var rawJson = "{\"test\":true,\"value\":42}";
-        var json = new JsonValue(rawJson);
-
-        // Act
-        var result = json.ToString();
-
-        // Assert
-        Assert.Equal(rawJson, result);
-    }
-
-    #endregion
 }

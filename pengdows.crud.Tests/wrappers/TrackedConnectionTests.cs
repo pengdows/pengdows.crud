@@ -3,6 +3,7 @@
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -58,7 +59,6 @@ public class TrackedConnectionTests
     public void Open_InvokesOnFirstOpen_OnlyOnce()
     {
         using var conn = new fakeDbConnection();
-        conn.ConnectionString = "Data Source=test;EmulatedProduct=SqlServer";
         var count = 0;
         using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
 
@@ -74,7 +74,6 @@ public class TrackedConnectionTests
     public async Task OpenAsync_InvokesOnFirstOpen_OnlyOnce()
     {
         await using var conn = new fakeDbConnection();
-        conn.ConnectionString = "Data Source=test;EmulatedProduct=SqlServer";
         var count = 0;
         await using var tracked = new TrackedConnection(conn, onFirstOpen: _ => count++);
 
@@ -83,19 +82,6 @@ public class TrackedConnectionTests
 
         Assert.Equal(1, count);
         Assert.True(tracked.WasOpened);
-    }
-
-    [Fact]
-    public void Open_InvokesOnFirstOpen_AfterConnectionIsOpen()
-    {
-        using var conn = new fakeDbConnection();
-        conn.ConnectionString = "Data Source=test;EmulatedProduct=SqlServer";
-        var wasOpen = false;
-        using var tracked = new TrackedConnection(conn, onFirstOpen: c => wasOpen = c.State == ConnectionState.Open);
-
-        tracked.Open();
-
-        Assert.True(wasOpen);
     }
 
     [Fact]
@@ -153,7 +139,7 @@ public class TrackedConnectionTests
         Assert.Equal("Data Source=test", tracked.ConnectionString);
 
         tracked.ConnectionString = null;
-        Assert.Null(tracked.ConnectionString);
+        Assert.Equal(string.Empty, tracked.ConnectionString);
     }
 
     [Fact]

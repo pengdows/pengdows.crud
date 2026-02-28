@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
 using Xunit;
 
@@ -16,9 +17,13 @@ public class IsolationLevelSupportTests
 {
     [Theory]
     [MemberData(nameof(GetSupportedLevelExpectations))]
-    public void GetSupportedLevels_MatchesExpectations(SupportedDatabase database, bool rcsiEnabled, IsolationLevel[] expected)
+    public void GetSupportedLevels_MatchesExpectations(
+        SupportedDatabase database,
+        bool rcsiEnabled,
+        bool allowSnapshotIsolation,
+        IsolationLevel[] expected)
     {
-        var resolver = new IsolationResolver(database, rcsiEnabled);
+        var resolver = new IsolationResolver(database, rcsiEnabled, allowSnapshotIsolation);
         var actual = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
 
         Assert.Equal(expected.OrderBy(level => level).ToArray(), actual);
@@ -29,12 +34,14 @@ public class IsolationLevelSupportTests
     {
         var sqlResolver = new IsolationResolver(
             SupportedDatabase.SqlServer,
-            readCommittedSnapshotEnabled: true);
+            true,
+            true);
         Assert.Throws<InvalidOperationException>(() => sqlResolver.Validate(IsolationLevel.Chaos));
 
         var pgResolver = new IsolationResolver(
             SupportedDatabase.PostgreSql,
-            readCommittedSnapshotEnabled: false);
+            false,
+            false);
         Assert.Throws<InvalidOperationException>(() => pgResolver.Validate(IsolationLevel.ReadUncommitted));
     }
 
@@ -43,6 +50,7 @@ public class IsolationLevelSupportTests
         yield return new object[]
         {
             SupportedDatabase.SqlServer,
+            true,
             true,
             new[]
             {
@@ -58,6 +66,7 @@ public class IsolationLevelSupportTests
         {
             SupportedDatabase.PostgreSql,
             false,
+            false,
             new[]
             {
                 IsolationLevel.ReadCommitted,
@@ -69,6 +78,7 @@ public class IsolationLevelSupportTests
         yield return new object[]
         {
             SupportedDatabase.MySql,
+            false,
             false,
             new[]
             {
@@ -83,8 +93,21 @@ public class IsolationLevelSupportTests
         {
             SupportedDatabase.DuckDB,
             false,
+            false,
             new[]
             {
+                IsolationLevel.Serializable
+            }
+        };
+
+        yield return new object[]
+        {
+            SupportedDatabase.Snowflake,
+            false,
+            false,
+            new[]
+            {
+                IsolationLevel.ReadCommitted,
                 IsolationLevel.Serializable
             }
         };

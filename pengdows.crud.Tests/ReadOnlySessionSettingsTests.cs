@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -17,7 +17,7 @@ public class ReadOnlySessionSettingsTests
         { SupportedDatabase.MariaDb, "SET SESSION TRANSACTION READ ONLY;" },
         { SupportedDatabase.Oracle, "ALTER SESSION SET READ ONLY;" },
         { SupportedDatabase.Sqlite, "PRAGMA query_only = ON;" },
-        { SupportedDatabase.DuckDB, "PRAGMA read_only = 1;" }
+        { SupportedDatabase.DuckDB, "SET access_mode = 'read_only';" }
     };
 
     [Theory]
@@ -84,4 +84,3 @@ public class ReadOnlySessionSettingsTests
         };
     }
 }
-

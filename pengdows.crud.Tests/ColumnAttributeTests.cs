@@ -27,7 +27,9 @@ public class ColumnAttributeTests
         tmr.Register<TestClass>();
         var tableInfo = tmr.GetTableInfo<TestClass>();
         var colVals = tableInfo.Columns.Values;
-        Assert.Equal("column_name", colVals.FirstOrDefault().Name);
+        var column = colVals.FirstOrDefault();
+        Assert.NotNull(column);
+        Assert.Equal("column_name", column.Name);
     }
 
     [Fact]
@@ -42,6 +44,6 @@ public class ColumnAttributeTests
     {
         [Id]
         [Column("column_name", DbType.String)]
-        public string ColumnName { get; set; }
+        public string ColumnName { get; set; } = string.Empty;
     }
 }

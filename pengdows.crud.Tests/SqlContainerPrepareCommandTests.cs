@@ -5,6 +5,7 @@ using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -43,7 +44,8 @@ public class SqlContainerPrepareCommandTests : SqlLiteContextTestBase
         {
             command.CommandType = CommandType.StoredProcedure;
         }
-        catch (ArgumentException ex) when (ex.Message.Contains("StoredProcedure") && ex.Message.Contains("not supported"))
+        catch (ArgumentException ex) when (ex.Message.Contains("StoredProcedure") &&
+                                           ex.Message.Contains("not supported"))
         {
             // SQLite doesn't support stored procedures, skip this test
             return;

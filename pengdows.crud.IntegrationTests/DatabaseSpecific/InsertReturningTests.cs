@@ -4,8 +4,10 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
@@ -17,6 +19,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// Tests both RETURNING-capable providers (SqlServer, PostgreSQL, SQLite, Firebird, Oracle)
 /// and non-RETURNING providers (MySQL).
 /// </summary>
+[Collection("IntegrationTests")]
 public class InsertReturningTests : DatabaseTestBase
 {
     private const string TableName = "returning_test";
@@ -24,33 +27,32 @@ public class InsertReturningTests : DatabaseTestBase
     // Providers that support RETURNING/OUTPUT clause
     private static readonly SupportedDatabase[] ReturningProviders =
     {
-        SupportedDatabase.Sqlite,
-        SupportedDatabase.PostgreSql,
         SupportedDatabase.SqlServer,
-        SupportedDatabase.Firebird
+        SupportedDatabase.PostgreSql,
+        SupportedDatabase.Sqlite,
+        SupportedDatabase.Firebird,
+        SupportedDatabase.Oracle,
+        SupportedDatabase.YugabyteDb
     };
 
-    // Providers that do NOT support RETURNING (INSERT works, but ID not populated inline)
+    // Providers that do NOT support RETURNING; fall back to LAST_INSERT_ID() or similar
     private static readonly SupportedDatabase[] NonReturningProviders =
     {
-        SupportedDatabase.MySql
+        SupportedDatabase.MySql,
+        SupportedDatabase.TiDb,
+        SupportedDatabase.Snowflake
     };
 
-    public InsertReturningTests(ITestOutputHelper output) : base(output)
+    public InsertReturningTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
     }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        var providers = ReturningProviders.ToList();
-        providers.AddRange(NonReturningProviders);
-
-        if (ShouldIncludeOracle())
-        {
-            providers.Add(SupportedDatabase.Oracle);
-        }
-
-        return providers;
+        var allProviders = ReturningProviders.Concat(NonReturningProviders).ToArray();
+        return IntegrationTestConfiguration.EnabledProviders
+            .Where(p => allProviders.Contains(p))
+            .ToList();
     }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
@@ -61,7 +63,7 @@ public class InsertReturningTests : DatabaseTestBase
         await container.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -73,8 +75,8 @@ public class InsertReturningTests : DatabaseTestBase
                 return;
             }
 
-            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
-            var helper = new EntityHelper<ReturningEntity, long>(context);
+            ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
+            var helper = new TableGateway<ReturningEntity, long>(context);
             var entity = new ReturningEntity
             {
                 Name = $"returning-{provider}-{Guid.NewGuid():N}"
@@ -94,7 +96,7 @@ public class InsertReturningTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_NonReturningProviders_InsertsSuccessfully()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -102,11 +104,13 @@ public class InsertReturningTests : DatabaseTestBase
             // Only test non-RETURNING providers
             if (!NonReturningProviders.Contains(provider))
             {
+                Output.WriteLine(
+                    $"[{provider}] Skipping: {provider} supports RETURNING/OUTPUT clause — identity population via RETURNING is covered in CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
                 return;
             }
 
-            ((TypeMapRegistry)context.TypeMapRegistry).Register<ReturningEntity>();
-            var helper = new EntityHelper<ReturningEntity, long>(context);
+            ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
+            var helper = new TableGateway<ReturningEntity, long>(context);
             var uniqueName = $"noreturning-{provider}-{Guid.NewGuid():N}";
             var entity = new ReturningEntity
             {
@@ -126,21 +130,19 @@ public class InsertReturningTests : DatabaseTestBase
         });
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task VerifyDialect_SupportsInsertReturning_MatchesExpectation()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             var supportsReturning = context.SupportsInsertReturning;
-            var expectedSupport = ReturningProviders.Contains(provider) ||
-                                  provider == SupportedDatabase.Oracle;
 
             if (NonReturningProviders.Contains(provider))
             {
                 Assert.False(supportsReturning,
                     $"{provider} should NOT support INSERT RETURNING");
             }
-            else if (expectedSupport)
+            else if (ReturningProviders.Contains(provider))
             {
                 Assert.True(supportsReturning,
                     $"{provider} should support INSERT RETURNING");
@@ -184,14 +186,24 @@ CREATE TABLE {table} (
 );",
             SupportedDatabase.Oracle => $@"
 CREATE TABLE {table} (
-    id NUMBER GENERATED BY DEFAULT ON NULL AS IDENTITY PRIMARY KEY,
-    name VARCHAR2(255) NOT NULL
+    {context.WrapObjectName("id")} NUMBER GENERATED BY DEFAULT ON NULL AS IDENTITY PRIMARY KEY,
+    {context.WrapObjectName("name")} VARCHAR2(255) NOT NULL
 );",
-            SupportedDatabase.MySql => $@"
+            SupportedDatabase.MySql or SupportedDatabase.TiDb => $@"
 CREATE TABLE {table} (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(255) NOT NULL
 );",
+            SupportedDatabase.YugabyteDb => $@"
+CREATE TABLE {table} (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);",
+            SupportedDatabase.Snowflake => $@"
+CREATE TABLE {table} (
+    {context.WrapObjectName("id")} BIGINT AUTOINCREMENT PRIMARY KEY,
+    {context.WrapObjectName("name")} VARCHAR(255) NOT NULL
+)",
             _ => throw new NotSupportedException($"Provider {provider} is not supported by this test")
         };
     }
@@ -212,7 +224,7 @@ WHERE {nameColumn} = ");
         container.Query.Append(parameterName);
         container.AddParameterWithValue("p0", DbType.String, name);
 
-        var count = Convert.ToInt32(await container.ExecuteScalarAsync<int>());
+        var count = Convert.ToInt32(await container.ExecuteScalarOrNullAsync<int>());
         Assert.Equal(1, count);
     }
 
@@ -245,6 +257,50 @@ WHERE {nameColumn} = ");
                || text.Contains("catalog error");
     }
 
+    /// <summary>
+    /// Snowflake-specific: verifies AUTOINCREMENT identity columns work for INSERT, and that
+    /// rows can be verified via name lookup. Snowflake does not support INSERT...RETURNING;
+    /// ID population uses LAST_INSERT_ID() on a best-effort basis (connection-scoped).
+    /// </summary>
+    [SkippableFact]
+    public async Task Snowflake_AutoIncrement_Insert_RowsExistAfterCreate()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine(
+                    $"[{provider}] Skipping: Snowflake-specific AUTOINCREMENT test — {provider} uses RETURNING/OUTPUT for reliable identity retrieval; see CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
+                return;
+            }
+
+            ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
+            var helper = new TableGateway<ReturningEntity, long>(context);
+
+            var entities = Enumerable.Range(0, 3)
+                .Select(i => new ReturningEntity { Name = $"sf-autoincrement-{i}-{Guid.NewGuid():N}" })
+                .ToList();
+
+            foreach (var entity in entities)
+            {
+                var created = await helper.CreateAsync(entity, context);
+                Assert.True(created, "CreateAsync should succeed for Snowflake AUTOINCREMENT table");
+            }
+
+            // Verify every row landed in the database (by name — ID population is best-effort)
+            foreach (var entity in entities)
+            {
+                await VerifyRowExistsAsync(context, entity.Name);
+            }
+
+            var ids = entities.Select(e => e.Id).ToList();
+            Output.WriteLine(
+                $"Snowflake AUTOINCREMENT IDs (LAST_INSERT_ID best-effort): [{string.Join(", ", ids)}]");
+            Output.WriteLine("Note: Snowflake has no INSERT...RETURNING; IDs require LAST_INSERT_ID() " +
+                             "which is connection-scoped. Use client-generated IDs for reliable key capture.");
+        });
+    }
+
     [Table(TableName)]
     private class ReturningEntity
     {
@@ -252,7 +308,6 @@ WHERE {nameColumn} = ");
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

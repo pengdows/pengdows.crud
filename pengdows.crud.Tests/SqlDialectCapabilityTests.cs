@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
+using pengdows.crud.Tests.Logging;
 using pengdows.crud.Tests.Mocks;
 using Xunit;
 
@@ -24,13 +25,13 @@ public class SqlDialectCapabilityTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);
         Assert.True(dialect.IsFallbackDialect);
@@ -112,10 +113,66 @@ public class SqlDialectCapabilityTests
         Assert.False(legacyDialect.CanUseModernFeatures);
     }
 
+    [Fact]
+    public void Sql92Dialect_UsesPositionalParameters()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+
+        Assert.Equal("?", dialect.ParameterMarker);
+        Assert.False(dialect.SupportsNamedParameters);
+        Assert.Equal("?", dialect.MakeParameterName("anyname"));
+    }
+
+    [Fact]
+    public void Sql92Dialect_DoesNotSupportDropTableIfExists()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+
+        Assert.False(dialect.SupportsDropTableIfExists);
+    }
+
+    [Fact]
+    public void Sql92Dialect_DoesNotSupportMerge()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+
+        Assert.False(dialect.SupportsMerge);
+    }
+
+    [Fact]
+    public void Sql92Dialect_DoesNotSupportInsertReturning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
+
+        Assert.False(dialect.SupportsInsertReturning);
+    }
+
+    [Fact]
+    public void Sql92Dialect_ConstructorLogsWarning()
+    {
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
+        _ = new Sql92Dialect(factory, lf.CreateLogger<SqlDialect>());
+
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("SQL-92 fallback"));
+    }
+
     private sealed class Sql89Dialect : Sql92Dialect
     {
-        public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
-        public override SqlStandardLevel DetermineStandardCompliance(Version? version) => SqlStandardLevel.Sql89;
+        public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
+
+        public override SqlStandardLevel DetermineStandardCompliance(Version? version)
+        {
+            return SqlStandardLevel.Sql89;
+        }
     }
 
     [Fact]

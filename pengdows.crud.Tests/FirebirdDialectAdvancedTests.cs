@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -31,7 +32,7 @@ public class FirebirdDialectAdvancedTests
     public async Task GetProductNameAsync_Should_Return_Firebird_From_Engine_Version_Query()
     {
         _factory.SetScalarResult("WI-V3.0.7.33374 Firebird 3.0");
-        
+
         var connection = (fakeDbConnection)_factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
@@ -45,10 +46,10 @@ public class FirebirdDialectAdvancedTests
     public async Task GetProductNameAsync_Should_Fallback_To_Database_Query_When_Engine_Version_Fails()
     {
         var connection = (fakeDbConnection)_factory.CreateConnection();
-        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database", 
+        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
             new InvalidOperationException("Engine version query failed"));
         _factory.SetScalarResult("success");
-        
+
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
 
@@ -61,11 +62,11 @@ public class FirebirdDialectAdvancedTests
     public async Task GetProductNameAsync_Should_Return_Null_When_Both_Queries_Fail()
     {
         var connection = (fakeDbConnection)_factory.CreateConnection();
-        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database", 
+        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
             new InvalidOperationException("Engine version query failed"));
-        connection.SetCommandFailure("SELECT * FROM rdb$database", 
+        connection.SetCommandFailure("SELECT * FROM rdb$database",
             new InvalidOperationException("Database query failed"));
-        
+
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
 
@@ -78,7 +79,7 @@ public class FirebirdDialectAdvancedTests
     public async Task GetDatabaseVersionAsync_Should_Return_Version_From_Engine_Version_Query()
     {
         _factory.SetScalarResult("WI-V3.0.7.33374 Firebird 3.0");
-        
+
         var connection = (fakeDbConnection)_factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
@@ -92,10 +93,10 @@ public class FirebirdDialectAdvancedTests
     public async Task GetDatabaseVersionAsync_Should_Fallback_To_Monitor_Query_When_Engine_Fails()
     {
         var connection = (fakeDbConnection)_factory.CreateConnection();
-        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database", 
+        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
             new InvalidOperationException("Engine version failed"));
         _factory.SetScalarResult("Firebird 4.0.2");
-        
+
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
 
@@ -108,11 +109,11 @@ public class FirebirdDialectAdvancedTests
     public async Task GetDatabaseVersionAsync_Should_Call_Base_When_Both_Queries_Fail()
     {
         var connection = (fakeDbConnection)_factory.CreateConnection();
-        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database", 
+        connection.SetCommandFailure("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
             new InvalidOperationException("Engine version failed"));
-        connection.SetCommandFailure("SELECT mon$server_version FROM mon$database", 
+        connection.SetCommandFailure("SELECT mon$server_version FROM mon$database",
             new InvalidOperationException("Monitor query failed"));
-        
+
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
 
@@ -126,7 +127,7 @@ public class FirebirdDialectAdvancedTests
     public async Task GetDatabaseVersionAsync_Should_Handle_Null_Result_From_Engine_Query()
     {
         _factory.SetScalarResult(null);
-        
+
         var connection = (fakeDbConnection)_factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
@@ -141,7 +142,7 @@ public class FirebirdDialectAdvancedTests
     public async Task GetDatabaseVersionAsync_Should_Handle_Empty_String_From_Engine_Query()
     {
         _factory.SetScalarResult("");
-        
+
         var connection = (fakeDbConnection)_factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection);
         await trackedConnection.OpenAsync();
@@ -156,7 +157,8 @@ public class FirebirdDialectAdvancedTests
     [InlineData("LI-V3.0.7", 3, 0, 7)]
     [InlineData("LI-V4.0.2", 4, 0, 2)]
     [InlineData("LI-V2.5.9", 2, 5, 9)]
-    public void ParseVersion_Should_Parse_Legacy_Format(string versionString, int expectedMajor, int expectedMinor, int expectedBuild)
+    public void ParseVersion_Should_Parse_Legacy_Format(string versionString, int expectedMajor, int expectedMinor,
+        int expectedBuild)
     {
         var version = _dialect.ParseVersion(versionString);
 
@@ -206,10 +208,11 @@ public class FirebirdDialectAdvancedTests
     [InlineData(3, 0, 0, SqlStandardLevel.Sql2008)]
     [InlineData(2, 5, 0, SqlStandardLevel.Sql2003)]
     [InlineData(1, 5, 0, SqlStandardLevel.Sql92)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch, SqlStandardLevel expected)
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch,
+        SqlStandardLevel expected)
     {
         var version = new Version(major, minor, patch);
-        
+
         var compliance = _dialect.DetermineStandardCompliance(version);
 
         Assert.Equal(expected, compliance);
@@ -239,20 +242,20 @@ public class FirebirdDialectAdvancedTests
 
         Assert.Equal(DbType.Int16, parameterTrue.DbType);
         Assert.Equal((short)1, parameterTrue.Value);
-        
+
         Assert.Equal(DbType.Int16, parameterFalse.DbType);
         Assert.Equal((short)0, parameterFalse.Value);
     }
 
     [Fact]
-    public void CreateDbParameter_Should_Convert_Guid_To_Binary()
+    public void CreateDbParameter_Should_Convert_Guid_To_String()
     {
         var guidValue = Guid.NewGuid();
-        
+
         var parameter = _dialect.CreateDbParameter("test", DbType.Guid, guidValue);
 
-        Assert.Equal(DbType.Binary, parameter.DbType);
-        Assert.Equal(guidValue.ToByteArray(), parameter.Value);
+        Assert.Equal(DbType.String, parameter.DbType);
+        Assert.Equal(guidValue.ToString("D"), parameter.Value);
     }
 
     [Fact]
@@ -265,29 +268,26 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Transaction_And_Dialect_Settings()
+    public void GetBaseSessionSettings_Should_Return_Expected_Settings()
     {
-        var context = new DatabaseContext("test", _factory);
-        
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetBaseSessionSettings();
 
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET NAMES UTF8;\nSET SQL DIALECT 3;", settings);
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Same_For_ReadWrite()
+    public void GetReadOnlySessionSettings_Should_Return_ReadOnly_Transaction()
     {
-        var context = new DatabaseContext("test", _factory);
-        
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET TRANSACTION READ ONLY;", settings);
     }
 
     [Fact]
     public void GetVersionQuery_Should_Return_Engine_Version_Query()
     {
-        Assert.Equal("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database", _dialect.GetVersionQuery());
+        Assert.Equal("SELECT rdb$get_context('SYSTEM', 'ENGINE_VERSION') FROM rdb$database",
+            _dialect.GetVersionQuery());
     }
 
     [Fact]
@@ -309,21 +309,11 @@ public class FirebirdDialectAdvancedTests
         Assert.True(_dialect.SupportsSavepoints);
         Assert.False(_dialect.SupportsJsonTypes);
         Assert.True(_dialect.SupportsArrayTypes);
-        Assert.True(_dialect.PrepareStatements);
+        Assert.False(_dialect.PrepareStatements);
         Assert.Equal(ProcWrappingStyle.ExecuteProcedure, _dialect.ProcWrappingStyle);
         Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(1499, _dialect.MaxOutputParameters);
         Assert.Equal(63, _dialect.ParameterNameMaxLength);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Transaction_And_Dialect_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
     }
 
     [Fact]
@@ -332,7 +322,7 @@ public class FirebirdDialectAdvancedTests
         // These properties check IsInitialized and ProductInfo.ParsedVersion
         // When not initialized, they should return false (default behavior)
         var newDialect = new FirebirdDialect(_factory, _logger);
-        
+
         // These will return false because IsInitialized is false
         Assert.False(newDialect.SupportsMerge);
         Assert.False(newDialect.SupportsWindowFunctions);

@@ -1,8 +1,25 @@
-using System;
+// =============================================================================
+// FILE: HStore.cs
+// PURPOSE: Immutable value object for PostgreSQL HSTORE key-value type.
+//
+// AI SUMMARY:
+// - Represents PostgreSQL HSTORE - key-value store in a single column.
+// - Readonly struct implementing IEquatable<HStore>, IEnumerable<KeyValuePair>.
+// - Properties:
+//   * Indexer [key]: Returns value or null if key doesn't exist
+//   * Keys, Values: Enumerate keys and values
+//   * Count, IsEmpty: Size information
+//   * ContainsKey(): Check for key existence
+// - Parse(): Parses HSTORE string format (key1=>val1, "key 2"=>"val 2", key3=>NULL).
+// - ToString(): Converts to canonical HSTORE format with proper escaping.
+// - Escaping rules: Quotes strings with whitespace/special chars, backslash-escapes.
+// - Null values: Represented as unquoted NULL in string format.
+// - Uses SbLite for efficient string building during parsing/serialization.
+// - Thread-safe and immutable.
+// =============================================================================
+
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud.types.valueobjects;
 
@@ -31,15 +48,15 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     /// <summary>
     /// Get value by key. Returns null if key doesn't exist.
     /// </summary>
-    public string? this[string key]
-    {
-        get => _data?.TryGetValue(key, out var value) == true ? value : null;
-    }
+    public string? this[string key] => _data?.TryGetValue(key, out var value) == true ? value : null;
 
     /// <summary>
     /// Check if the HStore contains a key.
     /// </summary>
-    public bool ContainsKey(string key) => _data?.ContainsKey(key) == true;
+    public bool ContainsKey(string key)
+    {
+        return _data?.ContainsKey(key) == true;
+    }
 
     /// <summary>
     /// Get all keys in the HStore.
@@ -67,7 +84,9 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     public static HStore Parse(string hstoreText)
     {
         if (string.IsNullOrWhiteSpace(hstoreText))
+        {
             return new HStore(new Dictionary<string, string?>());
+        }
 
         var data = new Dictionary<string, string?>();
         var pairs = SplitHStorePairs(hstoreText);
@@ -76,7 +95,9 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         {
             var arrowIndex = pair.IndexOf("=>");
             if (arrowIndex == -1)
+            {
                 throw new FormatException($"Invalid HSTORE pair format: {pair}");
+            }
 
             var key = UnescapeHStoreValue(pair[..arrowIndex].Trim());
             var valueText = pair[(arrowIndex + 2)..].Trim();
@@ -99,14 +120,20 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     public override string ToString()
     {
         if (_data == null || _data.Count == 0)
+        {
             return "";
+        }
 
-        var sb = new StringBuilder();
-        bool first = true;
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var first = true;
 
         foreach (var pair in _data)
         {
-            if (!first) sb.Append(", ");
+            if (!first)
+            {
+                sb.Append(", ");
+            }
+
             first = false;
 
             sb.Append(EscapeHStoreValue(pair.Key));
@@ -128,13 +155,13 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     private static IEnumerable<string> SplitHStorePairs(string hstore)
     {
         var pairs = new List<string>();
-        var sb = new StringBuilder();
-        bool inQuotes = false;
-        bool escaped = false;
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var inQuotes = false;
+        var escaped = false;
 
-        for (int i = 0; i < hstore.Length; i++)
+        for (var i = 0; i < hstore.Length; i++)
         {
-            char c = hstore[i];
+            var c = hstore[i];
 
             if (escaped)
             {
@@ -178,21 +205,29 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     private static string EscapeHStoreValue(string value)
     {
         if (string.IsNullOrEmpty(value))
+        {
             return "\"\"";
+        }
 
         // Check if quoting is needed
-        bool needsQuoting = value.Any(c => char.IsWhiteSpace(c) || c == '"' || c == '\\' || c == ',' || c == '=' || c == '>');
+        var needsQuoting = value.Any(c =>
+            char.IsWhiteSpace(c) || c == '"' || c == '\\' || c == ',' || c == '=' || c == '>');
 
         if (!needsQuoting)
+        {
             return value;
+        }
 
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append('"');
 
-        foreach (char c in value)
+        foreach (var c in value)
         {
             if (c == '"' || c == '\\')
+            {
                 sb.Append('\\');
+            }
+
             sb.Append(c);
         }
 
@@ -203,7 +238,9 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
     private static string UnescapeHStoreValue(string escapedValue)
     {
         if (string.IsNullOrEmpty(escapedValue))
+        {
             return "";
+        }
 
         escapedValue = escapedValue.Trim();
 
@@ -212,10 +249,10 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
             escapedValue = escapedValue[1..^1];
         }
 
-        var sb = new StringBuilder();
-        bool escaped = false;
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        var escaped = false;
 
-        foreach (char c in escapedValue)
+        foreach (var c in escapedValue)
         {
             if (escaped)
             {
@@ -240,13 +277,27 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         return (_data ?? new Dictionary<string, string?>()).GetEnumerator();
     }
 
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
 
     public bool Equals(HStore other)
     {
-        if (_data == null && other._data == null) return true;
-        if (_data == null || other._data == null) return false;
-        if (_data.Count != other._data.Count) return false;
+        if (_data == null && other._data == null)
+        {
+            return true;
+        }
+
+        if (_data == null || other._data == null)
+        {
+            return false;
+        }
+
+        if (_data.Count != other._data.Count)
+        {
+            return false;
+        }
 
         foreach (var pair in _data)
         {
@@ -260,20 +311,34 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         return true;
     }
 
-    public override bool Equals(object? obj) => obj is HStore other && Equals(other);
+    public override bool Equals(object? obj)
+    {
+        return obj is HStore other && Equals(other);
+    }
 
     public override int GetHashCode()
     {
-        if (_data == null) return 0;
+        if (_data == null)
+        {
+            return 0;
+        }
 
-        int hash = 0;
+        var hash = 0;
         foreach (var pair in _data)
         {
             hash ^= HashCode.Combine(pair.Key, pair.Value);
         }
+
         return hash;
     }
 
-    public static bool operator ==(HStore left, HStore right) => left.Equals(right);
-    public static bool operator !=(HStore left, HStore right) => !left.Equals(right);
+    public static bool operator ==(HStore left, HStore right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(HStore left, HStore right)
+    {
+        return !left.Equals(right);
+    }
 }

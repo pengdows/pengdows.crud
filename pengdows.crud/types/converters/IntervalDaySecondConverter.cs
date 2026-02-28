@@ -1,10 +1,86 @@
-using System;
+// =============================================================================
+// FILE: IntervalDaySecondConverter.cs
+// PURPOSE: Converter for Oracle INTERVAL DAY TO SECOND type.
+//
+// AI SUMMARY:
+// - Converts between database interval values and IntervalDaySecond value objects.
+// - Represents intervals with Days and sub-day Time (hours/minutes/seconds).
+// - Provider-specific:
+//   * Oracle: INTERVAL DAY TO SECOND type
+//   * PostgreSQL/CockroachDB: INTERVAL (ISO 8601 format)
+//   * Others: TimeSpan equivalent
+// - ConvertToProvider(): Returns ISO 8601 format (P5DT12H30M45.5S) for Oracle/PostgreSQL.
+// - TryConvertFromProvider(): Handles IntervalDaySecond, TimeSpan, and string.
+// - Parse(): Handles ISO 8601 duration format with time component.
+// - Components: Days (int) and Time (TimeSpan).
+// - Thread-safe and immutable value objects.
+// =============================================================================
+
 using System.Globalization;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.converters;
 
+/// <summary>
+/// Converts between database interval day-to-second values and <see cref="IntervalDaySecond"/> value objects.
+/// Represents Oracle INTERVAL DAY TO SECOND type with days and sub-day time components.
+/// </summary>
+/// <remarks>
+/// <para><strong>Provider-specific behavior:</strong></para>
+/// <list type="bullet">
+/// <item><description><strong>Oracle:</strong> Maps to INTERVAL DAY TO SECOND type. Format: P5DT12H30M45.5S (ISO 8601).</description></item>
+/// <item><description><strong>PostgreSQL/CockroachDB:</strong> Can be stored as INTERVAL and formatted as ISO 8601.</description></item>
+/// <item><description><strong>Other databases:</strong> Stores as TimeSpan equivalent. No native interval day-second type.</description></item>
+/// </list>
+/// <para><strong>Supported conversions from database:</strong></para>
+/// <list type="bullet">
+/// <item><description>IntervalDaySecond → IntervalDaySecond (pass-through)</description></item>
+/// <item><description>TimeSpan → IntervalDaySecond (converts via IntervalDaySecond.FromTimeSpan)</description></item>
+/// <item><description>string → IntervalDaySecond (parses ISO 8601 duration format like P5DT12H30M45.5S)</description></item>
+/// </list>
+/// <para><strong>Format:</strong> Uses ISO 8601 duration format for Oracle and PostgreSQL providers.
+/// Example: P5DT12H30M45.5S represents 5 days, 12 hours, 30 minutes, 45.5 seconds.</para>
+/// <para><strong>Components:</strong> IntervalDaySecond has Days (integer) and Time (TimeSpan for hours/minutes/seconds).
+/// Maximum precision depends on database (Oracle supports up to 9 digits of fractional seconds).</para>
+/// <para><strong>Thread safety:</strong> Converter instances are thread-safe. IntervalDaySecond value objects are immutable and thread-safe.</para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Entity with day-second interval
+/// [Table("tasks")]
+/// public class Task
+/// {
+///     [Id]
+///     [Column("id", DbType.Int32)]
+///     public int Id { get; set; }
+///
+///     [Column("estimated_duration", DbType.Object)]
+///     public IntervalDaySecond EstimatedDuration { get; set; }
+/// }
+///
+/// // Create with interval (5 days, 12 hours, 30 minutes)
+/// var task = new Task
+/// {
+///     EstimatedDuration = new IntervalDaySecond(days: 5, time: new TimeSpan(12, 30, 0))
+/// };
+/// await helper.CreateAsync(task);
+///
+/// // Convert from TimeSpan
+/// var task2 = new Task
+/// {
+///     EstimatedDuration = IntervalDaySecond.FromTimeSpan(TimeSpan.FromDays(2.5))
+/// };
+/// await helper.CreateAsync(task2);
+///
+/// // Retrieve and use
+/// var retrieved = await helper.RetrieveOneAsync(task.Id);
+/// Console.WriteLine($"Days: {retrieved.EstimatedDuration.Days}");            // 5
+/// Console.WriteLine($"Time: {retrieved.EstimatedDuration.Time}");            // 12:30:00
+/// Console.WriteLine($"Total: {retrieved.EstimatedDuration.TotalTime}");      // 5.12:30:00
+/// </code>
+/// </example>
 internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<IntervalDaySecond>
 {
     protected override object? ConvertToProvider(IntervalDaySecond value, SupportedDatabase provider)
@@ -73,7 +149,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
         }
 
         var timeIndex = trimmed.IndexOf('T');
-        string? datePart = trimmed;
+        var datePart = trimmed;
         string? timePart = null;
         if (timeIndex >= 0)
         {

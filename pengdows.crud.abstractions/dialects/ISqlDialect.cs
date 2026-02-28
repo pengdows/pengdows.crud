@@ -1,8 +1,9 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
-using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -45,6 +46,14 @@ public interface ISqlDialect
     bool SupportsNamedParameters { get; }
 
     /// <summary>
+    /// True when the dialect allows the same named parameter to appear multiple times
+    /// in a single SQL statement without requiring separate parameter objects for each occurrence.
+    /// Most named-parameter providers support this (SQL Server, PostgreSQL, etc.). Oracle does not.
+    /// Positional-parameter providers (e.g., OleDb with ?) never support this.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters { get; }
+
+    /// <summary>
     /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
     /// </summary>
     /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
@@ -68,6 +77,51 @@ public interface ISqlDialect
     /// Maximum number of parameters allowed in a single command.
     /// </summary>
     int MaxParameterLimit { get; }
+
+    /// <summary>
+    /// Maximum number of rows allowed in a single multi-row INSERT statement.
+    /// SQL Server: 1000; most others: no specific row limit beyond parameter count.
+    /// </summary>
+    int MaxRowsPerBatch { get; }
+
+    /// <summary>
+    /// Whether this dialect supports multi-row INSERT via VALUES (..., ...), (..., ...) syntax.
+    /// </summary>
+    bool SupportsBatchInsert { get; }
+
+    /// <summary>
+    /// Builds a multi-row INSERT statement structure for the dialect.
+    /// </summary>
+    /// <param name="tableName">Wrapped table name.</param>
+    /// <param name="columnNames">List of wrapped column names.</param>
+    /// <param name="rowCount">Number of rows in the batch.</param>
+    /// <param name="query">Target query builder to write the SQL structure into.</param>
+    /// <remarks>
+    /// Use this to generate the dialect-specific "shape" (e.g. INSERT ALL for Oracle).
+    /// The TableGateway will handle the actual parameter binding.
+    /// </remarks>
+    void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount, ISqlQueryBuilder query);
+
+    /// <summary>
+    /// Builds a multi-row INSERT statement structure with optional value inspection (for NULL inlining).
+    /// </summary>
+    void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue);
+
+    /// <summary>
+    /// Whether this dialect supports multi-row UPDATE via optimized strategy (e.g. UPDATE FROM VALUES or MERGE).
+    /// </summary>
+    bool SupportsBatchUpdate { get; }
+
+    /// <summary>
+    /// Builds an optimized batch UPDATE statement structure for the dialect.
+    /// </summary>
+    /// <param name="tableName">Wrapped table name.</param>
+    /// <param name="columnNames">List of wrapped column names (all columns to update).</param>
+    /// <param name="keyColumns">List of wrapped primary key column names.</param>
+    /// <param name="rowCount">Number of rows in the batch.</param>
+    /// <param name="query">Target query builder to write the SQL structure into.</param>
+    /// <param name="getValue">Function to get the value for a specific row and column index.</param>
+    void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue);
 
     /// <summary>
     /// Maximum permitted length for parameter names.
@@ -105,14 +159,18 @@ public interface ISqlDialect
     bool PrepareStatements { get; }
 
     /// <summary>
+    /// True when the dialect has permanently disabled prepare at runtime due to a server-level
+    /// exhaustion error (e.g. MySQL error 1461 — <c>max_prepared_stmt_count</c> reached).
+    /// Unlike <see cref="PrepareStatements"/>, this veto overrides
+    /// <see cref="IDatabaseContext.ForceManualPrepare"/> because retrying after exhaustion
+    /// would only compound the problem. Default implementation returns <see langword="false"/>.
+    /// </summary>
+    bool IsPrepareExhausted => false;
+
+    /// <summary>
     /// Regular expression describing valid parameter names.
     /// </summary>
     Regex ParameterNamePattern { get; }
-
-    /// <summary>
-    /// Indicates support for integrity constraints such as foreign keys.
-    /// </summary>
-    bool SupportsIntegrityConstraints { get; }
 
     /// <summary>
     /// True when the dialect supports join operations.
@@ -241,9 +299,36 @@ public interface ISqlDialect
     bool SupportsSavepoints { get; }
 
     /// <summary>
+    /// True when the database supports DROP TABLE IF EXISTS syntax.
+    /// Oracle requires a PL/SQL exception block instead.
+    /// </summary>
+    bool SupportsDropTableIfExists { get; }
+
+    /// <summary>
+    /// Gets the SQL statement to create a savepoint with the given name.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "SAVEPOINT name" or "SAVE TRANSACTION name").</returns>
+    string GetSavepointSql(string name);
+
+    /// <summary>
+    /// Gets the SQL statement to rollback to a savepoint with the given name.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "ROLLBACK TO SAVEPOINT name" or "ROLLBACK TRANSACTION name").</returns>
+    string GetRollbackToSavepointSql(string name);
+
+    /// <summary>
     /// Indicates whether stored procedure parameter names must match exactly.
     /// </summary>
     bool RequiresStoredProcParameterNameMatch { get; }
+
+    /// <summary>
+    /// Indicates whether MERGE UPDATE SET clause requires table alias prefix on target columns.
+    /// SQL Server, Oracle: true (allows `UPDATE SET t.col = value`)
+    /// PostgreSQL: false (requires `UPDATE SET col = value`, will error with alias prefix)
+    /// </summary>
+    bool MergeUpdateRequiresTargetAlias { get; }
 
     /// <summary>
     /// True when the dialect supports namespaces or schemas.
@@ -279,6 +364,51 @@ public interface ISqlDialect
     string WrapObjectName(string name);
 
     /// <summary>
+    /// Wraps a simple, single-part identifier with the dialect's quoting characters.
+    /// Use this instead of <see cref="WrapObjectName"/> when the identifier is known to be
+    /// a simple name with no dots or existing quotes — for example, a column name from a
+    /// <c>[Column]</c> attribute or a caller-provided table alias.
+    /// </summary>
+    /// <param name="name">Simple identifier to wrap (no dots, no existing quotes).</param>
+    /// <returns>Quoted identifier, e.g. <c>"name"</c>, <c>[name]</c>, or <c>`name`</c>.</returns>
+    string WrapSimpleName(string name) => QuotePrefix + name + QuoteSuffix;
+
+    /// <summary>
+    /// Replaces neutral SQL tokens with dialect-specific quoting and parameter markers:
+    /// <c>{Q}</c> → <see cref="QuotePrefix"/>, <c>{q}</c> → <see cref="QuoteSuffix"/>,
+    /// <c>{S}</c> → <see cref="ParameterMarker"/>.
+    /// Allows writing dialect-agnostic SQL strings without <c>TableGateway</c>.
+    /// </summary>
+    /// <param name="sql">SQL containing neutral tokens.</param>
+    /// <returns>SQL with tokens replaced by dialect-specific characters.</returns>
+    string ReplaceNeutralTokens(string sql)
+    {
+        if (sql == null)
+        {
+            throw new ArgumentNullException(nameof(sql));
+        }
+
+        var qp = QuotePrefix;
+        var qs = QuoteSuffix;
+        var pm = ParameterMarker;
+        var result = new System.Text.StringBuilder(sql.Length + 8);
+        for (var i = 0; i < sql.Length; i++)
+        {
+            if (sql[i] == '{' && i + 2 < sql.Length && sql[i + 2] == '}')
+            {
+                switch (sql[i + 1])
+                {
+                    case 'Q': result.Append(qp); i += 2; continue;
+                    case 'q': result.Append(qs); i += 2; continue;
+                    case 'S': result.Append(pm); i += 2; continue;
+                }
+            }
+            result.Append(sql[i]);
+        }
+        return result.ToString();
+    }
+
+    /// <summary>
     /// Formats a parameter name according to dialect rules.
     /// </summary>
     /// <param name="parameterName">Unformatted parameter name.</param>
@@ -300,9 +430,65 @@ public interface ISqlDialect
     string UpsertIncomingColumn(string columnName);
 
     /// <summary>
-    /// Optional alias used to reference incoming values during upsert.
+    /// Optional alias that points to the incoming row during upsert operations.
     /// </summary>
     string? UpsertIncomingAlias { get; }
+
+    /// <summary>
+    /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
+    /// </summary>
+    /// <param name="columns">Columns included in the source row.</param>
+    /// <param name="parameterNames">Parameter names (without markers) corresponding to columns.</param>
+    /// <returns>Dialect-specific USING clause with source alias 's'.</returns>
+    string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
+    {
+        if (columns == null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (parameterNames == null)
+        {
+            throw new ArgumentNullException(nameof(parameterNames));
+        }
+
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var values = new string[columns.Count];
+        var names = new string[columns.Count];
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var placeholder = MakeParameterName(parameterNames[i]);
+            if (columns[i].IsJsonType)
+            {
+                placeholder = RenderJsonArgument(placeholder, columns[i]);
+            }
+
+            values[i] = placeholder;
+            names[i] = WrapSimpleName(columns[i].Name);
+        }
+
+        return $"USING (VALUES ({string.Join(", ", values)})) AS s ({string.Join(", ", names)})";
+    }
+
+    /// <summary>
+    /// Formats the MERGE ON clause predicate for the dialect.
+    /// </summary>
+    /// <param name="predicate">Join predicate (e.g., "t.id = s.id").</param>
+    /// <returns>Dialect-specific ON clause predicate.</returns>
+    string RenderMergeOnClause(string predicate)
+    {
+        if (predicate == null)
+        {
+            throw new ArgumentNullException(nameof(predicate));
+        }
+
+        return predicate;
+    }
 
     /// <summary>
     /// Creates a parameter with the specified name, type, and value.
@@ -330,6 +516,13 @@ public interface ISqlDialect
     string GetVersionQuery();
 
     /// <summary>
+    /// Gets the SQL query to retrieve the next value from a sequence.
+    /// </summary>
+    /// <param name="sequenceName">The name of the sequence.</param>
+    /// <returns>The SQL query text.</returns>
+    string GetSequenceNextValQuery(string sequenceName);
+
+    /// <summary>
     /// Reads the database version from the connection.
     /// </summary>
     /// <param name="connection">Connection to inspect.</param>
@@ -351,12 +544,6 @@ public interface ISqlDialect
     /// <returns>Command text configuring session options.</returns>
     string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly);
 
-    /// <summary>
-    /// Legacy accessor for session settings without context information.
-    /// </summary>
-    /// <returns>Command text configuring session options.</returns>
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    string GetConnectionSessionSettings();
 
     /// <summary>
     /// Applies connection-string or provider-specific settings to the provided connection.
@@ -374,12 +561,6 @@ public interface ISqlDialect
     /// <returns>True if prepare should be disabled for this connection.</returns>
     bool ShouldDisablePrepareOn(Exception ex);
 
-    /// <summary>
-    /// Legacy overload for connection settings without context information.
-    /// </summary>
-    /// <param name="connection">Connection to configure.</param>
-    [Obsolete("Use the overload accepting context and readOnly.")]
-    void ApplyConnectionSettings(IDbConnection connection);
 
     /// <summary>
     /// Attempts to enter a read-only transaction. Implementations may be a no-op.
@@ -388,11 +569,26 @@ public interface ISqlDialect
     void TryEnterReadOnlyTransaction(ITransactionContext transaction);
 
     /// <summary>
+    /// Asynchronously attempts to enter a read-only transaction. Implementations may be a no-op.
+    /// </summary>
+    /// <param name="transaction">Transaction context.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.
     /// </summary>
     /// <param name="connection">Connection to check.</param>
     /// <returns>True if the snapshot isolation is on.</returns>
     bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
+
+    /// <summary>
+    /// Determines whether SNAPSHOT isolation level is enabled.
+    /// </summary>
+    /// <param name="connection">Connection to check.</param>
+    /// <returns>True if snapshot isolation is enabled.</returns>
+    bool IsSnapshotIsolationOn(ITrackedConnection connection);
 
     /// <summary>
     /// Determines whether the given exception represents a unique constraint violation.
@@ -416,6 +612,11 @@ public interface ISqlDialect
     IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection);
 
     /// <summary>
+    /// Initializes fallback metadata when detection cannot run (e.g., offline scenarios).
+    /// </summary>
+    void InitializeUnknownProductInfo();
+
+    /// <summary>
     /// Parses a raw version string into a <see cref="Version"/> instance.
     /// </summary>
     /// <param name="versionString">Version string reported by the database.</param>
@@ -428,6 +629,12 @@ public interface ISqlDialect
     /// <param name="versionString">Version string reported by the database.</param>
     /// <returns>Major version or null if unavailable.</returns>
     int? GetMajorVersion(string versionString);
+
+    /// <summary>
+    /// Generates a unique parameter name for the current operation.
+    /// </summary>
+    /// <returns>A unique parameter name (e.g., p1, p2, p42).</returns>
+    string GenerateParameterName();
 
     /// <summary>
     /// Generates a random identifier respecting name length limits.
@@ -451,9 +658,58 @@ public interface ISqlDialect
     /// <summary>
     /// Generates the RETURNING or OUTPUT clause for INSERT statements to capture identity values.
     /// </summary>
-    /// <param name="idColumnWrapped">Quoted identity column name</param>
-    /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
+    /// <param name="idColumnWrapped">
+    /// The identity column name already quoted with dialect-specific identifiers
+    /// (e.g., <c>"id"</c>, <c>[id]</c>, or <c>`id`</c>). Use <see cref="WrapObjectName"/>
+    /// or <see cref="WrapSimpleName"/> to produce this value before calling.
+    /// </param>
+    /// <returns>
+    /// Dialect-specific SQL fragment ready for direct concatenation into an INSERT statement,
+    /// for example <c>" RETURNING &quot;id&quot;"</c> or <c>"OUTPUT INSERTED.[id]"</c>.
+    /// Returns an empty string when <see cref="SupportsInsertReturning"/> is false.
+    /// </returns>
     string RenderInsertReturningClause(string idColumnWrapped);
+
+    /// <summary>
+    /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
+    /// </summary>
+    bool InsertReturningClauseBeforeValues { get; }
+
+    /// <summary>
+    /// Dialect-specific limit on output/import parameters.
+    /// </summary>
+    int MaxOutputParameters { get; }
+
+    /// <summary>
+    /// Returns the preferred strategy for retrieving generated keys.
+    /// </summary>
+    GeneratedKeyPlan GetGeneratedKeyPlan();
+
+    /// <summary>
+    /// Indicates whether the dialect has a safe session-scoped last-id function.
+    /// </summary>
+    bool HasSessionScopedLastIdFunction();
+
+    /// <summary>
+    /// Generates a correlation token lookup query for the specified table.
+    /// </summary>
+    string GetCorrelationTokenLookupQuery(string tableName, string idColumnName, string correlationTokenColumn,
+        string tokenParameterName);
+
+    /// <summary>
+    /// Generates a natural key lookup query for the specified table.
+    /// </summary>
+    string GetNaturalKeyLookupQuery(string tableName, string idColumnName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> parameterNames);
+
+    /// <summary>
+    /// Gives the dialect a chance to transform a value before it is assigned to a parameter.
+    /// Useful for databases with non-standard representations of common types.
+    /// </summary>
+    /// <param name="value">The raw value from the entity.</param>
+    /// <param name="dbType">The target database type.</param>
+    /// <returns>The transformed value to be stored in the parameter.</returns>
+    object? PrepareParameterValue(object? value, DbType dbType);
 
     // Connection pooling properties
     /// <summary>
@@ -479,4 +735,53 @@ public interface ISqlDialect
     /// Provider-specific (e.g., "Max Pool Size" vs "MaximumPoolSize"), null if not supported.
     /// </summary>
     string? MaxPoolSizeSettingName { get; }
+
+    /// <summary>
+    /// Classifies an exception into a well-known error category for metrics and observability.
+    /// </summary>
+    /// <param name="exception">The exception thrown by the database operation.</param>
+    /// <returns>
+    /// A <see cref="DbErrorCategory"/> value indicating the type of error.
+    /// Returns <see cref="DbErrorCategory.None"/> for <see cref="OperationCanceledException"/>
+    /// (cancellations are tracked separately).
+    /// The default implementation uses message heuristics; database-specific dialects
+    /// should override this to use error codes for accurate classification.
+    /// </returns>
+    DbErrorCategory ClassifyException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return DbErrorCategory.None;
+        }
+
+        var message = exception.Message;
+
+        if (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Deadlock;
+        }
+
+        if (message.Contains("serializ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("serialize", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.SerializationFailure;
+        }
+
+        if (message.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unique ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("violates", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.ConstraintViolation;
+        }
+
+        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Timeout;
+        }
+
+        return DbErrorCategory.Unknown;
+    }
 }

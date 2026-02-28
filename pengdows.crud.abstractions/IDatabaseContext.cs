@@ -1,13 +1,11 @@
-﻿#region
-
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -24,14 +22,31 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DbMode ConnectionMode { get; }
 
     /// <summary>
+    /// Global identifier used for tracing or tying back to instrumentation.
+    /// </summary>
+    Guid RootId { get; }
+
+    /// <summary>
+    /// Intended read/write posture of this context.
+    /// </summary>
+    ReadWriteMode ReadWriteMode { get; }
+
+    /// <summary>
     /// Gets the base connection string for this context.
     /// </summary>
     string ConnectionString { get; }
 
     /// <summary>
-    /// Type mapping registry for compiled accessors, enum coercions, and JSON handlers.
+    /// Human-readable name assigned to the context for diagnostics/scoping.
     /// </summary>
-    ITypeMapRegistry TypeMapRegistry { get; }
+    string Name { get; set; }
+
+    /// <summary>
+    /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
+    /// When available, provides better performance through shared prepared statement caching.
+    /// Null if using traditional DbProviderFactory approach.
+    /// </summary>
+    DbDataSource? DataSource { get; }
 
     /// <summary>
     /// Metadata gathered from connection.GetSchema and provider heuristics.
@@ -39,9 +54,16 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     IDataSourceInformation DataSourceInfo { get; }
 
     /// <summary>
-    /// Provider-specific SQL preamble to unify connection behavior (e.g., SET flags).
+    /// The SQL dialect in use for this context.
     /// </summary>
-    string SessionSettingsPreamble { get; }
+    ISqlDialect Dialect { get; }
+
+    /// <summary>
+    /// Timeout for internal mode locks (SingleWriter / SingleConnection) and
+    /// transaction completion locks (Commit / Rollback). <c>null</c> means wait
+    /// indefinitely. Corresponds to <see cref="configuration.IDatabaseContextConfiguration.ModeLockTimeout"/>.
+    /// </summary>
+    TimeSpan? ModeLockTimeout { get; }
 
     /// <summary>
     /// Stored Procedure wrapping style (CALL vs EXEC vs plain SELECT).
@@ -56,11 +78,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// The hard limit of output parameters this provider supports per statement.
     /// </summary>
-    /// <remarks>
-    /// Intentionally not part of the public interface to preserve compatibility.
-    /// Query the active dialect for limits when needed.
-    /// </remarks>
-    // int MaxOutputParameters { get; }
+    int MaxOutputParameters { get; }
 
     /// <summary>
     /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
@@ -68,14 +86,30 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     long NumberOfOpenConnections { get; }
 
     /// <summary>
+    /// Snapshot of metrics collected for this context.
+    /// </summary>
+    DatabaseMetrics Metrics { get; }
+
+    /// <summary>
+    /// Raised whenever the metrics collector records a new observation.
+    /// Subscribers receive the latest snapshot for the context.
+    /// </summary>
+    event EventHandler<DatabaseMetrics> MetricsUpdated;
+
+    /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).
     /// </summary>
     SupportedDatabase Product { get; }
 
     /// <summary>
-    /// Max observed number of concurrently open connections. Used for tuning.
+    /// Peak observed number of concurrently open connections. Used for tuning.
     /// </summary>
-    long MaxNumberOfConnections { get; }
+    long PeakOpenConnections { get; }
+
+    /// <summary>
+    /// Maximum size of the reader plan cache that TableGateway instances should maintain.
+    /// </summary>
+    int? ReaderPlanCacheSize => null;
 
     /// <summary>
     /// The raw database product name (from metadata).
@@ -103,6 +137,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if the provider supports named parameters (e.g., :name, @param).
     /// </summary>
     bool SupportsNamedParameters => DataSourceInfo.SupportsNamedParameters;
+
+    /// <summary>
+    /// True if the same named parameter can appear multiple times in a single SQL statement.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters => DataSourceInfo.SupportsRepeatedNamedParameters;
 
     /// <summary>
     /// True if the provider supports INSERT ... RETURNING or OUTPUT clause for identity retrieval.
@@ -150,10 +189,36 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     bool IsReadOnlyConnection { get; }
 
+    /// <summary>
+    /// True if read committed snapshot isolation (RCSI) is enabled on the database.
+    /// </summary>
     bool RCSIEnabled { get; }
 
     /// <summary>
+    /// Returns the session settings SQL preamble for the current context.
+    /// </summary>
+    [Obsolete("Use GetBaseSessionSettings() and GetReadOnlySessionSettings() instead.")]
+    string SessionSettingsPreamble { get; }
+
+    /// <summary>
+    /// Returns the baseline session settings SQL for the current context.
+    /// These are settings that apply regardless of execution intent (e.g. syntax, quoting).
+    /// </summary>
+    string GetBaseSessionSettings();
+
+    /// <summary>
+    /// Returns the read-only intent session settings SQL for the current context.
+    /// </summary>
+    string GetReadOnlySessionSettings();
+
+    /// <summary>
+    /// True if snapshot isolation is enabled on the database.
+    /// </summary>
+    bool SnapshotIsolationEnabled { get; }
+
+    /// <summary>
     /// Returns an async-compatible lock for this context instance.
+    /// This is intended for internal coordination within pengdows.crud and should not be required by consumers.
     /// </summary>
     ILockerAsync GetLock();
 
@@ -178,13 +243,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DbParameter CreateDbParameter<T>(DbType type, T value);
 
     /// <summary>
-    /// Returns a tracked connection for the given execution type.
-    /// Optionally reused depending on mode.
-    /// </summary>
-    ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
-
-
-    /// <summary>
     /// Begins a transaction using the native ADO.NET IsolationLevel.
     /// Not portable across all providers.
     /// </summary>
@@ -202,7 +260,30 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
         bool? readOnly = null);
 
     /// <summary>
-    /// Returns a randomly generated, collision-safe parameter/alias name.
+    /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
+    /// </summary>
+    Task<ITransactionContext> BeginTransactionAsync(
+        IsolationLevel? isolationLevel = null,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
+    /// </summary>
+    Task<ITransactionContext> BeginTransactionAsync(
+        IsolationProfile isolationProfile,
+        ExecutionType executionType = ExecutionType.Write,
+        bool? readOnly = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates a unique parameter name for the current operation (e.g., p1, p2, p42).
+    /// </summary>
+    string GenerateParameterName();
+
+    /// <summary>
+    /// Generates a random object name that conforms to the provider's identifier rules.
     /// </summary>
     string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30);
 

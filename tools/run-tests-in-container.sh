@@ -49,8 +49,10 @@ fi
 
 docker run --rm \
     -v "${PWD}:${WORKDIR}" \
+    -v "/var/run/docker.sock:/var/run/docker.sock" \
     -w "${WORKDIR}" \
     --env "DOTNET_CLI_TELEMETRY_OPTOUT=1" \
     --env "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1" \
+    ${TESTBED_ONLY:+--env "TESTBED_ONLY=${TESTBED_ONLY}"} \
     "$IMAGE" \
     "${DOTNET_CMD[@]}"

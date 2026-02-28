@@ -1,5 +1,18 @@
-using System;
-using System.Data;
+// =============================================================================
+// FILE: IDbCoercion.cs
+// PURPOSE: Interface for high-performance database type coercion.
+//
+// AI SUMMARY:
+// - Defines contract for converting between database values and .NET types.
+// - DbValue: Lightweight readonly struct wrapping raw value + optional DbType.
+// - IDbCoercion: Non-generic interface with TryRead/TryWrite methods.
+// - IDbCoercion<T>: Generic strongly-typed interface for specific type handling.
+// - TryRead(): Convert database value to .NET type (returns success bool).
+// - TryWrite(): Configure DbParameter from .NET value.
+// - Designed for high performance and AOT compatibility.
+// - Implementations: GuidCoercion, BooleanCoercion, DateTimeCoercion, JsonCoercion, etc.
+// =============================================================================
+
 using System.Data.Common;
 
 namespace pengdows.crud.types.coercion;
@@ -21,7 +34,10 @@ public readonly struct DbValue
 
     public bool IsNull => RawValue == null || RawValue == DBNull.Value;
 
-    public T? As<T>() => RawValue is T value ? value : default;
+    public T? As<T>()
+    {
+        return RawValue is T value ? value : default;
+    }
 }
 
 /// <summary>

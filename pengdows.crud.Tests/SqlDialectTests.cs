@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -26,7 +27,7 @@ public class SqlDialectTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
-        Assert.Equal(string.Empty, ctx.WrapObjectName(null));
+        Assert.Equal(string.Empty, ctx.WrapObjectName(null!));
         Assert.Equal(string.Empty, ctx.WrapObjectName(string.Empty));
     }
 
@@ -37,7 +38,7 @@ public class SqlDialectTests
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         var param = ctx.CreateDbParameter("p", DbType.Int32, 1);
         var paramName = ctx.MakeParameterName(param);
-        Assert.Equal(":p", paramName);
+        Assert.Equal("@p", paramName);
     }
 
     [Fact]
@@ -67,7 +68,9 @@ public class SqlDialectTests
 
     private sealed class NoNamedParameterDialect : SqlDialect
     {
-        public NoNamedParameterDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger) { }
+        public NoNamedParameterDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
 
         public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
         public override string ParameterMarker => "@";
@@ -76,7 +79,9 @@ public class SqlDialectTests
         public override int ParameterNameMaxLength => 64;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-        public override string GetVersionQuery() => string.Empty;
+        public override string GetVersionQuery()
+        {
+            return string.Empty;
+        }
     }
-
 }

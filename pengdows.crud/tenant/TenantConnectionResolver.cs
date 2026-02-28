@@ -1,14 +1,29 @@
-using System;
+// =============================================================================
+// FILE: TenantConnectionResolver.cs
+// PURPOSE: Resolves database configuration for tenant identifiers.
+//
+// AI SUMMARY:
+// - Implements ITenantConnectionResolver for tenant-to-config mapping.
+// - Thread-safe: uses ConcurrentDictionary with case-insensitive keys.
+// - GetDatabaseContextConfiguration(tenant): Returns config or throws.
+// - Register methods:
+//   * Register(tenant, config): Single tenant registration
+//   * Register(IEnumerable<TenantConfiguration>): Batch registration
+//   * Register(MultiTenantOptions): With application name composition
+// - Application name composition: "{baseApp}:{tenantName}" format.
+// - Clear(): Removes all registered configurations.
+// - Throws InvalidOperationException for unknown tenants.
+// - Validates ProviderName is non-empty during registration.
+// =============================================================================
+
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using pengdows.crud.configuration;
 
 namespace pengdows.crud.tenant;
 
 public class TenantConnectionResolver : ITenantConnectionResolver
 {
-    private readonly ConcurrentDictionary<string, DatabaseContextConfiguration> _configurations;
+    private readonly ConcurrentDictionary<string, IDatabaseContextConfiguration> _configurations;
 
     public TenantConnectionResolver()
         : this(Enumerable.Empty<TenantConfiguration>())
@@ -17,7 +32,8 @@ public class TenantConnectionResolver : ITenantConnectionResolver
 
     public TenantConnectionResolver(IEnumerable<TenantConfiguration>? tenants)
     {
-        _configurations = new ConcurrentDictionary<string, DatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
+        _configurations =
+            new ConcurrentDictionary<string, IDatabaseContextConfiguration>(StringComparer.OrdinalIgnoreCase);
 
         if (tenants != null)
         {
@@ -54,10 +70,12 @@ public class TenantConnectionResolver : ITenantConnectionResolver
 
         if (string.IsNullOrWhiteSpace(configuration.ProviderName))
         {
-            throw new ArgumentException("Tenant configuration must include a non-empty ProviderName.", nameof(configuration));
+            throw new ArgumentException("Tenant configuration must include a non-empty ProviderName.",
+                nameof(configuration));
         }
 
-        _configurations[tenant] = configuration;
+        // Clone so that mutations to the caller's object after registration do not affect stored config.
+        _configurations[tenant] = CloneConfiguration(configuration);
     }
 
     public void Register(IEnumerable<TenantConfiguration> tenants)
@@ -74,9 +92,11 @@ public class TenantConnectionResolver : ITenantConnectionResolver
                 continue;
             }
 
-            if (tenant.DatabaseContextConfiguration == null || string.IsNullOrWhiteSpace(tenant.DatabaseContextConfiguration.ProviderName))
+            if (tenant.DatabaseContextConfiguration == null ||
+                string.IsNullOrWhiteSpace(tenant.DatabaseContextConfiguration.ProviderName))
             {
-                throw new ArgumentException($"Tenant '{tenant?.Name}' configuration must include a non-empty ProviderName.");
+                throw new ArgumentException(
+                    $"Tenant '{tenant?.Name}' configuration must include a non-empty ProviderName.");
             }
 
             Register(tenant.Name, tenant.DatabaseContextConfiguration);
@@ -90,7 +110,62 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             throw new ArgumentNullException(nameof(options));
         }
 
-        Register(options.Tenants);
+        var baseApp = options.ApplicationName?.Trim();
+        if (string.IsNullOrWhiteSpace(baseApp))
+        {
+            Register(options.Tenants);
+            return;
+        }
+
+        foreach (var tenant in options.Tenants)
+        {
+            if (tenant == null)
+            {
+                continue;
+            }
+
+            var tenantName = tenant.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(tenantName))
+            {
+                throw new ArgumentException("Tenant configuration must include a non-empty Name.");
+            }
+
+            var configuration = tenant.DatabaseContextConfiguration
+                                ?? throw new ArgumentException(
+                                    $"Tenant '{tenantName}' configuration missing DatabaseContextConfiguration.");
+
+            if (!string.IsNullOrWhiteSpace(baseApp) &&
+                string.IsNullOrWhiteSpace(configuration.ApplicationName))
+            {
+                // Clone before mutating so the caller's original config object is not modified.
+                configuration = CloneConfiguration(configuration);
+                configuration.ApplicationName = $"{baseApp}:{tenantName}";
+            }
+
+            Register(tenantName, configuration);
+        }
+    }
+
+    private static DatabaseContextConfiguration CloneConfiguration(IDatabaseContextConfiguration source)
+    {
+        return new DatabaseContextConfiguration
+        {
+            ConnectionString = source.ConnectionString,
+            ReadOnlyConnectionString = source.ReadOnlyConnectionString,
+            ProviderName = source.ProviderName,
+            DbMode = source.DbMode,
+            ReadWriteMode = source.ReadWriteMode,
+            ForceManualPrepare = source.ForceManualPrepare,
+            DisablePrepare = source.DisablePrepare,
+            EnableMetrics = source.EnableMetrics,
+            MetricsOptions = source.MetricsOptions,
+            MaxConcurrentWrites = source.MaxConcurrentWrites,
+            MaxConcurrentReads = source.MaxConcurrentReads,
+            PoolAcquireTimeout = source.PoolAcquireTimeout,
+            ModeLockTimeout = source.ModeLockTimeout,
+            ApplicationName = source.ApplicationName,
+            EnableSingleWriterFairness = source.EnableSingleWriterFairness
+        };
     }
 
     public void Clear()

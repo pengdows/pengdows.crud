@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -143,14 +144,19 @@ public class SafeAsyncDisposableBaseTests
         {
             DisposeManagedCallCount++;
             if (ThrowInDisposeManaged)
+            {
                 throw new InvalidOperationException("Test exception in DisposeManaged");
+            }
         }
 
         protected override ValueTask DisposeManagedAsync()
         {
             DisposeManagedAsyncCallCount++;
             if (ThrowInDisposeManagedAsync)
+            {
                 throw new InvalidOperationException("Test exception in DisposeManagedAsync");
+            }
+
             return ValueTask.CompletedTask;
         }
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -30,7 +31,6 @@ public class DuckDbDialectAdvancedTests
     [Fact]
     public async Task GetProductNameAsync_Should_Return_DuckDB_From_Version_Query()
     {
-
         var connection = (fakeDbConnection)_factory.CreateConnection();
         connection.SetScalarResultForCommand(_dialect.GetVersionQuery(), "DuckDB v1.0.0");
         var trackedConnection = new TrackedConnection(connection);
@@ -179,7 +179,8 @@ public class DuckDbDialectAdvancedTests
     [InlineData("DuckDB v0.9.2", 0, 9, 2)]
     [InlineData("v0.7.1-dev", 0, 7, 1)]
     [InlineData("1.2.3", 1, 2, 3)]
-    public void ParseVersion_Should_Parse_DuckDB_Version_Formats(string versionString, int expectedMajor, int expectedMinor, int expectedPatch)
+    public void ParseVersion_Should_Parse_DuckDB_Version_Formats(string versionString, int expectedMajor,
+        int expectedMinor, int expectedPatch)
     {
         var version = _dialect.ParseVersion(versionString);
 
@@ -206,7 +207,8 @@ public class DuckDbDialectAdvancedTests
     [InlineData(0, 8, 0, SqlStandardLevel.Sql2011)]
     [InlineData(0, 6, 0, SqlStandardLevel.Sql2008)]
     [InlineData(0, 4, 0, SqlStandardLevel.Sql2003)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch, SqlStandardLevel expected)
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch,
+        SqlStandardLevel expected)
     {
         var version = new Version(major, minor, patch);
 
@@ -261,13 +263,13 @@ public class DuckDbDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Read_Only_Pragma_When_ReadOnly()
+    public void GetConnectionSessionSettings_Should_Return_SetAccessMode_When_ReadOnly()
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
-        Assert.Equal("PRAGMA read_only = 1;", settings);
+        Assert.Equal("SET access_mode = 'read_only';", settings);
     }
 
     [Fact]
@@ -275,9 +277,17 @@ public class DuckDbDialectAdvancedTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Equal(string.Empty, settings);
+    }
+
+    [Fact]
+    public void GetReadOnlySessionSettings_Should_Return_SetAccessMode()
+    {
+        var settings = _dialect.GetReadOnlySessionSettings();
+
+        Assert.Equal("SET access_mode = 'read_only';", settings);
     }
 
     [Fact]
@@ -286,7 +296,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=/path/to/file.duckdb", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: true);
+        _dialect.ApplyConnectionSettings(connection, context, true);
 
         Assert.Contains("access_mode=READ_ONLY", connection.ConnectionString);
     }
@@ -297,7 +307,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=:memory:", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: true);
+        _dialect.ApplyConnectionSettings(connection, context, true);
 
         Assert.DoesNotContain("access_mode=READ_ONLY", connection.ConnectionString);
     }
@@ -308,7 +318,7 @@ public class DuckDbDialectAdvancedTests
         var context = new DatabaseContext("Data Source=/path/to/file.duckdb", _factory);
         var connection = _factory.CreateConnection();
 
-        _dialect.ApplyConnectionSettings(connection, context, readOnly: false);
+        _dialect.ApplyConnectionSettings(connection, context, false);
 
         Assert.DoesNotContain("access_mode=READ_ONLY", connection.ConnectionString);
     }
@@ -353,16 +363,6 @@ public class DuckDbDialectAdvancedTests
         Assert.True(_dialect.PrepareStatements);
         Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(255, _dialect.ParameterNameMaxLength);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Empty_String()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
-
-        Assert.Equal(string.Empty, settings);
     }
 
     [Theory]

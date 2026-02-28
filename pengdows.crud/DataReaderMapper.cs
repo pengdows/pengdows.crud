@@ -1,47 +1,156 @@
-#region
+// =============================================================================
+// FILE: DataReaderMapper.cs
+// PURPOSE: High-performance mapper that converts IDataReader rows to strongly
+//          typed entity objects using cached execution plans.
+//
+// AI SUMMARY:
+// - Maps DataReader columns to entity properties via compiled delegates.
+// - Key methods:
+//   * LoadAsync<T>() - Loads all rows into a List<T>
+//   * StreamAsync<T>() - Returns IAsyncEnumerable<T> for streaming large results
+//   * Instance - Singleton for typical use
+// - Performance optimizations:
+//   * Caches execution plans per (Type, schema shape, options) tuple
+//   * Caches compiled setters per (Type, PropertyInfo) tuple
+//   * Bounded LRU caches prevent unbounded memory growth
+//   * BuildSchemaHash returns a long computed via pure arithmetic — zero string
+//     or AssemblyQualifiedName allocations on the hot path
+//   * LoadInternalAsync uses a direct while(ReadAsync) loop with the plan
+//     hoisted outside; per-row mapping is a simple delegate call (MapSingleRow)
+// - Column matching:
+//   * By default matches columns to properties by name (case-insensitive)
+//   * With ColumnsOnly=true, only maps [Column]-attributed properties
+// - Type coercion: Uses TypeCoercionHelper for automatic type conversion.
+// - Enum handling: Configurable via MapperOptions.EnumParseFailureMode.
+// - Null handling: Nullable properties receive null; non-nullable get defaults.
+// - Thread-safe: All caches use thread-safe data structures.
+// =============================================================================
 
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-
-#endregion
+using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud;
 
+/// <summary>
+/// High-performance mapper for converting <see cref="IDataReader"/> rows to strongly-typed entities.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This mapper uses cached execution plans and compiled delegates to achieve near-manual
+/// performance when mapping database results to entities.
+/// </para>
+/// <para>
+/// <strong>Cache Management:</strong> Execution plans are cached based on the combination of
+/// entity type, reader schema (column names/types), and mapping options. Bounded LRU caches
+/// prevent unbounded memory growth.
+/// </para>
+/// <para>
+/// <strong>Streaming:</strong> Use <see cref="StreamAsync{T}"/> for large result sets to avoid
+/// loading all rows into memory at once.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// // Load all results
+/// await using var reader = await container.ExecuteReaderAsync();
+/// var entities = await DataReaderMapper.LoadAsync&lt;MyEntity&gt;(reader, MapperOptions.Default);
+///
+/// // Stream large results
+/// await foreach (var entity in DataReaderMapper.StreamAsync&lt;MyEntity&gt;(reader))
+/// {
+///     ProcessEntity(entity);
+/// }
+/// </code>
+/// </example>
+/// <seealso cref="IDataReaderMapper"/>
+/// <seealso cref="MapperOptions"/>
+/// <seealso cref="TypeCoercionHelper"/>
 public sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
-    private static readonly ConcurrentDictionary<SetterCacheKey, Action<object, DbDataReader>> _setterCache = new();
-    private static readonly ConcurrentDictionary<PlanCacheKey, MapperPlan> _planCache = new();
-    private static readonly ConcurrentDictionary<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>> _propertyLookupCache = new();
+    // Cache capacity limits to prevent unbounded memory growth with varied query shapes.
+    // These are LRU-ish bounded caches that evict oldest entries when capacity is exceeded.
+    private const int MaxPlanCacheSize = 128;
+    private const int MaxSetterCacheSize = 512;
+    private const int MaxPropertyLookupCacheSize = 64;
+
+    private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
+    private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
+
+    private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
+        _propertyLookupCache = new(MaxPropertyLookupCacheSize);
+
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
+
+    // Cached MethodInfo/ConstructorInfo for typed direct-read expression trees.
+    // Resolved once at class load to avoid per-plan reflection overhead.
+    // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC.
+    // Used after GetDateTime() to apply the same UTC policy that other paths use.
+    private static readonly MethodInfo _normalizeDateTimeMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.NormalizeDateTime),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(DateTime) },
+            null)!;
+
+    // IDataRecord.GetDateTime(int) — called directly for string→DateTime coercion to
+    // delegate parsing to the DB driver (single parse, no intermediate string allocation).
+    private static readonly MethodInfo _getDateTimeMethod =
+        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetDateTime), new[] { typeof(int) })!;
+
+    private static readonly MethodInfo _coerceDateTimeOffsetFromStringMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromString),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(string) },
+            null)!;
+
+    private static readonly MethodInfo _coerceDateTimeOffsetFromDateTimeMethod =
+        typeof(TypeCoercionHelper).GetMethod(
+            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromDateTime),
+            BindingFlags.NonPublic | BindingFlags.Static,
+            null,
+            new[] { typeof(DateTime) },
+            null)!;
+
+    private static readonly MethodInfo _guidParseMethod =
+        typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
+
+    private static readonly ConstructorInfo _guidFromBytesConstructor =
+        typeof(Guid).GetConstructor(new[] { typeof(byte[]) })!;
 
     internal DataReaderMapper()
     {
     }
 
-    private readonly record struct PlanCacheKey(Type Type, string SchemaHash, bool ColumnsOnly, EnumParseFailureMode EnumMode);
+    private readonly record struct PlanCacheKey(
+        Type Type,
+        long SchemaHash,
+        bool ColumnsOnly,
+        EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadObjectsFromDataReaderAsync<T>(reader, cancellationToken);
+        return Instance.LoadAsync<T>(reader, cancellationToken);
     }
 
     public static Task<List<T>> LoadAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
@@ -58,14 +167,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     public static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
         return Instance.StreamAsync<T>(reader, options, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadObjectsFromDataReaderAsync<T>(
+    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken)
     {
@@ -74,7 +183,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     Task<List<T>> IDataReaderMapper.LoadAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return LoadInternalAsync<T>(reader, options, cancellationToken);
@@ -82,7 +191,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     IAsyncEnumerable<T> IDataReaderMapper.StreamAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return StreamInternalAsync<T>(reader, options, cancellationToken);
@@ -90,14 +199,28 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private async Task<List<T>> LoadInternalAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         CancellationToken cancellationToken)
         where T : class, new()
     {
-        var result = new List<T>();
-        await foreach (var item in StreamInternalAsync<T>(reader, options, cancellationToken))
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is not DbDataReader rdr)
         {
-            result.Add(item);
+            throw new ArgumentException("reader must be DbDataReader", nameof(reader));
+        }
+
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+
+        var result = new List<T>();
+
+        while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(MapSingleRow(rdr, plan, options));
         }
 
         return result;
@@ -105,7 +228,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private async IAsyncEnumerable<T> StreamInternalAsync<T>(
         IDataReader reader,
-        MapperOptions options,
+        IMapperOptions options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
@@ -121,45 +244,62 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var schemaHash = BuildSchemaHash(rdr, options);
         var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
 
-        var plan = _planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var obj = new T();
-            for (var i = 0; i < plan.Ordinals.Length; i++)
-            {
-                var ordinal = plan.Ordinals[i];
-                if (rdr.IsDBNull(ordinal))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    plan.Setters[i](obj, rdr);
-                }
-                catch (Exception ex)
-                {
-                    if (options.Strict)
-                    {
-                        throw new InvalidOperationException(
-                            $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
-                            ex);
-                    }
-                }
-            }
-
-            yield return obj;
+            yield return MapSingleRow(rdr, plan, options);
         }
     }
 
-    private static MapperPlan BuildPlan<T>(DbDataReader reader, MapperOptions options)
+    /// <summary>
+    /// Maps the current reader row to a single entity using a pre-built plan.
+    /// Called by both LoadInternalAsync (direct loop) and StreamInternalAsync
+    /// to keep per-row logic in one place.
+    /// </summary>
+    private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, IMapperOptions options)
+        where T : class, new()
+    {
+        var obj = new T();
+        for (var i = 0; i < plan.Ordinals.Length; i++)
+        {
+            var ordinal = plan.Ordinals[i];
+            if (rdr.IsDBNull(ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                plan.Setters[i](obj, rdr);
+            }
+            catch (Exception ex)
+            {
+                if (options.Strict)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
+                        ex);
+                }
+
+                TypeCoercionHelper.Logger.LogWarning(
+                    ex,
+                    "Failed to map column '{Column}' to property '{Property}'.",
+                    rdr.GetName(ordinal),
+                    plan.Properties[i].Name);
+            }
+        }
+
+        return obj;
+    }
+
+    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
 
         var ordinals = new List<int>();
-        var setters = new List<Action<object, DbDataReader>>();
+        var setters = new List<Action<T, DbDataReader>>();
         var properties = new List<PropertyInfo>();
 
         for (var i = 0; i < reader.FieldCount; i++)
@@ -176,88 +316,77 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 ordinals.Add(i);
                 var fieldType = ResolveFieldType(reader, i);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
-                setters.Add(GetOrCreateSetter(prop, fieldType, requiresCoercion, options.EnumMode, i));
+                setters.Add(GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
             }
         }
 
-        return new MapperPlan(
+        return new MapperPlan<T>(
             ordinals.ToArray(),
             properties.ToArray(),
             setters.ToArray());
     }
 
-    private static string BuildSchemaHash(DbDataReader reader, MapperOptions options)
+    /// <summary>
+    /// Computes a long hash over the reader schema and mapping options.
+    /// Pure arithmetic — no string allocations (AssemblyQualifiedName is gone).
+    /// </summary>
+    private static long BuildSchemaHash(DbDataReader reader, IMapperOptions options)
     {
-        var builder = new StringBuilder();
+        var hash = reader.FieldCount * 397L;
+        hash = unchecked(hash * 31L + (options.ColumnsOnly ? 1 : 0));
+        hash = unchecked(hash * 31L + (int)options.EnumMode);
 
-        // Include options in the hash to ensure proper cache invalidation
-        builder.Append(options.ColumnsOnly ? '1' : '0');
-        builder.Append('\u001F');
-        builder.Append((int)options.EnumMode);
-        builder.Append('\u001F');
-
-        // Build schema with both field names and types
         for (var i = 0; i < reader.FieldCount; i++)
         {
-            if (i > 0)
-            {
-                builder.Append('|');
-            }
-
             var name = reader.GetName(i);
 
-            // Apply name policy if specified and not in ColumnsOnly mode
             if (!options.ColumnsOnly && options.NamePolicy != null)
             {
                 name = options.NamePolicy(name);
             }
 
-            builder.Append(name);
-            builder.Append(':');
+            hash = unchecked(hash * 31L + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
 
-            // Include field type to ensure plans are rebuilt when column types change
             var fieldType = ResolveFieldType(reader, i);
-            builder.Append(fieldType.AssemblyQualifiedName ?? fieldType.FullName ?? fieldType.Name);
+            hash = unchecked(hash * 31L + fieldType.GetHashCode());
         }
 
-        return builder.ToString();
+        return hash;
     }
 
-    private static Action<object, DbDataReader> GetOrCreateSetter(
+    private static Action<T, DbDataReader> GetOrCreateSetter<T>(
         PropertyInfo prop,
         Type fieldType,
         bool requiresCoercion,
         EnumParseFailureMode enumMode,
         int ordinal)
     {
-        var key = new SetterCacheKey(prop, fieldType, requiresCoercion, enumMode, ordinal);
-        return _setterCache.GetOrAdd(key, static k => CompileSetter(k));
+        var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, enumMode, ordinal);
+        return (Action<T, DbDataReader>)_setterCache.GetOrAdd(key, static k => CompileSetter<T>(k));
     }
 
-    private static Action<object, DbDataReader> CompileSetter(SetterCacheKey key)
+    private static Action<T, DbDataReader> CompileSetter<T>(SetterCacheKey key)
     {
-        var objParam = Expression.Parameter(typeof(object), "target");
+        var objParam = Expression.Parameter(typeof(T), "target");
         var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
 
-        var typedTarget = Expression.Convert(objParam, key.Property.DeclaringType!);
-        var propertyAccess = Expression.Property(typedTarget, key.Property);
+        var propertyAccess = Expression.Property(objParam, key.Property);
+        var targetType = key.Property.PropertyType;
+        var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         Expression valueExpression;
         if (key.RequiresCoercion)
         {
-            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
-            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
-            valueExpression = Expression.Convert(
-                Expression.Call(
-                    typeof(DataReaderMapper),
-                    nameof(CoerceValue),
-                    Type.EmptyTypes,
-                    rawValue,
-                    Expression.Constant(key.Property, typeof(PropertyInfo)),
-                    Expression.Constant(key.FieldType, typeof(Type)),
-                    Expression.Constant(key.EnumMode, typeof(EnumParseFailureMode))),
-                key.Property.PropertyType);
+            if (!TryBuildDirectReadExpression(key, readerParam, targetType, underlyingTarget, out valueExpression))
+            {
+                // Fallback: GetValue() returns boxed object; coercer returns boxed result; then unbox.
+                var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+                var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+                var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode);
+                var invokeCoercer = Expression.Invoke(Expression.Constant(coercer), rawValue);
+                valueExpression = Expression.Convert(invokeCoercer, targetType);
+            }
         }
         else
         {
@@ -273,13 +402,32 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 rawValue = Expression.Call(readerParam, getFieldValueMethod, Expression.Constant(key.Ordinal));
             }
 
-            valueExpression = key.Property.PropertyType == key.FieldType
-                ? rawValue
-                : Expression.Convert(rawValue, key.Property.PropertyType);
+            if (targetType == key.FieldType)
+            {
+                valueExpression = rawValue;
+            }
+            else if (underlyingTarget == typeof(bool) && IsNumericType(key.FieldType))
+            {
+                var nonZero = Expression.NotEqual(rawValue, Expression.Default(key.FieldType));
+                valueExpression = targetType != underlyingTarget
+                    ? Expression.Convert(nonZero, targetType)
+                    : nonZero;
+            }
+            else if (IsNumericType(key.FieldType) && IsNumericType(underlyingTarget))
+            {
+                var converted = BuildNumericConversion(rawValue, key.FieldType, underlyingTarget);
+                valueExpression = targetType != underlyingTarget
+                    ? Expression.Convert(converted, targetType)
+                    : converted;
+            }
+            else
+            {
+                valueExpression = Expression.Convert(rawValue, targetType);
+            }
         }
 
         var assignment = Expression.Assign(propertyAccess, valueExpression);
-        var lambda = Expression.Lambda<Action<object, DbDataReader>>(assignment, objParam, readerParam);
+        var lambda = Expression.Lambda<Action<T, DbDataReader>>(assignment, objParam, readerParam);
         return lambda.Compile();
     }
 
@@ -301,7 +449,124 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return false;
         }
 
+        if (IsNumericType(fieldType) && IsNumericType(targetType))
+        {
+            return false;
+        }
+
+        if (targetType == typeof(bool) && IsNumericType(fieldType))
+        {
+            return false;
+        }
+
         return true;
+    }
+
+    private static Expression BuildNumericConversion(Expression rawValue, Type sourceType, Type targetType)
+    {
+        if (sourceType == targetType)
+        {
+            return rawValue;
+        }
+
+        // Integral → integral narrowing (e.g. long → int, long → short, int → byte).
+        // Use unchecked conversion — in a DB context the schema is trusted to fit.
+        // Emits conv.i4 / conv.i2 / etc. (1 CPU instruction, no overflow branch).
+        if (IsIntegralType(sourceType) && IsIntegralType(targetType))
+        {
+            return Expression.Convert(rawValue, targetType);
+        }
+
+        // float/double/decimal → integral: use Convert.ToXxx for rounding semantics.
+        if (IsIntegralType(targetType) && !IsIntegralType(sourceType))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        if (targetType == typeof(decimal) && (sourceType == typeof(double) || sourceType == typeof(float)))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        if ((targetType == typeof(double) || targetType == typeof(float)) && sourceType == typeof(decimal))
+        {
+            var method = ResolveConvertMethod(targetType, sourceType);
+            if (method != null)
+            {
+                return Expression.Call(method, rawValue);
+            }
+        }
+
+        return Expression.ConvertChecked(rawValue, targetType);
+    }
+
+    private static MethodInfo? ResolveConvertMethod(Type targetType, Type sourceType)
+    {
+        var methodName = targetType switch
+        {
+            var t when t == typeof(byte) => nameof(Convert.ToByte),
+            var t when t == typeof(sbyte) => nameof(Convert.ToSByte),
+            var t when t == typeof(short) => nameof(Convert.ToInt16),
+            var t when t == typeof(ushort) => nameof(Convert.ToUInt16),
+            var t when t == typeof(int) => nameof(Convert.ToInt32),
+            var t when t == typeof(uint) => nameof(Convert.ToUInt32),
+            var t when t == typeof(long) => nameof(Convert.ToInt64),
+            var t when t == typeof(ulong) => nameof(Convert.ToUInt64),
+            var t when t == typeof(float) => nameof(Convert.ToSingle),
+            var t when t == typeof(double) => nameof(Convert.ToDouble),
+            var t when t == typeof(decimal) => nameof(Convert.ToDecimal),
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrEmpty(methodName))
+        {
+            return null;
+        }
+
+        return typeof(Convert).GetMethod(methodName, new[] { sourceType });
+    }
+
+    private static bool IsNumericType(Type type)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Byte => true,
+            TypeCode.SByte => true,
+            TypeCode.Int16 => true,
+            TypeCode.UInt16 => true,
+            TypeCode.Int32 => true,
+            TypeCode.UInt32 => true,
+            TypeCode.Int64 => true,
+            TypeCode.UInt64 => true,
+            TypeCode.Single => true,
+            TypeCode.Double => true,
+            TypeCode.Decimal => true,
+            _ => false
+        };
+    }
+
+    private static bool IsIntegralType(Type type)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Byte => true,
+            TypeCode.SByte => true,
+            TypeCode.Int16 => true,
+            TypeCode.UInt16 => true,
+            TypeCode.Int32 => true,
+            TypeCode.UInt32 => true,
+            TypeCode.Int64 => true,
+            TypeCode.UInt64 => true,
+            _ => false
+        };
     }
 
     private static Type ResolveFieldType(DbDataReader reader, int ordinal)
@@ -392,6 +657,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private readonly record struct SetterCacheKey(
+        Type TargetType,
         PropertyInfo Property,
         Type FieldType,
         bool RequiresCoercion,
@@ -400,12 +666,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
-    private sealed record MapperPlan(
+    private sealed record MapperPlan<T>(
         int[] Ordinals,
         PropertyInfo[] Properties,
-        Action<object, DbDataReader>[] Setters);
+        Action<T, DbDataReader>[] Setters);
 
-    private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, MapperOptions options)
+    private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, IMapperOptions options)
     {
         var key = new PropertyLookupCacheKey(type, options.ColumnsOnly);
         return _propertyLookupCache.GetOrAdd(key, static cacheKey => BuildPropertyLookup(cacheKey));
@@ -413,7 +679,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static IReadOnlyDictionary<string, PropertyInfo> BuildPropertyLookup(PropertyLookupCacheKey cacheKey)
     {
-        var properties = cacheKey.Type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
+        var properties =
+            cacheKey.Type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.SetProperty);
         var comparer = StringComparer.OrdinalIgnoreCase;
         var lookup = new Dictionary<string, PropertyInfo>(properties.Length, comparer);
 
@@ -452,6 +719,87 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return lookup;
     }
 
+    /// <summary>
+    /// Attempts to build a typed expression tree for known source→target coercion pairs,
+    /// avoiding boxing of value-type return values compared to the
+    /// <c>GetValue() + Func&lt;object?,object?&gt;</c> coercer path.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when a typed expression was built and <paramref name="valueExpression"/> is set;
+    /// <c>false</c> when the pair is not handled here and the caller should fall back to the
+    /// generic coercer path.
+    /// </returns>
+    private static bool TryBuildDirectReadExpression(
+        SetterCacheKey key,
+        ParameterExpression readerParam,
+        Type targetType,
+        Type underlyingTarget,
+        out Expression valueExpression)
+    {
+        var fieldType = key.FieldType;
+        var ordinalConst = Expression.Constant(key.Ordinal);
+        var isNullable = targetType != underlyingTarget; // targetType is Nullable<underlyingTarget>
+
+        // string → DateTime / DateTime?
+        // Use reader.GetDateTime(ordinal) directly rather than GetFieldValue<string>() +
+        // CoerceDateTimeFromString(). Delegating to the DB driver:
+        //   • avoids allocating an intermediate C# string
+        //   • uses a single DateTime.Parse call (no DateTimeOffset.TryParse first attempt)
+        //   • matches what Dapper emits and what CompiledMapperFactory does for drivers
+        //     that natively return typeof(DateTime) from GetFieldType()
+        // NormalizeDateTime then applies the same UTC policy as every other path.
+        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTime))
+        {
+            var rawDt = Expression.Call(readerParam, _getDateTimeMethod, ordinalConst);
+            var normalized = Expression.Call(_normalizeDateTimeMethod, rawDt);
+            valueExpression = isNullable ? Expression.Convert(normalized, targetType) : normalized;
+            return true;
+        }
+
+        // string → DateTimeOffset / DateTimeOffset?
+        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTimeOffset))
+        {
+            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
+            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
+            var parsed = Expression.Call(_coerceDateTimeOffsetFromStringMethod, rawStr);
+            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            return true;
+        }
+
+        // DateTime → DateTimeOffset / DateTimeOffset?
+        if (fieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset))
+        {
+            var getDateTime = _getFieldValueGenericMethod.MakeGenericMethod(typeof(DateTime));
+            var rawDt = Expression.Call(readerParam, getDateTime, ordinalConst);
+            var converted = Expression.Call(_coerceDateTimeOffsetFromDateTimeMethod, rawDt);
+            valueExpression = isNullable ? Expression.Convert(converted, targetType) : converted;
+            return true;
+        }
+
+        // string → Guid / Guid?
+        if (fieldType == typeof(string) && underlyingTarget == typeof(Guid))
+        {
+            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
+            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
+            var parsed = Expression.Call(_guidParseMethod, rawStr);
+            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            return true;
+        }
+
+        // byte[] → Guid / Guid?
+        if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
+        {
+            var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));
+            var rawBytes = Expression.Call(readerParam, getBytes, ordinalConst);
+            var newGuid = Expression.New(_guidFromBytesConstructor, rawBytes);
+            valueExpression = isNullable ? Expression.Convert(newGuid, targetType) : newGuid;
+            return true;
+        }
+
+        valueExpression = null!;
+        return false;
+    }
+
     private static MethodInfo ResolveGetFieldValueMethod()
     {
         var methods = typeof(DbDataReader).GetMethods(BindingFlags.Instance | BindingFlags.Public);
@@ -467,4 +815,3 @@ public sealed class DataReaderMapper : IDataReaderMapper
         throw new InvalidOperationException("DbDataReader.GetFieldValue<T> method not found.");
     }
 }
-

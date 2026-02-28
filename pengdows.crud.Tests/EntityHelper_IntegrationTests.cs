@@ -4,23 +4,24 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
+public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
 {
-    private readonly EntityHelper<TestEntity, int> entityHelper;
+    private readonly TableGateway<TestEntity, int> entityHelper;
 
-    public EntityHelper_IntegrationTests()
+    public TableGateway_IntegrationTests()
     {
         // Create an in-memory SQLite connection
         // _connection = new SqliteConnection("Data Source=:memory:");
         // _connection.Open();
         TypeMap.Register<TestEntity>();
-        entityHelper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        entityHelper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
 
         Assert.Equal(DbMode.SingleConnection, Context.ConnectionMode);
     }
@@ -36,21 +37,16 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         await base.DisposeAsync();
     }
 
-    public void Dispose()
-    {
-        Context.Dispose();
-    }
-
-
     [Fact]
-    public void QuoteProperties_DelegateToContext()
+    public void QuoteProperties_AccessibleViaContextDialect()
     {
-        Assert.Equal(Context.QuotePrefix, entityHelper.QuotePrefix);
-        Assert.Equal(Context.QuoteSuffix, entityHelper.QuoteSuffix);
-        Assert.Equal(Context.CompositeIdentifierSeparator, entityHelper.CompositeIdentifierSeparator);
-        Assert.NotEqual("?", entityHelper.QuotePrefix);
-        Assert.NotEqual("?", entityHelper.QuoteSuffix);
-        Assert.NotEqual("?", entityHelper.CompositeIdentifierSeparator);
+        var dialect = Context.Dialect;
+        Assert.Equal(dialect.QuotePrefix, Context.QuotePrefix);
+        Assert.Equal(dialect.QuoteSuffix, Context.QuoteSuffix);
+        Assert.Equal(dialect.CompositeIdentifierSeparator, Context.CompositeIdentifierSeparator);
+        Assert.NotEqual("?", dialect.QuotePrefix);
+        Assert.NotEqual("?", dialect.QuoteSuffix);
+        Assert.NotEqual("?", dialect.CompositeIdentifierSeparator);
     }
 
     [Fact]
@@ -112,7 +108,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<IdentityTestEntity>(); // assumes you auto-build TableInfo from attributes
 
-        var helper = new EntityHelper<IdentityTestEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<IdentityTestEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new IdentityTestEntity { Id = 42, Name = "Hello" };
 
@@ -134,7 +130,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<NonInsertableIdEntity>();
 
-        var helper = new EntityHelper<NonInsertableIdEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<NonInsertableIdEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new NonInsertableIdEntity { Id = 1, Name = "Hello" };
 
@@ -153,7 +149,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var typeMap = new TypeMapRegistry();
         typeMap.Register<AuditOnOnlyEntity>();
 
-        var helper = new EntityHelper<AuditOnOnlyEntity, int>(Context, new StubAuditValueResolver("fred"));
+        var helper = new TableGateway<AuditOnOnlyEntity, int>(Context, new StubAuditValueResolver("fred"));
 
         var entity = new AuditOnOnlyEntity { Name = "Hello" };
 
@@ -211,11 +207,11 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         await create.ExecuteNonQueryAsync();
 
         var retrieve = entityHelper.BuildBaseRetrieve(string.Empty);
-        var list = (await entityHelper.LoadListAsync(retrieve));
+        var list = await entityHelper.LoadListAsync(retrieve);
         var listOfIds = list.Select(x => x.Id).ToList();
 
         var r = entityHelper.BuildRetrieve(listOfIds);
-        var r2 = (await entityHelper.LoadListAsync(r));
+        var r2 = await entityHelper.LoadListAsync(r);
 
         Assert.True(listOfIds.Count > 0 && r2.Count == listOfIds.Count);
     }
@@ -252,7 +248,7 @@ public class EntityHelper_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
         var retrieve = entityHelper.BuildBaseRetrieve("a");
         var x = await entityHelper.LoadListAsync(retrieve);
         var foundList = x.FindAll(itm => itm.Name == s);
-        Assert.Equal(1, foundList.Count);
+        Assert.Single(foundList);
         var found = foundList.First();
         Assert.True(found.Name == tmp.Name);
         entityHelper.BuildDelete(found.Id);

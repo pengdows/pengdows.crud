@@ -1,9 +1,11 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
@@ -120,7 +122,8 @@ public class AdvancedTypeRegistryTests
         var registry = new AdvancedTypeRegistry();
         var parameter = new TestDbParameter();
 
-        var success = registry.TryConfigureParameter(parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
+        var success =
+            registry.TryConfigureParameter(parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
 
         Assert.False(success);
     }
@@ -202,6 +205,26 @@ public class AdvancedTypeRegistryTests
     }
 
     [Fact]
+    public void DefaultMappings_ShouldMapSnowflakeDateTimeOffsetToUtcDateTime()
+    {
+        var registry = AdvancedTypeRegistry.Shared;
+        var mapping = registry.GetMapping(typeof(DateTimeOffset), SupportedDatabase.Snowflake);
+
+        Assert.NotNull(mapping);
+
+        var parameter = new TestDbParameter();
+        var dto = new DateTimeOffset(2026, 2, 22, 12, 34, 56, TimeSpan.FromHours(-5));
+
+        var success =
+            registry.TryConfigureParameter(parameter, typeof(DateTimeOffset), dto, SupportedDatabase.Snowflake);
+
+        Assert.True(success);
+        Assert.Equal(DbType.DateTime, parameter.DbType);
+        Assert.IsType<DateTime>(parameter.Value);
+        Assert.Equal(dto.UtcDateTime, (DateTime)parameter.Value);
+    }
+
+    [Fact]
     public void DefaultConverters_ShouldBeRegistered()
     {
         var registry = AdvancedTypeRegistry.Shared;
@@ -217,19 +240,37 @@ public class AdvancedTypeRegistryTests
         Assert.NotNull(registry.GetConverter(typeof(RowVersion)));
         Assert.NotNull(registry.GetConverter(typeof(Stream)));
         Assert.NotNull(registry.GetConverter(typeof(TextReader)));
+        Assert.NotNull(registry.GetConverter(typeof(JsonDocument)));
     }
 
     // Mock parameter class for testing
     private class TestDbParameter : DbParameter
     {
+        private string _parameterName = string.Empty;
+        private string _sourceColumn = string.Empty;
+
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        public override string ParameterName { get; set; } = string.Empty;
+
+        [AllowNull]
+        public override string ParameterName
+        {
+            get => _parameterName;
+            set => _parameterName = value ?? string.Empty;
+        }
+
         public override int Size { get; set; }
-        public override string SourceColumn { get; set; } = string.Empty;
+
+        [AllowNull]
+        public override string SourceColumn
+        {
+            get => _sourceColumn;
+            set => _sourceColumn = value ?? string.Empty;
+        }
+
         public override bool SourceColumnNullMapping { get; set; }
-        public override object? Value { get; set; }
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

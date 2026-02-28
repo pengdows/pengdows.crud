@@ -58,4 +58,3 @@ public class ClauseCountersTests
         Assert.Equal("i1", c.NextIns());
     }
 }
-

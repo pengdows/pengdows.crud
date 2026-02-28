@@ -8,7 +8,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.Firebird;
 
 public class FirebirdSqlTestContainer : TestContainer
 {
@@ -83,7 +83,7 @@ public class FirebirdSqlTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, _factory, null!));
+            new DatabaseContext(_connectionString, _factory));
     }
 
     protected override ValueTask DisposeAsyncCore()

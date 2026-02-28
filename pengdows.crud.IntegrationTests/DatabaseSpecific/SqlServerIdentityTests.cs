@@ -1,18 +1,20 @@
 using System;
 using System.Data;
-using System.Threading.Tasks;
 using pengdows.crud;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 
+[Collection("IntegrationTests")]
 public class SqlServerIdentityTests : DatabaseTestBase
 {
-    public SqlServerIdentityTests(ITestOutputHelper output) : base(output)
+    public SqlServerIdentityTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
     }
 
@@ -44,13 +46,13 @@ CREATE TABLE [dbo].[user_info_temp] (
         await container.ExecuteNonQueryAsync();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CreateAsync_PopulatesIdentityIdAndStoresRow()
     {
         await RunTestAgainstProviderAsync(SupportedDatabase.SqlServer, async context =>
         {
-            context.TypeMapRegistry.Register<UserInfoEntity>();
-            var helper = new EntityHelper<UserInfoEntity, int>(context);
+            context.RegisterEntity<UserInfoEntity>();
+            var helper = new TableGateway<UserInfoEntity, int>(context);
 
             var entity = new UserInfoEntity
             {
@@ -80,7 +82,7 @@ WHERE [user_id] = ");
             verify.Query.Append(verify.MakeParameterName("p0"));
             verify.AddParameterWithValue("p0", DbType.String, entity.Username);
 
-            var count = Convert.ToInt32(await verify.ExecuteScalarAsync<int>());
+            var count = Convert.ToInt32(await verify.ExecuteScalarOrNullAsync<int>());
             Assert.Equal(1, count);
         });
     }
@@ -96,20 +98,16 @@ WHERE [user_id] = ");
         [Column("user_id", DbType.String)]
         public string Username { get; set; } = string.Empty;
 
-        [Column("user_pass", DbType.String)]
-        public string Password { get; set; } = string.Empty;
+        [Column("user_pass", DbType.String)] public string Password { get; set; } = string.Empty;
 
-        [Column("role", DbType.String)]
-        public string Role { get; set; } = string.Empty;
+        [Column("role", DbType.String)] public string Role { get; set; } = string.Empty;
 
-        [Column("mobile", DbType.String)]
-        public string? Mobile { get; set; }
+        [Column("mobile", DbType.String)] public string? Mobile { get; set; }
 
         [Column("daily_update", DbType.Boolean)]
         public bool? IsDailyUpdate { get; set; }
 
-        [Column("active", DbType.Boolean)]
-        public bool? IsActive { get; set; }
+        [Column("active", DbType.Boolean)] public bool? IsActive { get; set; }
 
         [Column("login_alert", DbType.Boolean)]
         public bool? IsLoginAlert { get; set; }

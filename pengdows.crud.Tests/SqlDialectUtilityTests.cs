@@ -4,7 +4,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -94,11 +94,19 @@ public class SqlDialectUtilityTests
 
     private static bool IsPrime(int number)
     {
-        if (number < 2) return false;
-        for (int i = 2; i * i <= number; i++)
+        if (number < 2)
         {
-            if (number % i == 0) return false;
+            return false;
         }
+
+        for (var i = 2; i * i <= number; i++)
+        {
+            if (number % i == 0)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 }

@@ -7,7 +7,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.SqlServer;
 
 public class SqlServerTestContainer : TestContainer
 {
@@ -48,7 +48,7 @@ public class SqlServerTestContainer : TestContainer
         var factory = SqlClientFactory.Instance;
         var connection = factory.CreateConnection();
         var csb = factory.CreateConnectionStringBuilder();
-        //this gyration parses and scrubs the connectoin string.
+        //this gyration parses and scrubs the connection string.
         csb.ConnectionString = connectionString;
         connection.ConnectionString = csb.ConnectionString;
 
@@ -69,7 +69,7 @@ public class SqlServerTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, SqlClientFactory.Instance, null!));
+            new DatabaseContext(_connectionString, SqlClientFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

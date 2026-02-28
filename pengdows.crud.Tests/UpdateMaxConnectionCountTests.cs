@@ -1,7 +1,7 @@
 using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -9,10 +9,16 @@ namespace pengdows.crud.Tests;
 public class UpdateMaxConnectionCountTests
 {
     private static MethodInfo GetMethod()
-        => typeof(DatabaseContext).GetMethod("UpdateMaxConnectionCount", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetMethod("UpdateMaxConnectionCount",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static FieldInfo GetField()
-        => typeof(DatabaseContext).GetField("_maxNumberOfOpenConnections", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    {
+        return typeof(DatabaseContext).GetField("_peakOpenConnections",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+    }
 
     private static DatabaseContext CreateContext()
     {

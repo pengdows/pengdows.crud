@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -51,7 +52,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var helper = new TableGateway<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
@@ -65,7 +66,7 @@ public class DbModeTests
         await Task.WhenAll(tasks);
 
         var scSelect = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
-        var count = await scSelect.ExecuteScalarAsync<int>();
+        var count = await scSelect.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(20, count);
     }
 
@@ -86,7 +87,7 @@ public class DbModeTests
         await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
         await BuildUsersTableAsync(context);
 
-        var helper = new EntityHelper<User, int>(context, auditValueResolver: null);
+        var helper = new TableGateway<User, int>(context, null);
         var users = Enumerable.Range(1, 20)
             .Select(i => new User { Email = $"test{i}@example.com", Name = $"Test{i}", Version = 1 })
             .ToList();
@@ -100,11 +101,53 @@ public class DbModeTests
         await Task.WhenAll(tasks);
 
         var scRead = context.CreateSqlContainer("SELECT COUNT(*) FROM Users");
-        var count = await scRead.ExecuteScalarAsync<int>();
+        var count = await scRead.ExecuteScalarOrNullAsync<int>();
         Assert.Equal(20, count);
 
         // Cleanup the temp file
-        try { File.Delete(dbFile); } catch { }
+        try
+        {
+            File.Delete(dbFile);
+        }
+        catch
+        {
+        }
+    }
+
+    [Fact]
+    public async Task DbMode_Best_SharedSqliteMemory_SelectsSingleWriter()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            // Shared in-memory SQLite: previously hit the dead ternary arm
+            // "kind == Shared ? SingleWriter : SingleWriter" — should always be SingleWriter.
+            ConnectionString = "Data Source=file:best_shared_test?mode=memory&cache=shared",
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+    }
+
+    [Fact]
+    public async Task DbMode_Best_FileSqlite_SelectsSingleWriter()
+    {
+        var dbFile = Path.Combine(Path.GetTempPath(), $"crud_best_{Guid.NewGuid():N}.db");
+        try
+        {
+            var cfg = new DatabaseContextConfiguration
+            {
+                ConnectionString = $"Data Source={dbFile}",
+                DbMode = DbMode.Best,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            };
+            await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance);
+            Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+        }
+        finally
+        {
+            try { File.Delete(dbFile); } catch { }
+        }
     }
 
     // Minimal entity definition to exercise helper
@@ -123,7 +166,6 @@ public class DbModeTests
         [Column("Version", DbType.Int32)]
         public int Version { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 }

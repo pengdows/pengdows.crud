@@ -1,14 +1,25 @@
 using System.Data.Common;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.Tests.Mocks;
 
 internal sealed class NullParameterFactory : DbProviderFactory
 {
-    private readonly fakeDbFactory _inner = new fakeDbFactory(SupportedDatabase.Sqlite);
+    private readonly fakeDbFactory _inner = new(SupportedDatabase.Sqlite);
 
-    public override DbConnection CreateConnection() => _inner.CreateConnection();
-    public override DbCommand CreateCommand() => _inner.CreateCommand();
-    public override DbParameter CreateParameter() => null!;
+    public override DbConnection CreateConnection()
+    {
+        return _inner.CreateConnection();
+    }
+
+    public override DbCommand CreateCommand()
+    {
+        return _inner.CreateCommand();
+    }
+
+    public override DbParameter CreateParameter()
+    {
+        return null!;
+    }
 }

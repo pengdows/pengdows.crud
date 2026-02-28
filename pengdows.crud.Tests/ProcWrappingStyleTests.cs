@@ -3,7 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -41,7 +41,7 @@ public class ProcWrappingStyleTests
     private SqlContainer SetupParameterWrapTest(SupportedDatabase product)
     {
         var ctx = new DatabaseContext($"DataSource=:memory:;EmulatedProduct={product}", new fakeDbFactory(product));
-        var sc = ctx.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
+        var sc = (SqlContainer)ctx.CreateSqlContainer("dbo.Sqltest");
         for (var i = 0; i < 10; i++)
         {
             sc.AddParameterWithValue($"p{i}", DbType.Int32, i);
@@ -71,7 +71,9 @@ public class ProcWrappingStyleTests
     {
         var sc = SetupParameterWrapTest(SupportedDatabase.SqlServer);
         var s = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
-        Assert.Equal("DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;", s);
+        Assert.Equal(
+            "DECLARE @__ret INT;\nEXEC @__ret = \"dbo\".\"Sqltest\" @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9;\nSELECT @__ret;",
+            s);
     }
 
     [Fact]
@@ -96,9 +98,9 @@ public class ProcWrappingStyleTests
     {
         var sc = SetupParameterWrapTest(SupportedDatabase.PostgreSql);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
+        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
         s = sc.WrapForStoredProc(ExecutionType.Write);
-        Assert.Equal("CALL \"dbo\".\"Sqltest\"(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
+        Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
     }
 
     [Fact]

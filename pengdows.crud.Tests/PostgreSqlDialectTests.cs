@@ -4,21 +4,22 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading.Tasks;
 using Moq;
-
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
 
-namespace pengdows.crud.Tests ;
+namespace pengdows.crud.Tests;
 
 public class PostgreSqlDialectTests
 {
@@ -38,9 +39,9 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void ParameterMarker_ReturnsColon()
+    public void ParameterMarker_ReturnsAtSign()
     {
-        Assert.Equal(":", _dialect.ParameterMarker);
+        Assert.Equal("@", _dialect.ParameterMarker);
     }
 
     [Fact]
@@ -82,7 +83,7 @@ public class PostgreSqlDialectTests
     public void CreateDbParameter_With_Null_Value_Should_Set_DBNull()
     {
         // Act
-        var param = _dialect.CreateDbParameter("null_param", DbType.String, null);
+        var param = _dialect.CreateDbParameter<string?>("null_param", DbType.String, null);
 
         // Assert
         Assert.Equal("null_param", param.ParameterName);
@@ -112,9 +113,9 @@ public class PostgreSqlDialectTests
         var result1 = _dialect.IsUniqueViolation(uniqueViolationException);
         var result2 = _dialect.IsUniqueViolation(otherException);
 
-        // Note: Actual implementation may vary, testing the method exists and handles exceptions
-        Assert.True(result1 || !result1); // Method should not throw
-        Assert.True(result2 || !result2); // Method should not throw
+        // InvalidOperationException is not a DbException → base class returns false for both
+        Assert.False(result1);
+        Assert.False(result2);
     }
 
     [Fact]
@@ -146,7 +147,8 @@ public class PostgreSqlDialectTests
     public void GetConnectionSessionSettings_Should_Return_Session_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        var context = new DatabaseContext("Host=localhost;Database=test;EmulatedProduct=PostgreSql", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return some settings or empty string
@@ -220,7 +222,7 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void MakeParameterName_Should_Use_Colon_Prefix()
+    public void MakeParameterName_Should_Use_AtSign_Prefix()
     {
         // Arrange
         var param = _dialect.CreateDbParameter("test", DbType.String, "value");
@@ -229,18 +231,18 @@ public class PostgreSqlDialectTests
         var paramName = _dialect.MakeParameterName(param);
 
         // Assert
-        Assert.StartsWith(":", paramName);
+        Assert.StartsWith("@", paramName);
         Assert.Contains("test", paramName);
     }
 
     [Fact]
-    public void MakeParameterName_String_Should_Use_Colon_Prefix()
+    public void MakeParameterName_String_Should_Use_AtSign_Prefix()
     {
         // Act
         var paramName = _dialect.MakeParameterName("my_param");
 
         // Assert
-        Assert.StartsWith(":", paramName);
+        Assert.StartsWith("@", paramName);
         Assert.Contains("my_param", paramName);
     }
 
@@ -316,9 +318,9 @@ public class PostgreSqlDialectTests
     }
 
     [Theory]
-    [InlineData("test", ":test")]
-    [InlineData("p1", ":p1")]
-    [InlineData("param999", ":param999")]
+    [InlineData("test", "@test")]
+    [InlineData("p1", "@p1")]
+    [InlineData("param999", "@param999")]
     public void MakeParameterName_ReturnsCorrectFormat(string paramName, string expected)
     {
         var param = new fakeDbParameter
@@ -424,7 +426,7 @@ public class PostgreSqlDialectTests
     {
         var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object[] { null })!;
+        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object?[] { null })!;
 
         Assert.Equal(SqlStandardLevel.Sql2008, result);
     }
@@ -557,7 +559,7 @@ public class PostgreSqlDialectTests
         var context = new DatabaseContext("test", _factory);
 
         // Should not throw for non-Npgsql connections
-        _dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        _dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         Assert.True(true); // Verify no exceptions thrown
     }
@@ -753,7 +755,7 @@ public class PostgreSqlDialectTests
 
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
-        dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         // fakeDbConnection is not recognized as an Npgsql connection, so settings won't be modified
         // The connection string should remain unchanged for non-Npgsql connections
@@ -774,7 +776,7 @@ public class PostgreSqlDialectTests
 
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
-        dialect.ConfigureProviderSpecificSettings(connection, context, readOnly: false);
+        dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         Assert.Equal(original.ToLowerInvariant(), connection.ConnectionString);
     }
@@ -810,7 +812,15 @@ public class PostgreSqlDialectTests
 
     private class TestConnection : DbConnection
     {
-        public override string ConnectionString { get; set; } = string.Empty;
+        private string _connectionString = string.Empty;
+
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
+
         public override string Database => "test";
         public override string DataSource => "localhost";
         public override string ServerVersion => "1.0";

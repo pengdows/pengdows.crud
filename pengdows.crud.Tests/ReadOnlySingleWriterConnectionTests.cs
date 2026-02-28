@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -15,16 +19,21 @@ public class ReadOnlySingleWriterConnectionTests
     {
         public List<string> Commands { get; } = new();
         public List<string> ConnectionStrings { get; } = new();
-        
-        protected override DbCommand CreateDbCommand() => new RecordingCommand(this, Commands);
 
-        public override string ConnectionString 
-        { 
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, Commands);
+        }
+
+        [AllowNull]
+        public override string ConnectionString
+        {
             get => base.ConnectionString;
-            set 
-            { 
-                ConnectionStrings.Add(value);
-                base.ConnectionString = value; 
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
             }
         }
     }
@@ -32,7 +41,12 @@ public class ReadOnlySingleWriterConnectionTests
     private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _commands;
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection) => _commands = commands;
+
+        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
+        {
+            _commands = commands;
+        }
+
         public override int ExecuteNonQuery()
         {
             _commands.Add(CommandText);
@@ -43,6 +57,7 @@ public class ReadOnlySingleWriterConnectionTests
     private sealed class RecordingFactory : DbProviderFactory
     {
         public List<RecordingConnection> Connections { get; } = new();
+
         public override DbConnection CreateConnection()
         {
             var conn = new RecordingConnection();
@@ -50,8 +65,15 @@ public class ReadOnlySingleWriterConnectionTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private static DatabaseContext CreateReadOnlySingleWriterContext(RecordingFactory factory)
@@ -65,75 +87,50 @@ public class ReadOnlySingleWriterConnectionTests
         return new DatabaseContext(config, factory);
     }
 
-    private static DatabaseContext CreateReadOnlySingleConnectionContext(RecordingFactory factory)
+    [Fact]
+    public async Task ReadOnlySingleWriter_ReadConnection_ShouldHaveReadOnlySettings()
     {
-        var config = new DatabaseContextConfiguration
+        var factory = new RecordingFactory();
+        await using var ctx = CreateReadOnlySingleWriterContext(factory);
+
+        // ReadOnly context: all connections are read connections
+        var conn = ctx.GetConnection(ExecutionType.Read);
+        await conn.OpenAsync();
+        ctx.CloseAndDisposeConnection(conn);
+
+        Assert.True(factory.Connections.Count >= 1);
+        var operationalConnection = factory.Connections.Last();
+
+        // The connection must have read-only settings applied (query_only pragma for SQLite)
+        Assert.Contains(operationalConnection.Commands, c => c.Contains("query_only"));
+    }
+
+    [Fact]
+    public async Task ReadOnlySingleWriter_ReadConnections_ShouldBeReadOnly()
+    {
+        var factory = new RecordingFactory();
+        await using var ctx = CreateReadOnlySingleWriterContext(factory);
+
+        // ReadOnly context: only read connections are permitted
+        var readConn1 = ctx.GetConnection(ExecutionType.Read);
+        await readConn1.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn1);
+
+        var readConn2 = ctx.GetConnection(ExecutionType.Read);
+        await readConn2.OpenAsync();
+        ctx.CloseAndDisposeConnection(readConn2);
+
+        // Operational connections (those that received session settings) should be read-only.
+        // Init connections used for dialect detection may have empty command lists because
+        // session settings detection was not yet complete when they opened.
+        var operationalConnections = factory.Connections
+            .Where(c => c.Commands.Count > 0)
+            .ToList();
+        Assert.NotEmpty(operationalConnections);
+        foreach (var recorded in operationalConnections)
         {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
-            DbMode = DbMode.SingleConnection,
-            ReadWriteMode = ReadWriteMode.ReadOnly
-        };
-        return new DatabaseContext(config, factory);
-    }
-
-    [Fact]
-    public async Task ReadOnlySingleWriter_PersistentConnection_ShouldHaveReadOnlySettings()
-    {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleWriterContext(factory);
-
-        // Get any connection to trigger persistent connection creation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
-        
-        // The persistent connection MUST have read-only settings applied even for ExecutionType.Write
-        // because the context itself is ReadOnly
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
-    }
-
-    [Fact]
-    public async Task ReadOnlySingleConnection_PersistentConnection_ShouldHaveReadOnlySettings()
-    {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleConnectionContext(factory);
-
-        // Get any connection to trigger persistent connection creation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        Assert.Single(factory.Connections);
-        var persistentConnection = factory.Connections[0];
-        
-        // The persistent connection MUST have read-only settings applied even for ExecutionType.Write
-        // because the context itself is ReadOnly
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
-    }
-
-    [Fact]
-    public async Task ReadOnlySingleWriter_AllConnections_ShouldBeReadOnly()
-    {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleWriterContext(factory);
-
-        // Get write connection (should be the persistent connection)
-        var writeConn = ctx.GetConnection(ExecutionType.Write);
-        await writeConn.OpenAsync();
-        
-        // Get read connection (should create a new read-only connection)
-        var readConn = ctx.GetConnection(ExecutionType.Read);
-        await readConn.OpenAsync();
-        
-        Assert.Equal(2, factory.Connections.Count);
-        
-        // BOTH connections should have read-only settings because the context is ReadOnly
-        var persistentConnection = factory.Connections[0];
-        var readOnlyConnection = factory.Connections[1];
-        
-        Assert.Contains(persistentConnection.Commands, c => c.Contains("query_only"));
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+            Assert.Contains(recorded.Commands, c => c.Contains("query_only"));
+        }
     }
 
     [Fact]
@@ -143,43 +140,37 @@ public class ReadOnlySingleWriterConnectionTests
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
         // Attempting to create a write transaction on a read-only context should throw
-        await Assert.ThrowsAsync<NotSupportedException>(() => 
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
         {
             var tx = ctx.BeginTransaction(readOnly: false);
-            return tx.DisposeAsync().AsTask();
+            await tx.DisposeAsync();
         });
     }
 
     [Fact]
-    public async Task ReadOnlySingleWriter_WriteOperations_ShouldFail()
+    public void ReadOnlySingleWriter_GetWriteConnection_ThrowsPoolForbiddenException()
     {
+        // ReadOnly context: write pool is forbidden — GetConnection(Write) throws immediately
+        // rather than returning a connection that later fails at SQL execution time.
         var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleWriterContext(factory);
+        using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Get connection and try to perform write operation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        await using var container = ctx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        
-        // Should fail because context is read-only
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
+        Assert.Throws<PoolForbiddenException>(() => ctx.GetConnection(ExecutionType.Write));
     }
 
-    [Fact]
-    public async Task ReadOnlySingleConnection_WriteOperations_ShouldFail()
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    public void ReadOnlySingleConnection_IsNotSupported(SupportedDatabase database)
     {
-        var factory = new RecordingFactory();
-        await using var ctx = CreateReadOnlySingleConnectionContext(factory);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={database}",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
 
-        // Get connection and try to perform write operation
-        var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
-        
-        await using var container = ctx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        
-        // Should fail because context is read-only
-        await Assert.ThrowsAsync<NotSupportedException>(() => container.ExecuteNonQueryAsync());
+        Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, new fakeDbFactory(database)));
     }
 
     [Theory]
@@ -190,11 +181,18 @@ public class ReadOnlySingleWriterConnectionTests
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = mode == DbMode.SingleWriter ? "Data Source=file.db;EmulatedProduct=Sqlite" : "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ConnectionString = mode == DbMode.SingleWriter
+                ? "Data Source=file.db;EmulatedProduct=Sqlite"
+                : "Data Source=:memory:;EmulatedProduct=Sqlite",
             DbMode = mode,
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
-        
+        if (mode == DbMode.SingleConnection)
+        {
+            Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, factory));
+            return;
+        }
+
         await using var ctx = new DatabaseContext(config, factory);
 
         // Should fail because the context is read-only

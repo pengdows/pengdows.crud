@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.types.coercion;
 using Xunit;
@@ -50,7 +51,12 @@ public class ProviderParameterFactoryTests
 
     private sealed class BoolCoercion : DbCoercion<bool>
     {
-        public override bool TryRead(in DbValue src, out bool value) { value = false; return false; }
+        public override bool TryRead(in DbValue src, out bool value)
+        {
+            value = false;
+            return false;
+        }
+
         public override bool TryWrite(bool value, DbParameter parameter)
         {
             parameter.Value = value;
@@ -61,7 +67,12 @@ public class ProviderParameterFactoryTests
 
     private sealed class IntArrayCoercion : DbCoercion<int[]>
     {
-        public override bool TryRead(in DbValue src, out int[]? value) { value = null; return false; }
+        public override bool TryRead(in DbValue src, out int[]? value)
+        {
+            value = null;
+            return false;
+        }
+
         public override bool TryWrite(int[]? value, DbParameter parameter)
         {
             parameter.Value = value ?? Array.Empty<int>();
@@ -72,7 +83,12 @@ public class ProviderParameterFactoryTests
 
     private sealed class JsonElementCoercion : DbCoercion<JsonElement>
     {
-        public override bool TryRead(in DbValue src, out JsonElement value) { value = default; return false; }
+        public override bool TryRead(in DbValue src, out JsonElement value)
+        {
+            value = default;
+            return false;
+        }
+
         public override bool TryWrite(JsonElement value, DbParameter parameter)
         {
             parameter.Value = value.GetRawText();
@@ -83,7 +99,12 @@ public class ProviderParameterFactoryTests
 
     private sealed class GuidCoercion : DbCoercion<Guid>
     {
-        public override bool TryRead(in DbValue src, out Guid value) { value = Guid.Empty; return false; }
+        public override bool TryRead(in DbValue src, out Guid value)
+        {
+            value = Guid.Empty;
+            return false;
+        }
+
         public override bool TryWrite(Guid value, DbParameter parameter)
         {
             parameter.Value = value;
@@ -99,7 +120,8 @@ public class ProviderParameterFactoryTests
         var value = Guid.Parse("11111111-2222-3333-4444-555555555555");
 
         var registry = new CoercionRegistry();
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(Guid), value, SupportedDatabase.PostgreSql, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(Guid), value,
+            SupportedDatabase.PostgreSql, registry);
 
         Assert.True(configured);
         Assert.Equal(value, parameter.Value);
@@ -114,7 +136,8 @@ public class ProviderParameterFactoryTests
         var value = new[] { "alpha", "beta" };
 
         var registry = new CoercionRegistry();
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value, SupportedDatabase.PostgreSql, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value,
+            SupportedDatabase.PostgreSql, registry);
 
         Assert.True(configured);
         Assert.Equal((1 << 30) | 16, parameter.NpgsqlDbType); // Array | Text
@@ -127,7 +150,8 @@ public class ProviderParameterFactoryTests
         var value = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
 
         var registry = new CoercionRegistry();
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(byte[]), value, SupportedDatabase.SqlServer, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(byte[]), value,
+            SupportedDatabase.SqlServer, registry);
 
         Assert.True(configured);
         Assert.Equal(DbType.Binary, parameter.DbType);
@@ -142,7 +166,8 @@ public class ProviderParameterFactoryTests
         var registry = new CoercionRegistry();
         registry.Register(new DecimalCoercion());
 
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(decimal), 12.34m, SupportedDatabase.Oracle, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(decimal), 12.34m,
+            SupportedDatabase.Oracle, registry);
 
         Assert.True(configured);
         Assert.Equal(DbType.Decimal, parameter.DbType);
@@ -157,7 +182,8 @@ public class ProviderParameterFactoryTests
         var value = new[] { 1, 2, 3 };
 
         var registry = new CoercionRegistry();
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value, SupportedDatabase.DuckDB, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value,
+            SupportedDatabase.DuckDB, registry);
 
         Assert.True(configured);
         Assert.Same(value, parameter.Value);
@@ -171,7 +197,8 @@ public class ProviderParameterFactoryTests
         var registry = new CoercionRegistry();
         registry.Register(new IntArrayCoercion());
 
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value, SupportedDatabase.PostgreSql, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, value.GetType(), value,
+            SupportedDatabase.PostgreSql, registry);
 
         Assert.True(configured);
         Assert.Same(value, parameter.Value);
@@ -187,7 +214,8 @@ public class ProviderParameterFactoryTests
         var registry = new CoercionRegistry();
         registry.Register(new JsonElementCoercion());
 
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(JsonElement), element, SupportedDatabase.PostgreSql, registry);
+        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(JsonElement), element,
+            SupportedDatabase.PostgreSql, registry);
 
         Assert.True(configured);
         Assert.Equal(DbType.String, parameter.DbType);
@@ -201,7 +229,9 @@ public class ProviderParameterFactoryTests
         var registry = new CoercionRegistry();
         registry.Register(new BoolCoercion());
 
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(bool), true, SupportedDatabase.MySql, registry);
+        var configured =
+            ProviderParameterFactory.TryConfigureParameter(parameter, typeof(bool), true, SupportedDatabase.MySql,
+                registry);
 
         Assert.True(configured);
         Assert.Equal(DbType.Byte, parameter.DbType);
@@ -216,7 +246,9 @@ public class ProviderParameterFactoryTests
         var registry = new CoercionRegistry();
         registry.Register(new GuidCoercion());
 
-        var configured = ProviderParameterFactory.TryConfigureParameter(parameter, typeof(Guid), guid, SupportedDatabase.Sqlite, registry);
+        var configured =
+            ProviderParameterFactory.TryConfigureParameter(parameter, typeof(Guid), guid, SupportedDatabase.Sqlite,
+                registry);
 
         Assert.True(configured);
         Assert.Equal(DbType.String, parameter.DbType);

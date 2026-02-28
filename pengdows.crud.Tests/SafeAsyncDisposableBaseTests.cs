@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -48,7 +49,9 @@ public class SafeAsyncDisposableBaseTests
     private sealed class AsyncThrowsDisposable : SafeAsyncDisposableBase
     {
         protected override ValueTask DisposeManagedAsync()
-            => ValueTask.FromException(new InvalidOperationException("async"));
+        {
+            return ValueTask.FromException(new InvalidOperationException("async"));
+        }
         // For older TFMs:
         // => new ValueTask(Task.FromException(new InvalidOperationException("async")));
     }
@@ -58,13 +61,19 @@ public class SafeAsyncDisposableBaseTests
         public List<(Exception ex, string phase)> Logged { get; } = new();
 
         protected override ValueTask DisposeManagedAsync()
-            => ValueTask.FromException(new InvalidOperationException("managed"));
+        {
+            return ValueTask.FromException(new InvalidOperationException("managed"));
+        }
 
         protected override ValueTask DisposeUnmanagedAsync()
-            => ValueTask.FromException(new InvalidOperationException("unmanaged"));
+        {
+            return ValueTask.FromException(new InvalidOperationException("unmanaged"));
+        }
 
         protected override void OnDisposeException(Exception ex, string phase)
-            => Logged.Add((ex, phase));
+        {
+            Logged.Add((ex, phase));
+        }
     }
 
     private sealed class ExplicitSwallowDisposable : SafeAsyncDisposableBase
@@ -79,20 +88,29 @@ public class SafeAsyncDisposableBaseTests
             {
                 // eat error quietly
             }
+
             return ValueTask.CompletedTask;
         }
     }
 
     private sealed class ThrowIfDisposedDisposable : SafeAsyncDisposableBase
     {
-        public void Use() => ThrowIfDisposed();
+        public void Use()
+        {
+            ThrowIfDisposed();
+        }
     }
 
     private sealed class SyncOnlyDisposable : SafeAsyncDisposableBase
     {
         public int ManagedCount { get; private set; }
-        protected override void DisposeManaged() => ManagedCount++;
+
+        protected override void DisposeManaged()
+        {
+            ManagedCount++;
+        }
     }
+
     [Fact]
     public void Dispose_OnlyOnce()
     {
@@ -196,8 +214,8 @@ public class SafeAsyncDisposableBaseTests
         var d = new BothAsyncThrowDisposable();
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => d.DisposeAsync().AsTask());
-        Assert.Equal("managed", ex.Message);                     // first failure wins
-        Assert.Single(d.Logged);                                 // second is logged, not thrown
+        Assert.Equal("managed", ex.Message); // first failure wins
+        Assert.Single(d.Logged); // second is logged, not thrown
         Assert.Equal("DisposeUnmanagedAsync", d.Logged[0].phase);
         Assert.Equal("unmanaged", d.Logged[0].ex.Message);
         Assert.True(d.IsDisposed);

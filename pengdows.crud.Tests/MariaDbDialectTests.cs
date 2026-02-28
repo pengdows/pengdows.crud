@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -78,7 +78,7 @@ public class MariaDbDialectTests
     public void CreateDbParameter_With_Null_Value_Should_Set_DBNull()
     {
         // Act
-        var param = _dialect.CreateDbParameter("null_param", DbType.String, null);
+        var param = _dialect.CreateDbParameter<string?>("null_param", DbType.String, null);
 
         // Assert
         Assert.Equal("null_param", param.ParameterName);
@@ -109,9 +109,9 @@ public class MariaDbDialectTests
         var result1 = _dialect.IsUniqueViolation(duplicateKeyException);
         var result2 = _dialect.IsUniqueViolation(otherException);
 
-        // Assert - Method should handle exceptions gracefully
-        Assert.True(result1 || !result1); // Method should not throw
-        Assert.True(result2 || !result2); // Method should not throw
+        // InvalidOperationException is not a DbException → base class returns false for both
+        Assert.False(result1);
+        Assert.False(result2);
     }
 
     [Fact]
@@ -157,29 +157,30 @@ public class MariaDbDialectTests
     public void GetConnectionSessionSettings_Should_Return_MariaDb_Settings()
     {
         // Act
-        var settings = _dialect.GetConnectionSessionSettings();
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=MariaDb", _factory);
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         // Assert
         Assert.NotNull(settings); // Should return settings or empty string
     }
 
     [Fact]
-    public void SupportsWindowFunctions_Should_Return_True_For_Modern_MariaDb()
+    public async Task SupportsWindowFunctions_Should_Return_True_For_Modern_MariaDb()
     {
         // MariaDB 10.2+ supports window functions; initialize dialect first
         var connection = _factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
-        _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
+        _ = await _dialect.DetectDatabaseInfoAsync(trackedConnection);
         Assert.True(_dialect.SupportsWindowFunctions);
     }
 
     [Fact]
-    public void SupportsCommonTableExpressions_Should_Return_True()
+    public async Task SupportsCommonTableExpressions_Should_Return_True()
     {
         // MariaDB 10.2+ supports CTEs; initialize dialect first
         var connection = _factory.CreateConnection();
         var trackedConnection = new TrackedConnection(connection, "mariadb_test", NullLogger.Instance);
-        _ = _dialect.DetectDatabaseInfoAsync(trackedConnection).GetAwaiter().GetResult();
+        _ = await _dialect.DetectDatabaseInfoAsync(trackedConnection);
         Assert.True(_dialect.SupportsCommonTableExpressions);
     }
 
@@ -429,7 +430,8 @@ public class MariaDbDialectTests
     [InlineData(5, 7, SqlStandardLevel.Sql99)]
     [InlineData(5, 0, SqlStandardLevel.Sql99)]
     [InlineData(4, 1, SqlStandardLevel.Sql92)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, SqlStandardLevel expected)
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor,
+        SqlStandardLevel expected)
     {
         var version = new Version(major, minor);
 
@@ -467,7 +469,7 @@ public class MariaDbDialectTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
+        var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("STRICT_ALL_TABLES", settings);
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);
@@ -481,21 +483,7 @@ public class MariaDbDialectTests
     {
         var context = new DatabaseContext("test", _factory);
 
-        var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
-
-        Assert.Contains("STRICT_ALL_TABLES", settings);
-        Assert.Contains("ONLY_FULL_GROUP_BY", settings);
-        Assert.Contains("ANSI_QUOTES", settings);
-        Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.DoesNotContain("SET SESSION TRANSACTION READ ONLY", settings);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Base_Settings()
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var settings = _dialect.GetConnectionSessionSettings();
-#pragma warning restore CS0618 // Type or member is obsolete
+        var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Contains("STRICT_ALL_TABLES", settings);
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);

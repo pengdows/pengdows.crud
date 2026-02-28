@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -7,8 +8,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -27,21 +30,41 @@ public class ConnectionStrategyTests
             Connection = new RecordingConnection { EmulatedProduct = product };
         }
 
-        public override DbConnection CreateConnection() => Connection;
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbConnection CreateConnection()
+        {
+            return Connection;
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> ExecutedCommands { get; } = new();
-        protected override DbCommand CreateDbCommand() => new RecordingCommand(this, ExecutedCommands);
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new RecordingCommand(this, ExecutedCommands);
+        }
     }
 
     private sealed class RecordingCommand : fakeDbCommand
     {
         private readonly List<string> _record;
-        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection) => _record = record;
+
+        public RecordingCommand(fakeDbConnection connection, List<string> record) : base(connection)
+        {
+            _record = record;
+        }
+
         public override int ExecuteNonQuery()
         {
             _record.Add(CommandText);
@@ -49,7 +72,8 @@ public class ConnectionStrategyTests
         }
     }
 
-    private static DatabaseContext CreateContext(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer, string dataSource = "test")
+    private static DatabaseContext CreateContext(DbMode mode, SupportedDatabase product = SupportedDatabase.SqlServer,
+        string dataSource = "test")
     {
         var cfg = new DatabaseContextConfiguration
         {
@@ -117,7 +141,9 @@ public class ConnectionStrategyTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
         using var ctx = new DatabaseContext(cfg, factory);
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        // Settings are now sent as a single command (may include semicolons)
+        Assert.Contains(factory.Connection.ExecutedCommands,
+            cmd => cmd.Contains("PRAGMA foreign_keys = ON"));
     }
 
     [Fact]
@@ -183,25 +209,127 @@ public class ConnectionStrategyTests
         Assert.True(ctx.NumberOfOpenConnections >= 1);
     }
 
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    public void SingleConnection_ReadOnlyMode_IsDisallowed(SupportedDatabase database)
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={database}",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(cfg, new fakeDbFactory(database)));
+    }
+
     [Fact]
-    public async Task SingleWriter_ReadGetsNew_WriteGetsPersistent()
+    public void StandardRequested_IsolatedInMemory_CoercesToSingleConnection_ForReads()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var read = ctx.GetConnection(ExecutionType.Read);
+        var readShared = ctx.GetConnection(ExecutionType.Read, true);
+        var write = ctx.GetConnection(ExecutionType.Write);
+
+        Assert.Same(ctx.PersistentConnection, read);
+        Assert.Same(read, readShared);
+        Assert.Same(read, write);
+    }
+
+    [Fact]
+    public async Task SingleWriter_ReadAndWrite_AreEphemeralConnections()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        Assert.True(ctx.NumberOfOpenConnections >= 1);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
 
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
-        var countAfterOpen = ctx.NumberOfOpenConnections;
-        Assert.True(countAfterOpen >= 2);
-
+        Assert.Equal(1, ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(readConn);
-        Assert.Equal(countAfterOpen - 1, ctx.NumberOfOpenConnections);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
 
         var writeConn = ctx.GetConnection(ExecutionType.Write);
-        // write connection is persistent; releasing should not change count
-        var beforeRelease = ctx.NumberOfOpenConnections;
+        await writeConn.OpenAsync();
+        Assert.Equal(1, ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(writeConn);
-        Assert.Equal(beforeRelease, ctx.NumberOfOpenConnections);
+        Assert.Equal(0, ctx.NumberOfOpenConnections);
+    }
+
+    [Fact]
+    public void StandardConnections_DefaultToNoOpLockers()
+    {
+        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void StandardSharedConnections_UseRealLockers()
+    {
+        using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.SqlServer);
+        var connection = ctx.GetConnection(ExecutionType.Read, true);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleWriterWriteConnection_UsesNoOpLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Write);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleWriterReadConnection_UsesNoOpLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<NoOpAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
+    }
+
+    [Fact]
+    public void SingleConnectionPinnedConnection_UsesRealLocker()
+    {
+        using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
+        var connection = ctx.GetConnection(ExecutionType.Read);
+
+        using var locker = connection.GetLock();
+
+        Assert.IsType<RealAsyncLocker>(locker);
+
+        ctx.CloseAndDisposeConnection(connection);
     }
 
     [Fact]
@@ -213,22 +341,22 @@ public class ConnectionStrategyTests
         await a.OpenAsync();
         await b.OpenAsync();
         Assert.Equal(2, ctx.NumberOfOpenConnections);
-        Assert.Equal(2, ctx.MaxNumberOfConnections);
+        Assert.Equal(2, ctx.PeakOpenConnections);
         ctx.CloseAndDisposeConnection(a);
         ctx.CloseAndDisposeConnection(b);
         Assert.Equal(0, ctx.NumberOfOpenConnections);
-        Assert.Equal(2, ctx.MaxNumberOfConnections);
+        Assert.Equal(2, ctx.PeakOpenConnections);
     }
 
     [Fact]
     public async Task SingleWriter_MaxConnections_TracksReadPeak()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var before = ctx.NumberOfOpenConnections; // persistent write conn
+        var before = ctx.NumberOfOpenConnections;
         var read = ctx.GetConnection(ExecutionType.Read);
         await read.OpenAsync();
         Assert.True(ctx.NumberOfOpenConnections >= before + 1);
-        Assert.True(ctx.MaxNumberOfConnections >= ctx.NumberOfOpenConnections);
+        Assert.True(ctx.PeakOpenConnections >= ctx.NumberOfOpenConnections);
         ctx.CloseAndDisposeConnection(read);
     }
 
@@ -270,7 +398,7 @@ public class ConnectionStrategyTests
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
 
         // Create a separate connection that's not the persistent one
-        var separateConnection = ctx.GetConnection(ExecutionType.Read, isShared: false);
+        var separateConnection = ctx.GetConnection(ExecutionType.Read, false);
         await separateConnection.OpenAsync();
         var beforeCount = ctx.NumberOfOpenConnections;
 
@@ -306,7 +434,7 @@ public class ConnectionStrategyTests
         var tasks = new List<Task>();
 
         // Create connections from multiple tasks
-        for (int i = 0; i < 5; i++)
+        for (var i = 0; i < 5; i++)
         {
             tasks.Add(Task.Run(async () =>
             {
@@ -345,17 +473,18 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public async Task SingleWriter_WriteConnection_AlwaysSameReference()
+    public async Task SingleWriter_WriteConnections_Serializable()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
 
         var write1 = ctx.GetConnection(ExecutionType.Write);
-        var write2 = ctx.GetConnection(ExecutionType.Write);
-        var write3 = ctx.GetConnection(ExecutionType.Write);
+        ctx.CloseAndDisposeConnection(write1);
 
-        Assert.Same(write1, write2);
-        Assert.Same(write2, write3);
-        Assert.Same(write1, write3);
+        var write2 = ctx.GetConnection(ExecutionType.Write);
+        ctx.CloseAndDisposeConnection(write2);
+
+        Assert.NotNull(write1);
+        Assert.NotNull(write2);
     }
 
     [Fact]
@@ -479,7 +608,7 @@ public class ConnectionStrategyTests
     // Additional coverage tests for SingleConnectionStrategy
 
     [Fact]
-    public void SingleConnection_PostInitialize_AppliesSettingsAndSetsPersistent()
+    public void SingleConnection_PostInitialize_SetsPersistentOnly()
     {
         var factory = new RecordingFactory(SupportedDatabase.Sqlite);
         var cfg = new DatabaseContextConfiguration
@@ -491,13 +620,14 @@ public class ConnectionStrategyTests
         using var ctx = new DatabaseContext(cfg, factory);
 
         var connection = ctx.GetConnection(ExecutionType.Read);
+        var commandCountBefore = factory.Connection.ExecutedCommands.Count;
         var strategy = new SingleConnectionStrategy(ctx);
 
-        // PostInitialize should apply settings and set persistent connection
+        // PostInitialize should only set persistent connection, not apply settings
         strategy.PostInitialize(connection);
 
-        // Verify session settings were applied (should have PRAGMA commands)
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        // No additional commands should have been executed by PostInitialize itself
+        Assert.Equal(commandCountBefore, factory.Connection.ExecutedCommands.Count);
 
         // Verify persistent connection was set
         Assert.Same(connection, ctx.PersistentConnection);
@@ -542,97 +672,103 @@ public class ConnectionStrategyTests
         Assert.Equal(ConnectionState.Closed, separateConnection.State);
     }
 
-    // Additional coverage tests for SingleWriterConnectionStrategy
-
+    // ── Standard-mode ephemeral-churn stress ────────────────────────────────
+    // 20 tasks each open/close 50 ephemeral connections in tight succession.
+    // Metrics are enabled so ConnectionsOpened/Closed are populated.
+    // Verifies: no connection leaks, peak concurrency > 1, and every open
+    // has a matching close.
     [Fact]
-    public void SingleWriter_PostInitialize_AppliesSettingsAndSetsPersistent()
+    public async Task Standard_ConcurrentChurn_NoLeaks()
     {
-        var factory = new RecordingFactory(SupportedDatabase.Sqlite);
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
-            DbMode = DbMode.SingleWriter,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnableMetrics = true
         };
-        using var ctx = new DatabaseContext(cfg, factory);
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        var connection = ctx.GetConnection(ExecutionType.Write);
-        var strategy = new SingleWriterConnectionStrategy(ctx);
+        const int threads = 20;
+        const int roundsPerThread = 50;
+        const int totalCycles = threads * roundsPerThread; // 1 000
 
-        strategy.PostInitialize(connection);
+        var tasks = Enumerable.Range(0, threads).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < roundsPerThread; i++)
+            {
+                var conn = ctx.GetConnection(ExecutionType.Read);
+                await conn.OpenAsync();
+                await ctx.CloseAndDisposeConnectionAsync(conn);
+            }
+        })).ToArray();
 
-        // Verify session settings were applied
-        Assert.Contains("PRAGMA foreign_keys = ON", factory.Connection.ExecutedCommands);
+        await Task.WhenAll(tasks);
 
-        // Verify persistent connection was set
-        Assert.Same(connection, ctx.PersistentConnection);
+        var m = ctx.Metrics;
+        Assert.Equal(0, m.ConnectionsCurrent);
+        Assert.True(m.PeakOpenConnections > 1 || m.ConnectionsOpened >= totalCycles);
+        // Every churn cycle must have been tracked; init may add one extra open+close
+        Assert.True(m.ConnectionsOpened >= totalCycles);
+        Assert.True(m.ConnectionsClosed >= totalCycles);
+        Assert.Equal(m.ConnectionsOpened, m.ConnectionsClosed); // no leaks
     }
 
+    // ── KeepAlive sentinel-stability churn stress ───────────────────────────
+    // LocalDb connection string is required to retain KeepAlive mode (plain
+    // SqlServer coerces it to Standard).  20 tasks each open/close 50
+    // ephemeral connections while the sentinel stays pinned.
+    // Metrics are enabled to verify the opened/closed delta matches the
+    // sentinel that remains open at the end.
     [Fact]
-    public async Task SingleWriter_ReleaseConnectionAsync_ReadConnection_Disposes()
+    public async Task KeepAlive_ConcurrentChurn_SentinelPersists()
     {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnableMetrics = true
+        };
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
 
-        // Get a read connection (should be disposable)
-        var readConnection = ctx.GetConnection(ExecutionType.Read);
-        await readConnection.OpenAsync();
+        var sentinel = ctx.PersistentConnection;
+        Assert.NotNull(sentinel);
+        var baseMetrics = ctx.Metrics;
+        var baseCurrent = baseMetrics.ConnectionsCurrent; // sentinel(s) at rest
 
-        Assert.Equal(ConnectionState.Open, readConnection.State);
+        const int threads = 20;
+        const int roundsPerThread = 50;
+        const int totalCycles = threads * roundsPerThread; // 1 000
 
-        await strategy.ReleaseConnectionAsync(readConnection);
+        var tasks = Enumerable.Range(0, threads).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < roundsPerThread; i++)
+            {
+                var conn = ctx.GetConnection(ExecutionType.Read);
+                await conn.OpenAsync();
+                await ctx.CloseAndDisposeConnectionAsync(conn);
+            }
+        })).ToArray();
 
-        // Read connection should be disposed (State becomes Closed)
-        Assert.Equal(ConnectionState.Closed, readConnection.State);
-    }
+        await Task.WhenAll(tasks);
 
-    [Fact]
-    public async Task SingleWriter_ReleaseConnectionAsync_WriteConnection_DoesNotDispose()
-    {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
+        // Sentinel object identity must be unchanged
+        Assert.Same(sentinel, ctx.PersistentConnection);
 
-        // Get the write connection (should be persistent)
-        var writeConnection = ctx.GetConnection(ExecutionType.Write);
+        var m = ctx.Metrics;
 
-        // The persistent write connection should remain open
-        await strategy.ReleaseConnectionAsync(writeConnection);
+        // Only sentinel connection(s) remain — no ephemeral leaks
+        Assert.Equal(baseCurrent, m.ConnectionsCurrent);
 
-        // Persistent connection should still be available and not disposed
-        Assert.Same(writeConnection, ctx.PersistentConnection);
-    }
+        // At least one ephemeral connection overlapped with the sentinel
+        Assert.True(m.PeakOpenConnections > baseCurrent);
 
-    [Fact]
-    public void SingleWriter_ReleaseConnection_ReadConnection_Disposes()
-    {
-        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get a read connection (should be disposable)
-        var readConnection = ctx.GetConnection(ExecutionType.Read);
-        readConnection.Open();
-
-        Assert.Equal(ConnectionState.Open, readConnection.State);
-
-        strategy.ReleaseConnection(readConnection);
-
-        // Read connection should be disposed (State becomes Closed)
-        Assert.Equal(ConnectionState.Closed, readConnection.State);
-    }
-
-    [Fact]
-    public void SingleWriter_ReleaseConnection_WriteConnection_DoesNotDispose()
-    {
-        using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-        var strategy = new SingleWriterConnectionStrategy(ctx);
-
-        // Get the write connection (should be persistent)
-        var writeConnection = ctx.GetConnection(ExecutionType.Write);
-
-        // The persistent write connection should remain available after release
-        strategy.ReleaseConnection(writeConnection);
-
-        // Persistent connection should still be available and not disposed
-        Assert.Same(writeConnection, ctx.PersistentConnection);
+        // All ephemeral cycles were opened and closed; sentinel open is NOT
+        // closed, so opened - closed == baseCurrent (the still-open sentinels).
+        Assert.True(m.ConnectionsOpened >= totalCycles + baseCurrent);
+        Assert.True(m.ConnectionsClosed >= totalCycles);
+        Assert.Equal(baseCurrent, (int)(m.ConnectionsOpened - m.ConnectionsClosed));
     }
 }

@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Linq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -74,7 +75,7 @@ public class MySqlSessionSettingsTests
     }
 
     [Fact]
-    public void SessionSettingsNotAppliedDuringConstructionInStandardMode()
+    public void SessionSettingsAppliedWhenStandardConnectionOpens()
     {
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
@@ -85,7 +86,10 @@ public class MySqlSessionSettingsTests
         };
 
         using var ctx = new DatabaseContext(config, factory);
+        using var connection = ctx.GetConnection(ExecutionType.Read);
+        connection.Open();
+
         var count = factory.Connection.ExecutedCommands.Count(c => c.StartsWith("SET SESSION sql_mode"));
-        Assert.Equal(0, count);
+        Assert.True(count >= 1, "Session settings should be applied when the first standard connection opens");
     }
 }

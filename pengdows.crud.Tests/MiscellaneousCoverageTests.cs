@@ -4,7 +4,7 @@ using System;
 using System.Data;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -231,7 +231,8 @@ public class MiscellaneousCoverageTests
     [InlineData(SupportedDatabase.Sqlite, "Data Source=memory")]
     [InlineData(SupportedDatabase.PostgreSql, "Host=localhost;Database=test")]
     [InlineData(SupportedDatabase.SqlServer, "Server=localhost;Database=test")]
-    public void DatabaseContext_AllStatisticsProperties_ReturnConsistentValues(SupportedDatabase database, string connectionString)
+    public void DatabaseContext_AllStatisticsProperties_ReturnConsistentValues(SupportedDatabase database,
+        string connectionString)
     {
         // Comprehensive test of all statistics properties
         // Arrange
@@ -256,5 +257,120 @@ public class MiscellaneousCoverageTests
         var initialFailures = failures;
         context.TrackConnectionFailure(new TimeoutException());
         Assert.True(context.TotalConnectionFailures > initialFailures);
+    }
+
+    [Fact]
+    public void DatabaseContext_TrackConnectionReuse_IncrementsCounter()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+        var initial = context.TotalConnectionsReused;
+
+        // Act - Use reflection to call internal TrackConnectionReuse
+        var method = typeof(DatabaseContext).GetMethod("TrackConnectionReuse",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        method?.Invoke(context, null);
+
+        // Assert
+        Assert.True(context.TotalConnectionsReused > initial);
+    }
+
+    [Fact]
+    public void DatabaseContext_Metrics_Property_ReturnsSnapshot()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+
+        // Act
+        var metrics = context.Metrics;
+
+        // Assert - DatabaseMetrics is a struct, verify properties are valid
+        Assert.True(metrics.ConnectionsCurrent >= 0);
+        Assert.True(metrics.PeakOpenConnections >= 0);
+    }
+
+    [Theory]
+    [InlineData(3000000000L)] // > int.MaxValue
+    [InlineData(-3000000000L)] // < int.MinValue
+    [InlineData(0L)]
+    [InlineData(1000L)]
+    public void DatabaseContext_SaturateToInt_HandlesEdgeCases(long value)
+    {
+        // Arrange - Use reflection to access private method
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+        var method = typeof(DatabaseContext).GetMethod("SaturateToInt",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        // Act
+        var result = (int)method!.Invoke(null, new object[] { value })!;
+
+        // Assert
+        if (value >= int.MaxValue)
+        {
+            Assert.Equal(int.MaxValue, result);
+        }
+        else if (value <= int.MinValue)
+        {
+            Assert.Equal(int.MinValue, result);
+        }
+        else
+        {
+            Assert.Equal((int)value, result);
+        }
+    }
+
+    [Theory]
+    [InlineData("Connection timeout occurred")]
+    [InlineData("Operation TIMEOUT")]
+    public void DatabaseContext_IsTimeoutException_DetectsTimeoutInMessage(string message)
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+        var exception = new InvalidOperationException(message);
+        var initialTimeouts = context.TotalConnectionTimeoutFailures;
+
+        // Act
+        context.TrackConnectionFailure(exception);
+
+        // Assert - Should detect timeout in message
+        Assert.True(context.TotalConnectionTimeoutFailures > initialTimeouts);
+    }
+
+    [Fact]
+    public void DatabaseContext_IsTimeoutException_DetectsTimeoutInTypeName()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+
+        // Create an exception with "Timeout" in the type name
+        var exception = new TimeoutException("Network timeout");
+        var initialTimeouts = context.TotalConnectionTimeoutFailures;
+
+        // Act
+        context.TrackConnectionFailure(exception);
+
+        // Assert - Should detect TimeoutException type
+        Assert.True(context.TotalConnectionTimeoutFailures > initialTimeouts);
+    }
+
+    [Fact]
+    public void DatabaseContext_TrackConnectionFailure_WithNonTimeoutException_DoesNotIncrementTimeoutCounter()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test", factory);
+        var initialTimeouts = context.TotalConnectionTimeoutFailures;
+
+        // Act
+        context.TrackConnectionFailure(new InvalidOperationException("Generic error"));
+
+        // Assert - Should NOT increment timeout counter
+        Assert.Equal(initialTimeouts, context.TotalConnectionTimeoutFailures);
+        Assert.True(context.TotalConnectionFailures > 0); // But total failures should increment
     }
 }

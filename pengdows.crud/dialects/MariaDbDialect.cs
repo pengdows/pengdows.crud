@@ -1,23 +1,61 @@
+// =============================================================================
+// FILE: MariaDbDialect.cs
+// PURPOSE: MariaDB specific dialect implementation (extends MySqlDialect).
+//
+// AI SUMMARY:
+// - Inherits from MySqlDialect with MariaDB-specific overrides.
+// - Key differences from MySQL:
+//   * No native JSON type (uses LONGTEXT)
+//   * CTEs and window functions in 10.2+ (earlier than MySQL 8.0)
+//   * No INSERT ... AS alias syntax for upserts
+// - Uses LAST_INSERT_ID() for returning generated IDs.
+// - Session settings: Inherits ANSI_QUOTES mode from MySqlDialect.
+// - AUTO_INCREMENT for identity columns.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// MariaDB dialect. Inherits MySQL compatibility with MariaDB-specific feature differences
-/// (e.g., CTEs, window functions available in 10.2+, no native JSON type).
+/// MariaDB dialect inheriting MySQL compatibility with MariaDB-specific differences.
 /// </summary>
-public class MariaDbDialect : MySqlDialect
+/// <remarks>
+/// <para>
+/// MariaDB is a MySQL fork with additional features. This dialect inherits
+/// from <see cref="MySqlDialect"/> and overrides only the differences.
+/// </para>
+/// <para>
+/// <strong>Feature Differences:</strong>
+/// </para>
+/// <list type="bullet">
+/// <item><description>No native JSON type (mapped to LONGTEXT)</description></item>
+/// <item><description>CTEs and window functions available in 10.2+ (vs MySQL 8.0)</description></item>
+/// <item><description>Different upsert alias syntax handling</description></item>
+/// </list>
+/// </remarks>
+internal class MariaDbDialect : MySqlDialect
 {
     internal MariaDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }
 
+    internal MariaDbDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector)
+        : base(factory, logger, isMySqlConnector)
+    {
+    }
+
     // Only override what's different from MySQL
     public override SupportedDatabase DatabaseType => SupportedDatabase.MariaDb;
+
+    // MariaDB does not have the same max_prepared_stmt_count exhaustion concern as MySQL;
+    // prepared statements default ON here (MySQL defaults to OFF for safety).
+    public override bool PrepareStatements => true;
 
     // MariaDB inherits ANSI double-quote quoting from MySqlDialect (matches ANSI_QUOTES sql_mode)
 
@@ -26,7 +64,7 @@ public class MariaDbDialect : MySqlDialect
     {
         return "SELECT LAST_INSERT_ID()";
     }
-    
+
     public override bool SupportsIdentityColumns => true; // AUTO_INCREMENT
 
     // MariaDB does not provide a native JSON type; JSON is mapped to LONGTEXT
@@ -36,6 +74,9 @@ public class MariaDbDialect : MySqlDialect
     public override bool SupportsWindowFunctions => IsInitialized && IsAtLeast(10, 2);
     public override bool SupportsCommonTableExpressions => IsInitialized && IsAtLeast(10, 2);
 
+    // MariaDB does not support INSERT ... AS alias for ON DUPLICATE KEY UPDATE.
+    public override string? UpsertIncomingAlias => null;
+
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
         var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);
@@ -43,6 +84,7 @@ public class MariaDbDialect : MySqlDialect
         {
             return "MariaDB";
         }
+
         return name;
     }
 
@@ -77,15 +119,18 @@ public class MariaDbDialect : MySqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        try
-        {
-            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to apply MariaDB read-only session settings");
-        }
+        TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MariaDB");
+    }
+
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MariaDB", cancellationToken);
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return SetSessionTransactionReadWriteSql;
     }
 
     private bool IsAtLeast(int major, int minor)
@@ -100,8 +145,7 @@ public class MariaDbDialect : MySqlDialect
     }
 
     // Connection pooling properties for MariaDB
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName inherited from MySqlDialect -> base (true, "Pooling")
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
 }

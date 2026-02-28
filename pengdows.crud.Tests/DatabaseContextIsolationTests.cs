@@ -3,6 +3,8 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -25,8 +27,20 @@ public class DatabaseContextIsolationTests
     public void BeginTransaction_ResolvesIsolationLevel(SupportedDatabase product, IsolationProfile profile,
         IsolationLevel expected)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
-            new fakeDbFactory(product.ToString()));
+        var factory = new fakeDbFactory(product.ToString());
+        if (product == SupportedDatabase.SqlServer)
+        {
+            var connection = new fakeDbConnection();
+            connection.SetScalarResultForCommand(
+                "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            connection.SetScalarResultForCommand(
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            factory.Connections.Add(connection);
+        }
+
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         using var tx = context.BeginTransaction(profile);
 
         Assert.Equal(expected, tx.IsolationLevel);
@@ -37,19 +51,48 @@ public class DatabaseContextIsolationTests
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+        Assert.Throws<TransactionModeNotSupportedException>(() =>
+            context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.Oracle)]
+    public void BeginTransaction_ProfileRequiresRcsi_DoesNotThrowForOtherProviders(SupportedDatabase product)
+    {
+        var factory = new fakeDbFactory(product.ToString());
+        if (product == SupportedDatabase.SqlServer)
+        {
+            var connection = new fakeDbConnection();
+            connection.SetScalarResultForCommand(
+                "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            connection.SetScalarResultForCommand(
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()",
+                1);
+            factory.Connections.Add(connection);
+        }
+
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
+
+        using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+        Assert.NotNull(tx);
     }
 
     [Fact]
-    public void BeginTransaction_ProfileUnsupported_Throws()
+    public void BeginTransaction_ProfileSupported_CockroachDb_And_DuckDB()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
             new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
+        using var tx1 = context.BeginTransaction(IsolationProfile.FastWithRisks);
+        Assert.NotNull(tx1);
 
         context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.DuckDB}",
             new fakeDbFactory(SupportedDatabase.DuckDB.ToString()));
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.FastWithRisks));
+        using var tx2 = context.BeginTransaction(IsolationProfile.FastWithRisks);
+        Assert.NotNull(tx2);
     }
 
     [Fact]

@@ -1,47 +1,51 @@
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperDialectOverrideTests
+public class TableGatewayDialectOverrideTests
 {
     [Fact]
-    public void BuildCreate_WithPostgresOverride_UsesColonMarker()
+    public void BuildCreate_WithPostgresOverride_UsesAtMarker()
     {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var entity = new TestEntity { Name = "foo" };
 
         var sc = helper.BuildCreate(entity, overrideCtx);
         var sql = sc.Query.ToString();
 
-        // Postgres uses ':' for named parameters
-        Assert.Contains(":i0", sql);
-        Assert.DoesNotContain("@i0", sql);
+        // PostgreSQL uses '@' (ADO.NET standard); not the SqlServer base context
+        Assert.Contains("@i0", sql);
+        Assert.DoesNotContain("$i0", sql);
     }
 
     [Fact]
-    public void BuildDelete_WithPostgresOverride_UsesColonMarker()
+    public void BuildDelete_WithPostgresOverride_UsesAtMarker()
     {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql",
+            new fakeDbFactory(SupportedDatabase.PostgreSql), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildDelete(42, overrideCtx);
         var sql = sc.Query.ToString();
 
-        // BuildDelete uses a generated parameter name, so assert marker prefix only
-        Assert.Contains(":", sql);
-        Assert.DoesNotContain("@", sql);
+        // BuildDelete uses a generated parameter name; assert '@' marker is used
+        Assert.Contains("@", sql);
+        Assert.DoesNotContain("$", sql);
     }
 
     [Fact]
@@ -50,10 +54,12 @@ public class EntityHelperDialectOverrideTests
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
 
-        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
-        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
+        using var baseCtx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer), typeMap);
+        using var overrideCtx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite), typeMap);
 
-        var helper = new EntityHelper<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
+        var helper = new TableGateway<TestEntity, int>(baseCtx, new StubAuditValueResolver("tester"));
         var sc = helper.BuildRetrieve(new[] { 1, 2, 3 }, overrideCtx);
         var sql = sc.Query.ToString();
 
@@ -63,4 +69,3 @@ public class EntityHelperDialectOverrideTests
         Assert.Contains("@w1", sql);
     }
 }
-

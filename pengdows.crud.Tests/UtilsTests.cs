@@ -100,9 +100,9 @@ public class UtilsTests
     [InlineData("text")]
     [InlineData(null)]
     [InlineData(true)]
-    public void IsZeroNumeric_ReturnsFalse_ForNonZeroOrInvalid(object value)
+    public void IsZeroNumeric_ReturnsFalse_ForNonZeroOrInvalid(object? value)
     {
-        Assert.False(Utils.IsZeroNumeric(value));
+        Assert.False(Utils.IsZeroNumeric(value!));
     }
 
     [Fact]
@@ -145,5 +145,24 @@ public class UtilsTests
         }
 
         Assert.False(Utils.IsNullOrEmpty(GetItems()));
+    }
+
+    [Fact]
+    public void IsNullOrDbNull_Generic_ReturnsTrue_ForNull()
+    {
+        string? value = null;
+        Assert.True(Utils.IsNullOrDbNull<string?>(value));
+    }
+
+    [Fact]
+    public void IsNullOrDbNull_Generic_ReturnsTrue_ForDbNull()
+    {
+        Assert.True(Utils.IsNullOrDbNull<DBNull>(DBNull.Value));
+    }
+
+    [Fact]
+    public void IsNullOrDbNull_Generic_ReturnsFalse_ForValue()
+    {
+        Assert.False(Utils.IsNullOrDbNull("value"));
     }
 }

@@ -1,13 +1,9 @@
-#region
-
 using System.Data;
 using System.Data.Common;
-using System.Text;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -15,12 +11,12 @@ namespace pengdows.crud;
 /// Represents a composable, parameterized SQL container that supports dynamic query building,
 /// safe parameter binding, and execution in the context of a tracked database connection.
 /// </summary>
-public interface ISqlContainer :ISafeAsyncDisposableBase
+public interface ISqlContainer : ISafeAsyncDisposableBase
 {
     /// <summary>
-    /// Gets the <see cref="StringBuilder"/> used to compose the SQL query.
+    /// Gets the query builder used to compose the SQL query.
     /// </summary>
-    StringBuilder Query { get; }
+    ISqlQueryBuilder Query { get; }
 
     /// <summary>
     /// Gets the current count of parameters added to the container.
@@ -155,7 +151,7 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>The number of rows affected.</returns>
-    Task<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text);
+    ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the current query as a non-query command with cancellation support.
@@ -163,31 +159,192 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>The number of rows affected.</returns>
-    Task<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
+    ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Executes the query and returns the first column of the first row in the result set.
+    /// Executes the current query as a non-query command with an explicit execution intent.
+    /// </summary>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>The number of rows affected.</returns>
+    ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the current query as a non-query command with an explicit execution intent and cancellation support.
+    /// </summary>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The number of rows affected.</returns>
+    ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="commandType">Type of command to execute.</param>
-    /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    Task<T?> ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns the first column of the first row with cancellation support.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
     /// </summary>
     /// <typeparam name="T">The expected return type.</typeparam>
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    /// <returns>The scalar value or <c>null</c> if no results.</returns>
-    Task<T?> ExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row with an explicit execution intent.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row with an explicit execution intent and cancellation support.
+    /// Throws if the query returns no rows, or if the value is null/DBNull and <typeparamref name="T"/> is a non-nullable value type.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value. For nullable <typeparamref name="T"/>, returns <c>null</c> when the column is DBNull.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the query returns no rows, or when the value is null and <typeparamref name="T"/> is non-nullable.</exception>
+    ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    /// <remarks>
+    /// This method intentionally conflates "no rows" and "null value" into a single <c>null</c> return.
+    /// Use <see cref="TryExecuteScalarAsync{T}(CommandType)"/> if you need to distinguish between these cases.
+    /// </remarks>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull, with an explicit execution intent.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns the first column of the first row, or <c>null</c> if no rows or the value is DBNull, with an explicit execution intent and cancellation support.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>The scalar value, or <c>null</c> if the query returned no rows or the value was DBNull.</returns>
+    ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> that unambiguously distinguishes
+    /// between no rows, null value, and actual value.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    /// <remarks>
+    /// This is the fully unambiguous scalar API. Use when you need to distinguish between:
+    /// <list type="bullet">
+    ///   <item><description><see cref="ScalarStatus.None"/>: Query returned zero rows.</description></item>
+    ///   <item><description><see cref="ScalarStatus.Null"/>: Query returned a row but the value was DBNull/null.</description></item>
+    ///   <item><description><see cref="ScalarStatus.Value"/>: Query returned a non-null value.</description></item>
+    /// </list>
+    /// </remarks>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> with cancellation support.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> with an explicit execution intent.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType,
+        CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns a <see cref="ScalarResult{T}"/> with an explicit execution intent and cancellation support.
+    /// </summary>
+    /// <typeparam name="T">The expected return type.</typeparam>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A <see cref="ScalarResult{T}"/> with <see cref="ScalarStatus"/> indicating the outcome.</returns>
+    ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader.
     /// </summary>
     /// <param name="commandType">Type of command to execute.</param>
     /// <returns>A tracked reader over the results.</returns>
-    Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
+    /// <remarks>
+    /// <para><strong>Reader-as-lease:</strong></para>
+    /// <para>
+    /// The returned <see cref="ITrackedReader"/> holds the connection lock for its entire lifetime.
+    /// The lock is acquired when the reader is created and released only when the reader is disposed.
+    /// </para>
+    /// <para><strong>Required usage:</strong></para>
+    /// <para>
+    /// Always use <c>await using</c> (or <c>using</c>). The reader auto-disposes when it reaches end-of-results,
+    /// but you must still dispose on early termination (e.g., <c>break</c> in a loop).
+    /// </para>
+    /// <para><strong>Transactions:</strong></para>
+    /// <para>
+    /// When executed inside a transaction, the reader holds the transaction connection lock.
+    /// Dispose the reader before issuing additional commands on the same transaction.
+    /// </para>
+    /// <example>
+    /// <code>
+    /// await using var reader = await container.ExecuteReaderAsync();
+    /// while (await reader.ReadAsync())
+    /// {
+    ///     // consume row
+    /// }
+    /// // Lock released here
+    /// </code>
+    /// </example>
+    /// </remarks>
+    ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text);
 
     /// <summary>
     /// Executes the query and returns a tracked data reader with cancellation support.
@@ -195,13 +352,49 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="commandType">Type of command to execute.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>A tracked reader over the results.</returns>
-    Task<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
+    /// <remarks>
+    /// <para><strong>Reader-as-lease:</strong></para>
+    /// <para>
+    /// The returned <see cref="ITrackedReader"/> holds the connection lock for its entire lifetime.
+    /// Cancellation does not dispose the reader; always use <c>await using</c> to release the lock on cancellation paths.
+    /// </para>
+    /// <para><strong>Transactions:</strong></para>
+    /// <para>
+    /// In transaction contexts, dispose the reader before issuing additional commands on the same transaction connection.
+    /// </para>
+    /// </remarks>
+    ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Executes the query and returns a tracked data reader with an explicit execution intent.
+    /// </summary>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <returns>A tracked reader over the results.</returns>
+    ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType,
+        CommandType commandType = CommandType.Text);
+
+    /// <summary>
+    /// Executes the query and returns a tracked data reader with an explicit execution intent and cancellation support.
+    /// </summary>
+    /// <param name="executionType">Execution intent (Read/Write) for pool selection.</param>
+    /// <param name="commandType">Type of command to execute.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    /// <returns>A tracked reader over the results.</returns>
+    ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds multiple parameters to the container.
     /// </summary>
     /// <param name="list">The parameters to add.</param>
     void AddParameters(IEnumerable<DbParameter> list);
+
+    /// <summary>
+    /// Adds multiple parameters to the container from a list.
+    /// </summary>
+    /// <param name="list">The parameters to add.</param>
+    void AddParameters(IList<DbParameter> list);
 
     /// <summary>
     /// Creates a <see cref="DbCommand"/> for the given tracked connection.
@@ -238,5 +431,4 @@ public interface ISqlContainer :ISafeAsyncDisposableBase
     /// <param name="context">The database context to use for the cloned container. If null, uses the original context.</param>
     /// <returns>A cloned container with the specified context, ready for parameter value updates.</returns>
     ISqlContainer Clone(IDatabaseContext? context);
-
 }

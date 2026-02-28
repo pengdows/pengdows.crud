@@ -1,22 +1,21 @@
 using System;
 using System.Data;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Integration tests for CancellationToken support across EntityHelper, SqlContainer, and TrackedReader.
+/// Integration tests for CancellationToken support across TableGateway, SqlContainer, and TrackedReader.
 /// Uses FakeDb with data persistence enabled.
 /// </summary>
 public class CancellationTokenIntegrationTests : IAsyncLifetime
 {
-    private EntityHelper<TestEntity, int> _helper = null!;
+    private TableGateway<TestEntity, int> _helper = null!;
     private IDatabaseContext _context = null!;
     private TypeMapRegistry _typeMap = null!;
 
@@ -28,7 +27,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         // Create factory with data persistence enabled
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite) { EnableDataPersistence = true };
         _context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, _typeMap);
-        _helper = new EntityHelper<TestEntity, int>(_context);
+        _helper = new TableGateway<TestEntity, int>(_context);
 
         // Create test table
         using var createTable = _context.CreateSqlContainer(@"
@@ -38,7 +37,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
                 Value INTEGER
             )
         ");
-        createTable.ExecuteNonQueryAsync().Wait();
+        createTable.ExecuteNonQueryAsync().GetAwaiter().GetResult();
 
         return Task.CompletedTask;
     }
@@ -47,7 +46,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     {
         if (_context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (_context is IDisposable disp)
         {
@@ -55,10 +54,10 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         }
     }
 
-    #region EntityHelper CancellationToken Tests
+    #region TableGateway CancellationToken Tests
 
     [Fact]
-    public async Task EntityHelper_CreateAsync_WithValidToken_Succeeds()
+    public async Task TableGateway_CreateAsync_WithValidToken_Succeeds()
     {
         // Arrange
         var entity = new TestEntity { Id = 1, Name = "Test", Value = 100 };
@@ -72,7 +71,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EntityHelper_CreateAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task TableGateway_CreateAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         var entity = new TestEntity { Id = 2, Name = "Test", Value = 200 };
@@ -80,12 +79,12 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.CreateAsync(entity, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await _helper.CreateAsync(entity, _context, cts.Token));
     }
 
     [Fact]
-    public async Task EntityHelper_RetrieveAsync_WithValidToken_Succeeds()
+    public async Task TableGateway_RetrieveAsync_WithValidToken_Succeeds()
     {
         // Arrange
         var entity = new TestEntity { Id = 3, Name = "Retrieve", Value = 300 };
@@ -101,7 +100,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EntityHelper_RetrieveAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task TableGateway_RetrieveAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         var entity = new TestEntity { Id = 4, Name = "Test", Value = 400 };
@@ -110,12 +109,12 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.RetrieveAsync(new[] { 4 }, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await _helper.RetrieveAsync(new[] { 4 }, _context, cts.Token));
     }
 
     [Fact]
-    public async Task EntityHelper_UpdateAsync_WithValidToken_Succeeds()
+    public async Task TableGateway_UpdateAsync_WithValidToken_Succeeds()
     {
         // Arrange
         var entity = new TestEntity { Id = 5, Name = "Original", Value = 500 };
@@ -131,7 +130,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EntityHelper_UpdateAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task TableGateway_UpdateAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         var entity = new TestEntity { Id = 6, Name = "Original", Value = 600 };
@@ -141,12 +140,12 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.UpdateAsync(entity, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await _helper.UpdateAsync(entity, _context, cts.Token));
     }
 
     [Fact]
-    public async Task EntityHelper_DeleteAsync_WithValidToken_Succeeds()
+    public async Task TableGateway_DeleteAsync_WithValidToken_Succeeds()
     {
         // Arrange
         var entity = new TestEntity { Id = 7, Name = "ToDelete", Value = 700 };
@@ -161,7 +160,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EntityHelper_DeleteAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task TableGateway_DeleteAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         var entity = new TestEntity { Id = 8, Name = "ToDelete", Value = 800 };
@@ -170,12 +169,12 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.DeleteAsync(8, _context, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await _helper.DeleteAsync(8, _context, cts.Token));
     }
 
     [Fact]
-    public async Task EntityHelper_LoadListAsync_WithValidToken_Succeeds()
+    public async Task TableGateway_LoadListAsync_WithValidToken_Succeeds()
     {
         // Arrange
         await _helper.CreateAsync(new TestEntity { Id = 9, Name = "Item1", Value = 900 }, _context);
@@ -191,7 +190,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EntityHelper_LoadListAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task TableGateway_LoadListAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         using var container = _context.CreateSqlContainer("SELECT * FROM TestEntity");
@@ -199,8 +198,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => _helper.LoadListAsync(container, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await _helper.LoadListAsync(container, cts.Token));
     }
 
     #endregion
@@ -211,7 +210,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     public async Task SqlContainer_ExecuteNonQueryAsync_WithValidToken_Succeeds()
     {
         // Arrange
-        using var container = _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (11, 'NonQuery', 1100)");
+        using var container =
+            _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (11, 'NonQuery', 1100)");
         using var cts = new CancellationTokenSource();
 
         // Act
@@ -225,17 +225,18 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     public async Task SqlContainer_ExecuteNonQueryAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
-        using var container = _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (12, 'Test', 1200)");
+        using var container =
+            _context.CreateSqlContainer("INSERT INTO TestEntity (Id, Name, Value) VALUES (12, 'Test', 1200)");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteNonQueryAsync(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await container.ExecuteNonQueryAsync(CommandType.Text, cts.Token));
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarAsync_WithValidToken_ReturnsValue()
+    public async Task SqlContainer_ExecuteScalarOrNullAsync_WithValidToken_ReturnsValue()
     {
         // Arrange
         await _helper.CreateAsync(new TestEntity { Id = 13, Name = "Scalar", Value = 1300 }, _context);
@@ -243,14 +244,14 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         using var cts = new CancellationTokenSource();
 
         // Act
-        var result = await container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token);
+        var result = await container.ExecuteScalarOrNullAsync<int>(CommandType.Text, cts.Token);
 
         // Assert
         Assert.Equal(1300, result);
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteScalarAsync_WithCancelledToken_ThrowsTaskCanceledException()
+    public async Task SqlContainer_ExecuteScalarOrNullAsync_WithCancelledToken_ThrowsTaskCanceledException()
     {
         // Arrange
         using var container = _context.CreateSqlContainer("SELECT 1");
@@ -258,8 +259,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteScalarAsync<int>(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await container.ExecuteScalarOrNullAsync<int>(CommandType.Text, cts.Token));
     }
 
     [Fact]
@@ -288,8 +289,8 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<TaskCanceledException>(
-            () => container.ExecuteReaderAsync(CommandType.Text, cts.Token));
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await container.ExecuteReaderAsync(CommandType.Text, cts.Token));
     }
 
     #endregion
@@ -341,14 +342,10 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     [Table("TestEntity")]
     private class TestEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
-        [Column("Value", DbType.Int32)]
-        public int Value { get; set; }
+        [Column("Value", DbType.Int32)] public int Value { get; set; }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -16,7 +17,7 @@ public class fakeDbConnectionTests
         conn.Open();
         var schema = conn.GetSchema();
         Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
-        Assert.NotEqual(false, schema.Rows[0].Field<bool>("SupportsNamedParameters"));
+        Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
     }
 
     [Fact]

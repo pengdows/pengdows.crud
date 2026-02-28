@@ -11,8 +11,7 @@ public class AuditOnOnlyEntity
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 
-    [Column("Name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
     [CreatedOn]
     [Column("CreatedOn", DbType.DateTime)]

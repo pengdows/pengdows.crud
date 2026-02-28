@@ -3,14 +3,16 @@
 
 #region
 
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
-using testbed.Cockroach;
 
 #endregion
+
+// Enable Npgsql legacy timestamp behaviour so that "timestamp without time zone" columns
+// can be read as DateTime. Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactories())
 {
@@ -19,15 +21,17 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
- 
+
 var host = builder.Build();
 
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (Oracle can be enabled via INCLUDE_ORACLE=true)
+// Use the new parallel orchestrator (optional providers can be enabled via INCLUDE_* env vars)
 var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle);
+var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
+var includeYugabyte = Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake, includeYugabyte);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)
@@ -35,7 +39,7 @@ static ISet<string> ParseList(string? csv)
     return string.IsNullOrWhiteSpace(csv)
         ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
 string? GetArg(string name)
@@ -56,6 +60,7 @@ string? GetArg(string name)
             return args[i + 1];
         }
     }
+
     return null;
 }
 
@@ -66,6 +71,7 @@ if (only.Count > 0)
 {
     Console.WriteLine($"Filter: only => {string.Join(",", only)}");
 }
+
 if (exclude.Count > 0)
 {
     Console.WriteLine($"Filter: exclude => {string.Join(",", exclude)}");

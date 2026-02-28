@@ -8,12 +8,9 @@ namespace testbed.Cockroach;
 
 public class CockroachDbTestProvider : TestProvider
 {
-    private readonly IDatabaseContext _context;
-
     public CockroachDbTestProvider(IDatabaseContext context, IServiceProvider serviceProvider) : base(context,
         serviceProvider)
     {
-    this._context = context;
     }
 
     public override async Task CreateTable()
@@ -32,7 +29,7 @@ public class CockroachDbTestProvider : TestProvider
             // Table did not exist, ignore
         }
 
-        sqlContainer.Query.Clear();
+        sqlContainer.Clear();
         sqlContainer.Query.AppendFormat(@"
 -- Create table
 CREATE TABLE {0}test_table{1} (

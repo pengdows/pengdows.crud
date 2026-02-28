@@ -1,11 +1,11 @@
 #region
 
 using System;
-using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -13,34 +13,34 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperCreateAsyncStateMachineTests
+public class TableGatewayCreateAsyncStateMachineTests
 {
     private readonly TypeMapRegistry _typeMap;
     private readonly fakeDbFactory _factory;
-    private readonly ILogger<EntityHelper<TestEntity, int>> _logger;
+    private readonly ILogger<TableGateway<TestEntity, int>> _logger;
 
-    public EntityHelperCreateAsyncStateMachineTests()
+    public TableGatewayCreateAsyncStateMachineTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<TestEntity>();
         _typeMap.Register<TestEntitySimple>();
         _factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        _logger = new LoggerFactory().CreateLogger<EntityHelper<TestEntity, int>>();
+        _logger = new LoggerFactory().CreateLogger<TableGateway<TestEntity, int>>();
     }
 
     [Fact]
     public async Task CreateAsync_Should_Handle_Cancellation_Token()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // Cancel immediately
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => helper.CreateAsync(entity, context, cts.Token)
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context, cts.Token)
         );
     }
 
@@ -48,11 +48,11 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_Null_Entity()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => helper.CreateAsync(null!, context)
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, context)
         );
     }
 
@@ -60,13 +60,14 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_Null_Context()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => helper.CreateAsync(entity, null!)
-        );
+        var result = await helper.CreateAsync(entity, null!);
+
+        Assert.True(result);
     }
 
     [Fact]
@@ -74,13 +75,13 @@ public class EntityHelperCreateAsyncStateMachineTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql); // Use separate factory for this test
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         factory.SetScalarException(new InvalidOperationException("Database connection failed"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -90,12 +91,13 @@ public class EntityHelperCreateAsyncStateMachineTests
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(0); // Zero rows affected
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.False(result);
     }
 
@@ -105,12 +107,13 @@ public class EntityHelperCreateAsyncStateMachineTests
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(2); // Multiple rows affected (unexpected)
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.False(result); // Should return false for anything other than exactly 1 row
     }
 
@@ -120,12 +123,13 @@ public class EntityHelperCreateAsyncStateMachineTests
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(-1); // Negative rows affected (unusual but possible)
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.False(result);
     }
 
@@ -134,15 +138,16 @@ public class EntityHelperCreateAsyncStateMachineTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntityWithAutoId, int>>());
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntityWithAutoId, int>>());
         _typeMap.Register<TestEntityWithAutoId>();
         var entity = new TestEntityWithAutoId { Name = "Test" };
-        
+
         factory.SetNonQueryResult(1);
 
         // Should not throw even if ID population is skipped (no last-id for Unknown)
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.True(result); // Insert succeeded even if ID population failed
         Assert.Equal(0, entity.Id); // ID remains unchanged
     }
@@ -151,14 +156,14 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_Disposed_Context()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         await context.DisposeAsync(); // Dispose the context
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -170,12 +175,12 @@ public class EntityHelperCreateAsyncStateMachineTests
         factory.SetException(new InvalidOperationException("Connection failed"));
 
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -184,7 +189,8 @@ public class EntityHelperCreateAsyncStateMachineTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -193,8 +199,7 @@ public class EntityHelperCreateAsyncStateMachineTests
         factory.Connections.Clear();
         factory.Connections.Add(connection);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -204,7 +209,8 @@ public class EntityHelperCreateAsyncStateMachineTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
@@ -212,8 +218,7 @@ public class EntityHelperCreateAsyncStateMachineTests
         factory.SetScalarException(new InvalidOperationException("RETURNING failed"));
 
         // Act & Assert - should propagate the exception
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -222,14 +227,14 @@ public class EntityHelperCreateAsyncStateMachineTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         factory.SetScalarException(new TimeoutException("Command timeout"));
 
-        await Assert.ThrowsAsync<TimeoutException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<TimeoutException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -238,13 +243,13 @@ public class EntityHelperCreateAsyncStateMachineTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql); // Use separate factory for this test
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         factory.SetScalarException(new InvalidCastException("Parameter type mismatch"));
 
-        await Assert.ThrowsAsync<InvalidCastException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidCastException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -252,19 +257,20 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_OutOfMemoryException()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
-        
+
         var of = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var octx = new DatabaseContext("test", of, _typeMap);
-        var ohelper = new EntityHelper<TestEntitySimple, int>(octx, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var ohelper = new TableGateway<TestEntitySimple, int>(octx,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
         var oentity = new TestEntitySimple { Name = "Test" };
         of.SetScalarException(new OutOfMemoryException("Out of memory"));
 
-        await Assert.ThrowsAsync<OutOfMemoryException>(
-            () => ohelper.CreateAsync(oentity, octx)
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => ohelper.CreateAsync(oentity, octx)
         );
     }
 
@@ -275,15 +281,15 @@ public class EntityHelperCreateAsyncStateMachineTests
         var context = new DatabaseContext("test", factory, _typeMap);
         _typeMap.Register<TestEntitySimple>();
 
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
 
         // Set exception AFTER helper creation to avoid consuming during initialization
         // Note: ThreadAbortException is obsolete in .NET Core/.NET 5+, using OperationCanceledException as a substitute
         factory.SetScalarException(new OperationCanceledException("Simulated thread abort"));
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -294,7 +300,8 @@ public class EntityHelperCreateAsyncStateMachineTests
         var context = new DatabaseContext("test", factory, _typeMap);
         _typeMap.Register<TestEntitySimple>();
 
-        var helper = new EntityHelper<TestEntitySimple, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntitySimple, int>>());
+        var helper = new TableGateway<TestEntitySimple, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
 
         // Set exception AFTER helper creation to avoid consuming during initialization
         // Note: StackOverflowException cannot be caught in .NET Core/.NET 5+, using OutOfMemoryException as a substitute
@@ -302,8 +309,7 @@ public class EntityHelperCreateAsyncStateMachineTests
 
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<OutOfMemoryException>(
-            () => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => helper.CreateAsync(entity, context)
         );
     }
 
@@ -311,16 +317,17 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_Successful_Execution_With_ID_Population()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite); // SQLite supports INSERT RETURNING
-        
+
         // Set up ID population BEFORE creating DatabaseContext for proper initialization
-        factory.SetIdPopulationResult(42, rowsAffected: 1);
-        
+        factory.SetIdPopulationResult(42, 1);
+
         var context = new DatabaseContext("test", factory, _typeMap);
-        var helper = new EntityHelper<TestEntityWithAutoId, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntityWithAutoId, int>>());
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntityWithAutoId, int>>());
         var entity = new TestEntityWithAutoId { Name = "Test" };
 
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.True(result);
         Assert.Equal(42, entity.Id); // ID should be populated
     }
@@ -329,21 +336,22 @@ public class EntityHelperCreateAsyncStateMachineTests
     public async Task CreateAsync_Should_Handle_Entity_With_Complex_Properties()
     {
         var context = new DatabaseContext("test", _factory, _typeMap);
-        var helper = new EntityHelper<TestEntityComplex, int>(context, logger: new LoggerFactory().CreateLogger<EntityHelper<TestEntityComplex, int>>());
+        var helper = new TableGateway<TestEntityComplex, int>(context,
+            logger: new LoggerFactory().CreateLogger<TableGateway<TestEntityComplex, int>>());
         _typeMap.Register<TestEntityComplex>();
-        
-        var entity = new TestEntityComplex 
-        { 
+
+        var entity = new TestEntityComplex
+        {
             Name = "Test",
             CreatedOn = DateTime.Now,
             IsActive = true,
             Score = 95.5m
         };
-        
+
         _factory.SetNonQueryResult(1);
 
         var result = await helper.CreateAsync(entity, context);
-        
+
         Assert.True(result);
     }
 }

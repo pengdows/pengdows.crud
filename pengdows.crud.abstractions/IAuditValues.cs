@@ -16,12 +16,19 @@ public interface IAuditValues
     DateTime UtcNow { get; }
 
     /// <summary>
+    /// Optional UTC DateTimeOffset to use for timestamp fields when they require offset information.
+    /// </summary>
+    DateTimeOffset? TimestampOffset { get; }
+
+    /// <summary>
     /// Returns the <see cref="UserId"/> cast to the specified type.
     /// </summary>
     /// <typeparam name="T">Type to cast the identifier to.</typeparam>
     /// <returns>The user identifier as the requested type.</returns>
     T As<T>()
     {
+        if (UserId is null)
+            throw new InvalidOperationException($"UserId is null; cannot cast to {typeof(T).Name}.");
         return (T)UserId;
     }
 }

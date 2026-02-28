@@ -3,7 +3,7 @@
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -15,7 +15,8 @@ public class TransactionSavepointsTests
     [Fact]
     public async Task Savepoints_Supported_DoesNotThrow()
     {
-        using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", new fakeDbFactory(SupportedDatabase.Sqlite));
+        using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var tx = ctx.BeginTransaction(IsolationLevel.ReadCommitted);
 
         await tx.SavepointAsync("sp1");
@@ -25,11 +26,11 @@ public class TransactionSavepointsTests
     [Fact]
     public async Task Savepoints_Unsupported_NoOp()
     {
-        using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}", new fakeDbFactory(SupportedDatabase.MySql));
+        using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
+            new fakeDbFactory(SupportedDatabase.MySql));
         await using var tx = ctx.BeginTransaction(IsolationLevel.ReadCommitted);
 
         await tx.SavepointAsync("sp1");
         await tx.RollbackToSavepointAsync("sp1");
     }
 }
-

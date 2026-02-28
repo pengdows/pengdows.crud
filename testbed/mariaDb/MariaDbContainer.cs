@@ -7,7 +7,7 @@ using pengdows.crud;
 
 #endregion
 
-namespace testbed;
+namespace testbed.mariaDb;
 
 public class MariaDbContainer : TestContainer
 {
@@ -52,7 +52,7 @@ public class MariaDbContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, null!));
+            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

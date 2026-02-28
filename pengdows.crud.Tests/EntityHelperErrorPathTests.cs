@@ -5,16 +5,17 @@ using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
-using pengdows.crud.exceptions;
+using pengdows.crud.configuration;
 using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperErrorPathTests : IAsyncLifetime
+public class TableGatewayErrorPathTests : IAsyncLifetime
 {
     public TypeMapRegistry TypeMap { get; private set; } = null!;
     public IDatabaseContext Context { get; private set; } = null!;
@@ -33,25 +34,24 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     {
         if (Context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (Context is IDisposable disp)
         {
             disp.Dispose();
         }
     }
+
     [Table("test_entity")]
     private class EntityWithNoPrimaryKey
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Table("test_entity")]
     private class EntityWithoutIdColumn
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
 
         [PrimaryKey(1)]
         [Column("composite_key", DbType.String)]
@@ -61,52 +61,49 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Table("test_entity")]
     private class EntityWithUnsupportedId
     {
-        [Id]
-        [Column("id", DbType.Decimal)]
-        public decimal Id { get; set; }
+        [Id] [Column("id", DbType.Decimal)] public decimal Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Fact]
     public void Constructor_EntityWithoutTableAttribute_ThrowsInvalidOperationException()
     {
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<object, int>(Context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<object, int>(Context));
     }
 
     [Fact]
     public async Task UpdateAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync((TestEntity)null!));
     }
 
     [Fact]
-    public async Task UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
+    public void UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
     public async Task UpsertAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync((TestEntity)null!));
     }
 
     [Fact]
-    public async Task UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
+    public void UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPrimaryKey, int>(Context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
     public async Task CreateAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, Context));
     }
@@ -114,15 +111,15 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public async Task DeleteAsync_NullIds_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!));
     }
 
     [Fact]
     public async Task DeleteAsync_EmptyIds_ThrowsArgumentException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentException>(() => helper.DeleteAsync(new long[0]));
     }
@@ -130,7 +127,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public async Task RetrieveAsync_NullIds_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync(null!));
     }
@@ -138,7 +135,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public async Task RetrieveAsync_EmptyIds_ThrowsArgumentException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentException>(() => helper.RetrieveAsync(new long[0]));
     }
@@ -146,7 +143,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public async Task UpdateAsync_WithLoadOriginal_OriginalNotFound_ThrowsInvalidOperationException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
         var entity = new TestEntity { Id = 999, Name = "NonExistent" };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => helper.UpdateAsync(entity, true));
@@ -155,7 +152,7 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public void BuildDelete_ValidEntity_ReturnsContainer()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         var container = helper.BuildDelete(1);
 
@@ -166,27 +163,44 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public void BuildDelete_InvalidRowIdType_ThrowsInvalidOperationException()
     {
-        Assert.Throws<TypeInitializationException>(() => new EntityHelper<EntityWithUnsupportedId, decimal>(Context));
+        Assert.Throws<TypeInitializationException>(() => new TableGateway<EntityWithUnsupportedId, decimal>(Context));
     }
 
     [Fact]
-    public async Task TooManyParameters_ThrowsTooManyParametersException()
+    public async Task RetrieveAsync_LargeIdList_ChunksToStayWithinParameterLimit()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
-        var manyIds = new List<long>();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            EnableDataPersistence = true
+        };
+        var connection = new fakeDbConnection();
+        factory.Connections.Add(connection);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection
+        };
+        using var context = new DatabaseContext(config, factory, null, new TypeMapRegistry());
+        var helper = new TableGateway<TestEntity, long>(context);
+        var limit = context.MaxParameterLimit;
+        var manyIds = new List<long>(limit + 2);
 
-        for (int i = 0; i < 100000; i++)
+        for (var i = 0; i < limit + 2; i++)
         {
             manyIds.Add(i);
         }
 
-        await Assert.ThrowsAsync<TooManyParametersException>(() => helper.RetrieveAsync(manyIds));
+        connection.ExecutedReaderTexts.Clear();
+        var results = await helper.RetrieveAsync(manyIds, context);
+
+        Assert.NotNull(results);
+        Assert.Equal(2, connection.ExecutedReaderTexts.Count);
     }
 
     [Fact]
     public void BuildRetrieve_EntityWithoutIdColumn_ThrowsInvalidOperationException()
     {
-        var helper = new EntityHelper<EntityWithoutIdColumn, string>(Context);
+        var helper = new TableGateway<EntityWithoutIdColumn, string>(Context);
 
         Assert.Throws<InvalidOperationException>(() => helper.BuildRetrieve(new[] { "test" }, "alias"));
     }
@@ -195,13 +209,13 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public void ValidateRowIdType_UnsupportedType_ThrowsNotSupportedException()
     {
-        Assert.Throws<TypeInitializationException>(() => new EntityHelper<EntityWithUnsupportedId, decimal>(Context));
+        Assert.Throws<TypeInitializationException>(() => new TableGateway<EntityWithUnsupportedId, decimal>(Context));
     }
 
     [Fact]
     public async Task LoadSingleAsync_NullSqlContainer_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadSingleAsync(null!));
     }
@@ -209,43 +223,31 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Fact]
     public async Task LoadListAsync_NullSqlContainer_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadListAsync(null!));
     }
 
     [Fact]
-    public void ClearCaches_ClearsAllInternalCaches()
-    {
-        var helper = new EntityHelper<TestEntity, long>(Context);
-
-        helper.ClearCaches();
-
-        Assert.True(true);
-    }
-
-    [Fact]
     public void ClearCaches_ExecutesSuccessfully()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
-        helper.ClearCaches();
-
-        Assert.True(true);
+        helper.ClearCaches(); // should not throw
     }
 
     [Fact]
     public void SetLogger_NullLogger_SetsNullLogger()
     {
-        EntityHelper<TestEntity, long>.Logger = null!;
+        TableGateway<TestEntity, long>.Logger = null!;
 
-        Assert.NotNull(EntityHelper<TestEntity, long>.Logger);
+        Assert.NotNull(TableGateway<TestEntity, long>.Logger);
     }
 
     [Fact]
     public void BuildUpsert_ValidEntity_ReturnsContainer()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
         var entity = new TestEntity { Name = "Test" };
 
         var container = helper.BuildUpsert(entity);
@@ -256,20 +258,19 @@ public class EntityHelperErrorPathTests : IAsyncLifetime
     [Table("no_pk_entity")]
     private class EntityWithNoPkAttributes
     {
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = "";
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     [Fact]
     public void BuildUpsert_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new EntityHelper<EntityWithNoPkAttributes, string>(Context));
+        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPkAttributes, string>(Context));
     }
 
     [Fact]
     public async Task RetrieveOneAsync_NullEntity_ThrowsArgumentNullException()
     {
-        var helper = new EntityHelper<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context);
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync(null!));
     }

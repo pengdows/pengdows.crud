@@ -1,18 +1,18 @@
 using System.Collections.Generic;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
+public class TableGatewayBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<TestEntity, int> _helper;
+    private readonly TableGateway<TestEntity, int> _helper;
 
-    public EntityHelperBuildWhereByPrimaryKeyTests()
+    public TableGatewayBuildWhereByPrimaryKeyTests()
     {
         TypeMap.Register<TestEntity>();
-        _helper = new EntityHelper<TestEntity, int>(Context);
+        _helper = new TableGateway<TestEntity, int>(Context);
     }
 
     [Fact]
@@ -28,14 +28,27 @@ public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
         _helper.BuildWhereByPrimaryKey(list, sc, "t");
         var sql = sc.Query.ToString();
 
-        var pattern = "\\n WHERE \\(t\\.\"Name\" = @\\w+\\) OR \\(t\\.\"Name\" = @\\w+\\)";
+        var pattern = "\\n WHERE \\(\"t\"\\.\"Name\" = @\\w+\\) OR \\(\"t\"\\.\"Name\" = @\\w+\\)";
         Assert.Matches(pattern, sql);
         Assert.Equal(2, sc.ParameterCount);
         Assert.DoesNotContain(":", sql);
     }
 
     [Fact]
-    public void BuildWhereByPrimaryKey_WithPostgresOverride_UsesColonMarker()
+    public void BuildWhereByPrimaryKey_WrapsAliasWhenProvided()
+    {
+        var sc = Context.CreateSqlContainer();
+        var list = new List<TestEntity> { new() { Name = "A" } };
+
+        _helper.BuildWhereByPrimaryKey(list, sc, "select");
+        var sql = sc.Query.ToString();
+
+        Assert.Contains("(\"select\".\"Name\" = @", sql);
+        Assert.DoesNotContain("(select.\"Name\"", sql);
+    }
+
+    [Fact]
+    public void BuildWhereByPrimaryKey_WithPostgresOverride_UsesAtSignMarker()
     {
         using var overrideCtx = new DatabaseContext(
             "Data Source=:memory:;EmulatedProduct=PostgreSql",
@@ -47,8 +60,7 @@ public class EntityHelperBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
         _helper.BuildWhereByPrimaryKey(list, sc);
         var sql = sc.Query.ToString();
 
-        Assert.Contains(":", sql);
-        Assert.DoesNotContain("@", sql);
+        Assert.Contains("@", sql);
+        Assert.DoesNotContain(":", sql);
     }
 }
-

@@ -10,12 +10,12 @@ namespace pengdows.crud.Tests;
 
 public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
 {
-    private readonly EntityHelper<TestEntity, int> helper;
+    private readonly TableGateway<TestEntity, int> helper;
 
     public UpsertAsyncTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context, AuditValueResolver);
+        helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
     }
 
     public new async Task InitializeAsync()

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -33,7 +34,7 @@ public class SqlDialectFeatureTests
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,
             factory,
-                NullLogger<SqlDialect>.Instance);
+            NullLogger<SqlDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.True(dialect.SupportsJsonTypes);
     }

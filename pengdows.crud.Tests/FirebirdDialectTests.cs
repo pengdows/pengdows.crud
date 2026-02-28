@@ -2,7 +2,7 @@ using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -12,7 +12,8 @@ public class FirebirdDialectTests
     [Fact]
     public void QuotePrefixSuffix_AreDoubleQuotes()
     {
-        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
         Assert.Equal("\"", dialect.QuotePrefix);
         Assert.Equal("\"", dialect.QuoteSuffix);
     }
@@ -20,7 +21,8 @@ public class FirebirdDialectTests
     [Fact]
     public void CreateDbParameter_BooleanMapsToInt16()
     {
-        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
         var paramTrue = dialect.CreateDbParameter("p", DbType.Boolean, true);
         Assert.Equal(DbType.Int16, paramTrue.DbType);
         Assert.Equal((short)1, paramTrue.Value);
@@ -31,6 +33,4 @@ public class FirebirdDialectTests
 
         Assert.False(dialect.SupportsJsonTypes);
     }
-
-
 }

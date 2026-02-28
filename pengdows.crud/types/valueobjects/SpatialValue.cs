@@ -1,7 +1,30 @@
-using System;
+// =============================================================================
+// FILE: SpatialValue.cs
+// PURPOSE: Abstract base class for spatial value objects (Geometry, Geography).
+//
+// AI SUMMARY:
+// - Abstract base for all spatial value types (Geometry, Geography).
+// - Properties:
+//   * Srid: Spatial Reference System Identifier (e.g., 4326 for WGS84)
+//   * Format: SpatialFormat enum (WKB, WKT, GeoJSON)
+//   * WellKnownBinary: ReadOnlyMemory<byte> for binary representation
+//   * WellKnownText: String for text representation (e.g., "POINT(1 2)")
+//   * GeoJson: String for GeoJSON representation
+//   * ProviderValue: Provider-specific object (SqlGeometry, PostGIS type, etc.)
+// - Implements IEquatable<SpatialValue> with proper value equality.
+// - Clone(): Helper to safely copy byte spans.
+// - Thread-safe and immutable.
+// =============================================================================
 
 namespace pengdows.crud.types.valueobjects;
 
+/// <summary>
+/// Abstract base class for spatial value objects supporting multiple formats.
+/// </summary>
+/// <remarks>
+/// Provides common functionality for Geometry and Geography value objects,
+/// including SRID handling, format tracking, and equality comparison.
+/// </remarks>
 public abstract class SpatialValue : IEquatable<SpatialValue>
 {
     protected SpatialValue(
@@ -88,8 +111,9 @@ public abstract class SpatialValue : IEquatable<SpatialValue>
         var hash = 17;
         for (var i = 0; i < span.Length; i++)
         {
-            hash = (hash * 31) + span[i];
+            hash = hash * 31 + span[i];
         }
+
         return hash;
     }
 }

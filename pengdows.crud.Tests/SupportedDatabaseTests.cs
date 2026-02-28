@@ -2,6 +2,7 @@
 
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -11,6 +12,7 @@ namespace pengdows.crud.Tests;
 public class SupportedDatabaseTests
 {
     [Theory]
+    [InlineData("Snowflake", SupportedDatabase.Snowflake)]
     [InlineData("CockroachDb", SupportedDatabase.CockroachDb)]
     [InlineData("Firebird", SupportedDatabase.Firebird)]
     [InlineData("MariaDb", SupportedDatabase.MariaDb)]
@@ -23,7 +25,7 @@ public class SupportedDatabaseTests
     [InlineData("Unknown", SupportedDatabase.Unknown)]
     public void EnumParse_ShouldReturnCorrectValue(string input, SupportedDatabase expected)
     {
-        var result = Enum.Parse<SupportedDatabase>(input, ignoreCase: true);
+        var result = Enum.Parse<SupportedDatabase>(input, true);
         Assert.Equal(expected, result);
     }
 
@@ -49,7 +51,12 @@ public class SupportedDatabaseTests
                 "MariaDb",
                 "MySql",
                 "Sqlite",
-                "DuckDB"
+                "DuckDB",
+                "YugabyteDb",
+                "TiDb",
+                "Snowflake",
+                "AuroraMySql",
+                "AuroraPostgreSql"
             },
             names);
     }

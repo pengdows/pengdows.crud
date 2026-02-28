@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -25,13 +26,13 @@ public class DataSourceInformationSchemaTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
 
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);
@@ -71,13 +72,13 @@ public class DataSourceInformationSchemaTests
             SupportedDatabase.Unknown,
             "MysteryDB",
             "1.0",
-            parameterPattern: "?",
-            parameterFormat: "?{0}",
-            maxLength: 18,
-            namePattern: "?",
-            namePatternRegex: "?",
-            supportsNamed: false,
-            additionalScalars: scalars);
+            "?",
+            "?{0}",
+            18,
+            "?",
+            "?",
+            false,
+            scalars);
 
         var dialect = new Sql92Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
         dialect.DetectDatabaseInfo(tracked);
@@ -90,7 +91,7 @@ public class DataSourceInformationSchemaTests
         var schema = info.GetSchema(failingConn);
 
         Assert.Equal("Unknown Database (SQL-92 Compatible)", schema.Rows[0].Field<string>("DataSourceProductName"));
-        Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
-        Assert.NotEqual(false, schema.Rows[0].Field<bool>("SupportsNamedParameters"));
+        Assert.False(schema.Rows[0].Field<bool>("SupportsNamedParameters")); // Sql92Dialect uses positional params
+        Assert.False(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
     }
 }

@@ -1,12 +1,43 @@
-using System;
+// =============================================================================
+// FILE: IAdvancedTypeConverter.cs
+// PURPOSE: Interface and base class for advanced type converters.
+//
+// AI SUMMARY:
+// - Defines contract for converting between .NET types and provider-specific values.
+// - IAdvancedTypeConverter: Non-generic interface with ToProviderValue/FromProviderValue.
+// - AdvancedTypeConverter<T>: Generic abstract base class reducing boilerplate.
+// - ConvertToProvider(): Override in subclass for custom write conversion.
+// - TryConvertFromProvider(): Override in subclass for custom read conversion.
+// - Used by AdvancedTypeRegistry to configure DbParameters.
+// - Implementations: GeometryConverter, GeographyConverter, InetConverter, etc.
+// =============================================================================
+
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.types.converters;
 
 public interface IAdvancedTypeConverter
 {
+    /// <summary>
+    /// .NET type handled by this converter.
+    /// </summary>
     Type TargetType { get; }
+
+    /// <summary>
+    /// Converts a .NET value into a provider-specific representation.
+    /// </summary>
+    /// <param name="value">The .NET value to convert.</param>
+    /// <param name="provider">Target database provider.</param>
+    /// <returns>Value suitable for DbParameter assignment.</returns>
     object? ToProviderValue(object value, SupportedDatabase provider);
+
+    /// <summary>
+    /// Converts a provider-specific value back into a .NET representation.
+    /// </summary>
+    /// <param name="value">Value from the provider.</param>
+    /// <param name="provider">Source database provider.</param>
+    /// <returns>Converted .NET value or null.</returns>
     object? FromProviderValue(object value, SupportedDatabase provider);
 }
 

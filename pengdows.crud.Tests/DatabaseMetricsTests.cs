@@ -1,0 +1,437 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
+using pengdows.crud.fakeDb;
+using pengdows.crud.metrics;
+using Xunit;
+
+namespace pengdows.crud.Tests;
+
+public class DatabaseMetricsTests
+{
+    [Fact]
+    public async Task ExecuteNonQueryAsync_UpdatesMetricsOnSuccess()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+        var container = context.CreateSqlContainer("UPDATE data SET value = @p1");
+        container.AddParameterWithValue("p1", DbType.String, "value");
+
+        var result = await container.ExecuteNonQueryAsync();
+
+        Assert.Equal(1, result);
+        var metrics = context.Metrics;
+        Assert.Equal(1, metrics.CommandsExecuted);
+        Assert.True(metrics.RowsAffectedTotal >= 1);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_TimeoutIsTrackedAsFailure()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Add failingConnection BEFORE creating context
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetCommandFailure("SELECT 1", new TimeoutException("boom"));
+        factory.Connections.Add(failingConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Re-assert the failure after initialization probes to ensure the test command hits the timeout path.
+        failingConnection.SetCommandFailure("SELECT 1", new TimeoutException("boom"));
+
+        var container = context.CreateSqlContainer("SELECT 1");
+
+        await Assert.ThrowsAsync<TimeoutException>(async () => await container.ExecuteScalarOrNullAsync<int>());
+
+        var metrics = context.Metrics;
+        Assert.Equal(1, metrics.CommandsFailed);
+        Assert.Equal(1, metrics.CommandsTimedOut);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_TracksRowsRead()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Add connection with reader results BEFORE creating context
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } },
+            new Dictionary<string, object?> { { "value", 2 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } },
+            new Dictionary<string, object?> { { "value", 2 } }
+        });
+
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                // Read all rows
+            }
+        }
+
+        var metrics = context.Metrics;
+        Assert.Equal(2, metrics.RowsReadTotal);
+        Assert.Equal(1, metrics.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_UsesReadRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+            }
+        }
+
+        var after = context.Metrics;
+        Assert.Equal(before.Read.CommandsExecuted + 1, after.Read.CommandsExecuted);
+        Assert.Equal(before.Write.CommandsExecuted, after.Write.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        await using (var reader = await container.ExecuteReaderAsync(ExecutionType.Write))
+        {
+            while (await reader.ReadAsync())
+            {
+            }
+        }
+
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_WithWriteExecutionType_UsesWriteRoleMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(connection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("SELECT value FROM data");
+
+        var result = await container.ExecuteScalarOrNullAsync<int>(ExecutionType.Write);
+
+        Assert.Equal(1, result);
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarRequiredAsync_UsesWriteRoleMetrics()
+    {
+        var connection = new fakeDbConnection();
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "id", 42 } }
+        });
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.Connections.Add(connection);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            EnableMetrics = true,
+            DbMode = DbMode.SingleConnection
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "id", 42 } }
+        });
+
+        var before = context.Metrics;
+        var container = context.CreateSqlContainer("INSERT INTO data(value) VALUES (1) RETURNING id");
+
+        var result = await container.ExecuteScalarRequiredAsync<int>(ExecutionType.Write);
+
+        Assert.Equal(42, result);
+        var after = context.Metrics;
+        Assert.Equal(before.Write.CommandsExecuted + 1, after.Write.CommandsExecuted);
+        Assert.Equal(before.Read.CommandsExecuted, after.Read.CommandsExecuted);
+    }
+
+    [Fact]
+    public async Task TransactionCommit_UpdatesMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+        await using (var tx = context.BeginTransaction())
+        {
+            await Task.Delay(10);
+            tx.Commit();
+        }
+
+        var metrics = context.Metrics;
+        Assert.Equal(0, metrics.TransactionsActive);
+        Assert.True(metrics.TransactionsMax >= 1);
+    }
+
+    [Fact]
+    public async Task TransactionDisposeWithoutCommit_StillRecordsMetrics()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+        await using (context.BeginTransaction())
+        {
+            await Task.Delay(5);
+        }
+
+        var metrics = context.Metrics;
+        Assert.Equal(0, metrics.TransactionsActive);
+        Assert.True(metrics.TransactionsMax >= 1);
+    }
+
+    [Fact]
+    public async Task MetricsUpdated_EventRaisesLatestSnapshot()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Add connection with reader results BEFORE creating context
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(commandConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        DatabaseMetrics? observed = null;
+        var invocations = 0;
+        var signal = new TaskCompletionSource<DatabaseMetrics>(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.MetricsUpdated += (_, metrics) =>
+        {
+            observed = metrics;
+            Interlocked.Increment(ref invocations);
+            signal.TrySetResult(metrics);
+        };
+
+        var container = context.CreateSqlContainer("SELECT 1");
+        var value = await container.ExecuteScalarOrNullAsync<int>();
+        Assert.Equal(1, value);
+
+        var snapshot = await signal.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.NotNull(observed);
+        Assert.True(snapshot.CommandsExecuted >= 1);
+        Assert.True(Volatile.Read(ref invocations) >= 1);
+    }
+
+    [Fact]
+    public async Task MetricsUpdated_UnsubscribedHandlerNotInvoked()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Add connection with reader results BEFORE creating context
+        var commandConnection = new fakeDbConnection();
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+        factory.Connections.Add(commandConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Initialization probes consume queued results, so re-prime the connection for the actual command.
+        commandConnection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        var invoked = false;
+        EventHandler<DatabaseMetrics>? handler = (_, _) => invoked = true;
+        context.MetricsUpdated += handler;
+        context.MetricsUpdated -= handler;
+
+        var container = context.CreateSqlContainer("SELECT 1");
+        var value = await container.ExecuteScalarOrNullAsync<int>();
+        Assert.Equal(1, value);
+
+        Assert.False(invoked);
+    }
+
+    [Fact]
+    public void DatabaseMetrics_RecordExposesConstructorValues()
+    {
+        var read = new DatabaseRoleMetrics(
+            101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+            111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+            121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132);
+
+        var write = new DatabaseRoleMetrics(
+            201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
+            211, 212, 213, 214, 215, 216, 217, 218, 219, 220,
+            221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232);
+
+        var metrics = new DatabaseMetrics(
+            read, write,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+            11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+            21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34d);
+
+        Assert.Equal(read, metrics.Read);
+        Assert.Equal(write, metrics.Write);
+        Assert.Equal(1, metrics.ConnectionsCurrent);
+        Assert.Equal(2, metrics.PeakOpenConnections);
+        Assert.Equal(3, metrics.ConnectionsOpened);
+        Assert.Equal(4, metrics.ConnectionsClosed);
+        Assert.Equal(5, metrics.AvgConnectionHoldMs);
+        Assert.Equal(6, metrics.AvgConnectionOpenMs);
+        Assert.Equal(7, metrics.AvgConnectionCloseMs);
+        Assert.Equal(8, metrics.LongLivedConnections);
+        Assert.Equal(9, metrics.CommandsExecuted);
+        Assert.Equal(10, metrics.CommandsFailed);
+        Assert.Equal(11, metrics.CommandsTimedOut);
+        Assert.Equal(12, metrics.CommandsCancelled);
+        Assert.Equal(13, metrics.AvgCommandMs);
+        Assert.Equal(14, metrics.P95CommandMs);
+        Assert.Equal(15, metrics.P99CommandMs);
+        Assert.Equal(16, metrics.MaxParametersObserved);
+        Assert.Equal(17, metrics.RowsReadTotal);
+        Assert.Equal(18, metrics.RowsAffectedTotal);
+        Assert.Equal(19, metrics.PreparedStatements);
+        Assert.Equal(20, metrics.StatementsCached);
+        Assert.Equal(21, metrics.StatementsEvicted);
+        Assert.Equal(22, metrics.TransactionsActive);
+        Assert.Equal(23, metrics.TransactionsMax);
+        Assert.Equal(24, metrics.AvgTransactionMs);
+        Assert.Equal(25, metrics.TransactionsCommitted);
+        Assert.Equal(26, metrics.TransactionsRolledBack);
+        Assert.Equal(27, metrics.SlowCommandsTotal);
+        Assert.Equal(28, metrics.P95TransactionMs);
+        Assert.Equal(29, metrics.P99TransactionMs);
+        Assert.Equal(30, metrics.ErrorDeadlocks);
+        Assert.Equal(31, metrics.ErrorSerializationFailures);
+        Assert.Equal(32, metrics.ErrorConstraintViolations);
+        Assert.Equal(33, metrics.SessionInitCount);
+        Assert.Equal(34d, metrics.AvgSessionInitMs);
+    }
+}

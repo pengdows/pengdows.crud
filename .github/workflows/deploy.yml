@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write  # Needed for git push and release creation
 
@@ -21,16 +25,51 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup .NET 8 SDK
-        uses: actions/setup-dotnet@v2
+      - name: Detect coverage settings changes in PRs
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+
+          base_ref="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}"
+
+          # Only block changes to coverage exclusion/inclusion patterns.
+          # Timing settings (TestSessionTimeout) may legitimately differ between branches.
+          exclusion_changes=$(git diff "$base_ref...HEAD" -- coverage.runsettings \
+            | grep '^[+-]' | grep -v '^---' | grep -v '^+++' \
+            | { grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' || true; } \
+            | wc -l)
+          if [[ "$exclusion_changes" -gt 0 ]]; then
+            echo "❌ coverage.runsettings coverage exclusions changed. Exclusion changes require explicit maintainer review."
+            git diff "$base_ref...HEAD" -- coverage.runsettings
+            exit 1
+          fi
+
+          echo "✅ coverage.runsettings exclusions unchanged."
+
+      - name: Setup .NET SDKs
+        # 8.0.x: primary target framework for all projects in this solution.
+        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
+        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
+        #         ready to ship a net10.0 TFM.
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore pengdows.crud.sln
 
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
+
+      - name: Verify interface baselines
+        run: |
+          dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj --configuration Release -- \
+            --verify \
+            --baseline pengdows.crud.abstractions/ApiBaseline/interfaces.txt \
+            --assembly pengdows.crud.abstractions/bin/Release/net8.0/pengdows.crud.abstractions.dll
 
       - name: Install coverage tools
         run: |
@@ -48,6 +87,10 @@ jobs:
             --results-directory ./TestResults \
             --settings coverage.runsettings
 
+      - name: Run integration suite
+        run: |
+          dotnet run --no-build --configuration Release --project testbed/testbed.csproj
+
       - name: Generate coverage report
         run: |
             reportgenerator \
@@ -57,52 +100,82 @@ jobs:
               -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
               -classfilters:"-*Test*;-*Mock*"
 
-      - name: Enforce visual coverage from HTML report
+      - name: Enforce pengdows.crud coverage floor and ratchet from Cobertura XML
         run: |
           set -euo pipefail
 
-          html_file=$(find coverage-report -name "index.html" | head -n 1)
-
-          if [[ ! -f "$html_file" ]]; then
-            echo "❌ index.html not found!"
+          # Parse the reportgenerator Cobertura output, which is already filtered
+          # to pengdows.crud via -assemblyfilters in the previous step.
+          xml_file="coverage-report/Cobertura.xml"
+          if [[ ! -f "${xml_file}" ]]; then
+            echo "❌ ${xml_file} not found"
             exit 1
           fi
 
-          echo "🕵️ Dumping coverage-related lines from index.html:"
-          grep -i coverage "$html_file" || true
-
-          coverage_line=$(grep -Eo '[0-9]+ of [0-9]+' "$html_file" | head -n 1)
-
-          if [[ -z "$coverage_line" ]]; then
-            echo "❌ Could not extract line coverage info"
+          rate=$(grep -m1 'line-rate="' "$xml_file" | sed -n 's/.*line-rate="\([^"]*\)".*/\1/p')
+          if [[ -z "${rate}" ]]; then
+            echo "❌ Could not parse line-rate from Cobertura XML"
             exit 1
           fi
 
-          covered=$(echo "$coverage_line" | cut -d' ' -f1)
-          total=$(echo "$coverage_line" | cut -d' ' -f3)
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ${rate} * 100 }")
+          echo "📊 pengdows.crud line coverage (from ${xml_file}): $coverage_percent%"
 
-          if [[ -z "$covered" || -z "$total" ]]; then
-            echo "❌ Could not parse covered or total line count"
+          minimum_floor=83
+          baseline_file=".github/coverage-baseline.txt"
+          if [[ ! -f "$baseline_file" ]]; then
+            echo "❌ Missing $baseline_file"
             exit 1
           fi
 
-          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ($covered / $total) * 100 }")
-          echo "📊 Visual Coverage (from index.html): $coverage_percent%"
+          baseline=$(tr -d '[:space:]' < "$baseline_file")
+          if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
+            exit 1
+          fi
 
-          required=83
+          required="$minimum_floor"
+          baseline_higher=$(awk "BEGIN { print ($baseline > $required) ? 1 : 0 }")
+          if [[ "$baseline_higher" -eq 1 ]]; then
+            required="$baseline"
+          fi
+
+          echo "🧭 Minimum floor: ${minimum_floor}%"
+          echo "🧭 Baseline ratchet: ${baseline}%"
+          echo "🧭 Effective required coverage: ${required}%"
+
           too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
           if [[ "$too_low" -eq 1 ]]; then
-            echo "❌ Visual code coverage $coverage_percent% is below required $required%"
+            echo "❌ Coverage $coverage_percent% is below required $required%"
             exit 1
           else
-            echo "✅ Visual code coverage $coverage_percent% meets threshold"
+            echo "✅ Coverage $coverage_percent% meets threshold"
           fi
 
+      - name: Enforce no TransactionScope usage
+        run: |
+          set -euo pipefail
+
+          if grep -rn --include='*.cs' -E 'new\s+TransactionScope|using\s+System\.Transactions' \
+            pengdows.crud \
+            pengdows.crud.abstractions \
+            pengdows.crud.fakeDb \
+            testbed \
+            pengdows.crud.Tests \
+            pengdows.crud.IntegrationTests; then
+            echo "❌ TransactionScope usage is forbidden. Use ctx.BeginTransaction()."
+            exit 1
+          fi
+
+          echo "✅ No TransactionScope usage found."
+
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: TestResults/**/coverage.cobertura.xml
-          fail_ci_if_error: true
+          # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
+          # so we suppress errors rather than blocking community contributions.
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           token: ${{ secrets.CODECOV_TOKEN }}
           disable_file_fixes: true
 
@@ -116,7 +189,7 @@ jobs:
     name: Publish NuGet Package
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.actor != 'github-actions[bot]'
 
     steps:
       - name: Checkout code
@@ -125,17 +198,26 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v2
+      - name: Setup .NET SDKs
+        # 8.0.x: primary target framework for all projects in this solution.
+        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
+        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
+        #         ready to ship a net10.0 TFM.
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Generate version number
         id: version
         run: |
-          epoch=$(date +%s)
-          echo "version=1.0.${epoch}.0" >> "$GITHUB_OUTPUT"
-          echo "version_short=1.0.${epoch}" >> "$GITHUB_OUTPUT"
+          version=$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' Directory.Build.props | head -n1)
+          if [[ -z "$version" ]]; then
+            echo "Version not found in Directory.Build.props"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: dotnet build pengdows.crud.sln -c Release
@@ -161,41 +243,139 @@ jobs:
           fi
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      - name: Push package to NuGet
+      - name: Check if version already published
+        id: nuget_check
         run: |
           set -euo pipefail
-          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version_short }}.nupkg \
+
+          VERSION="${{ steps.version.outputs.version }}"
+          status_crud=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/${VERSION}.nupkg")
+          status_abstractions=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.abstractions/${VERSION}/${VERSION}.nupkg")
+          status_fakedb=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.fakedb/${VERSION}/${VERSION}.nupkg")
+
+          echo "NuGet status for v$VERSION:"
+          echo "  pengdows.crud: $status_crud"
+          echo "  pengdows.crud.abstractions: $status_abstractions"
+          echo "  pengdows.crud.fakedb: $status_fakedb"
+
+          all_published=true
+          for status in "$status_crud" "$status_abstractions" "$status_fakedb"; do
+            if [[ "$status" != "200" ]]; then
+              all_published=false
+              break
+            fi
+          done
+
+          any_published=false
+          for status in "$status_crud" "$status_abstractions" "$status_fakedb"; do
+            if [[ "$status" == "200" ]]; then
+              any_published=true
+              break
+            fi
+          done
+
+          if [[ "$all_published" == "true" ]]; then
+            echo "Version $VERSION already exists for all packages — skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$any_published" == "true" ]]; then
+            echo "❌ Version $VERSION is partially published. Resolve NuGet state before retrying."
+            exit 1
+          else
+            echo "Version $VERSION is new for all packages — proceeding with publish."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push package to NuGet
+        if: steps.nuget_check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
-          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version_short }}.nupkg \
+          dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pengdows.crud/pengdows.crud.csproj pengdows.crud.abstractions/pengdows.crud.abstractions.csproj pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj
-          git commit -m "Bump version to v${{ steps.version.outputs.version_short }}" || echo "No changes to commit"
-
-      - name: Push version bump commit
-        run: git push origin HEAD:main
-
       - name: Tag the release
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
-          git tag -a "v${{ steps.version.outputs.version_short }}" -m "Release v${{ steps.version.outputs.version_short }}"
-          git push origin "v${{ steps.version.outputs.version_short }}"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
-          tag_name: v${{ steps.version.outputs.version_short }}
-          name: v${{ steps.version.outputs.version_short }}
-          body: Automated release for version v${{ steps.version.outputs.version_short }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: Automated release for version v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate next patch version
+        id: next_version
+        if: steps.nuget_check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+
+          current="${{ steps.version.outputs.version }}"
+          IFS='.' read -r major minor patch <<< "$current"
+
+          if [[ -z "$major" || -z "$minor" || -z "$patch" ]]; then
+            echo "Could not parse semantic version: $current"
+            exit 1
+          fi
+
+          if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
+            echo "Semantic version must be numeric major.minor.patch: $current"
+            exit 1
+          fi
+
+          next_patch=$((patch + 1))
+          next_version="$major.$minor.$next_patch"
+          next_assembly_version="$major.$minor.$next_patch.0"
+
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+          echo "next_assembly_version=$next_assembly_version" >> "$GITHUB_OUTPUT"
+
+      - name: Note protected branch push skip
+        if: ${{ github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        run: echo "Branch is protected; skipping automated semver bump commit and push."
+
+      - name: Bump version for next release
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        run: |
+          set -euo pipefail
+
+          sed -i -E "s|<Version>[^<]+</Version>|<Version>${{ steps.next_version.outputs.next_version }}</Version>|" Directory.Build.props
+          sed -i -E "s|<AssemblyVersion>[^<]+</AssemblyVersion>|<AssemblyVersion>${{ steps.next_version.outputs.next_assembly_version }}</AssemblyVersion>|" Directory.Build.props
+          sed -i -E "s|<FileVersion>[^<]+</FileVersion>|<FileVersion>${{ steps.next_version.outputs.next_assembly_version }}</FileVersion>|" Directory.Build.props
+
+          # Verify the bump actually applied — sed exits 0 even when no lines matched,
+          # so an unchanged file means the pattern didn't match (e.g. reformatted XML).
+          if git diff --exit-code Directory.Build.props > /dev/null 2>&1; then
+            echo "❌ Version bump had no effect — sed pattern did not match Directory.Build.props"
+            exit 1
+          fi
+
+      - name: Commit semver bump
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Directory.Build.props
+          git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
+
+      - name: Push semver bump commit
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        run: git push origin HEAD:${{ github.event.repository.default_branch }}

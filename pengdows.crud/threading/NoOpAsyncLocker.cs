@@ -1,3 +1,21 @@
+// =============================================================================
+// FILE: NoOpAsyncLocker.cs
+// PURPOSE: No-op locker for ephemeral connections (zero synchronization overhead).
+//
+// AI SUMMARY:
+// - Implements ILockerAsync with no actual locking.
+// - Singleton pattern: NoOpAsyncLocker.Instance.
+// - All methods are no-ops:
+//   * Lock(): Returns immediately
+//   * LockAsync(): Returns Task.CompletedTask
+//   * TryLockAsync(): Returns Task.FromResult(true)
+// - Used for ephemeral (per-operation) connections in Standard/KeepAlive modes.
+// - TrackDisposeState = false: Singleton doesn't need disposal tracking.
+// - Extends SafeAsyncDisposableBase for interface compatibility.
+// - Zero overhead: No semaphore, no allocation, no contention.
+// =============================================================================
+
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.threading;
@@ -12,14 +30,15 @@ internal sealed class NoOpAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
 
     protected override bool TrackDisposeState => false;
 
-    public Task LockAsync(CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public void Lock()
     {
-        return Task.CompletedTask;
+        // No-op: no actual locking required
     }
 
-    public Task<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(true);
-    }
+    public ValueTask LockAsync(CancellationToken cancellationToken = default)
+        => ValueTask.CompletedTask;
 
+    public ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(true);
 }

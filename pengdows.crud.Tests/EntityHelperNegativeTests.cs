@@ -4,20 +4,20 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
-using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperNegativeTests : SqlLiteContextTestBase
+public class TableGatewayNegativeTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<TestEntity, int> helper;
+    private readonly TableGateway<TestEntity, int> helper;
 
-    public EntityHelperNegativeTests()
+    public TableGatewayNegativeTests()
     {
         TypeMap.Register<TestEntity>();
-        helper = new EntityHelper<TestEntity, int>(Context);
+        helper = new TableGateway<TestEntity, int>(Context);
     }
 
     [Fact]
@@ -40,11 +40,12 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_NoAudit_NoChanges_Throws()
     {
         // Use real SQLite for this integration test to ensure proper data persistence
-        using var realContext = new DatabaseContext("Data Source=:memory:", Microsoft.Data.Sqlite.SqliteFactory.Instance, new TypeMapRegistry());
+        using var realContext = new DatabaseContext("Data Source=:memory:",
+            Microsoft.Data.Sqlite.SqliteFactory.Instance, new TypeMapRegistry());
         var typeMap = realContext.TypeMapRegistry;
         _ = typeMap.GetTableInfo<NoAuditEntity>();
 
-        var noAuditHelper = new EntityHelper<NoAuditEntity, int>(realContext);
+        var noAuditHelper = new TableGateway<NoAuditEntity, int>(realContext);
         await BuildNoAuditTableReal(realContext);
         var e = new NoAuditEntity { Name = Guid.NewGuid().ToString() };
         await noAuditHelper.CreateAsync(e, realContext);
@@ -65,7 +66,8 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_EmptyList_Throws()
     {
         var sc = Context.CreateSqlContainer();
-        Assert.Throws<ArgumentException>("listOfObjects", () => helper.BuildWhereByPrimaryKey(new List<TestEntity>(), sc));
+        Assert.Throws<ArgumentException>("listOfObjects",
+            () => helper.BuildWhereByPrimaryKey(new List<TestEntity>(), sc));
     }
 
     [Fact]
@@ -76,8 +78,9 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         // Create a condition where we have more parameters than typical limits would allow
 
         var list = new List<TestEntity>();
-        // Create enough entities to exceed typical parameter limits
-        for (int i = 1; i <= 1000; i++)
+        // SQLite 3.32+ has a parameter limit of 32766. TestEntity has 1 primary key column,
+        // so we need more than 32766 entities to exceed the limit.
+        for (var i = 1; i <= 33000; i++)
         {
             list.Add(new TestEntity { Id = i, Name = $"Entity{i}" });
         }
@@ -101,7 +104,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Unknown", factory);
 
         // BuildUpsert should throw NotSupportedException for unknown database types
-        var entityHelper = new EntityHelper<TestEntity, int>(context);
+        var entityHelper = new TableGateway<TestEntity, int>(context);
         var testEntity = new TestEntity { Id = 1, Name = "Test" };
         Assert.Throws<NotSupportedException>(() =>
             entityHelper.BuildUpsert(testEntity));
@@ -128,8 +131,7 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
     [Table("NoIdTable")]
     private class EntityWithoutId
     {
-        [Column("Name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     private async Task BuildTestTable()
@@ -153,7 +155,8 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var qp = Context.QuotePrefix;
         var qs = Context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)", qp, qs);
+            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)",
+            qp, qs);
         var container = Context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
@@ -163,7 +166,8 @@ public class EntityHelperNegativeTests : SqlLiteContextTestBase
         var qp = context.QuotePrefix;
         var qs = context.QuoteSuffix;
         var sql = string.Format(
-            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)", qp, qs);
+            @"CREATE TABLE IF NOT EXISTS {0}NoAudit{1} ({0}Id{1} INTEGER PRIMARY KEY AUTOINCREMENT,{0}Name{1} TEXT NOT NULL)",
+            qp, qs);
         var container = context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }

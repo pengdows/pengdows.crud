@@ -1,11 +1,6 @@
-#region
-
-using System.Data;
 using System.Text.RegularExpressions;
 using pengdows.crud.enums;
-using pengdows.crud.wrappers;
-
-#endregion
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
@@ -33,6 +28,12 @@ public interface IDataSourceInformation
     /// Gets a value indicating whether the database supports named parameters.
     /// </summary>
     bool SupportsNamedParameters { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the same named parameter can appear multiple
+    /// times in a single SQL statement without requiring separate parameter objects.
+    /// </summary>
+    bool SupportsRepeatedNamedParameters { get; }
 
     /// <summary>
     /// Gets the character or string used to denote parameters in SQL commands.
@@ -90,6 +91,16 @@ public interface IDataSourceInformation
     SupportedDatabase Product { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the database supports DROP TABLE IF EXISTS syntax.
+    /// </summary>
+    bool SupportsDropTableIfExists { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the database supports TRUNCATE TABLE.
+    /// </summary>
+    bool SupportsTruncateTable { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the database supports MERGE statements.
     /// </summary>
     bool SupportsMerge { get; }
@@ -140,10 +151,4 @@ public interface IDataSourceInformation
     /// </summary>
     bool HasBasicCompatibility { get; }
 
-    /// <summary>
-    /// Retrieves the data source information schema for the specified connection.
-    /// </summary>
-    /// <param name="connection">The connection to query.</param>
-    /// <returns>A <see cref="DataTable"/> containing the information schema.</returns>
-    DataTable GetSchema(ITrackedConnection connection);
 }

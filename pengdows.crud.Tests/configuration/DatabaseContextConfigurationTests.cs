@@ -1,5 +1,6 @@
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests.configuration;
@@ -10,10 +11,11 @@ public class DatabaseContextConfigurationTests
     public void Constructor_InitializesWithDefaults()
     {
         var config = new DatabaseContextConfiguration();
-        
+
         Assert.Equal(string.Empty, config.ConnectionString);
+        Assert.Equal(string.Empty, config.ReadOnlyConnectionString);
         Assert.Equal(string.Empty, config.ProviderName);
-        Assert.Equal(DbMode.Standard, config.DbMode);
+        Assert.Equal(DbMode.Best, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
     }
 
@@ -22,10 +24,21 @@ public class DatabaseContextConfigurationTests
     {
         var config = new DatabaseContextConfiguration();
         const string connectionString = "Server=localhost;Database=test;";
-        
+
         config.ConnectionString = connectionString;
-        
+
         Assert.Equal(connectionString, config.ConnectionString);
+    }
+
+    [Fact]
+    public void ReadOnlyConnectionString_CanBeSetAndRetrieved()
+    {
+        var config = new DatabaseContextConfiguration();
+        const string connectionString = "Server=localhost;Database=test;ApplicationIntent=ReadOnly;";
+
+        config.ReadOnlyConnectionString = connectionString;
+
+        Assert.Equal(connectionString, config.ReadOnlyConnectionString);
     }
 
     [Fact]
@@ -33,9 +46,9 @@ public class DatabaseContextConfigurationTests
     {
         var config = new DatabaseContextConfiguration();
         const string providerName = "System.Data.SqlClient";
-        
+
         config.ProviderName = providerName;
-        
+
         Assert.Equal(providerName, config.ProviderName);
     }
 
@@ -43,9 +56,9 @@ public class DatabaseContextConfigurationTests
     public void DbMode_CanBeSetAndRetrieved()
     {
         var config = new DatabaseContextConfiguration();
-        
+
         config.DbMode = DbMode.KeepAlive;
-        
+
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
     }
 
@@ -74,14 +87,17 @@ public class DatabaseContextConfigurationTests
     {
         var config = new DatabaseContextConfiguration();
         const string connectionString = "Server=localhost;Database=test;";
+        const string readOnlyConnectionString = "Server=localhost;Database=test;ApplicationIntent=ReadOnly;";
         const string providerName = "System.Data.SqlClient";
-        
+
         config.ConnectionString = connectionString;
+        config.ReadOnlyConnectionString = readOnlyConnectionString;
         config.ProviderName = providerName;
         config.DbMode = DbMode.KeepAlive;
         config.ReadWriteMode = ReadWriteMode.WriteOnly;
-        
+
         Assert.Equal(connectionString, config.ConnectionString);
+        Assert.Equal(readOnlyConnectionString, config.ReadOnlyConnectionString);
         Assert.Equal(providerName, config.ProviderName);
         Assert.Equal(DbMode.KeepAlive, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
@@ -91,7 +107,7 @@ public class DatabaseContextConfigurationTests
     public void ImplementsIDatabaseContextConfiguration()
     {
         var config = new DatabaseContextConfiguration();
-        
+
         Assert.IsAssignableFrom<IDatabaseContextConfiguration>(config);
     }
 }

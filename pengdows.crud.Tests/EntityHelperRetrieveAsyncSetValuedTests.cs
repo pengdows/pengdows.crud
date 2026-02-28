@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -12,17 +13,23 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class EntityHelperRetrieveAsyncSetValuedTests
+public class TableGatewayRetrieveAsyncSetValuedTests
 {
     private readonly TypeMapRegistry _typeMap;
 
-    [Table("Ret")] private class RetEntity
+    [Table("Ret")]
+    private class RetEntity
     {
-        [Id(false)] [Column("Id", DbType.Int32)] public int Id { get; set; }
-        [PrimaryKey(1)] [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [PrimaryKey(1)]
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 
-    public EntityHelperRetrieveAsyncSetValuedTests()
+    public TableGatewayRetrieveAsyncSetValuedTests()
     {
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<RetEntity>();
@@ -38,13 +45,13 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         // Queue rows for the select execution
         execConn.EnqueueReaderResult(new[]
         {
-            new Dictionary<string, object> { ["Id"] = 1, ["Name"] = "a" },
-            new Dictionary<string, object> { ["Id"] = 2, ["Name"] = "b" }
+            new Dictionary<string, object?> { ["Id"] = 1, ["Name"] = "a" },
+            new Dictionary<string, object?> { ["Id"] = 2, ["Name"] = "b" }
         });
         factory.Connections.Add(execConn);
 
         using var ctx = new DatabaseContext("Data Source=pg;EmulatedProduct=PostgreSql", factory, _typeMap);
-        var helper = new EntityHelper<RetEntity, int>(ctx);
+        var helper = new TableGateway<RetEntity, int>(ctx);
 
         var result = await helper.RetrieveAsync(new[] { 1, 2, 3 });
         Assert.Equal(2, result.Count);
@@ -61,13 +68,13 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
         execConn.EnqueueReaderResult(new[]
         {
-            new Dictionary<string, object> { ["Id"] = 1, ["Name"] = "x" },
-            new Dictionary<string, object> { ["Id"] = 3, ["Name"] = "z" }
+            new Dictionary<string, object?> { ["Id"] = 1, ["Name"] = "x" },
+            new Dictionary<string, object?> { ["Id"] = 3, ["Name"] = "z" }
         });
         factory.Connections.Add(execConn);
 
         using var ctx = new DatabaseContext("Data Source=sqlite;EmulatedProduct=Sqlite", factory, _typeMap);
-        var helper = new EntityHelper<RetEntity, int>(ctx);
+        var helper = new TableGateway<RetEntity, int>(ctx);
 
         var result = await helper.RetrieveAsync(new[] { 1, 2, 3 });
         Assert.Equal(2, result.Count);
@@ -75,4 +82,3 @@ public class EntityHelperRetrieveAsyncSetValuedTests
         Assert.Equal(3, result[1].Id);
     }
 }
-

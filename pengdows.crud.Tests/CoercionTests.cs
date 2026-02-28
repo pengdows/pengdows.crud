@@ -1,8 +1,8 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using pengdows.crud.enums;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 using Xunit;
@@ -68,12 +68,12 @@ public class CoercionTests
 
     #endregion
 
-    #region RowVersion Tests
+    #region ByteArray Tests
 
     [Fact]
-    public void RowVersionCoercion_ShouldHandle8ByteArray()
+    public void ByteArrayCoercion_ShouldHandleByteArray()
     {
-        var bytes = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+        var bytes = new byte[] { 0x00, 0x01, 0x02, 0x03, 0x04 };
         var dbValue = new DbValue(bytes);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
@@ -83,27 +83,31 @@ public class CoercionTests
     }
 
     [Fact]
-    public void RowVersionCoercion_ShouldRejectWrongLength()
+    public void ByteArrayCoercion_ShouldHandleReadOnlyMemory()
     {
-        var bytes = new byte[] { 0x01, 0x02, 0x03 }; // Wrong length
-        var dbValue = new DbValue(bytes);
+        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+        var memory = new ReadOnlyMemory<byte>(bytes);
+        var dbValue = new DbValue(memory);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
 
-        Assert.False(success);
+        Assert.True(success);
+        Assert.Equal(bytes, result);
     }
 
     [Fact]
-    public void RowVersionCoercion_ShouldHandleULong()
+    public void ByteArrayCoercion_ShouldHandleArraySegment()
     {
-        var ulongValue = 12345UL;
-        var dbValue = new DbValue(ulongValue);
+        var bytes = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
+        var segment = new ArraySegment<byte>(bytes, 1, 3);
+        var dbValue = new DbValue(segment);
 
         var success = _registry.TryRead(dbValue, typeof(byte[]), out var result);
 
         Assert.True(success);
         var resultBytes = (byte[])result!;
-        Assert.Equal(8, resultBytes.Length);
+        Assert.Equal(3, resultBytes.Length);
+        Assert.Equal(new byte[] { 0x02, 0x03, 0x04 }, resultBytes);
     }
 
     #endregion
@@ -408,20 +412,22 @@ public class CoercionTests
 
         // First call
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
-            _registry.TryRead(dbValue, typeof(Guid), out var _);
+            _registry.TryRead(dbValue, typeof(Guid), out _);
         }
+
         sw.Stop();
 
         var firstBatch = sw.ElapsedMilliseconds;
 
         // Second batch - should be similar performance (testing caching)
         sw.Restart();
-        for (int i = 0; i < 1000; i++)
+        for (var i = 0; i < 1000; i++)
         {
-            _registry.TryRead(dbValue, typeof(Guid), out var _);
+            _registry.TryRead(dbValue, typeof(Guid), out _);
         }
+
         sw.Stop();
 
         var secondBatch = sw.ElapsedMilliseconds;
@@ -436,14 +442,31 @@ public class CoercionTests
 
     private class TestDbParameter : DbParameter
     {
+        private string _parameterName = string.Empty;
+        private string _sourceColumn = string.Empty;
+
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
-        public override string ParameterName { get; set; } = string.Empty;
+
+        [AllowNull]
+        public override string ParameterName
+        {
+            get => _parameterName;
+            set => _parameterName = value ?? string.Empty;
+        }
+
         public override int Size { get; set; }
-        public override string SourceColumn { get; set; } = string.Empty;
+
+        [AllowNull]
+        public override string SourceColumn
+        {
+            get => _sourceColumn;
+            set => _sourceColumn = value ?? string.Empty;
+        }
+
         public override bool SourceColumnNullMapping { get; set; }
-        public override object? Value { get; set; }
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
 
         public override void ResetDbType()
         {

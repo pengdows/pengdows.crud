@@ -1,10 +1,6 @@
-#region
-
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
-
-#endregion
 
 namespace pengdows.crud;
 
@@ -61,6 +57,11 @@ public interface IColumnInfo
     Type? EnumUnderlyingType { get; set; }
 
     /// <summary>
+    /// True when the enum should be stored as its string name rather than numeric value.
+    /// </summary>
+    bool EnumAsString { get; set; }
+
+    /// <summary>
     /// True when the column stores JSON data.
     /// </summary>
     bool IsJsonType { get; set; }
@@ -79,6 +80,11 @@ public interface IColumnInfo
     /// True when the column participates in the primary key.
     /// </summary>
     bool IsPrimaryKey { get; set; }
+
+    /// <summary>
+    /// True when the column is used as a correlation token for identity retrieval.
+    /// </summary>
+    bool IsCorrelationToken { get; set; }
 
     /// <summary>
     /// Order of the column within a composite primary key.

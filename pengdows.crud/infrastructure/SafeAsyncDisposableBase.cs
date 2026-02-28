@@ -1,3 +1,24 @@
+// =============================================================================
+// FILE: SafeAsyncDisposableBase.cs
+// PURPOSE: Base class for implementing safe synchronous and async disposal.
+//
+// AI SUMMARY:
+// - Abstract base implementing IDisposable and IAsyncDisposable patterns.
+// - Thread-safe: uses Interlocked to ensure single disposal.
+// - IsDisposed property: tracks disposal state.
+// - Overridable cleanup methods:
+//   * DisposeManaged(): Sync managed resource cleanup
+//   * DisposeManagedAsync(): Async managed cleanup (defaults to sync)
+//   * DisposeUnmanaged(): Sync unmanaged cleanup (prefer SafeHandle)
+//   * DisposeUnmanagedAsync(): Async unmanaged cleanup (defaults to sync)
+// - OnDisposeException(): Optional hook for logging swallowed exceptions.
+// - ThrowIfDisposed(): Guard method throws ObjectDisposedException.
+// - TrackDisposeState: Virtual property to opt-out (for singletons).
+// - GC.SuppressFinalize called after cleanup completes.
+// - Exception handling: Both sync and async paths call OnDisposeException for observability.
+// - Preserves first exception, continues cleanup, then rethrows (async) or swallows (sync).
+// =============================================================================
+
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 
@@ -69,7 +90,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
             }
             else
             {
-                OnDisposeException(ex, nameof(DisposeUnmanagedAsync)); // don't mask the first
+                OnDisposeException(ex, nameof(DisposeUnmanagedAsync)); // log only suppressed failures
             }
         }
         finally
@@ -85,7 +106,9 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
 
     // ---- Overridables (minimal surface area) ----
     /// <summary>Override for synchronous managed cleanup. Default no-op.</summary>
-    protected virtual void DisposeManaged() { }
+    protected virtual void DisposeManaged()
+    {
+    }
 
     /// <summary>Override for asynchronous managed cleanup. Defaults to sync bridge.</summary>
     protected virtual ValueTask DisposeManagedAsync()
@@ -95,7 +118,9 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
     }
 
     /// <summary>Override for synchronous unmanaged cleanup. Prefer SafeHandle.</summary>
-    protected virtual void DisposeUnmanaged() { }
+    protected virtual void DisposeUnmanaged()
+    {
+    }
 
     /// <summary>Override for asynchronous unmanaged cleanup. Defaults to sync bridge.</summary>
     protected virtual ValueTask DisposeUnmanagedAsync()
@@ -105,7 +130,9 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
     }
 
     /// <summary>Optional visibility hook for swallowed exceptions. Default no-op.</summary>
-    protected virtual void OnDisposeException(Exception ex, string phase) { }
+    protected virtual void OnDisposeException(Exception ex, string phase)
+    {
+    }
 
     /// <summary>Throw ObjectDisposedException if already disposed.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -118,8 +145,10 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private void ThrowObjectDisposed() =>
+    private void ThrowObjectDisposed()
+    {
         throw new ObjectDisposedException(GetType().FullName);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryBeginDispose()

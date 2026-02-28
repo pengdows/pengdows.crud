@@ -1,7 +1,23 @@
-using System;
+// =============================================================================
+// FILE: CoercionRegistry.cs
+// PURPOSE: Thread-safe registry for database type coercions.
+//
+// AI SUMMARY:
+// - High-performance, thread-safe registry for IDbCoercion implementations.
+// - CoercionRegistry.Shared provides singleton with standard coercions registered.
+// - Uses ConcurrentDictionary for both general and provider-specific coercions.
+// - Register<T>(): Registers coercion for a CLR type (optionally provider-specific).
+// - GetCoercion(): Retrieves coercion, preferring provider-specific if available.
+// - TryRead(): Converts DbValue to target type using registered coercion.
+// - TryWrite(): Configures DbParameter using registered coercion.
+// - RegisterStandardCoercions(): Calls BasicCoercions + AdvancedCoercions.RegisterAll().
+// - DbCoercion<T>: Abstract base class reducing boilerplate for implementations.
+// =============================================================================
+
 using System.Collections.Concurrent;
 using System.Data.Common;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.types.coercion;
 
@@ -47,7 +63,9 @@ public class CoercionRegistry
         {
             var key = (type, provider.Value);
             if (_providerSpecificCoercions.TryGetValue(key, out var providerCoercion))
+            {
                 return providerCoercion;
+            }
         }
 
         // Fall back to general coercion
@@ -94,12 +112,11 @@ public class CoercionRegistry
     /// </summary>
     private void RegisterStandardCoercions()
     {
-        // Register basic coercions
+        // Register basic coercions (primitives, JSON, arrays, ranges)
         BasicCoercions.RegisterAll(this);
 
-        // TODO: Re-enable advanced coercions once implemented
-        // AdvancedCoercions.RegisterAll(this);
-        // ProviderSpecificCoercions.RegisterAll(this);
+        // Register advanced coercions (spatial, network, temporal, LOBs)
+        AdvancedCoercions.RegisterAll(this);
     }
 }
 
@@ -119,7 +136,7 @@ public abstract class DbCoercion<T> : IDbCoercion<T>
     {
         if (targetType == typeof(T) || targetType == typeof(T?))
         {
-            if (TryRead(src, out T? typedValue))
+            if (TryRead(src, out var typedValue))
             {
                 value = typedValue;
                 return true;
@@ -136,6 +153,7 @@ public abstract class DbCoercion<T> : IDbCoercion<T>
         {
             return TryWrite(typedValue, parameter);
         }
+
         if (value == null)
         {
             return TryWrite(default, parameter);

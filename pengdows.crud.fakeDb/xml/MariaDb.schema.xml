@@ -47,7 +47,8 @@
         <DataSourceProductVersion>11.7.2-MariaDB-ubu2404</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>11.7.2</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)
+        </IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>
@@ -67,7 +68,8 @@
         <DataSourceProductVersion>11.7.2-MariaDB-ubu2404</DataSourceProductVersion>
         <DataSourceProductVersionNormalized>11.7.2</DataSourceProductVersionNormalized>
         <GroupByBehavior>2</GroupByBehavior>
-        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)</IdentifierPattern>
+        <IdentifierPattern>(^[\p{Lo}\p{Lu}\p{Ll}_@#][\p{Lo}\p{Lu}\p{Ll}\p{Nd}@$#_]*$)|(^\"[^\"\0]|\"\"+\"$)
+        </IdentifierPattern>
         <IdentifierCase>1</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
         <ParameterMarkerFormat>{0}</ParameterMarkerFormat>

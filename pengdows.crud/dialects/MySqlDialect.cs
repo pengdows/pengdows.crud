@@ -1,50 +1,136 @@
+// =============================================================================
+// FILE: MySqlDialect.cs
+// PURPOSE: MySQL specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports MySQL 5.7+ and 8.0+ with version-specific features.
+// - Key features:
+//   * INSERT ... ON DUPLICATE KEY UPDATE for upserts
+//   * Parameter marker: @ (at sign)
+//   * Identifier quoting: "name" (with ANSI_QUOTES mode)
+//   * Max parameters: 65535 (theoretical max)
+//   * Prepared statements enabled
+// - Session settings: STRICT_ALL_TABLES, ANSI_QUOTES mode for SQL standard.
+// - MySQL 8.0.20+ uses new alias syntax for ON DUPLICATE KEY UPDATE.
+// - Detects MySqlConnector vs Oracle's MySql.Data provider.
+// - LAST_INSERT_ID() for returning generated IDs.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// MySQL dialect with limited standard compliance
+/// MySQL dialect with ANSI SQL mode configuration.
 /// </summary>
-public class MySqlDialect : SqlDialect
+/// <remarks>
+/// <para>
+/// Supports MySQL 5.7 and 8.0+ with automatic version detection.
+/// Enforces ANSI-compatible SQL mode for consistent behavior.
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON DUPLICATE KEY UPDATE.
+/// MySQL 8.0.20+ uses the new alias syntax.
+/// </para>
+/// <para>
+/// <strong>Providers:</strong> Supports both MySqlConnector (recommended)
+/// and Oracle's MySql.Data. MySqlConnector is the preferred provider for
+/// new deployments because it supports cleaner pool separation and has shown
+/// better behavior under high-concurrency workloads.
+/// </para>
+/// </remarks>
+internal class MySqlDialect : SqlDialect
 {
-    private const string DefaultSqlMode = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES';";
-    private const string ExpectedSqlMode = "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+    private const string SqlModeSettingName = "sql_mode";
+
+    private const string RequiredSqlModeFlags =
+        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE," +
+        "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+
+    private const string DefaultSqlMode = $"SET SESSION {SqlModeSettingName} = '{RequiredSqlModeFlags}';";
+
+    // Alias kept for readability at call sites
+    private const string ExpectedSqlMode = RequiredSqlModeFlags;
+
+    protected const string SetSessionTransactionReadOnlySql = "SET SESSION TRANSACTION READ ONLY;";
+    protected const string SetSessionTransactionReadWriteSql = "SET SESSION TRANSACTION READ WRITE;";
+
+    private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
+    private const int MaxPreparedStatementCountErrorCode = 1461;
+    private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
+    private const string PreferredProviderWarning =
+        "MySql.Data is supported, but MySqlConnector is the preferred MySQL provider for pengdows.crud. " +
+        "MySqlConnector provides better read/write pool separation support and has shown better behavior under high concurrency.";
+
+    private const int DefaultMySqlConnectionTimeout = 15;
+
+    private static readonly string[] ConnectionTimeoutKeys =
+    {
+        "Connection Timeout", "ConnectionTimeout", "Connect Timeout"
+    };
 
     private string? _sessionSettings;
     private readonly bool _isMySqlConnector;
+    private readonly SupportedDatabase _flavor;
+    private volatile bool _prepareDisabledByServerLimit;
 
-    internal MySqlDialect(DbProviderFactory factory, ILogger logger)
-        : base(factory, logger)
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger, SupportedDatabase flavor = SupportedDatabase.MySql)
+        : this(factory, logger,
+            (factory.GetType().Namespace ?? string.Empty)
+            .Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase),
+            flavor)
     {
-        var ns = factory.GetType().Namespace ?? string.Empty;
-        _isMySqlConnector = ns.Contains("MySqlConnector", StringComparison.OrdinalIgnoreCase);
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.MySql;
+    internal MySqlDialect(DbProviderFactory factory, ILogger logger, bool isMySqlConnector, SupportedDatabase flavor = SupportedDatabase.MySql)
+        : base(factory, logger)
+    {
+        _isMySqlConnector = isMySqlConnector;
+        _flavor = flavor;
+
+        if (ShouldWarnAboutMySqlDataProvider(factory))
+        {
+            Logger.LogWarning(PreferredProviderWarning);
+        }
+    }
+
+    public override SupportedDatabase DatabaseType => _flavor;
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: MySQL theoretical maximum parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
+
     // IMMUTABLE: MySQL output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 65535;
+
     // IMMUTABLE: MySQL identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
-    
-    // MySQL benefits from server-side prepared statements
-    public override bool PrepareStatements => true;
+
+    // MySQL prepared statements default OFF to avoid max_prepared_stmt_count exhaustion.
+    // Opt-in via DatabaseContextConfiguration.ForceManualPrepare = true.
+    // ShouldDisablePrepareOn() still guards the opt-in path against error 1461.
+    public override bool PrepareStatements => false;
+
+    // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
+    // Retrying after exhaustion only compounds the problem.
+    public override bool IsPrepareExhausted => _prepareDisabledByServerLimit;
 
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
-    public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 5;
+    public override bool SupportsSavepoints => true; // Available since MySQL 5.0.3 (2005)
+    public override bool SupportsJsonTypes => IsInitialized && IsVersionAtLeast(5, 7, 8);
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
 
@@ -53,12 +139,37 @@ public class MySqlDialect : SqlDialect
         return "SELECT LAST_INSERT_ID()";
     }
 
-    public override string GetVersionQuery() => "SELECT VERSION()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT VERSION()";
+    }
+
+    public override bool ShouldDisablePrepareOn(Exception ex)
+    {
+        if (base.ShouldDisablePrepareOn(ex))
+        {
+            return true;
+        }
+
+        if (!IsMaxPreparedStatementLimit(ex))
+        {
+            return false;
+        }
+
+        if (!_prepareDisabledByServerLimit)
+        {
+            _prepareDisabledByServerLimit = true;
+            Logger.LogWarning(ex,
+                "Disabling prepare for MySQL dialect after max_prepared_stmt_count limit was reached.");
+        }
+
+        return true;
+    }
 
     public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
     {
         var productInfo = await base.DetectDatabaseInfoAsync(connection);
-        
+
         // Check and cache MySQL session settings during initialization
         if (_sessionSettings == null)
         {
@@ -67,14 +178,16 @@ public class MySqlDialect : SqlDialect
 
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}", _sessionSettings);
+                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}",
+                    _sessionSettings);
             }
             else
             {
-                Logger.LogInformation("MySQL session settings: no changes required (already compliant)");
+                Logger.LogInformation(
+                    "MySQL session settings: already compliant; enforcing baseline on every checkout");
             }
         }
-        
+
         return productInfo;
     }
 
@@ -85,17 +198,34 @@ public class MySqlDialect : SqlDialect
             conn =>
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT @@sql_mode";
+                cmd.CommandText = $"SELECT @@{SqlModeSettingName}";
 
                 var currentSqlMode = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
                 var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["sql_mode"] = currentSqlMode
+                    [SqlModeSettingName] = currentSqlMode
                 };
 
-                var script = SqlModeContainsAll(currentSqlMode, ExpectedSqlMode)
-                    ? string.Empty
-                    : DefaultSqlMode;
+                // Surgical Delta: Only apply what is missing
+                var currentModes = currentSqlMode.Split(',')
+                    .Select(m => m.Trim())
+                    .Where(m => !string.IsNullOrEmpty(m))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var expectedModes = ExpectedSqlMode.Split(',')
+                    .Select(m => m.Trim())
+                    .Where(m => !string.IsNullOrEmpty(m));
+
+                var missingModes = expectedModes.Where(m => !currentModes.Contains(m)).ToList();
+
+                if (missingModes.Count == 0)
+                {
+                    return new SessionSettingsResult(string.Empty, snapshot, false);
+                }
+
+                // Building the new mode: current + missing
+                var newMode = string.Join(",", currentModes.Concat(missingModes));
+                var script = $"SET SESSION {SqlModeSettingName} = '{newMode}';";
 
                 return new SessionSettingsResult(script, snapshot, false);
             },
@@ -109,30 +239,48 @@ public class MySqlDialect : SqlDialect
             "Failed to check MySQL session settings, applying default settings");
     }
 
-    private static bool SqlModeContainsAll(string currentMode, string expectedMode)
+    private static bool IsMaxPreparedStatementLimit(Exception ex)
     {
-        var currentModes = currentMode.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var expectedModes = expectedMode.Split(',').Select(m => m.Trim());
-        
-        return expectedModes.All(expectedModes => currentModes.Contains(expectedModes));
-    }
-
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        var baseSettings = _sessionSettings ?? DefaultSqlMode;
-        
-        if (readOnly)
+        for (Exception? current = ex; current != null; current = current.InnerException)
         {
-            return $"{baseSettings}\nSET SESSION TRANSACTION READ ONLY;";
+            if (current.Message.Contains(MaxPreparedStatementCountToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (TryGetProviderErrorCode(current) == MaxPreparedStatementCountErrorCode)
+            {
+                return true;
+            }
         }
 
-        return baseSettings;
+        return false;
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
+    private static int? TryGetProviderErrorCode(Exception ex)
     {
-        return _sessionSettings ?? DefaultSqlMode;
+        var numberProperty = ex.GetType().GetProperty("Number");
+        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
+        {
+            return number;
+        }
+
+        return null;
+    }
+
+    public override string GetBaseSessionSettings()
+    {
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
+    }
+
+    public override string GetReadOnlySessionSettings()
+    {
+        return SetSessionTransactionReadOnlySql;
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return SetSessionTransactionReadWriteSql;
     }
 
     public override SqlStandardLevel DetermineStandardCompliance(Version? version)
@@ -153,9 +301,10 @@ public class MySqlDialect : SqlDialect
 
     public override string UpsertIncomingColumn(string columnName)
     {
-        if (UseUpsertAlias)
+        var alias = UpsertIncomingAlias;
+        if (!string.IsNullOrEmpty(alias))
         {
-            return $"{WrapObjectName(UpsertIncomingAlias!)}.{WrapObjectName(columnName)}";
+            return $"{WrapObjectName(alias)}.{WrapObjectName(columnName)}";
         }
 
         return $"VALUES({WrapObjectName(columnName)})";
@@ -164,24 +313,86 @@ public class MySqlDialect : SqlDialect
     public override string? UpsertIncomingAlias => UseUpsertAlias ? "incoming" : null;
 
     private bool UseUpsertAlias =>
-        IsInitialized && ProductInfo.ParsedVersion is { } version && version >= new Version(8, 0, 20);
+        IsInitialized &&
+        ProductInfo.ParsedVersion is { } version &&
+        version >= UpsertAliasVersionThreshold;
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        try
-        {
-            using var sc = transaction.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;");
-            sc.ExecuteNonQueryAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to apply MySQL read-only session settings");
-        }
+        TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MySQL");
+    }
+
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MySQL", cancellationToken);
     }
 
     // Connection pooling properties for MySQL (provider-aware)
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => _isMySqlConnector ? "MinimumPoolSize" : "Min Pool Size";
     public override string? MaxPoolSizeSettingName => _isMySqlConnector ? "MaximumPoolSize" : "Max Pool Size";
+
+    public override string? ApplicationNameSettingName =>
+        _isMySqlConnector ? "Application Name" : null;
+
+    private static bool ShouldWarnAboutMySqlDataProvider(DbProviderFactory factory)
+    {
+        var factoryType = factory.GetType();
+        var typeNamespace = factoryType.Namespace ?? string.Empty;
+        var assemblyName = factoryType.Assembly.GetName().Name ?? string.Empty;
+
+        return typeNamespace.Contains("MySql.Data", StringComparison.OrdinalIgnoreCase) ||
+               assemblyName.Equals("MySql.Data", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal override string GetReadOnlyConnectionString(string connectionString)
+    {
+        if (_isMySqlConnector)
+        {
+            // MySqlConnector supports ApplicationName; pool split handled by
+            // ApplyApplicationNameSuffix in BuildReaderConnectionString.
+            return connectionString;
+        }
+
+        // Oracle MySql.Data does not support ApplicationName.
+        // Use Connection Timeout delta (+1s) to create a distinct connection string
+        // that forces a separate connection pool for read-only connections.
+        return ApplyConnectionTimeoutDelta(connectionString);
+    }
+
+    private string ApplyConnectionTimeoutDelta(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = Factory.CreateConnectionStringBuilder()
+                          ?? new DbConnectionStringBuilder();
+            builder.ConnectionString = connectionString;
+
+            var currentTimeout = DefaultMySqlConnectionTimeout;
+            foreach (var key in ConnectionTimeoutKeys)
+            {
+                if (builder.TryGetValue(key, out var value) &&
+                    int.TryParse(value?.ToString(), out var parsed) &&
+                    parsed > 0)
+                {
+                    currentTimeout = parsed;
+                    break;
+                }
+            }
+
+            builder["Connection Timeout"] = currentTimeout + 1;
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            // Fallback: append directly
+            return $"{connectionString};Connection Timeout={DefaultMySqlConnectionTimeout + 1}";
+        }
+    }
 }

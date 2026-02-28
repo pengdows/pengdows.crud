@@ -9,12 +9,12 @@ namespace pengdows.crud.Tests;
 
 public class BuildWhereNullIdTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<NullableIdEntity, int?> helper;
+    private readonly TableGateway<NullableIdEntity, int?> helper;
 
     public BuildWhereNullIdTests()
     {
         TypeMap.Register<NullableIdEntity>();
-        helper = new EntityHelper<NullableIdEntity, int?>(Context);
+        helper = new TableGateway<NullableIdEntity, int?>(Context);
     }
 
     [Fact]

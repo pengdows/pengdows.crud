@@ -6,6 +6,7 @@ using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
 using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
 #endregion
@@ -26,7 +27,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
         Console.WriteLine($"Running test with container: {GetType().Name}");
         await testProvider.RunTest();
         Console.WriteLine(
-            $"Test finished: MaxConnections={dbContext.MaxNumberOfConnections} CurrentOpenConnection={dbContext.NumberOfOpenConnections}");
+            $"Test finished: PeakOpenConnections={dbContext.PeakOpenConnections} CurrentOpenConnection={dbContext.NumberOfOpenConnections}");
     }
 
     public abstract Task StartAsync();
@@ -35,13 +36,21 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
     protected async Task WaitForDbToStart(DbProviderFactory instance, string connectionString, IContainer container,
         int numberOfSecondsToWait = 60)
     {
+        var overrideTimeout = Environment.GetEnvironmentVariable("TESTBED_STARTUP_TIMEOUT_SECONDS");
+        if (!string.IsNullOrWhiteSpace(overrideTimeout)
+            && int.TryParse(overrideTimeout, out var overrideSeconds)
+            && overrideSeconds > 0)
+        {
+            numberOfSecondsToWait = overrideSeconds;
+        }
+
         var csb = instance.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         csb.ConnectionString = connectionString;
 
         var timeout = TimeSpan.FromSeconds(numberOfSecondsToWait);
         var startTime = DateTime.UtcNow;
 
-        var lastError = String.Empty;
+        var lastError = string.Empty;
         while (DateTime.UtcNow - startTime < timeout)
         {
             var created = instance.CreateConnection();
@@ -49,6 +58,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
             {
                 throw new InvalidOperationException("DbProviderFactory.CreateConnection() returned null.");
             }
+
             await using var connection = created;
             try
             {
@@ -93,6 +103,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                     {
                         throw new InvalidOperationException("DbProviderFactory.CreateConnection() returned null.");
                     }
+
                     createConn.ConnectionString = csbTemp.ConnectionString;
 
                     await using var createCmd = createConn.CreateCommand();
@@ -100,6 +111,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                     {
                         throw new InvalidOperationException("CreateCommand() returned null.");
                     }
+
                     createCmd.CommandText = $"CREATE DATABASE '{db}';";
 
                     await createConn.OpenAsync();

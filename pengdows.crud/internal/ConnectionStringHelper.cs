@@ -1,9 +1,29 @@
+// =============================================================================
+// FILE: ConnectionStringHelper.cs
+// PURPOSE: Utilities for parsing and creating DbConnectionStringBuilder instances.
+//
+// AI SUMMARY:
+// - Helper for creating DbConnectionStringBuilder with graceful fallbacks.
+// - Create(factory, connectionString): Uses factory's builder if available.
+// - Create(builder, connectionString): Applies connection string to builder.
+// - Handles provider-specific builders that may reject certain string formats.
+// - Fallback strategy:
+//   1. Try provider's strongly-typed builder
+//   2. If that fails, fall back to generic DbConnectionStringBuilder
+//   3. For unparseable strings (like ":memory:"), stores as Data Source
+// - TryApply(): Safely sets ConnectionString property, catches exceptions.
+// - TrySetRawDataSource(): Sets raw value as Data Source for file paths.
+// - Used during DatabaseContext initialization for connection string parsing.
+// =============================================================================
+
 using System.Data.Common;
 
 namespace pengdows.crud.@internal;
 
 internal static class ConnectionStringHelper
 {
+    internal const string DataSourceKey = "Data Source";
+
     public static DbConnectionStringBuilder Create(DbProviderFactory factory, string? connectionString)
     {
         var preferred = factory?.CreateConnectionStringBuilder();
@@ -64,7 +84,7 @@ internal static class ConnectionStringHelper
     {
         try
         {
-            builder["Data Source"] = value;
+            builder[DataSourceKey] = value;
             return true;
         }
         catch

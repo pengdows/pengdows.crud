@@ -1,6 +1,7 @@
 #region
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -17,7 +18,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildDelete_UsesCachedSql()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildDelete(1);
         var cache = GetQueryCache(helper);
@@ -33,12 +34,12 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildDelete_CacheScopedPerInstance()
     {
         TypeMap.Register<CacheEntity>();
-        var helper1 = new EntityHelper<CacheEntity, int>(Context);
+        var helper1 = new TableGateway<CacheEntity, int>(Context);
         helper1.BuildDelete(1);
         var cache1 = GetQueryCache(helper1);
         Assert.True(cache1.ContainsKey("DeleteById"));
 
-        var helper2 = new EntityHelper<CacheEntity, int>(Context);
+        var helper2 = new TableGateway<CacheEntity, int>(Context);
         var cache2 = GetQueryCache(helper2);
         Assert.False(cache2.ContainsKey("DeleteById"));
     }
@@ -47,7 +48,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_CachesPerAlias()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a");
         var cache = GetQueryCache(helper);
@@ -63,7 +64,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildBaseRetrieve_DifferentAlias_SeparatesCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a");
         helper.BuildBaseRetrieve("b");
@@ -76,13 +77,13 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_CachesByCount()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc1 = Context.CreateSqlContainer();
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc1);
         var cache = GetQueryCache(helper);
-        var key = $"Where:{wrapped}:2";
+        var key = $"WhereQuery:{wrapped}:2";
         var first = cache[key];
 
         var sc2 = Context.CreateSqlContainer();
@@ -96,7 +97,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_DifferentCount_SeparatesCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc1 = Context.CreateSqlContainer();
@@ -106,14 +107,21 @@ public class QueryCacheTests : SqlLiteContextTestBase
         helper.BuildWhere(wrapped, new[] { 1, 2 }, sc2);
 
         var cache = GetQueryCache(helper);
-        Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
+        // Single-ID clause is stored in CachedSqlTemplates (dialect-keyed), not in _queryCache,
+        // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
+        Assert.False(cache.ContainsKey(wrapped), "Single-ID clause is in CachedSqlTemplates, not _queryCache");
+        // Multi-ID uses "WhereQuery:{col}:{bucket}" in _queryCache.
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"),
+            "Two-ID clause should be cached under WhereQuery key");
+        // SQL output is structurally different (equality vs IN-list).
+        Assert.NotEqual(sc1.Query.ToString(), sc2.Query.ToString());
     }
 
     [Fact]
     public void BuildWhere_ReusesParameters_WhenContainerReused()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc = Context.CreateSqlContainer();
@@ -133,7 +141,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void BuildWhere_AddsParameters_WhenCountIncreases()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         var sc = Context.CreateSqlContainer();
@@ -154,7 +162,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public async Task BuildDelete_ConcurrentCalls_ShareCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         await Task.WhenAll(
             Task.Run(() => helper.BuildDelete(1)),
@@ -169,7 +177,7 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public async Task BuildWhere_ConcurrentDifferentCounts_SeparateCache()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
         var wrapped = Context.WrapObjectName("Id");
 
         await Task.WhenAll(
@@ -186,19 +194,24 @@ public class QueryCacheTests : SqlLiteContextTestBase
         );
 
         var cache = GetQueryCache(helper);
-        Assert.NotSame(cache[$"Where:{wrapped}:1"], cache[$"Where:{wrapped}:2"]);
+        // Single-ID clause is stored in CachedSqlTemplates (dialect-keyed), not in _queryCache,
+        // to prevent cross-dialect cache pollution (e.g. SQLite "@" vs PostgreSQL ":" markers).
+        Assert.False(cache.ContainsKey(wrapped), $"Single-ID clause should be in CachedSqlTemplates, not _queryCache");
+        // Multi-ID (count=2) caches the IN-list clause under "WhereQuery:{col}:2".
+        Assert.True(cache.ContainsKey($"WhereQuery:{wrapped}:2"),
+            $"Two-ID clause should be cached under WhereQuery key");
     }
 
     [Fact]
     public void BuildBaseRetrieve_WhenLimitExceeded_DropsOldEntries()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
         helper.BuildBaseRetrieve("a0");
         var cache = GetQueryCache(helper);
 
-        var limit = (int)typeof(EntityHelper<CacheEntity, int>)
+        var limit = (int)typeof(TableGateway<CacheEntity, int>)
             .GetField("MaxCacheSize", BindingFlags.NonPublic | BindingFlags.Static)!
             .GetValue(null)!;
 
@@ -216,39 +229,62 @@ public class QueryCacheTests : SqlLiteContextTestBase
     public void ClearCaches_RemovesAllEntries()
     {
         TypeMap.Register<CacheEntity>();
-        var helper = new EntityHelper<CacheEntity, int>(Context);
+        var helper = new TableGateway<CacheEntity, int>(Context);
 
-        helper.BuildDelete(1);
+        // Use BuildBaseRetrieve with a non-"a" alias since it still populates the query cache.
+        // (BuildDelete now uses cloned container templates instead of the query cache.)
+        helper.BuildBaseRetrieve("b");
         var cache = GetQueryCache(helper);
-        Assert.True(cache.ContainsKey("DeleteById"));
+        Assert.True(cache.ContainsKey("BaseRetrieve:b"));
 
         helper.ClearCaches();
         cache = GetQueryCache(helper);
         Assert.Empty(cache);
 
-        helper.BuildDelete(2);
+        helper.BuildBaseRetrieve("b");
         cache = GetQueryCache(helper);
-        Assert.True(cache.ContainsKey("DeleteById"));
+        Assert.True(cache.ContainsKey("BaseRetrieve:b"));
     }
 
-    private static ConcurrentDictionary<string, string> GetQueryCache<TEntity, TId>(EntityHelper<TEntity, TId> helper)
+    private static Dictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
         where TEntity : class, new()
     {
-        var field = typeof(EntityHelper<TEntity, TId>)
+        // _queryCache is ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>>
+        // Aggregate all dialect caches into one dictionary for test inspection.
+        var field = typeof(TableGateway<TEntity, TId>)
             .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
-        var cache = field!.GetValue(helper)!;
-        var mapField = cache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
-        return (ConcurrentDictionary<string, string>)mapField!.GetValue(cache)!;
+        var outerDict = field!.GetValue(helper)!;
+
+        var result = new Dictionary<string, string>();
+        foreach (var dialectKvp in (System.Collections.IEnumerable)outerDict)
+        {
+            var kvpType = dialectKvp.GetType();
+            var boundedCache = kvpType.GetProperty("Value")!.GetValue(dialectKvp)!;
+
+            var mapField = boundedCache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
+            var rawMap = mapField!.GetValue(boundedCache)!;
+
+            // _map is ConcurrentDictionary<TKey, CacheEntry> — unwrap each CacheEntry.Value
+            var entryType = rawMap.GetType().GetGenericArguments()[1];
+            var valueProp = entryType.GetProperty("Value")!;
+
+            foreach (var item in (System.Collections.IEnumerable)rawMap)
+            {
+                var itemType = item.GetType();
+                var key = (string)itemType.GetProperty("Key")!.GetValue(item)!;
+                var entry = itemType.GetProperty("Value")!.GetValue(item)!;
+                result[key] = (string)valueProp.GetValue(entry)!;
+            }
+        }
+
+        return result;
     }
 
     [Table("CacheEntity")]
     private class CacheEntity
     {
-        [Id]
-        [Column("Id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Name", DbType.String)]
-        public string? Name { get; set; }
+        [Column("Name", DbType.String)] public string? Name { get; set; }
     }
 }

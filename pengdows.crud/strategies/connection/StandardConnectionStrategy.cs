@@ -1,3 +1,17 @@
+// =============================================================================
+// FILE: StandardConnectionStrategy.cs
+// PURPOSE: Default connection strategy using ephemeral connections with pooling.
+//
+// AI SUMMARY:
+// - Production-recommended strategy for scalable database connections.
+// - Creates ephemeral connections per operation, relying on ADO.NET pooling.
+// - "Open late, close early" - connections disposed immediately after use.
+// - No persistent connections - each GetConnection() creates new from pool.
+// - Thread-safe: No shared state between concurrent operations.
+// - Ideal for: SQL Server, PostgreSQL, MySQL, Oracle with connection pooling.
+// - Base class for KeepAliveConnectionStrategy (adds sentinel connection).
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
@@ -29,7 +43,7 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DO NOT MODIFY: This is the baseline strategy - changes here affect all production deployments
 /// </summary>
-public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
+internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionStrategy
 {
     protected readonly DatabaseContext _context;
 
@@ -40,7 +54,10 @@ public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public virtual ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
-        return _context.FactoryCreateConnection(null, isShared, _context.IsReadOnlyConnection);
+        var executionIsRead = executionType == ExecutionType.Read;
+        var readOnly = _context.IsReadOnlyConnection ||
+                       (executionIsRead && _context.ShouldUseReadOnlyForReadIntent());
+        return _context.GetStandardConnectionWithExecutionType(executionType, isShared, readOnly);
     }
 
     public virtual void PostInitialize(ITrackedConnection? connection)
@@ -64,20 +81,44 @@ public class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Shared helper for strategies that skip disposal of a persistent connection.
+    /// </summary>
+    internal static ValueTask ReleaseNonPersistentConnectionAsync(
+        ITrackedConnection? connection, ITrackedConnection? persistentConnection)
+    {
+        if (connection == null || ReferenceEquals(connection, persistentConnection))
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (connection is IAsyncDisposable asyncDisposable)
+        {
+            return asyncDisposable.DisposeAsync();
+        }
+
+        connection.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
     public virtual (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         // Standard strategy: reuse the initialization connection for detection, then dispose it
         if (initConnection != null)
         {
-            var dialect = SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
-            var dataSourceInfo = new DataSourceInformation(dialect);
-            return (dialect, dataSourceInfo);
+            // When using DbDataSource, factory is created from the connection and will not be null
+            // When factory is null, fall back to SQL-92 dialect
+            if (factory != null)
+            {
+                var dialect = SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
+                var dataSourceInfo = new DataSourceInformation(dialect);
+                return (dialect, dataSourceInfo);
+            }
         }
 
         return (null, null);
     }
-
 }

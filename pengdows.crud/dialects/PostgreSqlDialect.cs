@@ -1,44 +1,162 @@
-using System;
-using System.Collections.Generic;
+// =============================================================================
+// FILE: PostgreSqlDialect.cs
+// PURPOSE: PostgreSQL specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports PostgreSQL 10+ with comprehensive SQL standard compliance.
+// - Key features:
+//   * INSERT ... ON CONFLICT for upserts (supports DO UPDATE and DO NOTHING)
+//   * Parameter marker: @ (ADO.NET standard; avoids Npgsql '::' cast lookahead)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 32767 (practical limit)
+//   * Prepared statements enabled for performance
+// - Session settings: standard_conforming_strings, client_min_messages.
+// - RETURNING clause for getting generated IDs.
+// - Array/range type support via Npgsql.
+// - CockroachDB uses this dialect (Postgres-compatible wire protocol).
+// - Stored procedure support via CALL statement.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
-using System.Linq;
 using Microsoft.Extensions.Logging;
-using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// PostgreSQL dialect with comprehensive standard support
+/// PostgreSQL dialect with comprehensive SQL standard compliance.
 /// </summary>
-public class PostgreSqlDialect : SqlDialect
+/// <remarks>
+/// <para>
+/// Supports PostgreSQL 10 and later with automatic version detection.
+/// Also used for CockroachDB (Postgres-compatible).
+/// </para>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT (key) DO UPDATE.
+/// </para>
+/// <para>
+/// <strong>Prepared Statements:</strong> Enabled by default for performance.
+/// </para>
+/// </remarks>
+internal class PostgreSqlDialect : SqlDialect
 {
-    private const string DefaultSessionSettings = "SET standard_conforming_strings = on;\nSET client_min_messages = warning;";
+    private const string StandardConformingStringsSetting = "standard_conforming_strings";
+    private const string ClientMinMessagesSetting = "client_min_messages";
+    private const string ReadOnlyTransactionSetting = "default_transaction_read_only";
+
+    // Reflection-based property/type names used to stamp NpgsqlDbType on JSON parameters
+    private const string DataTypeNameProperty = "DataTypeName";
+    private const string NpgsqlDbTypeProperty = "NpgsqlDbType";
+    private const string JsonbTypeName = "Jsonb";
+
+    private const string DefaultSessionSettings =
+        $"SET {StandardConformingStringsSetting} = on;\nSET {ClientMinMessagesSetting} = warning;";
+
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["standard_conforming_strings"] = "on",
-            ["client_min_messages"] = "warning"
+            [StandardConformingStringsSetting] = "on",
+            [ClientMinMessagesSetting] = "warning"
         };
 
     private string? _sessionSettings;
+    private readonly SupportedDatabase _flavor;
 
-    internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger)
+    internal PostgreSqlDialect(DbProviderFactory factory, ILogger logger, SupportedDatabase flavor = SupportedDatabase.PostgreSql)
         : base(factory, logger)
     {
+        _flavor = flavor;
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
-    // Use ':' parameter marker; Npgsql supports ':' and existing integrations rely on it
-    public override string ParameterMarker => ":";
+    public override SupportedDatabase DatabaseType => _flavor;
+
+    // Use '@' parameter marker — ADO.NET standard; avoids Npgsql's '::' cast lookahead
+    public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+
     public override bool SupportsSetValuedParameters => true;
+
+    public override bool SupportsBatchUpdate => true;
+
+    /// <inheritdoc />
+    public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        if (rowCount <= 0) return;
+
+        // PostgreSQL UPDATE FROM VALUES pattern:
+        // UPDATE target SET col1 = s.col1, ...
+        // FROM (VALUES (@b0, @b1), (@b2, @b3)) AS s(pk, col1)
+        // WHERE target.pk = s.pk
+
+        query.Append("UPDATE ");
+        query.Append(tableName);
+        query.Append(" AS t SET ");
+
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0) query.Append(", ");
+            query.Append(columnNames[i]);
+            query.Append(" = s.");
+            query.Append(columnNames[i]);
+        }
+
+        query.Append(" FROM (VALUES ");
+
+        var allCols = new List<string>(keyColumns);
+        allCols.AddRange(columnNames);
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (row > 0) query.Append(", ");
+            query.Append('(');
+            for (var col = 0; col < allCols.Count; col++)
+            {
+                if (col > 0) query.Append(", ");
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
+            query.Append(')');
+        }
+
+        query.Append(") AS s(");
+        for (var i = 0; i < allCols.Count; i++)
+        {
+            if (i > 0) query.Append(", ");
+            query.Append(allCols[i]);
+        }
+
+        query.Append(") WHERE ");
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            if (i > 0) query.Append(" AND ");
+            query.Append("t.");
+            query.Append(keyColumns[i]);
+            query.Append(" = s.");
+            query.Append(keyColumns[i]);
+        }
+    }
+
     // IMMUTABLE: PostgreSQL practical parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 32767;
+
     // IMMUTABLE: PostgreSQL conservative output parameter limit for stored functions - do not change without extensive testing
     public override int MaxOutputParameters => 100;
+
     // IMMUTABLE: PostgreSQL NAMEDATALEN-1 identifier limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 63;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.PostgreSQL;
@@ -46,24 +164,26 @@ public class PostgreSqlDialect : SqlDialect
 
     // PostgreSQL benefits from prepared statements
     public override bool PrepareStatements => true;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsInsertOnConflict => true;
-    public override bool SupportsMerge => IsVersionAtLeast(15);
+    public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
+    public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
     public override bool SupportsJsonTable => IsVersionAtLeast(18);
     public override bool SupportsMergeReturning => IsVersionAtLeast(18);
 
-    public override bool SupportsInsertReturning => true;
+    // PostgreSQL MERGE does NOT allow table alias on left side of UPDATE SET
+    // Correct: UPDATE SET col = value
+    // Error:   UPDATE SET t.col = value  -- "column 't' of relation 'table' does not exist"
+    public override bool MergeUpdateRequiresTargetAlias => false;
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
+    public override bool SupportsInsertReturning => true;
 
     public override string GetLastInsertedIdQuery()
     {
@@ -85,12 +205,12 @@ public class PostgreSqlDialect : SqlDialect
         try
         {
             var type = parameter.GetType();
-            type.GetProperty("DataTypeName")?.SetValue(parameter, "jsonb");
+            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, "jsonb");
 
-            var npgsqlDbTypeProperty = type.GetProperty("NpgsqlDbType");
+            var npgsqlDbTypeProperty = type.GetProperty(NpgsqlDbTypeProperty);
             if (npgsqlDbTypeProperty != null && npgsqlDbTypeProperty.PropertyType.IsEnum)
             {
-                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, "Jsonb", ignoreCase: true, out var enumValue))
+                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, JsonbTypeName, true, out var enumValue))
                 {
                     npgsqlDbTypeProperty.SetValue(parameter, enumValue);
                 }
@@ -98,11 +218,15 @@ public class PostgreSqlDialect : SqlDialect
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to stamp NpgsqlDbType metadata for JSON parameter {Parameter}.", parameter.ParameterName);
+            Logger.LogDebug(ex, "Failed to stamp NpgsqlDbType metadata for JSON parameter {Parameter}.",
+                parameter.ParameterName);
         }
     }
 
-    public override string GetVersionQuery() => "SELECT version()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT version()";
+    }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
     {
@@ -111,6 +235,7 @@ public class PostgreSqlDialect : SqlDialect
         {
             return "PostgreSQL";
         }
+
         return name;
     }
 
@@ -127,11 +252,15 @@ public class PostgreSqlDialect : SqlDialect
             var snapshot = string.Join(", ", result.Snapshot.Select(kv => $"{kv.Key}={kv.Value}"));
             if (!string.IsNullOrWhiteSpace(_sessionSettings))
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}", snapshot, _sessionSettings);
+                Logger.LogInformation(
+                    "PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}", snapshot,
+                    _sessionSettings);
             }
             else
             {
-                Logger.LogInformation("PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)", snapshot);
+                Logger.LogInformation(
+                    "PostgreSQL session settings detected: {CurrentSettings}. Already compliant; enforcing baseline on every checkout",
+                    snapshot);
             }
         }
 
@@ -145,7 +274,8 @@ public class PostgreSqlDialect : SqlDialect
             conn =>
             {
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT name, setting FROM pg_settings WHERE name IN ('standard_conforming_strings', 'client_min_messages')";
+                cmd.CommandText =
+                    $"SELECT name, setting FROM pg_settings WHERE name IN ('{StandardConformingStringsSetting}', '{ClientMinMessagesSetting}')";
 
                 using var reader = cmd.ExecuteReader();
                 var currentSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -168,14 +298,15 @@ public class PostgreSqlDialect : SqlDialect
                 DefaultSessionSettings,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["standard_conforming_strings"] = "unknown",
-                    ["client_min_messages"] = "unknown"
+                    [StandardConformingStringsSetting] = "unknown",
+                    [ClientMinMessagesSetting] = "unknown"
                 },
                 true),
             "Failed to check PostgreSQL session settings, applying default settings");
     }
 
-    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(IDbConnection connection)
+    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(
+        IDbConnection connection)
     {
         var result = GetPostgreSqlSessionSettings(connection);
         var snapshot = new Dictionary<string, string>(result.Snapshot, StringComparer.OrdinalIgnoreCase);
@@ -212,89 +343,97 @@ public class PostgreSqlDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        // If session settings haven't been detected yet (e.g., in testing),
-        // provide fallback settings that are compatible with older PostgreSQL versions
-        return _sessionSettings ?? DefaultSessionSettings;
+        // Always enforce the full baseline on every connection checkout.
+        // A cached empty diff means the first sampled connection was already compliant,
+        // but pooled connections can drift if external code mutates session state.
+        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
     }
 
     public override string GetReadOnlySessionSettings()
     {
-        return "SET default_transaction_read_only = on";
+        return $"SET {ReadOnlyTransactionSetting} = on";
+    }
+
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return $"SET {ReadOnlyTransactionSetting} = off";
     }
 
     public override string? GetReadOnlyConnectionParameter()
     {
-        return "Options='-c default_transaction_read_only=on'";
+        return $"Options='-c {ReadOnlyTransactionSetting}=on'";
     }
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        var baseSettings = GetBaseSessionSettings();
+    /// <summary>
 
-        return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
+    /// <summary>
+    /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection
+    /// string before the DataSource is created.  Must be called while the connection
+    /// string still carries credentials; NpgsqlConnectionStringBuilder preserves them on
+    /// round-trip, unlike connection.ConnectionString on a DataSource-created connection.
+    /// </summary>
+    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    {
+        try
+        {
+            ConnectionStringBuilder.ConnectionString = connectionString;
+            var builder = ConnectionStringBuilder;
+            var modified = false;
+
+            if (!builder.ContainsKey("MaxAutoPrepare") || (int)builder["MaxAutoPrepare"] == 0)
+            {
+                builder["MaxAutoPrepare"] = 64;
+                modified = true;
+            }
+
+            if (!builder.ContainsKey("AutoPrepareMinUsages") || (int)builder["AutoPrepareMinUsages"] == 0)
+            {
+                builder["AutoPrepareMinUsages"] = 2;
+                modified = true;
+            }
+
+            if (!builder.ContainsKey("Multiplexing") || (bool)builder["Multiplexing"])
+            {
+                builder["Multiplexing"] = false;
+                modified = true;
+            }
+
+            return modified ? builder.ConnectionString : connectionString;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to prepare connection string for DataSource.");
+            return connectionString;
+        }
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
+    public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,
+        bool readOnly)
     {
-        return _sessionSettings ?? @"SET standard_conforming_strings = on;
-SET client_min_messages = warning;";
-    }
-
-    public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
-    {
-        // Apply Npgsql-specific prepare settings if this is an Npgsql connection
+        // Npgsql: all provider-specific settings are baked into the connection string
+        // before DataSource creation (via PrepareConnectionStringForDataSource).
+        // Do NOT read/write connection.ConnectionString here — on DataSource-created
+        // connections Npgsql strips credentials (PersistSecurityInfo behaviour) and
+        // writing it back would silently drop the password.
         if (connection.GetType().FullName?.StartsWith("Npgsql.") == true)
         {
-            try
+            return;
+        }
+
+        // For non-Npgsql connections in tests, normalize case so assertions using lower-case substrings succeed
+        try
+        {
+            var typeName = connection.GetType().Name;
+            var isTestConn = string.Equals(typeName, "TestConnection", StringComparison.Ordinal);
+            var isFakeDb = connection.GetType().FullName?.Contains("fakeDb.") == true;
+            if (isTestConn && !string.IsNullOrEmpty(connection.ConnectionString) && !isFakeDb)
             {
-                // Use the inherited ConnectionStringBuilder property instead of reflection
-                ConnectionStringBuilder.ConnectionString = connection.ConnectionString;
-                var builder = ConnectionStringBuilder;
-
-                // Configure auto-prepare settings for optimal prepared statement performance
-                if (builder.ContainsKey("MaxAutoPrepare") && (int)builder["MaxAutoPrepare"] == 0)
-                {
-                    builder["MaxAutoPrepare"] = 64;
-                }
-                else if (!builder.ContainsKey("MaxAutoPrepare"))
-                {
-                    builder["MaxAutoPrepare"] = 64;
-                }
-
-                if (builder.ContainsKey("AutoPrepareMinUsages") && (int)builder["AutoPrepareMinUsages"] == 0)
-                {
-                    builder["AutoPrepareMinUsages"] = 2;
-                }
-                else if (!builder.ContainsKey("AutoPrepareMinUsages"))
-                {
-                    builder["AutoPrepareMinUsages"] = 2;
-                }
-
-                // Multiplexing must be disabled for prepare to work properly
-                builder["Multiplexing"] = false;
-
-                connection.ConnectionString = builder.ToString();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogDebug(ex, "Failed to configure Npgsql connection string settings, using original connection string");
+                connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
             }
         }
-        else
+        catch
         {
-            // For non-Npgsql connections in tests, normalize case so assertions using lower-case substrings succeed
-            try
-            {
-                var typeName = connection.GetType().Name;
-                var isTestConn = string.Equals(typeName, "TestConnection", StringComparison.Ordinal);
-                var isFakeDb = connection.GetType().FullName?.Contains("fakeDb.") == true;
-                if (isTestConn && !string.IsNullOrEmpty(connection.ConnectionString) && !isFakeDb)
-                {
-                    connection.ConnectionString = connection.ConnectionString.ToLowerInvariant();
-                }
-            }
-            catch { /* ignore */ }
+            /* ignore */
         }
     }
 
@@ -315,6 +454,49 @@ SET client_min_messages = warning;";
         return SqlStandardLevel.Sql2008;
     }
 
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (value is DateTimeOffset dto)
+        {
+            // Npgsql 6+ requires DateTimeOffset to be UTC when writing to timestamptz.
+            return dto.UtcDateTime;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
+    /// <summary>
+    /// Sets Npgsql-specific type properties on a parameter via reflection so that
+    /// subclasses can reuse the same logic without duplicating it.
+    /// Silently ignores failures when the parameter is not an Npgsql parameter type.
+    /// </summary>
+    protected void SetNpgsqlParameterType(DbParameter parameter, string npgsqlDbTypeName, string dataTypeName)
+    {
+        try
+        {
+            var type = parameter.GetType();
+            var npgsqlDbTypeProp = type.GetProperty(NpgsqlDbTypeProperty);
+            if (npgsqlDbTypeProp != null)
+            {
+                if (Enum.TryParse(npgsqlDbTypeProp.PropertyType, npgsqlDbTypeName, true, out var enumVal))
+                {
+                    npgsqlDbTypeProp.SetValue(parameter, enumVal);
+                }
+            }
+
+            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, dataTypeName);
+        }
+        catch
+        {
+            // Not an Npgsql parameter or the property is absent — ignore.
+        }
+    }
+
     // Tests access a protected member via reflection; provide a protected facade that
     // delegates to the public base implementation without changing API surface.
     protected new SqlStandardLevel DetermineStandardCompliance(Version? version)
@@ -323,8 +505,8 @@ SET client_min_messages = warning;";
     }
 
     // Connection pooling properties for PostgreSQL (Npgsql)
-    public override bool SupportsExternalPooling => true;
-    public override string? PoolingSettingName => "Pooling";
+    // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Minimum Pool Size";
     public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
+    public override string? ApplicationNameSettingName => "Application Name";
 }

@@ -1,10 +1,10 @@
 #region
 
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 #endregion
 
@@ -14,6 +14,7 @@ public class fakeDbCommand : DbCommand
 {
     private bool _shouldFailOnExecute;
     private Exception? _customExecuteException;
+    public bool WasDisposed { get; private set; }
 
     public fakeDbCommand(DbConnection connection)
     {
@@ -25,16 +26,14 @@ public class fakeDbCommand : DbCommand
     {
     }
 
-    [AllowNull]
-    public override string CommandText { get; set; }
+    [AllowNull] public override string CommandText { get; set; } = string.Empty;
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
     protected override DbConnection? DbConnection { get; set; }
-    [AllowNull]
-    public new DbTransaction Transaction { get; set; }
+    [AllowNull] public new DbTransaction Transaction { get; set; }
 
     private readonly FakeParameterCollection _parameterCollection = new();
 
@@ -86,23 +85,30 @@ public class fakeDbCommand : DbCommand
                 {
                     conn.ExecutedNonQueryTexts.Add(CommandText);
                 }
+
                 return 0;
             }
         }
+
         if (conn != null && conn.NonQueryExecuteException != null)
         {
             var ex = conn.NonQueryExecuteException;
             conn.SetNonQueryExecuteException(null);
             throw ex;
         }
-        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exNonQuery))
+
+        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
         {
-            throw exNonQuery;
+            throw exNonQuery!;
         }
+
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
         }
+
+        // Apply output parameter values if queued
+        ApplyOutputParameterValues(conn);
 
         // Prefer queued results when present (test control)
         if (conn != null && conn.NonQueryResults.Count > 0)
@@ -139,12 +145,18 @@ public class fakeDbCommand : DbCommand
                 conn.SetScalarExecuteException(null);
                 throw ex;
             }
-            if (!string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exScalar))
+
+            if (TryGetCommandFailure(conn, CommandText, out var exScalar))
             {
-                throw exScalar;
+                throw exScalar!;
             }
+
+            // Apply output parameter values if queued
+            ApplyOutputParameterValues(conn);
+
             // Command-text-based result
-            if (!string.IsNullOrEmpty(CommandText) && conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
+            if (!string.IsNullOrEmpty(CommandText) &&
+                conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
             {
                 return commandResult;
             }
@@ -153,7 +165,8 @@ public class fakeDbCommand : DbCommand
             if (!string.IsNullOrEmpty(CommandText))
             {
                 var upper = CommandText.TrimStart().ToUpperInvariant();
-                var isGenericVersion = upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" || upper == "SELECT CURRENT_VERSION";
+                var isGenericVersion = upper == "SELECT VERSION()" || upper == "PRAGMA VERSION" ||
+                                       upper == "SELECT CURRENT_VERSION";
                 var isFirebirdEngine = upper.Contains("RDB$GET_CONTEXT('SYSTEM', 'ENGINE_VERSION')");
                 var isFirebirdMonitor = upper.Contains("MON$SERVER_VERSION");
                 if ((isGenericVersion || isFirebirdEngine || isFirebirdMonitor) && conn.ScalarResults.Count > 0)
@@ -161,6 +174,7 @@ public class fakeDbCommand : DbCommand
                     return conn.ScalarResults.Dequeue();
                 }
             }
+
             // Apply default scalar only to identity-returning paths and explicit version overrides
             if (conn.DefaultScalarResultOnce != null && !string.IsNullOrWhiteSpace(CommandText))
             {
@@ -173,17 +187,21 @@ public class fakeDbCommand : DbCommand
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
+
                 // INSERT ... RETURNING should return generated IDs
                 if (upper.StartsWith("INSERT") && (upper.Contains("RETURNING") || upper.Contains("OUTPUT INSERTED")))
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
+
                 // Identity retrieval SELECTs
-                if (upper.Contains("SCOPE_IDENTITY") || upper.Contains("LASTVAL") || upper.Contains("LAST_INSERT_ROWID") || upper.Contains("LAST_INSERT_ID"))
+                if (upper.Contains("SCOPE_IDENTITY") || upper.Contains("LASTVAL") ||
+                    upper.Contains("LAST_INSERT_ROWID") || upper.Contains("LAST_INSERT_ID"))
                 {
                     return conn.ConsumeDefaultScalarOnce();
                 }
             }
+
             // Handle version queries automatically based on emulated product (do not consume the generic queue)
             if (!string.IsNullOrEmpty(CommandText))
             {
@@ -193,6 +211,7 @@ public class fakeDbCommand : DbCommand
                     return versionResult;
                 }
             }
+
             // Prefer queued results when present (test control) for non-version commands
             if (conn.ScalarResults.Count > 0)
             {
@@ -264,9 +283,16 @@ public class fakeDbCommand : DbCommand
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
-        if (conn != null && !string.IsNullOrEmpty(CommandText) && conn.CommandFailuresByText.TryGetValue(CommandText, out var exReader))
+        if (TryGetCommandFailure(conn, CommandText, out var exReader))
         {
-            throw exReader;
+            throw exReader!;
+        }
+
+        // Propagate persistent scalar exception through the reader path as well,
+        // since ExecuteScalarCore now uses ExecuteReaderAsync internally.
+        if (conn?.PersistentScalarException != null)
+        {
+            throw conn.PersistentScalarException;
         }
 
         // Prefer queued results when present (test control)
@@ -275,10 +301,22 @@ public class fakeDbCommand : DbCommand
             conn.ExecutedReaderTexts.Add(CommandText);
         }
 
+        // Apply output parameter values if queued
+        ApplyOutputParameterValues(conn);
+
         if (conn != null && conn.ReaderResults.Count > 0)
         {
             var queued = conn.ReaderResults.Dequeue();
             return new fakeDbDataReader(ConvertRows(queued));
+        }
+
+        // Support for ExecuteScalarRequiredAsync which uses ExecuteReader:
+        // If we have ScalarResults but no ReaderResults, convert scalar to a single-row reader.
+        if (conn != null && conn.ScalarResults.Count > 0)
+        {
+            var scalar = conn.ScalarResults.Dequeue();
+            var row = new Dictionary<string, object> { ["Value"] = scalar! };
+            return new fakeDbDataReader(new[] { row });
         }
 
         // Use data persistence if enabled
@@ -319,6 +357,55 @@ public class fakeDbCommand : DbCommand
         return new fakeDbParameter();
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        WasDisposed = true;
+        base.Dispose(disposing);
+    }
+
+    private static bool TryGetCommandFailure(fakeDbConnection? conn, string? commandText, out Exception? failure)
+    {
+        failure = null;
+        if (string.IsNullOrEmpty(commandText))
+        {
+            return false;
+        }
+
+        return conn?.TryGetCommandFailure(commandText, out failure) == true;
+    }
+
+    /// <summary>
+    /// Applies queued output parameter values to the command's parameters.
+    /// This simulates stored procedure output parameter behavior.
+    /// </summary>
+    private void ApplyOutputParameterValues(fakeDbConnection? conn)
+    {
+        if (conn == null || conn.OutputParameterResults.Count == 0)
+        {
+            return;
+        }
+
+        var outputValues = conn.OutputParameterResults.Dequeue();
+        foreach (var kvp in outputValues)
+        {
+            // Find the parameter by name (case-insensitive)
+            foreach (DbParameter param in _parameterCollection)
+            {
+                if (string.Equals(param.ParameterName, kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (param.Direction == ParameterDirection.Output ||
+                        param.Direction == ParameterDirection.InputOutput ||
+                        param.Direction == ParameterDirection.ReturnValue)
+                    {
+                        param.Value = kvp.Value;
+                    }
+
+                    break;
+                }
+            }
+        }
+    }
+
     private static IEnumerable<Dictionary<string, object>> ConvertRows(IEnumerable<Dictionary<string, object?>> rows)
     {
         var converted = new List<Dictionary<string, object>>();
@@ -330,6 +417,7 @@ public class fakeDbCommand : DbCommand
             {
                 map[kvp.Key] = kvp.Value!;
             }
+
             converted.Add(map);
         }
 

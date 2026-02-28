@@ -1,7 +1,6 @@
 #region
 
 using pengdows.crud;
-using System.Text.Json;
 
 #endregion
 
@@ -12,7 +11,7 @@ public class StringAuditContextProvider
 {
     public string GetCurrentUserIdentifier()
     {
-        return JsonSerializer.Serialize("testuser");
+        return "testuser";
     }
 
     public IAuditValues Resolve()

@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -17,6 +19,7 @@ public class PrepareBehaviorTests
         public int PrepareAttempts { get; private set; }
         public int PrepareSuccesses { get; private set; }
         public bool ThrowOnFirstPrepare { get; set; }
+        public Exception? ThrowOnFirstPrepareException { get; set; }
         private bool _thrown;
 
         public RecordingPrepareCommand(fakeDbConnection connection) : base(connection)
@@ -26,7 +29,13 @@ public class PrepareBehaviorTests
         public override void Prepare()
         {
             PrepareAttempts++;
-            if (ThrowOnFirstPrepare && !_thrown)
+            if (!_thrown && ThrowOnFirstPrepareException != null)
+            {
+                _thrown = true;
+                throw ThrowOnFirstPrepareException;
+            }
+
+            if (!_thrown && ThrowOnFirstPrepare)
             {
                 _thrown = true;
                 throw new NotSupportedException("Simulated provider does not support Prepare()");
@@ -40,6 +49,7 @@ public class PrepareBehaviorTests
     {
         public List<RecordingPrepareCommand> Commands { get; } = new();
         public bool ThrowOnNextPrepare { get; set; }
+        public Exception? ThrowOnNextPrepareException { get; set; }
 
         protected override DbCommand CreateDbCommand()
         {
@@ -49,6 +59,13 @@ public class PrepareBehaviorTests
                 cmd.ThrowOnFirstPrepare = true;
                 ThrowOnNextPrepare = false;
             }
+
+            if (ThrowOnNextPrepareException != null)
+            {
+                cmd.ThrowOnFirstPrepareException = ThrowOnNextPrepareException;
+                ThrowOnNextPrepareException = null;
+            }
+
             Commands.Add(cmd);
             return cmd;
         }
@@ -74,11 +91,19 @@ public class PrepareBehaviorTests
             return conn;
         }
 
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
+        public override DbCommand CreateCommand()
+        {
+            return new fakeDbCommand();
+        }
+
+        public override DbParameter CreateParameter()
+        {
+            return new fakeDbParameter();
+        }
     }
 
-    private static DatabaseContext CreateContext(RecordingPrepareFactory factory, ReadWriteMode mode = ReadWriteMode.ReadWrite, bool? forcePrepare = null, bool? disablePrepare = null)
+    private static DatabaseContext CreateContext(RecordingPrepareFactory factory,
+        ReadWriteMode mode = ReadWriteMode.ReadWrite, bool? forcePrepare = null, bool? disablePrepare = null)
     {
         var cfg = new DatabaseContextConfiguration
         {
@@ -128,6 +153,7 @@ public class PrepareBehaviorTests
             totalAttempts += c.PrepareAttempts;
             totalSuccess += c.PrepareSuccesses;
         }
+
         Assert.Equal(2, totalAttempts);
         Assert.Equal(2, totalSuccess);
     }
@@ -145,7 +171,11 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands) attempts += c.PrepareAttempts;
+        foreach (var c in connection.Commands)
+        {
+            attempts += c.PrepareAttempts;
+        }
+
         Assert.Equal(0, attempts);
     }
 
@@ -169,7 +199,11 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands) attempts += c.PrepareAttempts;
+        foreach (var c in connection.Commands)
+        {
+            attempts += c.PrepareAttempts;
+        }
+
         Assert.True(attempts >= 1);
     }
 
@@ -199,7 +233,127 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands) attempts += c.PrepareAttempts;
+        foreach (var c in connection.Commands)
+        {
+            attempts += c.PrepareAttempts;
+        }
+
         Assert.Equal(1, attempts); // Only the first command attempted to prepare
+    }
+
+    [Fact]
+    public async Task Prepare_MySqlMaxPreparedFailure_DisablesSubsequentPrepareAttemptsAcrossConnections()
+    {
+        var factory = new RecordingPrepareFactory(SupportedDatabase.MySql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test degradation
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using (var tx1 = ctx.BeginTransaction(readOnly: false))
+        {
+            factory.Connections[^1].ThrowOnNextPrepareException = new FakeMySqlDbException(
+                1461,
+                "Can't create more than max_prepared_stmt_count statements (current value: 16382)");
+
+            await using var sc = tx1.CreateSqlContainer("SELECT @p0") as SqlContainer;
+            sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+            _ = await sc.ExecuteNonQueryAsync();
+        }
+
+        await using (var tx2 = ctx.BeginTransaction(readOnly: false))
+        {
+            await using var sc = tx2.CreateSqlContainer("SELECT @p0") as SqlContainer;
+            sc!.AddParameterWithValue("p0", DbType.Int32, 2);
+            _ = await sc.ExecuteNonQueryAsync();
+        }
+
+        var attempts = 0;
+        foreach (var connection in factory.Connections)
+        foreach (var command in connection.Commands)
+        {
+            attempts += command.PrepareAttempts;
+        }
+
+        Assert.Equal(1, attempts);
+    }
+
+    [Fact]
+    public async Task Prepare_MySqlNonLimitFailure_DoesNotDisablePrepare()
+    {
+        var factory = new RecordingPrepareFactory(SupportedDatabase.MySql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test this path
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using var tx = ctx.BeginTransaction(readOnly: false);
+        factory.Connections[^1].ThrowOnNextPrepareException = new FakeMySqlDbException(1205, "Lock wait timeout exceeded");
+
+        await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
+        {
+            sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+            _ = await Assert.ThrowsAsync<FakeMySqlDbException>(async () =>
+            {
+                _ = await sc.ExecuteNonQueryAsync();
+            });
+        }
+
+        await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
+        {
+            sc!.AddParameterWithValue("p0", DbType.Int32, 2);
+            _ = await sc.ExecuteNonQueryAsync();
+        }
+
+        var attempts = 0;
+        foreach (var connection in factory.Connections)
+        foreach (var command in connection.Commands)
+        {
+            attempts += command.PrepareAttempts;
+        }
+
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task MySql_DefaultPrepare_IsDisabled()
+    {
+        // MySQL defaults to PrepareStatements = false to avoid max_prepared_stmt_count exhaustion.
+        // No ForceManualPrepare — just the dialect default.
+        var factory = new RecordingPrepareFactory(SupportedDatabase.MySql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
+        sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+        _ = await sc.ExecuteNonQueryAsync();
+
+        var attempts = factory.Connections.Sum(c => c.Commands.Sum(cmd => cmd.PrepareAttempts));
+        Assert.Equal(0, attempts);
+    }
+
+    private sealed class FakeMySqlDbException : DbException
+    {
+        public FakeMySqlDbException(int number, string message)
+            : base(message)
+        {
+            Number = number;
+        }
+
+        public int Number { get; }
     }
 }

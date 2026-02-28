@@ -6,12 +6,12 @@ namespace pengdows.crud.Tests;
 
 public class BuildWhereTests : SqlLiteContextTestBase
 {
-    private readonly EntityHelper<NullableIdEntity, int?> _helper;
+    private readonly TableGateway<NullableIdEntity, int?> _helper;
 
     public BuildWhereTests()
     {
         TypeMap.Register<NullableIdEntity>();
-        _helper = new EntityHelper<NullableIdEntity, int?>(Context);
+        _helper = new TableGateway<NullableIdEntity, int?>(Context);
     }
 
     [Fact]
@@ -30,16 +30,15 @@ public class BuildWhereTests : SqlLiteContextTestBase
     [Fact]
     public void BuildWhere_TooManyParameters_Throws()
     {
-        // Test parameter limit behavior by creating a large number of parameters
-        // that would exceed any reasonable database parameter limit
+        // SQLite 3.32+ has a parameter limit of 32766. Use 33000 to exceed it.
         var sc = Context.CreateSqlContainer();
-        var largeParameterArray = new int?[1000];
-        for (int i = 0; i < 1000; i++)
+        var largeParameterArray = new int?[33000];
+        for (var i = 0; i < 33000; i++)
         {
             largeParameterArray[i] = i;
         }
 
         Assert.Throws<TooManyParametersException>(() =>
             _helper.BuildWhere(Context.WrapObjectName("Id"), largeParameterArray, sc));
-    } 
+    }
 }

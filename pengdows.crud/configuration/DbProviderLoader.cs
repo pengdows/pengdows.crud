@@ -1,4 +1,21 @@
-#region
+// =============================================================================
+// FILE: DbProviderLoader.cs
+// PURPOSE: Loads and registers DbProviderFactories from configuration.
+//
+// AI SUMMARY:
+// - Implements IDbProviderLoader for dynamic provider discovery.
+// - LoadAndRegisterProviders(): Main entry point, reads "DatabaseProviders" section.
+// - Provider loading strategies (in order):
+//   1. AssemblyPath: Load assembly from file path
+//   2. AssemblyName: Load assembly by name
+//   3. Fallback: Use DbProviderFactories.GetFactory() for built-in providers
+// - Registers factories:
+//   * As keyed singleton in DI container
+//   * With DbProviderFactories for legacy compatibility
+// - Thread-safe: static assembly cache with locking.
+// - Factory resolution: Looks for static "Instance" property on factory type.
+// - Comprehensive logging and error handling.
+// =============================================================================
 
 using System.Data.Common;
 using System.Reflection;
@@ -6,12 +23,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-#endregion
-
 namespace pengdows.crud.configuration;
 
 public class DbProviderLoader : IDbProviderLoader
 {
+    private const string DatabaseProvidersSection = "DatabaseProviders";
+
     private static readonly object _lock = new();
     private static readonly Dictionary<string, Assembly> _loadedAssemblies = new();
     private readonly IConfiguration _configuration;
@@ -26,7 +43,7 @@ public class DbProviderLoader : IDbProviderLoader
     public void LoadAndRegisterProviders(IServiceCollection services)
     {
         var providers = new Dictionary<string, DatabaseProviderConfig>();
-        _configuration.GetSection("DatabaseProviders").Bind(providers);
+        _configuration.GetSection(DatabaseProvidersSection).Bind(providers);
 
         foreach (var kvp in providers)
         {

@@ -18,6 +18,5 @@ public class CompositeKeyEntity
     [Column("Key2", DbType.Int32)]
     public int Key2 { get; set; }
 
-    [Column("Value", DbType.String)]
-    public string? Value { get; set; }
+    [Column("Value", DbType.String)] public string? Value { get; set; }
 }

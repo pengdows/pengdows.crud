@@ -1,10 +1,13 @@
 # pengdows.crud.fakeDb
 
-`pengdows.crud.fakeDb` provides a fake ADO.NET provider that you can use to **mock low-level database calls**. It lets `pengdows.crud` execute SQL without a real database connection, which is handy for integration or unit tests. The package ships with schema files to emulate different products so tests remain provider agnostic.
+`pengdows.crud.fakeDb` provides a fake ADO.NET provider that you can use to **mock low-level database calls**. It lets
+`pengdows.crud` execute SQL without a real database connection, which is handy for integration or unit tests. The
+package ships with schema files to emulate different products so tests remain provider agnostic.
 
 ## Usage
 
-In the `pengdows.crud.Tests` project the fake provider is used to spin up a `DatabaseContext` without touching a real database. The key pieces are `fakeDbFactory` and an `EmulatedProduct` value in the connection string:
+In the `pengdows.crud.Tests` project the fake provider is used to spin up a `DatabaseContext` without touching a real
+database. The key pieces are `fakeDbFactory` and an `EmulatedProduct` value in the connection string:
 
 ```csharp
 using pengdows.crud;
@@ -34,7 +37,8 @@ This makes `pengdows.crud.fakeDb` handy for testing any code that relies on
 
 ## Connection Breaking for Testing
 
-The enhanced `fakeDbConnection` supports sophisticated connection breaking functionality for testing error scenarios and connection failures.
+The enhanced `fakeDbConnection` supports sophisticated connection breaking functionality for testing error scenarios and
+connection failures.
 
 ### Connection Failure Modes
 

@@ -1,373 +1,195 @@
+#region
+
 using System;
 using System.Data;
-using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
-using pengdows.crud.fakeDb;
-using pengdows.crud.enums;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
+using Xunit;
+
+#endregion
 
 namespace pengdows.crud.Tests;
 
-/// <summary>
-/// Additional tests to improve overall coverage toward 90%.
-/// Targets various edge cases across SqlContainer, DatabaseContext, and wrappers.
-/// </summary>
-public class AdditionalCoverageTests
+public class AdditionalCoverageTests : SqlLiteContextTestBase
 {
-    [Table("test_table")]
-    public class SimpleEntity
+    [Table("test_coverage")]
+    private class SimpleCoverageEntity
     {
-        [Id]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
 
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
+
+        [Column("value", DbType.Int32)] public int Value { get; set; }
     }
 
-    #region SqlContainer Edge Cases
-
     [Fact]
-    public async Task SqlContainer_ExecuteNonQueryAsync_WithCancellationToken_WorksCorrectly()
+    public void DatabaseContext_ConnectionString_ReturnsValue()
     {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = new fakeDbConnection();
-        conn.EnqueueNonQueryResult(1);
-        factory.Connections.Add(conn);
-
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var container = context.CreateSqlContainer("INSERT INTO test VALUES (1)");
-
         // Act
-        var result = await container.ExecuteNonQueryAsync(CommandType.Text, CancellationToken.None);
+        var connectionString = Context.ConnectionString;
 
         // Assert
-        Assert.Equal(1, result);
+        Assert.NotNull(connectionString);
     }
 
     [Fact]
-    public async Task SqlContainer_ExecuteReaderAsync_WithCancellationToken_WorksCorrectly()
+    public void CreatedByAttribute_CanBeInstantiated()
     {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = new fakeDbConnection();
-        conn.EnqueueReaderResult(new[] { new System.Collections.Generic.Dictionary<string, object?> { ["id"] = 1, ["name"] = "test" } });
-        factory.Connections.Add(conn);
-
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var container = context.CreateSqlContainer("SELECT * FROM test");
-
         // Act
-        using var reader = await container.ExecuteReaderAsync(CommandType.Text, CancellationToken.None);
+        var attribute = new CreatedByAttribute();
 
-        // Assert - Just verify reader was created
-        Assert.NotNull(reader);
+        // Assert
+        Assert.NotNull(attribute);
     }
 
     [Fact]
-    public void SqlContainer_Clear_RemovesQueryAndParameters()
+    public void CreatedOnAttribute_CanBeInstantiated()
+    {
+        // Act
+        var attribute = new CreatedOnAttribute();
+
+        // Assert
+        Assert.NotNull(attribute);
+    }
+
+    [Fact]
+    public void TrackedConnection_ChangeDatabase_ThrowsNotImplemented()
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var container = context.CreateSqlContainer("SELECT * FROM test");
+        var connection = factory.CreateConnection();
+        var tracked = new TrackedConnection(connection);
+
+        // Act & Assert - Should throw NotImplementedException
+        Assert.Throws<NotImplementedException>(() => tracked.ChangeDatabase("testDb"));
+    }
+
+    [Fact]
+    public void SqlContainer_Clone_CreatesIndependentCopy()
+    {
+        // Arrange
+        var container = Context.CreateSqlContainer("SELECT 1");
         container.AddParameterWithValue("test", DbType.String, "value");
 
         // Act
-        container.Clear();
+        var clone = container.Clone();
 
         // Assert
-        Assert.Empty(container.Query.ToString());
-        Assert.Equal(0, container.ParameterCount);
+        Assert.NotSame(container, clone);
+        Assert.Equal(container.Query.ToString(), clone.Query.ToString());
+        Assert.Equal(container.ParameterCount, clone.ParameterCount);
     }
 
     [Fact]
-    public void SqlContainer_HasWhereAppended_TracksWhereClause()
+    public async Task TableGateway_LoadOperations_ExerciseValueExtractors()
     {
+        // This test exercises the compiled value extractor and coercer methods
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var container = context.CreateSqlContainer();
+        var helper = new TableGateway<SimpleCoverageEntity, long>(Context, AuditValueResolver);
 
-        // Act - Initially false
-        Assert.False(container.HasWhereAppended);
+        // Act - Create SQL that returns data requiring type coercion
+        var container = Context.CreateSqlContainer();
+        container.Query.Append("SELECT 1 as id, 'test' as name, 42 as value");
 
-        // Add WHERE clause
-        container.Query.Append("SELECT * FROM test WHERE id = 1");
-        container.HasWhereAppended = true;
+        var result = await helper.LoadSingleAsync(container);
 
         // Assert
-        Assert.True(container.HasWhereAppended);
-    }
-
-    #endregion
-
-    #region DatabaseContext Edge Cases
-
-    [Fact]
-    public async Task DatabaseContext_CloseAndDisposeConnectionAsync_WithNullConnection_DoesNotThrow()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act & Assert - Should not throw
-        await context.CloseAndDisposeConnectionAsync(null);
+        Assert.NotNull(result);
+        Assert.Equal(1L, result.Id);
+        Assert.Equal("test", result.Name);
+        Assert.Equal(42, result.Value);
     }
 
     [Fact]
-    public void DatabaseContext_CloseAndDisposeConnection_WithNullConnection_DoesNotThrow()
+    public void TableGateway_BuildUpsert_ExercisesUpsertLogic()
     {
+        // This exercises the upsert key resolution methods
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act & Assert - Should not throw
-        context.CloseAndDisposeConnection(null);
-    }
-
-    [Fact]
-    public void DatabaseContext_CreateDbParameter_WithNameAndValue_CreatesParameter()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
+        var helper = new TableGateway<SimpleCoverageEntity, long>(Context, AuditValueResolver);
+        var entity = new SimpleCoverageEntity { Name = "Test", Value = 100 };
 
         // Act
-        var param = context.CreateDbParameter("test", DbType.String, "value");
-
-        // Assert
-        Assert.NotNull(param);
-        Assert.Equal("test", param.ParameterName);
-        Assert.Equal("value", param.Value);
-    }
-
-    [Fact]
-    public void DatabaseContext_CreateDbParameter_WithoutName_CreatesParameter()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        var param = context.CreateDbParameter(DbType.String, "value");
-
-        // Assert
-        Assert.NotNull(param);
-        Assert.Equal("value", param.Value);
-    }
-
-    [Fact]
-    public void DatabaseContext_MakeParameterName_FormatsCorrectly()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var param = context.CreateDbParameter("test", DbType.String, "value");
-
-        // Act
-        var formattedName1 = context.MakeParameterName(param);
-        var formattedName2 = context.MakeParameterName("test");
-
-        // Assert
-        Assert.NotNull(formattedName1);
-        Assert.NotNull(formattedName2);
-    }
-
-    [Fact]
-    public void DatabaseContext_WrapObjectName_QuotesIdentifier()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        var wrapped = context.WrapObjectName("tableName");
-
-        // Assert
-        Assert.NotNull(wrapped);
-        Assert.NotEmpty(wrapped);
-    }
-
-    #endregion
-
-    #region TrackedConnection Edge Cases
-
-    [Fact]
-    public async Task TrackedConnection_OpenAsync_OpensConnection()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        using var conn = context.GetConnection(ExecutionType.Read);
-        await ((TrackedConnection)conn).OpenAsync();
-
-        // Assert
-        Assert.Equal(ConnectionState.Open, conn.State);
-    }
-
-    [Fact]
-    public async Task TrackedConnection_OpenAsync_WithCancellationToken_OpensConnection()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        using var conn = context.GetConnection(ExecutionType.Read);
-        await ((TrackedConnection)conn).OpenAsync(CancellationToken.None);
-
-        // Assert
-        Assert.Equal(ConnectionState.Open, conn.State);
-    }
-
-    [Fact]
-    public void TrackedConnection_BeginTransaction_CreatesTransaction()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        using var conn = context.GetConnection(ExecutionType.Write);
-
-        // Act
-        var transaction = conn.BeginTransaction();
-
-        // Assert
-        Assert.NotNull(transaction);
-    }
-
-    [Fact]
-    public void TrackedConnection_BeginTransaction_WithIsolationLevel_CreatesTransaction()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        using var conn = context.GetConnection(ExecutionType.Write);
-
-        // Act
-        var transaction = conn.BeginTransaction(IsolationLevel.ReadCommitted);
-
-        // Assert
-        Assert.NotNull(transaction);
-    }
-
-    #endregion
-
-    #region EntityHelper Additional Edge Cases
-
-    [Fact]
-    public async Task EntityHelper_RetrieveAsync_WithEmptyIdList_ThrowsArgumentException()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
-
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => helper.RetrieveAsync(Array.Empty<int>()));
-    }
-
-    [Fact]
-    public async Task EntityHelper_DeleteAsync_WithSingleId_ExecutesCorrectly()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = new fakeDbConnection();
-        conn.EnqueueNonQueryResult(1);
-        factory.Connections.Add(conn);
-
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
-
-        // Act
-        var result = await helper.DeleteAsync(1);
-
-        // Assert
-        Assert.Equal(1, result);
-    }
-
-    [Fact]
-    public async Task EntityHelper_DeleteAsync_WithMultipleIds_ExecutesCorrectly()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var conn = new fakeDbConnection();
-        conn.EnqueueNonQueryResult(3);
-        factory.Connections.Add(conn);
-
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
-
-        // Act
-        var result = await helper.DeleteAsync(new[] { 1, 2, 3 });
-
-        // Assert
-        Assert.Equal(3, result);
-    }
-
-    [Fact]
-    public void EntityHelper_BuildCreate_WithNullEntity_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
-
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => helper.BuildCreate(null!));
-    }
-
-    [Fact]
-    public void EntityHelper_BuildDelete_GeneratesCorrectSql()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
-
-        // Act
-        var container = helper.BuildDelete(1);
+        var container = helper.BuildUpsert(entity);
 
         // Assert
         Assert.NotNull(container);
-        Assert.Contains("DELETE", container.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+        var sql = container.Query.ToString();
+        Assert.Contains("INSERT", sql.ToUpperInvariant());
     }
 
     [Fact]
-    public void EntityHelper_BuildRetrieve_WithNullIds_ThrowsArgumentException()
+    public void DatabaseContext_CreateParameters_WorksCorrectly()
     {
+        // Test parameter creation methods
+        // Arrange & Act
+        var param1 = Context.CreateDbParameter(DbType.String, "test");
+        var param2 = Context.CreateDbParameter("named", DbType.Int32, 42);
+
+        // Assert
+        Assert.NotNull(param1);
+        Assert.NotNull(param2);
+        Assert.Equal(DbType.String, param1.DbType);
+        Assert.Equal("test", param1.Value);
+        Assert.Equal("named", param2.ParameterName);
+        Assert.Equal(42, param2.Value);
+    }
+
+    [Fact]
+    public void TransactionContext_Properties_ReturnCorrectValues()
+    {
+        // Test transaction context property access
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
+        using var transaction = Context.BeginTransaction();
 
         // Act & Assert
-        Assert.Throws<ArgumentException>(() =>
-            helper.BuildRetrieve((System.Collections.Generic.IReadOnlyCollection<int>?)null, "t"));
+        Assert.Equal(Context.ConnectionString, transaction.ConnectionString);
+        Assert.False(transaction.WasCommitted);
+        Assert.False(transaction.WasRolledBack);
     }
 
     [Fact]
-    public void EntityHelper_BuildBaseRetrieve_GeneratesSelectQuery()
+    public async Task SqlContainer_ExecuteScalarRequiredAsync_WorksCorrectly()
     {
+        // Test the ExecuteScalarRequiredAsync method
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var helper = new EntityHelper<SimpleEntity, int>(context);
+        var container = Context.CreateSqlContainer();
+        container.Query.Append("SELECT 42");
 
         // Act
-        var container = helper.BuildBaseRetrieve("t");
+        var result = await container.ExecuteScalarRequiredAsync<int>();
+
+        // Assert
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void DatabaseContext_CreateSqlContainer_CreatesContainer()
+    {
+        // Test SqlContainer creation
+        // Act
+        var container = Context.CreateSqlContainer("SELECT 1");
 
         // Assert
         Assert.NotNull(container);
-        Assert.Contains("SELECT", container.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("SELECT 1", container.Query.ToString());
     }
 
-    #endregion
+    [Fact]
+    public void WrappedConnection_GetLock_ReturnsLock()
+    {
+        // Test TrackedConnection lock functionality
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = factory.CreateConnection();
+        var tracked = new TrackedConnection(connection);
+
+        // Act
+        var lockObj = tracked.GetLock();
+
+        // Assert
+        Assert.NotNull(lockObj);
+    }
 }

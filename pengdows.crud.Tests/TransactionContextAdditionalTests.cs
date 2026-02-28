@@ -2,7 +2,7 @@
 
 using System;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -11,7 +11,11 @@ namespace pengdows.crud.Tests;
 
 public class TransactionContextAdditionalTests
 {
-    private static DatabaseContext CreateCtx() => new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", new fakeDbFactory(SupportedDatabase.Sqlite));
+    private static DatabaseContext CreateCtx()
+    {
+        return new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
+    }
 
     [Fact]
     public void DoubleCommit_ThrowsInvalidOperation()
@@ -31,4 +35,3 @@ public class TransactionContextAdditionalTests
         Assert.Throws<InvalidOperationException>(() => tx.Rollback());
     }
 }
-

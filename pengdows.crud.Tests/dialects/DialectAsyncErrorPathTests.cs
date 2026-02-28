@@ -6,7 +6,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -31,7 +31,7 @@ public class DialectAsyncErrorPathTests
     }
 
     [Fact]
-    public void FirebirdDialect_CreateDbParameter_GuidType_ConvertsToBinary()
+    public void FirebirdDialect_CreateDbParameter_GuidType_ConvertsToString()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
@@ -39,8 +39,8 @@ public class DialectAsyncErrorPathTests
 
         var param = dialect.CreateDbParameter("test", DbType.Guid, testGuid);
 
-        Assert.Equal(DbType.Binary, param.DbType);
-        Assert.Equal(testGuid.ToByteArray(), param.Value);
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal(testGuid.ToString("D"), param.Value);
     }
 
     [Fact]
@@ -117,7 +117,8 @@ public class DialectAsyncErrorPathTests
     [InlineData(3, 0, 0, SqlStandardLevel.Sql2008)]
     [InlineData(2, 0, 0, SqlStandardLevel.Sql2003)]
     [InlineData(1, 0, 0, SqlStandardLevel.Sql92)]
-    public void FirebirdDialect_DetermineStandardCompliance_VariousVersions_ReturnsCorrectLevel(int major, int minor, int build, SqlStandardLevel expected)
+    public void FirebirdDialect_DetermineStandardCompliance_VariousVersions_ReturnsCorrectLevel(int major, int minor,
+        int build, SqlStandardLevel expected)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
@@ -147,7 +148,8 @@ public class DialectAsyncErrorPathTests
         var factory = new fakeDbFactory(SupportedDatabase.DuckDB.ToString());
         var dialect = new DuckDbDialect(factory, NullLogger.Instance);
 
-        var settings = dialect.GetConnectionSessionSettings();
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
 
         Assert.NotNull(settings);
     }

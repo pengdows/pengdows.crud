@@ -3,6 +3,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -54,8 +55,8 @@ public class SqlContainerCriticalPathTests
         using var context = new DatabaseContext(config, factory);
         using var container = context.CreateSqlContainer("UPDATE widgets SET name = 'test'");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            container.ExecuteNonQueryAsync()).ConfigureAwait(false);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteNonQueryAsync());
 
         Assert.Contains("Simulated command creation failure", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

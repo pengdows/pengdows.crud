@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.tenant;
 using Xunit;
 
@@ -19,7 +20,7 @@ public class TenantConnectionResolverTests
             DatabaseContextConfiguration = new DatabaseContextConfiguration
             {
                 ConnectionString = "Server=A;",
-                ProviderName = "fake-a",
+                ProviderName = "Microsoft.Data.Sqlite",
                 DbMode = DbMode.Standard,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             }
@@ -31,7 +32,7 @@ public class TenantConnectionResolverTests
             DatabaseContextConfiguration = new DatabaseContextConfiguration
             {
                 ConnectionString = "Server=B;",
-                ProviderName = "fake-b",
+                ProviderName = "Microsoft.Data.Sqlite",
                 DbMode = DbMode.Standard,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             }
@@ -45,9 +46,11 @@ public class TenantConnectionResolverTests
         var resultA = resolver.GetDatabaseContextConfiguration("a");
         var resultB = resolver.GetDatabaseContextConfiguration("b");
 
-        // Assert
-        Assert.Same(tenantA.DatabaseContextConfiguration, resultA);
-        Assert.Same(tenantB.DatabaseContextConfiguration, resultB);
+        // Assert — values equal; stored config is a clone so references differ.
+        Assert.Equal(tenantA.DatabaseContextConfiguration.ConnectionString, resultA.ConnectionString);
+        Assert.Equal(tenantA.DatabaseContextConfiguration.ProviderName, resultA.ProviderName);
+        Assert.Equal(tenantB.DatabaseContextConfiguration.ConnectionString, resultB.ConnectionString);
+        Assert.Equal(tenantB.DatabaseContextConfiguration.ProviderName, resultB.ProviderName);
     }
 
     [Fact]
@@ -66,14 +69,14 @@ public class TenantConnectionResolverTests
     }
 
     [Fact]
-    public void Register_And_GetConfiguration_Should_ReturnSameInstance()
+    public void Register_And_GetConfiguration_Should_ReturnEquivalentConfig()
     {
         // Arrange
         var tenantId = "tenant-a";
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=A;",
-            ProviderName = "fake-a",
+            ProviderName = "Microsoft.Data.Sqlite",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
@@ -83,8 +86,11 @@ public class TenantConnectionResolverTests
         resolver.Register(tenantId, config);
         var result = resolver.GetDatabaseContextConfiguration(tenantId);
 
-        // Assert
-        Assert.Same(config, result);
+        // Assert — stored config is a clone so references differ; values must match.
+        Assert.Equal(config.ConnectionString, result.ConnectionString);
+        Assert.Equal(config.ProviderName, result.ProviderName);
+        Assert.Equal(config.DbMode, result.DbMode);
+        Assert.Equal(config.ReadWriteMode, result.ReadWriteMode);
     }
 
     [Fact]
@@ -105,13 +111,13 @@ public class TenantConnectionResolverTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Register_InvalidTenant_ShouldThrow(string invalidTenant)
+    public void Register_InvalidTenant_ShouldThrow(string? invalidTenant)
     {
         var config = new DatabaseContextConfiguration();
 
         var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            resolver.Register(invalidTenant, config));
+            resolver.Register(invalidTenant!, config));
 
         Assert.Equal("tenant", ex.ParamName);
     }
@@ -143,24 +149,24 @@ public class TenantConnectionResolverTests
         {
             Tenants = new List<TenantConfiguration>
             {
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-a",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
                     {
                         ConnectionString = "Server=OptA;",
-                        ProviderName = "fake-a",
+                        ProviderName = "Microsoft.Data.Sqlite",
                         DbMode = DbMode.Standard,
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }
                 },
-                new TenantConfiguration
+                new()
                 {
                     Name = "opts-b",
                     DatabaseContextConfiguration = new DatabaseContextConfiguration
                     {
                         ConnectionString = "Server=OptB;",
-                        ProviderName = "fake-b",
+                        ProviderName = "Microsoft.Data.Sqlite",
                         DbMode = DbMode.Standard,
                         ReadWriteMode = ReadWriteMode.ReadWrite
                     }
@@ -173,6 +179,150 @@ public class TenantConnectionResolverTests
 
         Assert.Equal("Server=OptA;", resolver.GetDatabaseContextConfiguration("opts-a").ConnectionString);
         Assert.Equal("Server=OptB;", resolver.GetDatabaseContextConfiguration("opts-b").ConnectionString);
+    }
+
+    [Fact]
+    public void Register_WithOptions_ComposesApplicationNameWhenMissing()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = "core-app",
+            Tenants = new List<TenantConfiguration>
+            {
+                new()
+                {
+                    Name = "east",
+                    DatabaseContextConfiguration = new DatabaseContextConfiguration
+                    {
+                        ConnectionString = "Server=East;",
+                        ProviderName = "Microsoft.Data.Sqlite",
+                        DbMode = DbMode.Standard,
+                        ReadWriteMode = ReadWriteMode.ReadWrite
+                    }
+                }
+            }
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(options);
+
+        var config = resolver.GetDatabaseContextConfiguration("east");
+        Assert.Equal("core-app:east", config.ApplicationName);
+    }
+
+    [Fact]
+    public void Register_WithOptions_DoesNotOverrideExplicitApplicationName()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = "core-app",
+            Tenants = new List<TenantConfiguration>
+            {
+                new()
+                {
+                    Name = "west",
+                    DatabaseContextConfiguration = new DatabaseContextConfiguration
+                    {
+                        ApplicationName = "override-app",
+                        ConnectionString = "Server=West;",
+                        ProviderName = "Microsoft.Data.Sqlite",
+                        DbMode = DbMode.Standard,
+                        ReadWriteMode = ReadWriteMode.ReadWrite
+                    }
+                }
+            }
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(options);
+
+        var config = resolver.GetDatabaseContextConfiguration("west");
+        Assert.Equal("override-app", config.ApplicationName);
+    }
+
+    [Fact]
+    public void Register_WithOptions_EmptyBaseApp_DoesNotCompose()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = "  ",
+            Tenants = new List<TenantConfiguration>
+            {
+                new()
+                {
+                    Name = "north",
+                    DatabaseContextConfiguration = new DatabaseContextConfiguration
+                    {
+                        ConnectionString = "Server=North;",
+                        ProviderName = "Microsoft.Data.Sqlite",
+                        DbMode = DbMode.Standard,
+                        ReadWriteMode = ReadWriteMode.ReadWrite
+                    }
+                }
+            }
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register(options);
+
+        var config = resolver.GetDatabaseContextConfiguration("north");
+        Assert.Equal(string.Empty, config.ApplicationName);
+    }
+
+    [Fact]
+    public void Register_WithOptions_EmptyBaseApp_MissingTenantNameThrows()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = string.Empty,
+            Tenants = new List<TenantConfiguration>
+            {
+                new()
+                {
+                    Name = "",
+                    DatabaseContextConfiguration = new DatabaseContextConfiguration
+                    {
+                        ConnectionString = "Server=Bad;",
+                        ProviderName = "Microsoft.Data.Sqlite",
+                        DbMode = DbMode.Standard,
+                        ReadWriteMode = ReadWriteMode.ReadWrite
+                    }
+                }
+            }
+        };
+
+        var resolver = new TenantConnectionResolver();
+        var ex = Assert.Throws<ArgumentNullException>(() => resolver.Register(options));
+
+        Assert.Equal("tenant", ex.ParamName);
+    }
+
+    [Fact]
+    public void Register_WithOptions_MissingTenantName_Throws()
+    {
+        var options = new MultiTenantOptions
+        {
+            ApplicationName = "core-app",
+            Tenants = new List<TenantConfiguration>
+            {
+                new()
+                {
+                    Name = " ",
+                    DatabaseContextConfiguration = new DatabaseContextConfiguration
+                    {
+                        ConnectionString = "Server=Bad;",
+                        ProviderName = "Microsoft.Data.Sqlite",
+                        DbMode = DbMode.Standard,
+                        ReadWriteMode = ReadWriteMode.ReadWrite
+                    }
+                }
+            }
+        };
+
+        var resolver = new TenantConnectionResolver();
+        var ex = Assert.Throws<ArgumentException>(() => resolver.Register(options));
+
+        Assert.Contains("non-empty Name", ex.Message);
     }
 
     [Fact]
@@ -190,12 +340,33 @@ public class TenantConnectionResolverTests
         resolver.Register("tenant-clear", new DatabaseContextConfiguration
         {
             ConnectionString = "Server=Clear;",
-            ProviderName = "fake-clear"
+            ProviderName = "Microsoft.Data.Sqlite"
         });
 
         resolver.Clear();
 
         Assert.Throws<InvalidOperationException>(() => resolver.GetDatabaseContextConfiguration("tenant-clear"));
+    }
+
+    [Fact]
+    public void Register_MutatingConfigAfterRegistration_DoesNotAffectStoredConfig()
+    {
+        var resolver = new TenantConnectionResolver();
+        var original = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=original;",
+            ProviderName = "FakeProvider"
+        };
+
+        resolver.Register("tenant1", original);
+
+        // Mutate the object the caller still holds.
+        original.ConnectionString = "Server=mutated;";
+
+        var stored = resolver.GetDatabaseContextConfiguration("tenant1");
+
+        // The stored config must reflect the value at registration time, not the mutation.
+        Assert.Equal("Server=original;", stored.ConnectionString);
     }
 
     private class TestTenantConnectionResolver : ITenantConnectionResolver

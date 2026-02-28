@@ -123,10 +123,11 @@ public class DbProviderLoaderTests
     [Fact]
     public void LoadAndRegisterProviders_FallbackToDbProviderFactories()
     {
+        var providerName = "Microsoft.Data.Sqlite.Test";
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["DatabaseProviders:sqlite:ProviderName"] = "Microsoft.Data.Sqlite"
+                ["DatabaseProviders:sqlite:ProviderName"] = providerName
             })
             .Build();
 
@@ -134,7 +135,7 @@ public class DbProviderLoaderTests
         var loader = new DbProviderLoader(config, logger.Object);
         var services = new ServiceCollection();
 
-       DbProviderFactories.RegisterFactory("Microsoft.Data.Sqlite", SqliteFactory.Instance);
+        DbProviderFactories.RegisterFactory(providerName, SqliteFactory.Instance);
 
         loader.LoadAndRegisterProviders(services);
 
@@ -142,7 +143,7 @@ public class DbProviderLoaderTests
         var factory = provider.GetRequiredKeyedService<DbProviderFactory>("sqlite");
 
         Assert.Same(SqliteFactory.Instance, factory);
-        Assert.Same(SqliteFactory.Instance, DbProviderFactories.GetFactory("Microsoft.Data.Sqlite"));
+        Assert.Same(SqliteFactory.Instance, DbProviderFactories.GetFactory(providerName));
     }
 
     [Fact]

@@ -11,10 +11,9 @@ namespace pengdows.crud.Tests;
 [Table("test_entity_with_guid")]
 public class TestEntityWithGuid
 {
-    [Id(writable: false)]
+    [Id(false)]
     [Column("id", DbType.Guid)]
     public Guid Id { get; set; }
 
-    [Column("name", DbType.String)]
-    public string Name { get; set; } = string.Empty;
+    [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 }

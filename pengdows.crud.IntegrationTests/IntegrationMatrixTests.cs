@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using pengdows.crud;
 using testbed;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests;
@@ -38,17 +36,22 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         {
             foreach (var failure in failures)
             {
-                _output.WriteLine($"Provider {failure.DatabaseProvider} ({failure.ContainerName}) failed: {failure.Error}");
+                _output.WriteLine(
+                    $"Provider {failure.DatabaseProvider} ({failure.ContainerName}) failed: {failure.Error}");
             }
 
-            Assert.True(false, "One or more integration providers failed. See test output for details.");
+            Assert.Fail("One or more integration providers failed. See test output for details.");
         }
     }
 
     public async Task InitializeAsync()
     {
         await _host.StartAsync();
-        _orchestrator = new ParallelTestOrchestrator(_host.Services, ShouldIncludeOracle());
+        _orchestrator = new ParallelTestOrchestrator(
+            _host.Services,
+            ShouldIncludeOracle(),
+            ShouldIncludeSnowflake(),
+            ShouldIncludeYugabyte());
     }
 
     public async Task DisposeAsync()
@@ -57,10 +60,29 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         _host.Dispose();
     }
 
-    private static bool ShouldIncludeOracle() => string.Equals(
-        Environment.GetEnvironmentVariable("INCLUDE_ORACLE"),
-        "true",
-        StringComparison.OrdinalIgnoreCase);
+    private static bool ShouldIncludeOracle()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("INCLUDE_ORACLE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool ShouldIncludeSnowflake()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldIncludeYugabyte()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     private static ISet<string> ParseList(string? csv)
     {

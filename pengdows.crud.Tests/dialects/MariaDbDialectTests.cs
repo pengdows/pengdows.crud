@@ -7,10 +7,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using pengdows.crud;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -116,6 +115,28 @@ public class MariaDbDialectTests
         var name = await d.GetProductNameAsync(tracked);
 
         Assert.Equal("MariaDB 10.5", name);
+    }
+
+    [Fact]
+    public void UpsertIncomingColumn_Should_Return_Values_Syntax_When_Alias_Not_Enabled()
+    {
+        var dialect = CreateDialect();
+        SetVersion(dialect, new Version(5, 7));
+
+        var result = dialect.UpsertIncomingColumn("test_column");
+
+        Assert.Equal("VALUES(\"test_column\")", result);
+        Assert.Null(dialect.UpsertIncomingAlias);
+    }
+
+    [Fact]
+    public void UpsertIncomingColumn_Should_Always_Use_Values_Syntax()
+    {
+        var dialect = CreateDialect();
+        SetVersion(dialect, new Version(10, 11));
+
+        Assert.Null(dialect.UpsertIncomingAlias);
+        Assert.Equal("VALUES(\"test_column\")", dialect.UpsertIncomingColumn("test_column"));
     }
 
     [Fact]

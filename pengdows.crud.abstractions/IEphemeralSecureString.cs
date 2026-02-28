@@ -16,4 +16,10 @@ public interface IEphemeralSecureString : IDisposable
     /// </summary>
     /// <param name="use">Action to perform using the plain string.</param>
     void WithRevealed(Action<string> use);
+
+    /// <summary>
+    /// Executes an asynchronous operation with the revealed string and then re-secures it.
+    /// </summary>
+    /// <param name="use">Asynchronous function to perform using the plain string.</param>
+    ValueTask WithRevealedAsync(Func<string, ValueTask> use);
 }

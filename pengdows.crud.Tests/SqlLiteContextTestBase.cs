@@ -3,7 +3,7 @@
 using System;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -27,13 +27,16 @@ public class SqlLiteContextTestBase : IAsyncLifetime
     public IDatabaseContext Context { get; }
     public IAuditValueResolver AuditValueResolver { get; }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public Task InitializeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     public async Task DisposeAsync()
     {
         if (Context is IAsyncDisposable asyncDisp)
         {
-            await asyncDisp.DisposeAsync().ConfigureAwait(false);
+            await asyncDisp.DisposeAsync();
         }
         else if (Context is IDisposable disp)
         {

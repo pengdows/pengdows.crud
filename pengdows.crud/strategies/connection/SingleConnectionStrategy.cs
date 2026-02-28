@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: SingleConnectionStrategy.cs
+// PURPOSE: Connection strategy where ALL operations use ONE persistent connection.
+//
+// AI SUMMARY:
+// - Most restrictive strategy: all reads AND writes share single connection.
+// - Required for isolated in-memory databases (SQLite :memory:, DuckDB :memory:).
+// - Connection loss = data loss for in-memory databases.
+// - GetConnection() always returns the same persistent connection.
+// - ReleaseConnection() never disposes the persistent connection.
+// - PostInitialize() stores connection as persistent on DatabaseContext.
+// - HandleDialectDetection() uses persistent connection directly.
+// - Thread safety: Application code must serialize access externally.
+// - Lowest overhead but highest latency (no concurrency).
+// - Extends SafeAsyncDisposableBase for proper cleanup on context disposal.
+// =============================================================================
+
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
@@ -58,11 +75,6 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public void PostInitialize(ITrackedConnection? connection)
     {
-        if (connection != null)
-        {
-            _context.ApplyPersistentConnectionSessionSettings(connection);
-        }
-
         _context.SetPersistentConnection(connection);
     }
 
@@ -79,30 +91,20 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
     public ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        if (connection == null || ReferenceEquals(connection, _context.PersistentConnection))
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        if (connection is IAsyncDisposable asyncDisposable)
-        {
-            return asyncDisposable.DisposeAsync();
-        }
-
-        connection.Dispose();
-        return ValueTask.CompletedTask;
+        return StandardConnectionStrategy.ReleaseNonPersistentConnectionAsync(
+            connection, _context.PersistentConnection);
     }
 
     public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
-        DbProviderFactory factory,
+        DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
         // SingleConnection strategy: use the persistent connection for detection
         // The initConnection becomes the single persistent connection, so reuse it
         var connectionForDetection = _context.PersistentConnection ?? initConnection;
 
-        if (connectionForDetection != null)
+        if (connectionForDetection != null && factory != null)
         {
             var dialect = SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
             var dataSourceInfo = new DataSourceInformation(dialect);
@@ -111,5 +113,4 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
         return (null, null);
     }
-
 }

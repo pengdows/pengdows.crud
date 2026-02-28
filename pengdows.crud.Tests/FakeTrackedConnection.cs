@@ -30,7 +30,8 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
         if (connection is fakeDbConnection fake && scalars.Count > 0)
         {
             var value = scalars.Values.First();
-            var isSqlite = scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));
+            var isSqlite =
+                scalars.Keys.Any(k => k.Equals("SELECT sqlite_version()", StringComparison.OrdinalIgnoreCase));
 
             // First reader result is consumed by IsSqliteAsync. Queue an empty
             // result for non-SQLite databases so the actual version query result
@@ -39,18 +40,18 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
             {
                 fake.EnqueueReaderResult(new[]
                 {
-                    new Dictionary<string, object> { { "version", value } }
+                    new Dictionary<string, object?> { { "version", value } }
                 });
             }
             else
             {
-                fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object>>());
+                fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
             }
 
             // Result for version query
             fake.EnqueueReaderResult(new[]
             {
-                new Dictionary<string, object> { { "version", value } }
+                new Dictionary<string, object?> { { "version", value } }
             });
 
             // Configure scalar results by command text
@@ -64,7 +65,13 @@ public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
         }
     }
 
-    DataTable ITrackedConnection.GetSchema(string dataSourceInformation) => _schema;
+    DataTable ITrackedConnection.GetSchema(string dataSourceInformation)
+    {
+        return _schema;
+    }
 
-    DataTable ITrackedConnection.GetSchema() => _schema;
+    DataTable ITrackedConnection.GetSchema()
+    {
+        return _schema;
+    }
 }

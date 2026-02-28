@@ -11,7 +11,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     [Table("TimeOnlyAudit")]
     private class TimeOnlyAuditEntity
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
@@ -31,7 +31,7 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     [Table("UserAudit")]
     private class UserAuditEntity
     {
-        [Id(writable: false)]
+        [Id(false)]
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
@@ -53,14 +53,14 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<TimeOnlyAuditEntity>();
-        var helper = new EntityHelper<TimeOnlyAuditEntity, int>(Context); // No audit resolver
-        
+        var helper = new TableGateway<TimeOnlyAuditEntity, int>(Context); // No audit resolver
+
         await CreateTimeOnlyAuditTable();
-        
+
         // Act & Assert - Should not throw
         var entity = new TimeOnlyAuditEntity { Name = Guid.NewGuid().ToString() };
         var success = await helper.CreateAsync(entity, Context);
-        
+
         Assert.True(success);
         Assert.True(entity.CreatedOn > DateTime.MinValue);
         Assert.True(entity.LastUpdatedOn > DateTime.MinValue);
@@ -71,15 +71,15 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helper = new EntityHelper<UserAuditEntity, int>(Context); // No audit resolver
-        
+        var helper = new TableGateway<UserAuditEntity, int>(Context); // No audit resolver
+
         await CreateUserAuditTable();
-        
+
         // Act & Assert
         var entity = new UserAuditEntity { Name = Guid.NewGuid().ToString() };
-        
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await helper.CreateAsync(entity, Context));
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await helper.CreateAsync(entity, Context));
 
         Assert.Contains("AuditValues", exception.Message);
         Assert.Contains("resolver", exception.Message, StringComparison.OrdinalIgnoreCase);
@@ -90,14 +90,14 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helper = new EntityHelper<UserAuditEntity, int>(Context, AuditValueResolver);
-        
+        var helper = new TableGateway<UserAuditEntity, int>(Context, AuditValueResolver);
+
         await CreateUserAuditTable();
-        
+
         // Act & Assert - Should not throw
         var entity = new UserAuditEntity { Name = Guid.NewGuid().ToString() };
         var success = await helper.CreateAsync(entity, Context);
-        
+
         Assert.True(success);
         Assert.Equal("test-user", entity.CreatedBy);
         Assert.Equal("test-user", entity.LastUpdatedBy);
@@ -108,14 +108,15 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange - TestEntity has both time and user fields
         TypeMap.Register<TestEntity>();
-        var helper = new EntityHelper<TestEntity, int>(Context); // No audit resolver
-        
+        var helper = new TableGateway<TestEntity, int>(Context); // No audit resolver
+
         await CreateTestTable();
-        
+
         // Act & Assert
         var entity = new TestEntity { Name = Guid.NewGuid().ToString() };
-        
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await helper.CreateAsync(entity, Context));
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await helper.CreateAsync(entity, Context));
 
         Assert.Contains("AuditValues", exception.Message);
         Assert.Contains("resolver", exception.Message, StringComparison.OrdinalIgnoreCase);
@@ -126,20 +127,21 @@ public class AuditFieldLogicTests : SqlLiteContextTestBase
     {
         // Arrange
         TypeMap.Register<UserAuditEntity>();
-        var helperWithResolver = new EntityHelper<UserAuditEntity, int>(Context, AuditValueResolver);
-        var helperWithoutResolver = new EntityHelper<UserAuditEntity, int>(Context); // No resolver
-        
+        var helperWithResolver = new TableGateway<UserAuditEntity, int>(Context, AuditValueResolver);
+        var helperWithoutResolver = new TableGateway<UserAuditEntity, int>(Context); // No resolver
+
         await CreateUserAuditTable();
-        
+
         // Create entity with resolver first
         var entity = new UserAuditEntity { Name = Guid.NewGuid().ToString() };
         await helperWithResolver.CreateAsync(entity, Context);
-        
+
         // Act & Assert - Update without resolver should throw
         entity.Name = "Updated Name";
-        
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await helperWithoutResolver.UpdateAsync(entity, Context));
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await helperWithoutResolver.UpdateAsync(entity, Context));
 
         Assert.Contains("AuditValues", exception.Message);
         Assert.Contains("resolver", exception.Message, StringComparison.OrdinalIgnoreCase);

@@ -1,15 +1,54 @@
+// =============================================================================
+// FILE: SqliteDialect.cs
+// PURPOSE: SQLite specific dialect implementation.
+//
+// AI SUMMARY:
+// - Supports SQLite 3.24+ with good SQL standard compliance.
+// - Key features:
+//   * INSERT ... ON CONFLICT for upserts (no MERGE support)
+//   * Parameter marker: @ (at sign)
+//   * Identifier quoting: "name" (double quotes)
+//   * Max parameters: 999 (SQLITE_MAX_VARIABLE_NUMBER default)
+//   * Prepared statements enabled
+// - Connection mode detection:
+//   * :memory: -> SingleConnection mode
+//   * File mode -> SingleWriter mode
+//   * Shared cache -> appropriate mode
+// - Detects System.Data.SQLite vs Microsoft.Data.Sqlite provider.
+// - RETURNING clause for getting generated IDs (SQLite 3.35+).
+// - Savepoint support for nested transaction semantics.
+// =============================================================================
+
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// SQLite dialect with good standard compliance despite being embedded
+/// SQLite dialect with good SQL standard compliance.
 /// </summary>
-public class SqliteDialect : SqlDialect
+/// <remarks>
+/// <para>
+/// Supports SQLite 3.24+ for UPSERT and 3.35+ for RETURNING clause.
+/// </para>
+/// <para>
+/// <strong>Connection Modes:</strong> DatabaseContext automatically selects
+/// appropriate DbMode based on connection string:
+/// </para>
+/// <list type="bullet">
+/// <item><description><c>:memory:</c> - Uses SingleConnection mode</description></item>
+/// <item><description>File path - Uses SingleWriter mode</description></item>
+/// </list>
+/// <para>
+/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT DO UPDATE.
+/// </para>
+/// </remarks>
+internal class SqliteDialect : SqlDialect
 {
     private readonly bool _systemDataSqlite;
 
@@ -22,12 +61,18 @@ public class SqliteDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
     public override string ParameterMarker => "@";
+
     public override bool SupportsNamedParameters => true;
+
     // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
-    public override int MaxParameterLimit => 999;
+    public override int MaxParameterLimit => IsVersionAtLeast(3, 32) ? 32766 : 999;
+
+    // SQLite has no server-side row-per-batch limit; only the parameter limit constrains chunk size
+    public override int MaxRowsPerBatch => int.MaxValue;
+
     // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
-    
+
     // SQLite benefits from prepared statements with inherent prepare support
     public override bool PrepareStatements => true;
 
@@ -40,21 +85,19 @@ public class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
 
-    public override string GetInsertReturningClause(string idColumnName)
-    {
-        return $"RETURNING {WrapObjectName(idColumnName)}";
-    }
-
     public override string GetLastInsertedIdQuery()
     {
         return "SELECT last_insert_rowid()";
     }
 
-    public override string GetVersionQuery() => "SELECT sqlite_version()";
+    public override string GetVersionQuery()
+    {
+        return "SELECT sqlite_version()";
+    }
 
     public override string GetBaseSessionSettings()
     {
-        return "PRAGMA foreign_keys = ON;";
+        return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
     }
 
     public override string GetReadOnlySessionSettings()
@@ -62,30 +105,44 @@ public class SqliteDialect : SqlDialect
         return "PRAGMA query_only = ON;";
     }
 
+    internal override string? GetReadOnlyTransactionResetSql()
+    {
+        return "PRAGMA query_only = OFF;";
+    }
+
     public override string? GetReadOnlyConnectionParameter()
     {
         return "Mode=ReadOnly";
     }
 
-    [Obsolete]
-    public override string GetConnectionSessionSettings()
+    internal override void ApplyConnectionSettingsCore(
+        IDbConnection connection,
+        IDatabaseContext context,
+        bool readOnly,
+        string? connectionStringOverride)
     {
-        return "PRAGMA foreign_keys = ON;";
-    }
+        var baseConnectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
+            ? context.ConnectionString
+            : connectionStringOverride;
 
-    public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
-    {
         // SQLite: Only apply read-only connection parameter if not a memory database
-        if (readOnly && IsMemoryDatabase(context.ConnectionString))
+        if (readOnly && IsMemoryDatabase(baseConnectionString))
         {
             // For memory databases, just set the connection string without read-only parameter
-            connection.ConnectionString = context.ConnectionString;
+            connection.ConnectionString = baseConnectionString;
         }
         else
         {
             // Use base class implementation for non-memory databases
-            base.ApplyConnectionSettings(connection, context, readOnly);
+            base.ApplyConnectionSettingsCore(connection, context, readOnly, baseConnectionString);
         }
+    }
+
+    internal override string GetReadOnlyConnectionString(string connectionString)
+    {
+        return IsMemoryDatabase(connectionString)
+            ? connectionString
+            : base.GetReadOnlyConnectionString(connectionString);
     }
 
     protected override bool IsMemoryDatabase(string connectionString)
@@ -103,7 +160,7 @@ public class SqliteDialect : SqlDialect
     {
         var resourceName = $"pengdows.crud.xml.{SupportedDatabase.Sqlite}.schema.xml";
         using var stream = typeof(SqliteDialect).Assembly.GetManifestResourceStream(resourceName)
-                        ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
+                           ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
         var table = new DataTable();
         table.ReadXml(stream);
         return table;
@@ -161,9 +218,85 @@ public class SqliteDialect : SqlDialect
         return ex is DbException dbEx && dbEx.ErrorCode == 19;
     }
 
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (value is bool b && IsNumericDbType(type))
+        {
+            return base.CreateDbParameter(name, type, b ? 1 : 0);
+        }
+
+        if (value is DateTime dt)
+        {
+            var utc = NormalizeUtc(dt);
+            return base.CreateDbParameter(name, DbType.String, utc.ToString("o", CultureInfo.InvariantCulture));
+        }
+
+        if (value is DateTimeOffset dto)
+        {
+            return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+        }
+
+        if (value is Guid guid)
+        {
+            return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
+        }
+
+        // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind
+        // DbType.Decimal correctly — the driver stores 0 instead of the actual value.
+        // Only convert when the caller declared DbType.Decimal; other mismatches (e.g.
+        // DbType.String + decimal) fall through to the base validator so they still throw.
+        if (value is decimal decValue && type == DbType.Decimal)
+        {
+            return base.CreateDbParameter(name, DbType.Double, (double)decValue);
+        }
+
+        var p = base.CreateDbParameter(name, type, value);
+
+        if (value is byte[] bytes && (type == DbType.Binary || type == DbType.Object))
+        {
+            p.Size = bytes.Length;
+        }
+
+        return p;
+    }
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        return base.PrepareParameterValue(value, dbType);
+    }
+
+    private static bool IsNumericDbType(DbType type)
+    {
+        return type is DbType.Byte or DbType.SByte
+            or DbType.Int16 or DbType.UInt16
+            or DbType.Int32 or DbType.UInt32
+            or DbType.Int64 or DbType.UInt64
+            or DbType.Single or DbType.Double
+            or DbType.Decimal or DbType.Currency
+            or DbType.VarNumeric;
+    }
+
     // Connection pooling properties for SQLite (provider-aware)
-    public override bool SupportsExternalPooling => _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+    public override bool SupportsExternalPooling =>
+        _systemDataSqlite; // Microsoft.Data.Sqlite: true pooling, but no min/max keywords
+
     public override string? PoolingSettingName => "Pooling"; // set only if absent; harmless for M.D.Sqlite
     public override string? MinPoolSizeSettingName => null; // no min keyword for either
     public override string? MaxPoolSizeSettingName => _systemDataSqlite ? "Max Pool Size" : null;
+    internal override int DefaultMaxPoolSize => int.MaxValue;
+
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"EXCLUDED.{WrapObjectName(columnName)}";
+    }
+
+    private static DateTime NormalizeUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
 }

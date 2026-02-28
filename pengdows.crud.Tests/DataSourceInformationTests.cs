@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -26,68 +27,85 @@ public static class DataSourceTestData
                 continue;
             }
 
-            var productName = db switch
-            {
-                SupportedDatabase.SqlServer => "SQL Server",
-                SupportedDatabase.MySql => "MySQL",
-                SupportedDatabase.MariaDb => "MariaDB",
-                SupportedDatabase.PostgreSql => "PostgreSQL",
-                SupportedDatabase.CockroachDb => "CockroachDB",
-                SupportedDatabase.Sqlite => "SQLite",
-                SupportedDatabase.Firebird => "Firebird",
-                SupportedDatabase.Oracle => "Oracle Database",
-                _ => db.ToString()
-            };
-
-            var markerFormat = db switch
-            {
-                SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":{0}",
-                SupportedDatabase.DuckDB => "$" + "{0}",
-                _ => "@{0}"
-            };
-
-            var schema = DataSourceInformation.BuildEmptySchema(
-                productName,
-                "1.2.3",
-                db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
-                markerFormat,
-                64,
-                @"@\\w+",
-                @"[@:]\w+",
-                db != SupportedDatabase.Sqlite
-            );
-
-            var factory = new fakeDbFactory(db.ToString());
-
-            SqlDialect dialect = db switch
-            {
-                SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
-                SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.CockroachDb => new PostgreSqlDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
-                SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
-                SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
-                _ => new Sql92Dialect(factory, NullLogger.Instance)
-            };
-
-            var versionSql = dialect.GetVersionQuery();
-
-            var versionString = db switch
-            {
-                SupportedDatabase.PostgreSql => "PostgreSQL 15.0",
-                _ => $"{db} v1.2.3"
-            };
-
-            var scalars = new Dictionary<string, object>
-            {
-                [versionSql] = versionString
-            };
-
-            yield return new object[] { db, schema, scalars };
+            yield return new object[] { db };
         }
+    }
+
+    public static (DataTable schema, Dictionary<string, object> scalars) BuildFixture(SupportedDatabase db)
+    {
+        var productName = db switch
+        {
+            SupportedDatabase.SqlServer => "SQL Server",
+            SupportedDatabase.MySql => "MySQL",
+            SupportedDatabase.AuroraMySql => "MySQL",
+            SupportedDatabase.MariaDb => "MariaDB",
+            SupportedDatabase.PostgreSql => "PostgreSQL",
+            SupportedDatabase.AuroraPostgreSql => "PostgreSQL",
+            SupportedDatabase.CockroachDb => "CockroachDB",
+            SupportedDatabase.YugabyteDb => "YugabyteDB",
+            SupportedDatabase.TiDb => "TiDB",
+            SupportedDatabase.Sqlite => "SQLite",
+            SupportedDatabase.Firebird => "Firebird",
+            SupportedDatabase.Oracle => "Oracle Database",
+            SupportedDatabase.Snowflake => "Snowflake",
+            _ => db.ToString()
+        };
+
+        var markerFormat = db switch
+        {
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@{0}",
+            SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":{0}",
+            SupportedDatabase.DuckDB => "$" + "{0}",
+            _ => "@{0}"
+        };
+
+        var schema = DataSourceInformation.BuildEmptySchema(
+            productName,
+            "1.2.3",
+            db == SupportedDatabase.Sqlite ? "@p[0-9]+" : "@[0-9]+",
+            markerFormat,
+            64,
+            @"@\\w+",
+            @"[@:]\w+",
+            db != SupportedDatabase.Sqlite
+        );
+
+        var factory = new fakeDbFactory(db.ToString());
+
+        SqlDialect dialect = db switch
+        {
+            SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
+            SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.AuroraMySql => new MySqlDialect(factory, NullLogger.Instance, SupportedDatabase.AuroraMySql),
+            SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.TiDb => new TiDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
+            SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance, SupportedDatabase.AuroraPostgreSql),
+            SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
+            SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
+            _ => new Sql92Dialect(factory, NullLogger.Instance)
+        };
+
+        var versionSql = dialect.GetVersionQuery();
+
+        var versionString = db switch
+        {
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => "PostgreSQL 15.0",
+            _ => $"{db} v1.2.3"
+        };
+
+        var scalars = new Dictionary<string, object>
+        {
+            [versionSql] = versionString
+        };
+
+        return (schema, scalars);
     }
 }
 
@@ -95,11 +113,9 @@ public class DataSourceInformationTests
 {
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
-    public void DataSourceInformation_Should_Configure_Each_Database(
-        SupportedDatabase db,
-        DataTable schema,
-        Dictionary<string, object> scalars)
+    public void DataSourceInformation_Should_Configure_Each_Database(SupportedDatabase db)
     {
+        var (schema, scalars) = DataSourceTestData.BuildFixture(db);
         var factory = new fakeDbFactory(db.ToString());
         // Arrange
         var x = factory.CreateConnection();
@@ -118,39 +134,47 @@ public class DataSourceInformationTests
         // Assert: parameter marker
         var expectedMarker = db switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => ":",
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@",
+            SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
-        var expectedMajor = db == SupportedDatabase.PostgreSql ? 15 : 1;
+        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15 : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
         var canMerge = (db == SupportedDatabase.SqlServer && info.ParsedVersion?.Major >= 10)
                        || db == SupportedDatabase.Oracle
+                       || db == SupportedDatabase.Snowflake
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
-                       || (db == SupportedDatabase.PostgreSql && info.ParsedVersion?.Major > 14);
+                       || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
+                       || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14);
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
-        var canConflict = (new[]
+        var canConflict = new[]
         {
             SupportedDatabase.PostgreSql,
+            SupportedDatabase.AuroraPostgreSql,
             SupportedDatabase.CockroachDb,
+            SupportedDatabase.YugabyteDb,
             SupportedDatabase.Sqlite,
             SupportedDatabase.DuckDB
-        }).Contains(db);
+        }.Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
 
-        var canOnDuplicateKey = (new[]
+        var canOnDuplicateKey = new[]
         {
             SupportedDatabase.MySql,
-            SupportedDatabase.MariaDb
-        }).Contains(db);
+            SupportedDatabase.AuroraMySql,
+            SupportedDatabase.MariaDb,
+            SupportedDatabase.TiDb
+        }.Contains(db);
         Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
         // Assert: proc wrap style
@@ -158,16 +182,22 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => ProcWrappingStyle.Call,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => ProcWrappingStyle.PostgreSQL,
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
-                or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB => false,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.Oracle => true,
+                or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
+                or SupportedDatabase.TiDb or SupportedDatabase.Snowflake => false,
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                or SupportedDatabase.Oracle => true,
             _ => true
         };
 
@@ -175,17 +205,17 @@ public class DataSourceInformationTests
 
         // Assert: named parameters flags
         Assert.True(info.SupportsNamedParameters);
-        Assert.NotEqual(false, info.SupportsNamedParameters);
+        Assert.True(info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits
         var expectedOutputParams = db switch
         {
             SupportedDatabase.SqlServer => 1024,
-            SupportedDatabase.MySql => 65535,
-            SupportedDatabase.MariaDb => 65535,
-            SupportedDatabase.PostgreSql => 100,
-            SupportedDatabase.CockroachDb => 100,
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
             SupportedDatabase.Oracle => 1024,
             SupportedDatabase.Sqlite => 0,
             SupportedDatabase.Firebird => 1499,
@@ -196,8 +226,9 @@ public class DataSourceInformationTests
 
     [Theory]
     [MemberData(nameof(DataSourceTestData.AllDatabases), MemberType = typeof(DataSourceTestData))]
-    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db, DataTable schema, Dictionary<string, object> scalars)
+    public void GetDatabaseVersion_Returns_Version(SupportedDatabase db)
     {
+        var (schema, scalars) = DataSourceTestData.BuildFixture(db);
         var factory = new fakeDbFactory(db.ToString());
         var connection = factory.CreateConnection();
         connection.ConnectionString = $"Data Source=test;EmulatedProduct={db}";
@@ -217,7 +248,7 @@ public class DataSourceInformationTests
         var conn = (fakeDbConnection)factory.CreateConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
 
-        var row = new Dictionary<string, object> { { "version", "3.0" } };
+        var row = new Dictionary<string, object?> { { "version", "3.0" } };
         // One result for IsSqliteAsync, one for GetVersionAsync, and one for IsSqliteSync
         conn.EnqueueReaderResult(new[] { row });
         conn.EnqueueReaderResult(new[] { row });
@@ -231,7 +262,8 @@ public class DataSourceInformationTests
     public void GetSchema_UsesEmbeddedForSqlite()
     {
         var tracked = BuildSqliteConnectionMock();
-        var info = DataSourceInformation.Create(tracked, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
+        var info = DataSourceInformation.Create(tracked, new fakeDbFactory(SupportedDatabase.Sqlite),
+            NullLoggerFactory.Instance);
 
         var schema = info.GetSchema(tracked);
         Assert.Equal("SQLite", schema.Rows[0].Field<string>("DataSourceProductName"));
@@ -251,5 +283,4 @@ public class DataSourceInformationTests
         Assert.Contains("SQL Server", schema.Rows[0].Field<string>("DataSourceProductName"));
         Assert.Equal("{0}", schema.Rows[0].Field<string>("ParameterMarkerFormat"));
     }
-
 }

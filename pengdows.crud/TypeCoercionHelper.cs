@@ -1,37 +1,72 @@
+// =============================================================================
+// FILE: TypeCoercionHelper.cs
+// PURPOSE: Static utilities for converting between .NET types and database
+//          types, handling nulls, enums, JSON, dates, and provider quirks.
+//
+// AI SUMMARY:
+// - Central type conversion logic used when reading from DataReader.
+// - Coerce() method handles:
+//   * Null/DBNull detection and propagation
+//   * Enum parsing (from string or numeric, with configurable failure mode)
+//   * JSON deserialization (from string or JsonDocument to typed objects)
+//   * Date/time conversions (DateOnly, TimeOnly, DateTimeOffset)
+//   * Guid from byte[] (for providers that return Guid as 16-byte array)
+//   * Numeric type conversions (respecting precision/overflow)
+// - ResolveCoercer() — plan-build-time factory that returns a single delegate
+//   for a given column.  Dispatches once to the correct path (enum, JSON,
+//   DateTime, DateTimeOffset, registered IDbCoercion, or full Coerce fallback)
+//   so that subsequent per-row calls skip all dispatch logic.
+// - GetJsonText() serializes objects to JSON strings for storage.
+// - Handles provider-specific quirks:
+//   * Some return TimeSpan as string
+//   * Some return Guid as byte[]
+//   * Some return DateTimeOffset as DateTime
+// - Configurable via TypeCoercionOptions for fine-tuning behavior.
+// - Logger property allows capturing coercion warnings/errors.
+// - Performance: Fast path for assignable types, no conversion needed.
+// =============================================================================
+
 #region
 
-using System;
+using System.Collections.Concurrent;
+using System.Data;
 using System.Globalization;
-using System.IO;
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 
 #endregion
 
 namespace pengdows.crud;
 
-public enum TimeMappingPolicy
-{
-    PreferDateTimeOffset,
-    ForceUtcDateTime
-}
-
-public enum JsonPassThrough
-{
-    PreferDocument,
-    PreferText
-}
-
-public sealed record TypeCoercionOptions(TimeMappingPolicy TimePolicy, JsonPassThrough JsonPreference, SupportedDatabase Provider)
-{
-    public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
-}
-
+/// <summary>
+/// Provides static utilities for type coercion between database and .NET types.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This helper is used by <see cref="DataReaderMapper"/> and <see cref="TableGateway{TEntity,TRowID}"/>
+/// to convert values read from the database to the appropriate .NET types.
+/// </para>
+/// <para>
+/// <strong>Null Handling:</strong> Both null and <see cref="DBNull.Value"/> are converted to null.
+/// </para>
+/// <para>
+/// <strong>Enum Handling:</strong> Enums can be stored as strings or numeric values.
+/// The <see cref="EnumParseFailureMode"/> parameter controls behavior when parsing fails.
+/// </para>
+/// <para>
+/// <strong>JSON Handling:</strong> Columns marked with <see cref="Attributes.JsonAttribute"/>
+/// are deserialized from JSON strings or <see cref="JsonDocument"/> to the target type.
+/// </para>
+/// </remarks>
+/// <seealso cref="TypeCoercionOptions"/>
+/// <seealso cref="EnumParseFailureMode"/>
 public static class TypeCoercionHelper
 {
     private static readonly Type GuidType = typeof(Guid);
@@ -39,12 +74,122 @@ public static class TypeCoercionHelper
     private static readonly Type ReadOnlyMemoryOfByteType = typeof(ReadOnlyMemory<byte>);
     private static readonly Type ArraySegmentOfByteType = typeof(ArraySegment<byte>);
 
+    /// <summary>
+    /// Cache of compiled type conversion delegates for faster Convert.ChangeType operations.
+    /// Key: (sourceType, targetType), Value: compiled converter function.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Type source, Type target), Func<object, object>> _conversionCache =
+        new();
+
     private static ILogger _logger = NullLogger.Instance;
 
     public static ILogger Logger
     {
         get => _logger;
         set => _logger = value ?? NullLogger.Instance;
+    }
+
+    /// <summary>
+    /// Converts a value to the specified target type using a cached compiled delegate.
+    /// This is significantly faster than Convert.ChangeType for repeated conversions.
+    /// </summary>
+    /// <param name="value">The value to convert (must not be null).</param>
+    /// <param name="targetType">The type to convert to.</param>
+    /// <returns>The converted value.</returns>
+    /// <exception cref="InvalidCastException">Thrown when the conversion fails.</exception>
+    public static object ConvertWithCache(object value, Type targetType)
+    {
+        if (value == null)
+        {
+            throw new ArgumentNullException(nameof(value), "Value cannot be null for type conversion");
+        }
+
+        var sourceType = value.GetType();
+        var actualTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // Fast path: already correct type
+        if (sourceType == actualTarget)
+        {
+            return value;
+        }
+
+        // Get or create compiled converter
+        var converter = _conversionCache.GetOrAdd(
+            (sourceType, actualTarget),
+            static key => CompileConverter(key.source, key.target)
+        );
+
+        try
+        {
+            return converter(value);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidCastException(
+                $"Cannot convert value '{value}' from {sourceType.Name} to {actualTarget.Name}.",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Compiles a fast type converter delegate using expression trees.
+    /// </summary>
+    private static Func<object, object> CompileConverter(Type sourceType, Type targetType)
+    {
+        // Parameter: object value
+        var param = Expression.Parameter(typeof(object), "value");
+
+        // Cast input: (TSource)value
+        var typedInput = Expression.Convert(param, sourceType);
+
+        Expression conversion;
+
+        // Special cases that Convert.ChangeType doesn't handle
+        if (sourceType == typeof(string) && targetType == typeof(Guid))
+        {
+            // Guid.Parse(stringValue)
+            var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
+            conversion = Expression.Call(parseMethod, typedInput);
+        }
+        else if (sourceType == typeof(byte[]) && targetType == typeof(Guid))
+        {
+            // new Guid(bytes) — MySQL and similar providers store UUIDs as BINARY(16)
+            var guidCtor = typeof(Guid).GetConstructor(new[] { typeof(byte[]) })!;
+            conversion = Expression.New(guidCtor, typedInput);
+        }
+        else if (sourceType == typeof(DateTime) && targetType == typeof(DateTimeOffset))
+        {
+            // new DateTimeOffset(dateTimeValue)
+            var constructor = typeof(DateTimeOffset).GetConstructor(new[] { typeof(DateTime) })!;
+            conversion = Expression.New(constructor, typedInput);
+        }
+        else if (sourceType == typeof(DateTimeOffset) && targetType == typeof(DateTime))
+        {
+            // dateTimeOffsetValue.DateTime
+            var property = typeof(DateTimeOffset).GetProperty(nameof(DateTimeOffset.DateTime))!;
+            conversion = Expression.Property(typedInput, property);
+        }
+        else
+        {
+            // Use ChangeType method with InvariantCulture for standard conversions
+            var changeTypeMethod = typeof(Convert).GetMethod(
+                nameof(Convert.ChangeType),
+                new[] { typeof(object), typeof(Type), typeof(IFormatProvider) })!;
+
+            conversion = Expression.Call(
+                changeTypeMethod,
+                Expression.Convert(typedInput, typeof(object)),
+                Expression.Constant(targetType),
+                Expression.Constant(CultureInfo.InvariantCulture)
+            );
+        }
+
+        // Cast result: (object)result
+        var boxedResult = Expression.Convert(conversion, typeof(object));
+
+        // Compile the lambda
+        var lambda = Expression.Lambda<Func<object, object>>(boxedResult, param);
+        return lambda.Compile();
     }
 
     public static object? Coerce(
@@ -98,7 +243,8 @@ public static class TypeCoercionHelper
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         // Don't take fast path for DateTime types as they may need UTC conversion
-        if (targetType.IsAssignableFrom(sourceType) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
+        if (targetType.IsAssignableFrom(sourceType) && underlyingTarget != typeof(DateTime) &&
+            underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
@@ -115,22 +261,32 @@ public static class TypeCoercionHelper
     {
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+        // Handle empty strings for non-string types
+        if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string))
+        {
+            if (underlyingTarget == typeof(decimal)) return 0m;
+            if (underlyingTarget == typeof(Guid)) return Guid.Empty;
+            if (underlyingTarget == typeof(DateTime)) return default(DateTime);
+            if (underlyingTarget == typeof(DateTimeOffset)) return default(DateTimeOffset);
+            if (underlyingTarget == typeof(int)) return 0;
+            if (underlyingTarget == typeof(long)) return 0L;
+            if (underlyingTarget == typeof(double)) return 0d;
+            if (underlyingTarget == typeof(float)) return 0f;
+            if (underlyingTarget == typeof(bool)) return false;
+            if (underlyingTarget == typeof(short)) return (short)0;
+            if (underlyingTarget == typeof(byte)) return (byte)0;
+            
+            return IsNumericClrType(underlyingTarget) ? Activator.CreateInstance(underlyingTarget) : null;
+        }
+
         // Don't take fast path for DateTime types as they may need UTC conversion
-        if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) && underlyingTarget != typeof(DateTimeOffset))
+        if (underlyingTarget.IsInstanceOfType(value) && underlyingTarget != typeof(DateTime) &&
+            underlyingTarget != typeof(DateTimeOffset))
         {
             return value;
         }
 
-        if (underlyingTarget == GuidType)
-        {
-            return CoerceGuid(value);
-        }
-
-        if (underlyingTarget == typeof(bool))
-        {
-            return CoerceBoolean(value);
-        }
-
+        // Policy-aware type handling (DateTime/DateTimeOffset require policy context)
         if (underlyingTarget == typeof(DateTimeOffset))
         {
             return CoerceDateTimeOffset(value, options);
@@ -141,16 +297,21 @@ public static class TypeCoercionHelper
             return CoerceDateTime(value, options);
         }
 
-        if (underlyingTarget == typeof(decimal))
+        // Primary path: Use unified CoercionRegistry system for other types
+        var dbValue = new types.coercion.DbValue(value, sourceType);
+        if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue,
+                options.Provider))
         {
-            return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+            return coercedValue;
         }
 
+        // Fallback: char[] to string conversion (not in coercion registry)
         if (underlyingTarget == typeof(string) && sourceType == typeof(char[]))
         {
             return new string((char[])value);
         }
 
+        // Legacy path: Try advanced converter for backward compatibility
         var advancedConverter = AdvancedTypeRegistry.Shared.GetConverter(underlyingTarget);
         if (advancedConverter != null)
         {
@@ -161,9 +322,10 @@ public static class TypeCoercionHelper
             }
         }
 
+        // Final fallback: Use cached compiled converter for better performance
         try
         {
-            return Convert.ChangeType(value, underlyingTarget, CultureInfo.InvariantCulture);
+            return ConvertWithCache(value, underlyingTarget);
         }
         catch (Exception ex)
         {
@@ -171,7 +333,28 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
+    private static bool IsNumericClrType(Type type)
+    {
+        switch (Type.GetTypeCode(type))
+        {
+            case TypeCode.Byte:
+            case TypeCode.SByte:
+            case TypeCode.UInt16:
+            case TypeCode.UInt32:
+            case TypeCode.UInt64:
+            case TypeCode.Int16:
+            case TypeCode.Int32:
+            case TypeCode.Int64:
+            case TypeCode.Decimal:
+            case TypeCode.Double:
+            case TypeCode.Single:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static object? CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)
     {
         if (enumType.IsInstanceOfType(value))
         {
@@ -208,14 +391,17 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object? HandleEnumFailure(object value, Type enumType, EnumParseFailureMode parseMode, bool targetNullable)
+    private static object? HandleEnumFailure(object value, Type enumType, EnumParseFailureMode parseMode,
+        bool targetNullable)
     {
         switch (parseMode)
         {
             case EnumParseFailureMode.Throw:
                 throw new ArgumentException($"Cannot convert '{value}' to enum {enumType}");
             case EnumParseFailureMode.SetDefaultValue:
-                return Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
+                return targetNullable
+                    ? null
+                    : Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
             case EnumParseFailureMode.SetNullAndLog:
                 TryLogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
                 return null;
@@ -348,9 +534,11 @@ public static class TypeCoercionHelper
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed):
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var parsed):
                 return parsed;
-            case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
+            case string s
+                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
@@ -367,14 +555,78 @@ public static class TypeCoercionHelper
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             case DateTimeOffset dto:
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto):
+            case string s when string.IsNullOrWhiteSpace(s):
+                // Treat empty/whitespace strings as invalid for DateTime
+                // This handles SQLite returning empty strings for TIMESTAMP columns
+                throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var dto):
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-            case string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
+            case string s
+                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             default:
                 throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
         }
     }
+
+    /// <summary>
+    /// Typed DateTime parser for string source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTime return value.
+    /// Applies the same UTC normalization as <see cref="CoerceDateTime"/> for the string case.
+    /// </summary>
+    internal static DateTime CoerceDateTimeFromString(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+        {
+            throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+        }
+
+        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+        {
+            return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
+        }
+
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
+        }
+
+        throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+    }
+
+    /// <summary>
+    /// Typed DateTimeOffset parser for string source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
+    /// </summary>
+    internal static DateTimeOffset CoerceDateTimeOffsetFromString(string s)
+    {
+        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return CreateFlexibleOffset(dt);
+        }
+
+        throw new InvalidCastException($"Cannot convert value '{s}' to DateTimeOffset.");
+    }
+
+    /// <summary>
+    /// Typed DateTimeOffset converter for DateTime source — used by compiled expression trees in
+    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
+    /// </summary>
+    internal static DateTimeOffset CoerceDateTimeOffsetFromDateTime(DateTime dt) => CreateFlexibleOffset(dt);
+
+    /// <summary>
+    /// Normalizes a DateTime returned by a database driver to DateTimeKind.Utc.
+    /// Many drivers (Snowflake, SQL Server, MySQL, Oracle) return TIMESTAMP/DATETIME columns
+    /// as DateTimeKind.Unspecified. Treating Unspecified as UTC matches the convention that
+    /// all datetime values stored in the database represent UTC instants.
+    /// </summary>
+    internal static DateTime NormalizeDateTime(DateTime dt) => ConvertToUtc(dt);
 
     private static DateTime ConvertToUtc(DateTime dt)
     {
@@ -562,4 +814,188 @@ public static class TypeCoercionHelper
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         return reader.ReadToEnd();
     }
-}
+
+    /// <summary>
+    /// Resolves the coercion delegate for a column at plan-build time so that the
+    /// hot per-row path skips registry lookups entirely.
+    /// </summary>
+    /// <param name="column">Column metadata (target type, enum type, JSON flag).</param>
+    /// <param name="provider">Database provider for registry dispatch.</param>
+    /// <param name="parseMode">Enum parse-failure behaviour.</param>
+    /// <param name="options">Provider-wide coercion options (time policy, etc.).</param>
+    internal static Func<object?, object?> ResolveCoercer(
+        IColumnInfo column,
+        SupportedDatabase provider,
+        EnumParseFailureMode parseMode,
+        TypeCoercionOptions options,
+        Type? fieldType = null)
+    {
+        var targetType = column.PropertyInfo.PropertyType;
+        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        var sourceType = fieldType;
+
+        // --- fast-path delegates, resolved once and captured in the closure ---
+
+        if (column.EnumType != null)
+        {
+            var enumType = column.EnumType;
+            return value => value == null ? null : CoerceEnum(value, enumType, parseMode, targetType);
+        }
+
+        if (column.IsJsonType)
+        {
+            return value => value == null ? null : CoerceJsonValue(value, targetType, column, options);
+        }
+
+        if (runtimeTarget == typeof(DateTimeOffset))
+        {
+            return value => value == null ? null : CoerceDateTimeOffset(value, options);
+        }
+
+        if (runtimeTarget == typeof(DateTime))
+        {
+            return value => value == null ? null : CoerceDateTime(value, options);
+        }
+
+        // Try to resolve a registered coercion once; if found, the returned
+        // delegate calls TryRead directly — no registry scan at runtime.
+        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, provider);
+        if (coercion != null)
+        {
+            return value =>
+            {
+                if (value == null)
+                {
+                    return null;
+                }
+
+                var dbValue = new types.coercion.DbValue(value, sourceType ?? value.GetType());
+                if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
+                {
+                    return result;
+                }
+
+                // Fallback to robust conversion cache
+                return ConvertWithCache(value, runtimeTarget);
+            };
+        }
+
+        // Fallback: full Coerce dispatch covers char[]→string, AdvancedTypeRegistry,
+        // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
+        // types that have no registered coercion.
+        return value => value == null ? null : Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
+    }
+
+    /// <summary>
+    /// Resolves a coercion delegate for a known source/target type pair.
+    /// This is used by DataReaderMapper to pre-bind the conversion path
+    /// once per plan and avoid repeated registry lookups on every row.
+    /// </summary>
+    internal static Func<object?, object?> ResolveCoercer(
+        Type sourceType,
+        Type targetType,
+        EnumParseFailureMode parseMode)
+    {
+        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (TryGetEnumType(targetType, out var enumType))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceEnum(value!, enumType, parseMode, targetType);
+        }
+
+        if (runtimeTarget == typeof(DateTimeOffset))
+        {
+            return value =>
+                Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, TypeCoercionOptions.Default);
+        }
+
+        if (runtimeTarget == typeof(DateTime))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTime(value!, TypeCoercionOptions.Default);
+        }
+
+        if (runtimeTarget.IsAssignableFrom(sourceType) &&
+            runtimeTarget != typeof(DateTime) &&
+            runtimeTarget != typeof(DateTimeOffset))
+        {
+            return value => Utils.IsNullOrDbNull(value) ? null : value;
+        }
+
+        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, SupportedDatabase.Unknown);
+        if (coercion != null)
+        {
+            return value =>
+            {
+                if (Utils.IsNullOrDbNull(value))
+                {
+                    return null;
+                }
+
+                var dbValue = new types.coercion.DbValue(value!, sourceType);
+                if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
+                {
+                    return result;
+                }
+
+                return ConvertWithCache(value!, runtimeTarget);
+            };
+        }
+
+                return value => Utils.IsNullOrDbNull(value)
+                    ? null
+                    : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
+            }
+        
+            /// <summary>
+            /// Optimized byte reader for compiled mappers. Uses a small stack buffer for small reads
+            /// and falls back to heap only for large binary data.
+            /// </summary>
+            public static byte[] ReadBytes(IDataRecord reader, int ordinal)
+            {
+                var length = reader.GetBytes(ordinal, 0, null, 0, 0);
+                if (length <= 0) return Array.Empty<byte>();
+        
+                // For small binary data (like small hashes), use a rented buffer to read,
+                // then copy to a new array of the exact size.
+                if (length <= 256)
+                {
+                    var temp = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
+                    try
+                    {
+                        reader.GetBytes(ordinal, 0, temp, 0, (int)length);
+                        var result = new byte[length];
+                        Buffer.BlockCopy(temp, 0, result, 0, (int)length);
+                        return result;
+                    }
+                    finally
+                    {
+                        System.Buffers.ArrayPool<byte>.Shared.Return(temp);
+                    }
+                }
+        
+                var heapBuffer = new byte[length];
+                reader.GetBytes(ordinal, 0, heapBuffer, 0, (int)length);
+                return heapBuffer;
+            }
+        
+            /// <summary>
+            /// Reads a GUID from a binary column without allocating a byte array.
+            /// Optimized for SQLite and other providers that store GUIDs as BLOBs.
+            /// </summary>
+            public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal)
+            {
+                var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
+                try
+                {
+                    var read = reader.GetBytes(ordinal, 0, temp, 0, 16);
+                    if (read < 16)
+                        throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
+                    return new Guid(temp.AsSpan(0, 16));
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(temp);
+                }
+            }
+        }
+        

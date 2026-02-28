@@ -1,13 +1,10 @@
 #region
 
-using System;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading;
-using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 
 #endregion
 
@@ -34,6 +31,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _skipFirstFailOnOpen;
     private fakeDbFactory? _factoryRef;
     private string? _emulatedTypeName;
+    private Action? _customOpenBehavior;
+    private Action? _customCommandBehavior;
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
@@ -48,9 +47,17 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
     public readonly List<string> ExecutedReaderTexts = new();
+    public fakeDbCommand? LastCreatedCommand { get; private set; }
+
+    /// <summary>
+    /// Queue of output parameter values to apply after command execution.
+    /// Each dictionary maps parameter name to its output value.
+    /// </summary>
+    internal readonly Queue<Dictionary<string, object?>> OutputParameterResults = new();
 
     // Enhanced data persistence
     internal readonly FakeDataStore DataStore;
+
     /// <summary>
     /// Controls whether the connection should persist DML results in-memory for subsequent queries.
     /// Tests opt-in explicitly to avoid surprising behavior changes in existing suites.
@@ -79,6 +86,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void EnqueueNonQueryResult(int value)
     {
         NonQueryResults.Enqueue(value);
+    }
+
+    /// <summary>
+    /// Enqueues output parameter values to be applied after the next command execution.
+    /// The dictionary maps parameter names to their output values.
+    /// </summary>
+    public void EnqueueOutputParameterResult(Dictionary<string, object?> outputValues)
+    {
+        OutputParameterResults.Enqueue(outputValues);
     }
 
     public void SetScalarResultForCommand(string commandText, object? value)
@@ -203,6 +219,32 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// Marks the connection as permanently broken - all operations will fail
+    /// </summary>
+    public void SetBroken()
+    {
+        SetFailOnOpen(true);
+        SetFailOnCommand(true);
+        SetFailOnBeginTransaction(true);
+    }
+
+    /// <summary>
+    /// Sets custom behavior for Open() calls
+    /// </summary>
+    public void SetCustomOpenBehavior(Action customBehavior)
+    {
+        _customOpenBehavior = customBehavior;
+    }
+
+    /// <summary>
+    /// Sets custom behavior for CreateCommand() calls
+    /// </summary>
+    public void SetCustomCommandBehavior(Action customBehavior)
+    {
+        _customCommandBehavior = customBehavior;
+    }
+
+    /// <summary>
     /// Sets the connection to fail after N successful open operations across the entire factory
     /// </summary>
     internal void SetSharedFailAfterOpenCount(fakeDbFactory factory, int openCount)
@@ -256,6 +298,22 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _factoryRef = null;
     }
 
+    internal bool TryGetCommandFailure(string commandText, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (CommandFailuresByText.TryGetValue(commandText, out exception))
+        {
+            return true;
+        }
+
+        if (_factoryRef?.TryGetCommandFailure(commandText, out exception) == true)
+        {
+            return true;
+        }
+
+        exception = null;
+        return false;
+    }
+
     IReadOnlyCollection<IEnumerable<Dictionary<string, object>>> IFakeDbConnection.RemainingReaderResults
     {
         get
@@ -273,6 +331,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
                 {
                     clonedRows.Add(CloneRow(row));
                 }
+
                 copies.Add(clonedRows);
             }
 
@@ -299,7 +358,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     void IFakeDbConnection.EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
-        var converted = new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection ? collection.Count : 0);
+        var converted =
+            new List<Dictionary<string, object?>>(rows is ICollection<Dictionary<string, object>> collection
+                ? collection.Count
+                : 0);
         foreach (var row in rows)
         {
             var newRow = new Dictionary<string, object?>(row.Count);
@@ -307,6 +369,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             {
                 newRow[kvp.Key] = kvp.Value;
             }
+
             converted.Add(newRow);
         }
 
@@ -354,7 +417,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     [AllowNull]
     public override string ConnectionString
     {
-        get => _connectionString!;
+        get => _connectionString ?? string.Empty;
         set => _connectionString = value;
     }
 
@@ -371,6 +434,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public int OpenCount { get; private set; }
 
     public int OpenAsyncCount { get; private set; }
+
+    public int CloseCount { get; private set; }
+
+    public int DisposeCount { get; private set; }
 
     public override void Open()
     {
@@ -438,6 +505,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw new InvalidOperationException("Connection is broken");
         }
 
+        // Invoke custom open behavior if set
+        _customOpenBehavior?.Invoke();
+
         OpenCount++;
         ParseEmulatedProduct(ConnectionString);
         var originalState = _state;
@@ -452,6 +522,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             throw _closeFailureException;
         }
+
+        CloseCount++;
         var original = _state;
         _state = ConnectionState.Closed;
         RaiseStateChangedEvent(original);
@@ -464,12 +536,28 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     protected override void Dispose(bool disposing)
     {
-        Close();
-        base.Dispose(disposing);
+        if (disposing)
+        {
+            DisposeCount++;
+        }
+
+        try
+        {
+            Close();
+        }
+        catch
+        {
+            // Dispose should not throw, even if Close is configured to fail.
+        }
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     public override async ValueTask DisposeAsync()
     {
+        DisposeCount++;
         await CloseAsync();
         await base.DisposeAsync();
     }
@@ -500,11 +588,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
-    private SupportedDatabase ParseEmulatedProduct(string connStr)
+    private SupportedDatabase ParseEmulatedProduct(string? connStr)
     {
         if (EmulatedProduct == SupportedDatabase.Unknown)
         {
-            var builder = new DbConnectionStringBuilder { ConnectionString = connStr };
+            var builder = new DbConnectionStringBuilder { ConnectionString = connStr ?? string.Empty };
             if (!builder.TryGetValue("EmulatedProduct", out var raw))
             {
                 EmulatedProduct = SupportedDatabase.Unknown;
@@ -570,7 +658,12 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw new InvalidOperationException("Cannot create command on broken connection");
         }
 
-        return new fakeDbCommand(this);
+        // Invoke custom command behavior if set
+        _customCommandBehavior?.Invoke();
+
+        var command = new fakeDbCommand(this);
+        LastCreatedCommand = command;
+        return command;
     }
 
     public override DataTable GetSchema()
