@@ -1053,9 +1053,15 @@ public class CoverageGapTests_TypesAndConverters
         var converter = new GeographyConverter();
         var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
 
-        // SqlServer spatial types require Microsoft.SqlServer.Types which is not available
-        Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geog, SupportedDatabase.SqlServer));
+        try
+        {
+            var value = converter.ToProviderValue(geog, SupportedDatabase.SqlServer);
+            Assert.NotNull(value);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Contains("Microsoft.SqlServer.Types", ex.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

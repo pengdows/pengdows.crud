@@ -52,6 +52,7 @@ internal static class CrossFrameworkRatioWriter
     private static List<CrossRatioRow> BuildRows(Summary summary)
     {
         var grouped = new Dictionary<(string ParameterKey, string Scenario), ScenarioMeans>();
+        var correctness = BenchmarkCorrectnessArtifacts.LoadForSummary(summary.Title);
 
         foreach (var report in summary.Reports)
         {
@@ -74,7 +75,9 @@ internal static class CrossFrameworkRatioWriter
                 means = new ScenarioMeans();
             }
 
-            means.Set(framework, stats.Mean);
+            var frameworkName = GetFrameworkName(framework);
+            var isInvalid = correctness.IsInvalid(parameterKey, scenario, frameworkName);
+            means.Set(framework, stats.Mean, isInvalid);
             grouped[key] = means;
         }
 
@@ -87,9 +90,16 @@ internal static class CrossFrameworkRatioWriter
                 continue;
             }
 
+            if (!means.IsValid(Framework.Pengdows) || !means.IsValid(Framework.Dapper))
+            {
+                continue;
+            }
+
             var pengdows = means.PengdowsMeanNs.Value;
             var dapper = means.DapperMeanNs.Value;
-            var entityFramework = means.EntityFrameworkMeanNs;
+            var entityFramework = means.IsValid(Framework.EntityFramework)
+                ? means.EntityFrameworkMeanNs
+                : null;
 
             rows.Add(new CrossRatioRow(
                 item.Key.ParameterKey,
@@ -117,6 +127,7 @@ internal static class CrossFrameworkRatioWriter
         sb.AppendLine("- `P÷D` = `Mean(_Pengdows) / Mean(_Dapper)`");
         sb.AppendLine("- `EF÷P` = `Mean(_EntityFramework) / Mean(_Pengdows)`");
         sb.AppendLine("- BenchmarkDotNet's built-in Ratio column is baseline-relative within each group.");
+        sb.AppendLine("- Rows requiring invalid framework results are excluded.");
         sb.AppendLine();
 
         foreach (var group in rows.GroupBy(row => row.ParameterKey))
@@ -208,6 +219,17 @@ internal static class CrossFrameworkRatioWriter
         return false;
     }
 
+    private static string GetFrameworkName(Framework framework)
+    {
+        return framework switch
+        {
+            Framework.Pengdows => "Pengdows",
+            Framework.Dapper => "Dapper",
+            Framework.EntityFramework => "EntityFramework",
+            _ => throw new ArgumentOutOfRangeException(nameof(framework), framework, null)
+        };
+    }
+
     private enum Framework
     {
         Pengdows,
@@ -220,19 +242,36 @@ internal static class CrossFrameworkRatioWriter
         public double? PengdowsMeanNs { get; private set; }
         public double? DapperMeanNs { get; private set; }
         public double? EntityFrameworkMeanNs { get; private set; }
+        public bool PengdowsInvalid { get; private set; }
+        public bool DapperInvalid { get; private set; }
+        public bool EntityFrameworkInvalid { get; private set; }
 
-        public void Set(Framework framework, double meanNanoseconds)
+        public bool IsValid(Framework framework)
+        {
+            return framework switch
+            {
+                Framework.Pengdows => !PengdowsInvalid,
+                Framework.Dapper => !DapperInvalid,
+                Framework.EntityFramework => !EntityFrameworkInvalid,
+                _ => throw new ArgumentOutOfRangeException(nameof(framework), framework, null)
+            };
+        }
+
+        public void Set(Framework framework, double meanNanoseconds, bool isInvalid)
         {
             switch (framework)
             {
                 case Framework.Pengdows:
                     PengdowsMeanNs = meanNanoseconds;
+                    PengdowsInvalid = PengdowsInvalid || isInvalid;
                     break;
                 case Framework.Dapper:
                     DapperMeanNs = meanNanoseconds;
+                    DapperInvalid = DapperInvalid || isInvalid;
                     break;
                 case Framework.EntityFramework:
                     EntityFrameworkMeanNs = meanNanoseconds;
+                    EntityFrameworkInvalid = EntityFrameworkInvalid || isInvalid;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(framework), framework, null);

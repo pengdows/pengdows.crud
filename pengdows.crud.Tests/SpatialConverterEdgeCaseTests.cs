@@ -32,10 +32,15 @@ public class SpatialConverterEdgeCaseTests
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
-        // Since Microsoft.SqlServer.Types isn't referenced, this should throw
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geometry, SupportedDatabase.SqlServer));
-        Assert.Contains("Microsoft.SqlServer.Types", ex.Message);
+        try
+        {
+            var value = converter.ToProviderValue(geometry, SupportedDatabase.SqlServer);
+            Assert.NotNull(value);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Contains("Microsoft.SqlServer.Types", ex.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

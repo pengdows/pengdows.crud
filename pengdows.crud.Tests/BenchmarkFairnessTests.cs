@@ -210,6 +210,37 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void CrossFrameworkRatioWriter_UsesCorrectnessArtifactsToFilterInvalidRows()
+    {
+        const string fileName = "CrossFrameworkRatioWriter.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "BenchmarkCorrectnessArtifacts.LoadForSummary",
+            "if (!means.IsValid(Framework.Pengdows) || !means.IsValid(Framework.Dapper))",
+            "Rows requiring invalid framework results are excluded."
+        });
+    }
+
+    [Fact]
+    public void ConnectionPoolProtectionBenchmarks_RecordAndWriteCorrectnessFailures()
+    {
+        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "ConcurrentDictionary<CorrectnessIssueKey, int>",
+            "MarkInvalid(",
+            "if (entity == null)",
+            "if (affected != 1)",
+            "BenchmarkCorrectnessArtifacts.Write(",
+            "nameof(ConnectionPoolProtectionBenchmarks)"
+        });
+    }
+
+    [Fact]
     public void OptInBenchmarkAttribute_IsDefined()
     {
         const string fileName = "OptInBenchmarkAttribute.cs";

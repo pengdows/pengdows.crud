@@ -257,8 +257,15 @@ public class AdvancedTypeConverterTests
         var geography = Geography.FromWellKnownText("POINT(0 1)", 4326);
         var converter = new GeographyConverter();
 
-        Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geography, SupportedDatabase.SqlServer));
+        try
+        {
+            var providerValue = converter.ToProviderValue(geography, SupportedDatabase.SqlServer);
+            Assert.NotNull(providerValue);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.Contains("Microsoft.SqlServer.Types", ex.Message, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

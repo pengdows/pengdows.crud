@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -36,6 +37,15 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 1, iterationCount: 3)]
 public class ConnectionPoolProtectionBenchmarks : IDisposable
 {
+    private const string FrameworkPengdows = "Pengdows";
+    private const string FrameworkDapper = "Dapper";
+    private const string FrameworkEntityFramework = "EntityFramework";
+    private const string ScenarioPoolExhaustion = "PoolExhaustion";
+    private const string ScenarioWriteStorm = "WriteStorm";
+    private const string ScenarioMixedOps = "MixedOps";
+    private const string ScenarioSustainedPressure = "SustainedPressure";
+    private const string ScenarioConnectionHoldTime = "ConnectionHoldTime";
+
     private const int HighConcurrency = 50;
     private const int SustainedOps = 100;
     private const int WriteStormConcurrency = 100;
@@ -67,6 +77,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     private string _connectionString = null!;
     private DbContextOptions<EfPoolProtectContext> _efOptions = null!;
     private SqliteConnection _sentinelConnection = null!;
+    private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
 
     [GlobalSetup]
     public async Task Setup()
@@ -116,6 +127,20 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     [GlobalCleanup]
     public void Cleanup()
     {
+        BenchmarkCorrectnessArtifacts.Write(nameof(ConnectionPoolProtectionBenchmarks),
+            _correctnessIssues
+                .OrderBy(pair => pair.Key.ParameterKey, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Scenario, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Framework, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Reason, StringComparer.Ordinal)
+                .Select(pair => new CorrectnessIssue(
+                    pair.Key.ParameterKey == "*" ? null : pair.Key.ParameterKey,
+                    pair.Key.Scenario,
+                    pair.Key.Framework,
+                    pair.Key.Reason,
+                    pair.Value))
+                .ToArray());
+
         if (_pengdowsContext != null)
         {
             BenchmarkMetricsWriter.Write(nameof(ConnectionPoolProtectionBenchmarks), _pengdowsContext);
@@ -163,7 +188,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 var sql = BuildReadSql(param => container.MakeParameterName(param));
                 container.Query.Append(sql);
                 container.AddParameterWithValue("id", DbType.Int32, id);
-                await _pengdowsHelper.LoadSingleAsync(container);
+                var entity = await _pengdowsHelper.LoadSingleAsync(container);
+                if (entity == null)
+                {
+                    MarkInvalid(ScenarioPoolExhaustion, FrameworkPengdows, "Read returned null");
+                }
             }));
         }
 
@@ -184,7 +213,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await conn.OpenAsync();
                 await ApplyBusyTimeoutAsync(conn);
                 var sql = BuildReadSql(param => $"@{param}");
-                await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id });
+                var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id });
+                if (entity == null)
+                {
+                    MarkInvalid(ScenarioPoolExhaustion, FrameworkDapper, "Read returned null");
+                }
             }));
         }
 
@@ -205,10 +238,14 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await context.Database.OpenConnectionAsync();
                 await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
                 var sql = BuildReadSql(param => $"@{param}");
-                await context.Entities
+                var entity = await context.Entities
                     .FromSqlRaw(sql, new SqliteParameter("id", id))
                     .AsNoTracking()
                     .FirstOrDefaultAsync();
+                if (entity == null)
+                {
+                    MarkInvalid(ScenarioPoolExhaustion, FrameworkEntityFramework, "Read returned null");
+                }
             }));
         }
 
@@ -224,22 +261,34 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
-            using var tx = _pengdowsContext.BeginTransaction();
-            await using (var setup = tx.CreateSqlContainer())
+            try
             {
-                await ApplyBusyTimeoutAsync(setup);
-            }
+                using var tx = _pengdowsContext.BeginTransaction();
+                await using (var setup = tx.CreateSqlContainer())
+                {
+                    await ApplyBusyTimeoutAsync(setup);
+                }
 
-            for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+                for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+                {
+                    await using var container = tx.CreateSqlContainer();
+                    container.Query.Append(BuildUpdateSql(param => container.MakeParameterName(param)));
+                    container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
+                    container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
+                    var affected = await container.ExecuteNonQueryAsync();
+                    if (affected != 1)
+                    {
+                        MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
+                    }
+                }
+
+                tx.Commit();
+            }
+            catch (Exception ex)
             {
-                await using var container = tx.CreateSqlContainer();
-                container.Query.Append(BuildUpdateSql(param => container.MakeParameterName(param)));
-                container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
-                container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
-                await container.ExecuteNonQueryAsync();
+                MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Exception: {ex.GetType().Name}");
+                throw;
             }
-
-            tx.Commit();
         });
 
         // Metrics are captured in GlobalCleanup via BenchmarkMetricsWriter.
@@ -250,21 +299,34 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
-            await using var conn = new SqliteConnection(_connectionString);
-            await conn.OpenAsync();
-            await ApplyBusyTimeoutAsync(conn);
-            await using var tx = await conn.BeginTransactionAsync();
-            var sql = BuildUpdateSql(param => $"@{param}");
-
-            for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+            try
             {
-                await conn.ExecuteAsync(
-                    sql,
-                    new { value = (i * 1000) + j, id = (j % 100) + 1 },
-                    transaction: tx);
-            }
+                await using var conn = new SqliteConnection(_connectionString);
+                await conn.OpenAsync();
+                await ApplyBusyTimeoutAsync(conn);
+                await using var tx = await conn.BeginTransactionAsync();
+                var sql = BuildUpdateSql(param => $"@{param}");
 
-            await tx.CommitAsync();
+                for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+                {
+                    var affected = await conn.ExecuteAsync(
+                        sql,
+                        new { value = (i * 1000) + j, id = (j % 100) + 1 },
+                        transaction: tx);
+
+                    if (affected != 1)
+                    {
+                        MarkInvalid(ScenarioWriteStorm, FrameworkDapper, $"Expected 1 row affected, got {affected}");
+                    }
+                }
+
+                await tx.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                MarkInvalid(ScenarioWriteStorm, FrameworkDapper, $"Exception: {ex.GetType().Name}");
+                throw;
+            }
         });
     }
 
@@ -273,21 +335,35 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
-            await using var context = new EfPoolProtectContext(_efOptions);
-            await context.Database.OpenConnectionAsync();
-            await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
-            await using var tx = await context.Database.BeginTransactionAsync();
-            var sql = BuildUpdateSql(param => $"@{param}");
-
-            for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+            try
             {
-                await context.Database.ExecuteSqlRawAsync(
-                    sql,
-                    new SqliteParameter("value", (i * 1000) + j),
-                    new SqliteParameter("id", (j % 100) + 1));
-            }
+                await using var context = new EfPoolProtectContext(_efOptions);
+                await context.Database.OpenConnectionAsync();
+                await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
+                await using var tx = await context.Database.BeginTransactionAsync();
+                var sql = BuildUpdateSql(param => $"@{param}");
 
-            await tx.CommitAsync();
+                for (var j = 0; j < WriteStormWritesPerTransaction; j++)
+                {
+                    var affected = await context.Database.ExecuteSqlRawAsync(
+                        sql,
+                        new SqliteParameter("value", (i * 1000) + j),
+                        new SqliteParameter("id", (j % 100) + 1));
+
+                    if (affected != 1)
+                    {
+                        MarkInvalid(ScenarioWriteStorm, FrameworkEntityFramework,
+                            $"Expected 1 row affected, got {affected}");
+                    }
+                }
+
+                await tx.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                MarkInvalid(ScenarioWriteStorm, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}");
+                throw;
+            }
         });
     }
 
@@ -315,7 +391,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         var sql = BuildReadSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
                         container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
-                        await _pengdowsHelper.LoadSingleAsync(container);
+                        var entity = await _pengdowsHelper.LoadSingleAsync(container);
+                        if (entity == null)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, "Read returned null");
+                        }
                         break;
                     }
                     case 1: // Create
@@ -325,7 +405,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         var sql = BuildInsertSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
                         container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
-                        await container.ExecuteNonQueryAsync();
+                        var affected = await container.ExecuteNonQueryAsync();
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 2: // Update
@@ -336,7 +420,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         container.Query.Append(sql);
                         container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
                         container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
-                        await container.ExecuteNonQueryAsync();
+                        var affected = await container.ExecuteNonQueryAsync();
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 3: // List
@@ -346,7 +434,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                         var sql = BuildListSql(param => container.MakeParameterName(param));
                         container.Query.Append(sql);
                         container.AddParameterWithValue("min", DbType.Int32, Random.Shared.Next(50));
-                        await _pengdowsHelper.LoadListAsync(container);
+                        var rows = await _pengdowsHelper.LoadListAsync(container);
+                        if (rows.Count == 0)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, "List query returned zero rows");
+                        }
                         break;
                     }
                 }
@@ -376,27 +468,44 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     case 0:
                     {
                         var sql = BuildReadSql(param => $"@{param}");
-                        await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql,
+                        var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql,
                             new { id = Random.Shared.Next(1, 100) });
+                        if (entity == null)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, "Read returned null");
+                        }
                         break;
                     }
                     case 1:
                     {
                         var sql = BuildInsertSql(param => $"@{param}");
-                        await conn.ExecuteAsync(sql, new { value = Random.Shared.Next() });
+                        var affected = await conn.ExecuteAsync(sql, new { value = Random.Shared.Next() });
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 2:
                     {
                         var sql = BuildUpdateSql(param => $"@{param}");
-                        await conn.ExecuteAsync(sql,
+                        var affected = await conn.ExecuteAsync(sql,
                             new { id = Random.Shared.Next(1, 100), value = Random.Shared.Next() });
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 3:
                     {
                         var sql = BuildListSql(param => $"@{param}");
-                        await conn.QueryAsync<PoolProtectEntity>(sql, new { min = Random.Shared.Next(50) });
+                        var rows = (await conn.QueryAsync<PoolProtectEntity>(sql, new { min = Random.Shared.Next(50) }))
+                            .AsList();
+                        if (rows.Count == 0)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, "List query returned zero rows");
+                        }
                         break;
                     }
                 }
@@ -426,36 +535,54 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     case 0:
                     {
                         var sql = BuildReadSql(param => $"@{param}");
-                        await context.Entities
+                        var entity = await context.Entities
                             .FromSqlRaw(sql, new SqliteParameter("id", Random.Shared.Next(1, 100)))
                             .AsNoTracking()
                             .FirstOrDefaultAsync();
+                        if (entity == null)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework, "Read returned null");
+                        }
                         break;
                     }
                     case 1:
                     {
                         var sql = BuildInsertSql(param => $"@{param}");
-                        await context.Database.ExecuteSqlRawAsync(
+                        var affected = await context.Database.ExecuteSqlRawAsync(
                             sql,
                             new SqliteParameter("value", Random.Shared.Next()));
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework,
+                                $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 2:
                     {
                         var sql = BuildUpdateSql(param => $"@{param}");
-                        await context.Database.ExecuteSqlRawAsync(
+                        var affected = await context.Database.ExecuteSqlRawAsync(
                             sql,
                             new SqliteParameter("value", Random.Shared.Next()),
                             new SqliteParameter("id", Random.Shared.Next(1, 100)));
+                        if (affected != 1)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework,
+                                $"Expected 1 row affected, got {affected}");
+                        }
                         break;
                     }
                     case 3:
                     {
                         var sql = BuildListSql(param => $"@{param}");
-                        await context.Entities
+                        var rows = await context.Entities
                             .FromSqlRaw(sql, new SqliteParameter("min", Random.Shared.Next(50)))
                             .AsNoTracking()
                             .ToListAsync();
+                        if (rows.Count == 0)
+                        {
+                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework, "List query returned zero rows");
+                        }
                         break;
                     }
                 }
@@ -479,7 +606,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             var sql = BuildReadSql(param => container.MakeParameterName(param));
             container.Query.Append(sql);
             container.AddParameterWithValue("id", DbType.Int32, i % 100 + 1);
-            await _pengdowsHelper.LoadSingleAsync(container);
+            var entity = await _pengdowsHelper.LoadSingleAsync(container);
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioSustainedPressure, FrameworkPengdows, "Read returned null");
+            }
         }
     }
 
@@ -492,7 +623,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await conn.OpenAsync();
             await ApplyBusyTimeoutAsync(conn);
             var sql = BuildReadSql(param => $"@{param}");
-            await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
+            var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioSustainedPressure, FrameworkDapper, "Read returned null");
+            }
         }
     }
 
@@ -505,10 +640,14 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await context.Database.OpenConnectionAsync();
             await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
             var sql = BuildReadSql(param => $"@{param}");
-            await context.Entities
+            var entity = await context.Entities
                 .FromSqlRaw(sql, new SqliteParameter("id", i % 100 + 1))
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioSustainedPressure, FrameworkEntityFramework, "Read returned null");
+            }
         }
     }
 
@@ -529,7 +668,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             var sql = BuildReadSql(param => container.MakeParameterName(param));
             container.Query.Append(sql);
             container.AddParameterWithValue("id", DbType.Int32, i % 100 + 1);
-            await _pengdowsHelper.LoadSingleAsync(container);
+            var entity = await _pengdowsHelper.LoadSingleAsync(container);
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioConnectionHoldTime, FrameworkPengdows, "Read returned null");
+            }
             sw.Stop();
             Interlocked.Add(ref totalTicks, sw.ElapsedTicks);
         }
@@ -549,7 +692,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await conn.OpenAsync();
             await ApplyBusyTimeoutAsync(conn);
             var sql = BuildReadSql(param => $"@{param}");
-            await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
+            var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioConnectionHoldTime, FrameworkDapper, "Read returned null");
+            }
             sw.Stop();
             Interlocked.Add(ref totalTicks, sw.ElapsedTicks);
         }
@@ -569,10 +716,14 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await context.Database.OpenConnectionAsync();
             await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
             var sql = BuildReadSql(param => $"@{param}");
-            await context.Entities
+            var entity = await context.Entities
                 .FromSqlRaw(sql, new SqliteParameter("id", i % 100 + 1))
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
+            if (entity == null)
+            {
+                MarkInvalid(ScenarioConnectionHoldTime, FrameworkEntityFramework, "Read returned null");
+            }
             sw.Stop();
             Interlocked.Add(ref totalTicks, sw.ElapsedTicks);
         }
@@ -583,6 +734,13 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     // ============================================================================
     // HELPERS
     // ============================================================================
+
+    private void MarkInvalid(string scenario, string framework, string reason, string? parameterKey = null)
+    {
+        var normalizedParameterKey = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
+        var key = new CorrectnessIssueKey(normalizedParameterKey, scenario, framework, reason);
+        _correctnessIssues.AddOrUpdate(key, 1, static (_, count) => count + 1);
+    }
 
     public void Dispose()
     {
@@ -647,6 +805,12 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         startGate.Set();
         await Task.WhenAll(tasks);
     }
+
+    private readonly record struct CorrectnessIssueKey(
+        string ParameterKey,
+        string Scenario,
+        string Framework,
+        string Reason);
 
     // ============================================================================
     // ENTITIES
