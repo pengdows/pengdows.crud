@@ -12,7 +12,7 @@ functionality:
 📁 pengdows.crud.IntegrationTests/
 ├── 📁 Infrastructure/           # Test infrastructure and base classes
 ├── 📁 Core/                    # Basic CRUD operations
-├── 📁 Advanced/                # Transactions, concurrency, bulk operations
+├── 📁 Advanced/                # Transactions, concurrency, batch operations
 ├── 📁 DatabaseSpecific/        # Database-specific features (PostgreSQL, SQL Server, etc.)
 ├── 📁 ConnectionManagement/    # DbMode testing and connection optimization
 ├── 📁 ErrorHandling/           # Failure scenarios and error recovery
@@ -35,7 +35,7 @@ functionality:
 
 - **TransactionTests**: Transaction isolation, rollback, savepoints, concurrent access, readonly transactions
 - **ConcurrencyTests**: Parallel operations, deadlock handling
-- **BulkOperationTests**: Large dataset operations, batch processing
+- **BatchOperationTests**: Large dataset operations, parameter-limit-aware batch processing
 
 ### 🎯 Database-Specific Tests
 

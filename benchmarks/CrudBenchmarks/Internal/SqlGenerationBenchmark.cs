@@ -77,11 +77,11 @@ public class SqlGenerationBenchmark
     }
 
     [Benchmark]
-    public ISqlContainer SqlGeneration_Mine_BuildUpdate()
+    public async Task<ISqlContainer> SqlGeneration_Mine_BuildUpdate()
     {
         // Uses TableGateway's internal caching and optimized template generation
         var film = new Film { Id = _filmId, Title = "Test", Length = 120 };
-        return _filmHelper.BuildUpdateAsync(film, false, _ctx).Result;
+        return await _filmHelper.BuildUpdateAsync(film, false, _ctx);
     }
 
     [Benchmark]

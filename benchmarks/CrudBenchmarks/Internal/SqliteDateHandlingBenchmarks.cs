@@ -27,8 +27,9 @@ public class SqliteDateHandlingBenchmarks : IDisposable
     private const int SeedRows = 1000;
 
     private SqliteConnection _sentinel = null!;
+    private SqliteConnection _dapperConn = null!;   // dedicated always-open connection, mirrors pengdows SingleConnection mode
     private DatabaseContext _context = null!;
-    private TableGateway<BenchEntity, int> _gateway = null!;
+    private TableGateway<BenchEntity, long> _gateway = null!;
     private TypeMapRegistry _typeMap = null!;
     private string _connectionString = string.Empty;
     private string _pengdowsSql = string.Empty;
@@ -82,16 +83,21 @@ public class SqliteDateHandlingBenchmarks : IDisposable
             DbMode = DbMode.SingleConnection
         };
         _context = new DatabaseContext(cfg, SqliteFactory.Instance, null, _typeMap);
-        _gateway = new TableGateway<BenchEntity, int>(_context);
+        _gateway = new TableGateway<BenchEntity, long>(_context);
 
         _pengdowsSql = BuildSingleReadSql(p => _context.MakeParameterName(p));
         _dapperSql = BuildSingleReadSql(p => $"@{p}");
+
+        // Open a dedicated connection for Dapper — equivalent to pengdows SingleConnection mode.
+        _dapperConn = new SqliteConnection(_connectionString);
+        _dapperConn.Open();
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
         _context?.Dispose();
+        _dapperConn?.Dispose();
         _sentinel?.Dispose();
     }
 
@@ -108,7 +114,7 @@ public class SqliteDateHandlingBenchmarks : IDisposable
         {
             var id = NextId();
             await using var container = _context.CreateSqlContainer(_pengdowsSql);
-            container.AddParameterWithValue("id", DbType.Int32, id);
+            container.AddParameterWithValue("id", DbType.Int64, (long)id);
             var result = await _gateway.LoadSingleAsync(container);
             if (result != null)
             {
@@ -126,7 +132,7 @@ public class SqliteDateHandlingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = NextId();
-            var row = await _sentinel.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
+            var row = await _dapperConn.QuerySingleOrDefaultAsync<DapperBenchEntity>(_dapperSql, new { id });
             if (row != null)
             {
                 hits++;
@@ -202,9 +208,11 @@ public class SqliteDateHandlingBenchmarks : IDisposable
     [Table("benchmark")]
     public sealed class BenchEntity
     {
+        // SQLite stores INTEGER as 64-bit; using long avoids an int64→int32 narrowing
+        // conversion on every read — the id column contributes zero coercion overhead.
         [Id(false)]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
+        [Column("id", DbType.Int64)]
+        public long Id { get; set; }
 
         [Column("created_at", DbType.DateTime)]
         public DateTime CreatedAt { get; set; }

@@ -1,6 +1,6 @@
 # pengdows.crud Internal Architecture
 
-This document explains the internal design of pengdows.crud version 1.1 for developers working on the library itself or AI assistants trying to understand how it works.
+This document explains the internal design of pengdows.crud version 2.0 for developers working on the library itself or AI assistants trying to understand how it works.
 
 **Audience**: Library maintainers, contributors, and AI systems analyzing the codebase.
 

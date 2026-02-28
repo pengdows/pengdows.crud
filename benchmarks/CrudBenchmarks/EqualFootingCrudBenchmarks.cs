@@ -49,6 +49,12 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // Counters for unique IDs in delete / create benchmarks
     private int _deleteIdSeed = 100_000;
 
+    // Precomputed SQL strings — built once in GlobalSetup using dialect-aware MakeParameterName,
+    // matching the Dapper pattern of defining SQL outside the benchmark loop.
+    private string _readSingleSql = null!;
+    private string _readListSql = null!;
+    private string _filteredQuerySql = null!;
+
     private bool _originalMatchNamesWithUnderscores;
 
     [Params(1, 10, 100)] public int RecordCount { get; set; }
@@ -105,6 +111,22 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _pengdowsContext = new DatabaseContext(ConnStr, SqliteFactory.Instance, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
         _gatewayNative = new TableGateway<BenchEntityNative, long>(_pengdowsContext);
+
+        // Precompute SQL strings once — avoids repeated string building in hot-path loops,
+        // matching the Dapper pattern of const string sql outside the loop.
+        _readSingleSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = " +
+            _pengdowsContext.MakeParameterName("Id");
+        _readListSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > " +
+            _pengdowsContext.MakeParameterName("Age") +
+            " LIMIT " + _pengdowsContext.MakeParameterName("Limit");
+        _filteredQuerySql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = " +
+            _pengdowsContext.MakeParameterName("IsActive") +
+            " AND age >= " + _pengdowsContext.MakeParameterName("MinAge") +
+            " AND age <= " + _pengdowsContext.MakeParameterName("MaxAge") +
+            " LIMIT " + _pengdowsContext.MakeParameterName("Limit");
 
         // Entity Framework options — DbContext created per operation
         _efOptions = new DbContextOptionsBuilder<EfBenchContext>()
@@ -210,10 +232,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
+            await using var container = _pengdowsContext.CreateSqlContainer(_readSingleSql);
             container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
             result = await _gateway.LoadSingleAsync(container);
         }
@@ -249,10 +268,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         BenchEntityNative? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
+            await using var container = _pengdowsContext.CreateSqlContainer(_readSingleSql);
             container.AddParameterWithValue("Id", DbType.Int64, (long)((i % SeedRows) + 1));
             result = await _gatewayNative.LoadSingleAsync(container);
         }
@@ -285,12 +301,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append(" LIMIT ");
-        container.Query.Append(container.MakeParameterName("Limit"));
+        await using var container = _pengdowsContext.CreateSqlContainer(_readListSql);
         container.AddParameterWithValue("Age", DbType.Int32, 30);
         container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
         return await _gateway.LoadListAsync(container);
@@ -302,12 +313,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntityNative>> ReadList_Pengdows_Native()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append(" LIMIT ");
-        container.Query.Append(container.MakeParameterName("Limit"));
+        await using var container = _pengdowsContext.CreateSqlContainer(_readListSql);
         container.AddParameterWithValue("Age", DbType.Int64, 30L);
         container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
         return await _gatewayNative.LoadListAsync(container);
@@ -495,16 +501,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> FilteredQuery_Pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = ");
-        container.Query.Append(container.MakeParameterName("IsActive"));
-        container.Query.Append(" AND age >= ");
-        container.Query.Append(container.MakeParameterName("MinAge"));
-        container.Query.Append(" AND age <= ");
-        container.Query.Append(container.MakeParameterName("MaxAge"));
-        container.Query.Append(" LIMIT ");
-        container.Query.Append(container.MakeParameterName("Limit"));
+        await using var container = _pengdowsContext.CreateSqlContainer(_filteredQuerySql);
         container.AddParameterWithValue("IsActive", DbType.Boolean, true);
         container.AddParameterWithValue("MinAge", DbType.Int32, 25);
         container.AddParameterWithValue("MaxAge", DbType.Int32, 45);
@@ -696,10 +693,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     public async Task<long> ConnectionHoldTime_Pengdows()
     {
         var sw = Stopwatch.StartNew();
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-        container.Query.Append(container.MakeParameterName("Id"));
+        await using var container = _pengdowsContext.CreateSqlContainer(_readSingleSql);
         container.AddParameterWithValue("Id", DbType.Int32, 1);
         await _gateway.LoadSingleAsync(container);
         sw.Stop();

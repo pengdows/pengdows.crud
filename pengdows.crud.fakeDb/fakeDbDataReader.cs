@@ -3,6 +3,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 
 #endregion
 
@@ -188,7 +189,15 @@ public class fakeDbDataReader : DbDataReader
 
     public override DateTime GetDateTime(int i)
     {
-        return (DateTime)GetValue(i);
+        var value = GetValue(i);
+        return value switch
+        {
+            DateTime dt => dt,
+            // Real SQLite drivers parse TEXT datetime columns in GetDateTime() using RoundtripKind.
+            // Match that behavior so fake readers backed by string values work the same way.
+            string s => DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            _ => Convert.ToDateTime(value, CultureInfo.InvariantCulture)
+        };
     }
 
     public override decimal GetDecimal(int i)

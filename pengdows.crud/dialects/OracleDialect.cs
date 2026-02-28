@@ -8,7 +8,7 @@
 //   * MERGE statement for upserts (with RETURNING via dual table)
 //   * Parameter marker: : (colon prefix, ODP.NET standard)
 //   * Identifier quoting: "name" (double quotes)
-//   * Max parameters: 64000 (practical limit)
+//   * Max parameters: 65535 (Oracle's internal 16-bit bind variable slot limit)
 //   * Sequence-based ID generation
 // - Uses Oracle-specific RETURNING INTO clause via PL/SQL block.
 // - Statement cache preferred over manual prepare.
@@ -53,11 +53,11 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override bool SupportsRepeatedNamedParameters => false;
 
-    // IMMUTABLE: Oracle bind variable limit: we follow 64,000 as a practical upper bound
-    // for modern Oracle (12c+) engines and ODP.NET providers. This aligns with
-    // widely observed limits in production and avoids overly conservative caps.
-    // Do not change without verifying against official Oracle docs/provider behavior.
-    public override int MaxParameterLimit => 64000;
+    // IMMUTABLE: Oracle bind variable limit is 65,535 — the hard ceiling imposed by Oracle's
+    // internal 16-bit slot index for bind variables. Applies per SQL statement and per
+    // PL/SQL procedure. In practice you will hit PGA memory or statement-length limits
+    // well before this, but 65535 is the correct upper bound to enforce in chunking logic.
+    public override int MaxParameterLimit => 65535;
 
     // IMMUTABLE: Oracle output parameter limit - do not change without extensive testing
     public override int MaxOutputParameters => 1024;

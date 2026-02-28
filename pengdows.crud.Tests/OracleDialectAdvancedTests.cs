@@ -46,10 +46,10 @@ public class OracleDialectAdvancedTests
     [Fact]
     public void MaxParameterLimit_Should_Return_Expected_Value()
     {
-        // Oracle supports a high number of bind variables per statement.
-        // We standardize on 64,000 to reflect modern Oracle limits and provider behavior.
+        // Oracle's bind variable limit is 65,535 — the hard ceiling imposed by Oracle's
+        // internal 16-bit slot index for bind variables.
         Assert.True(_dialect.MaxParameterLimit > 0);
-        Assert.True(_dialect.MaxParameterLimit <= 64000);
+        Assert.Equal(65535, _dialect.MaxParameterLimit);
     }
 
     [Fact]
@@ -453,7 +453,7 @@ public class OracleDialectAdvancedTests
         Assert.False(_dialect.PrepareStatements);
         Assert.True(_dialect.RequiresStoredProcParameterNameMatch);
         Assert.Equal(ProcWrappingStyle.Oracle, _dialect.ProcWrappingStyle);
-        Assert.Equal(64000, _dialect.MaxParameterLimit);
+        Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(1024, _dialect.MaxOutputParameters);
         Assert.Equal(30, _dialect.ParameterNameMaxLength);
     }

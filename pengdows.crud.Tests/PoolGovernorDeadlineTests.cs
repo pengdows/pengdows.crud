@@ -223,6 +223,24 @@ public sealed class PoolGovernorDeadlineTests
         turnstile.Release(); // cleanup
     }
 
+    /// <summary>
+    /// Immediate-path acquisitions must not fail just because the timeout is tiny.
+    /// If turnstile and slot are both available right away, no timed wait is needed.
+    /// </summary>
+    [Fact]
+    public void Acquire_ImmediatePathWithTinyTimeout_Succeeds()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var gov = new PoolGovernor(
+            PoolLabel.Reader, "tiny-immediate-sync", 1,
+            TimeSpan.FromTicks(10), // 1 microsecond budget
+            turnstile: turnstile,
+            holdTurnstile: false);
+
+        using var slot = gov.Acquire();
+        Assert.Equal(1, gov.GetSnapshot().InUse);
+    }
+
     private static IDisposable StartDelayedReleaseThread(SemaphoreSlim turnstile, int delayMs)
     {
         var thread = new Thread(() =>

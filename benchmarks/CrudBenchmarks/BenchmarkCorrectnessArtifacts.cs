@@ -2,6 +2,16 @@ using System.Text.Json;
 
 namespace CrudBenchmarks;
 
+/// <summary>
+/// Composite key for deduplicating correctness issues across concurrent benchmark iterations.
+/// Shared by all benchmark classes that track per-scenario framework correctness.
+/// </summary>
+internal readonly record struct CorrectnessIssueKey(
+    string ParameterKey,
+    string Scenario,
+    string Framework,
+    string Reason);
+
 internal sealed record CorrectnessIssue(
     string? ParameterKey,
     string Scenario,

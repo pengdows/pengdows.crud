@@ -34,4 +34,24 @@ public class SqliteDialectLimitTests
 
         Assert.Equal(expectedLimit, dialect.MaxParameterLimit);
     }
+
+    [Theory]
+    [InlineData(9876.54321)]
+    [InlineData(-99999999.99999999)]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    public void CreateDbParameter_Decimal_StoresAsDouble(double rawValue)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        var decimalValue = (decimal)rawValue;
+
+        var p = dialect.CreateDbParameter("col_decimal", DbType.Decimal, decimalValue);
+
+        // SQLite stores DECIMAL as REAL (double). The parameter must use DbType.Double
+        // so Microsoft.Data.Sqlite can bind the value correctly — DbType.Decimal causes
+        // the driver to store 0 instead of the actual value.
+        Assert.Equal(DbType.Double, p.DbType);
+        Assert.Equal((double)decimalValue, (double)p.Value!);
+    }
 }

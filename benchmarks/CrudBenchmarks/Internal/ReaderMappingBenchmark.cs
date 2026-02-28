@@ -146,7 +146,7 @@ public class ReaderMappingBenchmark
     [Benchmark(Baseline = true)]
     public async Task<List<TestEntity>> PengdowsCrud_OptimizedMapping()
     {
-        // Query from SQLite (apples-to-apples with Dapper)
+        // Query from DuckDB (apples-to-apples with Dapper via DuckDBConnection)
         // This uses pengdows.crud's optimized path:
         // - Hybrid plan: compiled expressions for direct columns + delegates for coercion
         // - Plan built once (column ordinals cached)
@@ -237,7 +237,10 @@ public class ReaderMappingBenchmark
 
         [Column("age", DbType.Int32)] public int Age { get; set; }
 
-        [Column("salary", DbType.Decimal)] public decimal Salary { get; set; }
+        // DuckDB DOUBLE column returns double; using double avoids a double→decimal
+        // conversion on every row. decimal would force Expression.Convert which
+        // is measurably more expensive than a direct double assignment.
+        [Column("salary", DbType.Double)] public double Salary { get; set; }
 
         [Column("is_active", DbType.Boolean)] public bool IsActive { get; set; }
 

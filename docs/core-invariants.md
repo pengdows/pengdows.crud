@@ -1,4 +1,4 @@
-# Core Invariants and Gotchas (v1.1)
+# Core Invariants and Gotchas (v2.0)
 
 This is a compact, high-signal guide for maintainers and AI assistants. It captures the rules that, if broken, create correctness bugs or misleading documentation.
 

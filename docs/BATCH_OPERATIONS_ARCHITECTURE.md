@@ -1,4 +1,4 @@
-# Bulk Operations Architecture
+# Batch Operations Architecture
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@
 
 ## Overview
 
-The bulk operations system provides high-performance batch processing of CRUD operations through multiple execution strategies. It's designed to be:
+The batch operations system provides high-performance batch processing of CRUD operations through multiple execution strategies. It's designed to be:
 
 - **Database-agnostic**: Works across all 9 supported databases
 - **Strategy-based**: Multiple approaches optimized for different scenarios
@@ -68,7 +68,7 @@ The bulk operations system provides high-performance batch processing of CRUD op
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    BulkOperationCoordinator                      │
+│                    BatchOperationCoordinator                      │
 │                                                                   │
 │  Responsibilities:                                                │
 │  - Validate inputs                                                │
@@ -139,7 +139,7 @@ The bulk operations system provides high-performance batch processing of CRUD op
 
 ### 1. TableGateway Additions
 
-**Location:** `TableGateway.BulkOperations.cs` (new partial file)
+**Location:** `TableGateway.BatchOperations.cs` (new partial file)
 
 ```csharp
 public partial class TableGateway<TEntity, TRowID>
@@ -206,7 +206,7 @@ public partial class TableGateway<TEntity, TRowID>
 
 ```csharp
 /// <summary>
-/// Configuration for bulk operations.
+/// Configuration for batch operations.
 /// </summary>
 public class BulkOptions
 {
@@ -238,7 +238,7 @@ public class BulkOptions
 
 ```csharp
 /// <summary>
-/// Result of a bulk operation.
+/// Result of a batch operation.
 /// </summary>
 public class BulkResult
 {
@@ -781,8 +781,8 @@ Different databases have different parameter limits:
 | Database | Parameter Limit | Strategy |
 |----------|----------------|----------|
 | SQL Server | 2,100 | Adjust batch size |
-| PostgreSQL | ~32,000 | Rarely hit |
-| Oracle | ~32,000 | Adjust batch size |
+| PostgreSQL | 32,767 | Rarely hit |
+| Oracle | 65,535 | Rarely a constraint |
 | MySQL | ~65,000 | Rarely hit |
 | SQLite | 999 | Small batches (500) |
 
@@ -792,14 +792,14 @@ Different databases have different parameter limits:
 public int MaxParametersPerBatch => this.DatabaseType switch
 {
     SupportedDatabase.SqlServer => 2100,
-    SupportedDatabase.Oracle => 32000,
-    SupportedDatabase.PostgreSql => 32000,
-    SupportedDatabase.MySql => 65000,
-    SupportedDatabase.MariaDb => 65000,
-    SupportedDatabase.Sqlite => 999,
-    SupportedDatabase.DuckDB => 999,
-    SupportedDatabase.Firebird => 1000,
-    SupportedDatabase.CockroachDb => 32000,
+    SupportedDatabase.Oracle => 65535,
+    SupportedDatabase.PostgreSql => 32767,
+    SupportedDatabase.MySql => 65535,
+    SupportedDatabase.MariaDb => 65535,
+    SupportedDatabase.Sqlite => 32766,  // 999 for SQLite < 3.32
+    SupportedDatabase.DuckDB => 65535,
+    SupportedDatabase.Firebird => 65535,
+    SupportedDatabase.CockroachDb => 32767,
     _ => 1000 // Conservative default
 };
 
@@ -1043,48 +1043,8 @@ public class DetailedProgress : IProgress<BulkProgress>
 
 ---
 
-## Future Enhancements
-
-### Phase 2 Features
-
-1. **Streaming Support**
-   ```csharp
-   await foreach (var batch in GenerateBatchesAsync())
-   {
-       await helper.CreateManyAsync(batch);
-   }
-   ```
-
-2. **Resumable Operations**
-   ```csharp
-   var checkpoint = new BulkCheckpoint();
-   var result = await helper.CreateManyAsync(entities, new BulkOptions
-   {
-       Checkpoint = checkpoint // Resume on failure
-   });
-   ```
-
-3. **Advanced Error Recovery**
-   ```csharp
-   var result = await helper.CreateManyAsync(entities, new BulkOptions
-   {
-       RetryPolicy = new ExponentialBackoffRetry(maxAttempts: 3)
-   });
-   ```
-
-4. **Metrics and Observability**
-   ```csharp
-   var result = await helper.CreateManyAsync(entities, new BulkOptions
-   {
-       Metrics = new PrometheusMetrics()
-   });
-   ```
-
----
-
 ## See Also
 
-- [Bulk Operations User Guide](BULK_OPERATIONS.md)
-- [Database Compatibility Matrix](BULK_OPERATIONS_COMPATIBILITY.md)
-- [Performance Benchmarks](../benchmarks/BulkOperationsBenchmarks.cs)
-- [Integration Tests](../pengdows.crud.IntegrationTests/BulkOperationsTests.cs)
+- [Batch Operations User Guide](BATCH_OPERATIONS.md)
+- [Database Compatibility Matrix](BATCH_OPERATIONS_COMPATIBILITY.md)
+- [Future Work](FUTURE_WORK.md)

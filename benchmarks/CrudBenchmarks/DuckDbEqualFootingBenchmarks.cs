@@ -44,6 +44,14 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private int _createIdSeed = 10_000;
     private int _deleteIdSeed = 100_000;
 
+    // Precomputed SQL strings — built once in GlobalSetup using dialect-aware MakeParameterName,
+    // matching the Dapper pattern of defining SQL outside the benchmark loop.
+    private string _readSingleSql = null!;
+    private string _readListSql = null!;
+    private string _filteredQuerySql = null!;
+    private string _createSql = null!;
+    private string _updateSql = null!;
+    private string _deleteSql = null!;
 
     private bool _originalMatchNamesWithUnderscores;
 
@@ -99,6 +107,34 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         };
         _pengdowsCtx = new DatabaseContext(cfg, DuckDBClientFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<DuckBenchEntity, int>(_pengdowsCtx);
+
+        // Precompute SQL strings once — avoids repeated string building in hot-path loops,
+        // matching the Dapper pattern of const string sql outside the loop.
+        // RecordCount is set by BDN before GlobalSetup runs (one setup per Params combination).
+        _readSingleSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = " +
+            _pengdowsCtx.MakeParameterName("Id");
+        _readListSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > " +
+            _pengdowsCtx.MakeParameterName("Age") + $" LIMIT {RecordCount}";
+        _filteredQuerySql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = " +
+            _pengdowsCtx.MakeParameterName("IsActive") +
+            " AND age >= " + _pengdowsCtx.MakeParameterName("MinAge") +
+            " AND age <= " + _pengdowsCtx.MakeParameterName("MaxAge") +
+            $" LIMIT {RecordCount}";
+        _createSql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (" +
+            _pengdowsCtx.MakeParameterName("Id") + ", " +
+            _pengdowsCtx.MakeParameterName("Name") + ", " +
+            _pengdowsCtx.MakeParameterName("Age") + ", " +
+            _pengdowsCtx.MakeParameterName("Salary") + ", " +
+            _pengdowsCtx.MakeParameterName("IsActive") + ", " +
+            _pengdowsCtx.MakeParameterName("CreatedAt") + ")";
+        _updateSql =
+            "UPDATE benchmark SET salary = " + _pengdowsCtx.MakeParameterName("Salary") +
+            " WHERE id = " + _pengdowsCtx.MakeParameterName("Id");
+        _deleteSql = "DELETE FROM benchmark WHERE id = " + _pengdowsCtx.MakeParameterName("Id");
     }
 
     [GlobalCleanup]
@@ -139,21 +175,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _createIdSeed);
-            await using var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append(
-                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.Query.Append(", ");
-            container.Query.Append(container.MakeParameterName("Name"));
-            container.Query.Append(", ");
-            container.Query.Append(container.MakeParameterName("Age"));
-            container.Query.Append(", ");
-            container.Query.Append(container.MakeParameterName("Salary"));
-            container.Query.Append(", ");
-            container.Query.Append(container.MakeParameterName("IsActive"));
-            container.Query.Append(", ");
-            container.Query.Append(container.MakeParameterName("CreatedAt"));
-            container.Query.Append(')');
+            await using var container = _pengdowsCtx.CreateSqlContainer(_createSql);
             container.AddParameterWithValue("Id", DbType.Int32, id);
             container.AddParameterWithValue("Name", DbType.String, $"Created {id}");
             container.AddParameterWithValue("Age", DbType.Int32, 25);
@@ -201,10 +223,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         DuckBenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
+            await using var container = _pengdowsCtx.CreateSqlContainer(_readSingleSql);
             container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
             result = await _gateway.LoadSingleAsync(container);
         }
@@ -236,11 +255,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<DuckBenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append($" LIMIT {RecordCount}");
+        await using var container = _pengdowsCtx.CreateSqlContainer(_readListSql);
         container.AddParameterWithValue("Age", DbType.Int32, 30);
         return await _gateway.LoadListAsync(container);
     }
@@ -266,11 +281,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append("UPDATE benchmark SET salary = ");
-            container.Query.Append(container.MakeParameterName("Salary"));
-            container.Query.Append(" WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
+            await using var container = _pengdowsCtx.CreateSqlContainer(_updateSql);
             container.AddParameterWithValue("Salary", DbType.Double, 60000.0 + i);
             container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
             count += await container.ExecuteNonQueryAsync();
@@ -309,22 +320,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            await using (var ins = _pengdowsCtx.CreateSqlContainer())
+            await using (var ins = _pengdowsCtx.CreateSqlContainer(_createSql))
             {
-                ins.Query.Append(
-                    "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (");
-                ins.Query.Append(ins.MakeParameterName("Id"));
-                ins.Query.Append(", ");
-                ins.Query.Append(ins.MakeParameterName("Name"));
-                ins.Query.Append(", ");
-                ins.Query.Append(ins.MakeParameterName("Age"));
-                ins.Query.Append(", ");
-                ins.Query.Append(ins.MakeParameterName("Salary"));
-                ins.Query.Append(", ");
-                ins.Query.Append(ins.MakeParameterName("IsActive"));
-                ins.Query.Append(", ");
-                ins.Query.Append(ins.MakeParameterName("CreatedAt"));
-                ins.Query.Append(')');
                 ins.AddParameterWithValue("Id", DbType.Int32, id);
                 ins.AddParameterWithValue("Name", DbType.String, "ToDelete");
                 ins.AddParameterWithValue("Age", DbType.Int32, 99);
@@ -334,9 +331,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 await ins.ExecuteNonQueryAsync();
             }
 
-            await using var del = _pengdowsCtx.CreateSqlContainer();
-            del.Query.Append("DELETE FROM benchmark WHERE id = ");
-            del.Query.Append(del.MakeParameterName("Id"));
+            await using var del = _pengdowsCtx.CreateSqlContainer(_deleteSql);
             del.AddParameterWithValue("Id", DbType.Int32, id);
             count += await del.ExecuteNonQueryAsync();
         }
@@ -381,15 +376,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<DuckBenchEntity>> FilteredQuery_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = ");
-        container.Query.Append(container.MakeParameterName("IsActive"));
-        container.Query.Append(" AND age >= ");
-        container.Query.Append(container.MakeParameterName("MinAge"));
-        container.Query.Append(" AND age <= ");
-        container.Query.Append(container.MakeParameterName("MaxAge"));
-        container.Query.Append($" LIMIT {RecordCount}");
+        await using var container = _pengdowsCtx.CreateSqlContainer(_filteredQuerySql);
         container.AddParameterWithValue("IsActive", DbType.Boolean, true);
         container.AddParameterWithValue("MinAge", DbType.Int32, 25);
         container.AddParameterWithValue("MaxAge", DbType.Int32, 45);
@@ -511,10 +498,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     public async Task<long> ConnectionHoldTime_Pengdows()
     {
         var sw = Stopwatch.StartNew();
-        await using var container = _pengdowsCtx.CreateSqlContainer();
-        container.Query.Append(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-        container.Query.Append(container.MakeParameterName("Id"));
+        await using var container = _pengdowsCtx.CreateSqlContainer(_readSingleSql);
         container.AddParameterWithValue("Id", DbType.Int32, 1);
         await _gateway.LoadSingleAsync(container);
         sw.Stop();

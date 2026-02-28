@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Threading;
 using BenchmarkDotNet.Attributes;
@@ -116,6 +117,26 @@ public class BrokenMappingBenchmarks : IDisposable
     private TypeMapRegistry _typeMap = null!;
     private string _connectionString = null!;
     private int _deleteIdSeed = 10000;
+    private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
+    private static readonly string[] AllScenarios =
+    {
+        "AggregateCount",
+        "BatchRead",
+        "Create",
+        "Delete",
+        "DeleteByKeyword",
+        "FilterByKeyword",
+        "FilteredQuery",
+        "ReadAll",
+        "ReadList",
+        "ReadSingle",
+        "ReadWithKeyword",
+        "Update",
+        "UpdateKeyword",
+        "Upsert"
+    };
+    private const string FrameworkDapper = "Dapper";
+    private const string FrameworkEntityFramework = "EntityFramework";
 
     // ============================================================================
     // SETUP / CLEANUP
@@ -148,11 +169,21 @@ public class BrokenMappingBenchmarks : IDisposable
 
         await CreateSchemaAsync();
         await SeedDataAsync();
+        MarkBrokenFrameworks();
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
+        BenchmarkCorrectnessArtifacts.Write(nameof(BrokenMappingBenchmarks),
+            _correctnessIssues.Select(pair => new CorrectnessIssue(
+                    ParameterKey: null,
+                    pair.Key.Scenario,
+                    pair.Key.Framework,
+                    pair.Key.Reason,
+                    pair.Value))
+                .ToArray());
+
         _pengdowsContext?.Dispose();
         _dapperConnection?.Dispose();
         _efContext?.Dispose();
@@ -174,6 +205,15 @@ public class BrokenMappingBenchmarks : IDisposable
 
         await using var container = _pengdowsContext.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
+    }
+
+    private void MarkBrokenFrameworks()
+    {
+        foreach (var scenario in AllScenarios)
+        {
+            MarkInvalid(scenario, FrameworkDapper, "Broken column mapping");
+            MarkInvalid(scenario, FrameworkEntityFramework, "Broken column mapping");
+        }
     }
 
     private async Task SeedDataAsync()
@@ -1162,6 +1202,13 @@ public class BrokenMappingBenchmarks : IDisposable
         public string? PhoneNumber { get; set; }
         public int Select { get; set; }
         public bool IsActive { get; set; }
+    }
+
+    private void MarkInvalid(string scenario, string framework, string reason, string? parameterKey = null)
+    {
+        var normalizedKey = string.IsNullOrWhiteSpace(parameterKey) ? "No parameters" : parameterKey.Trim();
+        var key = new CorrectnessIssueKey(normalizedKey, scenario, framework, reason);
+        _correctnessIssues.AddOrUpdate(key, 1, static (_, count) => count + 1);
     }
 
     /// <summary>

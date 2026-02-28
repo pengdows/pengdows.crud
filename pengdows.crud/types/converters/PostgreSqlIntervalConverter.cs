@@ -16,6 +16,7 @@
 // =============================================================================
 
 using System.Globalization;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -143,16 +144,18 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
 
     private static string FormatIso8601(PostgreSqlInterval value)
     {
-        var builder = new System.Text.StringBuilder();
+        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         builder.Append('P');
         if (value.Months != 0)
         {
-            builder.Append(value.Months.ToString(CultureInfo.InvariantCulture)).Append('M');
+            builder.Append(value.Months);
+            builder.Append('M');
         }
 
         if (value.Days != 0)
         {
-            builder.Append(value.Days.ToString(CultureInfo.InvariantCulture)).Append('D');
+            builder.Append(value.Days);
+            builder.Append('D');
         }
 
         var hasTime = value.Microseconds != 0;
@@ -162,18 +165,21 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             builder.Append('T');
             if (time.Hours != 0)
             {
-                builder.Append(time.Hours.ToString(CultureInfo.InvariantCulture)).Append('H');
+                builder.Append(time.Hours);
+                builder.Append('H');
             }
 
             if (time.Minutes != 0)
             {
-                builder.Append(time.Minutes.ToString(CultureInfo.InvariantCulture)).Append('M');
+                builder.Append(time.Minutes);
+                builder.Append('M');
             }
 
             if (time.Seconds != 0 || time.Milliseconds != 0)
             {
                 var seconds = time.Seconds + time.Milliseconds / 1000.0;
-                builder.Append(seconds.ToString(CultureInfo.InvariantCulture)).Append('S');
+                builder.Append(seconds.ToString(CultureInfo.InvariantCulture));
+                builder.Append('S');
             }
         }
 
@@ -182,7 +188,9 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             builder.Append("0D");
         }
 
-        return builder.ToString();
+        var result = builder.ToString();
+        builder.Dispose();
+        return result;
     }
 
     private static PostgreSqlInterval Parse(string text)

@@ -76,7 +76,7 @@ dotnet run -c Release -- --include-opt-in --filter "*MyExperimentalBenchmarks*"
 You can also enable opt-in classes via environment variable:
 
 ```bash
-CRUD_BENCH_INCLUDE_OPT_IN=1 dotnet run -c Release --filter "*MyExperimentalBenchmarks*"
+CRUD_BENCH_INCLUDE_OPT_IN=1 dotnet run -c Release -- --filter "*MyExperimentalBenchmarks*"
 ```
 
 ### Run with custom iterations

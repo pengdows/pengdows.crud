@@ -1,4 +1,4 @@
-# Bulk Operations Database Compatibility Matrix
+# Batch Operations Database Compatibility Matrix
 
 ## Strategy Compatibility
 
@@ -250,147 +250,44 @@ Or programmatic COPY with DuckDB.NET
 
 ---
 
-#### ⚠️ Oracle - Future Implementation
+#### Oracle
 
-**Options:**
-1. Oracle SQL*Loader (external tool)
-2. Array binding (OracleCommand with array parameters)
-3. Direct path API
-
-**For now:** Use batched INSERT ALL (still very fast)
+No provider-optimized path implemented. Uses batched INSERT ALL, which is already efficient.
+See [Future Work](FUTURE_WORK.md) for array binding notes.
 
 ---
 
-#### ⚠️ MySQL/MariaDB - Future Implementation
+#### MySQL / MariaDB
 
-**Options:**
-1. LOAD DATA INFILE (requires file permissions)
-2. Prepared statements with batch execution
-
-**For now:** Use batched multi-row INSERT (already very efficient)
+No provider-optimized path implemented. Uses batched multi-row INSERT with ON DUPLICATE KEY
+UPDATE for upserts. `LOAD DATA INFILE` is an option for bulk loads but requires server-side
+file permissions. See [Future Work](FUTURE_WORK.md).
 
 ---
 
-#### ⚠️ SQLite - Limited Benefit
+#### SQLite
 
-**SQLite is file-based and single-writer:**
-- Provider-optimized wouldn't help much
-- Batched INSERT in transaction is already optimal
-- Single-writer lock is the bottleneck
-
-**For now:** Use batched INSERT in transaction
+No provider-optimized path and none planned. SQLite is single-writer; the bottleneck is the
+write lock, not the parameter count. Batched INSERT in a transaction is already optimal.
 
 ---
 
-#### ⚠️ Firebird - Future Implementation
+#### Firebird
 
-**Options:**
-1. Array DML (execute with parameter arrays)
-2. Batch API (Firebird 4.0+)
-
-**For now:** Use batched multi-row INSERT
+No provider-optimized path implemented. Uses batched multi-row INSERT. Firebird 4.0 introduced
+a native batch API (`FbBatchCommand`) that could be used in a future provider-specific path.
+See [Future Work](FUTURE_WORK.md).
 
 ---
 
-## Recommended Strategy by Database
+## Strategy by Database (current implementation)
 
-| Database | Best Strategy | 2nd Best | Notes |
-|----------|---------------|----------|-------|
-| PostgreSQL | ProviderOptimized (COPY) | Batched | COPY is 50-100x faster |
-| SqlServer | ProviderOptimized (SqlBulkCopy) | Batched | SqlBulkCopy is 50-100x faster |
-| Oracle | Batched (INSERT ALL) | Concurrent | INSERT ALL is very efficient |
-| Firebird | Batched | Concurrent | Multi-row INSERT since 3.0 |
-| CockroachDB | Batched | Concurrent | No COPY, but batched is great |
-| MariaDB | Batched | Concurrent | Multi-row INSERT very efficient |
-| MySQL | Batched | Concurrent | Multi-row INSERT very efficient |
-| SQLite | Batched | Sequential | Single-writer limits concurrency |
-| DuckDB | ProviderOptimized (COPY) | Batched | COPY for analytical workloads |
-
----
-
-## Implementation Priority
-
-### Phase 1 (Immediate) - Core Strategies
-1. ✅ Sequential - Works everywhere
-2. ✅ Batched (standard multi-row VALUES) - Works on 8/9 databases
-3. ⚠️ Batched (Oracle INSERT ALL) - Special case for Oracle
-
-### Phase 2 (Short-term) - Concurrent
-4. ✅ Concurrent with throttling - Works everywhere
-
-### Phase 3 (Medium-term) - Provider Optimizations
-5. ✅ PostgreSQL COPY
-6. ✅ SQL Server SqlBulkCopy
-7. ✅ DuckDB COPY
-
-### Phase 4 (Long-term) - Additional Optimizations
-8. ⚠️ Oracle array binding
-9. ⚠️ MySQL LOAD DATA
-10. ⚠️ Firebird batch API
-
----
-
-## Auto Strategy Selection Logic
-
-```csharp
-private BulkStrategy SelectAutoStrategy(SupportedDatabase product, int entityCount)
-{
-    // Provider-optimized for large batches on supported databases
-    if (entityCount > 1000)
-    {
-        switch (product)
-        {
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.SqlServer:
-            case SupportedDatabase.DuckDB:
-                return BulkStrategy.ProviderOptimized; // COPY/SqlBulkCopy
-        }
-    }
-
-    // Batched for medium to large batches
-    if (entityCount > 10)
-    {
-        return BulkStrategy.Batched;
-    }
-
-    // Sequential for small batches (overhead not worth it)
-    return BulkStrategy.Sequential;
-}
-```
-
----
-
-## Dialect-Specific SQL Generation
-
-We'll need to extend ISqlDialect to support batch operations:
-
-```csharp
-public interface ISqlDialect
-{
-    // Existing methods...
-
-    // New methods for bulk operations
-    bool SupportsBatchInsert { get; }
-    int MaxParametersPerBatch { get; }
-    string BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount);
-    bool SupportsProviderOptimizedBulkInsert { get; }
-}
-```
-
-**Implementation per dialect:**
-- Standard: Multi-row VALUES
-- Oracle: INSERT ALL syntax
-- Others: Standard syntax with parameter limits respected
-
----
-
-## Summary
-
-✅ **ALL strategies work on ALL databases** with appropriate dialect handling:
-
-1. **Sequential**: Universal ✅
-2. **Batched**: Universal with Oracle requiring INSERT ALL syntax ⚠️
-3. **Concurrent**: Universal ✅
-4. **ProviderOptimized**: Available for PostgreSQL, SqlServer, DuckDB ✅
-
-The proposal is **fully compatible** with all your supported databases!
+| Database | Batch INSERT | Batch UPDATE | Batch UPSERT |
+|----------|-------------|--------------|--------------|
+| PostgreSQL | Multi-row VALUES | UPDATE FROM VALUES | INSERT … ON CONFLICT |
+| SQL Server | Multi-row VALUES | MERGE | MERGE |
+| Oracle | INSERT ALL | one UPDATE per row | MERGE (one per row) |
+| MySQL / MariaDB | Multi-row VALUES | one UPDATE per row | INSERT … ON DUPLICATE KEY UPDATE |
+| SQLite / CockroachDB | Multi-row VALUES | one UPDATE per row | INSERT … ON CONFLICT |
+| DuckDB | Multi-row VALUES | one UPDATE per row | INSERT … ON CONFLICT |
+| Firebird | Multi-row VALUES | one UPDATE per row | MERGE (one per row) |

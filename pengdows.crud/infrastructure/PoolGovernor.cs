@@ -26,7 +26,8 @@ using pengdows.crud.enums;
 //     - While a writer holds its slot, new readers cannot pass the turnstile.
 //     - IMPORTANT: This does NOT drain readers already queued on the semaphore before
 //       the writer acquired the turnstile. Starvation is reduced, not eliminated.
-//   * Readers (holdTurnstile=false): touch-and-release turnstile, then acquire slot.
+//   * Readers (holdTurnstile=false): gate on turnstile only while writers are
+//     active/waiting; otherwise bypass turnstile and go straight to slot acquire.
 //   * Only effective when reader and writer governors share the same turnstile instance
 //     and target the same connection pool (same pool key). Governors targeting separate
 //     connection pools (e.g., primary + read replica) should use independent turnstiles.
@@ -34,6 +35,7 @@ using pengdows.crud.enums;
 // =============================================================================
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using pengdows.crud.exceptions;
 using pengdows.crud.metrics;
 
@@ -42,11 +44,13 @@ namespace pengdows.crud.infrastructure;
 internal sealed class PoolGovernor : IDisposable
 {
     private const string NotInitializedMessage = "Pool governor is not initialized.";
+    private static readonly ConditionalWeakTable<SemaphoreSlim, TurnstileState> SharedTurnstileStates = new();
 
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
     private readonly SemaphoreSlim? _semaphore;
     private readonly TimeSpan _acquireTimeout;
+    private readonly long _acquireTimeoutStopwatchTicks;
     private readonly int _maxSlots;
     private readonly bool _disabled;
     private readonly bool _forbidden;
@@ -58,6 +62,7 @@ internal sealed class PoolGovernor : IDisposable
 
     // Turnstile fairness support: prevents writer starvation under reader pressure
     private readonly SemaphoreSlim? _turnstile;
+    private readonly TurnstileState? _turnstileState;
     private readonly bool _holdTurnstile;
 
     private long _inUse;
@@ -89,8 +94,12 @@ internal sealed class PoolGovernor : IDisposable
         _label = label;
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
+        _acquireTimeoutStopwatchTicks = ConvertTimeoutToStopwatchTicks(acquireTimeout);
         _trackMetrics = trackMetrics;
         _turnstile = turnstile;
+        _turnstileState = turnstile == null
+            ? null
+            : SharedTurnstileStates.GetValue(turnstile, static _ => new TurnstileState());
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
         _drainSignal = CreateDrainSignal(completed: true);
@@ -168,53 +177,83 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        // Always capture start for both metrics and deadline computation.
-        var waitStart = Stopwatch.GetTimestamp();
-        // Integer arithmetic avoids double-precision loss for large timeouts.
-        var deadlineTicks = waitStart
-            + _acquireTimeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
-            + _acquireTimeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
-
-        // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
-        // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
-        // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
-        // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
-        if (_turnstile != null)
-        {
-            var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
-            if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
-
-            try
-            {
-                var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
-                if (turnstileRemaining == TimeSpan.Zero
-                    || !_turnstile.Wait(turnstileRemaining, cancellationToken))
-                {
-                    Interlocked.Increment(ref _totalTurnstileTimeouts);
-                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                }
-            }
-            finally
-            {
-                if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
-            }
-
-            turnstileAcquired = true;
-
-            // Readers touch-and-release; writers hold until slot released
-            if (!_holdTurnstile)
-            {
-                _turnstile.Release();
-                turnstileAcquired = false;
-            }
-        }
-
+        var writerTurnstileInterestRegistered = false;
         try
         {
+            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+
+            // Fast path: no deadline arithmetic for immediate gate/slot success.
+            if (useTurnstileGate && _turnstile != null && _turnstile.Wait(0, cancellationToken))
+            {
+                turnstileAcquired = true;
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
+
+                if (_semaphore.Wait(0, cancellationToken))
+                {
+                    var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                    writerTurnstileInterestRegistered = false;
+                    return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+                }
+            }
+            else if (!useTurnstileGate && _semaphore.Wait(0, cancellationToken))
+            {
+                var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+            }
+
+            // Slow path: timed waits with a single deadline budget across gates.
+            var waitStart = Stopwatch.GetTimestamp();
+            var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
+
+            // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
+            // Writers hold the turnstile for their entire slot lifetime.
+            // Readers only gate here when writers are active/waiting; otherwise they bypass.
+            // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
+            // are not displaced — only NEW reader attempts are gated.
+            if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
+            {
+                var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
+                if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+
+                try
+                {
+                    var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
+                    if (turnstileRemaining == TimeSpan.Zero
+                        || !_turnstile.Wait(turnstileRemaining, cancellationToken))
+                    {
+                        Interlocked.Increment(ref _totalTurnstileTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+                }
+                finally
+                {
+                    if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
+                }
+
+                turnstileAcquired = true;
+
+                // Readers touch-and-release; writers hold until slot released
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
+            }
+
             if (_semaphore.Wait(0, cancellationToken))
             {
-                return OnAcquired(waitStart);
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                return OnAcquired(waitStart, releaseWriterInterestOnRelease);
             }
 
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
@@ -238,7 +277,9 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    return OnAcquired(waitStart);
+                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                    writerTurnstileInterestRegistered = false;
+                    return OnAcquired(waitStart, releaseWriterInterestOnRelease);
                 }
                 catch (OperationCanceledException)
                 {
@@ -251,7 +292,8 @@ internal sealed class PoolGovernor : IDisposable
                 if (_trackMetrics) Interlocked.Decrement(ref _queued);
             }
         }
-        catch {
+        catch
+        {
             // On failure, release turnstile if we're still holding it (writers only).
             // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
             if (turnstileAcquired && _turnstile != null)
@@ -259,6 +301,7 @@ internal sealed class PoolGovernor : IDisposable
                 _turnstile.Release();
             }
 
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
             throw;
         }
     }
@@ -283,10 +326,14 @@ internal sealed class PoolGovernor : IDisposable
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
-        if (_turnstile != null)
+        var writerTurnstileInterestRegistered = false;
+        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+        var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+        if (useTurnstileGate && _turnstile != null)
         {
             if (!_turnstile.Wait(0, cancellationToken))
             {
+                UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
                 slot = default;
                 return false;
             }
@@ -302,7 +349,9 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_semaphore.Wait(0, cancellationToken))
         {
-            slot = OnAcquired(waitStart);
+            var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+            writerTurnstileInterestRegistered = false;
+            slot = OnAcquired(waitStart, releaseWriterInterestOnRelease);
             return true;
         }
 
@@ -313,6 +362,7 @@ internal sealed class PoolGovernor : IDisposable
             _turnstile.Release();
         }
 
+        UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
         slot = default;
         return false;
     }
@@ -334,55 +384,86 @@ internal sealed class PoolGovernor : IDisposable
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
-        // Always capture start for both metrics and deadline computation.
-        var waitStart = Stopwatch.GetTimestamp();
-        // Integer arithmetic avoids double-precision loss for large timeouts.
-        var deadlineTicks = waitStart
-            + _acquireTimeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
-            + _acquireTimeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
-
-        // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
-        // Writers hold the turnstile for their entire slot lifetime; readers touch-and-release.
-        // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
-        // are not displaced — only NEW reader attempts are gated.
         var turnstileAcquired = false;
-        if (_turnstile != null)
-        {
-            var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
-            if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
-
-            try
-            {
-                var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
-                if (turnstileRemaining == TimeSpan.Zero
-                    || !await _turnstile.WaitAsync(turnstileRemaining, cancellationToken).ConfigureAwait(false))
-                {
-                    Interlocked.Increment(ref _totalTurnstileTimeouts);
-                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                }
-            }
-            finally
-            {
-                if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
-            }
-
-            turnstileAcquired = true;
-
-            // Readers touch-and-release; writers hold until slot released
-            if (!_holdTurnstile)
-            {
-                _turnstile.Release();
-                turnstileAcquired = false;
-            }
-        }
-
+        var writerTurnstileInterestRegistered = false;
         try
         {
+            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+
+            // Fast path: no deadline arithmetic for immediate gate/slot success.
+            if (useTurnstileGate && _turnstile != null
+                && await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                turnstileAcquired = true;
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
+
+                if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+                {
+                    var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                    writerTurnstileInterestRegistered = false;
+                    return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+                }
+            }
+            else if (!useTurnstileGate && await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+            }
+
+            // Slow path: timed waits with a single deadline budget across gates.
+            var waitStart = Stopwatch.GetTimestamp();
+            var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
+
+            // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
+            // Writers hold the turnstile for their entire slot lifetime.
+            // Readers only gate here when writers are active/waiting; otherwise they bypass.
+            // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
+            // are not displaced — only NEW reader attempts are gated.
+            if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
+            {
+                var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
+                if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+
+                try
+                {
+                    var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
+                    if (turnstileRemaining == TimeSpan.Zero
+                        || !await _turnstile.WaitAsync(turnstileRemaining, cancellationToken).ConfigureAwait(false))
+                    {
+                        Interlocked.Increment(ref _totalTurnstileTimeouts);
+                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                    }
+                }
+                finally
+                {
+                    if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
+                }
+
+                turnstileAcquired = true;
+
+                // Readers touch-and-release; writers hold until slot released
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
+            }
+
             // Use WaitAsync even for zero-timeout to maintain consistent async behavior
             // (Wait(0, ct) can throw OperationCanceledException synchronously)
             if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
-                return OnAcquired(waitStart);
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                return OnAcquired(waitStart, releaseWriterInterestOnRelease);
             }
 
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
@@ -406,7 +487,9 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    return OnAcquired(waitStart);
+                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                    writerTurnstileInterestRegistered = false;
+                    return OnAcquired(waitStart, releaseWriterInterestOnRelease);
                 }
                 catch (OperationCanceledException)
                 {
@@ -419,7 +502,8 @@ internal sealed class PoolGovernor : IDisposable
                 if (_trackMetrics) Interlocked.Decrement(ref _queued);
             }
         }
-        catch {
+        catch
+        {
             // On failure, release turnstile if we're still holding it (writers only).
             // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
             if (turnstileAcquired && _turnstile != null)
@@ -427,6 +511,7 @@ internal sealed class PoolGovernor : IDisposable
                 _turnstile.Release();
             }
 
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
             throw;
         }
     }
@@ -450,10 +535,14 @@ internal sealed class PoolGovernor : IDisposable
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
-        if (_turnstile != null)
+        var writerTurnstileInterestRegistered = false;
+        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+        var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+        if (useTurnstileGate && _turnstile != null)
         {
             if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
+                UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
                 return (false, default);
             }
 
@@ -468,7 +557,9 @@ internal sealed class PoolGovernor : IDisposable
 
         if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            return (true, OnAcquired(waitStart));
+            var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+            writerTurnstileInterestRegistered = false;
+            return (true, OnAcquired(waitStart, releaseWriterInterestOnRelease));
         }
 
         // Slot miss — release turnstile without recording hold metrics.
@@ -478,6 +569,7 @@ internal sealed class PoolGovernor : IDisposable
             _turnstile.Release();
         }
 
+        UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
         return (false, default);
     }
 
@@ -560,16 +652,67 @@ internal sealed class PoolGovernor : IDisposable
         return TimeSpan.FromSeconds((double)remainingTicks / Stopwatch.Frequency);
     }
 
-    private PoolSlot OnAcquired(long waitStart)
+    private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout)
+    {
+        var converted = timeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
+                        + timeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
+
+        return Math.Max(1, converted);
+    }
+
+    private bool ShouldUseTurnstileGate(bool writerTurnstileInterestRegistered)
+    {
+        if (_turnstile == null)
+        {
+            return false;
+        }
+
+        if (_holdTurnstile)
+        {
+            return true;
+        }
+
+        if (writerTurnstileInterestRegistered)
+        {
+            return true;
+        }
+
+        var state = _turnstileState;
+        return state != null && Volatile.Read(ref state.WritersActiveOrWaiting) > 0;
+    }
+
+    private void RegisterWriterTurnstileInterest(ref bool writerTurnstileInterestRegistered)
+    {
+        if (!_holdTurnstile || _turnstileState == null || writerTurnstileInterestRegistered)
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _turnstileState.WritersActiveOrWaiting);
+        writerTurnstileInterestRegistered = true;
+    }
+
+    private void UnregisterWriterTurnstileInterest(ref bool writerTurnstileInterestRegistered)
+    {
+        if (!writerTurnstileInterestRegistered || _turnstileState == null)
+        {
+            return;
+        }
+
+        Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+        writerTurnstileInterestRegistered = false;
+    }
+
+    private PoolSlot OnAcquired(long waitStart, bool releaseWriterTurnstileInterestOnRelease)
     {
         var inUse = Interlocked.Increment(ref _inUse);
         ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
-            return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart));
+        return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, releaseWriterTurnstileInterestOnRelease));
     }
 
-    internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt)
+    internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt, bool releaseWriterTurnstileInterest)
     {
         RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
         Interlocked.Decrement(ref _inUse);
@@ -594,6 +737,11 @@ internal sealed class PoolGovernor : IDisposable
         if (_holdTurnstile && _turnstile != null)
         {
             _turnstile.Release();
+        }
+
+        if (releaseWriterTurnstileInterest && _turnstileState != null)
+        {
+            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
         }
     }
 
@@ -664,6 +812,11 @@ internal sealed class PoolGovernor : IDisposable
         {
             return _drainSignal;
         }
+    }
+
+    private sealed class TurnstileState
+    {
+        internal long WritersActiveOrWaiting;
     }
 
     public void Dispose()

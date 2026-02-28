@@ -73,7 +73,7 @@ public class DialectPropertyTests
                     SupportedDatabase.Oracle,
                     ":",
                     true,
-                    64000,
+                    65535,
                     30,
                     ProcWrappingStyle.Oracle,
                     "\"",

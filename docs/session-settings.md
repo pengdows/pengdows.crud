@@ -1,6 +1,6 @@
 # Session Settings Enforcement
 
-pengdows.crud applies dialect-specific session-settings scripts **after** it knows which dialect it is talking to and **only if** the dialect provides non-empty SQL. The dialec t itself performs the “check current value → emit only the `SET` statements that actually need to change” behavior.
+pengdows.crud applies dialect-specific session-settings scripts **after** it knows which dialect it is talking to and **only if** the dialect provides non-empty SQL. The dialect itself performs the “check current value → emit only the `SET` statements that actually need to change” behavior.
 
 ## Key guarantees
 

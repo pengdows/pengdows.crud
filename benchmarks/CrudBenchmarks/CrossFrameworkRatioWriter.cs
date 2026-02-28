@@ -51,7 +51,7 @@ internal static class CrossFrameworkRatioWriter
 
     private static List<CrossRatioRow> BuildRows(Summary summary)
     {
-        var grouped = new Dictionary<(string ParameterKey, string Scenario), ScenarioMeans>();
+        var grouped = new Dictionary<(string ParameterKey, string Scenario, string JobId), ScenarioMeans>();
         var correctness = BenchmarkCorrectnessArtifacts.LoadForSummary(summary.Title);
 
         foreach (var report in summary.Reports)
@@ -69,7 +69,8 @@ internal static class CrossFrameworkRatioWriter
             }
 
             var parameterKey = ExtractParameterKey(report.BenchmarkCase.DisplayInfo);
-            var key = (parameterKey, scenario);
+            var jobId = report.BenchmarkCase.Job?.Id ?? "<default>";
+            var key = (parameterKey, scenario, jobId);
             if (!grouped.TryGetValue(key, out var means))
             {
                 means = new ScenarioMeans();

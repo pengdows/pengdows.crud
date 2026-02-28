@@ -85,6 +85,43 @@ public sealed class PoolGovernorTurnstileTests
         Assert.Equal(2, reader.GetSnapshot().InUse);
     }
 
+    [Fact]
+    public void Acquire_ReaderBypassesTurnstile_WhenNoWritersActiveOrWaiting()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var reader = new PoolGovernor(
+            PoolLabel.Reader, "ts-r-bypass", 1,
+            TimeSpan.FromMilliseconds(50),
+            turnstile: turnstile, holdTurnstile: false);
+
+        // Hold the turnstile externally to prove reader path can bypass it
+        // when there are no active/waiting writers.
+        Assert.True(turnstile.Wait(0));
+        using var slot = reader.Acquire();
+
+        Assert.Equal(1, reader.GetSnapshot().InUse);
+        Assert.Equal(0, reader.GetSnapshot().TotalTurnstileTimeouts);
+        turnstile.Release();
+    }
+
+    [Fact]
+    public async Task AcquireAsync_ReaderBypassesTurnstile_WhenNoWritersActiveOrWaiting()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var reader = new PoolGovernor(
+            PoolLabel.Reader, "ts-r-bypass-a", 1,
+            TimeSpan.FromMilliseconds(50),
+            turnstile: turnstile, holdTurnstile: false);
+
+        Assert.True(turnstile.Wait(0));
+        var slot = await reader.AcquireAsync();
+
+        Assert.Equal(1, reader.GetSnapshot().InUse);
+        Assert.Equal(0, reader.GetSnapshot().TotalTurnstileTimeouts);
+        slot.Dispose();
+        turnstile.Release();
+    }
+
     // ── TryAcquire / TryAcquireAsync with turnstile blocked ──────────────
 
     [Fact]

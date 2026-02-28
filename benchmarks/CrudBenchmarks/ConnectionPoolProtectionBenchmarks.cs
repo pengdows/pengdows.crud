@@ -806,12 +806,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         await Task.WhenAll(tasks);
     }
 
-    private readonly record struct CorrectnessIssueKey(
-        string ParameterKey,
-        string Scenario,
-        string Framework,
-        string Reason);
-
     // ============================================================================
     // ENTITIES
     // ============================================================================

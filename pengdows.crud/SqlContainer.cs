@@ -31,7 +31,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Data.Common;
 using System.Globalization;
-using System.Text;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -295,50 +294,54 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         var span = sql.AsSpan();
         var cursor = 0;
-        StringBuilder? sb = null;
-
-        while (cursor < sql.Length)
+        SqlQueryBuilder? sb = null;
+        try
         {
-            var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-            if (relIdx < 0) break;
-
-            var matchStart = cursor + relIdx;
-            var nameStart = matchStart + 3; // skip past "{P}"
-
-            // Not a valid identifier start — emit "{P}" literally and continue scanning
-            if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+            while (cursor < sql.Length)
             {
-                sb ??= new StringBuilder(sql.Length + 32);
-                sb.Append(span[cursor..(nameStart)]);
-                cursor = nameStart;
-                continue;
+                var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+                if (relIdx < 0) break;
+
+                var matchStart = cursor + relIdx;
+                var nameStart = matchStart + 3; // skip past "{P}"
+
+                // Not a valid identifier start — emit "{P}" literally and continue scanning
+                if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+                {
+                    sb ??= new SqlQueryBuilder(sql.Length + 32);
+                    sb.Append(span[cursor..(nameStart)]);
+                    cursor = nameStart;
+                    continue;
+                }
+
+                // Scan to end of identifier: [A-Za-z_][A-Za-z0-9_]*
+                var nameEnd = nameStart + 1;
+                while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                    nameEnd++;
+
+                sb ??= new SqlQueryBuilder(sql.Length + 32);
+                sb.Append(span[cursor..matchStart]); // literal text before {P}NAME
+
+                var name = sql[nameStart..nameEnd];
+                ParamSequence.Add(name);
+
+                sb.Append(_dialect.MakeParameterName(name));
+
+                cursor = nameEnd;
             }
 
-            // Scan to end of identifier: [A-Za-z_][A-Za-z0-9_]*
-            var nameEnd = nameStart + 1;
-            while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
-                nameEnd++;
+            if (sb == null)
+                return sql; // no placeholders found — return original without allocation
 
-            sb ??= new StringBuilder(sql.Length + 32);
-            sb.Append(span[cursor..matchStart]); // literal text before {P}NAME
+            if (cursor < sql.Length)
+                sb.Append(span[cursor..]);
 
-            var name = sql[nameStart..nameEnd];
-            ParamSequence.Add(name);
-
-            sb.Append(_dialect.ParameterMarker);
-            if (_dialect.SupportsNamedParameters)
-                sb.Append(span[nameStart..nameEnd]); // span avoids extra string alloc
-
-            cursor = nameEnd;
+            return sb.ToString();
         }
-
-        if (sb == null)
-            return sql; // no placeholders found — return original without allocation
-
-        if (cursor < sql.Length)
-            sb.Append(span[cursor..]);
-
-        return sb.ToString();
+        finally
+        {
+            sb?.Dispose();
+        }
     }
 
     /// <summary>
@@ -353,10 +356,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         var span = sql.AsSpan();
         var cursor = 0;
-        StringBuilder? sb = null;
+        SqlQueryBuilder? sb = null;
         Dictionary<string, int>? counts = null;
         HashSet<string>? usedNames = null;
 
+        try
+        {
         while (cursor < sql.Length)
         {
             var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
@@ -367,7 +372,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
             {
-                sb ??= new StringBuilder(sql.Length + 32);
+                sb ??= new SqlQueryBuilder(sql.Length + 32);
                 sb.Append(span[cursor..nameStart]);
                 cursor = nameStart;
                 continue;
@@ -377,7 +382,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
                 nameEnd++;
 
-            sb ??= new StringBuilder(sql.Length + 32);
+            sb ??= new SqlQueryBuilder(sql.Length + 32);
             sb.Append(span[cursor..matchStart]);
 
             var name = sql[nameStart..nameEnd];
@@ -400,8 +405,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 _renderedParameterMap[rendered] = name;
             }
 
-            sb.Append(_dialect.ParameterMarker);
-            sb.Append(rendered); // rendered is already a string; no extra concat needed
+            sb.Append(_dialect.MakeParameterName(rendered));
 
             cursor = nameEnd;
         }
@@ -413,6 +417,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             sb.Append(span[cursor..]);
 
         return sb.ToString();
+        }
+        finally
+        {
+            sb?.Dispose();
+        }
     }
 
     private string MakeDuplicateParameterName(string baseName, int occurrence, HashSet<string> usedNames)
@@ -1541,7 +1550,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // SECURITY: Never log parameter values - they may contain credentials, tokens, PII
             // Log only metadata: name, type, direction
-            var paramDump = new StringBuilder();
+            using var paramDump = new SqlQueryBuilder();
             var index = 0;
             foreach (var param in _parameters.Values)
             {

@@ -10,16 +10,16 @@ using Xunit.Abstractions;
 namespace pengdows.crud.IntegrationTests.Advanced;
 
 /// <summary>
-/// Integration tests for bulk operations including large inserts, updates,
+/// Integration tests for batch operations including large inserts, updates,
 /// deletes, and batch processing scenarios.
 /// </summary>
 [Collection("IntegrationTests")]
-public class BulkOperationTests : DatabaseTestBase
+public class BatchOperationTests : DatabaseTestBase
 {
     private static long _nextId;
     private readonly ConditionalWeakTable<IDatabaseContext, TableGateway<TestTable, long>> _gatewayCache = new();
 
-    public BulkOperationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
+    public BatchOperationTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
     }
 
@@ -368,7 +368,7 @@ public class BulkOperationTests : DatabaseTestBase
     }
 
     [SkippableFact]
-    public async Task ParallelBulkOperations_NoDataCorruption()
+    public async Task ParallelBatchOperations_NoDataCorruption()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
@@ -377,7 +377,7 @@ public class BulkOperationTests : DatabaseTestBase
             var batchCount = provider == SupportedDatabase.Snowflake ? 3 : 5;
             var recordsPerBatch = provider == SupportedDatabase.Snowflake ? 50 : 200;
 
-            // Act - 5 parallel bulk operations on different data sets
+            // Act - 5 parallel batch operations on different data sets
             var tasks = Enumerable.Range(0, batchCount).Select(async batch =>
             {
                 var entities = Enumerable.Range(0, recordsPerBatch)
@@ -450,7 +450,7 @@ public class BulkOperationTests : DatabaseTestBase
     }
 
     [SkippableFact]
-    public async Task RollbackLargeBulkOperation_NoDataLeaked()
+    public async Task RollbackLargeBatchOperation_NoDataLeaked()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {

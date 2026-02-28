@@ -220,9 +220,9 @@ public class PerformanceOptimizationBenchmarks
     }
 
     [Benchmark]
-    public ISqlContainer Update_Optimized_DirectAppends()
+    public async Task<ISqlContainer> Update_Optimized_DirectAppends()
     {
-        return _helper.BuildUpdateAsync(_testEntity).Result;
+        return await _helper.BuildUpdateAsync(_testEntity);
     }
 
     // Optimization 5: Cache Key (Tuple vs Struct)

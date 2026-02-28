@@ -241,6 +241,15 @@ internal class SqliteDialect : SqlDialect
             return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
         }
 
+        // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind
+        // DbType.Decimal correctly — the driver stores 0 instead of the actual value.
+        // Only convert when the caller declared DbType.Decimal; other mismatches (e.g.
+        // DbType.String + decimal) fall through to the base validator so they still throw.
+        if (value is decimal decValue && type == DbType.Decimal)
+        {
+            return base.CreateDbParameter(name, DbType.Double, (double)decValue);
+        }
+
         var p = base.CreateDbParameter(name, type, value);
 
         if (value is byte[] bytes && (type == DbType.Binary || type == DbType.Object))

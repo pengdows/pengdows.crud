@@ -93,13 +93,20 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     // Cached MethodInfo/ConstructorInfo for typed direct-read expression trees.
     // Resolved once at class load to avoid per-plan reflection overhead.
-    private static readonly MethodInfo _coerceDateTimeFromStringMethod =
+    // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC.
+    // Used after GetDateTime() to apply the same UTC policy that other paths use.
+    private static readonly MethodInfo _normalizeDateTimeMethod =
         typeof(TypeCoercionHelper).GetMethod(
-            nameof(TypeCoercionHelper.CoerceDateTimeFromString),
+            nameof(TypeCoercionHelper.NormalizeDateTime),
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(string) },
+            new[] { typeof(DateTime) },
             null)!;
+
+    // IDataRecord.GetDateTime(int) — called directly for string→DateTime coercion to
+    // delegate parsing to the DB driver (single parse, no intermediate string allocation).
+    private static readonly MethodInfo _getDateTimeMethod =
+        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetDateTime), new[] { typeof(int) })!;
 
     private static readonly MethodInfo _coerceDateTimeOffsetFromStringMethod =
         typeof(TypeCoercionHelper).GetMethod(
@@ -734,12 +741,18 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var isNullable = targetType != underlyingTarget; // targetType is Nullable<underlyingTarget>
 
         // string → DateTime / DateTime?
+        // Use reader.GetDateTime(ordinal) directly rather than GetFieldValue<string>() +
+        // CoerceDateTimeFromString(). Delegating to the DB driver:
+        //   • avoids allocating an intermediate C# string
+        //   • uses a single DateTime.Parse call (no DateTimeOffset.TryParse first attempt)
+        //   • matches what Dapper emits and what CompiledMapperFactory does for drivers
+        //     that natively return typeof(DateTime) from GetFieldType()
+        // NormalizeDateTime then applies the same UTC policy as every other path.
         if (fieldType == typeof(string) && underlyingTarget == typeof(DateTime))
         {
-            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
-            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
-            var parsed = Expression.Call(_coerceDateTimeFromStringMethod, rawStr);
-            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
+            var rawDt = Expression.Call(readerParam, _getDateTimeMethod, ordinalConst);
+            var normalized = Expression.Call(_normalizeDateTimeMethod, rawDt);
+            valueExpression = isNullable ? Expression.Convert(normalized, targetType) : normalized;
             return true;
         }
 

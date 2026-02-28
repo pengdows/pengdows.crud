@@ -51,12 +51,12 @@ public class Program
 
     private static bool IsOptInBenchmark(Type type)
     {
-        return type.GetCustomAttributes(typeof(OptInBenchmarkAttribute), inherit: true).Length != 0;
+        return type.GetCustomAttributes(typeof(OptInBenchmarkAttribute), inherit: false).Length != 0;
     }
 
     private static bool HasBenchmarkMethods(Type type)
     {
-        return type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        return type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Any(method => method.GetCustomAttributes(typeof(BenchmarkAttribute), inherit: true).Length != 0);
     }
 

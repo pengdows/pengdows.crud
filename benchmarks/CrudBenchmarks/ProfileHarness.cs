@@ -42,10 +42,17 @@ public static class ProfileHarness
         {
             using var cmd = sentinel.CreateCommand();
             cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO benchmark (id, name, age) VALUES (@id, @name, @age)";
+            var idParam = cmd.Parameters.Add("@id", SqliteType.Integer);
+            var nameParam = cmd.Parameters.Add("@name", SqliteType.Text);
+            var ageParam = cmd.Parameters.Add("@age", SqliteType.Integer);
+            cmd.Prepare();
+
             for (var i = 1; i <= SeedRows; i++)
             {
-                cmd.CommandText =
-                    $"INSERT INTO benchmark (id, name, age) VALUES ({i}, 'Person {i}', {20 + (i % 50)})";
+                idParam.Value = i;
+                nameParam.Value = $"Person {i}";
+                ageParam.Value = 20 + (i % 50);
                 cmd.ExecuteNonQuery();
             }
 

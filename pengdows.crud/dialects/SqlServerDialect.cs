@@ -22,8 +22,8 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
-using System.Text;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -74,14 +74,19 @@ internal class SqlServerDialect : SqlDialect
 
     private static string BuildDefaultSessionSettings()
     {
-        var sb = new StringBuilder();
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = 0; i < SessionSettingsDef.Length; i++)
         {
             if (i > 0) sb.Append(";\n");
-            sb.Append("SET ").Append(SessionSettingsDef[i].Name).Append(' ').Append(SessionSettingsDef[i].Value);
+            sb.Append("SET ");
+            sb.Append(SessionSettingsDef[i].Name);
+            sb.Append(' ');
+            sb.Append(SessionSettingsDef[i].Value);
         }
         sb.Append(';');
-        return sb.ToString();
+        var result = sb.ToString();
+        sb.Dispose();
+        return result;
     }
 
     private static IReadOnlyDictionary<string, string> BuildExpectedSessionSettings()
