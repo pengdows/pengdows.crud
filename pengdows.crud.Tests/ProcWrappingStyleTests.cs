@@ -98,9 +98,9 @@ public class ProcWrappingStyleTests
     {
         var sc = SetupParameterWrapTest(SupportedDatabase.PostgreSql);
         var s = sc.WrapForStoredProc(ExecutionType.Read);
-        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
+        Assert.Equal("SELECT * FROM \"dbo\".\"Sqltest\"(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
         s = sc.WrapForStoredProc(ExecutionType.Write);
-        Assert.Equal("CALL \"dbo\".\"Sqltest\"(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9)", s);
+        Assert.Equal("CALL \"dbo\".\"Sqltest\"(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9)", s);
     }
 
     [Fact]

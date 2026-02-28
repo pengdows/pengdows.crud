@@ -23,7 +23,7 @@ public class SqlContainerCloningTests : IDisposable
             "Data Source=:memory:;EmulatedProduct=Sqlite",
             new fakeDbFactory(SupportedDatabase.Sqlite));
 
-        // PostgreSQL context (uses : parameter markers)
+        // PostgreSQL context (uses @ parameter markers)
         _postgresContext = new DatabaseContext(
             "Data Source=:memory:;EmulatedProduct=PostgreSql",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
@@ -93,7 +93,7 @@ public class SqlContainerCloningTests : IDisposable
     [Fact]
     public void Clone_ParametersUseTargetContextDialect()
     {
-        // Arrange - Create container with PostgreSQL context (: parameter marker)
+        // Arrange - Create container with PostgreSQL context (@ parameter marker)
         using var originalContainer = _postgresContext.CreateSqlContainer("SELECT * FROM users WHERE id = ");
         var originalParam = originalContainer.AddParameterWithValue("id", DbType.Int32, 123);
 
@@ -120,15 +120,16 @@ public class SqlContainerCloningTests : IDisposable
         using var originalContainer = _sqliteContext.CreateSqlContainer("UPDATE users SET name = ");
         originalContainer.AddParameterWithValue("name", DbType.String, "Test");
 
-        // Act - Clone with PostgreSQL transaction context (: parameter marker)
-        using var transactionContext = _postgresContext.BeginTransaction();
+        // Act - Clone with DuckDB transaction context ($ parameter marker)
+        using var transactionContext = _duckDbContext.BeginTransaction();
         using var clonedContainer = originalContainer.Clone(transactionContext);
 
         // Assert
-        // Should use PostgreSQL dialect from transaction context, not SQLite
+        // Should use DuckDB dialect from transaction context, not SQLite
         var sqliteParam = originalContainer.MakeParameterName("test");
-        var pgParam = clonedContainer.MakeParameterName("test");
-        Assert.NotEqual(sqliteParam, pgParam);
+        var duckParam = clonedContainer.MakeParameterName("test");
+        Assert.NotEqual(sqliteParam, duckParam);
+        Assert.Equal("$test", duckParam);
 
         // SQL and parameters should be copied
         Assert.Equal(originalContainer.Query.ToString(), clonedContainer.Query.ToString());
@@ -150,8 +151,8 @@ public class SqlContainerCloningTests : IDisposable
         param.Scale = 2;
         param.Precision = 10;
 
-        // Act - Clone with PostgreSQL context (has output parameter support)
-        using var clonedContainer = originalContainer.Clone(_postgresContext);
+        // Act - Clone with DuckDB context to validate dialect-specific name formatting.
+        using var clonedContainer = originalContainer.Clone(_duckDbContext);
 
         // Assert
         Assert.Equal(originalContainer.ParameterCount, clonedContainer.ParameterCount);
@@ -162,8 +163,8 @@ public class SqlContainerCloningTests : IDisposable
 
         // Verify parameter formatting changed
         var sqliteParam = originalContainer.MakeParameterName("test");
-        var pgParam = clonedContainer.MakeParameterName("test");
-        Assert.NotEqual(sqliteParam, pgParam);
+        var duckParam = clonedContainer.MakeParameterName("test");
+        Assert.NotEqual(sqliteParam, duckParam);
     }
 
     [Fact]
@@ -290,7 +291,7 @@ public class SqlContainerCloningTests : IDisposable
     [Fact]
     public void Clone_CachedTemplateScenario_WorksWithDifferentTenants()
     {
-        // Arrange - Simulate an TableGateway cached template built with PostgreSQL context (: parameter marker)
+        // Arrange - Simulate an TableGateway cached template built with PostgreSQL context (@ parameter marker)
         using var cachedTemplate = _postgresContext.CreateSqlContainer(
             "SELECT id, name, email FROM users WHERE id = ");
         cachedTemplate.AddParameterWithValue("p0", DbType.Int32, 0); // Placeholder value
@@ -309,8 +310,8 @@ public class SqlContainerCloningTests : IDisposable
         var sqliteParam = tenant1Container.MakeParameterName("test");
         var duckParam = tenant2Container.MakeParameterName("test");
 
-        // All should be different
-        Assert.NotEqual(pgParam, sqliteParam);
+        // PostgreSQL and SQLite now both use '@' markers; DuckDB remains distinct.
+        Assert.Equal(pgParam, sqliteParam);
         Assert.NotEqual(pgParam, duckParam);
         Assert.NotEqual(sqliteParam, duckParam);
 

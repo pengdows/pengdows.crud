@@ -7,7 +7,7 @@ namespace pengdows.crud.Tests;
 public class TableGatewayDialectOverrideTests
 {
     [Fact]
-    public void BuildCreate_WithPostgresOverride_UsesColonMarker()
+    public void BuildCreate_WithPostgresOverride_UsesAtMarker()
     {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
@@ -23,13 +23,13 @@ public class TableGatewayDialectOverrideTests
         var sc = helper.BuildCreate(entity, overrideCtx);
         var sql = sc.Query.ToString();
 
-        // Postgres uses ':' for named parameters
-        Assert.Contains(":i0", sql);
-        Assert.DoesNotContain("@i0", sql);
+        // PostgreSQL uses '@' (ADO.NET standard); not the SqlServer base context
+        Assert.Contains("@i0", sql);
+        Assert.DoesNotContain("$i0", sql);
     }
 
     [Fact]
-    public void BuildDelete_WithPostgresOverride_UsesColonMarker()
+    public void BuildDelete_WithPostgresOverride_UsesAtMarker()
     {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TestEntity>();
@@ -43,9 +43,9 @@ public class TableGatewayDialectOverrideTests
         var sc = helper.BuildDelete(42, overrideCtx);
         var sql = sc.Query.ToString();
 
-        // BuildDelete uses a generated parameter name, so assert marker prefix only
-        Assert.Contains(":", sql);
-        Assert.DoesNotContain("@", sql);
+        // BuildDelete uses a generated parameter name; assert '@' marker is used
+        Assert.Contains("@", sql);
+        Assert.DoesNotContain("$", sql);
     }
 
     [Fact]

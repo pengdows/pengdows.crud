@@ -39,9 +39,9 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void ParameterMarker_ReturnsColon()
+    public void ParameterMarker_ReturnsAtSign()
     {
-        Assert.Equal(":", _dialect.ParameterMarker);
+        Assert.Equal("@", _dialect.ParameterMarker);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void MakeParameterName_Should_Use_Colon_Prefix()
+    public void MakeParameterName_Should_Use_AtSign_Prefix()
     {
         // Arrange
         var param = _dialect.CreateDbParameter("test", DbType.String, "value");
@@ -231,18 +231,18 @@ public class PostgreSqlDialectTests
         var paramName = _dialect.MakeParameterName(param);
 
         // Assert
-        Assert.StartsWith(":", paramName);
+        Assert.StartsWith("@", paramName);
         Assert.Contains("test", paramName);
     }
 
     [Fact]
-    public void MakeParameterName_String_Should_Use_Colon_Prefix()
+    public void MakeParameterName_String_Should_Use_AtSign_Prefix()
     {
         // Act
         var paramName = _dialect.MakeParameterName("my_param");
 
         // Assert
-        Assert.StartsWith(":", paramName);
+        Assert.StartsWith("@", paramName);
         Assert.Contains("my_param", paramName);
     }
 
@@ -318,9 +318,9 @@ public class PostgreSqlDialectTests
     }
 
     [Theory]
-    [InlineData("test", ":test")]
-    [InlineData("p1", ":p1")]
-    [InlineData("param999", ":param999")]
+    [InlineData("test", "@test")]
+    [InlineData("p1", "@p1")]
+    [InlineData("param999", "@param999")]
     public void MakeParameterName_ReturnsCorrectFormat(string paramName, string expected)
     {
         var param = new fakeDbParameter

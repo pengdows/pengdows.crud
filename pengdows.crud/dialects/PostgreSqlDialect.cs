@@ -6,7 +6,7 @@
 // - Supports PostgreSQL 10+ with comprehensive SQL standard compliance.
 // - Key features:
 //   * INSERT ... ON CONFLICT for upserts (supports DO UPDATE and DO NOTHING)
-//   * Parameter marker: : (colon prefix, Npgsql standard)
+//   * Parameter marker: @ (ADO.NET standard; avoids Npgsql '::' cast lookahead)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 32767 (practical limit)
 //   * Prepared statements enabled for performance
@@ -73,8 +73,8 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => _flavor;
 
-    // Use ':' parameter marker; Npgsql supports ':' and existing integrations rely on it
-    public override string ParameterMarker => ":";
+    // Use '@' parameter marker — ADO.NET standard; avoids Npgsql's '::' cast lookahead
+    public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 
     public override bool SupportsSetValuedParameters => true;
@@ -89,7 +89,7 @@ internal class PostgreSqlDialect : SqlDialect
 
         // PostgreSQL UPDATE FROM VALUES pattern:
         // UPDATE target SET col1 = s.col1, ...
-        // FROM (VALUES (:b0, :b1), (:b2, :b3)) AS s(pk, col1)
+        // FROM (VALUES (@b0, @b1), (@b2, @b3)) AS s(pk, col1)
         // WHERE target.pk = s.pk
 
         query.Append("UPDATE ");

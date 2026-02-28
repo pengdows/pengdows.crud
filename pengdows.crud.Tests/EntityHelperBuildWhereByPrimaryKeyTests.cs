@@ -48,7 +48,7 @@ public class TableGatewayBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void BuildWhereByPrimaryKey_WithPostgresOverride_UsesColonMarker()
+    public void BuildWhereByPrimaryKey_WithPostgresOverride_UsesAtSignMarker()
     {
         using var overrideCtx = new DatabaseContext(
             "Data Source=:memory:;EmulatedProduct=PostgreSql",
@@ -60,7 +60,7 @@ public class TableGatewayBuildWhereByPrimaryKeyTests : SqlLiteContextTestBase
         _helper.BuildWhereByPrimaryKey(list, sc);
         var sql = sc.Query.ToString();
 
-        Assert.Contains(":", sql);
-        Assert.DoesNotContain("@", sql);
+        Assert.Contains("@", sql);
+        Assert.DoesNotContain(":", sql);
     }
 }

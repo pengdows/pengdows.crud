@@ -54,8 +54,8 @@ public static class DataSourceTestData
         var markerFormat = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
-                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                or SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":{0}",
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@{0}",
+            SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":{0}",
             SupportedDatabase.DuckDB => "$" + "{0}",
             _ => "@{0}"
         };
@@ -135,8 +135,8 @@ public class DataSourceInformationTests
         var expectedMarker = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
-                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                or SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@",
+            SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             _ => "@"
         };

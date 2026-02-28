@@ -103,11 +103,11 @@ public sealed class ContextBaseCoverageTests
     }
 
     [Fact]
-    public void MakeParameterName_String_Postgres_ColonPrefix()
+    public void MakeParameterName_String_Postgres_AtPrefix()
     {
         using var ctx = PostgresContext();
         var name = ctx.MakeParameterName("bar");
-        Assert.Equal(":bar", name);
+        Assert.Equal("@bar", name);
     }
 
     [Fact]

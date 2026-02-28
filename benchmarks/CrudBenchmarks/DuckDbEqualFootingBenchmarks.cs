@@ -43,7 +43,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     // Explicit ID ranges — seed occupies 1..1000; ranges below avoid collision
     private int _createIdSeed = 10_000;
     private int _deleteIdSeed = 100_000;
-    private int _batchIdSeed = 200_000;
+
 
     private bool _originalMatchNamesWithUnderscores;
 
@@ -139,9 +139,21 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _createIdSeed);
-            const string sql =
-                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-            await using var container = _pengdowsCtx.CreateSqlContainer(sql);
+            await using var container = _pengdowsCtx.CreateSqlContainer();
+            container.Query.Append(
+                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (");
+            container.Query.Append(container.MakeParameterName("Id"));
+            container.Query.Append(", ");
+            container.Query.Append(container.MakeParameterName("Name"));
+            container.Query.Append(", ");
+            container.Query.Append(container.MakeParameterName("Age"));
+            container.Query.Append(", ");
+            container.Query.Append(container.MakeParameterName("Salary"));
+            container.Query.Append(", ");
+            container.Query.Append(container.MakeParameterName("IsActive"));
+            container.Query.Append(", ");
+            container.Query.Append(container.MakeParameterName("CreatedAt"));
+            container.Query.Append(')');
             container.AddParameterWithValue("Id", DbType.Int32, id);
             container.AddParameterWithValue("Name", DbType.String, $"Created {id}");
             container.AddParameterWithValue("Age", DbType.Int32, 25);
@@ -158,7 +170,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     public async Task<int> Create_Dapper()
     {
         const string sql =
-            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES ($Id, $Name, $Age, $Salary, $IsActive, $CreatedAt)";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
@@ -205,7 +217,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     {
         DuckBenchEntity? result = null;
         const string sql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id";
         for (var i = 0; i < RecordCount; i++)
         {
             await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
@@ -239,7 +251,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
         await conn.OpenAsync();
         var rows = await conn.QueryAsync<DuckBenchEntity>(
-            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT {RecordCount}",
+            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > $Age LIMIT {RecordCount}",
             new { Age = 30 });
         return rows.AsList();
     }
@@ -254,8 +266,11 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
-            await using var container = _pengdowsCtx.CreateSqlContainer(sql);
+            await using var container = _pengdowsCtx.CreateSqlContainer();
+            container.Query.Append("UPDATE benchmark SET salary = ");
+            container.Query.Append(container.MakeParameterName("Salary"));
+            container.Query.Append(" WHERE id = ");
+            container.Query.Append(container.MakeParameterName("Id"));
             container.AddParameterWithValue("Salary", DbType.Double, 60000.0 + i);
             container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
             count += await container.ExecuteNonQueryAsync();
@@ -267,7 +282,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<int> Update_Dapper()
     {
-        const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
+        const string sql = "UPDATE benchmark SET salary = $Salary WHERE id = $Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
@@ -294,10 +309,22 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            const string insertSql =
-                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-            await using (var ins = _pengdowsCtx.CreateSqlContainer(insertSql))
+            await using (var ins = _pengdowsCtx.CreateSqlContainer())
             {
+                ins.Query.Append(
+                    "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (");
+                ins.Query.Append(ins.MakeParameterName("Id"));
+                ins.Query.Append(", ");
+                ins.Query.Append(ins.MakeParameterName("Name"));
+                ins.Query.Append(", ");
+                ins.Query.Append(ins.MakeParameterName("Age"));
+                ins.Query.Append(", ");
+                ins.Query.Append(ins.MakeParameterName("Salary"));
+                ins.Query.Append(", ");
+                ins.Query.Append(ins.MakeParameterName("IsActive"));
+                ins.Query.Append(", ");
+                ins.Query.Append(ins.MakeParameterName("CreatedAt"));
+                ins.Query.Append(')');
                 ins.AddParameterWithValue("Id", DbType.Int32, id);
                 ins.AddParameterWithValue("Name", DbType.String, "ToDelete");
                 ins.AddParameterWithValue("Age", DbType.Int32, 99);
@@ -307,8 +334,9 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 await ins.ExecuteNonQueryAsync();
             }
 
-            const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
-            await using var del = _pengdowsCtx.CreateSqlContainer(deleteSql);
+            await using var del = _pengdowsCtx.CreateSqlContainer();
+            del.Query.Append("DELETE FROM benchmark WHERE id = ");
+            del.Query.Append(del.MakeParameterName("Id"));
             del.AddParameterWithValue("Id", DbType.Int32, id);
             count += await del.ExecuteNonQueryAsync();
         }
@@ -320,8 +348,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     public async Task<int> Delete_Dapper()
     {
         const string insertSql =
-            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES ($Id, $Name, $Age, $Salary, $IsActive, $CreatedAt)";
+        const string deleteSql = "DELETE FROM benchmark WHERE id = $Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
@@ -375,7 +403,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         await conn.OpenAsync();
         var rows = await conn.QueryAsync<DuckBenchEntity>(
             $"SELECT id, name, age, salary, is_active, created_at FROM benchmark " +
-            $"WHERE is_active = TRUE AND age >= @MinAge AND age <= @MaxAge LIMIT {RecordCount}",
+            $"WHERE is_active = TRUE AND age >= $MinAge AND age <= $MaxAge LIMIT {RecordCount}",
             new { MinAge = 25, MaxAge = 45 });
         return rows.AsList();
     }
@@ -411,150 +439,6 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         }
 
         return result;
-    }
-
-    // ========================================================================
-    // BATCH CREATE BENCHMARKS (loop of single INSERTs)
-    // ========================================================================
-
-    [Benchmark]
-    public async Task<int> BatchCreate_Pengdows()
-    {
-        var count = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var id = Interlocked.Increment(ref _batchIdSeed);
-            const string sql =
-                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-            await using var container = _pengdowsCtx.CreateSqlContainer(sql);
-            container.AddParameterWithValue("Id", DbType.Int32, id);
-            container.AddParameterWithValue("Name", DbType.String, $"Batch {id}");
-            container.AddParameterWithValue("Age", DbType.Int32, 30);
-            container.AddParameterWithValue("Salary", DbType.Double, 55000.0);
-            container.AddParameterWithValue("IsActive", DbType.Boolean, true);
-            container.AddParameterWithValue("CreatedAt", DbType.DateTime, DateTime.UtcNow);
-            count += await container.ExecuteNonQueryAsync();
-        }
-
-        return count;
-    }
-
-    [Benchmark]
-    public async Task<int> BatchCreate_Dapper()
-    {
-        const string sql =
-            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-        var count = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var id = Interlocked.Increment(ref _batchIdSeed);
-            await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
-            await conn.OpenAsync();
-            count += await conn.ExecuteAsync(sql, new
-            {
-                Id = id, Name = $"Batch {id}", Age = 30, Salary = 55000.0,
-                IsActive = true, CreatedAt = DateTime.UtcNow
-            });
-        }
-
-        return count;
-    }
-
-    // ========================================================================
-    // BULK CREATE: Multi-row VALUES — the real batch story
-    // ========================================================================
-
-    [Benchmark]
-    public async Task<int> BulkCreate_Pengdows()
-    {
-        var entities = new List<DuckBenchEntity>(RecordCount);
-        for (var i = 0; i < RecordCount; i++)
-        {
-            entities.Add(new DuckBenchEntity
-            {
-                Id = Interlocked.Increment(ref _batchIdSeed),
-                Name = $"Bulk {i}",
-                Age = 30,
-                Salary = 55000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
-        }
-
-        return await _gateway.BatchCreateAsync(entities, _pengdowsCtx);
-    }
-
-    [Benchmark]
-    public async Task<int> BulkCreate_Dapper()
-    {
-        if (RecordCount == 0) return 0;
-
-        var parameters = new DynamicParameters();
-        var valueClauses = new string[RecordCount];
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var id = Interlocked.Increment(ref _batchIdSeed);
-            valueClauses[i] = $"(@Id{i}, @Name{i}, @Age{i}, @Salary{i}, @IsActive{i}, @CreatedAt{i})";
-            parameters.Add($"Id{i}", id);
-            parameters.Add($"Name{i}", $"Bulk {id}");
-            parameters.Add($"Age{i}", 30);
-            parameters.Add($"Salary{i}", 55000.0);
-            parameters.Add($"IsActive{i}", true);
-            parameters.Add($"CreatedAt{i}", DateTime.UtcNow);
-        }
-
-        var sql = "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES " +
-                  string.Join(", ", valueClauses);
-        await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
-        await conn.OpenAsync();
-        return await conn.ExecuteAsync(sql, parameters);
-    }
-
-    // ========================================================================
-    // BULK vs LOOP (pengdows.crud only)
-    // Shows BatchCreateAsync multi-row VALUES speedup vs looped single INSERTs
-    // ========================================================================
-
-    [Benchmark]
-    public async Task<int> BulkVsLoop_SingleInserts_Pengdows()
-    {
-        var count = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var entity = new DuckBenchEntity
-            {
-                Id = Interlocked.Increment(ref _batchIdSeed),
-                Name = $"Loop {i}",
-                Age = 30,
-                Salary = 55000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-            var sc = _gateway.BuildCreate(entity, _pengdowsCtx);
-            count += await sc.ExecuteNonQueryAsync();
-        }
-
-        return count;
-    }
-
-    [Benchmark]
-    public async Task<int> BulkVsLoop_BatchCreate_Pengdows()
-    {
-        var entities = new List<DuckBenchEntity>(RecordCount);
-        for (var i = 0; i < RecordCount; i++)
-        {
-            entities.Add(new DuckBenchEntity
-            {
-                Id = Interlocked.Increment(ref _batchIdSeed),
-                Name = $"Batch {i}",
-                Age = 30,
-                Salary = 55000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
-        }
-
-        return await _gateway.BatchCreateAsync(entities, _pengdowsCtx);
     }
 
     // ========================================================================
@@ -601,7 +485,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         {
             sw.Restart();
             const string sql =
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id";
             var param = new { Id = (i % SeedRows) + 1 };
             sw.Stop();
             buildTicks += sw.ElapsedTicks;
@@ -644,7 +528,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
         await conn.OpenAsync();
         await conn.QueryFirstOrDefaultAsync<DuckBenchEntity>(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id",
             new { Id = 1 });
         sw.Stop();
         return sw.ElapsedTicks;
@@ -654,7 +538,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     // ENTITY
     // All columns map to native DuckDB types — no coercion required.
     // [Id(true)]: DuckDB INTEGER PRIMARY KEY has no AUTOINCREMENT; callers
-    // must supply all IDs explicitly (see _createIdSeed / _deleteIdSeed / _batchIdSeed).
+    // must supply all IDs explicitly (see _createIdSeed / _deleteIdSeed).
     // ========================================================================
 
     [Table("benchmark")]

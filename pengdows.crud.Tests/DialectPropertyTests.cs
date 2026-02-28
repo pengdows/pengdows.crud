@@ -91,7 +91,7 @@ public class DialectPropertyTests
                 new PostgreSqlDialect(factory, logger),
                 new DialectProps(
                     SupportedDatabase.PostgreSql,
-                    ":",
+                    "@",
                     true,
                     32767,
                     63,

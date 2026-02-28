@@ -56,7 +56,7 @@ public class DialectCoverageTests
                 new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance),
                 "\"",
                 true,
-                ":",
+                "@",
                 true),
             SupportedDatabase.SqlServer => new DialectTestConfig(
                 new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance),

@@ -490,9 +490,9 @@ CREATE TABLE {qp}test_table{qs} (
     {
         return product switch
         {
-            SupportedDatabase.PostgreSql => ":",
-            SupportedDatabase.CockroachDb => ":",
-            SupportedDatabase.YugabyteDb => ":",
+            SupportedDatabase.PostgreSql => "@",
+            SupportedDatabase.CockroachDb => "@",
+            SupportedDatabase.YugabyteDb => "@",
             SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             SupportedDatabase.Oracle => ":",

@@ -18,11 +18,13 @@
 //
 // Note on dialect differences:
 //   All dialects in this codebase use " for identifier quoting (ANSI SQL-92).
-//   The observable difference between dialects is the ParameterMarker:
-//     SQLite      → '@'   (e.g. @w0)
-//     PostgreSQL  → ':'   (e.g. :w0)
-//   Tests use SQLite (default context) vs PostgreSQL (tenant override context)
-//   to assert that the correct dialect is actually used.
+//   Observable ParameterMarker values:
+//     SQLite/PostgreSQL/CockroachDB → '@'   (ADO.NET standard)
+//     DuckDB                        → '$'
+//     Oracle/Snowflake              → ':'
+//   Tests use SQLite (default context) vs DuckDB (tenant override context)
+//   to assert that the correct dialect is actually used, since DuckDB's '$'
+//   marker produces observably different SQL from SQLite/PostgreSQL's '@'.
 // =============================================================================
 
 using System;
@@ -41,7 +43,7 @@ namespace pengdows.crud.Tests;
 
 public class MultiTenantDialectTests
 {
-    // SQLite uses '@' for parameters; PostgreSQL uses ':'.
+    // SQLite uses '@' for parameters; DuckDB uses '$'.
     // Using both lets tests assert that the correct dialect was actually used.
 
     private static DatabaseContext MakeSqliteContext() =>
@@ -55,6 +57,12 @@ public class MultiTenantDialectTests
         {
             ConnectionString = "Data Source=fake;EmulatedProduct=PostgreSql"
         }, new fakeDbFactory(SupportedDatabase.PostgreSql));
+
+    private static DatabaseContext MakeDuckDbContext() =>
+        new(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=fake;EmulatedProduct=DuckDB"
+        }, new fakeDbFactory(SupportedDatabase.DuckDB));
 
     // -------------------------------------------------------------------------
     // NoIdEntity — has [PrimaryKey] so TypeMapRegistry accepts it, but no [Id]
@@ -108,12 +116,12 @@ public class MultiTenantDialectTests
 
     // -------------------------------------------------------------------------
     // BuildCreate — positive confirmation that SQL-generating methods derive
-    // dialect from the passed context. PostgreSQL (':') vs SQLite ('@') makes
+    // dialect from the passed context. DuckDB ('$') vs SQLite ('@') makes
     // the dialect source observable.
     //
     // RED before fix: BuildCreate always used _dialect (SQLite '@') even when
-    // a PostgreSQL context was passed. After fix: uses the passed context's
-    // dialect and emits ':' parameter markers.
+    // a different-dialect context was passed. After fix: uses the passed
+    // context's dialect and emits the correct parameter marker.
     // -------------------------------------------------------------------------
 
     [Table("mt_entity")]
@@ -127,19 +135,19 @@ public class MultiTenantDialectTests
     }
 
     [Fact]
-    public void BuildCreate_PassedPostgresContext_SqlUsesColonMarker()
+    public void BuildCreate_PassedDuckDbContext_SqlUsesDollarMarker()
     {
         using var sqliteCtx = MakeSqliteContext();
-        using var postgresCtx = MakePostgresContext();
+        using var duckCtx = MakeDuckDbContext();
 
         var gateway = new TableGateway<MultiTenantEntity, int>(sqliteCtx);
         var entity = new MultiTenantEntity { Name = "test" };
 
-        var sc = gateway.BuildCreate(entity, postgresCtx);
+        var sc = gateway.BuildCreate(entity, duckCtx);
 
         var sql = sc.Query.ToString();
-        // PostgreSQL dialect — ':' parameter marker
-        Assert.Contains(":i0", sql);
+        // DuckDB dialect — '$' parameter marker
+        Assert.Contains("$i0", sql);
         // NOT SQLite '@' marker
         Assert.DoesNotContain("@i0", sql);
     }
@@ -176,17 +184,31 @@ public class MultiTenantDialectTests
     }
 
     [Fact]
-    public void ISqlDialect_ReplaceNeutralTokens_DifferentDialects_ProduceDifferentParameterMarker()
+    public void ISqlDialect_ReplaceNeutralTokens_SqliteAndPostgres_BothUseAtMarker()
     {
         using var sqliteCtx = MakeSqliteContext();
         using var postgresCtx = MakePostgresContext();
 
-        // {S} → ParameterMarker — SQLite = '@', PostgreSQL = ':'
+        // Both SQLite and PostgreSQL use '@' (ADO.NET standard) — {S} → '@'
         var sqliteResult = sqliteCtx.Dialect.ReplaceNeutralTokens("{S}p0");
         var postgresResult = postgresCtx.Dialect.ReplaceNeutralTokens("{S}p0");
 
         Assert.Equal("@p0", sqliteResult);
-        Assert.Equal(":p0", postgresResult);
+        Assert.Equal("@p0", postgresResult); // PostgreSQL also uses '@' (ADO.NET standard)
+    }
+
+    [Fact]
+    public void ISqlDialect_ReplaceNeutralTokens_DuckDb_ProducesDollarMarker()
+    {
+        using var sqliteCtx = MakeSqliteContext();
+        using var duckCtx = MakeDuckDbContext();
+
+        // DuckDB uses '$' — observable difference from '@' dialects
+        var sqliteResult = sqliteCtx.Dialect.ReplaceNeutralTokens("{S}p0");
+        var duckResult = duckCtx.Dialect.ReplaceNeutralTokens("{S}p0");
+
+        Assert.Equal("@p0", sqliteResult);
+        Assert.Equal("$p0", duckResult);
     }
 
     [Fact]

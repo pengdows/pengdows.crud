@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Data;
 using System.Data.Common;
@@ -137,6 +138,20 @@ internal abstract class SqlDialect : ISqlDialect
     private static readonly ConcurrentDictionary<Type, Action<DbParameter>> ProviderSpecificResetters = new();
 
     private static readonly Action<DbParameter> NoopReset = static _ => { };
+
+    /// <summary>
+    /// CLR types that are never registered in AdvancedTypeRegistry across any supported dialect.
+    /// Checking this set eliminates a ConcurrentDictionary lookup per parameter for the common case.
+    /// NOTE: bool, Guid, DateTime, DateTimeOffset are intentionally excluded — dialects register
+    /// them in AdvancedTypeRegistry (e.g. Oracle maps bool→Int16, Guid→VARCHAR2).
+    /// </summary>
+    private static readonly FrozenSet<Type> s_primitiveClrTypes = new HashSet<Type>
+    {
+        typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong),
+        typeof(float), typeof(double), typeof(decimal),
+        typeof(char), typeof(string)
+    }.ToFrozenSet();
 
     protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
@@ -952,18 +967,35 @@ internal abstract class SqlDialect : ISqlDialect
         // Performance: Inline null check to avoid method call overhead
         var valueIsNull = value == null || value is DBNull;
 
+        // Resolve CLR type first (uses typeof(T) — no boxing for value types).
+        // Then validate using the pre-resolved type to avoid boxing T into object?.
+        var runtimeType = valueIsNull ? null : ResolveClrType(value);
+
         if (!valueIsNull)
         {
             // Validate CLR type compatibility with DbType before setting the value.
             // Catches mismatches early with clear messages instead of deferring to
             // provider-specific errors at execution time.
-            DbTypeValidator.Validate(type, value);
+            // Pass runtimeType (already resolved) to avoid boxing value types.
+            DbTypeValidator.Validate(type, runtimeType);
         }
 
-        var runtimeType = valueIsNull ? null : ResolveClrType(value);
-        var handled = runtimeType != null &&
+        // Fast path: well-known primitive CLR types are never registered in AdvancedTypeRegistry.
+        // Skip the IsMappedType() ConcurrentDictionary lookup for the common case.
+        // PrepareParameterValue is still called — some dialects transform primitives
+        // (e.g. Oracle converts Guid→string and bool→NUMBER via PrepareParameterValue).
+        bool handled;
+        if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
+        {
+            // Primitive fast path: skip AdvancedTypes lookup, go straight to PrepareParameterValue.
+            handled = false;
+        }
+        else
+        {
+            handled = runtimeType != null &&
                       AdvancedTypes.IsMappedType(runtimeType) &&
                       AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
+        }
 
         if (!handled)
         {

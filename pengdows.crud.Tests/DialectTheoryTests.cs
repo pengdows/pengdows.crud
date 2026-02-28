@@ -17,8 +17,8 @@ public class DialectTheoryTests
         return new List<object[]>
         {
             new object[] { SupportedDatabase.SqlServer, ProcWrappingStyle.Exec, "@", true },
-            new object[] { SupportedDatabase.PostgreSql, ProcWrappingStyle.PostgreSQL, ":", true },
-            new object[] { SupportedDatabase.CockroachDb, ProcWrappingStyle.PostgreSQL, ":", true },
+            new object[] { SupportedDatabase.PostgreSql, ProcWrappingStyle.PostgreSQL, "@", true },
+            new object[] { SupportedDatabase.CockroachDb, ProcWrappingStyle.PostgreSQL, "@", true },
             new object[] { SupportedDatabase.MySql, ProcWrappingStyle.Call, "@", true },
             new object[] { SupportedDatabase.MariaDb, ProcWrappingStyle.Call, "@", true },
             new object[] { SupportedDatabase.Firebird, ProcWrappingStyle.ExecuteProcedure, "@", true },

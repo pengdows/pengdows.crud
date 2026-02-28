@@ -87,19 +87,19 @@ public class DialectBatchSqlTests
     public void Dialect_BuildBatchInsertSql_InlinesNulls()
     {
         // Arrange
-        // Note: PostgreSqlDialect uses : marker in pengdows.crud
+        // Note: PostgreSqlDialect uses @ marker (ADO.NET standard)
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
         Func<int, int, object?> getValue = (row, col) => (row == 0 && col == 1) ? null : "val";
-        
+
         // Act
         dialect.BuildBatchInsertSql("\"t\"", _columns, 2, _query, getValue);
         var sql = NormalizeSql(_query.ToString());
         _output.WriteLine(sql);
 
         // Assert
-        // Row 0: ("val", NULL) -> :b0 for col 0, NULL for col 1
-        // Row 1: ("val", "val") -> :b1 for col 0, :b2 for col 1
-        Assert.Contains("VALUES (:b0, NULL), (:b1, :b2)", sql);
+        // Row 0: ("val", NULL) -> @b0 for col 0, NULL for col 1
+        // Row 1: ("val", "val") -> @b1 for col 0, @b2 for col 1
+        Assert.Contains("VALUES (@b0, NULL), (@b1, @b2)", sql);
     }
 
     // =========================================================================
@@ -130,8 +130,8 @@ public class DialectBatchSqlTests
         _output.WriteLine(sql);
 
         Assert.Contains("INSERT INTO \"my_table\" (\"name\", \"age\") VALUES", sql);
-        Assert.Contains("(:b0, :b1)", sql);
-        Assert.Contains("(:b2, :b3)", sql);
+        Assert.Contains("(@b0, @b1)", sql);
+        Assert.Contains("(@b2, @b3)", sql);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public class DialectBatchSqlTests
 
         Assert.Contains("UPDATE \"my_table\" AS t SET", sql);
         Assert.Contains("\"name\" = s.\"name\"", sql);
-        Assert.Contains("FROM (VALUES (:b0, :b1, :b2))", sql);
+        Assert.Contains("FROM (VALUES (@b0, @b1, @b2))", sql);
         Assert.Contains("AS s(\"id\", \"name\", \"age\")", sql);
         Assert.Contains("WHERE t.\"id\" = s.\"id\"", sql);
     }
@@ -241,7 +241,7 @@ public class DialectBatchSqlTests
     public void Dialect_BuildBatchUpdateSql_InlinesNulls()
     {
         // col 0 = id (key), col 1 = name (null → inline NULL), col 2 = age (non-null)
-        // Expected VALUES: (:b0, NULL, :b1)  — paramIdx skips the NULL slot
+        // Expected VALUES: (@b0, NULL, @b1)  — paramIdx skips the NULL slot
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
         var query = new SqlQueryBuilder();
         Func<int, int, object?> getValue = (row, col) => col == 1 ? (object?)null : "val";
@@ -250,7 +250,7 @@ public class DialectBatchSqlTests
         var sql = NormalizeSql(query.ToString());
         _output.WriteLine(sql);
 
-        Assert.Contains("(:b0, NULL, :b1)", sql);
+        Assert.Contains("(@b0, NULL, @b1)", sql);
     }
 
     private static string NormalizeSql(string sql)

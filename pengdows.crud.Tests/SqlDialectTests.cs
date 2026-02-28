@@ -38,7 +38,7 @@ public class SqlDialectTests
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         var param = ctx.CreateDbParameter("p", DbType.Int32, 1);
         var paramName = ctx.MakeParameterName(param);
-        Assert.Equal(":p", paramName);
+        Assert.Equal("@p", paramName);
     }
 
     [Fact]
