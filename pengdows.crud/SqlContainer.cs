@@ -1086,8 +1086,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (executionType == ExecutionType.Write)
         {
             // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
-            if (_context is DatabaseContext dbContext &&
-                dbContext.ReadWriteMode == ReadWriteMode.ReadOnly)
+            if (_context.ReadWriteMode == ReadWriteMode.ReadOnly)
             {
                 throw new NotSupportedException("Write operations are not supported in read-only mode.");
             }
@@ -1262,8 +1261,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken)
     {
         if (executionType == ExecutionType.Write &&
-            _context is DatabaseContext dbCtx &&
-            dbCtx.ReadWriteMode == ReadWriteMode.ReadOnly)
+            _context.ReadWriteMode == ReadWriteMode.ReadOnly)
         {
             throw new NotSupportedException("Write operations are not supported in read-only mode.");
         }
@@ -1541,9 +1539,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // so we always execute as CommandType.Text for consistent behavior across providers.
         cmd.CommandType = CommandType.Text;
 
-        if (_logger.IsEnabled(LogLevel.Information))
+        if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogInformation("Executing SQL: {Sql}", cmdText);
+            _logger.LogDebug("Executing SQL: {Sql}", cmdText);
         }
 
         if (_parameters.Count > 0 && _logger.IsEnabled(LogLevel.Debug))

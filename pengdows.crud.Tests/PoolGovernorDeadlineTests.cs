@@ -59,7 +59,7 @@ public sealed class PoolGovernorDeadlineTests
         using var releaser = StartDelayedReleaseThread(turnstile, turnstileHoldMs);
 
         var sw = Stopwatch.StartNew();
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync().AsTask());
         sw.Stop();
 
         // Bug: ≈ 600 + 1000 = 1 600 ms.  Fix: ≤ 1 000 ms + scheduler headroom.
@@ -126,7 +126,7 @@ public sealed class PoolGovernorDeadlineTests
             holdTurnstile: true,
             trackMetrics: true);
 
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync().AsTask());
 
         Assert.Equal(1, gov.GetSnapshot().TotalSlotTimeouts);
         Assert.Equal(0, gov.GetSnapshot().TotalTurnstileTimeouts);
@@ -170,7 +170,7 @@ public sealed class PoolGovernorDeadlineTests
         await using var held = await gov.AcquireAsync(); // fill the pool
 
         var sw = Stopwatch.StartNew();
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync().AsTask());
         sw.Stop();
 
         // Should throw at approximately timeoutMs — not much earlier (correct timeout)
@@ -210,7 +210,7 @@ public sealed class PoolGovernorDeadlineTests
         await turnstile.WaitAsync(); // hold it — governor will timeout on turnstile
 
         var sw = Stopwatch.StartNew();
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync().AsTask());
         sw.Stop();
 
         // Timed out at turnstile — should be ≈ timeoutMs, definitely not 2 × timeoutMs

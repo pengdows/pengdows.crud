@@ -55,3 +55,6 @@ debug_*.cs
 # .NET SDK runtime artifacts
 .dotnet/
 *.DotSettings
+
+# Local MSBuild overrides (never commit)
+Directory.Build.user.props

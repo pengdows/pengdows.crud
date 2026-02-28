@@ -30,7 +30,7 @@ public class SqlDialectBranchTests
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.Oracle, GeneratedKeyPlan.PrefetchSequence)]
+    [InlineData(SupportedDatabase.Oracle, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted)]
     [InlineData(SupportedDatabase.PostgreSql, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.MySql, GeneratedKeyPlan.SessionScopedFunction)]

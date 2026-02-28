@@ -1,0 +1,16 @@
+<!--
+  Local developer overrides for MSBuild properties.
+  Copy this file to Directory.Build.user.props (which is gitignored) and
+  uncomment properties you want to override locally.
+
+  Do NOT commit Directory.Build.user.props — it is intentionally gitignored.
+-->
+<Project>
+    <PropertyGroup>
+        <!-- Uncomment to skip the verify-novendor tool (e.g., Oracle DLL crash workaround) -->
+        <!--<SkipVerifyNoVendor>true</SkipVerifyNoVendor>-->
+
+        <!-- Uncomment to skip interface API baseline validation -->
+        <!--<SkipInterfaceValidation>true</SkipInterfaceValidation>-->
+    </PropertyGroup>
+</Project>

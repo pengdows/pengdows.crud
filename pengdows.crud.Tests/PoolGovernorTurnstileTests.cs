@@ -60,7 +60,7 @@ public sealed class PoolGovernorTurnstileTests
         var wp = await writer.AcquireAsync();
 
         // Reader times out waiting for the TURNSTILE (not the slot semaphore).
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => reader.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => reader.AcquireAsync().AsTask());
         Assert.Equal(1, reader.GetSnapshot().TotalTurnstileTimeouts);
         Assert.Equal(0, reader.GetSnapshot().TotalSlotTimeouts); // no slot timeout
 
@@ -205,7 +205,7 @@ public sealed class PoolGovernorTurnstileTests
         var p1 = await w1.AcquireAsync();
 
         // W2 cannot pass the turnstile — it is still held by W1's slot.
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => w2.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => w2.AcquireAsync().AsTask());
         Assert.Equal(1, w2.GetSnapshot().TotalTurnstileTimeouts); // turnstile bottleneck
         Assert.Equal(0, w2.GetSnapshot().TotalSlotTimeouts); // no slot timeout
 
@@ -246,7 +246,7 @@ public sealed class PoolGovernorTurnstileTests
             sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
 
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync().AsTask());
 
         Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
         Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
@@ -322,7 +322,7 @@ public sealed class PoolGovernorTurnstileTests
             sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
 
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync().AsTask());
 
         Assert.True(turnstile.Wait(0), "Turnstile was not released after async slot acquisition failure.");
     }

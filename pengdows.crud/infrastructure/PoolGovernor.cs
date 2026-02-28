@@ -367,7 +367,7 @@ internal sealed class PoolGovernor : IDisposable
         return false;
     }
 
-    public async Task<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
         if (_forbidden)
         {
@@ -516,7 +516,7 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    public async Task<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
         if (_forbidden)
         {

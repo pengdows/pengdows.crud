@@ -156,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if rg -n --glob '*.cs' 'new\s+TransactionScope|using\s+System\.Transactions' \
+          if grep -rn --include='*.cs' -E 'new\s+TransactionScope|using\s+System\.Transactions' \
             pengdows.crud \
             pengdows.crud.abstractions \
             pengdows.crud.fakeDb \
@@ -173,7 +173,9 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: TestResults/**/coverage.cobertura.xml
-          fail_ci_if_error: true
+          # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
+          # so we suppress errors rather than blocking community contributions.
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           token: ${{ secrets.CODECOV_TOKEN }}
           disable_file_fixes: true
 
@@ -309,8 +311,8 @@ jobs:
           git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
-        if: steps.nuget_check.outputs.skip != 'true'
-        uses: softprops/action-gh-release@v1
+        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
@@ -355,9 +357,15 @@ jobs:
           set -euo pipefail
 
           sed -i -E "s|<Version>[^<]+</Version>|<Version>${{ steps.next_version.outputs.next_version }}</Version>|" Directory.Build.props
-          sed -i -E "s|<InformationalVersion>[^<]+</InformationalVersion>|<InformationalVersion>${{ steps.next_version.outputs.next_version }}</InformationalVersion>|" Directory.Build.props
           sed -i -E "s|<AssemblyVersion>[^<]+</AssemblyVersion>|<AssemblyVersion>${{ steps.next_version.outputs.next_assembly_version }}</AssemblyVersion>|" Directory.Build.props
           sed -i -E "s|<FileVersion>[^<]+</FileVersion>|<FileVersion>${{ steps.next_version.outputs.next_assembly_version }}</FileVersion>|" Directory.Build.props
+
+          # Verify the bump actually applied — sed exits 0 even when no lines matched,
+          # so an unchanged file means the pattern didn't match (e.g. reformatted XML).
+          if git diff --exit-code Directory.Build.props > /dev/null 2>&1; then
+            echo "❌ Version bump had no effect — sed pattern did not match Directory.Build.props"
+            exit 1
+          fi
 
       - name: Commit semver bump
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}

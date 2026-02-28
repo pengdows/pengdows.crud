@@ -520,6 +520,12 @@ internal static class ConnectionPoolingConfiguration
         "password", "pwd", "user id", "uid", "user", "username"
     };
 
+    // Substrings that, when found anywhere in a key name (case-insensitive), mark it as sensitive.
+    private static readonly string[] SensitiveKeySubstrings =
+    {
+        "password", "secret", "token", "access"
+    };
+
     /// <summary>
     /// Checks if sensitive values (like password) were stripped when converting the connection string.
     /// Many providers have PersistSecurityInfo=false by default, stripping passwords on read.
@@ -626,15 +632,26 @@ internal static class ConnectionPoolingConfiguration
                     continue;
                 }
 
-                // Skip sensitive keys - we want to keep the originals
-                var lowerKey = key.ToLowerInvariant();
+                // Skip sensitive keys - we want to keep the originals from the source connection string
                 var isSensitive = false;
                 foreach (var sensitiveKey in SensitiveKeys)
                 {
-                    if (lowerKey == sensitiveKey || lowerKey.Contains("password") || lowerKey.Contains("secret"))
+                    if (string.Equals(key, sensitiveKey, StringComparison.OrdinalIgnoreCase))
                     {
                         isSensitive = true;
                         break;
+                    }
+                }
+
+                if (!isSensitive)
+                {
+                    foreach (var substring in SensitiveKeySubstrings)
+                    {
+                        if (key.Contains(substring, StringComparison.OrdinalIgnoreCase))
+                        {
+                            isSensitive = true;
+                            break;
+                        }
                     }
                 }
 

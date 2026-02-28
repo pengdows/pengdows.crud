@@ -46,8 +46,6 @@ public sealed class RealAsyncLockerContentionTests
             await locker.LockAsync();
         });
 
-        // Spin until the waiter has actually entered contention (past the zero-timeout
-        // tryacquire in LockAsync, into RecordWaitStart). Task.Delay alone is a race.
         var spinDeadline = DateTime.UtcNow.AddMilliseconds(500);
         while (stats.GetSnapshot().CurrentWaiters == 0 && DateTime.UtcNow < spinDeadline)
         {

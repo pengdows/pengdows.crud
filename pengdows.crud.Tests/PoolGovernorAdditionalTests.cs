@@ -57,7 +57,7 @@ public class PoolGovernorAdditionalTests
         var governor = new PoolGovernor(PoolLabel.Writer, "writer-hash", 1, TimeSpan.FromMilliseconds(50));
         var slot = await governor.AcquireAsync();
 
-        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync().AsTask());
         Assert.Equal("writer-hash", ex.PoolKeyHash);
 
         slot.Dispose();
@@ -172,7 +172,7 @@ public class PoolGovernorAdditionalTests
         using var slot = governor.Acquire();
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => governor.WaitForDrainAsync(null, cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await governor.WaitForDrainAsync(null, cts.Token));
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class PoolGovernorAdditionalTests
         var governor = new PoolGovernor(PoolLabel.Reader, "drain-timeout", 1, TimeSpan.FromMilliseconds(50));
         using var slot = governor.Acquire();
 
-        await Assert.ThrowsAsync<TimeoutException>(() => governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(25)));
+        await Assert.ThrowsAsync<TimeoutException>(async () => await governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(25)));
     }
 
     // ── drain-signal race regression ──────────────────────────────────────

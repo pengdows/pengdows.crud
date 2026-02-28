@@ -335,16 +335,6 @@ public partial class DatabaseContext
             : connectionString;
 
         var isCustomConnectionString = !string.IsNullOrWhiteSpace(connectionString);
-        var useReaderCS = ShouldUseReaderConnectionString(readOnly);
-
-        if (_logger.IsEnabled(LogLevel.Warning) &&
-            !string.IsNullOrWhiteSpace(activeConnectionString) &&
-            activeConnectionString.IndexOf("password", StringComparison.OrdinalIgnoreCase) < 0)
-        {
-            // Log only the context name — never log connection strings (even redacted)
-            // to avoid leaking sensitive data through incomplete redaction paths.
-            _logger.LogWarning("Connection string missing password for {Name}", Name);
-        }
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {

@@ -147,7 +147,10 @@ public partial class DatabaseContext
             typeMapRegistry,
             null)
     {
-        _dialect = (SqlDialect)dialect;
+        _dialect = dialect as SqlDialect
+            ?? throw new ArgumentException(
+                $"Dialect must derive from SqlDialect; got {dialect?.GetType().Name ?? "null"}.",
+                nameof(dialect));
     }
 
     private DatabaseContext(
@@ -318,7 +321,7 @@ public partial class DatabaseContext
         }
         catch (Exception e)
         {
-            _logger?.LogError(e.Message);
+            _logger?.LogError(e, "DatabaseContext construction failed.");
             throw;
         }
         finally
@@ -334,10 +337,6 @@ public partial class DatabaseContext
         }
     }
 
-    /// <summary>
-    /// Creates a new DatabaseContext using a DbDataSource (e.g., NpgsqlDataSource).
-    /// This provides better performance through shared prepared statement caching.
-    /// </summary>
     /// <summary>
     /// Initializes a new DatabaseContext using a DbDataSource for connection creation.
     /// The DataSource provides better performance through shared prepared statement caching,
@@ -502,8 +501,7 @@ public partial class DatabaseContext
                 }
             }
 
-            // 7) Isolation resolver after product/RCSI known
-            _isolationResolver = new IsolationResolver(product, RCSIEnabled, SnapshotIsolationEnabled);
+            // 7) Isolation resolver is created in the outer constructor after RCSI/Snapshot detection.
 
             // 8) Return the open initConn only for Standard (caller disposes). For persistent modes we returned null.
             return initConn;
@@ -1255,18 +1253,16 @@ public partial class DatabaseContext
 
     private static bool ShouldIgnoreKey(string key)
     {
-        var lowered = key.ToLowerInvariant();
-        return lowered switch
-        {
-            "password" => true,
-            "pwd" => true,
-            "user id" => true,
-            "uid" => true,
-            "user" => true,
-            "username" => true,
-            _ => lowered.Contains("password", StringComparison.OrdinalIgnoreCase)
-                 || lowered.Contains("secret", StringComparison.OrdinalIgnoreCase)
-        };
+        return string.Equals(key, "password", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "pwd", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "user id", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "uid", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "user", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "username", StringComparison.OrdinalIgnoreCase)
+               || key.Contains("password", StringComparison.OrdinalIgnoreCase)
+               || key.Contains("secret", StringComparison.OrdinalIgnoreCase)
+               || key.Contains("token", StringComparison.OrdinalIgnoreCase)
+               || key.Contains("access", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SensitiveValuesStripped(string original, string normalized)
@@ -1762,15 +1758,19 @@ public partial class DatabaseContext
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Probing for native DbDataSource failed for {FactoryType}.",
-                factory.GetType().FullName);
-            
-            // If the provider explicitly throws NotSupportedException (via TargetInvocationException),
-            // it means it doesn't want to participate in the DataSource pattern at all.
+            // TargetInvocationException wrapping NotSupportedException = provider explicitly
+            // opts out of the DataSource pattern — fall through to GenericDbDataSource silently.
             if (ex is System.Reflection.TargetInvocationException tie && tie.InnerException is NotSupportedException)
             {
+                _logger.LogDebug("Provider {FactoryType} does not support DbDataSource; using generic wrapper.",
+                    factory.GetType().FullName);
                 return null;
             }
+
+            // Any other exception is unexpected — warn so it can be investigated, but still
+            // fall through to GenericDbDataSource rather than failing context construction.
+            _logger.LogWarning(ex, "Unexpected exception probing for DbDataSource on {FactoryType}; falling back to generic wrapper.",
+                factory.GetType().FullName);
         }
 
         // Fallback: Use our own wrapper so the rest of the framework can always use the DataSource path.

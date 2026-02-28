@@ -51,7 +51,7 @@ public sealed class PoolGovernorTests
         var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromMilliseconds(25), trackMetrics: true);
         await using var slot = await governor.AcquireAsync();
 
-        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(async () => await governor.AcquireAsync());
         Assert.Equal(PoolLabel.Reader, ex.PoolLabel);
         Assert.Equal("reader-key", ex.PoolKeyHash);
         Assert.True(ex.Snapshot.TotalSlotTimeouts >= 1);
@@ -85,7 +85,7 @@ public sealed class PoolGovernorTests
         await using var first = await governor.AcquireAsync();
 
         // Second acquire times out — should NOT update wait/hold ticks
-        await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+        await Assert.ThrowsAsync<PoolSaturatedException>(async () => await governor.AcquireAsync());
 
         // Check metrics BEFORE releasing first slot (ReleaseToken records hold on dispose)
         // If the timed-out attempt had called RecordWaitAndHold, these would be non-zero
@@ -127,7 +127,7 @@ public sealed class PoolGovernorTests
         await using var second = await governor.AcquireAsync();
 
         // Pool is full — a third acquisition must timeout
-        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync());
+        var ex = await Assert.ThrowsAsync<PoolSaturatedException>(() => governor.AcquireAsync().AsTask());
         Assert.Equal(2, ex.Snapshot.InUse);
         Assert.Equal(1, governor.GetSnapshot().TotalSlotTimeouts);
 
@@ -165,7 +165,7 @@ public sealed class PoolGovernorTests
         Assert.True(governor.GetSnapshot().Queued >= 1);
 
         cts.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => waiter);
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await waiter);
 
         var snapshot = governor.GetSnapshot();
         Assert.Equal(1, snapshot.TotalCanceledWaits);    // cancellation, not timeout
