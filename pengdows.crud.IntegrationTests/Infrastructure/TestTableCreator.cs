@@ -553,6 +553,7 @@ public class TestTableCreator
         return string.Format(@"
         DECLARE
             table_exists NUMBER;
+            sequence_exists NUMBER;
         BEGIN
             SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'TEST_TABLE';
             IF table_exists = 0 THEN
@@ -568,6 +569,16 @@ public class TestTableCreator
                         {0}updated_at{1} TIMESTAMP,
                         {0}updated_by{1} VARCHAR2(100)
                     )';
+            END IF;
+
+            SELECT COUNT(*) INTO sequence_exists FROM user_sequences WHERE LOWER(sequence_name) = 'test_table_seq';
+            IF sequence_exists = 0 THEN
+                EXECUTE IMMEDIATE '
+                    CREATE SEQUENCE {0}test_table_seq{1}
+                    START WITH 1
+                    INCREMENT BY 1
+                    NOCACHE
+                    NOCYCLE';
             END IF;
         END;", qp, qs, table);
     }

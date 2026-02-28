@@ -35,7 +35,7 @@ internal static class IntegrationObjectNameHelper
                     : [],
             SupportedDatabase.DuckDB => [GetValue(builder, "schema") ?? "main"],
             SupportedDatabase.Oracle => GetValue(builder, "User Id", "UID", "User") is { Length: > 0 } user
-                ? [user]
+                ? [user.ToUpperInvariant()]
                 : [],
             _ => []
         };

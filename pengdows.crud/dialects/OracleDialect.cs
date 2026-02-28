@@ -150,6 +150,11 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsSavepoints => true;
     public override bool SupportsInsertReturning => true;
 
+    public override GeneratedKeyPlan GetGeneratedKeyPlan()
+    {
+        return GeneratedKeyPlan.Returning;
+    }
+
     public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {
