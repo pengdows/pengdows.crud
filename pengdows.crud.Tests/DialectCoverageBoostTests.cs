@@ -34,7 +34,7 @@ public class DialectCoverageBoostTests
         Assert.Equal("src.\"col\"", dialect.UpsertIncomingColumn("col"));
         Assert.Null(dialect.ParseVersion("   "));
         Assert.Equal(new Version(8, 12, 1), dialect.ParseVersion("8.12.1"));
-        Assert.Equal("SET TRANSACTION READ ONLY;", dialect.GetReadOnlySessionSettings());
+        Assert.Equal("ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE;", dialect.GetReadOnlySessionSettings());
 
         var qb = new SqlQueryBuilder();
         dialect.BuildBatchUpdateSql("\"t\"", new[] { "\"val\"" }, new[] { "\"id\"" }, 1, qb,

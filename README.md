@@ -30,16 +30,31 @@
 
 ```csharp
 // Tenant A uses SQL Server
-services.AddKeyedSingleton<DatabaseContext>("enterprise-client", sp =>
-    new DatabaseContext("Server=azure.com;Database=enterprise;", SqlClientFactory.Instance));
+services.AddKeyedSingleton<DatabaseContext>("enterprise-client", sp => {
+    var config = new DatabaseContextConfiguration {
+        ConnectionString = "Server=azure.com;Database=enterprise;",
+        ProviderName = "System.Data.SqlClient"
+    };
+    return new DatabaseContext(config, SqlClientFactory.Instance);
+});
 
 // Tenant B uses PostgreSQL
-services.AddKeyedSingleton<DatabaseContext>("startup-client", sp =>
-    new DatabaseContext("Host=localhost;Database=startup;", NpgsqlFactory.Instance));
+services.AddKeyedSingleton<DatabaseContext>("startup-client", sp => {
+    var config = new DatabaseContextConfiguration {
+        ConnectionString = "Host=localhost;Database=startup;",
+        ProviderName = "Npgsql"
+    };
+    return new DatabaseContext(config, NpgsqlFactory.Instance);
+});
 
 // Tenant C uses SQLite
-services.AddKeyedSingleton<DatabaseContext>("embedded-client", sp =>
-    new DatabaseContext("Data Source=embedded.db", SqliteFactory.Instance));
+services.AddKeyedSingleton<DatabaseContext>("embedded-client", sp => {
+    var config = new DatabaseContextConfiguration {
+        ConnectionString = "Data Source=embedded.db",
+        ProviderName = "Microsoft.Data.Sqlite"
+    };
+    return new DatabaseContext(config, SqliteFactory.Instance);
+});
 
 // Or use built-in multi-tenant registry
 services.AddMultiTenancy(configuration);  // Loads from appsettings.json
@@ -352,6 +367,7 @@ Instead, it helps you write **real SQL** that's:
 | Feature | pengdows.crud | EF Core | Dapper |
 |---------|---------------|---------|--------|
 | **Multi-Tenancy (Mixed DB Types)** | ✅ **Built-in registry** | ❌ Manual | ❌ None |
+| **Read-Only Enforcement** | ✅ **ConnString + Session SQL** | ❌ None | ❌ None |
 | **Advanced Types (Spatial, Network, Ranges)** | ✅ **14 converters** | ⚠️ Limited | ❌ None |
 | **Streaming Large Results** | ✅ **IAsyncEnumerable** | ⚠️ With overhead | ❌ Loads all |
 | **Real-Time Metrics (P95/P99, Connections)** | ✅ **23+ metrics** | ⚠️ Logging only | ❌ None |
@@ -413,8 +429,13 @@ dotnet add package pengdows.crud.fakeDb
 ```csharp
 using System.Data.SqlClient;
 using pengdows.crud;
+using pengdows.crud.configuration;
 
-var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
+var config = new DatabaseContextConfiguration {
+    ConnectionString = "your-connection-string",
+    ProviderName = "System.Data.SqlClient"
+};
+var context = new DatabaseContext(config, SqlClientFactory.Instance);
 
 // Execute raw SQL
 var sc = context.CreateSqlContainer();
@@ -427,6 +448,7 @@ var dt = sc.ExecuteScalar<DateTime>();
 ```csharp
 using System.Data;
 using pengdows.crud;
+using pengdows.crud.configuration;
 
 [Table("users")]
 public class User
@@ -455,7 +477,11 @@ public class User
 
 public enum UserStatus { Active, Inactive, Suspended }
 
-var context = new DatabaseContext("connection-string", SqlClientFactory.Instance);
+var config = new DatabaseContextConfiguration {
+    ConnectionString = "connection-string",
+    ProviderName = "System.Data.SqlClient"
+};
+var context = new DatabaseContext(config, SqlClientFactory.Instance);
 var helper = new TableGateway<User, long>(context);
 
 // Create

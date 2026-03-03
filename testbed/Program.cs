@@ -82,14 +82,16 @@ var results = await orchestrator.RunAllTestsAsync(only, exclude);
 // Optional: Export results for CI/CD
 var successCount = results.Count(r => r.Success);
 var totalCount = results.Count;
+var totalChecks = results.Sum(r => r.ChecksPassed);
+var totalSkipped = results.Sum(r => r.ChecksSkipped);
 
 if (successCount == totalCount)
 {
-    Console.WriteLine("🎉 All tests passed!");
+    Console.WriteLine($"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!");
     Environment.Exit(0);
 }
 else
 {
-    Console.WriteLine($"❌ {totalCount - successCount} out of {totalCount} tests failed");
+    Console.WriteLine($"❌ {totalCount - successCount}/{totalCount} databases failed ({totalChecks} checks passed, {totalSkipped} skipped)");
     Environment.Exit(1);
 }

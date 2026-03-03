@@ -436,20 +436,8 @@ public class AdvancedTypeRegistry
             }
         });
 
-        // Oracle: store GUIDs as VARCHAR2(36)
-        RegisterMapping<Guid>(SupportedDatabase.Oracle, new ProviderTypeMapping
-        {
-            DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.String;
-                param.Size = 36;
-                if (value is Guid guid)
-                {
-                    param.Value = guid.ToString("D");
-                }
-            }
-        });
+        // Oracle Guid: handled by OracleDialect.GuidFormat (GuidStorageFormat.String).
+        // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
     }
 
     private void RegisterDefaultConverters()
@@ -838,20 +826,8 @@ public class AdvancedTypeRegistry
             }
         });
 
-        // Snowflake stores GUIDs as VARCHAR(36) — use plain string with fixed size
-        RegisterMapping<Guid>(SupportedDatabase.Snowflake, new ProviderTypeMapping
-        {
-            DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.String;
-                param.Size = 36;
-                if (value is Guid guid)
-                {
-                    param.Value = guid.ToString("D");
-                }
-            }
-        });
+        // Snowflake Guid: handled by SnowflakeDialect.GuidFormat (GuidStorageFormat.String).
+        // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
     }
 
     private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)

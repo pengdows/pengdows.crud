@@ -422,14 +422,15 @@ public class OracleDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Include_Read_Only_For_ReadOnly_Context()
+    public void GetConnectionSessionSettings_Should_Not_Include_Read_Only_For_ReadOnly_Context()
     {
         var context = new DatabaseContext("test", _factory);
 
         var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
-        Assert.Contains("ALTER SESSION SET READ ONLY", settings);
+        // Oracle has no session-level read-only mode, so it should NOT be in the connection session settings string
+        Assert.DoesNotContain("READ ONLY", settings);
     }
 
     [Fact]

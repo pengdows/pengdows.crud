@@ -295,20 +295,18 @@ public class TestAuditResolver : IAuditValueResolver
 
 public class TestAuditValues : IAuditValues
 {
-    public object UserId => "test-user";
-    public DateTime Timestamp => new DateTime(2023, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+    public object UserId { get; init; } = "test-user";
+    public DateTime UtcNow => new DateTime(2023, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+    public DateTimeOffset? TimestampOffset => null;
 }
 
 [Test]
 public async Task TestAuditFieldsPopulated()
 {
-    var services = new ServiceCollection();
-    services.AddSingleton<IAuditValueResolver, TestAuditResolver>();
-    var serviceProvider = services.BuildServiceProvider();
-
     var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
     var context = new DatabaseContext("test", factory);
-    var gateway = new TableGateway<AuditedEntity, int>(context, serviceProvider);
+    var resolver = new TestAuditResolver();
+    var gateway = new TableGateway<AuditedEntity, int>(context, resolver);
 
     var entity = new AuditedEntity { Name = "Test" };
     var container = gateway.BuildCreate(entity);

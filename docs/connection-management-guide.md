@@ -90,6 +90,7 @@ The context installs read and write `PoolGovernor` instances in every mode excep
 ## Related Documentation
 
 * [CONNECTION-MODES.md](CONNECTION-MODES.md) - Technical invariants and implementation details
+* [Read-Only Enforcement](read-only-enforcement.md) - Detailed enforcement matrix and strategies
 * [Connection Pooling](connection-pooling.md) - Database-specific pooling behavior
 * [Transactions](transactions.md) - Transaction management patterns
 * [Supported Databases](supported-databases.md) - Database provider support matrix

@@ -161,17 +161,21 @@ public sealed class ExecuteProcedureWrappingStrategyCoverageTests
     }
 
     [Fact]
-    public void Wrap_ReadWithoutArgs_EmptyParens()
+    public void Wrap_ReadWithoutArgs_OmitsParens()
     {
+        // Firebird does not allow empty parentheses in SELECT * FROM proc_name().
+        // When there are no input parameters the call must omit the parens entirely.
         var result = Strategy.Wrap("my_proc", ExecutionType.Read, "");
-        Assert.Equal("SELECT * FROM my_proc()", result);
+        Assert.Equal("SELECT * FROM my_proc", result);
     }
 
     [Fact]
-    public void Wrap_WriteWithoutArgs_EmptyParens()
+    public void Wrap_WriteWithoutArgs_OmitsParens()
     {
+        // Firebird does not allow empty parentheses in EXECUTE PROCEDURE proc_name().
+        // When there are no input parameters the call must omit the parens entirely.
         var result = Strategy.Wrap("my_proc", ExecutionType.Write, "");
-        Assert.Equal("EXECUTE PROCEDURE my_proc()", result);
+        Assert.Equal("EXECUTE PROCEDURE my_proc", result);
     }
 
     [Fact]

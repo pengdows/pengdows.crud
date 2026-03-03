@@ -273,6 +273,9 @@ internal class SqlServerDialect : SqlDialect
 
     public override string? GetReadOnlyConnectionParameter()
     {
+        // NOTE: ApplicationIntent=ReadOnly is a routing hint for Availability Groups (AG)
+        // and does NOT enforce server-side read-only state. Hard enforcement requires 
+        // read-only credentials or database permissions.
         return "ApplicationIntent=ReadOnly";
     }
 
@@ -329,57 +332,14 @@ internal class SqlServerDialect : SqlDialect
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
-
-                using var reader = cmd.ExecuteReader();
-                var currentSettings =
-                    new Dictionary<string, string>(ExpectedSessionSettings.Count, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var kvp in ExpectedSessionSettings)
-                {
-                    currentSettings[kvp.Key] = "OFF";
-                }
-
-                while (reader.Read())
-                {
-                    string settingName;
-                    string settingValue;
-
-                    if (reader.FieldCount == 1)
-                    {
-                        settingName = reader.GetName(0).ToUpperInvariant();
-                        settingValue = reader.GetString(0);
-                    }
-                    else
-                    {
-                        settingName = reader.GetString(0).ToUpperInvariant();
-                        settingValue = reader.GetString(1);
-                    }
-
-                    if (!currentSettings.ContainsKey(settingName))
-                    {
-                        continue;
-                    }
-
-                    currentSettings[settingName] =
-                        string.Equals(settingValue, "SET", StringComparison.OrdinalIgnoreCase)
-                            ? "ON"
-                            : "OFF";
-                }
-
-                var script = BuildSessionSettingsScript(
-                    ExpectedSessionSettings,
-                    currentSettings,
-                    static (name, value) => $"SET {name} {value};");
-
-                return new SessionSettingsResult(script, currentSettings, false);
+                // Always set the full baseline to ensure deterministic state in pooled connections.
+                return new SessionSettingsResult(DefaultSessionSettings, ExpectedSessionSettings, false);
             },
             () => new SessionSettingsResult(
                 DefaultSessionSettings,
                 new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
                 true),
-            "Failed to check SQL Server session settings, applying default settings");
+            "Failed to configure SQL Server session settings");
     }
 
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()

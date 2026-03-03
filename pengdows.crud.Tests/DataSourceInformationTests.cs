@@ -183,7 +183,8 @@ public class DataSourceInformationTests
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
+                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake => ProcWrappingStyle.Call,
+            SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
@@ -213,7 +214,8 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.SqlServer => 1024,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.Snowflake => 65535,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
             SupportedDatabase.Oracle => 1024,

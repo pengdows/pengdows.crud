@@ -114,6 +114,13 @@ internal static class DatabaseDetectionService
                     {
                         return SupportedDatabase.MariaDb;
                     }
+
+                    // TiDB reports DataSourceProductName = "MySQL" but its version contains "TiDB"
+                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                        productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.TiDb;
+                    }
                 }
             }
             catch

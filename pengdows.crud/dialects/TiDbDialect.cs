@@ -32,8 +32,12 @@ internal class TiDbDialect : MySqlDialect
     // but benefits from a "Pessimistic" transaction mode for correctness
     // in complex distributed workloads.
 
-        // MySql.Data provider has a bug/incompatibility with TiDB when preparing statements
-        public override bool PrepareStatements => false;
+    // MySql.Data provider has a bug/incompatibility with TiDB when preparing statements
+    public override bool PrepareStatements => false;
+
+    // TiDB's Go AST parser does not implement stored procedure DDL (*ast.ProcedureInfo).
+    // Stored procedures cannot be created or called on TiDB.
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
     
         public override string GetBaseSessionSettings()
         {

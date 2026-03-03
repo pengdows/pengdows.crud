@@ -41,6 +41,35 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
+/// Determines how <see cref="Guid"/> values are serialized to database parameters.
+/// Each dialect declares its preferred storage format via <see cref="SqlDialect.GuidFormat"/>.
+/// </summary>
+internal enum GuidStorageFormat
+{
+    /// <summary>
+    /// Leave <see cref="DbType.Guid"/> as-is and let the ADO.NET provider handle the
+    /// conversion.  Correct for SQL Server (<c>uniqueidentifier</c>), MySQL/MariaDB
+    /// (MySqlConnector maps <c>DbType.Guid</c> to <c>CHAR(36)</c> internally), and any
+    /// provider whose driver natively understands <c>DbType.Guid</c>.
+    /// </summary>
+    PassThrough,
+
+    /// <summary>
+    /// Convert to <see cref="DbType.String"/> with a 36-character hyphenated UUID string
+    /// (<c>"D"</c> format, e.g. <c>550e8400-e29b-41d4-a716-446655440000</c>).
+    /// Used by SQLite, DuckDB, Oracle, and Snowflake.
+    /// </summary>
+    String,
+
+    /// <summary>
+    /// Convert to <see cref="DbType.Binary"/> with the 16-byte <c>ToByteArray()</c>
+    /// representation.  Used by Firebird when the schema stores GUIDs as
+    /// <c>CHAR(16) OCTETS</c>.
+    /// </summary>
+    Binary,
+}
+
+/// <summary>
 /// Abstract base class implementing common SQL dialect functionality.
 /// </summary>
 /// <remarks>
@@ -317,6 +346,14 @@ internal abstract class SqlDialect : ISqlDialect
     // Overridden by MySqlDialect to veto prepare after error 1461 fires, even when ForceManualPrepare is set.
     public virtual bool IsPrepareExhausted => false;
 
+    /// <summary>
+    /// Declares how this dialect serializes <see cref="Guid"/> values to database parameters.
+    /// The base implementation returns <see cref="GuidStorageFormat.PassThrough"/>, which leaves
+    /// <see cref="DbType.Guid"/> untouched and delegates to the ADO.NET provider (correct for
+    /// SQL Server, MySQL, and MariaDB).  Dialects that need a specific wire format override this.
+    /// </summary>
+    protected virtual GuidStorageFormat GuidFormat => GuidStorageFormat.PassThrough;
+
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
@@ -556,34 +593,61 @@ internal abstract class SqlDialect : ISqlDialect
         return result;
     }
 
+    /// <summary>
+    /// Gets the final, optimized session initialization string for the given read-only intent.
+    /// Dialects should override this to combine baseline and intent settings into a single
+    /// SQL statement (where supported) to ensure 1 RTT and 1 execution on the server.
+    /// </summary>
+    public virtual string GetFinalSessionSettings(bool readOnly)
+    {
+        var baseline = GetBaseSessionSettings();
+        var intent = readOnly ? GetReadOnlySessionSettings() : GetReadOnlyTransactionResetSql();
+
+        if (string.IsNullOrWhiteSpace(baseline)) return intent ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(intent)) return baseline;
+
+        // Default: Multiple statements in a single command batch (1 RTT)
+        return baseline.TrimEnd(';') + ";\n" + intent;
+    }
+
+    /// <summary>
+    /// Builds a session settings script from the expected and current values.
+    /// Since pengdows.crud 2.0 enforces an "Always SET" policy for session integrity in pooled
+    /// environments, this method always returns the full set of expected settings to ensure
+    /// that any session pollution from prior pool users is overwritten.
+    /// </summary>
     protected static string BuildSessionSettingsScript(
         IReadOnlyDictionary<string, string> expected,
         IReadOnlyDictionary<string, string> current,
-        Func<string, string, string> formatter)
+        Func<string, string, string> formatter,
+        string separator = "\n")
     {
         if (expected.Count == 0)
         {
             return string.Empty;
         }
 
-        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var kvp in expected)
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
         {
-            current.TryGetValue(kvp.Key, out var currentValue);
-            if (string.Equals(currentValue, kvp.Value, StringComparison.OrdinalIgnoreCase))
+            var first = true;
+            foreach (var kvp in expected)
             {
-                continue;
+                if (!first)
+                {
+                    sb.Append(separator);
+                }
+
+                sb.Append(formatter(kvp.Key, kvp.Value));
+                first = false;
             }
 
-            if (builder.Length > 0)
-            {
-                builder.AppendLine();
-            }
-
-            builder.Append(formatter(kvp.Key, kvp.Value));
+            return sb.ToString();
         }
-
-        return builder.ToString();
+        finally
+        {
+            sb.Dispose();
+        }
     }
 
     protected SessionSettingsResult EvaluateSessionSettings(
@@ -1002,6 +1066,15 @@ internal abstract class SqlDialect : ISqlDialect
             parameter.DbType = type;
             var preparedValue = PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
+        }
+
+        // Apply the dialect's declared Guid storage format when the caller passed DbType.Guid
+        // and the AdvancedTypeRegistry did not already handle the parameter (e.g. PostgreSQL
+        // sets NpgsqlDbType.Uuid via reflection — we must not overwrite that).
+        if (!handled && !valueIsNull && type == DbType.Guid
+                && runtimeType == typeof(Guid) && GuidFormat != GuidStorageFormat.PassThrough)
+        {
+            ApplyGuidFormat(parameter, (Guid)(object)value!);
         }
 
         // Positional providers use "?" placeholders — parameter names must be blank.
@@ -1688,6 +1761,11 @@ internal abstract class SqlDialect : ISqlDialect
             return SupportedDatabase.MariaDb;
         }
 
+        if (combined.Contains("tidb"))
+        {
+            return SupportedDatabase.TiDb;
+        }
+
         if (combined.Contains("aurora") && combined.Contains("mysql"))
         {
             return SupportedDatabase.AuroraMySql;
@@ -1835,6 +1913,29 @@ internal abstract class SqlDialect : ISqlDialect
     public virtual object? PrepareParameterValue(object? value, DbType dbType)
     {
         return value;
+    }
+
+    /// <summary>
+    /// Applies the dialect's <see cref="GuidFormat"/> to an already-created <see cref="DbParameter"/>.
+    /// Called from <see cref="CreateDbParameter{T}"/> for non-handled Guid parameters whose
+    /// <see cref="GuidFormat"/> is not <see cref="GuidStorageFormat.PassThrough"/>.
+    /// </summary>
+    private void ApplyGuidFormat(DbParameter param, Guid guid)
+    {
+        switch (GuidFormat)
+        {
+            case GuidStorageFormat.String:
+                param.DbType = DbType.String;
+                param.Size = 36;
+                // Use string.Create to avoid heap allocation for the formatted string.
+                param.Value = string.Create(36, guid, static (span, g) => g.TryFormat(span, out _, "D"));
+                break;
+            case GuidStorageFormat.Binary:
+                param.DbType = DbType.Binary;
+                param.Value = guid.ToByteArray();
+                break;
+            // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
+        }
     }
 
     /// <summary>

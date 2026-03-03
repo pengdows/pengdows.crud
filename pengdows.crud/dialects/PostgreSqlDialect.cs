@@ -20,6 +20,7 @@
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -53,7 +54,7 @@ internal class PostgreSqlDialect : SqlDialect
     private const string JsonbTypeName = "Jsonb";
 
     private const string DefaultSessionSettings =
-        $"SET {StandardConformingStringsSetting} = on;\nSET {ClientMinMessagesSetting} = warning;";
+        $"SET {StandardConformingStringsSetting} = on, {ClientMinMessagesSetting} = warning;";
 
     private static readonly IReadOnlyDictionary<string, string> ExpectedSessionSettings =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -267,32 +268,37 @@ internal class PostgreSqlDialect : SqlDialect
         return productInfo;
     }
 
+    public override string GetFinalSessionSettings(bool readOnly)
+    {
+        // 1 RTT / 1 Command Optimization: Consolidate all session assignments (baseline + intent)
+        // into a single comma-separated SET command.
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
+        {
+            sb.Append("SET ");
+            sb.Append(StandardConformingStringsSetting);
+            sb.Append(" = on, ");
+            sb.Append(ClientMinMessagesSetting);
+            sb.Append(" = warning, ");
+            sb.Append(ReadOnlyTransactionSetting);
+            sb.Append(readOnly ? " = on;" : " = off;");
+
+            return sb.ToString();
+        }
+        finally
+        {
+            sb.Dispose();
+        }
+    }
+
     private SessionSettingsResult GetPostgreSqlSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText =
-                    $"SELECT name, setting FROM pg_settings WHERE name IN ('{StandardConformingStringsSetting}', '{ClientMinMessagesSetting}')";
-
-                using var reader = cmd.ExecuteReader();
-                var currentSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-                while (reader.Read())
-                {
-                    var settingName = reader.GetString(0);
-                    var settingValue = reader.GetString(1);
-                    currentSettings[settingName] = settingValue;
-                }
-
-                var built = BuildSessionSettingsScript(
-                    ExpectedSessionSettings,
-                    currentSettings,
-                    static (name, value) => $"SET {name} = {value};");
-
-                return new SessionSettingsResult(built, currentSettings, false);
+                // Always set the full baseline to ensure deterministic state in pooled connections.
+                return new SessionSettingsResult(DefaultSessionSettings, ExpectedSessionSettings, false);
             },
             () => new SessionSettingsResult(
                 DefaultSessionSettings,
@@ -302,43 +308,7 @@ internal class PostgreSqlDialect : SqlDialect
                     [ClientMinMessagesSetting] = "unknown"
                 },
                 true),
-            "Failed to check PostgreSQL session settings, applying default settings");
-    }
-
-    private (string settingsToApply, Dictionary<string, string> currentSettings) CheckPostgreSqlSettingsWithDetails(
-        IDbConnection connection)
-    {
-        var result = GetPostgreSqlSessionSettings(connection);
-        var snapshot = new Dictionary<string, string>(result.Snapshot, StringComparer.OrdinalIgnoreCase);
-        return (result.Settings, snapshot);
-    }
-
-    private string CheckPostgreSqlSettings(IDbConnection connection)
-    {
-        if (_sessionSettings != null)
-        {
-            return _sessionSettings;
-        }
-
-        var (settingsToApply, currentSettings) = CheckPostgreSqlSettingsWithDetails(connection);
-        _sessionSettings = settingsToApply;
-
-        var snapshot = string.Join(", ", currentSettings.Select(kv => $"{kv.Key}={kv.Value}"));
-        if (!string.IsNullOrWhiteSpace(_sessionSettings))
-        {
-            Logger.LogInformation(
-                "PostgreSQL session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
-                snapshot,
-                _sessionSettings);
-        }
-        else
-        {
-            Logger.LogInformation(
-                "PostgreSQL session settings detected: {CurrentSettings}. No changes required (already compliant)",
-                snapshot);
-        }
-
-        return _sessionSettings;
+            "Failed to configure PostgreSQL session settings");
     }
 
     public override string GetBaseSessionSettings()
@@ -351,12 +321,12 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override string GetReadOnlySessionSettings()
     {
-        return $"SET {ReadOnlyTransactionSetting} = on";
+        return $"SET {ReadOnlyTransactionSetting} = on;";
     }
 
     internal override string? GetReadOnlyTransactionResetSql()
     {
-        return $"SET {ReadOnlyTransactionSetting} = off";
+        return $"SET {ReadOnlyTransactionSetting} = off;";
     }
 
     public override string? GetReadOnlyConnectionParameter()

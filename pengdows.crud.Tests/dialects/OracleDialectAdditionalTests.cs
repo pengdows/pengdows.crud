@@ -83,14 +83,15 @@ public class OracleDialectAdditionalTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_AppendsReadOnly()
+    public void GetConnectionSessionSettings_DoesNotAppendReadOnly_ForOracle()
     {
         var d = CreateDialect();
         var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle",
             new fakeDbFactory(SupportedDatabase.Oracle));
 
         var ro = d.GetConnectionSessionSettings(ctx, true);
-        Assert.Contains("READ ONLY", ro);
+        // Oracle has no session-level read-only mode
+        Assert.DoesNotContain("READ ONLY", ro);
 
         var rw = d.GetConnectionSessionSettings(ctx, false);
         Assert.DoesNotContain("READ ONLY", rw);

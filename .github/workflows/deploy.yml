@@ -3,8 +3,20 @@ name: Build, Test & Publish NuGet Package
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'skills/**'
+      - 'LICENSE'
+      - 'logo.png'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'skills/**'
+      - 'LICENSE'
+      - 'logo.png'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +29,8 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
 
     steps:
       - name: Checkout code
@@ -101,6 +115,7 @@ jobs:
               -classfilters:"-*Test*;-*Mock*"
 
       - name: Enforce pengdows.crud coverage floor and ratchet from Cobertura XML
+        id: coverage
         run: |
           set -euo pipefail
 
@@ -151,6 +166,8 @@ jobs:
           else
             echo "✅ Coverage $coverage_percent% meets threshold"
           fi
+
+          echo "coverage=$coverage_percent" >> "$GITHUB_OUTPUT"
 
       - name: Enforce no TransactionScope usage
         run: |
@@ -305,13 +322,13 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
       - name: Tag the release
-        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        if: steps.nuget_check.outputs.skip != 'true'
         run: |
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
-        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        if: steps.nuget_check.outputs.skip != 'true'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -367,13 +384,24 @@ jobs:
             exit 1
           fi
 
+          # Ratchet coverage baseline if this deploy improved coverage.
+          new_coverage="${{ needs.build-and-test.outputs.coverage }}"
+          current_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.txt)
+          is_higher=$(awk "BEGIN { print ($new_coverage > $current_baseline) ? 1 : 0 }")
+          if [[ "$is_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_coverage" > .github/coverage-baseline.txt
+            echo "📈 Coverage baseline ratcheted: ${current_baseline}% → ${new_coverage}%"
+          else
+            echo "ℹ️ Coverage baseline unchanged at ${current_baseline}%"
+          fi
+
       - name: Commit semver bump
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Directory.Build.props
+          git add Directory.Build.props .github/coverage-baseline.txt
           git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
 
       - name: Push semver bump commit

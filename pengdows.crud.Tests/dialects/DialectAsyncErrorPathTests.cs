@@ -31,10 +31,27 @@ public class DialectAsyncErrorPathTests
     }
 
     [Fact]
-    public void FirebirdDialect_CreateDbParameter_GuidType_ConvertsToString()
+    public void FirebirdDialect_CreateDbParameter_GuidType_DefaultsToBinary()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
+        var testGuid = Guid.NewGuid();
+
+        // Default GuidStorageMode is Binary for backward compatibility
+        var param = dialect.CreateDbParameter("test", DbType.Guid, testGuid);
+
+        Assert.Equal(DbType.Binary, param.DbType);
+        Assert.Equal(testGuid.ToByteArray(), param.Value);
+    }
+
+    [Fact]
+    public void FirebirdDialect_CreateDbParameter_GuidType_StringMode_ConvertsToString()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
+        var dialect = new FirebirdDialect(factory, NullLogger.Instance)
+        {
+            GuidStorageMode = FirebirdGuidStorageMode.String
+        };
         var testGuid = Guid.NewGuid();
 
         var param = dialect.CreateDbParameter("test", DbType.Guid, testGuid);

@@ -49,18 +49,31 @@ internal class MySqlDialect : SqlDialect
     private const string SqlModeSettingName = "sql_mode";
 
     private const string RequiredSqlModeFlags =
-        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE," +
-        "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
+        "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES,NO_BACKSLASH_ESCAPES";
 
-    private const string DefaultSqlMode = $"SET SESSION {SqlModeSettingName} = '{RequiredSqlModeFlags}';";
+    private const string LegacySqlModeFlags = "NO_ZERO_DATE,NO_ZERO_IN_DATE";
+
+    private const string DefaultSqlMode = $"SET SESSION {SqlModeSettingName} = '{RequiredSqlModeFlags},{LegacySqlModeFlags}';";
 
     // Alias kept for readability at call sites
-    private const string ExpectedSqlMode = RequiredSqlModeFlags;
+    private const string ExpectedSqlMode = $"{RequiredSqlModeFlags},{LegacySqlModeFlags}";
 
-    protected const string SetSessionTransactionReadOnlySql = "SET SESSION TRANSACTION READ ONLY;";
-    protected const string SetSessionTransactionReadWriteSql = "SET SESSION TRANSACTION READ WRITE;";
+    // Use session-persistent variables for read-only enforcement rather than 'SET TRANSACTION'
+    // which has "next transaction only" semantics in some variants.
+    //
+    // Minimum server version requirement:
+    //   MySQL:   5.7.20+ (transaction_read_only introduced as a session variable in 5.7.20)
+    //            8.0+    (fully supported and preferred)
+    //   MariaDB: 10.4+   (transaction_read_only system variable added in 10.4)
+    //
+    // If your deployment targets MySQL < 5.7.20 or MariaDB < 10.4, use
+    // 'SET SESSION TRANSACTION READ ONLY' instead (single-transaction semantics only).
+    protected const string SetSessionReadOnlySql = "SET SESSION transaction_read_only = 1;";
+    protected const string SetSessionReadWriteSql = "SET SESSION transaction_read_only = 0;";
 
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
+    private static readonly Version MySqlLegacyModeDeprecationThreshold = new(8, 0, 0);
+
     private const int MaxPreparedStatementCountErrorCode = 1461;
     private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
     private const string PreferredProviderWarning =
@@ -191,43 +204,38 @@ internal class MySqlDialect : SqlDialect
         return productInfo;
     }
 
+    public override string GetFinalSessionSettings(bool readOnly)
+    {
+        // 1 RTT / 1 Command Optimization: Combine sql_mode and session-persistent read-only intent.
+        var baseline = GetBaseSessionSettings();
+        var intent = readOnly ? SetSessionReadOnlySql : SetSessionReadWriteSql;
+
+        return baseline.TrimEnd(';') + "; " + intent;
+    }
+
     private SessionSettingsResult GetMySqlSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"SELECT @@{SqlModeSettingName}";
+                var version = ProductInfo.ParsedVersion;
+                var useLegacyModes = version == null || 
+                                     _flavor == SupportedDatabase.MariaDb || 
+                                     version < MySqlLegacyModeDeprecationThreshold;
+                
+                var flags = useLegacyModes 
+                    ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}" 
+                    : RequiredSqlModeFlags;
 
-                var currentSqlMode = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
-                var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                // Overwrite-only policy: Always set the full sql_mode to our standard baseline.
+                // This is safer than delta interrogation across a pooled connection lifetime.
+                var script = $"SET SESSION {SqlModeSettingName} = '{flags}';";
+                
+                return new SessionSettingsResult(script, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    [SqlModeSettingName] = currentSqlMode
-                };
-
-                // Surgical Delta: Only apply what is missing
-                var currentModes = currentSqlMode.Split(',')
-                    .Select(m => m.Trim())
-                    .Where(m => !string.IsNullOrEmpty(m))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                var expectedModes = ExpectedSqlMode.Split(',')
-                    .Select(m => m.Trim())
-                    .Where(m => !string.IsNullOrEmpty(m));
-
-                var missingModes = expectedModes.Where(m => !currentModes.Contains(m)).ToList();
-
-                if (missingModes.Count == 0)
-                {
-                    return new SessionSettingsResult(string.Empty, snapshot, false);
-                }
-
-                // Building the new mode: current + missing
-                var newMode = string.Join(",", currentModes.Concat(missingModes));
-                var script = $"SET SESSION {SqlModeSettingName} = '{newMode}';";
-
-                return new SessionSettingsResult(script, snapshot, false);
+                    [SqlModeSettingName] = flags
+                }, false);
             },
             () => new SessionSettingsResult(
                 DefaultSqlMode,
@@ -236,7 +244,40 @@ internal class MySqlDialect : SqlDialect
                     ["sql_mode"] = "unknown"
                 },
                 true),
-            "Failed to check MySQL session settings, applying default settings");
+            "Failed to configure MySQL session settings, applying default settings");
+    }
+
+    /// <summary>
+    /// Pass through — Snowflake.Data handles warehouse/role/schema in the connection string.
+    /// </summary>
+    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    {
+        if (!_isMySqlConnector || string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = Factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
+            builder.ConnectionString = connectionString;
+
+            // PERFORMANCE: Disable driver-level connection reset to avoid an extra RTT per lease.
+            // Since pengdows.crud enforces a session baseline on every lease, driver-level reset
+            // is redundant and expensive.
+            const string resetKey = "ConnectionReset";
+            if (!builder.ContainsKey(resetKey))
+            {
+                builder[resetKey] = false;
+                Logger.LogDebug("Injecting ConnectionReset=false for MySqlConnector to optimize lease performance (1 RTT strategy)");
+            }
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
     }
 
     private static bool IsMaxPreparedStatementLimit(Exception ex)
@@ -275,12 +316,12 @@ internal class MySqlDialect : SqlDialect
 
     public override string GetReadOnlySessionSettings()
     {
-        return SetSessionTransactionReadOnlySql;
+        return SetSessionReadOnlySql;
     }
 
     internal override string? GetReadOnlyTransactionResetSql()
     {
-        return SetSessionTransactionReadWriteSql;
+        return SetSessionReadWriteSql;
     }
 
     public override SqlStandardLevel DetermineStandardCompliance(Version? version)
@@ -319,13 +360,13 @@ internal class MySqlDialect : SqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        TryExecuteReadOnlySql(transaction, SetSessionTransactionReadOnlySql, "MySQL");
+        TryExecuteReadOnlySql(transaction, SetSessionReadOnlySql, "MySQL");
     }
 
     public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
-        return TryExecuteReadOnlySqlAsync(transaction, SetSessionTransactionReadOnlySql, "MySQL", cancellationToken);
+        return TryExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, "MySQL", cancellationToken);
     }
 
     // Connection pooling properties for MySQL (provider-aware)

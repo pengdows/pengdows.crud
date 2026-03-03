@@ -71,7 +71,7 @@ public class ReadOnlyTransactionResetTests
     // ── Oracle ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Oracle_ReadOnlyTransaction_Commit_ResetsSession()
+    public async Task Oracle_ReadOnlyTransaction_Commit_DoesNotNeedReset()
     {
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
@@ -91,12 +91,13 @@ public class ReadOnlyTransactionResetTests
         Assert.Contains(commands,
             c => c.Contains("READ ONLY", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Contains(commands,
+        // Oracle has no persistent session read-only mode to reset
+        Assert.DoesNotContain(commands,
             c => c.Contains("READ WRITE", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task Oracle_ReadOnlyTransaction_Rollback_ResetsSession()
+    public async Task Oracle_ReadOnlyTransaction_Rollback_DoesNotNeedReset()
     {
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
@@ -113,7 +114,8 @@ public class ReadOnlyTransactionResetTests
 
         var commands = CollectCommands(factory);
 
-        Assert.Contains(commands,
+        // Oracle has no persistent session read-only mode to reset
+        Assert.DoesNotContain(commands,
             c => c.Contains("READ WRITE", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -138,10 +140,10 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ ONLY", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 1", StringComparison.OrdinalIgnoreCase));
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ WRITE", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -163,7 +165,7 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ WRITE", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 
     // ── MariaDB ─────────────────────────────────────────────────────────────
@@ -187,10 +189,10 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ ONLY", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 1", StringComparison.OrdinalIgnoreCase));
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ WRITE", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -212,6 +214,6 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("TRANSACTION READ WRITE", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 }

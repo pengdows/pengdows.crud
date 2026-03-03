@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Data;
 using System.Data.Common;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -90,7 +91,7 @@ public class DatabaseContextConnectionTests
     }
 
     [Fact]
-    public void SessionSettings_SkippedWhenAlreadyApplied()
+    public void SessionSettings_AppliedOnEveryCall()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
@@ -107,13 +108,13 @@ public class DatabaseContextConnectionTests
         context.ExecuteSessionSettings(connection, false);
         Assert.Single(connection.ExecutedStatements);
 
-        // Second call should be skipped because the context remembers this PHYSICAL connection object.
-        // Even if we clear the list, it won't re-execute.
+        // Second call should NOT be skipped because we always apply baseline settings on every lease
+        // to ensure deterministic state even in a shared pool.
         connection.ExecutedStatements.Clear();
         context.ExecuteSessionSettings(connection, false);
-        Assert.Empty(connection.ExecutedStatements);
+        Assert.Single(connection.ExecutedStatements);
         
-        // A DIFFERENT physical connection should still get initialized
+        // A DIFFERENT physical connection should also get initialized
         var connection2 = new CapturingConnection();
         context.ExecuteSessionSettings(connection2, false);
         Assert.Single(connection2.ExecutedStatements);
@@ -159,6 +160,41 @@ public class DatabaseContextConnectionTests
         using var tracked = new TrackedConnection(connection);
 
         context.ExecuteSessionSettings(tracked, false);
+
+        Assert.False(tracked.LocalState.SessionSettingsApplied);
+    }
+
+    /// <summary>
+    /// Async path counterpart to <see cref="ExecuteSessionSettings_Failure_DoesNotMarkApplied"/>.
+    /// Verifies that when the session-settings command fails during an async connection open
+    /// (the onFirstOpen handler is triggered by <see cref="TrackedConnection.OpenAsync"/>),
+    /// the connection's <see cref="IConnectionLocalState.SessionSettingsApplied"/> remains false.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteSessionSettings_Failure_Async_DoesNotMarkApplied()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new fakeDbConnection();
+        ConnectionFailureHelper.ConfigureConnectionFailure(connection, ConnectionFailureMode.FailOnCommand);
+
+        // Wire up the onFirstOpen callback to call ExecuteSessionSettings — mirrors the production
+        // path in FactoryCreateConnection where the firstOpenHandler delegates to ExecuteSessionSettings.
+        TrackedConnection? tracked = null;
+        tracked = new TrackedConnection(
+            connection,
+            onFirstOpen: conn => context.ExecuteSessionSettings(tracked!, false));
+
+        // OpenAsync triggers TriggerFirstOpen → onFirstOpen → ExecuteSessionSettings (sync, but
+        // reached via the async open path). The command failure is swallowed; applied = false.
+        await tracked.OpenAsync();
 
         Assert.False(tracked.LocalState.SessionSettingsApplied);
     }

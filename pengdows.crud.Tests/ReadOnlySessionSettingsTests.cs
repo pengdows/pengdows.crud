@@ -12,10 +12,10 @@ public class ReadOnlySessionSettingsTests
 {
     public static TheoryData<SupportedDatabase, string> DialectData => new()
     {
-        { SupportedDatabase.PostgreSql, "SET default_transaction_read_only = on" },
-        { SupportedDatabase.MySql, "SET SESSION TRANSACTION READ ONLY;" },
-        { SupportedDatabase.MariaDb, "SET SESSION TRANSACTION READ ONLY;" },
-        { SupportedDatabase.Oracle, "ALTER SESSION SET READ ONLY;" },
+        { SupportedDatabase.PostgreSql, "SET default_transaction_read_only = on;" },
+        { SupportedDatabase.MySql, "SET SESSION transaction_read_only = 1;" },
+        { SupportedDatabase.MariaDb, "SET SESSION transaction_read_only = 1;" },
+        { SupportedDatabase.Oracle, "" },
         { SupportedDatabase.Sqlite, "PRAGMA query_only = ON;" },
         { SupportedDatabase.DuckDB, "SET access_mode = 'read_only';" }
     };
@@ -35,6 +35,7 @@ public class ReadOnlySessionSettingsTests
     [MemberData(nameof(DialectData))]
     public void GetConnectionSessionSettings_NotReadOnly_DoesNotContainSnippet(SupportedDatabase db, string expected)
     {
+        if (string.IsNullOrEmpty(expected)) return;
         var factory = new fakeDbFactory(db);
         using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={db}", factory);
         var dialect = CreateDialect(db, factory);
@@ -60,6 +61,7 @@ public class ReadOnlySessionSettingsTests
     [MemberData(nameof(DialectData))]
     public void SessionSettingsPreamble_ReadWriteContext_DoesNotContainSnippet(SupportedDatabase db, string expected)
     {
+        if (string.IsNullOrEmpty(expected)) return;
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={db}",

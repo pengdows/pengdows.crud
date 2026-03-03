@@ -26,10 +26,10 @@ You may also optionally pass a pre-existing query string.
 
 ### Query
 
-A `StringBuilder` used to build the SQL command text.
+An `ISqlQueryBuilder` used to build the SQL command text. It is a pooled, high-performance builder that replaces `StringBuilder` with zero-allocation `ReadOnlySpan<char>` appends.
 
-- This allows in-place construction of SQL fragments
-- SQL can be inspected or logged before execution
+- Supports the same `Append`/`AppendLine`/`AppendFormat`/`Replace` API that `StringBuilder` does
+- SQL can be inspected or logged before execution via `.ToString()`
 
 ### AddParameter / AddParameters / AddParameterWithValue
 
@@ -62,8 +62,9 @@ All execution methods return `ValueTask` (not `Task`) for reduced allocations. A
 |--------|---------|---------|
 | `ExecuteReaderAsync(CommandType)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
 | `ExecuteNonQueryAsync(CommandType)` | `ValueTask<int>` | Returns affected row count |
-| `ExecuteScalarAsync<T>(CommandType)` | `ValueTask<T?>` | Returns single coerced value |
-| `ExecuteScalarWriteAsync<T>(CommandType)` | `ValueTask<T?>` | Extension: scalar on write connection (for INSERT...RETURNING) |
+| `ExecuteScalarRequiredAsync<T>(CommandType)` | `ValueTask<T>` | Returns value — throws if no rows or null |
+| `ExecuteScalarOrNullAsync<T>(CommandType)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
+| `TryExecuteScalarAsync<T>(CommandType)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
 
 ## Clone for Reuse
 

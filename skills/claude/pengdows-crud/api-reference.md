@@ -60,8 +60,8 @@ IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken ct
 
 ```csharp
 // Create
-Task<bool> CreateAsync(TEntity entity, IDatabaseContext context);
-Task<bool> CreateAsync(TEntity entity, IDatabaseContext context, CancellationToken ct);
+Task<bool> CreateAsync(TEntity entity);
+Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
 
 // Retrieve single
 Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
@@ -109,7 +109,7 @@ TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ### Query Building
 
 ```csharp
-StringBuilder Query { get; }              // SQL text builder
+ISqlQueryBuilder Query { get; }           // SQL text builder (pooled, zero-alloc appends)
 bool HasWhereAppended { get; set; }       // Whether WHERE exists
 int ParameterCount { get; }               // Current parameter count
 string QuotePrefix { get; }               // Dialect quote prefix
@@ -154,17 +154,19 @@ T GetParameterValue<T>(string name);
 ValueTask<int> ExecuteNonQueryAsync(CommandType type = CommandType.Text);
 ValueTask<int> ExecuteNonQueryAsync(CommandType type, CancellationToken ct);
 
-ValueTask<T?> ExecuteScalarAsync<T>(CommandType type = CommandType.Text);
-ValueTask<T?> ExecuteScalarAsync<T>(CommandType type, CancellationToken ct);
+// Scalar — three variants depending on how you want to handle no-rows / null:
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text);   // throws if no rows or null
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type, CancellationToken ct);
+ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type = CommandType.Text);      // null if no rows or DBNull
+ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type, CancellationToken ct);
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type = CommandType.Text);         // unambiguous: None/Null/Value
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type, CancellationToken ct);
 
 ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type = CommandType.Text);
 ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type, CancellationToken ct);
 ```
 
-**Extension method (on SqlContainer):**
-```csharp
-ValueTask<T?> ExecuteScalarWriteAsync<T>(CommandType type = CommandType.Text, CancellationToken ct = default);
-```
+All execution methods also have `ExecutionType` overloads for explicit read/write pool routing.
 
 ### Clone and Lifecycle
 
@@ -187,7 +189,7 @@ string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool
 
 ```csharp
 void CloseAndDisposeConnection(ITrackedConnection? conn);
-Task CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
+ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 ```
 
 Note: Direct connection access is internal-only; use `ISqlContainer` for execution.
@@ -215,15 +217,14 @@ ISqlContainer CreateSqlContainer(string? query = null);
 ### Properties
 
 ```csharp
-ISqlDialect Dialect { get; }          // SQL dialect in use for this context
-TimeSpan? ModeLockTimeout { get; }    // Mode/transaction lock timeout; null = wait indefinitely
+ISqlDialect Dialect { get; }                   // SQL dialect in use for this context
+TimeSpan? ModeLockTimeout { get; }             // Mode/transaction lock timeout; null = wait indefinitely
 DbMode ConnectionMode { get; }
-ITypeMapRegistry TypeMapRegistry { get; }
-IDataSourceInfo DataSourceInfo { get; }
+IDataSourceInformation DataSourceInfo { get; }
 SupportedDatabase Product { get; }
-int NumberOfOpenConnections { get; }
-int PeakOpenConnections { get; }
-int? ReaderPlanCacheSize { get; }     // Plan cache size for reader connections
+long NumberOfOpenConnections { get; }
+long PeakOpenConnections { get; }
+int? ReaderPlanCacheSize { get; }              // Plan cache size for reader connections
 ```
 
 ## ITransactionContext

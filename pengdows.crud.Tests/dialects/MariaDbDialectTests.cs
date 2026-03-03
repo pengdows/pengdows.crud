@@ -154,7 +154,7 @@ public class MariaDbDialectTests
 
         var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
         transaction
-            .Setup(t => t.CreateSqlContainer("SET SESSION TRANSACTION READ ONLY;"))
+            .Setup(t => t.CreateSqlContainer("SET SESSION transaction_read_only = 1;"))
             .Returns(container.Object)
             .Verifiable();
 

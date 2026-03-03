@@ -201,9 +201,11 @@ await foreach (var order in LoadStreamAsync(sc))
 All execution methods return `ValueTask` (not `Task`) for reduced allocations:
 
 ```csharp
-ValueTask<int>            ExecuteNonQueryAsync(commandType);  // Row count
-ValueTask<T?>             ExecuteScalarAsync<T>(commandType); // Single value
-ValueTask<ITrackedReader> ExecuteReaderAsync(commandType);    // Data reader
+ValueTask<int>             ExecuteNonQueryAsync(commandType);          // Row count
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(commandType); // Single value — throws if no rows or null
+ValueTask<T?>              ExecuteScalarOrNullAsync<T>(commandType);   // Single value — null if no rows or DBNull
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(commandType);      // Unambiguous: None/Null/Value
+ValueTask<ITrackedReader>  ExecuteReaderAsync(commandType);            // Data reader
 ```
 
 All have `CancellationToken` overloads.

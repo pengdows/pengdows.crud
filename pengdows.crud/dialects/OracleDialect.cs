@@ -70,6 +70,10 @@ internal class OracleDialect : SqlDialect
     // Oracle prefers statement cache and array binding over manual prepare
     public override bool PrepareStatements => false;
 
+    // Oracle stores GUIDs as VARCHAR2(36) — handled here via GuidFormat rather than
+    // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -249,8 +253,8 @@ internal class OracleDialect : SqlDialect
     }
 
     private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-    private const string ReadOnlySessionSetting = "ALTER SESSION SET READ ONLY;";
-    private const string ReadWriteSessionSetting = "ALTER SESSION SET READ WRITE;";
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
+    private const string SetTransactionReadWriteSql = "SET TRANSACTION READ WRITE;";
 
     public override string GetBaseSessionSettings()
     {
@@ -259,12 +263,14 @@ internal class OracleDialect : SqlDialect
 
     public override string GetReadOnlySessionSettings()
     {
-        return ReadOnlySessionSetting;
+        // Oracle has no true persistent session-level read-only mode.
+        // Enforcement must happen at transaction start.
+        return string.Empty;
     }
 
     internal override string? GetReadOnlyTransactionResetSql()
     {
-        return ReadWriteSessionSetting;
+        return string.Empty;
     }
 
     internal override void ApplyConnectionSettingsCore(
@@ -321,13 +327,13 @@ internal class OracleDialect : SqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "Oracle");
+        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "Oracle");
     }
 
     public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
-        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "Oracle", cancellationToken);
+        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "Oracle", cancellationToken);
     }
 
     // Connection pooling properties for Oracle

@@ -64,6 +64,17 @@ internal class SnowflakeDialect : SqlDialect
 
     public override bool PrepareStatements => true;
 
+    // Snowflake stored procedures use CALL proc_name(args) syntax.
+    // ProcWrappingStyle.None would map to UnsupportedProcWrappingStrategy and throw at runtime.
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
+
+    // Snowflake stored procedures support many parameters; the base default of 0 is incorrect.
+    public override int MaxOutputParameters => 65535;
+
+    // Snowflake stores GUIDs as VARCHAR(36) — handled here via GuidFormat rather than
+    // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     public override bool SupportsNamespaces => true;
 
     // Snowflake optimized batching
@@ -241,79 +252,78 @@ internal class SnowflakeDialect : SqlDialect
         return productInfo;
     }
 
+    public override string GetFinalSessionSettings(bool readOnly)
+    {
+        // 1 RTT / 1 Command Optimization: Consolidate all session assignments (baseline + intent)
+        // into a single comma-separated ALTER SESSION SET command.
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
+        {
+            sb.Append("ALTER SESSION SET ");
+            // CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ: the Snowflake.Data driver defaults
+            // to TIMESTAMP_LTZ for DateTime bind variables; since the dialect normalises
+            // DateTimeOffset → UTC DateTime for NTZ columns we must override this to prevent
+            // the driver from attaching timezone metadata at bind time.
+            //
+            // LOCK_TIMEOUT = 30000 s (≈8.3 h): intentionally shorter than the Snowflake default
+            // of 43200 s (12 h); long-held locks in a data-access layer indicate a bug.
+            sb.Append("TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000");
+
+            if (readOnly)
+            {
+                sb.Append(", TRANSACTION_READ_ONLY = TRUE;");
+            }
+            else
+            {
+                sb.Append(", TRANSACTION_READ_ONLY = FALSE;");
+            }
+
+            return sb.ToString();
+        }
+        finally
+        {
+            sb.Dispose();
+        }
+    }
+
     private SessionSettingsResult GetSnowflakeSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SHOW PARAMETERS IN SESSION";
+                // Snowflake ALTER SESSION SET allows comma-separated assignments in a single command.
+                // This is the optimal "Always SET" pattern for Snowflake.
+                var script = "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
 
-                var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                using (var reader = cmd.ExecuteReader())
+                return new SessionSettingsResult(script, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    while (reader.Read())
-                    {
-                        var key = reader["key"]?.ToString();
-                        var val = reader["value"]?.ToString();
-                        if (key != null && val != null)
-                        {
-                            snapshot[key] = val;
-                        }
-                    }
-                }
-
-                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-                try
-                {
-                    if (!snapshot.TryGetValue("TIMEZONE", out var tz) ||
-                        !string.Equals(tz, "UTC", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sb.Append("SET TIMEZONE = 'UTC';");
-                    }
-
-                    if (!snapshot.TryGetValue("TIMESTAMP_OUTPUT_FORMAT", out var fmt) ||
-                        !string.Equals(fmt, "YYYY-MM-DD HH24:MI:SS.FF3", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (sb.Length > 0) sb.AppendLine();
-                        sb.Append("SET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';");
-                    }
-
-                    if (!snapshot.TryGetValue("LOCK_TIMEOUT", out var lt) ||
-                        !string.Equals(lt, "30000", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (sb.Length > 0) sb.AppendLine();
-                        sb.Append("SET LOCK_TIMEOUT = 30000;");
-                    }
-
-                    return new SessionSettingsResult(sb.ToString(), snapshot, false);
-                }
-                finally
-                {
-                    sb.Dispose();
-                }
+                    ["TIMEZONE"] = "UTC",
+                    ["TIMESTAMP_OUTPUT_FORMAT"] = "YYYY-MM-DD HH24:MI:SS.FF3",
+                    ["CLIENT_TIMESTAMP_TYPE_MAPPING"] = "TIMESTAMP_NTZ",
+                    ["LOCK_TIMEOUT"] = "30000"
+                }, false);
             },
             () => new SessionSettingsResult(
-                "SET TIMEZONE = 'UTC';\nSET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\nSET LOCK_TIMEOUT = 30000;",
+                "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;",
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 true),
-            "Failed to check Snowflake session settings");
+            "Failed to configure Snowflake session settings");
     }
 
     public override string GetBaseSessionSettings()
     {
-        return _sessionSettings ?? "SET TIMEZONE = 'UTC';\nSET TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3';\nSET LOCK_TIMEOUT = 30000;";
+        return _sessionSettings ?? "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
     }
 
     public override string GetReadOnlySessionSettings()
     {
-        return "SET TRANSACTION READ ONLY;";
+        return "ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE;";
     }
 
     internal override string? GetReadOnlyTransactionResetSql()
     {
-        return "SET TRANSACTION READ WRITE;";
+        return "ALTER SESSION SET TRANSACTION_READ_ONLY = FALSE;";
     }
 
     // Connection pooling properties for Snowflake

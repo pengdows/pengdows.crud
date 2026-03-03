@@ -341,7 +341,7 @@ public class PostgreSqlDialectTests
 
         Assert.NotEmpty(settings);
         Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("SET client_min_messages = warning", settings);
+        Assert.Contains("client_min_messages = warning", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 
@@ -354,7 +354,7 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, true);
 
         Assert.NotEmpty(settings);
-        Assert.Contains("SET default_transaction_read_only = on", settings);
+        Assert.Contains("SET default_transaction_read_only = on;", settings);
         Assert.Contains("SET standard_conforming_strings = on", settings);
     }
 
@@ -570,7 +570,7 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetBaseSessionSettings();
 
         Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("SET client_min_messages = warning", settings);
+        Assert.Contains("client_min_messages = warning", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 
@@ -579,7 +579,7 @@ public class PostgreSqlDialectTests
     {
         var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET default_transaction_read_only = on", settings);
+        Assert.Equal("SET default_transaction_read_only = on;", settings);
     }
 
     [Fact]
@@ -660,89 +660,6 @@ public class PostgreSqlDialectTests
         Assert.Equal(32767, _dialect.MaxParameterLimit);
         Assert.Equal(100, _dialect.MaxOutputParameters);
         Assert.Equal(63, _dialect.ParameterNameMaxLength);
-    }
-
-    [Fact]
-    public void CheckPostgreSqlSettingsWithDetails_WhenSettingsMatch_ReturnsEmptyScript()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-        var (connectionMock, commandMock) = CreateSettingsConnection(
-            ("standard_conforming_strings", "on"),
-            ("client_min_messages", "warning"));
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettingsWithDetails",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var (settingsToApply, currentSettings) = ((string Settings, Dictionary<string, string> Current))method.Invoke(
-            dialect,
-            new object[] { connectionMock.Object })!;
-
-        Assert.Equal(string.Empty, settingsToApply);
-        Assert.Equal("on", currentSettings["standard_conforming_strings"]);
-        Assert.Equal("warning", currentSettings["client_min_messages"]);
-
-        commandMock.Verify(c => c.ExecuteReader(), Times.Once);
-        commandMock.Verify(c => c.Dispose(), Times.Once);
-        connectionMock.Verify(c => c.CreateCommand(), Times.Once);
-    }
-
-    [Fact]
-    public void CheckPostgreSqlSettingsWithDetails_WhenCommandFails_ReturnsFallbackScript()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-
-        var commandMock = new Mock<IDbCommand>(MockBehavior.Strict);
-        commandMock.SetupProperty(c => c.CommandText);
-        commandMock.Setup(c => c.ExecuteReader()).Throws(new InvalidOperationException("boom"));
-        commandMock.Setup(c => c.Dispose());
-
-        var connectionMock = new Mock<IDbConnection>(MockBehavior.Strict);
-        connectionMock.Setup(c => c.CreateCommand()).Returns(commandMock.Object);
-        connectionMock.Setup(c => c.Dispose());
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettingsWithDetails",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var (settingsToApply, currentSettings) = ((string Settings, Dictionary<string, string> Current))method.Invoke(
-            dialect,
-            new object[] { connectionMock.Object })!;
-
-        Assert.Contains("SET standard_conforming_strings = on", settingsToApply);
-        Assert.Contains("SET client_min_messages = warning", settingsToApply);
-        Assert.Equal("unknown", currentSettings["standard_conforming_strings"]);
-        Assert.Equal("unknown", currentSettings["client_min_messages"]);
-
-        commandMock.Verify(c => c.Dispose(), Times.Once);
-        connectionMock.Verify(c => c.CreateCommand(), Times.Once);
-    }
-
-    [Fact]
-    public void CheckPostgreSqlSettings_CachesComputedSessionSettings()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-        var (connectionMock, commandMock) = CreateSettingsConnection(
-            ("standard_conforming_strings", "off"),
-            ("client_min_messages", "warning"));
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var firstResult = (string)method.Invoke(dialect, new object[] { connectionMock.Object })!;
-
-        Assert.Contains("SET standard_conforming_strings = on", firstResult);
-
-        commandMock.Verify(c => c.ExecuteReader(), Times.Once);
-
-        var secondConnection = new Mock<IDbConnection>(MockBehavior.Strict);
-        secondConnection.Setup(c => c.Dispose());
-
-        var secondResult = (string)method.Invoke(dialect, new object[] { secondConnection.Object })!;
-
-        Assert.Equal(firstResult, secondResult);
-        secondConnection.VerifyNoOtherCalls();
     }
 
     [Fact]

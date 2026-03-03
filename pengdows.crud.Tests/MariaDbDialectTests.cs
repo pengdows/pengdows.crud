@@ -475,7 +475,7 @@ public class MariaDbDialectTests
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);
         Assert.Contains("ANSI_QUOTES", settings);
         Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY", settings);
+        Assert.Contains("SET SESSION transaction_read_only = 1", settings);
     }
 
     [Fact]
@@ -489,7 +489,7 @@ public class MariaDbDialectTests
         Assert.Contains("ONLY_FULL_GROUP_BY", settings);
         Assert.Contains("ANSI_QUOTES", settings);
         Assert.Contains("NO_BACKSLASH_ESCAPES", settings);
-        Assert.DoesNotContain("SET SESSION TRANSACTION READ ONLY", settings);
+        Assert.DoesNotContain("SET SESSION transaction_read_only = 1", settings);
     }
 
     [Fact]

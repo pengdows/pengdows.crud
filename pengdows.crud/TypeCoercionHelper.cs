@@ -366,6 +366,11 @@ public static class TypeCoercionHelper
 
         if (!string.IsNullOrEmpty(stringValue))
         {
+            if (ColumnInfo.TryParseEnumLiteral(enumType, stringValue, out var literalResult))
+            {
+                return literalResult!;
+            }
+
             if (Enum.TryParse(enumType, stringValue, true, out var parsed))
             {
                 return parsed!;

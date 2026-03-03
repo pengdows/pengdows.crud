@@ -248,11 +248,27 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void CreateDbParameter_Should_Convert_Guid_To_String()
+    public void CreateDbParameter_Guid_DefaultsToBinary()
     {
         var guidValue = Guid.NewGuid();
 
+        // Default GuidStorageMode is Binary (backward-compatible)
         var parameter = _dialect.CreateDbParameter("test", DbType.Guid, guidValue);
+
+        Assert.Equal(DbType.Binary, parameter.DbType);
+        Assert.Equal(guidValue.ToByteArray(), parameter.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_Guid_StringMode_ConvertsToString()
+    {
+        var dialectWithStringMode = new FirebirdDialect(_factory, _logger)
+        {
+            GuidStorageMode = FirebirdGuidStorageMode.String
+        };
+        var guidValue = Guid.NewGuid();
+
+        var parameter = dialectWithStringMode.CreateDbParameter("test", DbType.Guid, guidValue);
 
         Assert.Equal(DbType.String, parameter.DbType);
         Assert.Equal(guidValue.ToString("D"), parameter.Value);

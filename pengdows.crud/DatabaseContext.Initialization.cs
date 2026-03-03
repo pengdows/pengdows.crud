@@ -238,6 +238,13 @@ public partial class DatabaseContext
 
             _sessionSettingsDetectionCompleted = true;
 
+            // PRE-COMPUTE SESSION SETTINGS: Compute the "ready-to-go" session strings once
+            // per context. GetFinalSessionSettings(bool) ensures that each dialect
+            // returns exactly ONE optimized string (combining baseline + intent)
+            // to ensure 1 RTT and 1 execution on the server on the hot path.
+            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false);
+            _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true);
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
             if (Product == SupportedDatabase.DuckDB)

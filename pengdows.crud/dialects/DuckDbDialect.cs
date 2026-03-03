@@ -65,6 +65,9 @@ internal class DuckDbDialect : SqlDialect
     // DuckDB supports prepare for modest performance gains
     public override bool PrepareStatements => true;
 
+    // DuckDB stores GUIDs as VARCHAR UUID strings (no native UUID column type in older versions).
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
     public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
@@ -146,6 +149,11 @@ internal class DuckDbDialect : SqlDialect
     }
 
     private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
+
+    // SET access_mode = 'read_only' / 'read_write' is available in DuckDB 0.3.0+.
+    // The old PRAGMA read_only = 1 syntax was deprecated and removed.
+    // Minimum supported DuckDB version for this library: 0.8.0+
+    // (pengdows.crud CI testbed uses DuckDB 1.x; see testbed project for pinned version).
     private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
     private const string ReadWriteSessionSetting = "SET access_mode = 'read_write';";
 
@@ -328,15 +336,7 @@ internal class DuckDbDialect : SqlDialect
         var parameter = base.CreateDbParameter(name, type, value);
 
         // DuckDB specific parameter handling
-        if (type == DbType.Guid && value is Guid guidValue)
-        {
-            // DuckDB handles GUIDs as strings in UUID format
-            parameter.DbType = DbType.String;
-            // Use string.Create with Guid.TryFormat to avoid allocations
-            parameter.Value =
-                string.Create(36, guidValue, static (span, guid) => { guid.TryFormat(span, out _, "D"); });
-        }
-        else if (type == DbType.Boolean && value is bool boolValue)
+        if (type == DbType.Boolean && value is bool boolValue)
         {
             // DuckDB has native boolean support
             parameter.DbType = DbType.Boolean;

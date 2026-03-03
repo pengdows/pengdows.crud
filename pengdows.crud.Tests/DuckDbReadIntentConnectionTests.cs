@@ -97,7 +97,7 @@ public sealed class DuckDbReadIntentConnectionTests
 
         Assert.DoesNotContain(allConnectionStrings,
             cs => cs.Contains("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(allCommands,
-            cmd => cmd.Contains("access_mode", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(allCommands,
+            cmd => cmd.Contains("access_mode = 'read_write'", StringComparison.OrdinalIgnoreCase));
     }
 }

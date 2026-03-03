@@ -12,6 +12,23 @@ pengdows.crud supports the following databases with tested ADO.NET providers:
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
+## Minimum Server Versions
+
+| Database | Minimum Version | Notes |
+|----------|----------------|-------|
+| SQL Server | 2014 (12.x) | Required for `JSON_VALUE` if used; RCSI recommended |
+| PostgreSQL | 10 | Required for logical replication, `GENERATED ALWAYS AS IDENTITY` |
+| Oracle | 12c (12.1) | Required for identity columns, JSON support requires 12.2+ |
+| MySQL | 5.7.20 | `transaction_read_only` session variable required for read-only enforcement |
+| MariaDB | 10.4 | `transaction_read_only` session variable required for read-only enforcement |
+| SQLite | 3.35 | Required for `RETURNING` clause support |
+| Firebird | 2.5 | Minimum for MERGE, UTF-8 session settings; 3.0+ for window functions |
+| DuckDB | 0.8.0 | `SET access_mode` supported since 0.3.0; CI testbed pins to 1.x |
+
+> **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
+> MySQL 5.7.20+ or MariaDB 10.4+. Earlier versions only support `SET SESSION TRANSACTION READ ONLY`
+> which applies to the next transaction only, not the session persistently.
+
 ## Default Pool Sizes (Provider vs Practical)
 
 | SupportedDatabase | Default Max Pool Size (provider) | Practical / Recommended Max Pool Size | Key Practical Limits & Advice |
@@ -23,3 +40,23 @@ Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation
 | Sqlite (Microsoft.Data.Sqlite) | Effectively unlimited (pooling enabled by default since v6, no hard max) | 1-20 (or unlimited for in-memory) | Single-writer lock means >1-4 concurrent writers kills perf. Practical: keep pool small (5-20) or disable pooling for high concurrency. In-memory/shared can handle more, but still file-lock limited on disk. |
 | DuckDb (.NET DuckDB) | Effectively unlimited (no hard pool limit in most impls) | 1-8 (or up to threads count) | Embedded: connection creation is cheap. Practical: single connection often best; multiple only if parallelizing queries. Limit to CPU cores or threads setting. No real pool exhaustion; bottleneck is CPU/RAM for queries, not connections. |
 | Sql92 fallback / unknown | 100 | 50-100 | Conservative defaults for generic relational DBs. |
+
+---
+
+## Read-Only Enforcement Matrix
+
+pengdows.crud enforces read-only intent at multiple levels where supported by the database engine and provider.
+
+| Database | Connection String | Session SQL | Dual Enforcement | Enforcement Strategy |
+| :--- | :---: | :---: | :---: | :--- |
+| **PostgreSQL** | Yes | Yes | **Yes** | `Options='-c default_transaction_read_only=on'` + `SET ...` |
+| **SQLite** | Yes | Yes | **Yes** | `Mode=ReadOnly` + `PRAGMA query_only = ON` |
+| **DuckDB** | Yes | Yes | **Yes** | `access_mode=READ_ONLY` + `SET access_mode = 'read_only'` |
+| **SQL Server** | Yes | No | No | `ApplicationIntent=ReadOnly` (Driver-managed) |
+| **MySQL / MariaDB** | No | Yes | No | `SET SESSION transaction_read_only = 1` (MySQL 5.7.20+ / MariaDB 10.4+) |
+| **Snowflake** | No | Yes | No | `ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE` |
+| **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` |
+| **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
+
+> **Dual Enforcement:** For PostgreSQL, SQLite, and DuckDB, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool.
+

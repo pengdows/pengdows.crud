@@ -20,6 +20,24 @@ public class TestProvider : IAsyncTestProvider
     protected readonly IDatabaseContext _context;
     protected readonly TableGateway<TestTable, long> _helper;
 
+    private int _checksPassed;
+    private int _checksSkipped;
+
+    public int ChecksPassed => _checksPassed;
+    public int ChecksSkipped => _checksSkipped;
+
+    protected void CheckOk(string message)
+    {
+        Console.WriteLine(message);
+        _checksPassed++;
+    }
+
+    protected void CheckSkip(string message)
+    {
+        Console.WriteLine(message);
+        _checksSkipped++;
+    }
+
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
     {
         _context = databaseContext;
@@ -92,6 +110,13 @@ public class TestProvider : IAsyncTestProvider
             await TestStoredProcReturnValue();
             Console.WriteLine($"  Stored procedure: {stepSw.ElapsedMilliseconds}ms");
             SnowflakeStep($"Stored procedure: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
+            Console.WriteLine("Running scalar UDF test");
+            SnowflakeStep("Scalar UDF: start");
+            await TestScalarUdf();
+            Console.WriteLine($"  Scalar UDF: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Scalar UDF: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
             Console.WriteLine("Running parameter binding");
@@ -437,15 +462,6 @@ CREATE TABLE {qp}test_table{qs} (
         };
     }
 
-    private static bool SupportsSavepoints(SupportedDatabase product)
-    {
-        return product switch
-        {
-            SupportedDatabase.DuckDB => false,
-            SupportedDatabase.Snowflake => false,
-            _ => true
-        };
-    }
 
     private static string GetGuidType(SupportedDatabase product, bool supportsGuid)
     {
@@ -519,6 +535,12 @@ CREATE TABLE {qp}test_table{qs} (
 
     private async Task TestStoredProcReturnValue()
     {
+        if (_context.ProcWrappingStyle == ProcWrappingStyle.None)
+        {
+            CheckSkip($"  [StoredProc] Stored procedures not supported by {_context.Product} — skip");
+            return;
+        }
+
         var sc = _context.CreateSqlContainer();
         switch (_context.Product)
         {
@@ -543,12 +565,43 @@ CREATE TABLE {qp}test_table{qs} (
                 await sc.ExecuteNonQueryAsync();
                 break;
 
-            default:
+            case SupportedDatabase.Snowflake:
+                // Create a minimal stored procedure that returns the current timestamp as VARCHAR.
+                // Snowflake SQL Scripting syntax: AS $$ BEGIN RETURN ...; END $$.
+                sc.Query.Append(
+                    "CREATE OR REPLACE PROCEDURE sp_pengdows_test()\n" +
+                    "  RETURNS VARCHAR\n" +
+                    "  LANGUAGE SQL\n" +
+                    "AS $$\n" +
+                    "  BEGIN\n" +
+                    "    RETURN CURRENT_TIMESTAMP()::VARCHAR;\n" +
+                    "  END\n" +
+                    "$$");
+                await sc.ExecuteNonQueryAsync();
+
+                // Call via WrapForStoredProc — generates: CALL "sp_pengdows_test"()
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var snowflakeWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(snowflakeWrapped);
+                var snowflakeResult = await sc.ExecuteScalarOrNullAsync<string>();
+                if (string.IsNullOrWhiteSpace(snowflakeResult))
+                {
+                    throw new Exception("Snowflake stored proc returned null or empty");
+                }
+
+                sc.Clear();
+                sc.Query.Append("DROP PROCEDURE sp_pengdows_test()");
+                await sc.ExecuteNonQueryAsync();
+
+                // Verify captureReturn is not supported (Snowflake uses CALL, not EXEC with return)
+                sc.Clear();
                 sc.Query.Append("dummy_proc");
                 try
                 {
                     sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
-                    throw new Exception("Expected NotSupportedException for captureReturn");
+                    throw new Exception("Expected NotSupportedException for captureReturn on Snowflake");
                 }
                 catch (NotSupportedException)
                 {
@@ -556,8 +609,152 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 break;
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.AuroraMySql:
+            case SupportedDatabase.MariaDb:
+            {
+                // MySQL/MariaDB: CALL `proc_name`() — proc body uses BEGIN...END with SELECT.
+                // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
+                // no DELIMITER change needed over ADO.NET.
+                //
+                // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
+                // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
+                // error and skip gracefully so TiDB does not fail the run.
+                var qp = _context.QuotePrefix;
+                var qs = _context.QuoteSuffix;
+                sc.Query.Append(
+                    $"CREATE PROCEDURE {qp}sp_pengdows_test{qs}()\n" +
+                    "BEGIN\n" +
+                    "  SELECT 42;\n" +
+                    "END");
+                await sc.ExecuteNonQueryAsync();
+
+                // CALL `sp_pengdows_test`() — result set contains one row with value 42.
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var mysqlWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                sc.Clear();
+                sc.Query.Append(mysqlWrapped);
+                var mysqlResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (mysqlResult != 42)
+                {
+                    throw new Exception($"[MySQL/MariaDB proc] Expected 42 but got {mysqlResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {qp}sp_pengdows_test{qs}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.AuroraPostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            {
+                // PostgreSQL: Read path → SELECT * FROM "fn_name"(); Write path → CALL "proc_name"().
+                // Use a SQL function (CREATE OR REPLACE FUNCTION) which supports SELECT * FROM invocation
+                // and is compatible across PostgreSQL, CockroachDB (22.2+), and YugabyteDB.
+                sc.Query.Append(
+                    "CREATE OR REPLACE FUNCTION fn_pengdows_test()\n" +
+                    "RETURNS INTEGER\n" +
+                    "LANGUAGE SQL\n" +
+                    "AS $$\n" +
+                    "  SELECT 42;\n" +
+                    "$$");
+                await sc.ExecuteNonQueryAsync();
+
+                // SELECT * FROM "fn_pengdows_test"() — returns one row, one column: 42.
+                sc.Clear();
+                sc.Query.Append("fn_pengdows_test");
+                var pgWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(pgWrapped);
+                var pgResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (pgResult != 42)
+                {
+                    throw new Exception($"[PostgreSQL func] Expected 42 but got {pgResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append("DROP FUNCTION fn_pengdows_test()");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.Oracle:
+            {
+                // Oracle: BEGIN "proc_name"; END; (anonymous PL/SQL block invocation).
+                // Oracle stored procs don't return result sets; verify the call executes without error.
+                // Quote the proc name in CREATE so Oracle stores it case-sensitively as lowercase,
+                // matching the quoted reference that WrapForStoredProc generates.
+                var oraQp = _context.QuotePrefix;
+                var oraQs = _context.QuoteSuffix;
+                sc.Query.Append(
+                    $"CREATE OR REPLACE PROCEDURE {oraQp}sp_pengdows_test{oraQs} AS BEGIN NULL; END;");
+                await sc.ExecuteNonQueryAsync();
+
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var oracleWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                sc.Clear();
+                sc.Query.Append(oracleWrapped);
+                await sc.ExecuteNonQueryAsync(); // Just verify it runs without error.
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {oraQp}sp_pengdows_test{oraQs}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.Firebird:
+            {
+                // Firebird: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read path.
+                // Identifiers must be quoted in DDL to preserve case so the quoted invocation
+                // generated by WrapForStoredProc (which calls WrapObjectName) matches at runtime.
+                var fbQp = _context.QuotePrefix;
+                var fbQs = _context.QuoteSuffix;
+                sc.Query.Append(
+                    $"CREATE OR ALTER PROCEDURE {fbQp}sp_pengdows_test{fbQs}\n" +
+                    "RETURNS (result_val INTEGER)\n" +
+                    "AS\n" +
+                    "BEGIN\n" +
+                    "  result_val = 42;\n" +
+                    "  SUSPEND;\n" +
+                    "END");
+                await sc.ExecuteNonQueryAsync();
+
+                // SELECT * FROM "sp_pengdows_test" — returns one row, result_val = 42.
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var fbWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(fbWrapped);
+                var fbResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (fbResult != 42)
+                {
+                    throw new Exception($"[Firebird proc] Expected 42 but got {fbResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {fbQp}sp_pengdows_test{fbQs}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            default:
+                throw new Exception(
+                    $"[StoredProc] Unhandled database {_context.Product} in stored proc test — add a case or override ProcWrappingStyle.None.");
         }
     }
+
+    /// <summary>
+    /// Tests scalar UDF invocation inline in a SELECT statement.
+    /// Default implementation is a no-op; override in database-specific providers
+    /// where UDF creation and inline invocation is meaningful to exercise.
+    /// </summary>
+    protected virtual Task TestScalarUdf() => Task.CompletedTask;
 
     // -------------------------------------------------------------------------
     // § 5  Parameter binding semantics
@@ -587,7 +784,7 @@ CREATE TABLE {qp}test_table{qs} (
         if (isNullCount != 0)
             throw new Exception($"[ParamBinding] IS NULL predicate: expected 0 rows, got {isNullCount}");
 
-        Console.WriteLine("  [ParamBinding] NULL semantics: OK");
+        CheckOk("  [ParamBinding] NULL semantics: OK");
 
         // 5a: duplicate named parameter
         await TestDuplicateParameter();
@@ -641,7 +838,7 @@ CREATE TABLE {qp}test_table{qs} (
             if (idCount != 1)
                 throw new Exception($"[ParamBinding] Int64 binding: expected 1, got {idCount}");
 
-            Console.WriteLine("  [ParamBinding] Type matrix (int32, string, int64): OK");
+            CheckOk("  [ParamBinding] Type matrix (int32, string, int64): OK");
         }
         finally
         {
@@ -661,7 +858,7 @@ CREATE TABLE {qp}test_table{qs} (
                 $"[ParamBinding] Parameter marker: expected prefix '{expected}', got '{rendered}'");
         }
 
-        Console.WriteLine($"  [ParamBinding] Marker prefix '{expected}': OK");
+        CheckOk($"  [ParamBinding] Marker prefix '{expected}': OK");
     }
 
     private async Task TestTypeBindingMatrix()
@@ -769,8 +966,7 @@ INSERT INTO {table} (
             }
             else
             {
-                Console.WriteLine(
-                    $"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
+                CheckSkip($"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
             }
 
             if (supportsGuid)
@@ -779,12 +975,11 @@ INSERT INTO {table} (
             }
             else
             {
-                Console.WriteLine(
-                    $"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
+                CheckSkip($"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
             }
 
             await AssertBindingCount("bin_val", DbType.Binary, binVal);
-            Console.WriteLine("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
+            CheckOk("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
         }
         finally
         {
@@ -812,8 +1007,7 @@ INSERT INTO {table} (
     {
         if (!_context.SupportsRepeatedNamedParameters)
         {
-            Console.WriteLine(
-                "  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
+            CheckSkip("  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
             return;
         }
 
@@ -828,7 +1022,7 @@ INSERT INTO {table} (
         var count = await sc.ExecuteScalarOrNullAsync<int>();
         if (count < 0)
             throw new Exception($"[ParamBinding] Duplicate param returned invalid count: {count}");
-        Console.WriteLine($"  [ParamBinding] Duplicate param (same @p0 twice): OK ({count} rows matched)");
+        CheckOk($"  [ParamBinding] Duplicate param (same @p0 twice): OK ({count} rows matched)");
     }
 
     // -------------------------------------------------------------------------
@@ -1113,7 +1307,7 @@ INSERT INTO {table} (
                 }
                 else
                 {
-                    Console.WriteLine($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
+                    CheckSkip($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
                 }
 
                 if (supportsDto)
@@ -1130,7 +1324,7 @@ INSERT INTO {table} (
                 }
                 else
                 {
-                    Console.WriteLine($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
+                    CheckSkip($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
                 }
             }
 
@@ -1145,8 +1339,7 @@ INSERT INTO {table} (
             if (predicateCount != 1)
                 throw new Exception($"[RoundTrip] Bool predicate expected 1, got {predicateCount}");
 
-            Console.WriteLine(
-                "  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
+            CheckOk("  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
         }
         finally
         {
@@ -1334,7 +1527,7 @@ INSERT INTO {table} (
         if (after != before)
             throw new Exception(
                 $"[ExtendedTx] Rollback-on-exception: expected {before} rows, got {after}");
-        Console.WriteLine("  [ExtendedTx] Rollback-on-exception: OK");
+        CheckOk("  [ExtendedTx] Rollback-on-exception: OK");
     }
 
     private async Task TestReadYourWrites()
@@ -1348,41 +1541,34 @@ INSERT INTO {table} (
         if (during != before + 1)
             throw new Exception(
                 $"[ExtendedTx] Read-your-writes: expected {before + 1} inside tx, got {during}");
-        Console.WriteLine("  [ExtendedTx] Read-your-writes: OK");
+        CheckOk("  [ExtendedTx] Read-your-writes: OK");
     }
 
     private async Task TestSavepoints()
     {
-        if (!SupportsSavepoints(_context.Product))
+        if (!_context.Dialect.SupportsSavepoints)
         {
-            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
+            CheckSkip("  [ExtendedTx] Savepoints not supported — skip");
             return;
         }
 
-        try
+        await using var tx = _context.BeginTransaction();
+        var before = await CountTestRows(tx);
+
+        await InsertTestRows(tx);
+        await tx.SavepointAsync("sp1");
+        await InsertTestRows(tx);
+        await tx.RollbackToSavepointAsync("sp1");
+        tx.Commit();
+
+        var after = await CountTestRows();
+        if (after != before + 1)
         {
-            await using var tx = _context.BeginTransaction();
-            var before = await CountTestRows(tx);
-
-            await InsertTestRows(tx);
-            await tx.SavepointAsync("sp1");
-            await InsertTestRows(tx);
-            await tx.RollbackToSavepointAsync("sp1");
-            tx.Commit();
-
-            var after = await CountTestRows();
-            if (after != before + 1)
-            {
-                throw new Exception(
-                    $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
-            }
-
-            Console.WriteLine("  [ExtendedTx] Savepoint rollback: OK");
+            throw new Exception(
+                $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
         }
-        catch (NotSupportedException)
-        {
-            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
-        }
+
+        CheckOk("  [ExtendedTx] Savepoint rollback: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1413,7 +1599,7 @@ INSERT INTO {table} (
         });
 
         await Task.WhenAll(tasks);
-        Console.WriteLine($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
+        CheckOk($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1467,7 +1653,7 @@ INSERT INTO {table} (
                     $"[Batch] Command reuse expected counts 1/1, got {count1}/{count2}");
             }
 
-            Console.WriteLine("  [Batch] Reuse container with new parameters: OK");
+            CheckOk("  [Batch] Reuse container with new parameters: OK");
         }
         finally
         {
@@ -1494,8 +1680,7 @@ INSERT INTO {table} (
 
         if (!supports)
         {
-            Console.WriteLine(
-                $"  [Capabilities] Upsert: not supported by {_context.Product} — skip");
+            CheckSkip($"  [Capabilities] Upsert: not supported by {_context.Product} — skip");
             return;
         }
 
@@ -1529,7 +1714,7 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Upsert: expected 'upsert-updated', got '{retrieved.Description}'");
 
-            Console.WriteLine("  [Capabilities] Upsert (insert + update): OK");
+            CheckOk("  [Capabilities] Upsert (insert + update): OK");
         }
         finally
         {
@@ -1584,7 +1769,7 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Paging: pages overlap on IDs {string.Join(",", overlap)}");
 
-            Console.WriteLine("  [Capabilities] Paging (2 × 5-row pages, no overlap): OK");
+            CheckOk("  [Capabilities] Paging (2 × 5-row pages, no overlap): OK");
         }
         finally
         {
@@ -1635,7 +1820,7 @@ INSERT INTO {table} (
         {
             var sc2 = _helper.BuildCreate(t, _context);
             await sc2.ExecuteNonQueryAsync();
-            Console.WriteLine("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
+            CheckSkip("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
         }
         else
         {
@@ -1647,14 +1832,13 @@ INSERT INTO {table} (
             }
             catch (DbException ex)
             {
-                Console.WriteLine(
-                    $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+                CheckOk($"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
             }
         }
 
         // 12b: Connection must still be usable after the exception
         var healthCount = await CountTestRows();
-        Console.WriteLine($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
+        CheckOk($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
 
         await CleanupTestRow(id);
 
@@ -1674,8 +1858,7 @@ INSERT INTO {table} (
         if (string.IsNullOrWhiteSpace(syntaxEx?.Message))
             throw new Exception("[ErrorMapping] Syntax error exception had empty message");
 
-        Console.WriteLine(
-            $"  [ErrorMapping] Syntax error → DbException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
+        CheckOk($"  [ErrorMapping] Syntax error → DbException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
     }
 
     // -------------------------------------------------------------------------
@@ -1773,7 +1956,7 @@ INSERT INTO {table} (
             if (camelVal != "CamelValue")
                 throw new Exception($"[Quoting] Expected 'CamelValue', got '{camelVal}'");
 
-            Console.WriteLine("  [Quoting] Reserved words, spaces, and mixed case: OK");
+            CheckOk("  [Quoting] Reserved words, spaces, and mixed case: OK");
         }
         finally
         {

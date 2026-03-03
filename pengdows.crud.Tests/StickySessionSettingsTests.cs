@@ -37,15 +37,16 @@ public sealed class StickySessionSettingsTests
         var firstSettingsCount = fakeConn.ExecutedNonQueryTexts.Count;
         Assert.True(firstSettingsCount > 0, "Settings should execute on first call");
 
-        // Act 2: Second Read (Should be skipped)
+        // Act 2: Second Read (Always re-executes under Always SET policy)
         context.ExecuteSessionSettings(physicalConn, readOnly: true);
-        Assert.Equal(firstSettingsCount, fakeConn.ExecutedNonQueryTexts.Count);
+        Assert.True(fakeConn.ExecutedNonQueryTexts.Count > firstSettingsCount, "Settings should re-execute on every call");
+        var secondSettingsCount = fakeConn.ExecutedNonQueryTexts.Count;
 
         // Act 3: Intent Change to Write (MUST RE-EXECUTE)
         context.ExecuteSessionSettings(physicalConn, readOnly: false);
         
         // Assert
-        Assert.True(fakeConn.ExecutedNonQueryTexts.Count > firstSettingsCount, 
-            "Settings MUST re-execute when intent changes, even on the same physical connection.");
+        Assert.True(fakeConn.ExecutedNonQueryTexts.Count > secondSettingsCount, 
+            "Settings MUST re-execute when intent changes.");
     }
 }

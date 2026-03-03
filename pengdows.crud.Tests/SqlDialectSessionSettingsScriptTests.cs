@@ -27,7 +27,7 @@ public class SqlDialectSessionSettingsScriptTests
     }
 
     [Fact]
-    public void BuildSessionSettingsScript_SkipsUnchangedSettings()
+    public void BuildSessionSettingsScript_ReturnsAllExpectedSettings()
     {
         var expected = new Dictionary<string, string>
         {
@@ -39,7 +39,9 @@ public class SqlDialectSessionSettingsScriptTests
             ["quoted_identifier"] = "ON"
         };
         var script = BuildScript(expected, current);
-        Assert.Equal("SET ansi_nulls = ON;", script);
+        // Under Always SET policy, it returns everything in expected
+        Assert.Contains("SET ansi_nulls = ON;", script);
+        Assert.Contains("SET quoted_identifier = ON;", script);
     }
 
     private static string BuildScript(
@@ -50,6 +52,7 @@ public class SqlDialectSessionSettingsScriptTests
             "BuildSessionSettingsScript",
             BindingFlags.NonPublic | BindingFlags.Static);
         var formatter = new Func<string, string, string>((key, value) => $"SET {key} = {value};");
-        return (string)method!.Invoke(null, new object[] { expected, current, formatter })!;
+        // Pass the default separator "\n" as the 4th parameter
+        return (string)method!.Invoke(null, new object[] { expected, current, formatter, "\n" })!;
     }
 }

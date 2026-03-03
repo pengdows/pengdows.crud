@@ -51,4 +51,41 @@ CREATE TABLE {qp}test_table{qs} (
         Console.WriteLine($"[Snowflake] CreateTable completed in {sw.ElapsedMilliseconds}ms");
         SnowflakeDebugLog.Log($"[Snowflake] CreateTable completed in {sw.ElapsedMilliseconds}ms");
     }
+
+    /// <summary>
+    /// Creates a minimal scalar UDF, calls it inline in a SELECT, asserts the result,
+    /// then drops it. Exercises the full UDF lifecycle on a real Snowflake account.
+    /// </summary>
+    protected override async Task TestScalarUdf()
+    {
+        var sc = _context.CreateSqlContainer();
+
+        // Create a scalar UDF that adds 1 to its integer argument.
+        // Snowflake SQL UDF syntax: AS $$ expression $$.
+        sc.Query.Append(
+            "CREATE OR REPLACE FUNCTION udf_pengdows_add_one(n INTEGER)\n" +
+            "  RETURNS INTEGER\n" +
+            "  LANGUAGE SQL\n" +
+            "AS $$\n" +
+            "  n + 1\n" +
+            "$$");
+        await sc.ExecuteNonQueryAsync();
+
+        // Invoke inline in SELECT with a bound parameter (verifies parameterised UDF calls work).
+        sc.Clear();
+        sc.Query.Append("SELECT udf_pengdows_add_one(");
+        var p = sc.AddParameterWithValue("p0", DbType.Int32, 41);
+        sc.Query.Append(sc.MakeParameterName(p));
+        sc.Query.Append(")");
+        var result = await sc.ExecuteScalarOrNullAsync<long>();
+        if (result != 42)
+        {
+            throw new Exception($"[Snowflake UDF] Expected 42 but got {result}");
+        }
+
+        // Clean up — Snowflake DROP FUNCTION requires the full parameter type signature.
+        sc.Clear();
+        sc.Query.Append("DROP FUNCTION udf_pengdows_add_one(INTEGER)");
+        await sc.ExecuteNonQueryAsync();
+    }
 }

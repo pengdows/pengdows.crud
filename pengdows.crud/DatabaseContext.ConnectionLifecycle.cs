@@ -127,191 +127,64 @@ public partial class DatabaseContext
 
     /// <summary>
     /// Executes session settings on the given connection as a single command.
-    /// Skips execution if detection has not completed, dialect is null,
-    /// or the connection has already had settings applied.
+    /// Skips execution if detection has not completed or dialect is null.
     /// </summary>
     internal void ExecuteSessionSettings(IDbConnection connection, bool readOnly)
     {
-        if (!_sessionSettingsDetectionCompleted || _dialect == null)
+        if (!_sessionSettingsDetectionCompleted)
         {
             return;
         }
 
-        // Get the real physical connection from any wrapper (like TrackedConnection)
-        // to check if we've already initialized THIS physical instance in the pool.
-        var current = (object)connection;
-        while (current is IInternalConnectionWrapper wrapper)
-        {
-            current = wrapper.UnderlyingConnection;
-        }
+        var settingsToApply = readOnly
+            ? _cachedReadOnlySessionSettings
+            : _cachedReadWriteSessionSettings;
 
-        if (current is not DbConnection physicalConnection)
+        if (string.IsNullOrWhiteSpace(settingsToApply))
         {
-            return;
-        }
-
-        // Lazily compute the baseline SQL key — call GetBaseSessionSettings() exactly once
-        // per context so repeated connection opens don't re-invoke the dialect method.
-        if (Volatile.Read(ref _cachedBaselineKeyComputed) == 0)
-        {
-            _cachedBaselineKey = _dialect.GetBaseSessionSettings();
-            Volatile.Write(ref _cachedBaselineKeyComputed, 1);
-        }
-
-        var baselineKey = _cachedBaselineKey ?? string.Empty;
-
-        // Compute the desired intent key for this connection.
-        //
-        // For write connections, only emit the write-reset SQL when transitioning FROM a
-        // read-only session state. Fresh connections are already in read-write mode and need
-        // no intent SQL. This avoids emitting a no-op (or invalid) reset command on every
-        // new connection obtained from the pool.
-        //
-        // We detect "was read-only" by inspecting the cached intent string: if the previous
-        // intent is non-empty AND is not the write-reset SQL itself, the connection was in a
-        // read-only session state and needs the reset. We deliberately do NOT call
-        // GetReadOnlySessionSettings() in the write path — the read-only key is cached from
-        // the first readOnly=true invocation and reused for comparison in the write path.
-        string? intent;
-        if (readOnly)
-        {
-            // Lazily compute the read-only intent key — call GetReadOnlySessionSettings()
-            // exactly once per context.
-            if (Volatile.Read(ref _cachedReadOnlyIntentKeyComputed) == 0)
+            if (readOnly)
             {
-                _cachedReadOnlyIntentKey = _dialect.GetReadOnlySessionSettings();
-                Volatile.Write(ref _cachedReadOnlyIntentKeyComputed, 1);
+                // Some dialects (e.g. Oracle) have no session-level read-only SQL equivalent.
+                // Oracle enforces read-only at the transaction level via SET TRANSACTION READ ONLY,
+                // not at the connection level. A consumer who configures a read-only context for
+                // Oracle will not get connection-level enforcement — the intent must be honoured
+                // by always beginning transactions with readOnly: true.
+                _logger.LogDebug(
+                    "Dialect {Dialect} does not emit session-level read-only SQL; " +
+                    "read-only intent must be enforced at the transaction level for {Name}.",
+                    Dialect?.GetType().Name ?? "unknown", Name);
             }
 
-            intent = _cachedReadOnlyIntentKey;
-        }
-        else
-        {
-            var writeResetSql = _dialect.GetReadOnlyTransactionResetSql();
-            if (!string.IsNullOrEmpty(writeResetSql) &&
-                _initializedConnections.TryGetValue(physicalConnection, out var prevState))
+            if (connection is ITrackedConnection t)
             {
-                var prevParts = prevState.Split('|');
-                var prevIntent = prevParts.Length == 2 ? prevParts[1] : string.Empty;
-                // Non-empty prevIntent that is not already the write-reset SQL means the
-                // connection was placed in read-only session mode and needs to be reset.
-                intent = !string.IsNullOrEmpty(prevIntent) &&
-                         !string.Equals(prevIntent, writeResetSql, StringComparison.Ordinal)
-                    ? writeResetSql
-                    : null;
-            }
-            else
-            {
-                intent = null;
-            }
-        }
-
-        var intentKey = intent ?? string.Empty;
-
-        var needsBaseline = true;
-        var needsIntent = true;
-
-        if (_initializedConnections.TryGetValue(physicalConnection, out var lastFullSettings))
-        {
-            // Format: "baseline|intent"
-            var parts = lastFullSettings.Split('|');
-            if (parts.Length == 2)
-            {
-                if (string.Equals(parts[0], baselineKey, StringComparison.Ordinal))
-                {
-                    needsBaseline = false;
-                }
-                if (string.Equals(parts[1], intentKey, StringComparison.Ordinal))
-                {
-                    needsIntent = false;
-                }
-            }
-        }
-
-        if (!needsBaseline && !needsIntent)
-        {
-            if (connection is ITrackedConnection tc)
-            {
-                tc.LocalState.MarkSessionSettingsApplied();
+                t.LocalState.MarkSessionSettingsApplied();
             }
             return;
         }
 
-        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        _logger.LogInformation("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
+            Name, readOnly);
+
+        var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            if (needsBaseline && !string.IsNullOrWhiteSpace(baselineKey))
-            {
-                sb.Append(baselineKey);
-            }
-
-            if (needsIntent && !string.IsNullOrWhiteSpace(intentKey))
-            {
-                if (sb.Length > 0) sb.AppendLine();
-                sb.Append(intentKey);
-            }
-
-            if (sb.Length > 0)
-            {
-                var settingsToApply = sb.ToString();
-                _logger.LogInformation("Applying session settings for {Name} (Baseline: {Baseline}, Intent: {Intent})",
-                    Name, needsBaseline, needsIntent);
-
-                var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                try
-                {
-                    using var cmd = connection.CreateCommand();
-                    cmd.CommandText = settingsToApply;
-                    cmd.ExecuteNonQuery();
-                    var sessionInitMs = MetricsCollector.ToMilliseconds(
-                        System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
-                    _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
-                    return;
-                }
-            }
-
-            // Update the cache with the new composite state
-            _initializedConnections.AddOrUpdate(physicalConnection, $"{baselineKey}|{intentKey}");
-            
-            if (connection is ITrackedConnection tc)
-            {
-                tc.LocalState.MarkSessionSettingsApplied();
-            }
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settingsToApply;
+            cmd.ExecuteNonQuery();
+            var sessionInitMs = MetricsCollector.ToMilliseconds(
+                System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
+            _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
         }
-        finally
+        catch (Exception ex)
         {
-            sb.Dispose();
+            _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            return;
         }
-    }
 
-    private string GetCachedSessionSettings(bool readOnly)
-    {
-        if (readOnly)
+        if (connection is ITrackedConnection tc)
         {
-            if (Volatile.Read(ref _cachedReadOnlySessionSettingsComputed) == 1)
-            {
-                return _cachedReadOnlySessionSettings ?? string.Empty;
-            }
-
-            var settings = _dialect.GetConnectionSessionSettings(this, true);
-            _cachedReadOnlySessionSettings = settings;
-            Volatile.Write(ref _cachedReadOnlySessionSettingsComputed, 1);
-            return settings;
+            tc.LocalState.MarkSessionSettingsApplied();
         }
-
-        if (Volatile.Read(ref _cachedReadWriteSessionSettingsComputed) == 1)
-        {
-            return _cachedReadWriteSessionSettings ?? string.Empty;
-        }
-
-        var readWriteSettings = _dialect.GetConnectionSessionSettings(this, false);
-        _cachedReadWriteSessionSettings = readWriteSettings;
-        Volatile.Write(ref _cachedReadWriteSessionSettingsComputed, 1);
-        return readWriteSettings;
     }
 
     /// <summary>

@@ -76,6 +76,9 @@ internal class SqliteDialect : SqlDialect
     // SQLite benefits from prepared statements with inherent prepare support
     public override bool PrepareStatements => true;
 
+    // SQLite has no native UUID type — store GUIDs as 36-char hyphenated strings.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
@@ -234,11 +237,6 @@ internal class SqliteDialect : SqlDialect
         if (value is DateTimeOffset dto)
         {
             return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
-        }
-
-        if (value is Guid guid)
-        {
-            return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
         }
 
         // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind

@@ -92,10 +92,10 @@ public class MagicStringRegressionTests
     }
 
     [Fact]
-    public void OracleDialect_ReadOnlySettings_AppendsReadOnly()
+    public void OracleDialect_ReadOnlySettings_IsEmpty()
     {
         var d = CreateOracleDialect();
-        Assert.Equal("ALTER SESSION SET READ ONLY;", d.GetReadOnlySessionSettings());
+        Assert.Equal(string.Empty, d.GetReadOnlySessionSettings());
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class MagicStringRegressionTests
     public void PostgreSqlDialect_ReadOnlySessionSettings_Value()
     {
         var d = CreatePostgreSqlDialect();
-        Assert.Equal("SET default_transaction_read_only = on", d.GetReadOnlySessionSettings());
+        Assert.Equal("SET default_transaction_read_only = on;", d.GetReadOnlySessionSettings());
     }
 
     [Fact]
@@ -218,7 +218,7 @@ public class MagicStringRegressionTests
     {
         var d = CreateMySqlDialect();
         using var ctx = CreateContext(SupportedDatabase.MySql);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY;",
+        Assert.Contains("SET SESSION transaction_read_only = 1;",
             d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 
@@ -227,7 +227,7 @@ public class MagicStringRegressionTests
     {
         var d = CreateMariaDbDialect();
         using var ctx = CreateContext(SupportedDatabase.MariaDb);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY;",
+        Assert.Contains("SET SESSION transaction_read_only = 1;",
             d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 
