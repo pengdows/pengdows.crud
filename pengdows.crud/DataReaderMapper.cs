@@ -787,6 +787,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         // byte[] → Guid / Guid?
+        // NOTE: new Guid(byte[]) uses .NET's mixed-endian layout (Data1/2/3 little-endian).
+        // This is correct when the driver returns raw bytes from a column that was written
+        // with the base SqlDialect.SerializeGuidAsBinary (also mixed-endian).
+        // If a dialect overrides SerializeGuidAsBinary to write big-endian bytes (e.g. Firebird),
+        // its driver MUST return a native Guid for the column — not byte[] — so this path is
+        // never reached and the byte-order mismatch never occurs.
         if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
         {
             var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));

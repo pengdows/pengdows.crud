@@ -115,6 +115,24 @@ internal class FirebirdDialect : SqlDialect
             ? GuidStorageFormat.Binary
             : GuidStorageFormat.String;
 
+    /// <summary>
+    /// Serializes a <see cref="Guid"/> to 16 bytes in RFC 4122 big-endian byte order.
+    /// The Firebird .NET driver reads <c>CHAR(16) CHARACTER SET OCTETS</c> back as a
+    /// <see cref="Guid"/> by treating the stored bytes as a big-endian UUID, so we must
+    /// write in that same layout for a correct round-trip.
+    /// .NET's <see cref="Guid.ToByteArray()"/> uses mixed-endian (Data1/2/3 little-endian),
+    /// so we swap the first three components after calling it.
+    /// </summary>
+    protected override byte[] SerializeGuidAsBinary(Guid guid)
+    {
+        var bytes = guid.ToByteArray();
+        (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
+        (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
+        (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
+        (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
+        return bytes;
+    }
+
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;

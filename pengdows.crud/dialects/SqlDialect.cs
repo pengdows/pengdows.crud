@@ -354,6 +354,27 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     protected virtual GuidStorageFormat GuidFormat => GuidStorageFormat.PassThrough;
 
+    /// <summary>
+    /// Serializes a <see cref="Guid"/> to the 16-byte representation used when
+    /// <see cref="GuidFormat"/> is <see cref="GuidStorageFormat.Binary"/>.
+    /// <para>
+    /// The base implementation returns <see cref="Guid.ToByteArray()"/>, which uses .NET's
+    /// mixed-endian layout (Data1/Data2/Data3 are little-endian, Data4 is big-endian).
+    /// Dialects whose driver reads binary Guid columns using RFC 4122 big-endian byte order
+    /// (e.g. Firebird's <c>CHAR(16) CHARACTER SET OCTETS</c>) must override this and return
+    /// bytes in the big-endian layout so the round-trip is correct.
+    /// </para>
+    /// <para>
+    /// <strong>Read-side note:</strong> If a driver returns binary Guid columns as
+    /// <see cref="byte[]"/> (rather than a native <see cref="Guid"/>), the deserializer
+    /// reconstructs the Guid via <c>new Guid(bytes)</c> which also expects mixed-endian.
+    /// A dialect that overrides this method to write big-endian bytes must therefore also
+    /// ensure its driver returns a native <see cref="Guid"/> on reads (as Firebird does for
+    /// <c>CHAR(16) CHARACTER SET OCTETS</c>), or add a matching read-side coercion.
+    /// </para>
+    /// </summary>
+    protected virtual byte[] SerializeGuidAsBinary(Guid guid) => guid.ToByteArray();
+
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
@@ -1932,15 +1953,7 @@ internal abstract class SqlDialect : ISqlDialect
                 break;
             case GuidStorageFormat.Binary:
                 param.DbType = DbType.Binary;
-                // ToByteArray() uses .NET's mixed-endian layout (Data1/2/3 little-endian).
-                // Drivers that read CHAR(16) CHARACTER SET OCTETS as a Guid interpret bytes
-                // as RFC 4122 big-endian, so we must reverse the first three components.
-                var bytes = guid.ToByteArray();
-                (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
-                (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
-                (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
-                (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
-                param.Value = bytes;
+                param.Value = SerializeGuidAsBinary(guid);
                 break;
             // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
         }
