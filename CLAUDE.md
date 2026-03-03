@@ -489,6 +489,34 @@ var results = await helper.LoadListAsync(sc);
 - CI enforces minimum **83% coverage**; target **95%** for new work.
 - Expand `fakeDb` when tests need behaviors it lacks — don't bypass its limitations.
 
+## Adding a New Database
+
+**Every new database added to `SupportedDatabase` requires a complete integration test suite.** No exceptions.
+
+### Checklist
+
+1. **Enum value** — add to `pengdows.crud.abstractions/enums/SupportedDatabase.cs`
+2. **Dialect** — create `pengdows.crud/dialects/<Name>Dialect.cs`, register in `SqlDialectFactory.cs`
+3. **Test container** — create `testbed/<Name>/<Name>TestContainer.cs` (start, get context, dispose)
+4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` (override `CreateTable()`; override `TestUpsertCapability()` etc. only when the database has a documented limitation)
+5. **Always-on registration** — add to the `configurations` list in `ParallelTestOrchestrator.GetTestConfigurations()` (not in an opt-in block)
+6. **Unit tests** — add dialect-level unit tests in `pengdows.crud.Tests/dialects/`
+
+### Opt-in exceptions (require env var)
+
+Only databases that **cannot run in a standard Docker container** may remain opt-in:
+- `INCLUDE_ORACLE=true` — Oracle image requires license acceptance
+- `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
+
+All other databases must run automatically with no env var gating.
+
+### Aurora variants
+
+`AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image.
+They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL
+dialect respectively. No separate integration suite is required; they are covered by the
+MySQL/PostgreSQL suites.
+
 ## Core Invariants
 
 1. **DatabaseContext is SINGLETON** — one per connection string

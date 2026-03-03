@@ -193,20 +193,11 @@ internal static class DatabaseDetectionService
                 catch { /* not aurora mysql */ }
             }
 
-            // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
-            // throws "function does not exist" on standard PostgreSQL.
-            if (isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT aurora_version()";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
-                        return SupportedDatabase.AuroraPostgreSql;
-                }
-                catch { /* not aurora pg */ }
-            }
-
-            // SELECT version() — works on MySQL, PostgreSQL, CockroachDB, YugabyteDB, TiDB
+            // SELECT version() — safe probe that never throws; used first for PG-family because
+            // function-call probes (aurora_version, aurora_version()) can leave a YugabyteDB YSQL
+            // connection in an aborted state, silently swallowing subsequent queries.
+            // Run this early so the -YB- / Cockroach / TiDB markers are checked before any
+            // probe that could corrupt connection state.
             if (isMySqlFamily || isPgFamily)
             {
                 try
@@ -222,6 +213,35 @@ internal static class DatabaseDetectionService
                         return SupportedDatabase.CockroachDb;
                 }
                 catch { /* version() not available */ }
+            }
+
+            // YugabyteDB fallback: Query pg_settings for a YugabyteDB-only GUC. Runs after
+            // SELECT version() as a belt-and-suspenders guard for cases where the version string
+            // does not contain the expected markers (e.g. stripped by some proxy/pooler).
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText =
+                        "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                        return SupportedDatabase.YugabyteDb;
+                }
+                catch { /* pg_settings unavailable — very unusual, continue */ }
+            }
+
+            // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
+            // throws "function does not exist" on standard PostgreSQL. Runs last because it
+            // can leave a YSQL connection in an aborted state (already handled above).
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT aurora_version()";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                        return SupportedDatabase.AuroraPostgreSql;
+                }
+                catch { /* not aurora pg */ }
             }
         }
         catch

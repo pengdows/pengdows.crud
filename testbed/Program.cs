@@ -30,8 +30,7 @@ Console.WriteLine();
 // Use the new parallel orchestrator (optional providers can be enabled via INCLUDE_* env vars)
 var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var includeYugabyte = Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake, includeYugabyte);
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

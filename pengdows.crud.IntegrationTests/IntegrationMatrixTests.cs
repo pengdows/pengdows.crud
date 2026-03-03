@@ -50,8 +50,7 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         _orchestrator = new ParallelTestOrchestrator(
             _host.Services,
             ShouldIncludeOracle(),
-            ShouldIncludeSnowflake(),
-            ShouldIncludeYugabyte());
+            ShouldIncludeSnowflake());
     }
 
     public async Task DisposeAsync()
@@ -72,14 +71,6 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
     {
         return string.Equals(
             Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"),
-            "true",
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ShouldIncludeYugabyte()
-    {
-        return string.Equals(
-            Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE"),
             "true",
             StringComparison.OrdinalIgnoreCase);
     }

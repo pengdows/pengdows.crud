@@ -340,4 +340,20 @@ internal class OracleDialect : SqlDialect
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+
+    // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
+    // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
+    protected override DbType RemapDbType(DbType type) => type switch
+    {
+        DbType.Boolean => DbType.Int16,
+        DbType.Guid => DbType.String,
+        _ => type
+    };
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.Boolean && value is bool b)
+            return b ? (short)1 : (short)0;
+        return base.PrepareParameterValue(value, dbType);
+    }
 }

@@ -98,16 +98,6 @@ END;", qp, qs);
     }
 
     /// <summary>
-    /// Oracle MERGE upsert generation currently produces invalid SQL ("ORA-00969: missing ON keyword").
-    /// Skip the upsert probe until the dialect's BuildUpsert is fixed for Oracle.
-    /// </summary>
-    protected override Task TestUpsertCapability()
-    {
-        Console.WriteLine("  [Oracle] Skipping upsert capability (MERGE generation issue — ORA-00969)");
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
     /// Oracle does not support repeated named parameters (:p0 used twice).
     /// Use two distinct parameter names instead and verify same result.
     /// </summary>

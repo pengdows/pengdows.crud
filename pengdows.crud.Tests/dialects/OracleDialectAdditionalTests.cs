@@ -108,4 +108,35 @@ public class OracleDialectAdditionalTests
         d.ApplyConnectionSettings(conn, ctx, false);
         Assert.True(conn.StatementCacheSize >= 64);
     }
+
+    [Fact]
+    public void CreateDbParameter_Bool_True_IsRemappedToNumeric()
+    {
+        var d = CreateDialect();
+        var param = d.CreateDbParameter("p", DbType.Boolean, true);
+        // Oracle maps bool → NUMBER via AdvancedTypeRegistry: DbType.Int16 and integer value 1
+        Assert.Equal(DbType.Int16, param.DbType);
+        Assert.Equal(1, Convert.ToInt32(param.Value));
+    }
+
+    [Fact]
+    public void CreateDbParameter_Bool_False_IsRemappedToNumeric()
+    {
+        var d = CreateDialect();
+        var param = d.CreateDbParameter("p", DbType.Boolean, false);
+        Assert.Equal(DbType.Int16, param.DbType);
+        Assert.Equal(0, Convert.ToInt32(param.Value));
+    }
+
+    [Fact]
+    public void CreateDbParameter_Guid_IsRemappedToString()
+    {
+        // Oracle ODP.NET throws for DbType.Guid; OracleDialect remaps to String.
+        // ApplyGuidFormat then serializes to "D"-format VARCHAR2(36).
+        var d = CreateDialect();
+        var guid = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var param = d.CreateDbParameter("p", DbType.Guid, guid);
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
+    }
 }

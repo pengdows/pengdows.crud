@@ -1668,10 +1668,44 @@ INSERT INTO {table} (
     // § 11  Capability probes
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Runs a capability test with enforcement:
+    /// - A test that returns without calling CheckOk or CheckSkip is a silent skip → failure.
+    /// - A test that calls CheckSkip when the dialect claims support for that capability → failure.
+    /// </summary>
+    private async Task RunCapabilityTest(string capabilityName, bool dialectClaimsSupport, Func<Task> test)
+    {
+        var passedBefore = _checksPassed;
+        var skippedBefore = _checksSkipped;
+
+        await test();
+
+        var passed = _checksPassed > passedBefore;
+        var skipped = _checksSkipped > skippedBefore;
+
+        if (!passed && !skipped)
+        {
+            throw new Exception(
+                $"[{capabilityName}] capability test for {_context.Product} returned without recording " +
+                "a result. Override must call CheckOk on success or CheckSkip when not supported.");
+        }
+
+        if (dialectClaimsSupport && skipped && !passed)
+        {
+            throw new Exception(
+                $"[{capabilityName}] was skipped but {_context.Product} dialect reports this capability " +
+                "as supported. Fix the test implementation or correct the dialect capability flag.");
+        }
+    }
+
     protected virtual async Task TestCapabilityProbes()
     {
-        await TestUpsertCapability();
-        await TestPagingCapability();
+        var supportsUpsert = _context.DataSourceInfo.SupportsMerge
+                             || _context.DataSourceInfo.SupportsInsertOnConflict
+                             || _context.DataSourceInfo.SupportsOnDuplicateKey;
+
+        await RunCapabilityTest("Upsert", supportsUpsert, TestUpsertCapability);
+        await RunCapabilityTest("Paging", true, TestPagingCapability);
     }
 
     protected virtual async Task TestUpsertCapability()

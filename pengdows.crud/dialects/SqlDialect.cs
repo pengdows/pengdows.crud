@@ -1084,7 +1084,7 @@ internal abstract class SqlDialect : ISqlDialect
 
         if (!handled)
         {
-            parameter.DbType = type;
+            parameter.DbType = RemapDbType(type);
             var preparedValue = PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
         }
@@ -1935,6 +1935,13 @@ internal abstract class SqlDialect : ISqlDialect
     {
         return value;
     }
+
+    /// <summary>
+    /// Maps a <see cref="DbType"/> to the effective type this dialect's provider accepts.
+    /// Override in dialects whose drivers reject certain <see cref="DbType"/> values natively
+    /// (e.g., Oracle ODP.NET throws on <see cref="DbType.Boolean"/>).
+    /// </summary>
+    protected virtual DbType RemapDbType(DbType type) => type;
 
     /// <summary>
     /// Applies the dialect's <see cref="GuidFormat"/> to an already-created <see cref="DbParameter"/>.
