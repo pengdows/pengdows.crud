@@ -26,8 +26,10 @@ namespace pengdows.crud.IntegrationTests.Core;
 ///   <item>SQLite: DecimalValue stored as REAL (IEEE 754 double); precision
 ///     is limited to ~15 significant digits. Assert with 1e-7 tolerance.</item>
 ///   <item>Oracle: GuidValue stored as VARCHAR2(36); round-trips exactly.</item>
-///   <item>MySQL / MariaDB / SQLite / Firebird: GuidValue stored as CHAR(36)
-///     or TEXT; round-trips exactly as a string representation.</item>
+///   <item>MySQL / MariaDB / SQLite: GuidValue stored as CHAR(36) or TEXT;
+///     round-trips exactly as a string representation.</item>
+///   <item>Firebird: GuidValue stored as CHAR(16) CHARACTER SET OCTETS (binary);
+///     round-trips exactly via byte[] coercion.</item>
 ///   <item>Snowflake: GuidValue stored as VARCHAR(36); round-trips exactly.</item>
 /// </list>
 /// </summary>
@@ -95,8 +97,8 @@ public class RoundTripEntity
 
     /// <summary>
     /// Guid — stored as UNIQUEIDENTIFIER (SQL Server), UUID (PostgreSQL /
-    /// DuckDB / CockroachDB), VARCHAR2(36) (Oracle), or CHAR(36) (MySQL / MariaDB /
-    /// SQLite / Firebird). Must round-trip exactly regardless of storage form.
+    /// DuckDB / CockroachDB), VARCHAR2(36) (Oracle), CHAR(36) (MySQL / MariaDB / SQLite),
+    /// or CHAR(16) CHARACTER SET OCTETS (Firebird). Must round-trip exactly regardless of storage form.
     /// </summary>
     [Column("guid_value", DbType.Guid)]
     public Guid GuidValue { get; set; }

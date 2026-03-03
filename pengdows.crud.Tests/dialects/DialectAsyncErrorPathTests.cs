@@ -37,11 +37,21 @@ public class DialectAsyncErrorPathTests
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
         var testGuid = Guid.NewGuid();
 
-        // Default GuidStorageMode is Binary for backward compatibility
+        // Default GuidStorageMode is Binary; bytes stored in RFC 4122 big-endian layout.
         var param = dialect.CreateDbParameter("test", DbType.Guid, testGuid);
 
         Assert.Equal(DbType.Binary, param.DbType);
-        Assert.Equal(testGuid.ToByteArray(), param.Value);
+        var stored = (byte[])param.Value!;
+        Assert.Equal(16, stored.Length);
+        var roundTripped = new Guid(new byte[]
+        {
+            stored[3], stored[2], stored[1], stored[0],
+            stored[5], stored[4],
+            stored[7], stored[6],
+            stored[8], stored[9], stored[10], stored[11],
+            stored[12], stored[13], stored[14], stored[15]
+        });
+        Assert.Equal(testGuid, roundTripped);
     }
 
     [Fact]

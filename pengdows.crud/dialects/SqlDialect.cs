@@ -1932,7 +1932,15 @@ internal abstract class SqlDialect : ISqlDialect
                 break;
             case GuidStorageFormat.Binary:
                 param.DbType = DbType.Binary;
-                param.Value = guid.ToByteArray();
+                // ToByteArray() uses .NET's mixed-endian layout (Data1/2/3 little-endian).
+                // Drivers that read CHAR(16) CHARACTER SET OCTETS as a Guid interpret bytes
+                // as RFC 4122 big-endian, so we must reverse the first three components.
+                var bytes = guid.ToByteArray();
+                (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
+                (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
+                (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
+                (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
+                param.Value = bytes;
                 break;
             // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
         }

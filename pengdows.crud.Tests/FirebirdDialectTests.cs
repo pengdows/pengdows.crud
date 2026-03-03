@@ -36,9 +36,8 @@ public class FirebirdDialectTests
     }
 
     /// <summary>
-    /// Round-trip test: Guid in Binary mode (default) stores as DbType.Binary / byte[].
-    /// This is the backward-compatible default for existing Firebird schemas
-    /// that use CHAR(16) OCTETS columns.
+    /// Round-trip test: Guid in Binary mode (default) stores as DbType.Binary / 16 bytes
+    /// in RFC 4122 big-endian layout (required by Firebird's CHAR(16) CHARACTER SET OCTETS).
     /// </summary>
     [Fact]
     public void CreateDbParameter_Guid_DefaultsToBinary_BackwardCompatible()
@@ -53,8 +52,19 @@ public class FirebirdDialectTests
         var param = dialect.CreateDbParameter("p", DbType.Guid, id);
 
         Assert.Equal(DbType.Binary, param.DbType);
-        Assert.IsType<byte[]>(param.Value);
-        Assert.Equal(id.ToByteArray(), (byte[])param.Value!);
+        var stored = Assert.IsType<byte[]>(param.Value);
+        Assert.Equal(16, stored.Length);
+        // Bytes are in RFC 4122 big-endian layout; reconstruct Guid by re-applying .NET's
+        // mixed-endian convention (Data1/2/3 little-endian) to verify round-trip.
+        var roundTripped = new Guid(new byte[]
+        {
+            stored[3], stored[2], stored[1], stored[0],
+            stored[5], stored[4],
+            stored[7], stored[6],
+            stored[8], stored[9], stored[10], stored[11],
+            stored[12], stored[13], stored[14], stored[15]
+        });
+        Assert.Equal(id, roundTripped);
     }
 
     /// <summary>

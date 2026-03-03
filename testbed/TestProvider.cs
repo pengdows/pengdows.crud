@@ -444,6 +444,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.DuckDB => true,
             SupportedDatabase.Sqlite => true,
             SupportedDatabase.Oracle => true,
+            SupportedDatabase.Firebird => true,
             _ => false
         };
     }
@@ -479,6 +480,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.DuckDB => "UUID",
             SupportedDatabase.Oracle => "VARCHAR2(36)",
             SupportedDatabase.Sqlite => "TEXT",
+            SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             _ => "UUID"
         };
     }

@@ -115,15 +115,30 @@ public class GuidStorageFormatTests
     // ─── Firebird (mode-configurable) ────────────────────────────────────────
 
     [Fact]
-    public void Firebird_Guid_DefaultsBinary_16Bytes()
+    public void Firebird_Guid_DefaultsBinary_16Bytes_BigEndianLayout()
     {
+        // Firebird drivers read CHAR(16) CHARACTER SET OCTETS back as a Guid using
+        // RFC 4122 big-endian byte order, so we must store bytes in that layout.
         var factory = new fakeDbFactory(SupportedDatabase.Firebird);
         var dialect = new FirebirdDialect(factory, NullLogger.Instance);
 
         var param = dialect.CreateDbParameter("p", DbType.Guid, TestGuid);
 
         Assert.Equal(DbType.Binary, param.DbType);
-        Assert.Equal(TestGuid.ToByteArray(), param.Value);
+        var stored = (byte[])param.Value!;
+        Assert.Equal(16, stored.Length);
+
+        // Reconstruct the Guid from stored bytes using big-endian interpretation:
+        // the first 4 bytes, next 2, and next 2 are stored big-endian (reversed vs ToByteArray).
+        var reconstructed = new Guid(new byte[]
+        {
+            stored[3], stored[2], stored[1], stored[0],   // Data1 little-endian
+            stored[5], stored[4],                          // Data2 little-endian
+            stored[7], stored[6],                          // Data3 little-endian
+            stored[8], stored[9], stored[10], stored[11],  // Data4 big-endian
+            stored[12], stored[13], stored[14], stored[15]
+        });
+        Assert.Equal(TestGuid, reconstructed);
     }
 
     [Fact]
