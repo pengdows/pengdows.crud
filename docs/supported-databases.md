@@ -1,13 +1,14 @@
 # Supported Databases
 
-pengdows.crud supports the following databases with tested ADO.NET providers:
+pengdows.crud supports 13 directly supported databases with tested ADO.NET providers:
 
 - SQL Server / Express / LocalDB
-- PostgreSQL / TimescaleDB
+- PostgreSQL / TimescaleDB / Aurora PostgreSQL
+- MySQL / MariaDB / Aurora MySQL
 - CockroachDB
 - YugabyteDB
+- TiDB
 - Oracle
-- MySQL / MariaDB
 - SQLite
 - Firebird
 - DuckDB
@@ -98,4 +99,3 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
 
 > **Dual Enforcement:** For PostgreSQL, SQLite, and DuckDB, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool.
-

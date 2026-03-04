@@ -663,7 +663,7 @@ public class OrderGatewayTests
         Assert.Throws<InvalidOperationException>(() =>
         {
             using var container = context.CreateSqlContainer("SELECT 1");
-            container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+            container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
         });
     }
 }

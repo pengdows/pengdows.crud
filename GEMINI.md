@@ -79,7 +79,7 @@ Provides deep operational visibility by tracking detailed metrics for connection
 - C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
 - File-scoped namespaces; lowercase namespaces (`pengdows.crud.*`).
 - Indentation: 4 spaces; `WarningsAsErrors=true`.
-- **Nothing outside of `DatabaseContext` should expose a public constructor.**
+- Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
 - Program to interfaces; concrete types exist only to satisfy `pengdows.crud.abstractions` contracts.
 - Organize by domain folders: `attributes/`, `dialects/`, `connection/`, `threading/`, `exceptions/`.
 
@@ -284,7 +284,7 @@ The project CI enforces a minimum of **83% line coverage**. However, for all new
 
 ### 3. Interface-First Design
 
-All public APIs must be exposed via interfaces in `pengdows.crud.abstractions`. Implementation details should remain internal to `pengdows.crud` whenever possible. Nothing outside of `DatabaseContext` should expose a public constructor.
+All public APIs must be exposed via interfaces in `pengdows.crud.abstractions`. Implementation details should remain internal to `pengdows.crud` whenever possible, and new public constructors should be introduced only for clear SDK-use scenarios.
 
 ## Building and Testing
 

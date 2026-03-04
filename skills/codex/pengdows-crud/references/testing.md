@@ -71,7 +71,7 @@ factory.AddQueryResult("SELECT id, name FROM users WHERE active = $1", new objec
 
 var context = new DatabaseContext("test", factory);
 var container = context.CreateSqlContainer("SELECT COUNT(*) FROM users");
-var count = await container.ExecuteScalarAsync<int>(); // Returns 42
+var count = await container.ExecuteScalarRequiredAsync<int>(); // Returns 42
 ```
 
 ## Connection Failure Simulation
@@ -94,7 +94,7 @@ public void TestConnectionFailure()
     Assert.Throws<InvalidOperationException>(() =>
     {
         using var container = context.CreateSqlContainer("SELECT 1");
-        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+        container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
     });
 }
 ```
@@ -113,7 +113,7 @@ var context = new DatabaseContext("test", factory);
 Assert.Throws<InvalidOperationException>(() =>
 {
     using var container = context.CreateSqlContainer("SELECT 1");
-    container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+    container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
 });
 ```
 
@@ -180,7 +180,7 @@ public void TestDatabaseContextFailureHandling()
     var ex = Assert.Throws<InvalidOperationException>(() =>
     {
         using var container = context.CreateSqlContainer("SELECT 1");
-        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+        container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
     });
 
     Assert.Contains("Connection failed", ex.Message);
@@ -278,7 +278,7 @@ public async Task TestCustomQuery()
     container.Query.Append(container.MakeParameterName("price"));
     container.AddParameterWithValue("price", DbType.Decimal, 10.00m);
 
-    var count = await container.ExecuteScalarAsync<int>();
+    var count = await container.ExecuteScalarRequiredAsync<int>();
     Assert.Equal(15, count);
 }
 ```
@@ -376,7 +376,7 @@ public async Task TestSlowConnection()
     var stopwatch = Stopwatch.StartNew();
 
     using var container = context.CreateSqlContainer("SELECT 1");
-    await container.ExecuteScalarAsync<int>();
+    await container.ExecuteScalarRequiredAsync<int>();
 
     stopwatch.Stop();
     Assert.True(stopwatch.ElapsedMilliseconds >= 500);

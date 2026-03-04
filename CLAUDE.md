@@ -138,7 +138,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - Consumers should depend on abstractions in `pengdows.crud.abstractions`.
 - `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect` etc. are the official surface area.
 - Hide implementation details as `internal` by default.
-- **Nothing outside of `DatabaseContext` should expose a public constructor** — objects should be resolved through factory helpers, DI, or internal constructors (exceptions require documented rationale).
+- Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
 
 ## CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)
 
@@ -151,7 +151,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
-2. TableGateway REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
+2. TableGateway requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
@@ -291,7 +291,9 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
 **Query Execution (all return ValueTask):**
 - `ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)` - Execute INSERT/UPDATE/DELETE, returns row count
-- `ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return single value
+- `ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return required single value
+- `ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return nullable single value
+- `TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return scalar result metadata
 - `ExecuteReaderAsync(CommandType commandType = CommandType.Text)` - Execute and return ITrackedReader
 
 **Parameter Management:**
@@ -441,7 +443,7 @@ var helper = new TableGateway<TestEntity, long>(context);
 **Testing SQL Execution:**
 ```csharp
 using var container = context.CreateSqlContainer("SELECT 1");
-var result = await container.ExecuteScalarAsync<int>();
+var result = await container.ExecuteScalarRequiredAsync<int>();
 ```
 
 **Testing CRUD Operations:**
@@ -580,7 +582,7 @@ MySQL/PostgreSQL suites.
 - Program to interfaces (`IDatabaseContext`, `ITableGateway`, `ISqlContainer`)
 
 **Common Mistakes to Avoid:**
-- Don't expose public constructors on implementation types (except DatabaseContext)
+- Don't add new public constructors unless there is a clear SDK-use reason; prefer interface-first APIs and DI/factories
 - Use `RetrieveAsync` for multiple entities, `RetrieveOneAsync` for single by ID/key, `LoadSingleAsync` for custom SQL
 - Use correct `ExecutionType` (Read vs Write) for connections
 - Don't confuse `[Id]` (pseudo key/row ID) with `[PrimaryKey]` (business key)
