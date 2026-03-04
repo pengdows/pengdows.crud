@@ -246,9 +246,17 @@ public class TestProvider : IAsyncTestProvider
     {
         var databaseContext = _context;
         var sqlContainer = databaseContext.CreateSqlContainer();
-        var qp = databaseContext.QuotePrefix;
-        var qs = databaseContext.QuoteSuffix;
-        sqlContainer.Query.AppendFormat(@"DROP TABLE IF EXISTS {0}test_table{1}", qp, qs);
+        var tableName = databaseContext.WrapObjectName("test_table");
+        var idColumn = databaseContext.WrapObjectName("id");
+        var nameColumn = databaseContext.WrapObjectName("name");
+        var descriptionColumn = databaseContext.WrapObjectName("description");
+        var valueColumn = databaseContext.WrapObjectName("value");
+        var isActiveColumn = databaseContext.WrapObjectName("is_active");
+        var createdAtColumn = databaseContext.WrapObjectName("created_at");
+        var createdByColumn = databaseContext.WrapObjectName("created_by");
+        var updatedAtColumn = databaseContext.WrapObjectName("updated_at");
+        var updatedByColumn = databaseContext.WrapObjectName("updated_by");
+        sqlContainer.Query.AppendFormat("DROP TABLE IF EXISTS {0}", tableName);
         try
         {
             await sqlContainer.ExecuteNonQueryAsync();
@@ -264,17 +272,17 @@ public class TestProvider : IAsyncTestProvider
         var longType = GetLongType(databaseContext.Product);
         var boolType = GetBooleanType(databaseContext.Product);
         sqlContainer.Query.Append($@"
-CREATE TABLE {qp}test_table{qs} (
-    {qp}id{qs} {longType} NOT NULL,
-    {qp}name{qs} VARCHAR(100) NOT NULL,
-    {qp}description{qs} VARCHAR(1000) NOT NULL,
-    {qp}value{qs} {intType} NOT NULL,
-    {qp}is_active{qs} {boolType} NOT NULL,
-    {qp}created_at{qs} {dateType} NOT NULL,
-    {qp}created_by{qs} VARCHAR(100) NOT NULL,
-    {qp}updated_at{qs} {dateType} NOT NULL,
-    {qp}updated_by{qs} VARCHAR(100) NOT NULL,
-    PRIMARY KEY ({qp}id{qs})
+CREATE TABLE {tableName} (
+    {idColumn} {longType} NOT NULL,
+    {nameColumn} VARCHAR(100) NOT NULL,
+    {descriptionColumn} VARCHAR(1000) NOT NULL,
+    {valueColumn} {intType} NOT NULL,
+    {isActiveColumn} {boolType} NOT NULL,
+    {createdAtColumn} {dateType} NOT NULL,
+    {createdByColumn} VARCHAR(100) NOT NULL,
+    {updatedAtColumn} {dateType} NOT NULL,
+    {updatedByColumn} VARCHAR(100) NOT NULL,
+    PRIMARY KEY ({idColumn})
 );");
         await sqlContainer.ExecuteNonQueryAsync();
     }
@@ -547,8 +555,12 @@ CREATE TABLE {qp}test_table{qs} (
         switch (_context.Product)
         {
             case SupportedDatabase.SqlServer:
+                var sqlServerProcName = _context.WrapObjectName("ReturnFive");
+                var sqlServerSchema = _context.WrapObjectName("dbo");
+                var sqlServerQualifiedProcName = sqlServerSchema + _context.CompositeIdentifierSeparator +
+                                                 sqlServerProcName;
                 sc.Query.Append(
-                    "CREATE OR ALTER PROCEDURE dbo.ReturnFive AS BEGIN RETURN 5 END");
+                    $"CREATE OR ALTER PROCEDURE {sqlServerQualifiedProcName} AS BEGIN RETURN 5 END");
                 await sc.ExecuteNonQueryAsync();
 
                 sc.Clear();
@@ -563,15 +575,16 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append("DROP PROCEDURE dbo.ReturnFive");
+                sc.Query.Append($"DROP PROCEDURE {sqlServerQualifiedProcName}");
                 await sc.ExecuteNonQueryAsync();
                 break;
 
             case SupportedDatabase.Snowflake:
+                var snowflakeProcName = _context.WrapObjectName("sp_pengdows_test");
                 // Create a minimal stored procedure that returns the current timestamp as VARCHAR.
                 // Snowflake SQL Scripting syntax: AS $$ BEGIN RETURN ...; END $$.
                 sc.Query.Append(
-                    "CREATE OR REPLACE PROCEDURE sp_pengdows_test()\n" +
+                    $"CREATE OR REPLACE PROCEDURE {snowflakeProcName}()\n" +
                     "  RETURNS VARCHAR\n" +
                     "  LANGUAGE SQL\n" +
                     "AS $$\n" +
@@ -594,7 +607,7 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append("DROP PROCEDURE sp_pengdows_test()");
+                sc.Query.Append($"DROP PROCEDURE {snowflakeProcName}()");
                 await sc.ExecuteNonQueryAsync();
 
                 // Verify captureReturn is not supported (Snowflake uses CALL, not EXEC with return)
@@ -616,6 +629,7 @@ CREATE TABLE {qp}test_table{qs} (
             case SupportedDatabase.AuroraMySql:
             case SupportedDatabase.MariaDb:
             {
+                var mysqlProcName = _context.WrapObjectName("sp_pengdows_test");
                 // MySQL/MariaDB: CALL `proc_name`() — proc body uses BEGIN...END with SELECT.
                 // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
                 // no DELIMITER change needed over ADO.NET.
@@ -623,10 +637,8 @@ CREATE TABLE {qp}test_table{qs} (
                 // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
                 // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
                 // error and skip gracefully so TiDB does not fail the run.
-                var qp = _context.QuotePrefix;
-                var qs = _context.QuoteSuffix;
                 sc.Query.Append(
-                    $"CREATE PROCEDURE {qp}sp_pengdows_test{qs}()\n" +
+                    $"CREATE PROCEDURE {mysqlProcName}()\n" +
                     "BEGIN\n" +
                     "  SELECT 42;\n" +
                     "END");
@@ -645,7 +657,7 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {qp}sp_pengdows_test{qs}");
+                sc.Query.Append($"DROP PROCEDURE {mysqlProcName}");
                 await sc.ExecuteNonQueryAsync();
                 break;
             }
@@ -655,11 +667,12 @@ CREATE TABLE {qp}test_table{qs} (
             case SupportedDatabase.CockroachDb:
             case SupportedDatabase.YugabyteDb:
             {
+                var pgFunctionName = _context.WrapObjectName("fn_pengdows_test");
                 // PostgreSQL: Read path → SELECT * FROM "fn_name"(); Write path → CALL "proc_name"().
                 // Use a SQL function (CREATE OR REPLACE FUNCTION) which supports SELECT * FROM invocation
                 // and is compatible across PostgreSQL, CockroachDB (22.2+), and YugabyteDB.
                 sc.Query.Append(
-                    "CREATE OR REPLACE FUNCTION fn_pengdows_test()\n" +
+                    $"CREATE OR REPLACE FUNCTION {pgFunctionName}()\n" +
                     "RETURNS INTEGER\n" +
                     "LANGUAGE SQL\n" +
                     "AS $$\n" +
@@ -680,21 +693,20 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append("DROP FUNCTION fn_pengdows_test()");
+                sc.Query.Append($"DROP FUNCTION {pgFunctionName}()");
                 await sc.ExecuteNonQueryAsync();
                 break;
             }
 
             case SupportedDatabase.Oracle:
             {
+                var oracleProcName = _context.WrapObjectName("sp_pengdows_test");
                 // Oracle: BEGIN "proc_name"; END; (anonymous PL/SQL block invocation).
                 // Oracle stored procs don't return result sets; verify the call executes without error.
                 // Quote the proc name in CREATE so Oracle stores it case-sensitively as lowercase,
                 // matching the quoted reference that WrapForStoredProc generates.
-                var oraQp = _context.QuotePrefix;
-                var oraQs = _context.QuoteSuffix;
                 sc.Query.Append(
-                    $"CREATE OR REPLACE PROCEDURE {oraQp}sp_pengdows_test{oraQs} AS BEGIN NULL; END;");
+                    $"CREATE OR REPLACE PROCEDURE {oracleProcName} AS BEGIN NULL; END;");
                 await sc.ExecuteNonQueryAsync();
 
                 sc.Clear();
@@ -705,20 +717,19 @@ CREATE TABLE {qp}test_table{qs} (
                 await sc.ExecuteNonQueryAsync(); // Just verify it runs without error.
 
                 sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {oraQp}sp_pengdows_test{oraQs}");
+                sc.Query.Append($"DROP PROCEDURE {oracleProcName}");
                 await sc.ExecuteNonQueryAsync();
                 break;
             }
 
             case SupportedDatabase.Firebird:
             {
+                var firebirdProcName = _context.WrapObjectName("sp_pengdows_test");
                 // Firebird: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read path.
                 // Identifiers must be quoted in DDL to preserve case so the quoted invocation
                 // generated by WrapForStoredProc (which calls WrapObjectName) matches at runtime.
-                var fbQp = _context.QuotePrefix;
-                var fbQs = _context.QuoteSuffix;
                 sc.Query.Append(
-                    $"CREATE OR ALTER PROCEDURE {fbQp}sp_pengdows_test{fbQs}\n" +
+                    $"CREATE OR ALTER PROCEDURE {firebirdProcName}\n" +
                     "RETURNS (result_val INTEGER)\n" +
                     "AS\n" +
                     "BEGIN\n" +
@@ -740,7 +751,7 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {fbQp}sp_pengdows_test{fbQs}");
+                sc.Query.Append($"DROP PROCEDURE {firebirdProcName}");
                 await sc.ExecuteNonQueryAsync();
                 break;
             }
@@ -771,7 +782,7 @@ CREATE TABLE {qp}test_table{qs} (
         sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
             _helper.WrappedTableName,
             _context.WrapObjectName("description"),
-            _context.MakeParameterName("p0"));
+            sc.MakeParameterName("p0"));
         sc.AddParameterWithValue("p0", DbType.String, DBNull.Value);
         var nullCount = await sc.ExecuteScalarOrNullAsync<int>();
         if (nullCount != 0)
@@ -812,7 +823,7 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("value"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 99);
             var valueCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (valueCount < 1)
@@ -823,7 +834,7 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("description"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.String, knownDesc);
             var strCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (strCount != 1)
@@ -834,7 +845,7 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int64, id);
             var idCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (idCount != 1)
@@ -917,15 +928,15 @@ INSERT INTO {table} (
     {_context.WrapObjectName("guid_val")},
     {_context.WrapObjectName("bin_val")}
 ) VALUES (
-    {_context.MakeParameterName("p0")},
-    {_context.MakeParameterName("p1")},
-    {_context.MakeParameterName("p2")},
-    {_context.MakeParameterName("p3")},
-    {_context.MakeParameterName("p4")},
-    {_context.MakeParameterName("p5")},
-    {_context.MakeParameterName("p6")},
-    {_context.MakeParameterName("p7")},
-    {_context.MakeParameterName("p8")}
+    {sc.MakeParameterName("p0")},
+    {sc.MakeParameterName("p1")},
+    {sc.MakeParameterName("p2")},
+    {sc.MakeParameterName("p3")},
+    {sc.MakeParameterName("p4")},
+    {sc.MakeParameterName("p5")},
+    {sc.MakeParameterName("p6")},
+    {sc.MakeParameterName("p7")},
+    {sc.MakeParameterName("p8")}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.Int32, intVal);
@@ -994,7 +1005,7 @@ INSERT INTO {table} (
             query.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 table,
                 _context.WrapObjectName(column),
-                _context.MakeParameterName("p0"));
+                query.MakeParameterName("p0"));
             query.AddParameterWithValue("p0", type, value);
             var count = await query.ExecuteScalarOrNullAsync<int>();
             if (count != 1)
@@ -1018,13 +1029,13 @@ INSERT INTO {table} (
             "SELECT COUNT(*) FROM {0} WHERE {1} = {2} OR {3} = {2}",
             _helper.WrappedTableName,
             _context.WrapObjectName("created_by"),
-            _context.MakeParameterName("p0"),
+            sc.MakeParameterName("p0"),
             _context.WrapObjectName("updated_by"));
         sc.AddParameterWithValue("p0", DbType.String, "__nonexistent_user_xyzzy__");
         var count = await sc.ExecuteScalarOrNullAsync<int>();
         if (count < 0)
             throw new Exception($"[ParamBinding] Duplicate param returned invalid count: {count}");
-        CheckOk($"  [ParamBinding] Duplicate param (same @p0 twice): OK ({count} rows matched)");
+        CheckOk($"  [ParamBinding] Duplicate param (same logical parameter twice): OK ({count} rows matched)");
     }
 
     // -------------------------------------------------------------------------
@@ -1177,17 +1188,17 @@ INSERT INTO {table} (
     {_context.WrapObjectName("guid_value")},
     {_context.WrapObjectName("bin_value")}
 ) VALUES (
-    {_context.MakeParameterName("p0")},
-    {_context.MakeParameterName("p1")},
-    {_context.MakeParameterName("p2")},
-    {_context.MakeParameterName("p3")},
-    {_context.MakeParameterName("p4")},
-    {_context.MakeParameterName("p5")},
-    {_context.MakeParameterName("p6")},
-    {_context.MakeParameterName("p7")},
-    {_context.MakeParameterName("p8")},
-    {_context.MakeParameterName("p9")},
-    {_context.MakeParameterName("p10")}
+    {sc.MakeParameterName("p0")},
+    {sc.MakeParameterName("p1")},
+    {sc.MakeParameterName("p2")},
+    {sc.MakeParameterName("p3")},
+    {sc.MakeParameterName("p4")},
+    {sc.MakeParameterName("p5")},
+    {sc.MakeParameterName("p6")},
+    {sc.MakeParameterName("p7")},
+    {sc.MakeParameterName("p8")},
+    {sc.MakeParameterName("p9")},
+    {sc.MakeParameterName("p10")}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.String, unicodeText);
@@ -1235,7 +1246,7 @@ INSERT INTO {table} (
                 _context.WrapObjectName("bin_value"),
                 table,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                select.MakeParameterName("p0"));
             select.AddParameterWithValue("p0", DbType.Int64, id);
 
             await using (var reader = await select.ExecuteReaderAsync())
@@ -1335,7 +1346,7 @@ INSERT INTO {table} (
                 "SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 table,
                 _context.WrapObjectName("is_active"),
-                _context.MakeParameterName("p0"));
+                boolPredicate.MakeParameterName("p0"));
             boolPredicate.AddParameterWithValue("p0", DbType.Boolean, true);
             var predicateCount = await boolPredicate.ExecuteScalarOrNullAsync<int>();
             if (predicateCount != 1)
@@ -1642,7 +1653,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int64, id1);
 
             var count1 = await sc.ExecuteScalarOrNullAsync<int>();
@@ -1927,12 +1938,12 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "INSERT INTO {0} ({1}, {2}, {3}, {4}, {5}, {6}) VALUES ({7}, {8}, {9}, {10}, {11}, {12})",
                 wrappedTable, wrappedId, wrappedOrder, wrappedUser, wrappedDefault, wrappedDisplay, wrappedCamel,
-                _context.MakeParameterName("p0"),
-                _context.MakeParameterName("p1"),
-                _context.MakeParameterName("p2"),
-                _context.MakeParameterName("p3"),
-                _context.MakeParameterName("p4"),
-                _context.MakeParameterName("p5"));
+                sc.MakeParameterName("p0"),
+                sc.MakeParameterName("p1"),
+                sc.MakeParameterName("p2"),
+                sc.MakeParameterName("p3"),
+                sc.MakeParameterName("p4"),
+                sc.MakeParameterName("p5"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             sc.AddParameterWithValue("p1", DbType.Int32, 42);
             sc.AddParameterWithValue("p2", DbType.Int32, 7);
@@ -1946,7 +1957,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedOrder, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var val = await sc.ExecuteScalarOrNullAsync<int>();
             if (val != 42)
@@ -1956,7 +1967,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedUser, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var userVal = await sc.ExecuteScalarOrNullAsync<int>();
             if (userVal != 7)
@@ -1966,7 +1977,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedDefault, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var defaultVal = await sc.ExecuteScalarOrNullAsync<int>();
             if (defaultVal != 9)
@@ -1976,7 +1987,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedDisplay, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var displayVal = await sc.ExecuteScalarOrNullAsync<string>();
             if (displayVal != "display value")
@@ -1986,7 +1997,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedCamel, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var camelVal = await sc.ExecuteScalarOrNullAsync<string>();
             if (camelVal != "CamelValue")

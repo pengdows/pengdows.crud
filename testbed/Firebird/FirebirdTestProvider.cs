@@ -27,12 +27,20 @@ public class FirebirdTestProvider : TestProvider
     public override async Task CreateTable()
     {
         var sqlContainer = context.CreateSqlContainer();
-        var qp = context.QuotePrefix;
-        var qs = context.QuoteSuffix;
+        var tableName = context.WrapObjectName("test_table");
+        var idColumn = context.WrapObjectName("id");
+        var nameColumn = context.WrapObjectName("name");
+        var descriptionColumn = context.WrapObjectName("description");
+        var valueColumn = context.WrapObjectName("value");
+        var isActiveColumn = context.WrapObjectName("is_active");
+        var createdAtColumn = context.WrapObjectName("created_at");
+        var createdByColumn = context.WrapObjectName("created_by");
+        var updatedAtColumn = context.WrapObjectName("updated_at");
+        var updatedByColumn = context.WrapObjectName("updated_by");
 
         // Drop table if exists (Firebird 4.0+)
         sqlContainer.Query.AppendFormat(
-            "DROP TABLE IF EXISTS {0}test_table{1}", qp, qs);
+            "DROP TABLE IF EXISTS {0}", tableName);
 
         try
         {
@@ -45,17 +53,18 @@ public class FirebirdTestProvider : TestProvider
 
         sqlContainer.Clear();
         sqlContainer.Query.AppendFormat(@"
-CREATE TABLE {0}test_table{1} (
-    {0}id{1} BIGINT NOT NULL PRIMARY KEY,
-    {0}name{1} VARCHAR(100) NOT NULL,
-    {0}description{1} VARCHAR(1000) NOT NULL,
-    {0}value{1} INTEGER NOT NULL,
-    {0}is_active{1} BOOLEAN NOT NULL,
-    {0}created_at{1} TIMESTAMP NOT NULL,
-    {0}created_by{1} VARCHAR(100) NOT NULL,
-    {0}updated_at{1} TIMESTAMP NOT NULL,
-    {0}updated_by{1} VARCHAR(100) NOT NULL
-)", qp, qs);
+CREATE TABLE {0} (
+    {1} BIGINT NOT NULL PRIMARY KEY,
+    {2} VARCHAR(100) NOT NULL,
+    {3} VARCHAR(1000) NOT NULL,
+    {4} INTEGER NOT NULL,
+    {5} BOOLEAN NOT NULL,
+    {6} TIMESTAMP NOT NULL,
+    {7} VARCHAR(100) NOT NULL,
+    {8} TIMESTAMP NOT NULL,
+    {9} VARCHAR(100) NOT NULL
+	)", tableName, idColumn, nameColumn, descriptionColumn, valueColumn, isActiveColumn, createdAtColumn,
+            createdByColumn, updatedAtColumn, updatedByColumn);
 
         await sqlContainer.ExecuteNonQueryAsync();
         Console.WriteLine("Table created successfully");

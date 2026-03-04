@@ -12,10 +12,18 @@ public class TiDBTestProvider : TestProvider
     public override async Task CreateTable()
     {
         var sqlContainer = _context.CreateSqlContainer();
-        var qp = _context.QuotePrefix;
-        var qs = _context.QuoteSuffix;
+        var tableName = _context.WrapObjectName("test_table");
+        var idColumn = _context.WrapObjectName("id");
+        var nameColumn = _context.WrapObjectName("name");
+        var descriptionColumn = _context.WrapObjectName("description");
+        var valueColumn = _context.WrapObjectName("value");
+        var isActiveColumn = _context.WrapObjectName("is_active");
+        var createdAtColumn = _context.WrapObjectName("created_at");
+        var createdByColumn = _context.WrapObjectName("created_by");
+        var updatedAtColumn = _context.WrapObjectName("updated_at");
+        var updatedByColumn = _context.WrapObjectName("updated_by");
 
-        sqlContainer.Query.AppendFormat("DROP TABLE IF EXISTS {0}test_table{1}", qp, qs);
+        sqlContainer.Query.AppendFormat("DROP TABLE IF EXISTS {0}", tableName);
         try
         {
             await sqlContainer.ExecuteNonQueryAsync();
@@ -29,18 +37,19 @@ public class TiDBTestProvider : TestProvider
         // TiDB is MySQL wire-compatible.  Use BIGINT PK with explicit IDs (no AUTO_INCREMENT)
         // so the shared Interlocked.Increment ID strategy in TestProvider works correctly.
         sqlContainer.Query.AppendFormat(@"
-CREATE TABLE {0}test_table{1} (
-    {0}id{1}          BIGINT       NOT NULL,
-    {0}name{1}        VARCHAR(100) NOT NULL,
-    {0}description{1} VARCHAR(1000) NOT NULL,
-    {0}value{1}       INT          NOT NULL,
-    {0}is_active{1}   BOOLEAN      NOT NULL,
-    {0}created_at{1}  DATETIME     NOT NULL,
-    {0}created_by{1}  VARCHAR(100) NOT NULL,
-    {0}updated_at{1}  DATETIME     NOT NULL,
-    {0}updated_by{1}  VARCHAR(100) NOT NULL,
-    PRIMARY KEY ({0}id{1})
-);", qp, qs);
+CREATE TABLE {0} (
+    {1} BIGINT NOT NULL,
+    {2} VARCHAR(100) NOT NULL,
+    {3} VARCHAR(1000) NOT NULL,
+    {4} INT NOT NULL,
+    {5} BOOLEAN NOT NULL,
+    {6} DATETIME NOT NULL,
+    {7} VARCHAR(100) NOT NULL,
+    {8} DATETIME NOT NULL,
+    {9} VARCHAR(100) NOT NULL,
+    PRIMARY KEY ({1})
+);", tableName, idColumn, nameColumn, descriptionColumn, valueColumn, isActiveColumn, createdAtColumn,
+            createdByColumn, updatedAtColumn, updatedByColumn);
 
         await sqlContainer.ExecuteNonQueryAsync();
     }
