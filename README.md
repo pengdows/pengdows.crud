@@ -127,10 +127,15 @@ public class Entity
 
 ### Real-Time Metrics & Observability
 
-**23+ metrics tracked automatically** with zero configuration:
+**23+ metrics available** (enable metrics in context configuration):
 
 ```csharp
-var context = new DatabaseContext(connectionString, factory);
+var config = new DatabaseContextConfiguration
+{
+    ConnectionString = connectionString,
+    EnableMetrics = true
+};
+var context = new DatabaseContext(config, factory);
 
 // Get real-time snapshot
 var metrics = context.Metrics;
@@ -291,15 +296,19 @@ var orders = await helper.RetrieveAsync(new[] { 1, 2, 3, ..., 1000 });
 
 ## 🧩 Supported Databases
 
-Tested and tuned for:
+Tested and tuned for 13 directly supported databases:
 
 - **SQL Server** / Express / LocalDB
-- **PostgreSQL** / TimescaleDB / CockroachDB
+- **PostgreSQL** / Aurora PostgreSQL / TimescaleDB
+- **MySQL** / MariaDB / Aurora MySQL
 - **Oracle**
-- **MySQL** / MariaDB
 - **SQLite**
 - **Firebird**
 - **DuckDB**
+- **CockroachDB**
+- **YugabyteDB**
+- **TiDB**
+- **Snowflake**
 
 > All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
@@ -440,7 +449,7 @@ var context = new DatabaseContext(config, SqlClientFactory.Instance);
 // Execute raw SQL
 var sc = context.CreateSqlContainer();
 sc.Query.Append("SELECT CURRENT_TIMESTAMP");
-var dt = sc.ExecuteScalar<DateTime>();
+var dt = await sc.ExecuteScalarRequiredAsync<DateTime>();
 ```
 
 ### Entity Mapping
@@ -898,7 +907,7 @@ public class Order
 // Create helper with enum failure mode
 var helper = new TableGateway<Order, int>(context)
 {
-    EnumParseFailureMode = EnumParseFailureMode.SetNullAndLog  // Don't throw on unknown values
+    EnumParseBehavior = EnumParseFailureMode.SetNullAndLog  // Don't throw on unknown values
 };
 
 // Database has "Cancelled" but enum doesn't
@@ -924,14 +933,17 @@ var orders = await helper.RetrieveAsync(orderIds);
 **Real-world problem:** Need to detect performance degradation before users complain. APM tools cost money.
 
 ```csharp
-var context = new DatabaseContext(connectionString, factory, options: new DatabaseContextOptions
+var config = new DatabaseContextConfiguration
 {
+    ConnectionString = connectionString,
+    EnableMetrics = true,
     MetricsOptions = new MetricsOptions
     {
         PercentileWindowSize = 1024,        // Sliding window (power of 2)
         LongLivedConnectionThreshold = 30   // Seconds before flagged
     }
-});
+};
+var context = new DatabaseContext(config, factory);
 
 // Subscribe to real-time metrics updates
 context.MetricsUpdated += (sender, m) =>
@@ -972,26 +984,17 @@ Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
 **Real-world problem:** PostgreSQL has timestamptz, MySQL doesn't. Oracle handles JSON differently. Need consistent behavior.
 
 ```csharp
-var context = new DatabaseContext(connectionString, factory, options: new DatabaseContextOptions
+var options = TypeCoercionOptions.Default with
 {
-    TypeCoercionOptions = new TypeCoercionOptions
-    {
-        TimeMappingPolicy = TimeMappingPolicy.ForceUtcDateTime,  // Strip offsets
-        JsonPassThrough = JsonPassThrough.PreferDocument         // Use JsonDocument
-    }
-});
+    TimeMappingPolicy = TimeMappingPolicy.ForceUtcDateTime, // Strip offsets
+    JsonPassThrough = JsonPassThrough.PreferDocument        // Use JsonDocument
+};
 
-// TimeMappingPolicy.ForceUtcDateTime:
-// DateTimeOffset -> DateTime (UTC) for MySQL, SQLite (no timezone support)
-
-// TimeMappingPolicy.PreferDateTimeOffset:
-// DateTime -> DateTimeOffset for multi-timezone correctness
-
-// JsonPassThrough.PreferDocument:
-// JSON -> JsonDocument (PostgreSQL jsonb optimization)
-
-// JsonPassThrough.PreferText:
-// JSON -> string (MySQL JSON type compatibility)
+var normalized = TypeCoercionHelper.Coerce(
+    value: dbValue,
+    sourceType: dbValue.GetType(),
+    targetType: typeof(DateTimeOffset),
+    options: options);
 ```
 
 **When it matters:** Multi-database support. Migrating between providers.
@@ -1005,22 +1008,15 @@ var context = new DatabaseContext(connectionString, factory, options: new Databa
 **Real-world problem:** Added a column to database. Don't want to update every entity immediately.
 
 ```csharp
-var helper = new TableGateway<User, long>(context)
-{
-    MapperOptions = new MapperOptions
-    {
-        Mode = MapperMode.Flexible,  // Ignore extra columns
-        ColumnsOnly = true,           // Skip computed properties during INSERT
-        NamePolicy = name => name.ToLowerInvariant()  // Custom mapping
-    }
-};
+var options = new MapperOptions(
+    Strict: false,                                // Ignore extra columns
+    ColumnsOnly: true,                            // Only map [Column] properties
+    NamePolicy: name => name.ToLowerInvariant(), // Custom mapping
+    EnumMode: EnumParseFailureMode.SetNullAndLog);
 
-// Strict mode: Throws if SELECT returns columns not in entity
-// Flexible mode: Ignores extra columns (gradual migration)
-
-// ColumnsOnly: Only serialize [Column] properties
-var sc = helper.BuildCreate(user);
-// Skips properties without [Column] attribute
+// Strict=true: Throws if SELECT returns columns not in entity
+// Strict=false: Ignores extra columns (gradual migration)
+var users = await DataReaderMapper.LoadAsync<User>(reader, options);
 ```
 
 **When it matters:** Large codebases with gradual schema evolution. Blue-green deployments.
@@ -1031,27 +1027,25 @@ var sc = helper.BuildCreate(user);
 
 ### 8. Isolation Level Portability
 
-**Real-world problem:** Need REPEATABLE READ but each database has different syntax. Want portable code.
+**Real-world problem:** Need consistent transaction semantics but each database has different native isolation names. Want portable code.
 
 ```csharp
-// Portable isolation levels
-using var tx = context.BeginTransaction(IsolationProfile.RepeatableRead);
+// Portable isolation profiles
+using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
-// IsolationProfile maps to native levels:
-// - SQL Server: REPEATABLE READ
-// - PostgreSQL: REPEATABLE READ
-// - Oracle: SERIALIZABLE (closest match - degraded)
-// - MySQL: REPEATABLE READ
-// - SQLite: SERIALIZABLE (only option - degraded)
+// IsolationProfile maps to provider-native levels per dialect
 
 // Check if degraded
 var (nativeLevel, wasDegraded) = context.Dialect.IsolationResolver.ResolveWithDetail(
-    IsolationProfile.RepeatableRead);
+    IsolationProfile.SafeNonBlockingReads);
 
 if (wasDegraded)
     _logger.LogWarning("Isolation level degraded to {Level}", nativeLevel);
 
-// Available: ReadUncommitted, ReadCommitted, RepeatableRead, Serializable, Snapshot
+// Available:
+// - SafeNonBlockingReads
+// - StrictConsistency
+// - FastWithRisks
 ```
 
 **When it matters:** Multi-database support. Testing against different providers.
@@ -1355,11 +1349,15 @@ await Assert.ThrowsAsync<InvalidOperationException>(() =>
 
 // Test result mapping
 connection.EnqueueScalarResult(42);
-var result = await container.ExecuteScalarAsync<int>();
+var result = await container.ExecuteScalarRequiredAsync<int>();
 Assert.Equal(42, result);
 ```
 
-**2,951+ tests run in ~6 seconds** using fakeDb.
+Test totals change continuously. Get the current unit-test count dynamically:
+
+```bash
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --list-tests | rg -c "^[[:space:]]*pengdows\\.crud\\.Tests\\."
+```
 
 ### Integration Tests (Real Databases)
 

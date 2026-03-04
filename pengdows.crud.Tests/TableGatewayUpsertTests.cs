@@ -2,6 +2,7 @@
 
 using System.Data;
 using System.Threading.Tasks;
+using System;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.attributes;
@@ -48,6 +49,27 @@ public class TableGatewayUpsertTests
         Assert.Equal(1, entity.Version);
     }
 
+    [Fact]
+    public void BuildUpsert_WithNonWritableIdAndNoPrimaryKey_ThrowsNotSupported()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+        var helper = new TableGateway<IdOnlyEntity, long>(context);
+
+        var entity = new IdOnlyEntity
+        {
+            Value = "v1"
+        };
+
+        Assert.Throws<NotSupportedException>(() => helper.BuildUpsert(entity, context));
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {
@@ -64,5 +86,16 @@ public class TableGatewayUpsertTests
         [Version]
         [Column("version", DbType.Int32)]
         public int Version { get; set; }
+    }
+
+    [Table("id_only_entities")]
+    private class IdOnlyEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int64)]
+        public long Id { get; set; }
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
     }
 }

@@ -66,13 +66,13 @@ dotnet pack <project>.csproj -c Release
 
 - Program to interfaces whenever possible; concrete types should primarily exist to satisfy the interface contracts, and consumers should depend on the abstractions located under `pengdows.crud.abstractions`.
 - Expose `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, etc., as the official surface area for `pengdows.crud` and keep implementation types internal unless there is a compelling reason to document them directly.
-- Hide implementation details as `internal` by default. **Nothing outside of `DatabaseContext` should expose a public constructor** — objects should either be resolved through factory helpers, DI, or internal constructors (exceptions require documented rationale). This keeps the SDK surface stable and highlights the interface-first programming model.
+- Hide implementation details as `internal` by default. Prefer factory/DI creation. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate and documented.
 
 ## Interface-first Mandate
 
 - Always code against the interface contract; implementation classes exist only to fulfill the abstractions defined in `pengdows.crud.abstractions`.
 - Treat interfaces such as `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect`, etc. as the primary SDK surface — new code should depend on those APIs rather than concrete helpers.
-- Keep concrete types internal unless a public contract is required, and do not introduce public constructors except for `DatabaseContext`.
+- Keep concrete types internal unless a public contract is required; avoid adding new public constructors unless there is a clear SDK-use reason.
 
 ## Interfaces & Extension Points
 
@@ -81,7 +81,7 @@ dotnet pack <project>.csproj -c Release
   - `ModeLockTimeout` property (`TimeSpan?`) — timeout for mode/transaction locks; `null` = wait indefinitely
   - `ReaderPlanCacheSize` property (`int?`) — plan cache size for reader connections
 - `ISqlContainer`: compose SQL safely and execute.
-  Example: `var sc = ctx.CreateSqlContainer("SELECT 1"); var v = await sc.ExecuteScalarAsync<int>();`
+  Example: `var sc = ctx.CreateSqlContainer("SELECT 1"); var v = await sc.ExecuteScalarRequiredAsync<int>();`
 - `ITableGateway<TEntity, TRowID>`: SQL-first CRUD with inspectable containers.
   Example: `var sc = helper.BuildRetrieve(new[] { id }); var e = await helper.LoadSingleAsync(sc);`
 - `ITransactionContext`: `using var tx = ctx.BeginTransaction(); ... tx.Commit();` Pass `tx` to helper methods when you want execution inside the transaction.
@@ -122,7 +122,9 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 **ISqlContainer execution methods return `ValueTask` (not `Task`):**
 ```csharp
 ValueTask<int>            ExecuteNonQueryAsync(commandType);
-ValueTask<T?>             ExecuteScalarAsync<T>(commandType);
+ValueTask<T>              ExecuteScalarRequiredAsync<T>(commandType);
+ValueTask<T?>             ExecuteScalarOrNullAsync<T>(commandType);
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(commandType);
 ValueTask<ITrackedReader> ExecuteReaderAsync(commandType);
 ```
 
@@ -143,7 +145,7 @@ var clone = container.Clone(txContext);     // Different context (transaction, m
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
-2. TableGateway REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
+2. TableGateway requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
@@ -233,6 +235,10 @@ typeMap.Register<MyEntity>();           // Explicit pre-registration
 typeMap.GetTableInfo<MyEntity>();       // Auto-registers on first call
 new TableGateway<MyEntity, long>(ctx);  // Also triggers auto-registration
 ```
+
+## JSON Mapping Defaults
+
+JSON CLR types (`JsonDocument`, `JsonElement`, `JsonNode`, `JsonValue`) are auto-detected as JSON columns by the type map. `[Json]` remains available for explicit override/clarity.
 
 ## Enum Storage
 
@@ -374,10 +380,10 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `KeepAlive`)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
-11. **Execution methods return ValueTask** — not Task, for reduced allocations
+11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
 12. **All async methods have CancellationToken overloads** — pass tokens through for proper cancellation
 
 ## Commit & Pull Request Guidelines

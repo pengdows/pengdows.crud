@@ -30,7 +30,7 @@ want **full control** over SQL, **predictable behavior** across databases, and *
     - UTC timestamps
 - Built-in **audit tracking** per entity and per field.
 - **Safe SQL generation** with strict parameterization (`@`, `:`, or `?` depending on provider).
-- Connection lifecycle modes: `New`, `Shared`, `KeepAlive`.
+- Connection lifecycle modes: `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, `Best`.
 - **Scoped transactions** via `TransactionContext`.
 - Works cleanly with DI and ADO.NET—**no leaky abstractions**.
 
@@ -114,7 +114,7 @@ Instead, it helps you write **real SQL** that's:
 
 ---
 
--## 📚 Documentation
+## 📚 Documentation
 
 Topics include:
 

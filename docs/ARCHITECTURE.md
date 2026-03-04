@@ -294,7 +294,7 @@ public ILockerAsync GetLock()
 
 ```csharp
 using var container = context.CreateSqlContainer("SELECT 1");
-var value = await container.ExecuteScalarAsync<int>();
+var value = await container.ExecuteScalarRequiredAsync<int>();
 ```
 
 **Notes:**

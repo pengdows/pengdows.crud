@@ -316,12 +316,8 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
 
-        // Validate upsert key exists — same logic as ResolveUpsertKey
-        var hasWritableId = _idColumn != null && _idColumn.IsIdIsWritable;
-        if (!hasWritableId && _tableInfo.PrimaryKeys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
+        // Validate upsert key exists and is usable (PK preferred, writable Id fallback).
+        _ = ResolveUpsertKey();
 
         // For databases that support multi-row upsert via ON CONFLICT or ON DUPLICATE KEY
         if (ctx.DataSourceInfo.SupportsInsertOnConflict)
@@ -474,14 +470,8 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareForInsertOrUpsert(entity, auditValues);
         }
 
-        // Resolve conflict key
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
-
-        var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+        // Resolve conflict key once for all chunks.
+        var conflictCols = ResolveUpsertKey();
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);

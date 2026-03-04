@@ -9,7 +9,7 @@
 ### Breaking Changes from 1.x
 - **`EntityHelper<TEntity, TRowID>` renamed to `TableGateway<TEntity, TRowID>`** — interface: `ITableGateway`
 - **Interface-first design mandate** — all public APIs exposed through `pengdows.crud.abstractions`
-- **All async methods return `ValueTask`/`ValueTask<T>`** instead of `Task`/`Task<T>` (30-50% allocation reduction)
+- **Core execution APIs use `ValueTask`** (`ISqlContainer` / reader operations) to reduce allocation overhead on hot paths
 - **API baseline enforcement** — breaking interface changes detected automatically at build time
 
 ### New Features
@@ -162,15 +162,21 @@ Connection lifecycle, transaction management, metrics, and pool governance.
 
 ```csharp
 // Create context (with auto-selected connection mode)
-var context = new DatabaseContext(
-    "Server=localhost;Database=mydb",
-    SqlClientFactory.Instance,
-    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best }
-);
+var config = new DatabaseContextConfiguration
+{
+    ConnectionString = "Server=localhost;Database=mydb",
+    DbMode = DbMode.Best
+};
+var context = new DatabaseContext(config, SqlClientFactory.Instance);
 
 // Or with NpgsqlDataSource (preferred for PostgreSQL)
 var dataSource = new NpgsqlDataSourceBuilder(connectionString).Build();
-var context = new DatabaseContext(connectionString, dataSource);
+var pgConfig = new DatabaseContextConfiguration
+{
+    ConnectionString = connectionString,
+    DbMode = DbMode.Best
+};
+var context = new DatabaseContext(pgConfig, dataSource, NpgsqlFactory.Instance);
 
 // Transactions
 using var transaction = context.BeginTransaction();
@@ -361,7 +367,7 @@ bool success = await gateway.CreateAsync(customer, context);
 // Or build SQL manually
 var container = gateway.BuildCreate(customer);
 container.Query.Append(" RETURNING customer_id"); // PostgreSQL
-var newId = await container.ExecuteScalarAsync<int>();
+var newId = await container.ExecuteScalarRequiredAsync<int>();
 ```
 
 ### Retrieve
@@ -573,13 +579,14 @@ The pool governor prevents connection pool exhaustion by limiting concurrent con
 ```csharp
 var config = new DatabaseContextConfiguration
 {
+    ConnectionString = connectionString,
     DbMode = DbMode.Best,
     MaxConcurrentReads = 20,
     MaxConcurrentWrites = 10,
     PoolAcquireTimeout = TimeSpan.FromSeconds(5)
 };
 
-var context = new DatabaseContext(connectionString, factory, config);
+var context = new DatabaseContext(config, factory);
 ```
 
 **Features:**
@@ -666,7 +673,7 @@ public enum DbMode
 {
     Standard = 0,         // Recommended for production
     KeepAlive = 1,        // Keeps one sentinel connection open
-    SingleWriter = 2,     // Persistent writer + ephemeral readers
+    SingleWriter = 2,     // Serialized writes with ephemeral connections
     SingleConnection = 4, // All work through one pinned connection
     Best = 15             // Auto-select optimal mode for the database
 }
@@ -678,7 +685,7 @@ public enum DbMode
 |------|----------|----------|
 | **Standard** | Production workloads | New connection per operation, relies on provider pooling |
 | **KeepAlive** | SQL Server LocalDB | Sentinel connection prevents database unload |
-| **SingleWriter** | File-based SQLite/DuckDB | One persistent write connection, ephemeral readers |
+| **SingleWriter** | File-based SQLite/DuckDB | Serializes write operations via turnstile; readers use ephemeral connections |
 | **SingleConnection** | In-memory `:memory:` databases | All operations share one pinned connection |
 | **Best** | Everywhere (recommended) | Auto-selects based on database type and connection string |
 
@@ -693,8 +700,12 @@ public enum DbMode
 
 ```csharp
 // Recommended: let pengdows.crud choose
-var context = new DatabaseContext(connectionString, factory,
-    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best });
+var config = new DatabaseContextConfiguration
+{
+    ConnectionString = connectionString,
+    DbMode = DbMode.Best
+};
+var context = new DatabaseContext(config, factory);
 ```
 
 ### Connection Strategy Pattern
@@ -702,7 +713,7 @@ var context = new DatabaseContext(connectionString, factory,
 Each `DbMode` maps to an `IConnectionStrategy` implementation:
 - `StandardConnectionStrategy` — Ephemeral connections from pool
 - `KeepAliveConnectionStrategy` — Sentinel + ephemeral work connections
-- `SingleWriterConnectionStrategy` — Persistent writer + ephemeral readers
+- `SingleWriterConnectionStrategy` — Serialized writers + ephemeral work connections
 - `SingleConnectionStrategy` — All work on single pinned connection
 
 ## Session Settings
@@ -843,15 +854,15 @@ public void ConnectionFailure_ThrowsExpectedException()
     Assert.Throws<InvalidOperationException>(() =>
     {
         using var container = context.CreateSqlContainer("SELECT 1");
-        container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+        container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
     });
 }
 ```
 
 ## Performance Optimizations
 
-### 1. ValueTask Throughout
-All async methods return `ValueTask`/`ValueTask<T>` instead of `Task`/`Task<T>`, reducing allocations by 30-50% for synchronous completion paths.
+### 1. ValueTask on Execution Hot Paths
+`ISqlContainer` execution methods use `ValueTask`/`ValueTask<T>` for synchronous-completion paths to reduce allocations.
 
 ### 2. Reader Plan Caching
 ```csharp
@@ -1004,9 +1015,9 @@ public class TenantOrderService
 - **Refactor**: Improve while keeping tests green
 - **Coverage**: 83% minimum (CI enforced), 95% target for new features
 
-### Test Count (as of v2.0)
-- **Unit Tests**: 4,300+ tests (all passing)
-- **Integration Tests**: Across 9 databases via Testcontainers
+### Test Count
+- **Unit Tests**: Dynamic and continuously growing
+- **Integration Tests**: Multi-database coverage via Testcontainers
 - **Benchmarks**: BenchmarkDotNet suite with automatic container lifecycle
 
 ### CI/CD Pipeline
@@ -1024,7 +1035,7 @@ public class TenantOrderService
 | **SQL Control** | LINQ only | Raw SQL | Raw SQL | Raw SQL |
 | **Type Safety** | Strong | Dynamic | Dynamic | Strong |
 | **Change Tracking** | Built-in | Manual | Manual | Manual |
-| **Multi-DB Support** | 8+ DBs | Any ADO.NET | Any ADO.NET | 9 DBs |
+| **Multi-DB Support** | 8+ DBs | Any ADO.NET | Any ADO.NET | 13 directly supported databases |
 | **Testability** | InMemory provider | Mockable | Mockable | fakeDb |
 | **Learning Curve** | High | Low | Low | Medium |
 | **Performance** | Good | Excellent | Very Good | Excellent |
@@ -1033,7 +1044,7 @@ public class TenantOrderService
 | **Transaction Mgmt** | Built-in | Manual | Manual | Built-in |
 | **Connection Mgmt** | Automatic | Manual | Manual | Strategies + Governor |
 | **Metrics** | None | None | None | 25+ real-time metrics |
-| **ValueTask** | No | No | No | Yes (all async) |
+| **ValueTask** | No | No | No | Yes (execution hot paths) |
 | **Code Size** | Very Large | Small | Small | Medium |
 
 ## Getting Started
@@ -1064,9 +1075,12 @@ public class Product
 ### 3. Create Context and Gateway
 ```csharp
 var context = new DatabaseContext(
-    "Server=localhost;Database=mydb",
-    SqlClientFactory.Instance,
-    new DatabaseContextConfiguration { ConnectionMode = DbMode.Best }
+    new DatabaseContextConfiguration
+    {
+        ConnectionString = "Server=localhost;Database=mydb",
+        DbMode = DbMode.Best
+    },
+    SqlClientFactory.Instance
 );
 
 var gateway = new TableGateway<Product, int>(context);

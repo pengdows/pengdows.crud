@@ -56,10 +56,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
-        if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
+        _ = ResolveUpsertKey();
 
         if (ctx.DataSourceInfo.IsUsingFallbackDialect)
         {
@@ -86,15 +83,15 @@ public partial class TableGateway<TEntity, TRowID>
 
     private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
     {
-        if (_idColumn != null && _idColumn.IsIdIsWritable)
-        {
-            return new List<IColumnInfo> { _idColumn! };
-        }
-
         var keys = _tableInfo.PrimaryKeys;
         if (keys.Count > 0)
         {
             return keys;
+        }
+
+        if (_idColumn != null && _idColumn.IsIdIsWritable)
+        {
+            return new List<IColumnInfo> { _idColumn };
         }
 
         throw new NotSupportedException(UpsertNoWritableKeyMessage);
@@ -182,13 +179,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var conflictCols = ResolveUpsertKey();
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
@@ -295,12 +286,6 @@ public partial class TableGateway<TEntity, TRowID>
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
                 .Append(BuildWrappedTableName(dialect))
@@ -367,13 +352,7 @@ public partial class TableGateway<TEntity, TRowID>
                 insertValSb.Append(wrapped);
             }
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var joinCols = ResolveUpsertKey();
             for (var i = 0; i < joinCols.Count; i++)
             {
                 if (i > 0)
@@ -454,13 +433,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var joinCols = ResolveUpsertKey();
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("UPDATE OR INSERT INTO ")

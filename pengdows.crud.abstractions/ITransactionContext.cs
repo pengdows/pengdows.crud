@@ -63,8 +63,30 @@ public interface ITransactionContext : IDatabaseContext
     Task SavepointAsync(string name);
 
     /// <summary>
+    /// Creates a named savepoint within the transaction scope.
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task SavepointAsync(string name, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return SavepointAsync(name);
+    }
+
+    /// <summary>
     /// Rolls back the transaction to the specified savepoint.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
     Task RollbackToSavepointAsync(string name);
+
+    /// <summary>
+    /// Rolls back the transaction to the specified savepoint.
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return RollbackToSavepointAsync(name);
+    }
 }
