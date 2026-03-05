@@ -96,7 +96,7 @@ public partial class DatabaseContext
             return NoOpAsyncLocker.Instance;
         }
 
-        return new RealAsyncLocker(_connectionOpenGate);
+        return _connectionOpenLocker ?? (ILockerAsync)new RealAsyncLocker(_connectionOpenGate);
     }
 
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,

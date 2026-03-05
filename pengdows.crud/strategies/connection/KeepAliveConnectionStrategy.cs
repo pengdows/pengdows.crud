@@ -80,15 +80,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         catch
         {
             // Dispose and rethrow to avoid leaking partially initialized connections
-            try
-            {
-                conn.Dispose();
-            }
-            catch
-            {
-                /* ignore */
-            }
-
+            conn.Dispose();
             throw;
         }
 
@@ -154,14 +146,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         {
             if (ownsConnection && detectionTarget != null)
             {
-                try
-                {
-                    detectionTarget.Dispose();
-                }
-                catch
-                {
-                    /* ignore */
-                }
+                detectionTarget.Dispose();
             }
         }
     }

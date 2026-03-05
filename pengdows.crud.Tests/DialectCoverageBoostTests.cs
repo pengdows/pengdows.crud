@@ -34,7 +34,12 @@ public class DialectCoverageBoostTests
         Assert.Equal("src.\"col\"", dialect.UpsertIncomingColumn("col"));
         Assert.Null(dialect.ParseVersion("   "));
         Assert.Equal(new Version(8, 12, 1), dialect.ParseVersion("8.12.1"));
-        Assert.Equal("ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE;", dialect.GetReadOnlySessionSettings());
+        // Snowflake has no session-level read-only mode; TRANSACTION_READ_ONLY is not a valid
+        // ALTER SESSION SET parameter. GetReadOnlySessionSettings returns empty (base default).
+        Assert.Equal(string.Empty, dialect.GetReadOnlySessionSettings());
+        // GetFinalSessionSettings does not include TRANSACTION_READ_ONLY regardless of readOnly flag
+        Assert.DoesNotContain("TRANSACTION_READ_ONLY", dialect.GetFinalSessionSettings(true), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TRANSACTION_READ_ONLY", dialect.GetFinalSessionSettings(false), StringComparison.OrdinalIgnoreCase);
 
         var qb = new SqlQueryBuilder();
         dialect.BuildBatchUpdateSql("\"t\"", new[] { "\"val\"" }, new[] { "\"id\"" }, 1, qb,

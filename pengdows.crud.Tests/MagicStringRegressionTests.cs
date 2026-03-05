@@ -158,19 +158,31 @@ public class MagicStringRegressionTests
     }
 
     // ── DuckDB read-only pins ─────────────────────────────────────────────
+    // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string.
+    // No session SQL is used; both GetReadOnlySessionSettings and GetReadOnlyTransactionResetSql
+    // fall back to the base (empty string / null).
 
     [Fact]
-    public void DuckDbDialect_ReadOnlySessionSettings_IsSetAccessMode()
+    public void DuckDbDialect_ReadOnlySessionSettings_IsEmpty()
     {
         var d = CreateDuckDbDialect();
-        Assert.Equal("SET access_mode = 'read_only';", d.GetReadOnlySessionSettings());
+        Assert.Equal(string.Empty, d.GetReadOnlySessionSettings());
     }
 
     [Fact]
-    public void DuckDbDialect_ReadWriteSessionSettings_IsAccessModeReadWrite()
+    public void DuckDbDialect_ReadOnlyTransactionResetSql_IsNull()
     {
         var d = CreateDuckDbDialect();
-        Assert.Equal("SET access_mode = 'read_write';", d.GetReadOnlyTransactionResetSql());
+        Assert.Null(d.GetReadOnlyTransactionResetSql());
+    }
+
+    [Fact]
+    public void DuckDbDialect_FinalSessionSettings_IsEmpty()
+    {
+        var d = CreateDuckDbDialect();
+        // Redundant DuckDB session settings removed for performance: handled by connection string
+        Assert.Equal(string.Empty, d.GetFinalSessionSettings(true));
+        Assert.Equal(string.Empty, d.GetFinalSessionSettings(false));
     }
 
     [Fact]

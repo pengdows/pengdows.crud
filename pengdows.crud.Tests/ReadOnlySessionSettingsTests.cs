@@ -16,8 +16,10 @@ public class ReadOnlySessionSettingsTests
         { SupportedDatabase.MySql, "SET SESSION transaction_read_only = 1;" },
         { SupportedDatabase.MariaDb, "SET SESSION transaction_read_only = 1;" },
         { SupportedDatabase.Oracle, "" },
-        { SupportedDatabase.Sqlite, "PRAGMA query_only = ON;" },
-        { SupportedDatabase.DuckDB, "SET access_mode = 'read_only';" }
+        // SQLite, DuckDB, and Snowflake use connection string enforcement — no session SQL
+        { SupportedDatabase.Sqlite, "" },
+        { SupportedDatabase.DuckDB, "" },
+        { SupportedDatabase.Snowflake, "" }
     };
 
     [Theory]
@@ -72,6 +74,22 @@ public class ReadOnlySessionSettingsTests
         Assert.DoesNotContain(expected, ctx.SessionSettingsPreamble);
     }
 
+    // Regression guard: these dialects must NOT produce session SQL for read-only enforcement —
+    // they rely on connection string parameters (access_mode, Mode=ReadOnly) or server permissions.
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite, "PRAGMA query_only")]
+    [InlineData(SupportedDatabase.DuckDB, "SET access_mode")]
+    [InlineData(SupportedDatabase.Snowflake, "TRANSACTION_READ_ONLY")]
+    public void GetFinalSessionSettings_ReadOnly_DoesNotContainRemovedSql(
+        SupportedDatabase db, string forbidden)
+    {
+        var factory = new fakeDbFactory(db);
+        using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={db}", factory);
+        var dialect = CreateDialect(db, factory);
+        var settings = dialect.GetFinalSessionSettings(true);
+        Assert.DoesNotContain(forbidden, settings, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static SqlDialect CreateDialect(SupportedDatabase database, fakeDbFactory factory)
     {
         return database switch
@@ -82,6 +100,7 @@ public class ReadOnlySessionSettingsTests
             SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger<OracleDialect>.Instance),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger<DuckDbDialect>.Instance),
+            SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance),
             _ => throw new ArgumentOutOfRangeException(nameof(database))
         };
     }

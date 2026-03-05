@@ -148,13 +148,17 @@ Returns the wrapped SQL string. The `captureReturn` parameter enables capturing 
 - Finalizer calls `Dispose(false)` to ensure unmanaged cleanup
 - `Cleanup()` handles connection and command cleanup based on execution mode
 
-## WrapObjectName
+## WrapObjectName vs WrapSimpleName
 
-Wraps table or column names using the database's quote character. This will split and reassemble a value as well.
+There are two wrapping methods with different splitting behavior:
+
+### WrapObjectName — splits on CompositeIdentifierSeparator (`.`)
+
+Use for table names, column names, schema-qualified names, and alias-prefixed columns. Splits the input on `.`, wraps each segment individually, and reassembles with the separator.
 
 ```csharp
 var name = sc.WrapObjectName("MyTable");
-// Returns "MyTable" or [MyTable] or `MyTable` or similarly appropriate value
+// Returns "MyTable" or [MyTable] or `MyTable`
 
 var schemaAndName = sc.WrapObjectName("dbo.mytable");
 // Returns "dbo"."mytable" or [dbo].[mytable] or `dbo`.`mytable`
@@ -163,7 +167,18 @@ var aliasedColumn = sc.WrapObjectName("o.total");
 // Returns "o"."total" or [o].[total] or `o`.`total`
 ```
 
-**IMPORTANT:** Always use `WrapObjectName()` for all table names, column names, and aliases in custom SQL to ensure proper quoting per database dialect.
+Also idempotent — already-quoted segments are left as-is.
+
+### WrapSimpleName — wraps the entire string as one token
+
+Use when the identifier must not be split, e.g. a parameter name, a literal that contains a dot that is part of the name, or any case where splitting on `.` would be wrong.
+
+```csharp
+var param = sc.WrapSimpleName("some.weird.name");
+// Wraps the whole string: "some.weird.name" — no splitting
+```
+
+**IMPORTANT:** Always use `WrapObjectName()` for table names, column names, schema qualifiers, and alias-prefixed columns in custom SQL. Use `WrapSimpleName()` only when you explicitly need to suppress the split.
 
 ## Complete Example
 

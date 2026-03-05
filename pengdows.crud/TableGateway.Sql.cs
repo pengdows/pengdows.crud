@@ -15,7 +15,6 @@
 // - Performance: Templates built once per dialect, then cloned for use.
 // =============================================================================
 
-using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 
@@ -90,29 +89,8 @@ public partial class TableGateway<TEntity, TRowID>
             return (TRowID)(object)string.Empty;
         }
 
-        if (typeof(TRowID).IsArray)
-        {
-            var elementType = typeof(TRowID).GetElementType() ?? typeof(object);
-            var instance = Array.CreateInstance(elementType, 1);
-            return (TRowID)(object)instance;
-        }
-
-        try
-        {
-            return (TRowID)Activator.CreateInstance(typeof(TRowID), true)!;
-        }
-        catch
-        {
-            try
-            {
-                return (TRowID)RuntimeHelpers.GetUninitializedObject(typeof(TRowID));
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    $"Unable to create a template identifier instance for {typeof(TRowID)}.", ex);
-            }
-        }
+        throw new InvalidOperationException(
+            $"Unsupported row-id type for template generation: {typeof(TRowID)}.");
     }
 
     private static IReadOnlyCollection<TRowID> CreateTemplateRowIds(int count)

@@ -1448,6 +1448,33 @@ Benchmark suite included: `benchmarks/CrudBenchmarks/`
 
 ---
 
+## Support pengdows.crud
+
+pengdows.crud is an independent, developer-driven project focused on deterministic, SQL-first data access for .NET. It exists because too many data layers trade correctness, transparency, and operational safety for convenience.
+
+The goal is simple:
+
+* predictable SQL behavior across dialects
+* strong concurrency and session guarantees
+* disciplined connection pooling and backpressure
+* minimal abstraction over the database
+
+If you use pengdows.crud in your projects—or simply value tools that respect how databases actually work—consider supporting the project.
+
+Support helps fund:
+
+* development and testing across multiple database engines
+* documentation, benchmarks, and real-world examples
+* ecosystem tools such as the **mint** POCO generator
+* the long-term maintenance that most open-source infrastructure quietly depends on
+
+pengdows.crud is built in the open and designed for developers who care about correctness, performance, and control over their data layer.
+
+If you'd like to help keep the project moving forward, you can support it here:
+**[https://buymeacoffee.com/pengdows](https://buymeacoffee.com/pengdows)**
+
+---
+
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

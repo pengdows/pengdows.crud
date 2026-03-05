@@ -37,9 +37,14 @@ public class DuckDbReadBenchmarks : IDisposable
     // Dapper uses a single persistent connection (avoids per-op open/close in the Dapper path)
     private DuckDBConnection _dapperConn = null!;
 
-    // pengdows.crud uses Standard mode (connection-per-op — same as EqualFootingCrudBenchmarks)
+    // pengdows.crud — Standard mode (connection-per-op — same as EqualFootingCrudBenchmarks)
     private DatabaseContext _pengdowsCtx = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+
+    // pengdows.crud — SingleConnection mode (shared persistent connection, eliminates open/close overhead)
+    private DatabaseContext _pengdowsSingleCtx = null!;
+    private TableGateway<BenchEntity, int> _singleGateway = null!;
+
     private TypeMapRegistry _typeMap = null!;
 
     private bool _originalMatchNamesWithUnderscores;
@@ -92,6 +97,17 @@ public class DuckDbReadBenchmarks : IDisposable
         };
         _pengdowsCtx = new DatabaseContext(cfg, DuckDBClientFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsCtx);
+
+        // SingleConnection: shared persistent connection — eliminates open/close + session-settings overhead.
+        // Puts pengdows.crud on equal footing with the Dapper _dapperConn path.
+        var cfgSingle = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={_dbFile}",
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleConnection
+        };
+        _pengdowsSingleCtx = new DatabaseContext(cfgSingle, DuckDBClientFactory.Instance, null, _typeMap);
+        _singleGateway = new TableGateway<BenchEntity, int>(_pengdowsSingleCtx);
     }
 
     [GlobalCleanup]
@@ -99,6 +115,7 @@ public class DuckDbReadBenchmarks : IDisposable
     {
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
         _pengdowsCtx?.Dispose();
+        _pengdowsSingleCtx?.Dispose();
         _dapperConn?.Dispose();
 
         foreach (var f in new[] { _dbFile, _dbFile + ".wal" })
@@ -142,6 +159,27 @@ public class DuckDbReadBenchmarks : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// pengdows.crud SingleConnection — shared persistent connection, no open/close per op.
+    /// On equal footing with ReadSingle_Dapper (both use a shared connection).
+    /// </summary>
+    [Benchmark]
+    public async Task<BenchEntity?> ReadSingle_Pengdows_SingleConnection()
+    {
+        BenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var container = _pengdowsSingleCtx.CreateSqlContainer();
+            container.Query.Append(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
+            container.Query.Append(container.MakeParameterName("Id"));
+            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
+            result = await _singleGateway.LoadSingleAsync(container);
+        }
+
+        return result;
+    }
+
     [Benchmark]
     public async Task<BenchEntity?> ReadSingle_Dapper()
     {
@@ -171,6 +209,21 @@ public class DuckDbReadBenchmarks : IDisposable
         container.Query.Append($" LIMIT {RecordCount}");
         container.AddParameterWithValue("Age", DbType.Int32, 30);
         return await _gateway.LoadListAsync(container);
+    }
+
+    /// <summary>
+    /// pengdows.crud SingleConnection list read — shared persistent connection.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<BenchEntity>> ReadList_Pengdows_SingleConnection()
+    {
+        await using var container = _pengdowsSingleCtx.CreateSqlContainer();
+        container.Query.Append(
+            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
+        container.Query.Append(container.MakeParameterName("Age"));
+        container.Query.Append($" LIMIT {RecordCount}");
+        container.AddParameterWithValue("Age", DbType.Int32, 30);
+        return await _singleGateway.LoadListAsync(container);
     }
 
     [Benchmark]

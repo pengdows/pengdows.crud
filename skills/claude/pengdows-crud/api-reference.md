@@ -120,7 +120,8 @@ string CompositeIdentifierSeparator { get; } // Identifier separator
 ### Identifier Handling
 
 ```csharp
-string WrapObjectName(string name);       // Quote identifiers per dialect
+string WrapObjectName(string name);       // Split on '.', wrap each segment, reassemble — use for tables/columns/aliases
+string WrapSimpleName(string name);       // Wrap the whole string as one token — no splitting on '.'
 string MakeParameterName(string name);    // Format parameter name per dialect
 string MakeParameterName(DbParameter p);  // Format from parameter object
 ```

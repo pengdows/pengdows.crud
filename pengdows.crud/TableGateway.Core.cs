@@ -1248,21 +1248,10 @@ public partial class TableGateway<TEntity, TRowID> :
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
-        // Fast path: generate simple equality SQL directly instead of using expensive templates
-        using var container = BuildBaseRetrieve("", ctx);
         var dialect = GetDialect(ctx);
-
-        // Add simple WHERE clause: column = @p0
-        var wrappedColumnName = dialect.WrapSimpleName(_idColumn.Name);
-        var paramName = container.MakeParameterName("p0");
-        container.Query.Append(SqlFragments.Where);
-        container.Query.Append(wrappedColumnName);
-        container.Query.Append(SqlFragments.EqualsOp);
-        container.Query.Append(paramName);
-
-        // Add the parameter
-        var parameter = container.CreateDbParameter(paramName, _idColumn.DbType, id);
-        container.AddParameter(parameter);
+        var templates = GetContainerTemplatesForDialect(dialect, ctx);
+        using var container = templates.GetByIdTemplate!.Clone(ctx);
+        container.SetParameterValue("p0", id);
 
         return await LoadSingleAsync(container, cancellationToken).ConfigureAwait(false);
     }

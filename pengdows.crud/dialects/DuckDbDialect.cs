@@ -150,37 +150,29 @@ internal class DuckDbDialect : SqlDialect
 
     private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
 
-    // SET access_mode = 'read_only' / 'read_write' is available in DuckDB 0.3.0+.
-    // The old PRAGMA read_only = 1 syntax was deprecated and removed.
-    // Minimum supported DuckDB version for this library: 0.8.0+
-    // (pengdows.crud CI testbed uses DuckDB 1.x; see testbed project for pinned version).
-    private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
-    private const string ReadWriteSessionSetting = "SET access_mode = 'read_write';";
-
+    // Read-only enforcement for DuckDB uses the connection string parameter access_mode=READ_ONLY,
+    // applied at database-open time via ApplyConnectionSettingsCore and GetReadOnlyConnectionString.
+    // This is the only reliable enforcement path: access_mode is a file-open attribute set when
+    // DuckDB opens the database file and cannot be changed on an already-open connection.
+    // No session SQL or transaction SQL is used for read-only enforcement.
     public override string? GetReadOnlyConnectionParameter()
     {
         return ReadOnlyConnectionParam;
     }
 
-    public override string GetReadOnlySessionSettings()
+    /// <summary>
+    /// DuckDB read-only mode is enforced via <c>access_mode=READ_ONLY</c> in the connection string
+    /// (see <see cref="ApplyConnectionSettingsCore"/> and <see cref="GetReadOnlyConnectionString"/>),
+    /// not via session SQL. Returns empty string to avoid an extra RTT on every connection open.
+    /// </summary>
+    public override string GetFinalSessionSettings(bool readOnly)
     {
-        return ReadOnlySessionSetting;
+        return string.Empty;
     }
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "DuckDB", cancellationToken);
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return ReadWriteSessionSetting;
+        return string.Empty;
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

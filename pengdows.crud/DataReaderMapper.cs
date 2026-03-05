@@ -264,7 +264,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         for (var i = 0; i < plan.Ordinals.Length; i++)
         {
             var ordinal = plan.Ordinals[i];
-            if (rdr.IsDBNull(ordinal))
+            if (!plan.SkipNullCheck[i] && rdr.IsDBNull(ordinal))
             {
                 continue;
             }
@@ -301,6 +301,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var ordinals = new List<int>();
         var setters = new List<Action<T, DbDataReader>>();
         var properties = new List<PropertyInfo>();
+        var skipNullChecks = new List<bool>();
 
         for (var i = 0; i < reader.FieldCount; i++)
         {
@@ -318,13 +319,19 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 setters.Add(GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
+                // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
+                // guard for these columns — if the DB returns NULL for a non-nullable property,
+                // the typed getter will throw, which is the correct loud failure.
+                var propType = prop.PropertyType;
+                skipNullChecks.Add(propType.IsValueType && Nullable.GetUnderlyingType(propType) == null);
             }
         }
 
         return new MapperPlan<T>(
             ordinals.ToArray(),
             properties.ToArray(),
-            setters.ToArray());
+            setters.ToArray(),
+            skipNullChecks.ToArray());
     }
 
     /// <summary>
@@ -669,7 +676,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private sealed record MapperPlan<T>(
         int[] Ordinals,
         PropertyInfo[] Properties,
-        Action<T, DbDataReader>[] Setters);
+        Action<T, DbDataReader>[] Setters,
+        bool[] SkipNullCheck);
 
     private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, IMapperOptions options)
     {

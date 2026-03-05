@@ -254,36 +254,21 @@ internal class SnowflakeDialect : SqlDialect
 
     public override string GetFinalSessionSettings(bool readOnly)
     {
-        // 1 RTT / 1 Command Optimization: Consolidate all session assignments (baseline + intent)
-        // into a single comma-separated ALTER SESSION SET command.
-        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        try
-        {
-            sb.Append("ALTER SESSION SET ");
-            // CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ: the Snowflake.Data driver defaults
-            // to TIMESTAMP_LTZ for DateTime bind variables; since the dialect normalises
-            // DateTimeOffset → UTC DateTime for NTZ columns we must override this to prevent
-            // the driver from attaching timezone metadata at bind time.
-            //
-            // LOCK_TIMEOUT = 30000 s (≈8.3 h): intentionally shorter than the Snowflake default
-            // of 43200 s (12 h); long-held locks in a data-access layer indicate a bug.
-            sb.Append("TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000");
-
-            if (readOnly)
-            {
-                sb.Append(", TRANSACTION_READ_ONLY = TRUE;");
-            }
-            else
-            {
-                sb.Append(", TRANSACTION_READ_ONLY = FALSE;");
-            }
-
-            return sb.ToString();
-        }
-        finally
-        {
-            sb.Dispose();
-        }
+        // 1 RTT / 1 Command Optimization: Consolidate all session assignments into a single
+        // comma-separated ALTER SESSION SET command.
+        //
+        // CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ: the Snowflake.Data driver defaults
+        // to TIMESTAMP_LTZ for DateTime bind variables; since the dialect normalises
+        // DateTimeOffset → UTC DateTime for NTZ columns we must override this to prevent
+        // the driver from attaching timezone metadata at bind time.
+        //
+        // LOCK_TIMEOUT = 30000 s (≈8.3 h): intentionally shorter than the Snowflake default
+        // of 43200 s (12 h); long-held locks in a data-access layer indicate a bug.
+        //
+        // Note: Snowflake does not have a session-level read-only mode. TRANSACTION_READ_ONLY
+        // is not a valid ALTER SESSION SET parameter. Read-only intent must be enforced through
+        // Snowflake role/warehouse permissions or read-only credentials, not session SQL.
+        return "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
     }
 
     private SessionSettingsResult GetSnowflakeSessionSettings(IDbConnection connection)
@@ -314,16 +299,6 @@ internal class SnowflakeDialect : SqlDialect
     public override string GetBaseSessionSettings()
     {
         return _sessionSettings ?? "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
-    }
-
-    public override string GetReadOnlySessionSettings()
-    {
-        return "ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE;";
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return "ALTER SESSION SET TRANSACTION_READ_ONLY = FALSE;";
     }
 
     // Connection pooling properties for Snowflake

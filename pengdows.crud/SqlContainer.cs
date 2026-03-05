@@ -1100,15 +1100,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         try
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            contextLocker = _context.GetLock();
+            if (contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+            
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
+            
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
@@ -1142,6 +1148,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.DisposeAsync().ConfigureAwait(false);
+            }
             Cleanup(cmd, conn);
         }
     }
@@ -1346,13 +1356,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
+        ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var lockTransferred = false;
         try
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            contextLocker = _context.GetLock();
+            if (contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+            
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
@@ -1423,6 +1438,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 catch
                 {
                     // Ignore disposal errors in finally block
+                }
+            }
+
+            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            {
+                try
+                {
+                    await contextLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // ignore
                 }
             }
 

@@ -230,12 +230,11 @@ public class CriticalPathCoverageTests
     }
 
     /// <summary>
-    /// Test transaction isolation error scenarios
+    /// Unsupported isolation levels are rejected; supported levels can be rolled back cleanly.
     /// </summary>
     [Fact]
     public void DatabaseContext_TransactionIsolationErrors_HandledCorrectly()
     {
-        // Test transaction error handling paths
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
@@ -245,11 +244,12 @@ public class CriticalPathCoverageTests
 
         using var context = new DatabaseContext(config, factory);
 
-        // Test unsupported isolation levels
-        using var tx = context.BeginTransaction(IsolationLevel.Chaos);
-        Assert.NotNull(tx);
+        // Unsupported isolation levels must be rejected, not silently passed to the driver.
+        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationLevel.Chaos));
 
-        // Test transaction rollback scenarios
+        // Supported levels work and can be rolled back cleanly.
+        using var tx = context.BeginTransaction(IsolationLevel.Serializable);
+        Assert.NotNull(tx);
         tx.Rollback();
         Assert.True(tx.WasRolledBack);
     }

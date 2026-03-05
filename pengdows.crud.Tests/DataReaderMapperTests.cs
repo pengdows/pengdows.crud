@@ -333,7 +333,9 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(37, result[0].Age);
-        Assert.Equal(2, reader.GetValueCallCount);
+        // IsDBNull is no longer called for non-nullable value types (int), so GetValueCallCount
+        // is 1 (BuildSchemaHash → GetFieldType → GetValue), not 2.
+        Assert.Equal(1, reader.GetValueCallCount);
         Assert.Equal(1, reader.GetFieldValueCallCount);
     }
 
@@ -352,7 +354,9 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(58, result[0].Age);
-        Assert.True(reader.GetValueCallCount >= 3);
+        // IsDBNull is no longer called for non-nullable value types (int), so the minimum
+        // is 2 (BuildSchemaHash → GetFieldType → GetValue, coercion setter → GetValue).
+        Assert.True(reader.GetValueCallCount >= 2);
         Assert.Equal(0, reader.GetFieldValueCallCount);
     }
 
@@ -418,7 +422,9 @@ public class DataReaderMapperTests
         Assert.Single(secondResult);
         Assert.Equal(71, secondResult[0].Age);
         Assert.Equal(0, secondReader.GetFieldValueCallCount);
-        Assert.True(secondReader.GetValueCallCount >= 2);
+        // GetFieldType is suppressed in StrictTrackingFieldAccessReader, and IsDBNull is
+        // no longer called for non-nullable int. Only the coercion setter calls GetValue.
+        Assert.True(secondReader.GetValueCallCount >= 1);
         Assert.Equal(0, secondReader.GetFieldValueFailures);
     }
 

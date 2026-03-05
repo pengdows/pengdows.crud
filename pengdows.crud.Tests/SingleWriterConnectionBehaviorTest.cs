@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data.Common;
@@ -101,7 +102,7 @@ public class SingleWriterConnectionBehaviorTest
         Assert.True(factory.Connections.Count > initialCount);
         var writeConnection = factory.Connections.Last();
 
-        // Acquire two read connections, each of which should be read-only
+        // Acquire two read connections, each of which should be read-only via connection string
         for (var i = 0; i < 2; i++)
         {
             var readConn = ctx.GetConnection(ExecutionType.Read);
@@ -109,7 +110,8 @@ public class SingleWriterConnectionBehaviorTest
             ctx.CloseAndDisposeConnection(readConn);
 
             var readOnlyConnection = factory.Connections.Last();
-            Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+            Assert.Contains(readOnlyConnection.ConnectionStrings,
+                cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
         }
     }
 
@@ -141,6 +143,7 @@ public class SingleWriterConnectionBehaviorTest
         ctx.CloseAndDisposeConnection(readConn);
         var readOnlyConnection = factory.Connections.Last();
 
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+        Assert.Contains(readOnlyConnection.ConnectionStrings,
+            cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
     }
 }

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.IO;
+using System.Reflection;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -254,4 +255,30 @@ public class DbProviderLoaderTests
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
+
+    [Fact]
+    public void LoadProviderFactory_AssemblyPath_UsesLoadedAssemblyCache_OnSecondCall()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var logger = new Mock<ILogger<DbProviderLoader>>();
+        var loader = new DbProviderLoader(config, logger.Object);
+        var method = typeof(DbProviderLoader).GetMethod("LoadProviderFactory",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+
+        var fullPath = typeof(PropertyFactory).Assembly.Location;
+        var relativePath = Path.GetRelativePath(AppDomain.CurrentDomain.BaseDirectory, fullPath);
+        var providerConfig = new DatabaseProviderConfig
+        {
+            ProviderName = "Test.CacheHit",
+            FactoryType = typeof(PropertyFactory).FullName!,
+            AssemblyPath = relativePath
+        };
+
+        var first = (DbProviderFactory)method!.Invoke(loader, new object[] { "cache-a", providerConfig })!;
+        var second = (DbProviderFactory)method.Invoke(loader, new object[] { "cache-b", providerConfig })!;
+
+        Assert.Same(first, second);
+    }
+
 }

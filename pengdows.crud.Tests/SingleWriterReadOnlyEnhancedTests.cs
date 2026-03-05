@@ -124,15 +124,16 @@ public class SingleWriterReadOnlyEnhancedTests
 
                 Assert.True(factory.Connections.Count >= 1);
 
-                // Verify that session settings were applied to the read-only connection
+                // Verify that read-only enforcement was applied to the connection
                 var readOnlyConnection = factory.Connections.Last();
-                Assert.NotEmpty(readOnlyConnection.Commands);
 
                 // Database-specific session setting verification
                 switch (database)
                 {
                     case SupportedDatabase.Sqlite:
-                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+                        // SQLite read-only is enforced via Mode=ReadOnly in the connection string
+                        Assert.Contains(readOnlyConnection.ConnectionStrings,
+                            cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
                         break;
                     case SupportedDatabase.MySql:
                     case SupportedDatabase.MariaDb:
@@ -142,7 +143,13 @@ public class SingleWriterReadOnlyEnhancedTests
                         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("READ ONLY"));
                         break;
                     case SupportedDatabase.DuckDB:
-                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("read_only"));
+                        // DuckDB in ReadWriteMode.ReadWrite: access_mode=READ_ONLY is NOT applied
+                        // per-transaction — ShouldUseReadOnlyForReadIntent() returns false for DuckDB
+                        // to prevent locking out concurrent writers. Read-only enforcement is at the
+                        // application level (TransactionContext._isReadOnly write guard). No session SQL
+                        // is emitted either (removed: access_mode cannot be changed after connection open).
+                        Assert.DoesNotContain(readOnlyConnection.Commands,
+                            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
                         break;
                     case SupportedDatabase.SqlServer:
                         // SQL Server relies on ApplicationIntent connection string parameter
@@ -203,8 +210,9 @@ public class SingleWriterReadOnlyEnhancedTests
             // but session-level settings should still be applied for logical read-only behavior
             if (connectionString.Contains("Sqlite"))
             {
+                // In-memory SQLite: no Mode=ReadOnly in connection string, and no PRAGMA query_only SQL
                 Assert.DoesNotContain(readOnlyConnection.ConnectionStrings, cs => cs.Contains("Mode=ReadOnly"));
-                Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+                Assert.DoesNotContain(readOnlyConnection.Commands, c => c.Contains("query_only"));
             }
         }
 
@@ -295,7 +303,9 @@ public class SingleWriterReadOnlyEnhancedTests
             Assert.True(factory.Connections.Count >= 1, "At least one read-only connection should be created.");
 
             var readOnlyConnection = factory.Connections.Last();
-            Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+            // SQLite read-only is enforced via Mode=ReadOnly in the connection string
+            Assert.Contains(readOnlyConnection.ConnectionStrings,
+                cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
         }
 
         // Leak detection: every connection opened during this test must have been disposed
@@ -355,7 +365,9 @@ public class SingleWriterReadOnlyEnhancedTests
             var currentConnection = factory.Connections.Last();
             if (shouldBeReadOnly)
             {
-                Assert.Contains(currentConnection.Commands, c => c.Contains("query_only"));
+                // SQLite read-only is enforced via Mode=ReadOnly in the connection string
+                Assert.Contains(currentConnection.ConnectionStrings,
+                    cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
             }
         }
 

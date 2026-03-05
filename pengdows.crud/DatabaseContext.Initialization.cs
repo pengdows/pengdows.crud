@@ -251,6 +251,7 @@ public partial class DatabaseContext
             {
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
+                _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
             }
 
             // Apply pooling defaults now that we have the final mode and dialect

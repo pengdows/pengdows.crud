@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data.Common;
@@ -19,10 +20,23 @@ public class SingleWriterReadOnlyTransactionTests
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> Commands { get; } = new();
+        public List<string> ConnectionStrings { get; } = new();
 
         protected override DbCommand CreateDbCommand()
         {
             return new RecordingCommand(this, Commands);
+        }
+
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string ConnectionString
+        {
+            get => base.ConnectionString;
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
+            }
         }
     }
 
@@ -86,8 +100,10 @@ public class SingleWriterReadOnlyTransactionTests
         }
 
         Assert.True(factory.Connections.Count >= 1);
-        var readOnlyConnection = factory.Connections.Last();
-        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("query_only"));
+        // SQLite read-only is enforced via Mode=ReadOnly in the connection string, not PRAGMA query_only
+        var allConnectionStrings = factory.Connections.SelectMany(c => c.ConnectionStrings).ToList();
+        Assert.Contains(allConnectionStrings,
+            cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

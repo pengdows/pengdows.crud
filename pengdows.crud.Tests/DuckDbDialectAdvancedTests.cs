@@ -269,7 +269,8 @@ public class DuckDbDialectAdvancedTests
 
         var settings = _dialect.GetConnectionSessionSettings(context, true);
 
-        Assert.Equal("SET access_mode = 'read_only';", settings);
+        // Redundant DuckDB session settings removed for performance: handled by connection string
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]
@@ -283,11 +284,13 @@ public class DuckDbDialectAdvancedTests
     }
 
     [Fact]
-    public void GetReadOnlySessionSettings_Should_Return_SetAccessMode()
+    public void GetReadOnlySessionSettings_Should_Return_Empty_ConnectionStringEnforced()
     {
+        // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string.
+        // No session SQL is emitted; the base default (empty string) is returned.
         var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET access_mode = 'read_only';", settings);
+        Assert.Equal(string.Empty, settings);
     }
 
     [Fact]

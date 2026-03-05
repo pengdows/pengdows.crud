@@ -102,4 +102,12 @@ public class ValueObjectCoverageTests
         Assert.Equal(BitConverter.ToString(bytes).Replace("-", string.Empty, StringComparison.Ordinal),
             version.ToString());
     }
+
+    [Fact]
+    public void RowVersion_Equals_WithDifferentObjectType_ReturnsFalse()
+    {
+        var version = new RowVersion(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+
+        Assert.False(version.Equals((object)"not-rowversion"));
+    }
 }

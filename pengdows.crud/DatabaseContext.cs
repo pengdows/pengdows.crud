@@ -121,6 +121,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private ProcWrappingStyle _procWrappingStyle;
     private ITrackedConnection? _connection = null;
     private SemaphoreSlim? _connectionOpenGate;
+    private ReusableAsyncLocker? _connectionOpenLocker;
 
     private long _connectionCount;
     private string _connectionString = string.Empty;
@@ -358,6 +359,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
+            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -366,6 +368,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
+            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
 
@@ -397,6 +400,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
+            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -405,6 +409,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
+            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
 

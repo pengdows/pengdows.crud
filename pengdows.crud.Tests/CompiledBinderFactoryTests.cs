@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Data.Common;
 using System.Collections.Generic;
@@ -41,6 +42,17 @@ public class CompiledBinderFactoryTests
     }
 
     public enum Status { Active, Inactive }
+
+    [Table("BinderTestsNumericEnum")]
+    public class BinderEntityNumericEnum
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("status", DbType.Int32)]
+        public Status Status { get; set; }
+    }
 
     private readonly IReadOnlyList<IColumnInfo> _columns;
     private readonly ISqlDialect _dialect;
@@ -139,5 +151,45 @@ public class CompiledBinderFactoryTests
         Assert.Equal(_columns.Count, parameters.Count);
         Assert.Equal(42, parameters[0].Value);
         Assert.Equal("Upsert", parameters[1].Value);
+    }
+
+    [Fact]
+    public void CreateInsertBinder_EnumStoredAsNumeric_UsesUnderlyingValue()
+    {
+        var typeMap = new TypeMapRegistry();
+        var tableInfo = typeMap.GetTableInfo<BinderEntityNumericEnum>();
+        var columns = tableInfo.OrderedColumns;
+        var paramNames = new[] { "p0", "p1" };
+
+        var binder = CompiledBinderFactory<BinderEntityNumericEnum>.CreateInsertBinder(columns, paramNames, _dialect);
+        var parameters = new List<DbParameter>();
+
+        var count = binder(new BinderEntityNumericEnum { Id = 7, Status = Status.Inactive }, parameters);
+
+        Assert.Equal(2, count);
+        Assert.Equal(2, parameters.Count);
+        Assert.Equal(7, parameters[0].Value);
+        Assert.Equal((int)Status.Inactive, Convert.ToInt32(parameters[1].Value));
+    }
+
+    [Fact]
+    public void CreateUpdateBinder_EnumStoredAsNumeric_UsesUnderlyingValue()
+    {
+        var typeMap = new TypeMapRegistry();
+        var tableInfo = typeMap.GetTableInfo<BinderEntityNumericEnum>();
+        var updateColumns = tableInfo.OrderedColumns.Where(c => !c.IsId).ToList();
+        var paramNames = new[] { "p0" };
+
+        var binder = CompiledBinderFactory<BinderEntityNumericEnum>.CreateUpdateBinder(updateColumns, paramNames,
+            _dialect);
+        var parameters = new List<DbParameter>();
+
+        var updated = new BinderEntityNumericEnum { Id = 1, Status = Status.Inactive };
+        var original = new BinderEntityNumericEnum { Id = 1, Status = Status.Active };
+        var count = binder(updated, original, parameters);
+
+        Assert.Equal(1, count);
+        Assert.Single(parameters);
+        Assert.Equal((int)Status.Inactive, Convert.ToInt32(parameters[0].Value));
     }
 }

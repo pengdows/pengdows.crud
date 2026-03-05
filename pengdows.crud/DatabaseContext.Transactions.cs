@@ -168,6 +168,10 @@ public partial class DatabaseContext
                     isolationLevel = supported.First();
                 }
             }
+            else
+            {
+                _isolationResolver.Validate(isolationLevel.Value);
+            }
         }
 
         return (ro, isolationLevel.Value);

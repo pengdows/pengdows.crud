@@ -3,6 +3,9 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using pengdows.crud.@internal;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -44,6 +47,20 @@ public class ConnectionStringHelperAdditionalBranchTests
         Assert.False(applied);
     }
 
+    [Fact]
+    public void Create_WithThrowingBuilder_AndEmptyInput_UsesFallbackApplyPath()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite)
+        {
+            ConnectionStringBuilderBehavior = ConnectionStringBuilderBehavior.ThrowOnConnectionStringSet
+        };
+
+        var result = ConnectionStringHelper.Create(factory, string.Empty);
+
+        Assert.NotNull(result);
+        Assert.Equal(string.Empty, result.ConnectionString);
+    }
+
     private sealed class ThrowingIndexerBuilder : DbConnectionStringBuilder
     {
         [AllowNull]
@@ -53,4 +70,5 @@ public class ConnectionStringHelperAdditionalBranchTests
             set => throw new InvalidOperationException("cannot set value");
         }
     }
+
 }

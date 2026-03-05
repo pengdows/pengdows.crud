@@ -101,8 +101,9 @@ public class ReadOnlySingleWriterConnectionTests
         Assert.True(factory.Connections.Count >= 1);
         var operationalConnection = factory.Connections.Last();
 
-        // The connection must have read-only settings applied (query_only pragma for SQLite)
-        Assert.Contains(operationalConnection.Commands, c => c.Contains("query_only"));
+        // SQLite read-only is enforced via Mode=ReadOnly in the connection string
+        Assert.Contains(operationalConnection.ConnectionStrings,
+            cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -129,7 +130,8 @@ public class ReadOnlySingleWriterConnectionTests
         Assert.NotEmpty(operationalConnections);
         foreach (var recorded in operationalConnections)
         {
-            Assert.Contains(recorded.Commands, c => c.Contains("query_only"));
+            Assert.Contains(recorded.ConnectionStrings,
+                cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
         }
     }
 

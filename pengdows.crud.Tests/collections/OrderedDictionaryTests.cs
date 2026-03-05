@@ -1011,4 +1011,15 @@ public class OrderedDictionaryTests
         Assert.Equal(0, dict["key0"]);
         Assert.Equal(testCount - 1, dict[$"key{testCount - 1}"]);
     }
+
+    [Fact]
+    public void Add_KeyValuePairOverload_AddsEntry()
+    {
+        var dict = new OrderedDictionary<string, int>();
+
+        dict.Add(new KeyValuePair<string, int>("pair-key", 42));
+
+        Assert.True(dict.ContainsKey("pair-key"));
+        Assert.Equal(42, dict["pair-key"]);
+    }
 }

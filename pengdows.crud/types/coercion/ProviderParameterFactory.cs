@@ -52,13 +52,6 @@ public static class ProviderParameterFactory
             return true;
         }
 
-        // Fall back to general coercion
-        if (coercionRegistry.TryWrite(value, parameter))
-        {
-            ApplyProviderSpecificOptimizations(parameter, valueType, provider);
-            return true;
-        }
-
         return false;
     }
 

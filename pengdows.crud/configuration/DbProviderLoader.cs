@@ -62,20 +62,8 @@ public class DbProviderLoader : IDbProviderLoader
             services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory);
 
             // Register with DbProviderFactories for legacy compatibility
-            try
-            {
-                DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);
-                _logger.LogInformation("Registered provider '{ProviderKey}' with DbProviderFactories", providerKey);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to register provider '{ProviderKey}' with DbProviderFactories",
-                    providerKey);
-                throw new InvalidOperationException(
-                    $"Failed to register DbProviderFactory for provider '{kvp.Key}' with provider name  '{kvp.Value.ProviderName}'.",
-                    ex
-                );
-            }
+            DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);
+            _logger.LogInformation("Registered provider '{ProviderKey}' with DbProviderFactories", providerKey);
         }
     }
 

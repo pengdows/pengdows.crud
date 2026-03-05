@@ -108,17 +108,12 @@ public class TransactionContextTests
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.CockroachDb)]
-    [InlineData(SupportedDatabase.Sqlite)]
-    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase)
+    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Sqlite,      IsolationLevel.ReadCommitted)]
+    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase, IsolationLevel level)
     {
-        var tx = CreateContext(supportedDatabase).BeginTransaction(IsolationLevel.ReadUncommitted);
-        if (tx.IsolationLevel < IsolationLevel.Chaos)
-        {
-            Console.WriteLine($"{supportedDatabase}: {nameof(tx.IsolationLevel)}: {tx.IsolationLevel}");
-        }
-
-        Assert.True(IsolationLevel.Chaos < tx.IsolationLevel); // upgraded due to ReadWrite
+        using var tx = CreateContext(supportedDatabase).BeginTransaction(level);
+        Assert.Equal(level, tx.IsolationLevel);
     }
 
     [Fact]

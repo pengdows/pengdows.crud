@@ -97,6 +97,18 @@ public class NetworkConverterEdgeCaseTests
         Assert.Equal(physical, result.Address);
     }
 
+    [Fact]
+    public void MacAddressConverter_TryConvert_MacAddressPassthrough_ReturnsTrue()
+    {
+        var converter = new MacAddressConverter();
+        var mac = MacAddress.Parse("08:00:2B:01:02:03");
+
+        var success = converter.TryConvertFromProvider(mac, SupportedDatabase.PostgreSql, out var result);
+
+        Assert.True(success);
+        Assert.Equal(mac, result);
+    }
+
     // ===== CidrConverter =====
 
     [Fact]
@@ -175,6 +187,17 @@ public class NetworkConverterEdgeCaseTests
         var shim = new NpgsqlCidrShim(IPAddress.Parse("10.0.0.0"), null);
 
         var success = converter.TryConvertFromProvider(shim, SupportedDatabase.PostgreSql, out _);
+        Assert.False(success);
+    }
+
+    [Fact]
+    public void CidrConverter_TryConvert_NpgsqlShim_InvalidNetmaskType_ReturnsFalse()
+    {
+        var converter = new CidrConverter();
+        var shim = new NpgsqlCidrShim(IPAddress.Parse("10.0.0.0"), "not-a-byte");
+
+        var success = converter.TryConvertFromProvider(shim, SupportedDatabase.PostgreSql, out _);
+
         Assert.False(success);
     }
 

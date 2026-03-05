@@ -68,6 +68,18 @@ public class StringBuilderLiteTests
     }
 
     [Fact]
+    public void AppendSpan_LargeReservation_UsesMinCapacityGrowthPath()
+    {
+        var sb = SbLite.Create(stackalloc char[4]);
+
+        var span = sb.AppendSpan(20);
+        span.Fill('x');
+
+        Assert.Equal(20, sb.Length);
+        Assert.Equal(new string('x', 20), sb.ToString());
+    }
+
+    [Fact]
     public void Append_NullOrEmpty_NoChange()
     {
         var sb = SbLite.Create(stackalloc char[8]);

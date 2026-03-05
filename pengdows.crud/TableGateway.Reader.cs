@@ -49,6 +49,12 @@ public partial class TableGateway<TEntity, TRowID>
         return plan.CompiledMapper(reader);
     }
 
+    // Hot path cache: Stores the most recently used plan to avoid hash/dictionary
+    // overhead for high-throughput single-row reads (200k+ loops).
+    // Using simple instance fields is faster than ThreadLocal/AsyncLocal for single-thread loops.
+    private HybridRecordsetPlan? _hotPlan;
+    private long _hotHash;
+
     private HybridRecordsetPlan GetOrBuildRecordsetPlan(ITrackedReader reader)
     {
         var fieldCount = reader.FieldCount;
@@ -72,8 +78,17 @@ public partial class TableGateway<TEntity, TRowID>
 
             var hash = (long)hashBuilder.ToHashCode();
 
+            // Optimization: check hot plan first
+            var hotPlan = Volatile.Read(ref _hotPlan);
+            if (hotPlan != null && hash == _hotHash)
+            {
+                return hotPlan;
+            }
+
             if (_readerPlans.TryGet(hash, out var existingPlan))
             {
+                _hotHash = hash;
+                Volatile.Write(ref _hotPlan, existingPlan);
                 return existingPlan;
             }
 
@@ -81,7 +96,11 @@ public partial class TableGateway<TEntity, TRowID>
             var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes);
             var plan = new HybridRecordsetPlan(compiledMapper);
 
-            return _readerPlans.GetOrAdd(hash, _ => plan);
+            var added = _readerPlans.GetOrAdd(hash, _ => plan);
+            _hotHash = hash;
+            Volatile.Write(ref _hotPlan, added);
+            
+            return added;
         }
         finally
         {

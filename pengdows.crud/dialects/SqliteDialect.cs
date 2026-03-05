@@ -103,16 +103,11 @@ internal class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
     }
 
-    public override string GetReadOnlySessionSettings()
-    {
-        return "PRAGMA query_only = ON;";
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return "PRAGMA query_only = OFF;";
-    }
-
+    // Read-only enforcement for SQLite uses Mode=ReadOnly in the connection string (see
+    // GetReadOnlyConnectionString and ApplyConnectionSettingsCore), which opens the database
+    // file read-only at the OS level. This is stronger and more reliable than PRAGMA query_only,
+    // which is session-scoped and can be reset by any caller on the same connection.
+    // No session SQL or transaction SQL is used for read-only enforcement.
     public override string? GetReadOnlyConnectionParameter()
     {
         return "Mode=ReadOnly";
