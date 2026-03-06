@@ -12,7 +12,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
+public class TableGatewayAdditionalBranchTests : RealSqliteContextTestBase
 {
     [Table("BranchTest")]
     private sealed class BranchEntity
@@ -122,12 +122,7 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     {
         var helper = new TableGateway<GuidBranchEntity, Guid>(Context, AuditValueResolver);
         var id = Guid.NewGuid();
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}GuidBranchTest{qs}({qp}Id{qs}, {qp}Name{qs}) VALUES(@id, 'n')");
-        insert.AddParameterWithValue("@id", DbType.String, id.ToString());
-        await insert.ExecuteNonQueryAsync();
+        await helper.CreateAsync(new GuidBranchEntity { Id = id, Name = "n" });
 
         var entity = new GuidBranchEntity { Id = id, Name = "updated" };
         var container = await helper.BuildUpdateAsync(entity, true);
@@ -139,14 +134,10 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_AuditOnlyChange_IncludesAuditColumns()
     {
         var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n', @last)");
-        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
-        await insert.ExecuteNonQueryAsync();
+        var entity = new AuditBranchEntity { Name = "n" };
+        await helper.CreateAsync(entity);
 
-        var loaded = await helper.RetrieveOneAsync(1);
+        var loaded = await helper.RetrieveOneAsync(entity.Id);
         Assert.NotNull(loaded);
 
         var sc = await helper.BuildUpdateAsync(loaded!, true);
@@ -158,14 +149,10 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_AuditWithBusinessChange_Succeeds()
     {
         var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n2', @last)");
-        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
-        await insert.ExecuteNonQueryAsync();
+        var entity = new AuditBranchEntity { Name = "n2" };
+        await helper.CreateAsync(entity);
 
-        var loaded = await helper.RetrieveOneAsync(2);
+        var loaded = await helper.RetrieveOneAsync(entity.Id);
         Assert.NotNull(loaded);
         loaded!.Name = "updated";
 

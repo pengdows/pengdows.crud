@@ -549,6 +549,10 @@ using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 // - SafeNonBlockingReads: MVCC snapshot, no dirty reads, no blocking
 // - StrictConsistency:    Serializable, fully isolated (financial/critical logic)
 // - FastWithRisks:        ReadUncommitted / dirty reads (almost never recommended)
+
+// PostgreSQL note:
+// BeginTransaction(IsolationProfile.SafeNonBlockingReads) throws TransactionModeNotSupportedException.
+// Use StrictConsistency or native IsolationLevel.ReadCommitted on PostgreSQL.
 ```
 
 ### Savepoints

@@ -40,13 +40,14 @@ want **full control** over SQL, **predictable behavior** across databases, and *
 
 Tested and tuned for:
 
-- SQL Server / Express / LocalDB
-- PostgreSQL / TimescaleDB
+- SQL Server / Express / LocalDB / Azure SQL
+- PostgreSQL / TimescaleDB / CockroachDB / YugabyteDB / Aurora PostgreSQL
 - Oracle
-- MySQL / MariaDB
+- MySQL / MariaDB / TiDB / Aurora MySQL
 - SQLite
 - Firebird
-- CockroachDB
+- DuckDB
+- Snowflake (opt-in; cloud-only, requires credentials)
 
 > All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and
 `GetSchema("DataSourceInformation")`.
@@ -136,9 +137,9 @@ dotnet add package pengdows.crud
 ```
 
 ```csharp
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using pengdows.crud;
 
 var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new TableGateway<MyEntity, long>(db);
+var gateway = new TableGateway<MyEntity, long>(db);
 ```

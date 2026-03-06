@@ -311,14 +311,23 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
 **Parameter Naming Convention:**
 
-| Operation | Pattern | Example |
-|-----------|---------|---------|
-| INSERT | `i{n}` | `i0`, `i1`, `i2` |
-| UPDATE SET | `s{n}` | `s0`, `s1`, `s2` |
-| WHERE | `w{n}` | `w0`, `w1`, `w2` |
-| JOIN | `j{n}` | `j0`, `j1` |
-| KEY | `k{n}` | `k0`, `k1` |
-| VERSION | `v{n}` | `v0`, `v1` |
+| Prefix | Used in | Build method(s) |
+|--------|---------|-----------------|
+| `i{n}` | INSERT values | `BuildCreate`, `BuildUpsert`, batch |
+| `s{n}` | UPDATE SET clause | `BuildUpdateAsync`, batch |
+| `w{n}` | WHERE (retrieve IN/ANY) | `BuildRetrieve` |
+| `k{n}` | WHERE id/key | `BuildDelete`, `BuildUpdateAsync` WHERE id, entity lookup |
+| `v{n}` | Optimistic lock version | `BuildUpdateAsync` (only if `[Version]` column exists) |
+| `j{n}` | JOIN conditions | Custom SQL |
+| `b{n}` | Batch row values | `BuildBatchCreate/Update/Upsert` |
+
+Critical distinctions for `SetParameterValue()` reuse:
+- `BuildRetrieve` id slot → `"w0"` with **scalar** value (not array); PostgreSQL ANY takes array
+- `BuildDelete` id slot → `"k0"`
+- `BuildUpdateAsync`: SET params are `s0`…`sN`; WHERE id is `k0` (key counter, independent of set counter)
+- Always pass base name without database prefix: `"w0"` not `"@w0"`
+
+See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 ### DatabaseContext Key Methods
 

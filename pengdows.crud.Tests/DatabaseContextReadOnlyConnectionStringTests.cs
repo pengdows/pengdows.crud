@@ -96,6 +96,61 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
         Assert.Contains("ApplicationIntent=ReadOnly", readerConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Oracle_BuildReaderConnectionString_AddsMetadataPoolingFalse_WhenDerived()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=primary;User Id=test;Password=test;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Oracle));
+
+        var reader = GetReaderConnectionString(ctx);
+        var writer = ctx.ConnectionString;
+
+        Assert.Contains("Metadata Pooling", reader, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Metadata Pooling", writer, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(reader, writer, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Oracle_BuildReaderConnectionString_DoesNotInjectDiscriminator_WhenExplicitReaderProvided()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=primary;User Id=test;Password=test;",
+            ReadOnlyConnectionString = "Data Source=replica;User Id=test;Password=test;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Oracle));
+
+        var reader = GetReaderConnectionString(ctx);
+        Assert.Contains("Data Source=replica", reader, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Metadata Pooling", reader, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Oracle_BuildReaderConnectionString_DoesNotOverwrite_ExistingMetadataPooling()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=primary;User Id=test;Password=test;Metadata Pooling=true;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Oracle));
+
+        var reader = GetReaderConnectionString(ctx);
+        // user set it to true — must not be clobbered to false
+        Assert.DoesNotContain("Metadata Pooling=false", reader, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string GetReaderConnectionString(DatabaseContext ctx)
     {
         var field = typeof(DatabaseContext).GetField("_readerConnectionString",

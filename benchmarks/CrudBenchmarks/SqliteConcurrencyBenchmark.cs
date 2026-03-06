@@ -149,7 +149,7 @@ public class SqliteConcurrencyBenchmark
         await BenchmarkConcurrency.RunConcurrentWithErrors(Operations, Parallelism,
             async () =>
             {
-                using (var connection = new SqliteConnection(_dapperConnectionString))
+                await using (var connection = new SqliteConnection(_dapperConnectionString))
                 {
                     await connection.OpenAsync();
                     await connection.ExecuteAsync("INSERT INTO TestEntities (Name, Counter) VALUES (@Name, @Counter);",

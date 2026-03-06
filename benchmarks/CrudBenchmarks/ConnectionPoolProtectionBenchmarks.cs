@@ -263,7 +263,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         {
             try
             {
-                using var tx = _pengdowsContext.BeginTransaction();
+                await using var tx = _pengdowsContext.BeginTransaction();
                 await using (var setup = tx.CreateSqlContainer())
                 {
                     await ApplyBusyTimeoutAsync(setup);

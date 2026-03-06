@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
@@ -199,6 +200,46 @@ public class DatabaseContextConnectionTests
         Assert.False(tracked.LocalState.SessionSettingsApplied);
     }
 
+    [Fact]
+    public async Task ExecuteSessionSettingsAsync_UsesExecuteNonQueryAsync()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleWriter,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new AsyncCapturingConnection();
+
+        await context.ExecuteSessionSettingsAsync(connection, readOnly: false, CancellationToken.None);
+
+        Assert.Equal(1, connection.AsyncExecuteCount);
+        Assert.Equal(0, connection.SyncExecuteCount);
+    }
+
+    [Fact]
+    public async Task ExecuteSessionSettingsAsync_PropagatesCancellation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleWriter,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new AsyncCapturingConnection();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => context.ExecuteSessionSettingsAsync(connection, readOnly: false, cts.Token));
+    }
+
     private sealed class CapturingConnection : DbConnection
     {
         public List<string> ExecutedStatements { get; } = new();
@@ -294,5 +335,111 @@ public class DatabaseContextConnectionTests
 
         public override void Prepare()
         {
-            }
-        }}
+        }
+        }
+
+    private sealed class AsyncCapturingConnection : DbConnection
+    {
+        private string _connectionString = string.Empty;
+
+        public int SyncExecuteCount { get; set; }
+        public int AsyncExecuteCount { get; set; }
+
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
+
+        public override int ConnectionTimeout => 30;
+        public override string Database => "capturing";
+        public override ConnectionState State => ConnectionState.Open;
+        public override string DataSource => "capturing";
+        public override string ServerVersion => "1.0";
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel il)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void ChangeDatabase(string databaseName)
+        {
+        }
+
+        public override void Close()
+        {
+        }
+
+        public override void Open()
+        {
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new AsyncCapturingCommand(this);
+        }
+    }
+
+    private sealed class AsyncCapturingCommand : DbCommand
+    {
+        private readonly AsyncCapturingConnection _owner;
+        private string _commandText = string.Empty;
+
+        public AsyncCapturingCommand(AsyncCapturingConnection owner)
+        {
+            _owner = owner;
+        }
+
+        [AllowNull]
+        public override string CommandText
+        {
+            get => _commandText;
+            set => _commandText = value ?? string.Empty;
+        }
+
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; } = CommandType.Text;
+        public override bool DesignTimeVisible { get; set; }
+        protected override DbConnection? DbConnection { get; set; }
+        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
+        protected override DbTransaction? DbTransaction { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        public override void Cancel()
+        {
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            _owner.SyncExecuteCount++;
+            return 0;
+        }
+
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _owner.AsyncExecuteCount++;
+            return Task.FromResult(0);
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override object? ExecuteScalar()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Prepare()
+        {
+        }
+    }
+}

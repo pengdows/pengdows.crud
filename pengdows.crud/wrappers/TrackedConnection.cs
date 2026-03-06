@@ -104,6 +104,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     private readonly string? _namePrefix;
     private readonly Action<DbConnection>? _onDispose;
     private readonly Action<DbConnection>? _onFirstOpen;
+    private readonly Func<DbConnection, CancellationToken, Task>? _onFirstOpenAsync;
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
@@ -137,12 +138,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         DbMode mode = DbMode.Standard,
         TimeSpan? modeLockTimeout = null,
         PoolSlot? slot = null,
-        string? namePrefix = null
+        string? namePrefix = null,
+        Func<DbConnection, CancellationToken, Task>? onFirstOpenAsync = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
         _onStateChange = onStateChange;
         _onFirstOpen = onFirstOpen;
+        _onFirstOpenAsync = onFirstOpenAsync;
         _onDispose = onDispose;
         _logger = logger ?? NullLogger<TrackedConnection>.Instance;
         _metricsCollector = metricsCollector;
@@ -326,6 +329,22 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         if (Interlocked.Exchange(ref _wasOpened, 1) == 0)
         {
             _onFirstOpen?.Invoke(_connection);
+            _onFirstOpenAsync?.Invoke(_connection, CancellationToken.None).GetAwaiter().GetResult();
+        }
+    }
+
+    private async Task TriggerFirstOpenAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Exchange(ref _wasOpened, 1) != 0)
+        {
+            return;
+        }
+
+        _onFirstOpen?.Invoke(_connection);
+
+        if (_onFirstOpenAsync != null)
+        {
+            await _onFirstOpenAsync(_connection, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -358,7 +377,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
             }
         }
 
-        TriggerFirstOpen();
+        await TriggerFirstOpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
     protected override async ValueTask DisposeManagedAsync()

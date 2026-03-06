@@ -1933,6 +1933,17 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual object? PrepareParameterValue(object? value, DbType dbType)
     {
+        if (value is Guid guid)
+        {
+            return dbType switch
+            {
+                DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
+                    => string.Create(36, guid, static (span, g) => g.TryFormat(span, out _, "D")),
+                DbType.Binary => SerializeGuidAsBinary(guid),
+                _ => value
+            };
+        }
+
         return value;
     }
 
@@ -2195,6 +2206,18 @@ internal abstract class SqlDialect : ISqlDialect
     /// Default: null (not supported), override in provider-specific dialects.
     /// </summary>
     public virtual string? ApplicationNameSettingName => null;
+
+    /// <summary>
+    /// Connection string attribute name used to discriminate reader vs writer pool keys
+    /// when <see cref="ApplicationNameSettingName"/> is not supported by the provider.
+    /// Default: null (no discriminator needed — ApplicationName suffix is sufficient).
+    /// </summary>
+    internal virtual string? ReadOnlyPoolDiscriminatorSettingName => null;
+
+    /// <summary>
+    /// Value to set for <see cref="ReadOnlyPoolDiscriminatorSettingName"/> on reader connection strings.
+    /// </summary>
+    internal virtual string? ReadOnlyPoolDiscriminatorSettingValue => null;
 
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).

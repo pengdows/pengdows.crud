@@ -24,6 +24,12 @@ namespace CrudBenchmarks;
 /// This benchmark isolates the coercion cost: comparing the DuckDB ratio (pengdows/Dapper)
 /// against the SQLite ratio shows how much of the SQLite gap was type-conversion overhead.
 ///
+/// pengdows.crud side uses the full TableGateway API:
+///   - BuildRetrieve for keyed reads (reused container + SetParameterValue)
+///   - BuildBaseRetrieve + WrapObjectName for list queries (reused + SetParameterValue)
+///   LIMIT values are inlined (DuckDB does not support named parameters in LIMIT).
+///   Since GlobalSetup runs per [Params] value, the inlined LIMIT is always correct.
+///
 /// Structure mirrors EqualFootingCrudBenchmarks so numbers are directly comparable.
 /// </summary>
 [MemoryDiagnoser]
@@ -48,6 +54,14 @@ public class DuckDbReadBenchmarks : IDisposable
     private TypeMapRegistry _typeMap = null!;
 
     private bool _originalMatchNamesWithUnderscores;
+
+    // Reusable ISqlContainer fields — built once in GlobalSetup, reused each iteration.
+    // LIMIT is inlined since DuckDB does not support named parameters in LIMIT.
+    // GlobalSetup runs per [Params] value so the inlined LIMIT is always correct.
+    private ISqlContainer _readSingleSc = null!;
+    private ISqlContainer _readSingleScSingle = null!;
+    private ISqlContainer _readListSc = null!;
+    private ISqlContainer _readListScSingle = null!;
 
     [Params(1, 10, 100)] public int RecordCount { get; set; }
 
@@ -108,12 +122,36 @@ public class DuckDbReadBenchmarks : IDisposable
         };
         _pengdowsSingleCtx = new DatabaseContext(cfgSingle, DuckDBClientFactory.Instance, null, _typeMap);
         _singleGateway = new TableGateway<BenchEntity, int>(_pengdowsSingleCtx);
+
+        // ---- Build reusable containers once ----
+
+        // ReadSingle — keyed by id collection; loop calls SetParameterValue("w0", id) (scalar)
+        _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
+        _readSingleScSingle = _singleGateway.BuildRetrieve(new[] { 1 });
+
+        // ReadList — BuildBaseRetrieve + WHERE age > @Age + inlined LIMIT (DuckDB limitation)
+        _readListSc = _gateway.BuildBaseRetrieve("b");
+        _readListSc.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.age")} > ");
+        _readListSc.Query.Append(_readListSc.MakeParameterName("Age"));
+        _readListSc.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListSc.Query.Append($" LIMIT {RecordCount}");
+
+        _readListScSingle = _singleGateway.BuildBaseRetrieve("b");
+        _readListScSingle.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.age")} > ");
+        _readListScSingle.Query.Append(_readListScSingle.MakeParameterName("Age"));
+        _readListScSingle.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListScSingle.Query.Append($" LIMIT {RecordCount}");
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
+
+        _readSingleSc?.Dispose();
+        _readSingleScSingle?.Dispose();
+        _readListSc?.Dispose();
+        _readListScSingle?.Dispose();
         _pengdowsCtx?.Dispose();
         _pengdowsSingleCtx?.Dispose();
         _dapperConn?.Dispose();
@@ -148,12 +186,8 @@ public class DuckDbReadBenchmarks : IDisposable
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            result = await _gateway.LoadSingleAsync(container);
+            _readSingleSc.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _gateway.LoadSingleAsync(_readSingleSc);
         }
 
         return result;
@@ -169,12 +203,8 @@ public class DuckDbReadBenchmarks : IDisposable
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsSingleCtx.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            result = await _singleGateway.LoadSingleAsync(container);
+            _readSingleScSingle.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _singleGateway.LoadSingleAsync(_readSingleScSingle);
         }
 
         return result;
@@ -201,14 +231,8 @@ public class DuckDbReadBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer();
-        // DuckDB does not support named parameters in LIMIT; inline the value directly.
-        container.Query.Append(
-            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append($" LIMIT {RecordCount}");
-        container.AddParameterWithValue("Age", DbType.Int32, 30);
-        return await _gateway.LoadListAsync(container);
+        _readListSc.SetParameterValue("Age", 30);
+        return await _gateway.LoadListAsync(_readListSc);
     }
 
     /// <summary>
@@ -217,13 +241,8 @@ public class DuckDbReadBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Pengdows_SingleConnection()
     {
-        await using var container = _pengdowsSingleCtx.CreateSqlContainer();
-        container.Query.Append(
-            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append($" LIMIT {RecordCount}");
-        container.AddParameterWithValue("Age", DbType.Int32, 30);
-        return await _singleGateway.LoadListAsync(container);
+        _readListScSingle.SetParameterValue("Age", 30);
+        return await _singleGateway.LoadListAsync(_readListScSingle);
     }
 
     [Benchmark]

@@ -337,6 +337,56 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
+    /// Injects a pool-key discriminator key/value into the connection string.
+    /// Used when <c>ApplicationNameSettingName</c> is unsupported and the dialect needs
+    /// an alternative attribute to differentiate reader vs writer connection pools.
+    /// No-op if: either parameter is null/empty, key already present, or raw connection string.
+    /// </summary>
+    public static string ApplyPoolDiscriminator(
+        string connectionString,
+        string? discriminatorSettingName,
+        string? discriminatorSettingValue,
+        DbConnectionStringBuilder? builder = null)
+    {
+        if (string.IsNullOrWhiteSpace(discriminatorSettingName) ||
+            string.IsNullOrWhiteSpace(discriminatorSettingValue) ||
+            string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            builder ??= new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            // Don't override if user already set the discriminator key
+            if (builder.ContainsKey(discriminatorSettingName))
+            {
+                return connectionString;
+            }
+
+            builder[discriminatorSettingName] = discriminatorSettingValue;
+            var result = builder.ConnectionString;
+
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
     /// Sets the maximum pool size on a connection string.
     /// When <paramref name="overrideExisting"/> is false the call is a no-op if the setting
     /// is already present; when true it overwrites unconditionally (used by SingleWriter to

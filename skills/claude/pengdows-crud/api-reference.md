@@ -252,21 +252,37 @@ Task RollbackToSavepointAsync(string name);
 
 ## Parameter Naming Convention
 
-| Operation | Pattern | Examples |
-|-----------|---------|----------|
-| INSERT | `i{n}` | `i0`, `i1`, `i2` |
-| UPDATE SET | `s{n}` | `s0`, `s1`, `s2` |
-| WHERE | `w{n}` | `w0`, `w1`, `w2` |
-| JOIN | `j{n}` | `j0`, `j1`, `j2` |
-| KEY | `k{n}` | `k0`, `k1`, `k2` |
-| VERSION | `v{n}` | `v0`, `v1` |
+| Prefix | Used in | Build method(s) |
+|--------|---------|-----------------|
+| `i{n}` | INSERT values | `BuildCreate`, `BuildUpsert`, batch |
+| `s{n}` | UPDATE SET clause | `BuildUpdateAsync`, batch |
+| `w{n}` | WHERE (retrieve IN/ANY) | `BuildRetrieve` |
+| `k{n}` | WHERE id/key | `BuildDelete`, `BuildUpdateAsync` WHERE, entity lookup |
+| `v{n}` | Optimistic lock version | `BuildUpdateAsync` (only with `[Version]` column) |
+| `j{n}` | JOIN conditions | Custom SQL |
+| `b{n}` | Batch row values | `BuildBatchCreate/Update/Upsert` |
 
-Use base name without prefix when calling `SetParameterValue()`:
+**Critical distinctions**:
+- `BuildRetrieve` → id slot is `w0` (scalar for single-element reuse, array for PostgreSQL ANY)
+- `BuildDelete` → id slot is `k0`
+- `BuildUpdateAsync` → SET slots are `s0`…`sN`, then WHERE id is `k0` (key counter, always starts at 0)
+
+Always pass the base name (no `@`/`:`/`$`) to `SetParameterValue()`:
 
 ```csharp
-container.SetParameterValue("w0", newId);      // Correct
-container.SetParameterValue("@w0", newId);     // Wrong - no prefix
+// BuildRetrieve reuse — scalar value, not array:
+_readSc.SetParameterValue("w0", nextId);        // ✓ scalar
+_readSc.SetParameterValue("w0", new[]{nextId}); // ✗ throws on non-PostgreSQL
+
+// BuildDelete reuse:
+_deleteSc.SetParameterValue("k0", idToDelete);
+
+// BuildUpdateAsync reuse — SET params then key:
+_updateSc.SetParameterValue("s2", newSalary);   // 3rd updatable column
+_updateSc.SetParameterValue("k0", targetId);    // WHERE id
 ```
+
+See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 ## ExecutionType
 

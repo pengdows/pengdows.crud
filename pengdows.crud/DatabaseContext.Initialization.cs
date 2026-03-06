@@ -927,11 +927,28 @@ public partial class DatabaseContext
                 : readOnly;
         }
 
-        return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+        var readerResult = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
             effectiveApplicationName);
+
+        // For dialects without ApplicationNameSettingName (e.g., Oracle ODP.NET), the
+        // suffix is a no-op and reader/writer end up with identical connection strings,
+        // sharing a single connection pool. Apply a discriminator key/value so the strings
+        // differ and the provider creates separate pools for reader and writer connections.
+        // Skip when the caller supplied an explicit ReadOnlyConnectionString — they already
+        // manage pool isolation themselves.
+        if (string.IsNullOrWhiteSpace(_dialect.ApplicationNameSettingName) &&
+            string.IsNullOrWhiteSpace(rawReadOnlyConnectionString))
+        {
+            readerResult = ConnectionPoolingConfiguration.ApplyPoolDiscriminator(
+                readerResult,
+                _dialect.ReadOnlyPoolDiscriminatorSettingName,
+                _dialect.ReadOnlyPoolDiscriminatorSettingValue);
+        }
+
+        return readerResult;
     }
 
     private string ResolveApplicationName(string? configuredApplicationName)

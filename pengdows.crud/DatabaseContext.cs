@@ -337,6 +337,98 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
 
+    private void DisposeOwnedDataSources()
+    {
+        var primaryOwned = _dataSourceProvided ? null : _dataSource;
+        var readerOwned = _readerDataSource;
+
+        if (ReferenceEquals(readerOwned, primaryOwned))
+        {
+            readerOwned = null;
+        }
+
+        if (_dataSourceProvided && ReferenceEquals(readerOwned, _dataSource))
+        {
+            readerOwned = null;
+        }
+
+        try
+        {
+            primaryOwned?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            readerOwned?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _dataSource = null;
+            _readerDataSource = null;
+        }
+    }
+
+    private async ValueTask DisposeOwnedDataSourcesAsync()
+    {
+        var primaryOwned = _dataSourceProvided ? null : _dataSource;
+        var readerOwned = _readerDataSource;
+
+        if (ReferenceEquals(readerOwned, primaryOwned))
+        {
+            readerOwned = null;
+        }
+
+        if (_dataSourceProvided && ReferenceEquals(readerOwned, _dataSource))
+        {
+            readerOwned = null;
+        }
+
+        try
+        {
+            if (primaryOwned is IAsyncDisposable ad)
+            {
+                await ad.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                primaryOwned?.Dispose();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            if (readerOwned is IAsyncDisposable rd)
+            {
+                await rd.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                readerOwned?.Dispose();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _dataSource = null;
+            _readerDataSource = null;
+        }
+    }
+
     protected override void DisposeManaged()
     {
         if (_metricsCollector != null)
@@ -371,6 +463,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
+
+        DisposeOwnedDataSources();
 
         base.DisposeManaged();
     }
@@ -412,6 +506,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
+
+        await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }

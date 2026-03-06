@@ -51,7 +51,9 @@ using var connection = context.GetConnection(ExecutionType.Read);
 Start a transaction with read-only intent.
 
 ```csharp
-using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+using var tx = await context.BeginTransactionAsync(
+    executionType: ExecutionType.Read,
+    readOnly: true);
 // Transaction is locked to read-only at the session level.
 ```
 

@@ -1,7 +1,11 @@
 #region
 
 using System.Data;
+using System.Data.Common;
+using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -128,6 +132,48 @@ END;", triggerName, tableName, idColumn, sequenceName);
         if (count < 0)
             throw new Exception($"[ParamBinding] Oracle 2-param duplicate: invalid count {count}");
         Console.WriteLine($"  [ParamBinding] Duplicate param (Oracle 2-param workaround): OK ({count} rows)");
+    }
+
+    /// <summary>
+    /// Validates that Oracle reader and writer connections draw from separate ODP.NET pools.
+    /// Uses Max Pool Size=1 and Connection Timeout=3 so any pool sharing causes an immediate
+    /// timeout, while separate pools allow both connections to open concurrently.
+    /// </summary>
+    protected override async Task TestPoolIsolation()
+    {
+        // Build a fresh context with a tiny pool to make contention detectable.
+        var builder = new DbConnectionStringBuilder
+        {
+            ConnectionString = _context.ConnectionString
+        };
+        builder["Max Pool Size"] = 1;
+        builder["Connection Timeout"] = 3;
+
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = builder.ConnectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, OracleClientFactory.Instance);
+
+        // Acquire and hold the writer connection (pool now at capacity for writer pool key).
+        var writer = ctx.GetConnection(ExecutionType.Write);
+        await writer.OpenAsync();
+        try
+        {
+            // Reader must come from a separate pool (Metadata Pooling=false) — should not block.
+            var reader = ctx.GetConnection(ExecutionType.Read);
+            await reader.OpenAsync();
+            ctx.CloseAndDisposeConnection(reader);
+        }
+        finally
+        {
+            ctx.CloseAndDisposeConnection(writer);
+        }
+
+        CheckOk("  [PoolIsolation] Reader and writer use separate ODP.NET pools (Metadata Pooling discriminator): OK");
     }
 
     /// <summary>

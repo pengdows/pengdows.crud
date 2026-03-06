@@ -22,6 +22,13 @@ namespace CrudBenchmarks;
 ///   - PostgreSQL DDL (SERIAL, BOOLEAN, DOUBLE PRECISION)
 ///   - No _Native variants (SQLite int64 coercion is not a PostgreSQL concern)
 ///
+/// pengdows.crud side uses the full TableGateway API:
+///   - BuildCreate for INSERT (framework generates dialect-correct INSERT, type-safe params)
+///   - BuildRetrieve for keyed reads (reused container + SetParameterValue)
+///   - BuildBaseRetrieve + WrapObjectName for custom queries (reused + SetParameterValue)
+///   - BuildUpdateAsync for full UPDATE (reused container + SetParameterValue on changed fields)
+///   - BuildDelete for DELETE (reused container + SetParameterValue)
+///
 /// The key question this answers: does the ~1.5x Pengdows/Dapper ratio hold when
 /// real network I/O dominates, or does it dissolve into noise?
 /// </summary>
@@ -42,15 +49,19 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     // Entity Framework
     private DbContextOptions<EfPgBenchContext> _efOptions = null!;
 
-    // Unique ID seeds for delete / batch-create benchmarks — start high to avoid
-    // colliding with SERIAL-generated IDs from Create_* benchmarks (~1000 rows seeded)
+    // Unique ID seed for delete benchmarks — start high to avoid colliding with SERIAL IDs
     private int _deleteIdSeed = 1_000_000;
 
-    // Precomputed SQL strings — built once in GlobalSetup using dialect-aware MakeParameterName,
-    // matching the Dapper pattern of defining SQL outside the benchmark loop.
-    private string _readSingleSql = null!;
-    private string _readListSql = null!;
-    private string _filteredQuerySql = null!;
+    // Reusable ISqlContainer fields — built once in GlobalSetup using TableGateway Build* methods.
+    // Sequential benchmark loops reuse the same container via SetParameterValue; no SQL
+    // re-generation and no allocation per iteration.
+    private ISqlContainer _readSingleSc = null!;
+    private ISqlContainer _readListSc = null!;
+    private ISqlContainer _filteredQuerySc = null!;
+    private ISqlContainer _updateSc = null!;
+    private ISqlContainer _deleteInsertSc = null!;
+    private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _aggregateSc = null!;
 
     [Params(1, 10, 100)] public int RecordCount { get; set; }
 
@@ -120,31 +131,89 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         _pengdowsContext = new DatabaseContext(_connStr, NpgsqlFactory.Instance, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
 
-        // Precompute SQL strings once — avoids repeated string building in hot-path loops,
-        // matching the Dapper pattern of const string sql outside the loop.
-        _readSingleSql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = " +
-            _pengdowsContext.MakeParameterName("Id");
-        _readListSql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > " +
-            _pengdowsContext.MakeParameterName("Age") +
-            " LIMIT " + _pengdowsContext.MakeParameterName("Limit");
-        _filteredQuerySql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = " +
-            _pengdowsContext.MakeParameterName("IsActive") +
-            " AND age >= " + _pengdowsContext.MakeParameterName("MinAge") +
-            " AND age <= " + _pengdowsContext.MakeParameterName("MaxAge") +
-            " LIMIT " + _pengdowsContext.MakeParameterName("Limit");
-
         // Entity Framework
         _efOptions = new DbContextOptionsBuilder<EfPgBenchContext>()
             .UseNpgsql(_connStr)
             .Options;
+
+        // ---- Build reusable containers once ----
+
+        // ReadSingle — keyed by id collection; loop calls SetParameterValue("w0", id) (scalar)
+        _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
+
+        // ReadList — BuildBaseRetrieve + custom WHERE age > @Age LIMIT @Limit
+        _readListSc = _gateway.BuildBaseRetrieve("b");
+        _readListSc.Query.Append($" WHERE {_pengdowsContext.WrapObjectName("b.age")} > ");
+        _readListSc.Query.Append(_readListSc.MakeParameterName("Age"));
+        _readListSc.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListSc.Query.Append(" LIMIT ");
+        _readListSc.Query.Append(_readListSc.MakeParameterName("Limit"));
+        _readListSc.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
+
+        // FilteredQuery — BuildBaseRetrieve + multi-condition WHERE
+        _filteredQuerySc = _gateway.BuildBaseRetrieve("b");
+        _filteredQuerySc.Query.Append($" WHERE {_pengdowsContext.WrapObjectName("b.is_active")} = ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("IsActive"));
+        _filteredQuerySc.AddParameterWithValue("IsActive", DbType.Boolean, true);
+        _filteredQuerySc.Query.Append($" AND {_pengdowsContext.WrapObjectName("b.age")} >= ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("MinAge"));
+        _filteredQuerySc.AddParameterWithValue("MinAge", DbType.Int32, 0);
+        _filteredQuerySc.Query.Append($" AND {_pengdowsContext.WrapObjectName("b.age")} <= ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("MaxAge"));
+        _filteredQuerySc.AddParameterWithValue("MaxAge", DbType.Int32, 0);
+        _filteredQuerySc.Query.Append(" LIMIT ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("Limit"));
+        _filteredQuerySc.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
+
+        // Update — full entity UPDATE; loop sets SetParameterValue("s2", salary) + ("k0", id)
+        // Column SET order: name=s0, age=s1, salary=s2, is_active=s3, created_at=s4; WHERE id=k0
+        _updateSc = await _gateway.BuildUpdateAsync(new BenchEntity
+        {
+            Id = 1, Name = "Updated", Age = 25,
+            Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+        });
+
+        // Delete insert side — explicit id required since SERIAL would otherwise auto-assign.
+        // Reuse via SetParameterValue("Id", id) each iteration; other fields stay fixed.
+        _deleteInsertSc = _pengdowsContext.CreateSqlContainer();
+        _deleteInsertSc.Query.Append("INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("Id"));
+        _deleteInsertSc.Query.Append(", ");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("Name"));
+        _deleteInsertSc.Query.Append(", ");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("Age"));
+        _deleteInsertSc.Query.Append(", ");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("Salary"));
+        _deleteInsertSc.Query.Append(", ");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("IsActive"));
+        _deleteInsertSc.Query.Append(", ");
+        _deleteInsertSc.Query.Append(_deleteInsertSc.MakeParameterName("CreatedAt"));
+        _deleteInsertSc.Query.Append(")");
+        _deleteInsertSc.AddParameterWithValue("Id", DbType.Int32, 0);
+        _deleteInsertSc.AddParameterWithValue("Name", DbType.String, "ToDelete");
+        _deleteInsertSc.AddParameterWithValue("Age", DbType.Int32, 99);
+        _deleteInsertSc.AddParameterWithValue("Salary", DbType.Double, 1.0);
+        _deleteInsertSc.AddParameterWithValue("IsActive", DbType.Boolean, false);
+        _deleteInsertSc.AddParameterWithValue("CreatedAt", DbType.String, DateTime.UtcNow.ToString("O"));
+
+        // Delete — BuildDelete; loop sets SetParameterValue("k0", id)
+        _deleteSc = _gateway.BuildDelete(0);
+
+        // Aggregate — no variable params; same container reused each iteration
+        _aggregateSc = _pengdowsContext.CreateSqlContainer(
+            "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
     }
 
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        _readSingleSc?.Dispose();
+        _readListSc?.Dispose();
+        _filteredQuerySc?.Dispose();
+        _updateSc?.Dispose();
+        _deleteInsertSc?.Dispose();
+        _deleteSc?.Dispose();
+        _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
         if (_container != null) await _container.DisposeAsync();
     }
@@ -174,21 +243,24 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     // CREATE BENCHMARKS
     // ========================================================================
 
+    /// <summary>
+    /// Uses BuildCreate — framework generates the dialect-correct INSERT with type-safe parameters.
+    /// Entity data changes each iteration so a new container is built per iteration.
+    /// Dapper and EF Core use equivalent per-iteration construction.
+    /// </summary>
     [Benchmark]
     public async Task<int> Create_Pengdows()
     {
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            const string sql =
-                "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES (@Name, @Age, @Salary, @IsActive, @CreatedAt)";
-            await using var container = _pengdowsContext.CreateSqlContainer(sql);
-            container.AddParameterWithValue("Name", DbType.String, $"Created {i}");
-            container.AddParameterWithValue("Age", DbType.Int32, 25);
-            container.AddParameterWithValue("Salary", DbType.Double, 50000.0);
-            container.AddParameterWithValue("IsActive", DbType.Boolean, true);
-            container.AddParameterWithValue("CreatedAt", DbType.String, DateTime.UtcNow.ToString("O"));
-            count += await container.ExecuteNonQueryAsync();
+            var entity = new BenchEntity
+            {
+                Name = $"Created {i}", Age = 25, Salary = 50000.0,
+                IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+            await using var sc = _gateway.BuildCreate(entity);
+            count += await sc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -244,9 +316,8 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsContext.CreateSqlContainer(_readSingleSql);
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            result = await _gateway.LoadSingleAsync(container);
+            _readSingleSc.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _gateway.LoadSingleAsync(_readSingleSc);
         }
 
         return result;
@@ -294,10 +365,8 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(_readListSql);
-        container.AddParameterWithValue("Age", DbType.Int32, 30);
-        container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
-        return await _gateway.LoadListAsync(container);
+        _readListSc.SetParameterValue("Age", 30);
+        return await _gateway.LoadListAsync(_readListSc);
     }
 
     [Benchmark]
@@ -330,17 +399,19 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     // UPDATE BENCHMARKS
     // ========================================================================
 
+    /// <summary>
+    /// Uses BuildUpdateAsync — framework generates a full UPDATE for all columns.
+    /// Reuses the pre-built container; only salary (s2) and id (k0) are varied.
+    /// </summary>
     [Benchmark]
     public async Task<int> Update_Pengdows()
     {
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
-            await using var container = _pengdowsContext.CreateSqlContainer(sql);
-            container.AddParameterWithValue("Salary", DbType.Double, 60000.0 + i);
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            count += await container.ExecuteNonQueryAsync();
+            _updateSc.SetParameterValue("s2", 60000.0 + i);
+            _updateSc.SetParameterValue("k0", (i % SeedRows) + 1);
+            count += await _updateSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -382,6 +453,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     // DELETE BENCHMARKS (insert-then-delete to avoid row depletion)
     // ========================================================================
 
+    /// <summary>
+    /// Uses reusable containers for both the insert and delete steps.
+    /// Insert uses a manually-built container (explicit id required; SERIAL would otherwise auto-assign).
+    /// Delete uses BuildDelete with SetParameterValue("k0", id).
+    /// </summary>
     [Benchmark]
     public async Task<int> Delete_Pengdows()
     {
@@ -389,23 +465,12 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            const string insertSql =
-                "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
-            await using (var ins = _pengdowsContext.CreateSqlContainer(insertSql))
-            {
-                ins.AddParameterWithValue("Id", DbType.Int32, id);
-                ins.AddParameterWithValue("Name", DbType.String, "ToDelete");
-                ins.AddParameterWithValue("Age", DbType.Int32, 99);
-                ins.AddParameterWithValue("Salary", DbType.Double, 1.0);
-                ins.AddParameterWithValue("IsActive", DbType.Boolean, false);
-                ins.AddParameterWithValue("CreatedAt", DbType.String, DateTime.UtcNow.ToString("O"));
-                await ins.ExecuteNonQueryAsync();
-            }
 
-            const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
-            await using var del = _pengdowsContext.CreateSqlContainer(deleteSql);
-            del.AddParameterWithValue("Id", DbType.Int32, id);
-            count += await del.ExecuteNonQueryAsync();
+            _deleteInsertSc.SetParameterValue("Id", id);
+            await _deleteInsertSc.ExecuteNonQueryAsync();
+
+            _deleteSc.SetParameterValue("k0", id);
+            count += await _deleteSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -476,12 +541,10 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> FilteredQuery_Pengdows()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer(_filteredQuerySql);
-        container.AddParameterWithValue("IsActive", DbType.Boolean, true);
-        container.AddParameterWithValue("MinAge", DbType.Int32, 25);
-        container.AddParameterWithValue("MaxAge", DbType.Int32, 45);
-        container.AddParameterWithValue("Limit", DbType.Int32, RecordCount);
-        return await _gateway.LoadListAsync(container);
+        _filteredQuerySc.SetParameterValue("IsActive", true);
+        _filteredQuerySc.SetParameterValue("MinAge", 25);
+        _filteredQuerySc.SetParameterValue("MaxAge", 45);
+        return await _gateway.LoadListAsync(_filteredQuerySc);
     }
 
     [Benchmark]
@@ -524,9 +587,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsContext.CreateSqlContainer(
-                "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
-            result = await container.ExecuteScalarOrNullAsync<double>();
+            result = await _aggregateSc.ExecuteScalarOrNullAsync<double>();
         }
 
         return result;
@@ -567,6 +628,8 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
     // ========================================================================
     // BREAKDOWN: BUILD vs EXECUTE timing
+    // Isolates how long BuildRetrieve takes vs actual I/O execution.
+    // Shows the framework's SQL-generation cost is negligible compared to DB round-trip.
     // ========================================================================
 
     [Benchmark]
@@ -577,21 +640,19 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
         for (var i = 0; i < RecordCount; i++)
         {
+            // Measure the full Build* cost: SQL generation + parameter creation
             sw.Restart();
-            var container = _pengdowsContext.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
+            var sc = _gateway.BuildRetrieve(new[] { (i % SeedRows) + 1 });
             sw.Stop();
             buildTicks += sw.ElapsedTicks;
 
+            // Measure execute phase: connection acquire + wire + mapping
             sw.Restart();
-            await _gateway.LoadSingleAsync(container);
+            await _gateway.LoadSingleAsync(sc);
             sw.Stop();
             executeTicks += sw.ElapsedTicks;
 
-            await container.DisposeAsync();
+            await sc.DisposeAsync();
         }
 
         return (buildTicks, executeTicks);
@@ -662,9 +723,8 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     public async Task<long> ConnectionHoldTime_Pengdows()
     {
         var sw = Stopwatch.StartNew();
-        await using var container = _pengdowsContext.CreateSqlContainer(_readSingleSql);
-        container.AddParameterWithValue("Id", DbType.Int32, 1);
-        await _gateway.LoadSingleAsync(container);
+        _readSingleSc.SetParameterValue("w0", 1);
+        await _gateway.LoadSingleAsync(_readSingleSc);
         sw.Stop();
         return sw.ElapsedTicks;
     }

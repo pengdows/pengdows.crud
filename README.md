@@ -687,8 +687,8 @@ public class HttpAuditResolver : IAuditValueResolver
     }
 }
 
-// Register in DI
-builder.Services.AddScoped<IAuditValueResolver, HttpAuditResolver>();
+// Register in DI (singleton; uses IHttpContextAccessor for per-request user)
+builder.Services.AddSingleton<IAuditValueResolver, HttpAuditResolver>();
 
 // TableGateway uses it automatically
 var helper = new TableGateway<Order, int>(context, auditResolver);
@@ -1035,12 +1035,9 @@ using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
 // IsolationProfile maps to provider-native levels per dialect
 
-// Check if degraded
-var (nativeLevel, wasDegraded) = context.Dialect.IsolationResolver.ResolveWithDetail(
-    IsolationProfile.SafeNonBlockingReads);
-
-if (wasDegraded)
-    _logger.LogWarning("Isolation level degraded to {Level}", nativeLevel);
+// Note: on PostgreSQL, SafeNonBlockingReads profile is not supported
+// and BeginTransaction(...) throws TransactionModeNotSupportedException.
+// Use StrictConsistency or native IsolationLevel.ReadCommitted there.
 
 // Available:
 // - SafeNonBlockingReads

@@ -1,0 +1,243 @@
+# SqlContainer Detailed Documentation
+
+The `SqlContainer` class in pengdows.crud wraps and simplifies direct SQL execution. It handles connections, parameters, and logging in a consistent, safe, and database-agnostic way.
+
+## Purpose
+
+SqlContainer is responsible for:
+
+- Executing raw or generated SQL
+- Managing parameters in a portable way
+- Handling command lifecycle and cleanup
+- Enforcing DbMode/read-write rules (read-only, write-only)
+- Safely invoking stored procedures across supported databases
+
+## Construction
+
+Instances of SqlContainer are constructed internally by `DatabaseContext` or `TransactionContext`, both implement `IDatabaseContext`.
+
+```csharp
+var sc = context.CreateSqlContainer();
+```
+
+You may also optionally pass a pre-existing query string.
+
+## Key Members
+
+### Query
+
+An `ISqlQueryBuilder` used to build the SQL command text. It is a pooled, high-performance builder that replaces `StringBuilder` with zero-allocation `ReadOnlySpan<char>` appends.
+
+- Supports the same `Append`/`AppendLine`/`AppendFormat`/`Replace` API that `StringBuilder` does
+- SQL can be inspected or logged before execution via `.ToString()`
+
+### AddParameter / AddParameters / AddParameterWithValue
+
+Used to bind parameters to the command.
+
+- Automatically supports `@name`, `:name`, or positional `?`
+- Parameters are created using `DbProviderFactory`
+- `AddParameterWithValue` creates and adds parameter in one call
+- Overloads with `ParameterDirection` support output/return parameters
+
+```csharp
+// Method 1: Create parameter, then add it
+var p = sc.CreateDbParameter("email", DbType.String, email);
+sc.AddParameter(p);
+sc.Query.Append(sc.MakeParameterName(p));
+
+// Method 2: Create and add parameter in one call (preferred)
+var param = sc.AddParameterWithValue("email", DbType.String, email);
+sc.Query.Append(sc.MakeParameterName(param));
+
+// Method 3: With explicit direction (for stored procedure output parameters)
+var outParam = sc.AddParameterWithValue("result", DbType.Int32, 0, ParameterDirection.Output);
+```
+
+## Execution Methods
+
+All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads.
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `ExecuteReaderAsync(CommandType)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
+| `ExecuteNonQueryAsync(CommandType)` | `ValueTask<int>` | Returns affected row count |
+| `ExecuteScalarRequiredAsync<T>(CommandType)` | `ValueTask<T>` | Returns value — throws if no rows or null |
+| `ExecuteScalarOrNullAsync<T>(CommandType)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
+| `TryExecuteScalarAsync<T>(CommandType)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
+
+## Clone for Reuse
+
+SqlContainer supports cloning for reusing SQL structure with different parameter values or contexts:
+
+```csharp
+// Clone with same context - update parameter values for batch operations
+var template = gateway.BuildCreate(entity);
+var clone = template.Clone();
+clone.SetParameterValue("i0", newValue);
+
+// Clone with different context - essential for transactions and multi-tenancy
+var clone = template.Clone(transactionContext);
+```
+
+## Command Preparation
+
+All commands are prepared with proper:
+
+- Parameter limit enforcement
+- CommandType (Text or StoredProcedure)
+- Statement preparation (if supported)
+- Connection open behavior (auto-opened if closed)
+
+## Stored Procedure Support
+
+ADO.NET supports three values for the `CommandType` enumeration:
+
+- `CommandType.Text` – The default; executes the provided SQL string as-is
+- `CommandType.StoredProcedure` – Intended to call a stored procedure
+- `CommandType.TableDirect` – Used to select all rows from a table without SQL (not supported)
+
+### Behavior in This Library
+
+While ADO.NET allows `CommandType.StoredProcedure`, it does not automatically wrap the command in the correct syntax for the underlying database.
+
+This library addresses that limitation:
+
+1. It accepts `CommandType.StoredProcedure`
+2. Internally rewrites the command into valid SQL using appropriate syntax for the target database
+3. Sets the command back to `CommandType.Text` before executing
+
+This ensures stored procedures work across all supported databases without requiring database-specific formatting.
+
+### WrapForStoredProc
+
+```csharp
+string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool captureReturn = false);
+```
+
+Returns the wrapped SQL string. The `captureReturn` parameter enables capturing the stored procedure return value when supported by the dialect.
+
+### Procedure Wrapping Syntax by Database
+
+| Database | Syntax Used |
+|----------|-------------|
+| SQL Server | `EXEC procName` |
+| Oracle | `BEGIN procName; END;` |
+| PostgreSQL | `CALL procName()` or `SELECT * FROM procName()` |
+| MySQL / MariaDB | `CALL procName()` |
+| Firebird | `EXECUTE PROCEDURE procName` |
+
+### Not Supported
+
+`CommandType.TableDirect` is not supported, as it bypasses SQL entirely and is of limited value in cross-database scenarios.
+
+## Reader Behavior
+
+- If in `TransactionContext` or `SingleConnection` mode, connection stays open
+- Otherwise, `CommandBehavior.CloseConnection` is used to auto-close
+- **ITrackedReader is a lease** — it pins the connection for its lifetime. Always use `await using` and dispose promptly.
+
+## Logging
+
+- SQL is logged through `ILogger` at Information level
+- Parameter values are NOT logged unless the consumer does so explicitly
+
+## Disposal and Cleanup
+
+- `Dispose()` clears parameters and query buffer
+- Finalizer calls `Dispose(false)` to ensure unmanaged cleanup
+- `Cleanup()` handles connection and command cleanup based on execution mode
+
+## WrapObjectName
+
+Wraps table or column names using the database's quote character. This will split and reassemble a value as well.
+
+```csharp
+var name = sc.WrapObjectName("MyTable");
+// Returns "MyTable" or [MyTable] or `MyTable` or similarly appropriate value
+
+var schemaAndName = sc.WrapObjectName("dbo.mytable");
+// Returns "dbo"."mytable" or [dbo].[mytable] or `dbo`.`mytable`
+
+var aliasedColumn = sc.WrapObjectName("o.total");
+// Returns "o"."total" or [o].[total] or `o`.`total`
+```
+
+**IMPORTANT:** Always use `WrapObjectName()` for all table names, column names, and aliases in custom SQL to ensure proper quoting per database dialect.
+
+## Complete Example
+
+```csharp
+var sc = context.CreateSqlContainer();
+
+// Build SELECT with proper identifier quoting
+sc.Query.Append("SELECT * FROM ");
+sc.Query.Append(sc.WrapObjectName("Users"));
+sc.Query.Append(" WHERE ");
+sc.Query.Append(sc.WrapObjectName("Id"));
+sc.Query.Append(" = ");
+
+// Add parameter
+var param = sc.AddParameterWithValue("userId", DbType.Int32, 42);
+sc.Query.Append(sc.MakeParameterName(param));
+
+// Execute
+await using var reader = await sc.ExecuteReaderAsync();
+while (await reader.ReadAsync())
+{
+    // Process rows
+}
+```
+
+## Custom Query with Multiple Conditions
+
+```csharp
+var sc = gateway.BuildBaseRetrieve("u");
+
+// Add WHERE clause with proper quoting
+sc.Query.Append(" WHERE ");
+sc.Query.Append(sc.WrapObjectName("u.status"));
+sc.Query.Append(" = ");
+var statusParam = sc.AddParameterWithValue("status", DbType.String, "Active");
+sc.Query.Append(sc.MakeParameterName(statusParam));
+
+sc.Query.Append(" AND ");
+sc.Query.Append(sc.WrapObjectName("u.created_at"));
+sc.Query.Append(" >= ");
+var dateParam = sc.AddParameterWithValue("since", DbType.DateTime, DateTime.UtcNow.AddDays(-30));
+sc.Query.Append(sc.MakeParameterName(dateParam));
+
+sc.Query.Append(" ORDER BY ");
+sc.Query.Append(sc.WrapObjectName("u.created_at"));
+sc.Query.Append(" DESC");
+
+var users = await gateway.LoadListAsync(sc);
+```
+
+## Streaming Large Result Sets
+
+For memory-efficient processing of large queries:
+
+```csharp
+var sc = gateway.BuildBaseRetrieve("u");
+sc.Query.Append(" ORDER BY ");
+sc.Query.Append(sc.WrapObjectName("u.id"));
+
+await foreach (var user in gateway.LoadStreamAsync(sc))
+{
+    await ProcessUserAsync(user);
+    // Can break early - reader is disposed automatically
+}
+```
+
+## Stored Procedure Example
+
+```csharp
+var sc = context.CreateSqlContainer();
+sc.Query.Append("GetUsersByRole");
+
+var roleParam = sc.AddParameterWithValue("role", DbType.String, "Admin");
+
+// Execute as stored procedure - library handles syntax per database
+await using var reader = await sc.ExecuteReaderAsync(CommandType.StoredProcedure);
+```

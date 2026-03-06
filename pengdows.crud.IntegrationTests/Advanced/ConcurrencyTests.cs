@@ -166,7 +166,7 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Each transaction operates on its own entity
             var tasks = entities.Select(async entity =>
             {
-                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
                 var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
@@ -363,7 +363,7 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 try
                 {
-                    await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                    await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
                     var helper = CreateTableGateway(context);
 
                     var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -410,7 +410,7 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 var entity = CreateTestEntity(NameEnum.Test, 1000 + i);
 
-                await using var transaction = context.BeginTransaction(IsolationLevel.ReadCommitted);
+                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
                 var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
@@ -456,5 +456,12 @@ public class ConcurrencyTests : DatabaseTestBase
             UpdatedBy = "testuser",
             CreatedBy = "testuser"
         };
+    }
+
+    private static IsolationLevel GetReadCommittedCompatibleIsolationLevel(SupportedDatabase provider)
+    {
+        return provider is SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB
+            ? IsolationLevel.Serializable
+            : IsolationLevel.ReadCommitted;
     }
 }

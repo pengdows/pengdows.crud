@@ -545,15 +545,19 @@ public class FakeDataStore
         try
         {
             // Handle "column = value" or "column = @param"
-            var match = Regex.Match(whereClause, @"(\w+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
+            // Improved regex to handle quoted identifiers like "Id" = @p0
+            var match = Regex.Match(whereClause, @"([`\[\]""'\w.]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
-                var column = match.Groups[1].Value.Trim();
+                var column = CleanIdentifier(match.Groups[1].Value);
                 var valueExpression = match.Groups[2].Value.Trim();
 
                 if (!row.ContainsKey(column))
                 {
-                    return false;
+                    // Fallback for case-insensitive column matching in fake store
+                    var key = row.Keys.FirstOrDefault(k => k.Equals(column, StringComparison.OrdinalIgnoreCase));
+                    if (key == null) return false;
+                    column = key;
                 }
 
                 var rowValue = row[column];

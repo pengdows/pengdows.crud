@@ -187,6 +187,75 @@ public partial class DatabaseContext
         }
     }
 
+    internal async Task ExecuteSessionSettingsAsync(
+        IDbConnection connection,
+        bool readOnly,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessionSettingsDetectionCompleted)
+        {
+            return;
+        }
+
+        var settingsToApply = readOnly
+            ? _cachedReadOnlySessionSettings
+            : _cachedReadWriteSessionSettings;
+
+        if (string.IsNullOrWhiteSpace(settingsToApply))
+        {
+            if (readOnly)
+            {
+                _logger.LogDebug(
+                    "Dialect {Dialect} does not emit session-level read-only SQL; " +
+                    "read-only intent must be enforced at the transaction level for {Name}.",
+                    Dialect?.GetType().Name ?? "unknown", Name);
+            }
+
+            if (connection is ITrackedConnection t)
+            {
+                t.LocalState.MarkSessionSettingsApplied();
+            }
+            return;
+        }
+
+        _logger.LogInformation("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
+            Name, readOnly);
+
+        var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settingsToApply;
+            if (cmd is DbCommand dbCommand)
+            {
+                await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                cmd.ExecuteNonQuery();
+            }
+
+            var sessionInitMs = MetricsCollector.ToMilliseconds(
+                System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
+            _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            return;
+        }
+
+        if (connection is ITrackedConnection tc)
+        {
+            tc.LocalState.MarkSessionSettingsApplied();
+        }
+    }
+
     /// <summary>
     /// Factory method to create a new tracked connection with state change monitoring and session settings.
     /// </summary>
@@ -269,6 +338,33 @@ public partial class DatabaseContext
             onFirstOpen?.Invoke(conn);
         };
 
+        Func<DbConnection, CancellationToken, Task>? firstOpenHandlerAsync = async (conn, cancellationToken) =>
+        {
+            try
+            {
+                if (trackedConnection != null)
+                {
+                    await ExecuteSessionSettingsAsync(trackedConnection, readOnly, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await ExecuteSessionSettingsAsync(conn, readOnly, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+            }
+
+            // Invoke any additional callback provided by caller
+            onFirstOpen?.Invoke(conn);
+        };
+
         var metricsCollector = executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
         var useReaderPrefix = readOnly && ShouldUseReaderConnectionString(readOnly);
         var namePrefix = useReaderPrefix ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
@@ -305,7 +401,8 @@ public partial class DatabaseContext
             ConnectionMode,
             _modeLockTimeout,
             slot,
-            namePrefix
+            namePrefix,
+            firstOpenHandlerAsync
         );
         trackedConnection = tracked;
         return tracked;

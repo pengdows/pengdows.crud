@@ -341,6 +341,11 @@ internal class OracleDialect : SqlDialect
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
 
+    // Oracle ODP.NET has no "Application Name" connection string key — use "Metadata Pooling"
+    // as the pool-key discriminator to guarantee separate pools for reader vs writer connections.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "Metadata Pooling";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "false";
+
     // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
     // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
     protected override DbType RemapDbType(DbType type) => type switch

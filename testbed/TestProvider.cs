@@ -173,6 +173,11 @@ public class TestProvider : IAsyncTestProvider
             await TestIdentifierQuoting();
             Console.WriteLine($"  Identifier quoting: {stepSw.ElapsedMilliseconds}ms");
             SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
+            Console.WriteLine("Running pool isolation");
+            await TestPoolIsolation();
+            Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
         }
         catch (Exception ex)
         {
@@ -2012,6 +2017,13 @@ INSERT INTO {table} (
             await sc.ExecuteNonQueryAsync();
         }
     }
+
+    /// <summary>
+    /// Validates that reader and writer connections use separate connection pools.
+    /// Base implementation is a no-op; override in dialects that require discriminator-based
+    /// pool isolation (e.g., Oracle where ApplicationNameSettingName is not supported).
+    /// </summary>
+    protected virtual Task TestPoolIsolation() => Task.CompletedTask;
 
     /// <summary>
     /// Deletes a single row by ID.

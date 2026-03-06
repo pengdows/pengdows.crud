@@ -49,21 +49,31 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
-    public void ApplesToApplesBenchmarks_UsePrebuiltSqlAndFactoryConnections()
+    public void ApplesToApplesBenchmarks_UsePrebuiltContainersAndFactoryConnections()
     {
         const string fileName = "ApplesToApplesDapperBenchmarks.cs";
         var text = LoadBenchmarkText(fileName);
 
+        // pengdows.crud side uses BuildRetrieve (container built once) + SetParameterValue (reuse per loop).
+        // Dapper side uses pre-built SQL string + factory connection per op.
         AssertAllPresent(fileName, text, new[]
         {
-            "BuildSingleReadSql",
-            "_pengdowsSql",
+            "BuildRetrieve",
+            "SetParameterValue",
+            "_readSingleSc",
             "_dapperSql",
-            "CreateSqlContainer(_pengdowsSql)",
             "CreateConnection",
             "ConnectionString",
             "OpenAsync",
             "QuerySingleOrDefaultAsync"
+        });
+
+        // Must NOT use the old per-iteration container-creation pattern
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "BuildSingleReadSql",
+            "_pengdowsSql",
+            "CreateSqlContainer(_pengdowsSql)"
         });
     }
 
