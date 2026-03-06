@@ -55,16 +55,24 @@ public partial class DatabaseContext
         return GetConnection(executionType, isShared);
     }
 
-    /// <inheritdoc/>
-    public void CloseAndDisposeConnection(ITrackedConnection? connection)
+    internal void CloseAndDisposeConnectionInternal(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
     }
 
-    /// <inheritdoc/>
-    public async ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    internal async ValueTask CloseAndDisposeConnectionAsyncInternal(ITrackedConnection? connection)
     {
         await _connectionStrategy.ReleaseConnectionAsync(connection).ConfigureAwait(false);
+    }
+
+    void IInternalConnectionProvider.CloseAndDisposeConnection(ITrackedConnection? connection)
+    {
+        CloseAndDisposeConnectionInternal(connection);
+    }
+
+    ValueTask IInternalConnectionProvider.CloseAndDisposeConnectionAsync(ITrackedConnection? connection)
+    {
+        return CloseAndDisposeConnectionAsyncInternal(connection);
     }
 
     /// <summary>

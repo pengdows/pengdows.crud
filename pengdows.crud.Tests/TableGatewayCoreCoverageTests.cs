@@ -16,7 +16,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         TypeMap.Register<CoreCoverageEntity>();
         var gateway = new TableGateway<CoreCoverageEntity, int>(Context);
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var sql = "{Q}Name{q} = {S}value";
 
         var replaced = dialect.ReplaceNeutralTokens(sql);
@@ -37,7 +37,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
                          BindingFlags.NonPublic | BindingFlags.Instance) ??
                      throw new InvalidOperationException("Missing helper");
 
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
 
         // Call twice with same dialect
         var result1 = (string)method.Invoke(gateway, new object[] { dialect })!;
@@ -61,7 +61,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
                          BindingFlags.NonPublic | BindingFlags.Instance) ??
                      throw new InvalidOperationException("Missing helper");
 
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
 
         // Call twice with same dialect
         var result1 = (string)method.Invoke(gateway, new object[] { dialect })!;
@@ -232,7 +232,7 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     {
         TypeMap.Register<SchemaEntity>();
         var gateway = new TableGateway<SchemaEntity, int>(Context);
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var method = typeof(TableGateway<SchemaEntity, int>)
                          .GetMethod("BuildWrappedTableName", BindingFlags.NonPublic | BindingFlags.Instance)
                      ?? throw new InvalidOperationException("Missing helper");

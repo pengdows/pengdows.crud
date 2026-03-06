@@ -226,7 +226,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var preamble = context.SessionSettingsPreamble;
+        var preamble = context.GetSessionSettingsPreamble();
         if (expectSettings)
         {
             Assert.False(string.IsNullOrWhiteSpace(preamble));

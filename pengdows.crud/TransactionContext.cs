@@ -147,8 +147,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _isReadOnly = isReadOnly;
-        _dialect = context.Dialect ??
-                   throw new InvalidOperationException("IDatabaseContext must expose a non-null Dialect.");
+        _dialect = context.GetDialect();
         RootId = ((IContextIdentity)_context).RootId;
         var metricsAccessor = context as IMetricsCollectorAccessor;
         _metricsCollector = metricsAccessor?.MetricsCollector;
@@ -316,9 +315,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
 
     /// <inheritdoc/>
-    public string SessionSettingsPreamble => _context.Dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-
-    /// <inheritdoc/>
     public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
 
     /// <inheritdoc/>
@@ -334,8 +330,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         remove => _context.MetricsUpdated -= value;
     }
 
-    /// <inheritdoc/>
-    public ILockerAsync GetLock()
+    internal ILockerAsync GetLockInternal()
     {
         ThrowIfDisposed();
         if (IsCompleted)
@@ -344,6 +339,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         return _reusableLocker;
+    }
+
+    ILockerAsync IInternalConnectionProvider.GetLock()
+    {
+        return GetLockInternal();
     }
 
     protected override void ValidateCanCreateContainer()
@@ -502,8 +502,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
-    /// <inheritdoc/>
-    public void CloseAndDisposeConnection(ITrackedConnection? conn)
+    private void CloseAndDisposeConnectionInternal(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -519,8 +518,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _context.CloseAndDisposeConnection(conn);
     }
 
-    /// <inheritdoc/>
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+    private ValueTask CloseAndDisposeConnectionAsyncInternal(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -534,6 +532,16 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         return _context.CloseAndDisposeConnectionAsync(conn);
+    }
+
+    void IInternalConnectionProvider.CloseAndDisposeConnection(ITrackedConnection? conn)
+    {
+        CloseAndDisposeConnectionInternal(conn);
+    }
+
+    ValueTask IInternalConnectionProvider.CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+    {
+        return CloseAndDisposeConnectionAsyncInternal(conn);
     }
 
     /// <inheritdoc/>
@@ -865,6 +873,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
     /// <inheritdoc />
     public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;

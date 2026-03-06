@@ -42,7 +42,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
             Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
@@ -82,7 +82,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
             Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
@@ -119,7 +119,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
             Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
@@ -154,7 +154,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
             // Should not contain MinPoolSize for SingleConnection mode
@@ -186,7 +186,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
 
         // For non-pooling databases, should not set any pooling parameters
         if (dialect.PoolingSettingName != null)
@@ -231,7 +231,7 @@ public class MinPoolSizeBehaviorTests
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = connectionString;
 
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
             Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));

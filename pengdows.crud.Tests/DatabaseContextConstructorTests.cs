@@ -644,7 +644,7 @@ public class DatabaseContextConstructorTests
         using var context = new DatabaseContext(config, dataSource, dataSource.Factory, NullLoggerFactory.Instance);
 
         // Assert
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
         Assert.Equal(SupportedDatabase.SqlServer, context.Product);
     }
 

@@ -1020,7 +1020,7 @@ public class TransactionContextTests
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
         Assert.NotNull(tx.DataSourceInfo);
 #pragma warning disable CS0618
-        Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
+        Assert.Equal(context.GetSessionSettingsPreamble(), tx.GetSessionSettingsPreamble());
 #pragma warning restore CS0618
         Assert.Equal(context.GetBaseSessionSettings(), tx.GetBaseSessionSettings());
         Assert.Equal(context.GetReadOnlySessionSettings(), tx.GetReadOnlySessionSettings());

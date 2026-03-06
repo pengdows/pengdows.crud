@@ -135,18 +135,23 @@ public class DataSourceInformation : IDataSourceInformation
     public bool CanUseModernFeatures => _dialect.CanUseModernFeatures;
     public bool HasBasicCompatibility => _dialect.HasBasicCompatibility;
 
-    public DataTable GetSchema(ITrackedConnection connection)
+    internal DataTable GetSchema(ITrackedConnection connection)
     {
-        return _dialect.GetDataSourceInformationSchema(connection);
+        if (_dialect is not IInternalSqlDialect internalDialect)
+        {
+            throw new InvalidOperationException("ISqlDialect must support internal schema operations.");
+        }
+
+        return internalDialect.GetDataSourceInformationSchema(connection);
     }
 
-    public static DataSourceInformation Create(ITrackedConnection connection, DbProviderFactory factory,
+    internal static DataSourceInformation Create(ITrackedConnection connection, DbProviderFactory factory,
         ILoggerFactory? loggerFactory = null)
     {
         return CreateAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
     }
 
-    public static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection,
+    internal static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection,
         DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
     {
         if (connection == null)

@@ -94,7 +94,7 @@ internal enum GuidStorageFormat
 /// </remarks>
 /// <seealso cref="ISqlDialect"/>
 /// <seealso cref="SqlDialectFactory"/>
-internal abstract class SqlDialect : ISqlDialect
+internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;

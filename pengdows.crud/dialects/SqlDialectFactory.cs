@@ -27,7 +27,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 public static class SqlDialectFactory
 {
-    public static async Task<ISqlDialect> CreateDialectAsync(
+    internal static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
@@ -39,11 +39,16 @@ public static class SqlDialectFactory
         var inferredType = DatabaseDetectionService.DetectProduct(connection, factory);
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
-        await dialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        if (dialect is not IInternalSqlDialect internalDialect)
+        {
+            throw new InvalidOperationException("Dialect must support internal detection operations.");
+        }
+
+        await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
     }
 
-    public static ISqlDialect CreateDialect(
+    internal static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory)
     {
@@ -51,7 +56,7 @@ public static class SqlDialectFactory
     }
 
 
-    public static ISqlDialect CreateDialect(
+    internal static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)

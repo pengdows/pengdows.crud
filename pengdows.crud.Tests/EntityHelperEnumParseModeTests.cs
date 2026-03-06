@@ -86,7 +86,7 @@ public class TableGatewayEnumParseModeTests : SqlLiteContextTestBase
     public void ReplaceNeutralTokens_ReplacesMarkers()
     {
         var helper = new TableGateway<EnumModeEntity, int>(Context);
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var replaced = dialect.ReplaceNeutralTokens("{Q}Name{q} FROM {Q}T{q} WHERE {Q}Id{q}={S}id");
         var expected =
             $"{dialect.WrapObjectName("Name")} FROM {dialect.WrapObjectName("T")} WHERE {dialect.WrapObjectName("Id")}={dialect.ParameterMarker}id";

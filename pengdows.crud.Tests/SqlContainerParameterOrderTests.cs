@@ -148,7 +148,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
     public async Task NamedDialect_IgnoresParamSequence()
     {
         using var container = Context.CreateSqlContainer("SELECT {P}b, {P}a") as SqlContainer;
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var rendered = container!.RenderParams(container.Query.ToString());
         container.Query.Clear().Append(rendered);
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);

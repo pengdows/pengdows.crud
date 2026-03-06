@@ -1,10 +1,8 @@
 ﻿using System.Data;
 using System.Data.Common;
-using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
-using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -52,11 +50,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Metadata gathered from connection.GetSchema and provider heuristics.
     /// </summary>
     IDataSourceInformation DataSourceInfo { get; }
-
-    /// <summary>
-    /// The SQL dialect in use for this context.
-    /// </summary>
-    ISqlDialect Dialect { get; }
 
     /// <summary>
     /// Timeout for internal mode locks (SingleWriter / SingleConnection) and
@@ -195,12 +188,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool RCSIEnabled { get; }
 
     /// <summary>
-    /// Returns the session settings SQL preamble for the current context.
-    /// </summary>
-    [Obsolete("Use GetBaseSessionSettings() and GetReadOnlySessionSettings() instead.")]
-    string SessionSettingsPreamble { get; }
-
-    /// <summary>
     /// Returns the baseline session settings SQL for the current context.
     /// These are settings that apply regardless of execution intent (e.g. syntax, quoting).
     /// </summary>
@@ -215,12 +202,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if snapshot isolation is enabled on the database.
     /// </summary>
     bool SnapshotIsolationEnabled { get; }
-
-    /// <summary>
-    /// Returns an async-compatible lock for this context instance.
-    /// This is intended for internal coordination within pengdows.crud and should not be required by consumers.
-    /// </summary>
-    ILockerAsync GetLock();
 
     /// <summary>
     /// Creates a new SQL container for building statements.
@@ -298,13 +279,4 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     void AssertIsReadConnection();
 
 
-    /// <summary>
-    /// Returns a connection to the strategy, disposing it if necessary.
-    /// </summary>
-    void CloseAndDisposeConnection(ITrackedConnection? conn);
-
-    /// <summary>
-    /// Returns a connection to the strategy asynchronously, disposing it if necessary.
-    /// </summary>
-    ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 }

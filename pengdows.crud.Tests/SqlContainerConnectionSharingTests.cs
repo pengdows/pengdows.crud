@@ -70,7 +70,7 @@ public class SqlContainerConnectionSharingTests
 
         public bool? LastIsShared { get; private set; }
 
-        public ISqlDialect Dialect => _context.Dialect;
+        public ISqlDialect Dialect => _context.GetDialect();
         public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
 
         public DbMode ConnectionMode => _context.ConnectionMode;
@@ -91,7 +91,7 @@ public class SqlContainerConnectionSharingTests
             throw new InvalidOperationException("IDatabaseContext must expose an internal TypeMapRegistry.");
 
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
-        public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+        public string SessionSettingsPreamble => _context.GetSessionSettingsPreamble();
         public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
         public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

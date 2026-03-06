@@ -40,7 +40,7 @@ public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
     [Fact]
     public void QuoteProperties_AccessibleViaContextDialect()
     {
-        var dialect = Context.Dialect;
+        var dialect = Context.GetDialect();
         Assert.Equal(dialect.QuotePrefix, Context.QuotePrefix);
         Assert.Equal(dialect.QuoteSuffix, Context.QuoteSuffix);
         Assert.Equal(dialect.CompositeIdentifierSeparator, Context.CompositeIdentifierSeparator);

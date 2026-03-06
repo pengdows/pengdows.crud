@@ -163,7 +163,7 @@ public partial class DatabaseContext
         ILockerAsync? initLocker = null;
         try
         {
-            initLocker = GetLock();
+            initLocker = GetLockInternal();
             initLocker.Lock();
             if (configuration is null)
             {

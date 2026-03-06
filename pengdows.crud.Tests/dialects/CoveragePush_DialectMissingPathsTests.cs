@@ -132,7 +132,7 @@ public class CoveragePush_DialectMissingPathsTests
         using var txn = ctx.BeginTransaction();
 
         // Line 369: returns TryExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, ...)
-        await ctx.Dialect.TryEnterReadOnlyTransactionAsync(txn, CancellationToken.None);
+        await ctx.GetDialect().TryEnterReadOnlyTransactionAsync(txn, CancellationToken.None);
 
         // Success: no exception thrown
         txn.Rollback();
@@ -151,7 +151,7 @@ public class CoveragePush_DialectMissingPathsTests
 
         using var query = new SqlQueryBuilder();
         // getValue returns null → line 174: query.Append("NULL")
-        ctx.Dialect.BuildBatchUpdateSql(
+        ctx.GetDialect().BuildBatchUpdateSql(
             "\"t\"",
             new[] { "\"col\"" },
             new[] { "\"id\"" },
@@ -173,7 +173,7 @@ public class CoveragePush_DialectMissingPathsTests
 
         using var query = new SqlQueryBuilder();
         // getValue returns DBNull.Value → same NULL path (line 172-174)
-        ctx.Dialect.BuildBatchUpdateSql(
+        ctx.GetDialect().BuildBatchUpdateSql(
             "\"t\"",
             new[] { "\"col\"" },
             new[] { "\"id\"" },
@@ -200,7 +200,7 @@ public class CoveragePush_DialectMissingPathsTests
         try
         {
             // Lines 293-300: executes SnapshotIsolationQuery, fakeDb returns null → 0 → false
-            var result = ctx.Dialect.IsSnapshotIsolationOn(conn);
+            var result = ctx.GetDialect().IsSnapshotIsolationOn(conn);
             Assert.False(result);
         }
         finally
@@ -224,7 +224,7 @@ public class CoveragePush_DialectMissingPathsTests
         try
         {
             // Lines 284-288: executes RcsiQuery, fakeDb returns null → 0 → false
-            var result = ctx.Dialect.IsReadCommittedSnapshotOn(conn);
+            var result = ctx.GetDialect().IsReadCommittedSnapshotOn(conn);
             Assert.False(result);
         }
         finally
@@ -245,7 +245,7 @@ public class CoveragePush_DialectMissingPathsTests
             "Data Source=test;EmulatedProduct=Firebird", factory);
 
         // Line 220: public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.Returning
-        var plan = ctx.Dialect.GetGeneratedKeyPlan();
+        var plan = ctx.GetDialect().GetGeneratedKeyPlan();
         Assert.Equal(GeneratedKeyPlan.Returning, plan);
     }
 
@@ -261,7 +261,7 @@ public class CoveragePush_DialectMissingPathsTests
             "Data Source=test;EmulatedProduct=Firebird", factory);
 
         // Lines 383-387: Regex matches LI-V3.0.0, int.TryParse, return new Version(major, minor, build)
-        var version = ctx.Dialect.ParseVersion("LI-V3.0.0");
+        var version = ctx.GetDialect().ParseVersion("LI-V3.0.0");
         Assert.NotNull(version);
         Assert.Equal(3, version.Major);
         Assert.Equal(0, version.Minor);
@@ -279,7 +279,7 @@ public class CoveragePush_DialectMissingPathsTests
             "Data Source=test;EmulatedProduct=Firebird", factory);
 
         // Lines 394-397: Regex matches "Firebird 4.0", int.TryParse, return new Version(major, minor)
-        var version = ctx.Dialect.ParseVersion("Firebird 4.0");
+        var version = ctx.GetDialect().ParseVersion("Firebird 4.0");
         Assert.NotNull(version);
         Assert.Equal(4, version.Major);
         Assert.Equal(0, version.Minor);
@@ -300,7 +300,7 @@ public class CoveragePush_DialectMissingPathsTests
         try
         {
             // Lines 409-415: executes EngineVersionQuery → fakeDb returns "4.0.0" → returns it
-            var versionStr = ctx.Dialect.GetDatabaseVersion(conn);
+            var versionStr = ctx.GetDialect().GetDatabaseVersion(conn);
             Assert.Equal("4.0.0", versionStr);
         }
         finally

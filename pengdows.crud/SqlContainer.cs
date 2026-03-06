@@ -222,9 +222,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal static SqlContainer Create(IDatabaseContext context, string? query = "",
         ILogger<ISqlContainer>? logger = null)
     {
-        var dialect = context.Dialect
-                      ?? throw new InvalidOperationException(
-                          "IDatabaseContext must expose a non-null Dialect.");
+        var dialect = context.GetDialect();
         return new SqlContainer(context, dialect, query, logger);
     }
 
@@ -654,7 +652,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
 
-    public DbCommand CreateCommand(ITrackedConnection conn)
+    internal DbCommand CreateCommand(ITrackedConnection conn)
     {
         var dbCommand = CreateRawCommand(conn);
 
@@ -1141,7 +1139,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandFailed(startTimestamp);
             if (metrics != null)
             {
-                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+                metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
             }
 
             throw;
@@ -1421,7 +1419,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandFailed(startTimestamp);
             if (metrics != null)
             {
-                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+                metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
             }
 
             throw;
@@ -1827,7 +1825,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var targetContext = context ?? _context;
 
         // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = targetContext.Dialect ?? _dialect;
+        var targetDialect = context != null ? targetContext.GetDialect() : _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
         // OPTIMIZATION: Share cached command text instead of re-rendering

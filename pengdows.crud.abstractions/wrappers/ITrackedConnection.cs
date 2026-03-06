@@ -9,7 +9,7 @@ namespace pengdows.crud.wrappers;
 /// <summary>
 /// Represents a connection that tracks usage and exposes additional helpers such as locking.
 /// </summary>
-public interface ITrackedConnection : IDbConnection
+internal interface ITrackedConnection : IDbConnection
 {
     /// <summary>
     /// Gets or sets the connection string for this connection.

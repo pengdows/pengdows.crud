@@ -128,10 +128,8 @@ public class DataReaderMapperNegativeTests
 
         var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(true);
-        IDataReaderMapper mapper = new DataReaderMapper();
-
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            mapper.LoadAsync<SampleEntity>(reader, options));
+            DataReaderMapper.LoadAsync<SampleEntity>(reader, options));
     }
 
     [Fact]

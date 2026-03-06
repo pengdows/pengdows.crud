@@ -108,7 +108,7 @@ public class DatabaseContextUncoveredMethodsTests
         };
         var context = new DatabaseContext(config, factory);
 
-        var preamble = context.SessionSettingsPreamble;
+        var preamble = context.GetSessionSettingsPreamble();
 
         Assert.NotNull(preamble);
     }

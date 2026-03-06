@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
@@ -41,7 +42,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var ctx = CreateSqliteContext();
         using var query = new SqlQueryBuilder();
         Assert.Throws<ArgumentException>(() =>
-            ctx.Dialect.BuildBatchInsertSql("", new[] { "col1" }, 1, query));
+            ctx.GetDialect().BuildBatchInsertSql("", new[] { "col1" }, 1, query));
     }
 
     [Fact]
@@ -51,7 +52,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var ctx = CreateSqliteContext();
         using var query = new SqlQueryBuilder();
         Assert.Throws<ArgumentException>(() =>
-            ctx.Dialect.BuildBatchInsertSql("my_table", null!, 1, query));
+            ctx.GetDialect().BuildBatchInsertSql("my_table", null!, 1, query));
     }
 
     [Fact]
@@ -61,7 +62,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var ctx = CreateSqliteContext();
         using var query = new SqlQueryBuilder();
         Assert.Throws<ArgumentException>(() =>
-            ctx.Dialect.BuildBatchInsertSql("my_table", Array.Empty<string>(), 1, query));
+            ctx.GetDialect().BuildBatchInsertSql("my_table", Array.Empty<string>(), 1, query));
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var ctx = CreateSqliteContext();
         using var query = new SqlQueryBuilder();
         Assert.Throws<ArgumentException>(() =>
-            ctx.Dialect.BuildBatchInsertSql("my_table", new[] { "col1" }, 0, query));
+            ctx.GetDialect().BuildBatchInsertSql("my_table", new[] { "col1" }, 0, query));
     }
 
     // =========================================================================
@@ -90,7 +91,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var query = new SqlQueryBuilder();
         // PostgreSQL uses base BuildBatchInsertSql — calling the no-getValue overload
         // delegates to the getValue=null overload (lines 257-258).
-        ctx.Dialect.BuildBatchInsertSql("\"t\"", new[] { "\"c\"" }, 1, query);
+        ctx.GetDialect().BuildBatchInsertSql("\"t\"", new[] { "\"c\"" }, 1, query);
         Assert.Contains("INSERT INTO", query.ToString());
     }
 
@@ -106,7 +107,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         using var ctx = CreateSqliteContext();
         using var query = new SqlQueryBuilder();
         Assert.Throws<NotSupportedException>(() =>
-            ctx.Dialect.BuildBatchUpdateSql("t", new[] { "col" }, new[] { "id" }, 1, query, null));
+            ctx.GetDialect().BuildBatchUpdateSql("t", new[] { "col" }, new[] { "id" }, 1, query, null));
     }
 
     // =========================================================================
@@ -118,7 +119,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
     {
         // Line 511: if (string.IsNullOrWhiteSpace(name)) return string.Empty;
         using var ctx = CreateSqliteContext();
-        var result = ctx.Dialect.WrapSimpleName(string.Empty);
+        var result = ctx.GetDialect().WrapSimpleName(string.Empty);
         Assert.Equal(string.Empty, result);
     }
 
@@ -127,7 +128,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
     {
         // Same line 511 guard with whitespace
         using var ctx = CreateSqliteContext();
-        var result = ctx.Dialect.WrapSimpleName("   ");
+        var result = ctx.GetDialect().WrapSimpleName("   ");
         Assert.Equal(string.Empty, result);
     }
 
@@ -140,7 +141,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
     {
         // Line 543: trimmed.Length == 0 → return string.Empty
         using var ctx = CreateSqliteContext();
-        var result = ctx.Dialect.WrapObjectName("   ");
+        var result = ctx.GetDialect().WrapObjectName("   ");
         Assert.Equal(string.Empty, result);
     }
 
@@ -157,7 +158,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
         var conn = ctx.GetConnection(ExecutionType.Read);
         try
         {
-            var result = ctx.Dialect.IsReadCommittedSnapshotOn(conn);
+            var result = ctx.GetDialect().IsReadCommittedSnapshotOn(conn);
             Assert.False(result);
         }
         finally
@@ -179,7 +180,7 @@ public class CoveragePush_SqlDialectBaseMethodTests
             "Data Source=test;EmulatedProduct=DuckDB",
             new fakeDbFactory(SupportedDatabase.DuckDB));
         var ex = new StubDbException();
-        var result = ctx.Dialect.IsUniqueViolation(ex);
+        var result = ctx.GetDialect().IsUniqueViolation(ex);
         Assert.False(result);
     }
 

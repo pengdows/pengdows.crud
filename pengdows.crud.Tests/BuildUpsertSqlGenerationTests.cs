@@ -92,7 +92,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var columns = BuildInsertColumns(Context);
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(Context, dialect);
@@ -112,7 +112,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var columns = BuildInsertColumns(context);
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(context, dialect);
@@ -132,7 +132,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var table = context.WrapObjectName("UpsertLite");
         var wrappedId = context.WrapObjectName("Id");
         var wrappedName = context.WrapObjectName("Name");
@@ -160,7 +160,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
 
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
         var wrappedKey = context.WrapObjectName("NaturalKey");
         var wrappedValue = context.WrapObjectName("Value");

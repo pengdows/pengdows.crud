@@ -397,13 +397,6 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     void AddParameters(IList<DbParameter> list);
 
     /// <summary>
-    /// Creates a <see cref="DbCommand"/> for the given tracked connection.
-    /// </summary>
-    /// <param name="conn">The connection to associate with the command.</param>
-    /// <returns>The created command.</returns>
-    DbCommand CreateCommand(ITrackedConnection conn);
-
-    /// <summary>
     /// Clears the accumulated query and parameters.
     /// </summary>
     void Clear();

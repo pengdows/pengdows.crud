@@ -12,8 +12,10 @@
 // - Returns ITrackedConnection with locking and lifecycle tracking.
 // =============================================================================
 
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.@internal;
@@ -21,4 +23,10 @@ namespace pengdows.crud.@internal;
 internal interface IInternalConnectionProvider
 {
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false);
+
+    ILockerAsync GetLock();
+
+    void CloseAndDisposeConnection(ITrackedConnection? connection);
+
+    ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection);
 }

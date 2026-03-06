@@ -14,11 +14,9 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// TDD tests for:
-///   1. IDatabaseContext.Dialect — the dialect must be accessible via the interface,
-///      not only through an internal ISqlDialectProvider cast.
-///   2. IDatabaseContext.ModeLockTimeout — completion/mode lock timeout must be
+///   1. IDatabaseContext.ModeLockTimeout — completion/mode lock timeout must be
 ///      configured through context rather than a hardcoded constant.
-///   3. TransactionContext.CompletionLockTimeoutSeconds — the hardcoded const must
+///   2. TransactionContext.CompletionLockTimeoutSeconds — the hardcoded const must
 ///      be removed; TransactionContext must delegate to its parent context's
 ///      ModeLockTimeout instead.
 /// </summary>
@@ -35,37 +33,11 @@ public class ContextDialectAndLockTimeoutTests
         return new DatabaseContext(config, factory);
     }
 
-    // -------------------------------------------------------------------------
-    // IDatabaseContext must expose Dialect
-    // -------------------------------------------------------------------------
-
     [Fact]
-    public void IDatabaseContext_HasDialectProperty()
+    public void IDatabaseContext_DoesNotExposeDialectProperty()
     {
-        var prop = typeof(IDatabaseContext).GetProperty(
-            nameof(IDatabaseContext.Dialect),
-            BindingFlags.Public | BindingFlags.Instance);
-
-        Assert.NotNull(prop);
-        Assert.True(prop!.PropertyType.IsAssignableTo(typeof(ISqlDialect)),
-            "Dialect property must be of type ISqlDialect");
-    }
-
-    [Fact]
-    public void DatabaseContext_Dialect_AccessibleViaInterface()
-    {
-        using IDatabaseContext ctx = MakeContext();
-        Assert.NotNull(ctx.Dialect);
-    }
-
-    [Fact]
-    public void TransactionContext_Dialect_MatchesParent()
-    {
-        using var ctx = MakeContext();
-        using var tx = ctx.BeginTransaction();
-        IDatabaseContext txCtx = tx;
-
-        Assert.Same(ctx.Dialect, txCtx.Dialect);
+        var prop = typeof(IDatabaseContext).GetProperty("Dialect", BindingFlags.Public | BindingFlags.Instance);
+        Assert.Null(prop);
     }
 
     // -------------------------------------------------------------------------
@@ -155,20 +127,6 @@ public class ContextDialectAndLockTimeoutTests
     }
 
     // -------------------------------------------------------------------------
-    // ISqlDialect.TryEnterReadOnlyTransactionAsync must return ValueTask
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void ISqlDialect_TryEnterReadOnlyTransactionAsync_ReturnsValueTask()
-    {
-        var method = typeof(ISqlDialect).GetMethod(
-            "TryEnterReadOnlyTransactionAsync",
-            BindingFlags.Public | BindingFlags.Instance);
-        Assert.NotNull(method);
-        Assert.Equal(typeof(ValueTask), method!.ReturnType);
-    }
-
-    // -------------------------------------------------------------------------
     // ISqlDialect.WrapSimpleName — fast path for attribute-sourced identifiers
     // -------------------------------------------------------------------------
 
@@ -186,7 +144,7 @@ public class ContextDialectAndLockTimeoutTests
     public void ISqlDialect_WrapSimpleName_ReturnsQuotePrefixNameQuoteSuffix()
     {
         using var ctx = MakeContext();
-        var dialect = ctx.Dialect!;
+        var dialect = ctx.GetDialect()!;
         var expected = dialect.QuotePrefix + "my_col" + dialect.QuoteSuffix;
         Assert.Equal(expected, dialect.WrapSimpleName("my_col"));
     }
@@ -195,13 +153,13 @@ public class ContextDialectAndLockTimeoutTests
     public void ISqlDialect_WrapSimpleName_MatchesWrapObjectNameForSimpleIdentifiers()
     {
         using var ctx = MakeContext();
-        var dialect = ctx.Dialect!;
+        var dialect = ctx.GetDialect()!;
         // For simple single-part names, WrapSimpleName must produce the same result as WrapObjectName.
         Assert.Equal(dialect.WrapObjectName("my_col"), dialect.WrapSimpleName("my_col"));
     }
 
     // -------------------------------------------------------------------------
-    // TableGateway accesses Dialect via context.Dialect, not internal cast
+    // TableGateway accesses dialect via internal provider boundary.
     // -------------------------------------------------------------------------
 
     [Table("DialectAccessEntity")]
@@ -219,9 +177,6 @@ public class ContextDialectAndLockTimeoutTests
     [Fact]
     public void TableGateway_Build_UsesDialectFromContextDirectly()
     {
-        // If TableGateway used the internal ISqlDialectProvider cast, this would
-        // break if IDatabaseContext doesn't implement that interface. By using
-        // context.Dialect instead, any IDatabaseContext implementation works.
         var typeMap = new TypeMapRegistry();
         typeMap.Register<DialectAccessEntity>();
         using var ctx = new DatabaseContext(

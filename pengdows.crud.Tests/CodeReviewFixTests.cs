@@ -32,7 +32,7 @@ public class CodeReviewFixTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext("test", factory);
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
 
         var sql = dialect.GetSavepointSql("my_savepoint");
 
@@ -49,7 +49,7 @@ public class CodeReviewFixTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext("test", factory);
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
 
         var sql = dialect.GetRollbackToSavepointSql("my_savepoint");
 
@@ -62,7 +62,7 @@ public class CodeReviewFixTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory);
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
 
         var sql = dialect.GetSavepointSql("my_savepoint");
 
@@ -77,7 +77,7 @@ public class CodeReviewFixTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory);
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
 
         // A malicious savepoint name should be wrapped, not interpolated raw
         var sql = dialect.GetSavepointSql("sp1; DROP TABLE users; --");

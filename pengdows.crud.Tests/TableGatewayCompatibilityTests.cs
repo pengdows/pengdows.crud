@@ -42,7 +42,7 @@ public class TableGatewayCompatibilityTests
         var typeMap = new TypeMapRegistry();
         var context = new Mock<IDatabaseContext>(MockBehavior.Strict);
         context.As<ITypeMapAccessor>().SetupGet(a => a.TypeMapRegistry).Returns(typeMap);
-        context.SetupGet(c => c.Dialect).Returns((ISqlDialect?)null!);
+        context.As<ISqlDialectProvider>().SetupGet(c => c.Dialect).Returns((ISqlDialect?)null!);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             new TableGateway<TestEntity, int>(context.Object));

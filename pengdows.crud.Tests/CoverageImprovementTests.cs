@@ -40,7 +40,7 @@ public class CoverageImprovementTests
 
         // Act & Assert - Verify mode and dialect
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class CoverageImprovementTests
 
         // Act & Assert
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]
@@ -319,7 +319,7 @@ public class CoverageImprovementTests
         var context = new DatabaseContext($"{connectionString};EmulatedProduct={database}", factory);
 
         // Assert
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
         Assert.Equal(database, context.Product);
     }
 
@@ -353,7 +353,7 @@ public class CoverageImprovementTests
 
         // Assert - Context created successfully (mode may be coerced based on connection string)
         Assert.NotNull(context);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]

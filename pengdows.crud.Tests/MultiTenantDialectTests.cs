@@ -12,7 +12,7 @@
 //   2. ReplaceNeutralTokens moved from TableGateway to ISqlDialect — it now
 //      lives on the dialect itself so callers can use any context's dialect.
 //   3. MakeParameterName(DbParameter) removed from ITableGateway — consumers
-//      use context.Dialect.MakeParameterName or sc.MakeParameterName instead.
+//      use context.GetDialect().MakeParameterName or sc.MakeParameterName instead.
 //   4. BuildCreate and other SQL-building methods correctly use the dialect
 //      from the passed context, not the gateway's default.
 //
@@ -176,7 +176,7 @@ public class MultiTenantDialectTests
     public void ISqlDialect_ReplaceNeutralTokens_ReplacesQuoteAndParameterTokens()
     {
         using var ctx = MakeSqliteContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var result = dialect.ReplaceNeutralTokens("{Q}col{q} = {S}p0");
 
@@ -190,8 +190,8 @@ public class MultiTenantDialectTests
         using var postgresCtx = MakePostgresContext();
 
         // Both SQLite and PostgreSQL use '@' (ADO.NET standard) — {S} → '@'
-        var sqliteResult = sqliteCtx.Dialect.ReplaceNeutralTokens("{S}p0");
-        var postgresResult = postgresCtx.Dialect.ReplaceNeutralTokens("{S}p0");
+        var sqliteResult = sqliteCtx.GetDialect().ReplaceNeutralTokens("{S}p0");
+        var postgresResult = postgresCtx.GetDialect().ReplaceNeutralTokens("{S}p0");
 
         Assert.Equal("@p0", sqliteResult);
         Assert.Equal("@p0", postgresResult); // PostgreSQL also uses '@' (ADO.NET standard)
@@ -204,8 +204,8 @@ public class MultiTenantDialectTests
         using var duckCtx = MakeDuckDbContext();
 
         // DuckDB uses '$' — observable difference from '@' dialects
-        var sqliteResult = sqliteCtx.Dialect.ReplaceNeutralTokens("{S}p0");
-        var duckResult = duckCtx.Dialect.ReplaceNeutralTokens("{S}p0");
+        var sqliteResult = sqliteCtx.GetDialect().ReplaceNeutralTokens("{S}p0");
+        var duckResult = duckCtx.GetDialect().ReplaceNeutralTokens("{S}p0");
 
         Assert.Equal("@p0", sqliteResult);
         Assert.Equal("$p0", duckResult);
@@ -215,7 +215,7 @@ public class MultiTenantDialectTests
     public void ISqlDialect_ReplaceNeutralTokens_NullSql_ThrowsArgumentNullException()
     {
         using var ctx = MakeSqliteContext();
-        Assert.Throws<ArgumentNullException>(() => ctx.Dialect.ReplaceNeutralTokens(null!));
+        Assert.Throws<ArgumentNullException>(() => ctx.GetDialect().ReplaceNeutralTokens(null!));
     }
 
     [Fact]
@@ -223,12 +223,12 @@ public class MultiTenantDialectTests
     {
         using var ctx = MakeSqliteContext();
         const string sql = "SELECT 1";
-        Assert.Equal(sql, ctx.Dialect.ReplaceNeutralTokens(sql));
+        Assert.Equal(sql, ctx.GetDialect().ReplaceNeutralTokens(sql));
     }
 
     // -------------------------------------------------------------------------
     // MakeParameterName removed from ITableGateway — callers must use
-    // context.Dialect.MakeParameterName or sc.MakeParameterName instead.
+    // context.GetDialect().MakeParameterName or sc.MakeParameterName instead.
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -251,8 +251,8 @@ public class MultiTenantDialectTests
     {
         // Confirm the correct alternative is accessible on the context.
         using var ctx = MakeSqliteContext();
-        var param = ctx.Dialect.CreateDbParameter("p0", DbType.Int32, 42);
-        var name = ctx.Dialect.MakeParameterName(param);
+        var param = ctx.GetDialect().CreateDbParameter("p0", DbType.Int32, 42);
+        var name = ctx.GetDialect().MakeParameterName(param);
         Assert.Equal("@p0", name);
     }
 }

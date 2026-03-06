@@ -175,7 +175,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
 
         // Assert
         Assert.True(dialect.SupportsInsertReturning);
@@ -572,7 +572,7 @@ public class SqlServerIdentityOutputClauseTests
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
 
-        Assert.False(context.Dialect.SupportsInsertReturning);
+        Assert.False(context.GetDialect().SupportsInsertReturning);
     }
 
     [Theory]
@@ -584,7 +584,7 @@ public class SqlServerIdentityOutputClauseTests
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
 
-        Assert.True(context.Dialect.SupportsInsertReturning);
+        Assert.True(context.GetDialect().SupportsInsertReturning);
     }
 
     // ============================================================================

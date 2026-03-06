@@ -203,9 +203,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 "IDatabaseContext must expose an internal TypeMapRegistry.");
         }
 
-        _dialect = databaseContext.Dialect
-                   ?? throw new InvalidOperationException(
-                       "IDatabaseContext must expose a non-null Dialect.");
+        _dialect = databaseContext.GetDialect();
         _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
         _readerPlans = new BoundedCache<long, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
@@ -473,7 +471,7 @@ public partial class TableGateway<TEntity, TRowID> :
         string lastIdQuery;
         try
         {
-            lastIdQuery = ctx.Dialect.GetLastInsertedIdQuery();
+            lastIdQuery = ctx.GetDialect().GetLastInsertedIdQuery();
         }
         catch (NotSupportedException)
         {
@@ -1672,9 +1670,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private static ISqlDialect GetDialect(IDatabaseContext ctx)
     {
-        return ctx.Dialect
-               ?? throw new InvalidOperationException(
-                   "IDatabaseContext must expose a non-null Dialect.");
+        return ctx.GetDialect();
     }
 
     private static void ValidateRowIdType()

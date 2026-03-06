@@ -31,7 +31,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
+public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
@@ -60,6 +60,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         _metricsCollector = metricsCollector;
         _lifetimeListener = lifetimeListener;
     }
+
+    DbDataReader IInternalTrackedReader.InnerReader => _reader;
 
     protected override void DisposeManaged()
     {

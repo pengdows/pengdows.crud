@@ -39,7 +39,7 @@ public class TableGatewayIdPopulationDebugTest
         Assert.False(tableInfo.Id.IsIdIsWritable); // Should be false for auto-generated IDs
 
         // Check the SQL dialect configuration
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         Assert.NotNull(dialect);
 
         // For SQL Server, SupportsInsertReturning should be true (uses OUTPUT INSERTED)

@@ -36,11 +36,12 @@ using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
 /// <summary>
-/// High-performance mapper for converting <see cref="IDataReader"/> rows to strongly-typed entities.
+/// High-performance mapper for converting <see cref="ITrackedReader"/> rows to strongly-typed entities.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -141,48 +142,82 @@ public sealed class DataReaderMapper : IDataReaderMapper
         EnumParseFailureMode EnumMode);
 
     public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
-        IDataReader reader,
+        ITrackedReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadAsync<T>(reader, cancellationToken);
+        return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
     public static Task<List<T>> LoadAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return LoadInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        ITrackedReader reader,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return StreamInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return StreamInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    internal static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
+        IDataReader reader,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    internal static Task<List<T>> LoadAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadAsync<T>(reader, options, cancellationToken);
+        return LoadInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    public static IAsyncEnumerable<T> StreamAsync<T>(
+    internal static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.StreamAsync<T>(reader, MapperOptions.Default, cancellationToken);
+        return StreamInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    public static IAsyncEnumerable<T> StreamAsync<T>(
+    internal static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.StreamAsync<T>(reader, options, cancellationToken);
+        return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
     Task<List<T>> IDataReaderMapper.LoadAsync<T>(
-        IDataReader reader,
+        ITrackedReader reader,
         CancellationToken cancellationToken)
     {
         return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
     Task<List<T>> IDataReaderMapper.LoadAsync<T>(
-        IDataReader reader,
+        ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
     {
@@ -190,20 +225,47 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     IAsyncEnumerable<T> IDataReaderMapper.StreamAsync<T>(
-        IDataReader reader,
+        ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    private async Task<List<T>> LoadInternalAsync<T>(
+    private static async Task<List<T>> LoadInternalAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken)
+        where T : class, new()
+    {
+        var recordReader = GetRecordReader(reader);
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+
+        var result = new List<T>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(MapSingleRow(recordReader, plan, options));
+        }
+
+        return result;
+    }
+
+    private static async Task<List<T>> LoadInternalAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
         where T : class, new()
     {
         ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is ITrackedReader trackedReader)
+        {
+            return await LoadInternalAsync<T>(trackedReader, options, cancellationToken).ConfigureAwait(false);
+        }
 
         if (reader is not DbDataReader rdr)
         {
@@ -226,13 +288,41 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return result;
     }
 
-    private async IAsyncEnumerable<T> StreamInternalAsync<T>(
+    private static async IAsyncEnumerable<T> StreamInternalAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+        where T : class, new()
+    {
+        var recordReader = GetRecordReader(reader);
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return MapSingleRow(recordReader, plan, options);
+        }
+    }
+
+    private static async IAsyncEnumerable<T> StreamInternalAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
         ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is ITrackedReader trackedReader)
+        {
+            await foreach (var item in StreamInternalAsync<T>(trackedReader, options, cancellationToken))
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         if (reader is not DbDataReader rdr)
         {
@@ -250,6 +340,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         {
             yield return MapSingleRow(rdr, plan, options);
         }
+    }
+
+    private static DbDataReader GetRecordReader(ITrackedReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is IInternalTrackedReader internalReader)
+        {
+            return internalReader.InnerReader;
+        }
+
+        if (reader is DbDataReader dbReader)
+        {
+            return dbReader;
+        }
+
+        throw new ArgumentException("reader must expose an underlying DbDataReader", nameof(reader));
     }
 
     /// <summary>

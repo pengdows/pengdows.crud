@@ -247,11 +247,15 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// Context-level locking is intentionally a no-op. Serialization happens at the connection level:
     /// connections returned by <c>GetConnection(...)</c> provide the real lock when a mode uses shared/pinned connections.
     /// </remarks>
-    /// <inheritdoc/>
-    public ILockerAsync GetLock()
+    internal ILockerAsync GetLockInternal()
     {
         ThrowIfDisposed();
         return NoOpAsyncLocker.Instance;
+    }
+
+    ILockerAsync IInternalConnectionProvider.GetLock()
+    {
+        return GetLockInternal();
     }
 
 
@@ -268,8 +272,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
 
     /// <inheritdoc/>
-    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-
     /// <inheritdoc/>
     public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings();
 
@@ -513,4 +515,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 }

@@ -133,7 +133,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
         };
 
         var result = ((string sql, System.Collections.Generic.List<System.Data.Common.DbParameter> parameters))
-            buildUpdateByKey.Invoke(gateway, new object[] { entity, keyColumns, Context.Dialect })!;
+            buildUpdateByKey.Invoke(gateway, new object[] { entity, keyColumns, Context.GetDialect() })!;
 
         Assert.Contains("SET", result.sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Version", result.sql, StringComparison.OrdinalIgnoreCase);
@@ -149,7 +149,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
 
         var container = Context.CreateSqlContainer("UPDATE Test SET Name = @p0 WHERE 1=1");
         var counters = new ClauseCounters();
-        var args = new object?[] { container, null, Context.Dialect, counters };
+        var args = new object?[] { container, null, Context.GetDialect(), counters };
 
         var result = method.Invoke(gateway, args);
         _ = (ClauseCounters)args[3]!;
@@ -171,7 +171,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
 
         var container = unknownContext.CreateSqlContainer("UPDATE Test SET Name = ? WHERE 1=1");
         var counters = new ClauseCounters();
-        var args = new object?[] { container, 42, unknownContext.Dialect, counters };
+        var args = new object?[] { container, 42, unknownContext.GetDialect(), counters };
 
         var result = method.Invoke(gateway, args);
 

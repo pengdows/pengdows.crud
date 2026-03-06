@@ -523,20 +523,6 @@ public interface ISqlDialect
     string GetSequenceNextValQuery(string sequenceName);
 
     /// <summary>
-    /// Reads the database version from the connection.
-    /// </summary>
-    /// <param name="connection">Connection to inspect.</param>
-    /// <returns>Version string reported by the database.</returns>
-    string GetDatabaseVersion(ITrackedConnection connection);
-
-    /// <summary>
-    /// Retrieves the data source information schema as a <see cref="DataTable"/>.
-    /// </summary>
-    /// <param name="connection">Connection to query.</param>
-    /// <returns>Schema information.</returns>
-    DataTable GetDataSourceInformationSchema(ITrackedConnection connection);
-
-    /// <summary>
     /// Returns dialect-specific session settings to apply to a connection.
     /// </summary>
     /// <param name="context">The database context requesting settings.</param>
@@ -546,89 +532,11 @@ public interface ISqlDialect
 
 
     /// <summary>
-    /// Applies connection-string or provider-specific settings to the provided connection.
-    /// </summary>
-    /// <param name="connection">Connection to configure.</param>
-    /// <param name="context">Database context requesting the settings.</param>
-    /// <param name="readOnly">True when the connection should be read-only.</param>
-    void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
-
-    /// <summary>
-    /// Determines whether prepare should be disabled for a connection based on an exception.
-    /// Used for per-connection runtime opt-out on first failure.
-    /// </summary>
-    /// <param name="ex">Exception thrown during prepare attempt.</param>
-    /// <returns>True if prepare should be disabled for this connection.</returns>
-    bool ShouldDisablePrepareOn(Exception ex);
-
-
-    /// <summary>
-    /// Attempts to enter a read-only transaction. Implementations may be a no-op.
-    /// </summary>
-    /// <param name="transaction">Transaction context.</param>
-    void TryEnterReadOnlyTransaction(ITransactionContext transaction);
-
-    /// <summary>
-    /// Asynchronously attempts to enter a read-only transaction. Implementations may be a no-op.
-    /// </summary>
-    /// <param name="transaction">Transaction context.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.
-    /// </summary>
-    /// <param name="connection">Connection to check.</param>
-    /// <returns>True if the snapshot isolation is on.</returns>
-    bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
-
-    /// <summary>
-    /// Determines whether SNAPSHOT isolation level is enabled.
-    /// </summary>
-    /// <param name="connection">Connection to check.</param>
-    /// <returns>True if snapshot isolation is enabled.</returns>
-    bool IsSnapshotIsolationOn(ITrackedConnection connection);
-
-    /// <summary>
     /// Determines whether the given exception represents a unique constraint violation.
     /// </summary>
     /// <param name="ex">Exception to inspect.</param>
     /// <returns>True if the exception indicates a unique key violation.</returns>
     bool IsUniqueViolation(DbException ex);
-
-    /// <summary>
-    /// Detects database product information from the connection.
-    /// </summary>
-    /// <param name="connection">Connection to interrogate.</param>
-    /// <returns>Discovered product information.</returns>
-    Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection);
-
-    /// <summary>
-    /// Synchronously detects database product information from the connection.
-    /// </summary>
-    /// <param name="connection">Connection to interrogate.</param>
-    /// <returns>Discovered product information.</returns>
-    IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection);
-
-    /// <summary>
-    /// Initializes fallback metadata when detection cannot run (e.g., offline scenarios).
-    /// </summary>
-    void InitializeUnknownProductInfo();
-
-    /// <summary>
-    /// Parses a raw version string into a <see cref="Version"/> instance.
-    /// </summary>
-    /// <param name="versionString">Version string reported by the database.</param>
-    /// <returns>Parsed version or null when parsing fails.</returns>
-    Version? ParseVersion(string versionString);
-
-    /// <summary>
-    /// Retrieves the major version number from the version string.
-    /// </summary>
-    /// <param name="versionString">Version string reported by the database.</param>
-    /// <returns>Major version or null if unavailable.</returns>
-    int? GetMajorVersion(string versionString);
 
     /// <summary>
     /// Generates a unique parameter name for the current operation.

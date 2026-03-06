@@ -35,7 +35,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = new InvalidOperationException("Something went wrong");
         var category = dialect.ClassifyException(ex);
@@ -48,7 +48,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = new OperationCanceledException();
         var category = dialect.ClassifyException(ex);
@@ -65,7 +65,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = CreateDbExceptionWithMessage(message);
         var category = dialect.ClassifyException(ex);
@@ -81,7 +81,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = CreateDbExceptionWithMessage(message);
         var category = dialect.ClassifyException(ex);
@@ -99,7 +99,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = CreateDbExceptionWithMessage(message);
         var category = dialect.ClassifyException(ex);
@@ -115,7 +115,7 @@ public class DbErrorCategoryTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var ctx = ConnectionFailureHelper.CreateFailOnCommandContext();
-        var dialect = ctx.Dialect;
+        var dialect = ctx.GetDialect();
 
         var ex = CreateDbExceptionWithMessage(message);
         var category = dialect.ClassifyException(ex);
