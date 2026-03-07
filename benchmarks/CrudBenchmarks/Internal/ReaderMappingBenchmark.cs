@@ -144,9 +144,8 @@ public class ReaderMappingBenchmark
         // - Hybrid plan: compiled expressions for direct columns + delegates for coercion
         // - Plan built once (column ordinals cached)
         // - Type extractors cached
-        var sql =
-            // LIMIT cannot be parameterized in DuckDB SQL; RowCount is a BDN [Params] integer constant.
-            "SELECT id, name, email, age, salary, is_active, created_at, score FROM test_entities LIMIT " + RowCount;
+        // LIMIT cannot be parameterized in DuckDB SQL; RowCount is a BDN [Params] integer constant.
+        var sql = "SELECT id, name, email, age, salary, is_active, created_at, score FROM test_entities LIMIT " + RowCount;
         var container = _context.CreateSqlContainer(sql);
         return await _helper.LoadListAsync(container);
     }
@@ -215,9 +214,8 @@ public class ReaderMappingBenchmark
         // - Single compiled expression for entire entity
         // - Zero delegate calls per column (all inlined)
         // - Plan cached by query string + type
-        var sql =
-            // LIMIT cannot be parameterized in DuckDB SQL; RowCount is a BDN [Params] integer constant.
-            "SELECT id, name, email, age, salary, is_active, created_at, score FROM test_entities LIMIT " + RowCount;
+        // LIMIT cannot be parameterized in DuckDB SQL; RowCount is a BDN [Params] integer constant.
+        var sql = "SELECT id, name, email, age, salary, is_active, created_at, score FROM test_entities LIMIT " + RowCount;
         return _dapperConnection.Query<TestEntity>(sql).AsList();
     }
 
