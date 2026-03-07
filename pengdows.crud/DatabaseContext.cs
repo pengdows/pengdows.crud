@@ -308,8 +308,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public bool? DisablePrepare => _disablePrepare;
 
-    /// <inheritdoc/>
-    public void AssertIsReadConnection()
+    internal void AssertIsReadConnection()
     {
         if (!_isReadConnection)
         {
@@ -317,8 +316,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
     }
 
-    /// <inheritdoc/>
-    public void AssertIsWriteConnection()
+    internal void AssertIsWriteConnection()
     {
         if (!_isWriteConnection)
         {
@@ -515,6 +513,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    /// <inheritdoc/>
+    public new ISqlDialect Dialect => _dialect;
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 }

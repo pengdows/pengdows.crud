@@ -74,7 +74,7 @@ public interface IColumnInfo
     /// <summary>
     /// Indicates whether the identifier column is writable.
     /// </summary>
-    bool IsIdIsWritable { get; set; }
+    bool IsIdWritable { get; set; }
 
     /// <summary>
     /// True when the column participates in the primary key.

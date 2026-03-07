@@ -19,6 +19,11 @@ namespace pengdows.crud.Tests.dialects;
 /// </summary>
 public class SessionSettingsBaselineEnforcementTests
 {
+    // Reflection is required here because there is no public API to drive the dialect cache
+    // into a stale/empty state. The test simulates a scenario that occurs only at runtime
+    // (detection found the first pooled connection already compliant → cached diff = "").
+    // Directly mutating the private field is the minimal way to reproduce this boundary
+    // condition without adding test-only hooks to production code.
     private static readonly BindingFlags NonPublicInstance =
         BindingFlags.NonPublic | BindingFlags.Instance;
 

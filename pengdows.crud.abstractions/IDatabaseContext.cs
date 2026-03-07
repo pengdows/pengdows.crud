@@ -1,5 +1,6 @@
 ﻿using System.Data;
 using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
@@ -87,7 +88,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Raised whenever the metrics collector records a new observation.
     /// Subscribers receive the latest snapshot for the context.
     /// </summary>
+    /// <remarks>
+    /// Handlers must NOT call back into the context (no queries, no transactions).
+    /// Always unsubscribe when the subscriber is disposed — DatabaseContext is a
+    /// singleton and the event outlives short-lived handlers, causing memory leaks
+    /// if handlers are not removed.
+    /// </remarks>
     event EventHandler<DatabaseMetrics> MetricsUpdated;
+
+    /// <summary>
+    /// The SQL dialect in use for this context.
+    /// </summary>
+    ISqlDialect Dialect { get; }
 
     /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).
@@ -267,16 +279,5 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Generates a random object name that conforms to the provider's identifier rules.
     /// </summary>
     string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30);
-
-    /// <summary>
-    /// Throws if this context is not writable.
-    /// </summary>
-    void AssertIsWriteConnection();
-
-    /// <summary>
-    /// Throws if this context is not readable.
-    /// </summary>
-    void AssertIsReadConnection();
-
 
 }

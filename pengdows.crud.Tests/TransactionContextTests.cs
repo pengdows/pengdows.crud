@@ -438,22 +438,6 @@ public class TransactionContextTests
             return _dialect.GenerateRandomName(length, parameterNameMaxLength);
         }
 
-        public void AssertIsWriteConnection()
-        {
-            if (_isReadOnlyContext)
-            {
-                throw new InvalidOperationException("Context is read-only.");
-            }
-        }
-
-        public void AssertIsReadConnection()
-        {
-            if (!_isReadOnlyContext)
-            {
-                throw new InvalidOperationException("Context is not readable.");
-            }
-        }
-
         public void CloseAndDisposeConnection(ITrackedConnection? conn)
         {
             ConnectionReleased = true;

@@ -34,10 +34,29 @@ public class ContextDialectAndLockTimeoutTests
     }
 
     [Fact]
-    public void IDatabaseContext_DoesNotExposeDialectProperty()
+    public void IDatabaseContext_ExposesDialectProperty()
     {
         var prop = typeof(IDatabaseContext).GetProperty("Dialect", BindingFlags.Public | BindingFlags.Instance);
-        Assert.Null(prop);
+        Assert.NotNull(prop);
+        Assert.Equal(typeof(ISqlDialect), prop!.PropertyType);
+    }
+
+    [Fact]
+    public void IDatabaseContext_DoesNotExposeAssertIsReadConnection()
+    {
+        var method = typeof(IDatabaseContext).GetMethod(
+            "AssertIsReadConnection",
+            BindingFlags.Public | BindingFlags.Instance);
+        Assert.Null(method);
+    }
+
+    [Fact]
+    public void IDatabaseContext_DoesNotExposeAssertIsWriteConnection()
+    {
+        var method = typeof(IDatabaseContext).GetMethod(
+            "AssertIsWriteConnection",
+            BindingFlags.Public | BindingFlags.Instance);
+        Assert.Null(method);
     }
 
     // -------------------------------------------------------------------------

@@ -188,7 +188,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
             DbType = colAttr.Type,
             Ordinal = colAttr.Ordinal,
             IsId = isId,
-            IsIdIsWritable = isId && isIdWritable && nonIns == null,
+            IsIdWritable = isId && isIdWritable && nonIns == null,
             IsNonInsertable = nonIns != null || (isId && !isIdWritable),
             IsNonUpdateable = nonUpd != null || isId,
             IsPrimaryKey = pkAttr != null,

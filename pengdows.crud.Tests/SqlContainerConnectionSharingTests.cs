@@ -206,16 +206,6 @@ public class SqlContainerConnectionSharingTests
             return _context.GenerateRandomName(length, parameterNameMaxLength);
         }
 
-        public void AssertIsWriteConnection()
-        {
-            _context.AssertIsWriteConnection();
-        }
-
-        public void AssertIsReadConnection()
-        {
-            _context.AssertIsReadConnection();
-        }
-
         public void CloseAndDisposeConnection(ITrackedConnection? conn)
         {
             _context.CloseAndDisposeConnection(conn);

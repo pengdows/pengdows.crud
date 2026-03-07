@@ -241,7 +241,7 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
-        public bool IsIdIsWritable { get; set; }
+        public bool IsIdWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }

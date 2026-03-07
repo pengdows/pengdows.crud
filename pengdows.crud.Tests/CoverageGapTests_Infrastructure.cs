@@ -175,9 +175,6 @@ public class CoverageGapTests_Infrastructure
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) =>
             throw new NotImplementedException();
 
-        public void AssertIsWriteConnection() => throw new NotImplementedException();
-        public void AssertIsReadConnection() => throw new NotImplementedException();
-
         public void CloseAndDisposeConnection(ITrackedConnection? conn)
         {
         }

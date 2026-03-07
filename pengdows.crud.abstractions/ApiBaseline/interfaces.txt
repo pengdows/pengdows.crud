@@ -33,8 +33,6 @@ method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITra
 method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<T>>
 method pengdows.crud.IDataReaderMapper::StreamAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<T>
 method pengdows.crud.IDataSourceInformation::GetCompatibilityWarning() -> string
-method pengdows.crud.IDatabaseContext::AssertIsReadConnection() -> void
-method pengdows.crud.IDatabaseContext::AssertIsWriteConnection() -> void
 method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Nullable`1<bool>, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ITransactionContext>
@@ -227,7 +225,7 @@ property pengdows.crud.IColumnInfo::IsCreatedBy : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsCreatedOn : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsEnum : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsId : bool { get; set; }
-property pengdows.crud.IColumnInfo::IsIdIsWritable : bool { get; set; }
+property pengdows.crud.IColumnInfo::IsIdWritable : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsJsonType : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsLastUpdatedBy : bool { get; set; }
 property pengdows.crud.IColumnInfo::IsLastUpdatedOn : bool { get; set; }
@@ -272,6 +270,7 @@ property pengdows.crud.IDatabaseContext::ConnectionString : string { get; }
 property pengdows.crud.IDatabaseContext::DataSource : System.Data.Common.DbDataSource { get; }
 property pengdows.crud.IDatabaseContext::DataSourceInfo : pengdows.crud.IDataSourceInformation { get; }
 property pengdows.crud.IDatabaseContext::DatabaseProductName : string { get; }
+property pengdows.crud.IDatabaseContext::Dialect : pengdows.crud.dialects.ISqlDialect { get; }
 property pengdows.crud.IDatabaseContext::DisablePrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::ForceManualPrepare : System.Nullable`1<bool> { get; }
 property pengdows.crud.IDatabaseContext::IsReadOnlyConnection : bool { get; }

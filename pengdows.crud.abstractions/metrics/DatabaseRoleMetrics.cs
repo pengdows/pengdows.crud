@@ -3,6 +3,13 @@ namespace pengdows.crud.metrics;
 /// <summary>
 /// Snapshot of metrics collected for a specific execution role (read or write).
 /// </summary>
+/// <remarks>
+/// The parameters here intentionally parallel those on <see cref="DatabaseMetrics"/>.
+/// They are kept separate (not extracted into a shared base record) so that the
+/// public API surface remains stable and independent for each type.
+/// Do not attempt to collapse them into a common base — it would complicate the API
+/// and gain nothing at the consumer level.
+/// </remarks>
 /// <param name="ConnectionsCurrent">Current number of open connections held by the role.</param>
 /// <param name="PeakOpenConnections">Historical maximum number of concurrently open connections observed.</param>
 /// <param name="ConnectionsOpened">Total connections opened since context creation.</param>

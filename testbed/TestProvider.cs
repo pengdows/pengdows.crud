@@ -1522,6 +1522,55 @@ INSERT INTO {table} (
         await TestRollbackOnException();
         await TestReadYourWrites();
         await TestSavepoints();
+        await TestInvalidIsolationLevels();
+    }
+
+    protected virtual Task TestInvalidIsolationLevels()
+    {
+        // IsolationLevel.Chaos is universally invalid for all supported databases
+        try
+        {
+            _context.BeginTransaction(IsolationLevel.Chaos);
+            throw new Exception("[InvalidTxType] Chaos isolation level should have been rejected");
+        }
+        catch (InvalidOperationException)
+        {
+            CheckOk("  [InvalidTxType] Chaos isolation level rejected: OK");
+        }
+
+        // Database-specific: pick one level that is not supported by this database
+        IsolationLevel? unsupported = _context.Product switch
+        {
+            SupportedDatabase.PostgreSql
+                or SupportedDatabase.Firebird
+                or SupportedDatabase.Sqlite
+                or SupportedDatabase.YugabyteDb => IsolationLevel.ReadUncommitted,
+            SupportedDatabase.Oracle           => IsolationLevel.RepeatableRead,
+            SupportedDatabase.CockroachDb
+                or SupportedDatabase.DuckDB    => IsolationLevel.ReadCommitted,
+            SupportedDatabase.TiDb             => IsolationLevel.Serializable,
+            SupportedDatabase.Snowflake        => IsolationLevel.RepeatableRead,
+            _                                  => null
+        };
+
+        if (unsupported is null)
+        {
+            CheckSkip($"  [InvalidTxType] No database-specific unsupported level test for {_context.Product}");
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            _context.BeginTransaction(unsupported.Value);
+            throw new Exception(
+                $"[InvalidTxType] {unsupported.Value} isolation on {_context.Product} should have been rejected");
+        }
+        catch (InvalidOperationException)
+        {
+            CheckOk($"  [InvalidTxType] {unsupported.Value} isolation level rejected for {_context.Product}: OK");
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task TestRollbackOnException()

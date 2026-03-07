@@ -231,7 +231,7 @@ public class ColumnInfo : IColumnInfo
     /// True for <c>[Id]</c> or <c>[Id(true)]</c>. False for <c>[Id(false)]</c>
     /// (database-generated like IDENTITY/SERIAL).
     /// </remarks>
-    public bool IsIdIsWritable { get; set; }
+    public bool IsIdWritable { get; set; }
 
     /// <summary>
     /// Gets or sets whether this column is part of the entity's business/primary key.

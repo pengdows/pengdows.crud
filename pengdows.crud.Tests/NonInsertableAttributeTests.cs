@@ -34,7 +34,7 @@ public class NonInsertableAttributeTests
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<NonInsertableIdEntity>();
         Assert.NotNull(info.Id);
-        Assert.False(info.Id!.IsIdIsWritable);
+        Assert.False(info.Id!.IsIdWritable);
     }
 
     [Fact]
@@ -44,6 +44,6 @@ public class NonInsertableAttributeTests
         var info = registry.GetTableInfo<IdentityTestEntity>();
         Assert.NotNull(info.Id);
         Assert.True(info.Id!.IsNonInsertable);
-        Assert.False(info.Id.IsIdIsWritable);
+        Assert.False(info.Id.IsIdWritable);
     }
 }

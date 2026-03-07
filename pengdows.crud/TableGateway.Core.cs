@@ -297,7 +297,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
-            _idColumn != null && !_idColumn.IsIdIsWritable)
+            _idColumn != null && !_idColumn.IsIdWritable)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
 
@@ -354,7 +354,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
@@ -391,7 +391,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
-            _idColumn != null && !_idColumn.IsIdIsWritable)
+            _idColumn != null && !_idColumn.IsIdWritable)
         {
             var sc = BuildCreateWithReturning(entity, true, ctx);
 
@@ -449,7 +449,7 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdIsWritable)
+            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             }
@@ -681,7 +681,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private void EnsureWritableIdHasValue(TEntity entity)
     {
-        if (_idColumn == null || !_idColumn.IsIdIsWritable)
+        if (_idColumn == null || !_idColumn.IsIdWritable)
         {
             return;
         }
@@ -730,7 +730,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var outputClause = string.Empty;
         var returningClause = string.Empty;
 
-        if (withReturning && _idColumn != null && !_idColumn.IsIdIsWritable && dialect.SupportsInsertReturning)
+        if (withReturning && _idColumn != null && !_idColumn.IsIdWritable && dialect.SupportsInsertReturning)
         {
             var idWrapped = dialect.WrapSimpleName(_idColumn.Name);
             var clause = dialect.RenderInsertReturningClause(idWrapped);
@@ -1412,7 +1412,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var insertable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
         foreach (var c in _tableInfo.OrderedColumns)
         {
-            if (!c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            if (!c.IsNonInsertable && (!c.IsId || c.IsIdWritable))
             {
                 insertable.Add(c);
             }

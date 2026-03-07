@@ -439,14 +439,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return GetConnection(executionType, isShared);
     }
 
-    /// <inheritdoc/>
-    public void AssertIsReadConnection()
+    internal void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
     }
 
-    /// <inheritdoc/>
-    public void AssertIsWriteConnection()
+    internal void AssertIsWriteConnection()
     {
         if (_isReadOnly)
         {
@@ -873,6 +871,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    /// <inheritdoc/>
+    public new ISqlDialect Dialect => _dialect;
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 

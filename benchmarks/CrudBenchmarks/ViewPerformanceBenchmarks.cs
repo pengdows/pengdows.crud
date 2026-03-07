@@ -128,7 +128,7 @@ public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
 
     private async Task ProveSessionSettingsDiffAsync()
     {
-        var settingsScript = _pengdowsContext.SessionSettingsPreamble;
+        var settingsScript = _pengdowsContext.GetSessionSettingsPreamble();
         Console.WriteLine(string.IsNullOrWhiteSpace(settingsScript)
             ? "[PROOF] pengdows session diff: (empty — all settings already compliant)"
             : $"[PROOF] pengdows session diff: {settingsScript.Replace("\n", " ").Trim()}");

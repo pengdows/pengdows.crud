@@ -89,7 +89,7 @@ public partial class TableGateway<TEntity, TRowID>
             return keys;
         }
 
-        if (_idColumn != null && _idColumn.IsIdIsWritable)
+        if (_idColumn != null && _idColumn.IsIdWritable)
         {
             return new List<IColumnInfo> { _idColumn };
         }

@@ -127,7 +127,7 @@ public partial class TableGateway<TEntity, TRowID>
         var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId);
 
         var insertColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdWritable))
             .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
             .OrderBy(c => c.Ordinal)
             .ToList();

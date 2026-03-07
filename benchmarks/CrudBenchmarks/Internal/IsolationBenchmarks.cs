@@ -154,13 +154,12 @@ public class IsolationBenchmarks
     // ============= CONNECTION OVERHEAD BENCHMARKS =============
 
     [Benchmark]
-    public async Task<ITrackedConnection> ConnectionOverhead_Mine()
+    public async Task ConnectionOverhead_Mine()
     {
         // pengdows.crud connection management (with tracking, wrapping, etc.)
         var conn = _ctx.GetConnection(ExecutionType.Read);
         await conn.OpenAsync();
         _ctx.CloseAndDisposeConnection(conn);
-        return conn;
     }
 
     [Benchmark]
