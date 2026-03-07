@@ -80,11 +80,24 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         {
             using var cmd = _sentinel.CreateCommand();
             cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO benchmark (id, name, age) VALUES (@id, @name, @age)";
+            var idParam = cmd.CreateParameter();
+            idParam.ParameterName = "@id";
+            idParam.DbType = DbType.Int32;
+            var nameParam = cmd.CreateParameter();
+            nameParam.ParameterName = "@name";
+            nameParam.DbType = DbType.String;
+            var ageParam = cmd.CreateParameter();
+            ageParam.ParameterName = "@age";
+            ageParam.DbType = DbType.Int32;
+            cmd.Parameters.Add(idParam);
+            cmd.Parameters.Add(nameParam);
+            cmd.Parameters.Add(ageParam);
             for (var i = 1; i <= SeedRows; i++)
             {
-                cmd.CommandText =
-                    "INSERT INTO benchmark (id, name, age) " +
-                    $"VALUES ({i}, 'Person {i}', {20 + (i % 50)})";
+                idParam.Value = i;
+                nameParam.Value = $"Person {i}";
+                ageParam.Value = 20 + (i % 50);
                 cmd.ExecuteNonQuery();
             }
 
@@ -239,7 +252,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         using var cmd = _sentinel.CreateCommand();
         cmd.CommandText = _dapperSql;
         var param = cmd.CreateParameter();
-        param.ParameterName = "id";
+        param.ParameterName = "@id";
         param.DbType = DbType.Int32;
         param.Value = 1;
         cmd.Parameters.Add(param);

@@ -13,7 +13,16 @@ namespace CrudBenchmarks;
 
 internal sealed class IndexedViewEnvironment : IAsyncDisposable
 {
-    private const string Password = "YourStrong@Passw0rd";
+    private static readonly string Password = GeneratePassword();
+
+    private static string GeneratePassword()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(18);
+        // Prefix satisfies SQL Server complexity (upper, lower, digit, special);
+        // base64 body provides entropy. Replace base64 chars that are invalid in
+        // some connection string parsers.
+        return "Bx3@" + Convert.ToBase64String(bytes).Replace("+", "A").Replace("/", "B").Replace("=", "");
+    }
     private const string Database = "IndexedViewBenchmark";
     private const string Schema = "dbo";
     private const string ViewName = "vw_CustomerOrderSummary";

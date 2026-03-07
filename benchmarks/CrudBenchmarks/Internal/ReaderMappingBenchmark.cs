@@ -96,17 +96,10 @@ public class ReaderMappingBenchmark
             score = i * 1.5
         });
 
-        // DuckDB prefers batch inserts - build VALUES list
-        var values = testData.Select(row =>
-            $"({row.id}, '{row.name}', '{row.email}', {row.age}, {row.salary}, " +
-            $"{(row.is_active ? "true" : "false")}, '{row.created_at:yyyy-MM-dd HH:mm:ss}', {row.score})");
-
-        var insertSql = $@"
-            INSERT INTO test_entities (id, name, email, age, salary, is_active, created_at, score)
-            VALUES {string.Join(", ", values)}
-        ";
-
-        _dapperConnection.Execute(insertSql);
+        _dapperConnection.Execute(
+            "INSERT INTO test_entities (id, name, email, age, salary, is_active, created_at, score) " +
+            "VALUES (@id, @name, @email, @age, @salary, @is_active, @created_at, @score)",
+            testData);
     }
 
     [GlobalCleanup]

@@ -45,7 +45,13 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
     private const string MySqlImage = "mysql:8.0";
     private const int SeedRows = 2000;
-    private const string RootPassword = "rootpassword";
+    private static readonly string RootPassword = GeneratePassword();
+
+    private static string GeneratePassword()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(18);
+        return "Bx3@" + Convert.ToBase64String(bytes).Replace("+", "A").Replace("/", "B").Replace("=", "");
+    }
     private const string DatabaseName = "benchdb";
     private const string UserName = "root";
 

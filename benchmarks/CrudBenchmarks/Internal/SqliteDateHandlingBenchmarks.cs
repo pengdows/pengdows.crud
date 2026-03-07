@@ -61,12 +61,19 @@ public class SqliteDateHandlingBenchmarks : IDisposable
         {
             using var cmd = _sentinel.CreateCommand();
             cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO benchmark (id, created_at) VALUES (@id, @created_at)";
+            var idParam = cmd.CreateParameter();
+            idParam.ParameterName = "@id";
+            idParam.DbType = DbType.Int32;
+            var createdParam = cmd.CreateParameter();
+            createdParam.ParameterName = "@created_at";
+            createdParam.DbType = DbType.String;
+            cmd.Parameters.Add(idParam);
+            cmd.Parameters.Add(createdParam);
             for (var i = 1; i <= SeedRows; i++)
             {
-                var created = DateTime.UtcNow.AddMinutes(-i).ToString("O");
-                cmd.CommandText =
-                    "INSERT INTO benchmark (id, created_at) " +
-                    $"VALUES ({i}, '{created}')";
+                idParam.Value = i;
+                createdParam.Value = DateTime.UtcNow.AddMinutes(-i).ToString("O");
                 cmd.ExecuteNonQuery();
             }
 
@@ -153,7 +160,7 @@ public class SqliteDateHandlingBenchmarks : IDisposable
         using var cmd = _sentinel.CreateCommand();
         cmd.CommandText = _dapperSql;
         var param = cmd.CreateParameter();
-        param.ParameterName = "id";
+        param.ParameterName = "@id";
         param.DbType = DbType.Int32;
         param.Value = 1;
         cmd.Parameters.Add(param);
