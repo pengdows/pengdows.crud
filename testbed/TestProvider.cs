@@ -308,9 +308,8 @@ CREATE TABLE {tableName} (
             Name = name,
             Description = ctx.GenerateRandomName()
         };
-        var sq = _helper.BuildCreate(t, ctx);
-        var rows = await sq.ExecuteNonQueryAsync();
-        if (rows != 1)
+        var ok = await _helper.CreateAsync(t, ctx);
+        if (!ok)
         {
             throw new Exception("Insert failed");
         }
@@ -320,22 +319,15 @@ CREATE TABLE {tableName} (
 
     private async Task<TestTable> RetrieveRows(long id, IDatabaseContext? db = null)
     {
-        var arr = new List<long> { id };
         var ctx = db ?? _context;
-        var sc = _helper.BuildRetrieve(arr, ctx);
-
-        Console.WriteLine(sc.Query.ToString());
-
-        var x = await _helper.LoadListAsync(sc);
-
-        return x.First();
+        return await _helper.RetrieveOneAsync(id, ctx)
+               ?? throw new Exception($"Row {id} not found");
     }
 
     protected virtual async Task DeletedRow(TestTable t, IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
-        var sc = _helper.BuildDelete(t.Id, ctx);
-        var count = await sc.ExecuteNonQueryAsync();
+        var count = await _helper.DeleteAsync(t.Id, ctx);
         if (count != 1)
         {
             throw new Exception("Delete failed");
@@ -823,8 +815,7 @@ CREATE TABLE {tableName} (
             Value = 99,
             IsActive = true
         };
-        var createSc = _helper.BuildCreate(t, _context);
-        await createSc.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
 
         try
         {
@@ -1084,8 +1075,7 @@ INSERT INTO {table} (
         };
 
         var beforeInsert = DateTime.UtcNow;
-        var createSc = _helper.BuildCreate(t, _context);
-        await createSc.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
         var afterInsert = DateTime.UtcNow;
 
         try
@@ -1661,12 +1651,8 @@ INSERT INTO {table} (
                 Value = 0,
                 IsActive = true
             };
-            var createSc = _helper.BuildCreate(t, _context);
-            await createSc.ExecuteNonQueryAsync();
-
-            var sc = _helper.BuildRetrieve(new List<long> { id }, _context);
-            await _helper.LoadListAsync(sc);
-
+            await _helper.CreateAsync(t, _context);
+            await _helper.RetrieveOneAsync(id, _context);
             await CleanupTestRow(id);
         });
 
@@ -1701,10 +1687,7 @@ INSERT INTO {table} (
             IsActive = true
         };
 
-        var sc1 = _helper.BuildCreate(t1, _context);
-        await sc1.ExecuteNonQueryAsync();
-        var sc2 = _helper.BuildCreate(t2, _context);
-        await sc2.ExecuteNonQueryAsync();
+        await _helper.BatchCreateAsync([t1, t2], _context);
 
         try
         {
@@ -1844,24 +1827,22 @@ INSERT INTO {table} (
                 Value = i,
                 IsActive = true
             };
-            var createSc = _helper.BuildCreate(t, _context);
-            await createSc.ExecuteNonQueryAsync();
+            await _helper.CreateAsync(t, _context);
         }
 
+        var idCol = _context.WrapObjectName("id");
         try
         {
             // Page 1: first 5 of our IDs
             var sc1 = _helper.BuildRetrieve(ids, _context);
-            sc1.Query.AppendFormat(" ORDER BY {0} {1}",
-                _context.WrapObjectName("id"),
-                BuildPagingClause(0, 5));
+            sc1.Query.Append(" ORDER BY ").Append(idCol);
+            _context.Dialect.AppendPaging(sc1.Query, 0, 5);
             var page1 = await _helper.LoadListAsync(sc1);
 
             // Page 2: next 5 of our IDs
             var sc2 = _helper.BuildRetrieve(ids, _context);
-            sc2.Query.AppendFormat(" ORDER BY {0} {1}",
-                _context.WrapObjectName("id"),
-                BuildPagingClause(5, 5));
+            sc2.Query.Append(" ORDER BY ").Append(idCol);
+            _context.Dialect.AppendPaging(sc2.Query, 5, 5);
             var page2 = await _helper.LoadListAsync(sc2);
 
             if (page1.Count != 5)
@@ -1879,25 +1860,8 @@ INSERT INTO {table} (
         }
         finally
         {
-            foreach (var id in ids)
-                await CleanupTestRow(id);
+            await _helper.DeleteAsync(ids);
         }
-    }
-
-    /// <summary>
-    /// Returns the dialect-appropriate SQL clause for paging appended after ORDER BY.
-    /// </summary>
-    protected virtual string BuildPagingClause(int skip, int count)
-    {
-        return _context.Product switch
-        {
-            SupportedDatabase.SqlServer or SupportedDatabase.Oracle =>
-                $"OFFSET {skip} ROWS FETCH NEXT {count} ROWS ONLY",
-            SupportedDatabase.Firebird =>
-                $"ROWS {skip + 1} TO {skip + count}",
-            _ =>
-                $"LIMIT {count} OFFSET {skip}"
-        };
     }
 
     // -------------------------------------------------------------------------
@@ -1918,22 +1882,19 @@ INSERT INTO {table} (
         };
 
         // Insert first copy
-        var sc1 = _helper.BuildCreate(t, _context);
-        await sc1.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
 
         // 12a: Duplicate PK → must surface as DbException (except Snowflake, which doesn't enforce constraints)
         if (_context.Product == SupportedDatabase.Snowflake)
         {
-            var sc2 = _helper.BuildCreate(t, _context);
-            await sc2.ExecuteNonQueryAsync();
+            await _helper.CreateAsync(t, _context);
             CheckSkip("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
         }
         else
         {
             try
             {
-                var sc2 = _helper.BuildCreate(t, _context);
-                await sc2.ExecuteNonQueryAsync();
+                await _helper.CreateAsync(t, _context);
                 throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
             }
             catch (DbException ex)
@@ -2156,8 +2117,7 @@ INSERT INTO {table} (
     protected virtual async Task CleanupTestRow(long id, IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
-        var del = _helper.BuildDelete(id, ctx);
-        await del.ExecuteNonQueryAsync();
+        await _helper.DeleteAsync(id, ctx);
     }
 
     /// <summary>
