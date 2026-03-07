@@ -2097,6 +2097,30 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
     /// <param name="parameterNames">List of parameter names corresponding to the columns</param>
     /// <returns>SQL query to find the inserted row by natural key</returns>
     /// <exception cref="InvalidOperationException">Thrown when natural key lookup is unsafe</exception>
+    /// <inheritdoc/>
+    public virtual bool SupportsOffsetFetch => true;
+
+    /// <inheritdoc/>
+    public virtual bool SupportsLimitOffset => true;
+
+    /// <inheritdoc/>
+    public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    {
+        if (SupportsOffsetFetch)
+        {
+            query.Append(" OFFSET ").Append(offset)
+                 .Append(" ROWS FETCH NEXT ").Append(limit).Append(" ROWS ONLY");
+        }
+        else
+        {
+            query.Append(" LIMIT ").Append(limit);
+            if (offset > 0)
+            {
+                query.Append(" OFFSET ").Append(offset);
+            }
+        }
+    }
+
     public virtual string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
         IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
     {

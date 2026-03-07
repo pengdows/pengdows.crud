@@ -175,6 +175,11 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running paging");
+            await TestPaging();
+            Console.WriteLine($"  Paging: {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running pool isolation");
             await TestPoolIsolation();
             Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
@@ -2072,6 +2077,93 @@ INSERT INTO {table} (
     /// Base implementation is a no-op; override in dialects that require discriminator-based
     /// pool isolation (e.g., Oracle where ApplicationNameSettingName is not supported).
     /// </summary>
+    protected virtual async Task TestPaging()
+    {
+        const int totalRows = 7;
+        const int pageSize = 3;
+
+        // Insert totalRows rows with known sequential IDs so ORDER BY id is deterministic.
+        var ids = new List<long>(totalRows);
+        for (var i = 0; i < totalRows; i++)
+        {
+            ids.Add(await InsertTestRows());
+        }
+
+        ids.Sort();
+
+        var dialect = _context.Dialect;
+        var idCol = _context.WrapObjectName("id");
+        var tableName = _helper.WrappedTableName;
+
+        // --- Page 1 (offset 0, limit 3) ---
+        await using var sc1 = _context.CreateSqlContainer();
+        sc1.Query.Append("SELECT ").Append(idCol)
+            .Append(" FROM ").Append(tableName)
+            .Append(" ORDER BY ").Append(idCol);
+        dialect.AppendPaging(sc1.Query, offset: 0, limit: pageSize);
+        await using var rdr1 = await sc1.ExecuteReaderAsync();
+        var page1 = new List<long>();
+        while (await rdr1.ReadAsync())
+        {
+            page1.Add(rdr1.GetInt64(0));
+        }
+
+        if (page1.Count != pageSize)
+        {
+            throw new Exception(
+                $"[Paging] Page 1 expected {pageSize} rows but got {page1.Count}");
+        }
+
+        CheckOk($"[Paging] Page 1 returned {page1.Count} rows as expected");
+
+        // --- Page 2 (offset 3, limit 3) ---
+        await using var sc2 = _context.CreateSqlContainer();
+        sc2.Query.Append("SELECT ").Append(idCol)
+            .Append(" FROM ").Append(tableName)
+            .Append(" ORDER BY ").Append(idCol);
+        dialect.AppendPaging(sc2.Query, offset: pageSize, limit: pageSize);
+        await using var rdr2 = await sc2.ExecuteReaderAsync();
+        var page2 = new List<long>();
+        while (await rdr2.ReadAsync())
+        {
+            page2.Add(rdr2.GetInt64(0));
+        }
+
+        if (page2.Count != pageSize)
+        {
+            throw new Exception(
+                $"[Paging] Page 2 expected {pageSize} rows but got {page2.Count}");
+        }
+
+        CheckOk($"[Paging] Page 2 returned {page2.Count} rows as expected");
+
+        // Pages must not overlap.
+        if (page1.Intersect(page2).Any())
+        {
+            throw new Exception("[Paging] Pages 1 and 2 overlap — offset not applied correctly");
+        }
+
+        CheckOk("[Paging] Pages 1 and 2 are disjoint");
+
+        // Combined pages must be a subset of the IDs we inserted.
+        var combined = page1.Concat(page2).ToHashSet();
+        if (!combined.IsSubsetOf(ids))
+        {
+            throw new Exception("[Paging] Paged rows contain IDs not inserted by this test");
+        }
+
+        CheckOk("[Paging] All paged IDs are from inserted rows");
+
+        // Clean up the rows we inserted.
+        foreach (var id in ids)
+        {
+            var sc = _helper.BuildDelete(id);
+            await sc.ExecuteNonQueryAsync();
+        }
+
+        CheckOk("[Paging] Cleanup complete");
+    }
+
     protected virtual Task TestPoolIsolation() => Task.CompletedTask;
 
     /// <summary>

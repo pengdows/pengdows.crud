@@ -76,6 +76,9 @@ internal class SqliteDialect : SqlDialect
     // SQLite benefits from prepared statements with inherent prepare support
     public override bool PrepareStatements => true;
 
+    // SQLite supports LIMIT/OFFSET only — no OFFSET/FETCH NEXT syntax.
+    public override bool SupportsOffsetFetch => false;
+
     // SQLite has no native UUID type — store GUIDs as 36-char hyphenated strings.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 

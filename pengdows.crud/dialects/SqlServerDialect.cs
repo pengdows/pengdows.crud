@@ -107,6 +107,9 @@ internal class SqlServerDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
+
+    // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
+    public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";
 
     // DO NOT override QuotePrefix / QuoteSuffix here.

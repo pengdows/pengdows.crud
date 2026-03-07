@@ -645,6 +645,37 @@ public interface ISqlDialect
     string? MaxPoolSizeSettingName { get; }
 
     /// <summary>
+    /// True when the dialect supports SQL:2008 offset/fetch paging syntax:
+    /// <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c>.
+    /// Supported by SQL Server, Oracle 12c+, PostgreSQL, Firebird 3+, DuckDB, and others.
+    /// SQLite does not support this syntax.
+    /// </summary>
+    bool SupportsOffsetFetch { get; }
+
+    /// <summary>
+    /// True when the dialect supports <c>LIMIT m OFFSET n</c> paging syntax.
+    /// Supported by PostgreSQL, MySQL, MariaDB, SQLite, and most open-source databases.
+    /// SQL Server and Oracle do not support this syntax.
+    /// </summary>
+    bool SupportsLimitOffset { get; }
+
+    /// <summary>
+    /// Appends dialect-appropriate paging SQL to the supplied query builder.
+    /// Uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
+    /// is true, otherwise falls back to <c>LIMIT m OFFSET n</c>.
+    /// </summary>
+    /// <param name="query">The <see cref="ISqlQueryBuilder"/> to append to.</param>
+    /// <param name="offset">Number of rows to skip (0 = no skip, limit-only).</param>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <remarks>
+    /// SQL Server requires an ORDER BY clause before OFFSET/FETCH — callers are responsible
+    /// for appending ORDER BY before calling this method.
+    /// When <paramref name="offset"/> is 0 and the dialect uses LIMIT/OFFSET, the OFFSET
+    /// clause is omitted from the generated SQL.
+    /// </remarks>
+    void AppendPaging(ISqlQueryBuilder query, int offset, int limit);
+
+    /// <summary>
     /// Classifies an exception into a well-known error category for metrics and observability.
     /// </summary>
     /// <param name="exception">The exception thrown by the database operation.</param>

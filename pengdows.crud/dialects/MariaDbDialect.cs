@@ -57,6 +57,9 @@ internal class MariaDbDialect : MySqlDialect
     // prepared statements default ON here (MySQL defaults to OFF for safety).
     public override bool PrepareStatements => true;
 
+    // MariaDB 10.6+ supports OFFSET/FETCH NEXT syntax; older versions use LIMIT/OFFSET only.
+    public override bool SupportsOffsetFetch => IsInitialized && IsAtLeast(10, 6);
+
     // MariaDB inherits ANSI double-quote quoting from MySqlDialect (matches ANSI_QUOTES sql_mode)
 
     // MariaDB uses LAST_INSERT_ID() like MySQL

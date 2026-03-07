@@ -70,6 +70,9 @@ internal class OracleDialect : SqlDialect
     // Oracle prefers statement cache and array binding over manual prepare
     public override bool PrepareStatements => false;
 
+    // Oracle uses OFFSET/FETCH NEXT syntax (12c+) — no LIMIT keyword.
+    public override bool SupportsLimitOffset => false;
+
     // Oracle stores GUIDs as VARCHAR2(36) — handled here via GuidFormat rather than
     // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
