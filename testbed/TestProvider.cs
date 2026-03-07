@@ -2144,12 +2144,7 @@ INSERT INTO {table} (
         CheckOk("[Paging] All paged IDs are from inserted rows");
 
         // Clean up the rows we inserted.
-        foreach (var id in ids)
-        {
-            await using var sc = _helper.BuildDelete(id);
-            await sc.ExecuteNonQueryAsync();
-        }
-
+        await _helper.DeleteAsync(ids);
         CheckOk("[Paging] Cleanup complete");
     }
 
