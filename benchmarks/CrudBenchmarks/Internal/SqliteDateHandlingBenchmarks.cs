@@ -149,7 +149,6 @@ public class SqliteDateHandlingBenchmarks : IDisposable
         return hits;
     }
 
-    [Benchmark]
     public string DumpFieldTypes()
     {
         if (_fieldTypeDump != null)

@@ -43,8 +43,20 @@ public class PagingDialectTests
     private static FirebirdDialect Firebird() =>
         new(new fakeDbFactory(SupportedDatabase.Firebird), _log);
 
-    private static PostgreSqlDialect CockroachDb() =>
+    private static CockroachDbDialect CockroachDb() =>
         new(new fakeDbFactory(SupportedDatabase.CockroachDb), _log);
+
+    private static DuckDbDialect DuckDb() =>
+        new(new fakeDbFactory(SupportedDatabase.DuckDB), _log);
+
+    private static SnowflakeDialect Snowflake() =>
+        new(new fakeDbFactory(SupportedDatabase.Snowflake), _log);
+
+    private static TiDbDialect TiDb() =>
+        new(new fakeDbFactory(SupportedDatabase.TiDb), _log);
+
+    private static YugabyteDbDialect YugabyteDb() =>
+        new(new fakeDbFactory(SupportedDatabase.YugabyteDb), _log);
 
     private static T WithVersion<T>(T dialect, Version version) where T : SqlDialect
     {
@@ -131,6 +143,51 @@ public class PagingDialectTests
     public void MariaDb_AlwaysSupportsLimitOffset()
         => Assert.True(MariaDb(new Version(10, 5, 0)).SupportsLimitOffset);
 
+    // CockroachDB inherits PostgreSqlDialect — OFFSET/FETCH (both syntaxes)
+    [Fact]
+    public void CockroachDb_SupportsOffsetFetch_IsTrue()
+        => Assert.True(CockroachDb().SupportsOffsetFetch);
+
+    [Fact]
+    public void CockroachDb_SupportsLimitOffset_IsTrue()
+        => Assert.True(CockroachDb().SupportsLimitOffset);
+
+    // DuckDB inherits SqlDialect base — OFFSET/FETCH (both syntaxes)
+    [Fact]
+    public void DuckDb_SupportsOffsetFetch_IsTrue()
+        => Assert.True(DuckDb().SupportsOffsetFetch);
+
+    [Fact]
+    public void DuckDb_SupportsLimitOffset_IsTrue()
+        => Assert.True(DuckDb().SupportsLimitOffset);
+
+    // Snowflake inherits SqlDialect base — OFFSET/FETCH (both syntaxes)
+    [Fact]
+    public void Snowflake_SupportsOffsetFetch_IsTrue()
+        => Assert.True(Snowflake().SupportsOffsetFetch);
+
+    [Fact]
+    public void Snowflake_SupportsLimitOffset_IsTrue()
+        => Assert.True(Snowflake().SupportsLimitOffset);
+
+    // TiDB inherits MySqlDialect — always LIMIT/OFFSET (MySQL-compatible)
+    [Fact]
+    public void TiDb_SupportsOffsetFetch_IsFalse()
+        => Assert.False(TiDb().SupportsOffsetFetch);
+
+    [Fact]
+    public void TiDb_SupportsLimitOffset_IsTrue()
+        => Assert.True(TiDb().SupportsLimitOffset);
+
+    // YugabyteDB inherits PostgreSqlDialect — OFFSET/FETCH (both syntaxes)
+    [Fact]
+    public void YugabyteDb_SupportsOffsetFetch_IsTrue()
+        => Assert.True(YugabyteDb().SupportsOffsetFetch);
+
+    [Fact]
+    public void YugabyteDb_SupportsLimitOffset_IsTrue()
+        => Assert.True(YugabyteDb().SupportsLimitOffset);
+
     // -------------------------------------------------------------------------
     // AppendPaging SQL output — OFFSET/FETCH dialects
     // -------------------------------------------------------------------------
@@ -207,6 +264,41 @@ public class PagingDialectTests
     {
         var sql = Paging(MariaDb(new Version(10, 6, 0)), offset: 5, limit: 15);
         Assert.Equal(" OFFSET 5 ROWS FETCH NEXT 15 ROWS ONLY", sql);
+    }
+
+    [Fact]
+    public void CockroachDb_AppendPaging_UsesOffsetFetch()
+    {
+        var sql = Paging(CockroachDb(), offset: 10, limit: 5);
+        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", sql);
+    }
+
+    [Fact]
+    public void DuckDb_AppendPaging_UsesOffsetFetch()
+    {
+        var sql = Paging(DuckDb(), offset: 10, limit: 5);
+        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", sql);
+    }
+
+    [Fact]
+    public void Snowflake_AppendPaging_UsesOffsetFetch()
+    {
+        var sql = Paging(Snowflake(), offset: 10, limit: 5);
+        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", sql);
+    }
+
+    [Fact]
+    public void TiDb_AppendPaging_UsesLimitOffset()
+    {
+        var sql = Paging(TiDb(), offset: 10, limit: 5);
+        Assert.Equal(" LIMIT 5 OFFSET 10", sql);
+    }
+
+    [Fact]
+    public void YugabyteDb_AppendPaging_UsesOffsetFetch()
+    {
+        var sql = Paging(YugabyteDb(), offset: 10, limit: 5);
+        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", sql);
     }
 
     // -------------------------------------------------------------------------

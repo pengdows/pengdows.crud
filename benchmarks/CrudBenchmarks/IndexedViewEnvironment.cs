@@ -274,8 +274,9 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             var sb = new StringBuilder();
             for (var i = batch; i < batchEnd; i++)
             {
-                sb.AppendLine(
-                    $"INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES ('Company {i + 1:D6}');");
+                sb.Append("INSERT INTO dbo.Customers (company_name) OUTPUT INSERTED.customer_id VALUES ('Company ")
+                  .Append((i + 1).ToString("D6"))
+                  .AppendLine("');");
             }
 
             await using var cmd = conn.CreateCommand();
@@ -313,7 +314,8 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             {
                 if (i > batch) sb.Append(',');
                 var (cid, amt, days) = orderRows[i];
-                sb.Append($"({cid},{amt},DATEADD(day,-{days},GETUTCDATE()))");
+                sb.Append('(').Append(cid).Append(',').Append(amt)
+                  .Append(",DATEADD(day,-").Append(days).Append(",GETUTCDATE()))");
             }
 
             await using var cmd = conn.CreateCommand();
