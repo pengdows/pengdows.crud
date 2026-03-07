@@ -211,7 +211,7 @@ pengdows.crud enforces this philosophy through its attribute system:
 
 - `[Id]` marks a unique surrogate key column — single column only
 - `[PrimaryKey]` may be used on one or more fields for business identity
-- Tables must have a unique single-column `[Id]` to use full TableGateway automation
+- `[Id]` is required for row-id based operations; `CreateAsync` can work with `[PrimaryKey]`-only entities
 - `RetrieveOneAsync(entity)` targets `[PrimaryKey]` columns, not `[Id]`
 
 ### Flexible CRUD Operations

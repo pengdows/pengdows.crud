@@ -121,6 +121,13 @@ ISqlContainer BuildRetrieve(entities);        // SELECT ... WHERE pk columns mat
 ISqlContainer BuildDelete(id);                // DELETE ... WHERE id = @id
 ISqlContainer BuildUpsert(entity);            // Dialect-specific INSERT-or-UPDATE
 
+// Batch Build methods (new in 2.0)
+IReadOnlyList<ISqlContainer> BuildBatchCreate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(entities);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(ids);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(entities);
+
 // ONLY async Build method (needs DB I/O when loadOriginal: true)
 ISqlContainer sc = await BuildUpdateAsync(entity);                     // UPDATE statement
 ISqlContainer sc = await BuildUpdateAsync(entity, loadOriginal: true); // Loads current row first
@@ -155,9 +162,23 @@ IAsyncEnumerable<TEntity> orders = RetrieveStreamAsync(ids);       // Returns st
 bool created  = await CreateAsync(entity, context);    // INSERT, returns true if 1 row
 int affected  = await UpdateAsync(entity);             // UPDATE, returns row count
 int affected  = await DeleteAsync(id);                 // DELETE single, returns row count
-int affected  = await DeleteAsync(ids);                // DELETE batch, returns row count
+int affected  = await DeleteAsync(ids);                 // DELETE batch, returns row count
 int affected  = await UpsertAsync(entity);             // INSERT or UPDATE
+
+// Collection operations (Delegates to Batch methods)
+int affected = await CreateAsync(entities);            // Batch INSERT
+int affected = await UpdateAsync(entities);            // Batch UPDATE
+int affected = await UpsertAsync(entities);            // Batch UPSERT
+int affected = await DeleteAsync(entities);            // Batch DELETE by primary key
+
+// Explicit Batch Operations
+int affected = await BatchCreateAsync(entities);
+int affected = await BatchUpdateAsync(entities);
+int affected = await BatchUpsertAsync(entities);
+int affected = await BatchDeleteAsync(ids);
+int affected = await BatchDeleteAsync(entities);
 ```
+
 
 ### WHERE Clause Helpers (modify an existing container)
 
@@ -552,13 +573,13 @@ Transactions are **operation-scoped** - create inside methods, never store as fi
 // Inside your extended gateway
 public async Task<bool> CancelOrderAsync(long orderId)
 {
-    using var txn = Context.BeginTransaction();
+    await using var txn = await Context.BeginTransactionAsync();
     try
     {
         var order = await RetrieveOneAsync(orderId);
         if (order == null || order.Status == OrderStatus.Shipped)
         {
-            txn.Rollback();
+            await txn.RollbackAsync();
             return false;
         }
 
@@ -567,16 +588,16 @@ public async Task<bool> CancelOrderAsync(long orderId)
 
         if (affected > 0)
         {
-            txn.Commit();
+            await txn.CommitAsync();
             return true;
         }
 
-        txn.Rollback();
+        await txn.RollbackAsync();
         return false;
     }
     catch
     {
-        txn.Rollback();
+        await txn.RollbackAsync();
         throw;
     }
 }
@@ -584,13 +605,12 @@ public async Task<bool> CancelOrderAsync(long orderId)
 // With isolation level
 using var txn = Context.BeginTransaction(IsolationLevel.Serializable);
 
-// With read-only flag
-using var txn = Context.BeginTransaction(readOnly: true);
-
-// With savepoints
-await txn.SavepointAsync("checkpoint1");
-await txn.RollbackToSavepointAsync("checkpoint1");
+// Async version with profile
+await using var txn = await Context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
 ```
+
+**Resource Safety:**
+Always use `await using` for `ITransactionContext` and `ITrackedReader` to ensure connections are released correctly.
 
 **CRITICAL: Do NOT use `TransactionScope`**
 

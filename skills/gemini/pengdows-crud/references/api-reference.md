@@ -23,17 +23,22 @@ ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? ids, IDatabaseContext? 
 ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? entities, string alias, IDatabaseContext? context = null);
 ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? entities, IDatabaseContext? context = null);
 
-// UPDATE statement (async because loadOriginal may need DB I/O)
-Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null);
-Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null);
-Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
-Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context, CancellationToken ct);
+// UPDATE statement
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
 
 // DELETE statement
 ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null);
 
 // Dialect-specific UPSERT
 ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
+
+// Batch Build methods
+IReadOnlyList<ISqlContainer> BuildBatchCreate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null);
 ```
 
 ### WHERE Clause Helpers (modify existing container)
@@ -60,38 +65,39 @@ IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken ct
 
 ```csharp
 // Create
-Task<bool> CreateAsync(TEntity entity);
 Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // Delegates to BatchCreateAsync
 
 // Retrieve single
-Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null);
-Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context, CancellationToken ct);
-Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null);  // By [PrimaryKey]
-Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);  // By [PrimaryKey]
 
 // Retrieve multiple
-Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
-Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null, CancellationToken ct = default);
 
 // Retrieve streamed (memory-efficient for large sets)
-IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
-IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+IAsyncEnumerable<TEntity> RetrieveStreamAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null, CancellationToken ct = default);
 
 // Update
-Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null);
-Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
-Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null);
-Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context, CancellationToken ct);
+Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // Delegates to BatchUpdateAsync
 
 // Delete
-Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null);
-Task<int> DeleteAsync(TRowID id, IDatabaseContext? context, CancellationToken ct);
-Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null);
-Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context, CancellationToken ct);
+Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // By primary key
 
 // Upsert
-Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null);
-Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context, CancellationToken ct);
+Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // Delegates to BatchUpsertAsync
+
+// Explicit Batch Operations
+Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 ```
 
 ### Other Members
@@ -99,7 +105,6 @@ Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context, CancellationTok
 ```csharp
 string WrappedTableName { get; }                    // Fully qualified, quoted table name
 EnumParseFailureMode EnumParseBehavior { get; set; } // Enum parse failure handling
-string MakeParameterName(DbParameter p);             // Format parameter name per dialect
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
 TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ```
@@ -141,6 +146,7 @@ DbParameter AddParameterWithValue<T>(string? name, DbType type, T value, Paramet
 // Add pre-constructed
 void AddParameter(DbParameter parameter);
 void AddParameters(IEnumerable<DbParameter> list);
+void AddParameters(IList<DbParameter> list);
 
 // Get/Set values
 void SetParameterValue(string name, object? value);
@@ -153,14 +159,12 @@ T GetParameterValue<T>(string name);
 ```csharp
 ValueTask<int> ExecuteNonQueryAsync(CommandType type = CommandType.Text);
 ValueTask<int> ExecuteNonQueryAsync(CommandType type, CancellationToken ct);
+ValueTask<int> ExecuteNonQueryAsync(ExecutionType execType, CommandType type = CommandType.Text);
 
-// Scalar — three variants depending on how you want to handle no-rows / null:
-ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text);   // throws if no rows or null
-ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type, CancellationToken ct);
-ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type = CommandType.Text);      // null if no rows or DBNull
-ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type, CancellationToken ct);
-ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type = CommandType.Text);         // unambiguous: None/Null/Value
-ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type, CancellationToken ct);
+// Scalar — unambiguous distinguishing between None/Null/Value:
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text); // throws if no rows or null
+ValueTask<T?>              ExecuteScalarOrNullAsync<T>(CommandType type = CommandType.Text);   // null if no rows or DBNull
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type = CommandType.Text);      // status: None, Null, or Value
 
 ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type = CommandType.Text);
 ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type, CancellationToken ct);
@@ -174,7 +178,7 @@ All execution methods also have `ExecutionType` overloads for explicit read/writ
 ISqlContainer Clone();                        // Clone with same context
 ISqlContainer Clone(IDatabaseContext? context); // Clone with different context
 void Clear();                                  // Clear query and parameters
-DbCommand CreateCommand(ITrackedConnection conn); // Create command for connection
+void Dispose();                                // Release resources
 ```
 
 ### Stored Procedure Support
@@ -185,27 +189,14 @@ string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool
 
 ## IDatabaseContext
 
-### Connection Management
-
-```csharp
-void CloseAndDisposeConnection(ITrackedConnection? conn);
-ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
-```
-
-Note: Direct connection access is internal-only; use `ISqlContainer` for execution.
-
 ### Transaction Management
 
 ```csharp
-ITransactionContext BeginTransaction(
-    IsolationLevel? level = null,
-    ExecutionType type = ExecutionType.Write,
-    bool? readOnly = null);
+ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
+ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
 
-ITransactionContext BeginTransaction(
-    IsolationProfile profile,
-    ExecutionType type = ExecutionType.Write,
-    bool? readOnly = null);
+Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
+Task<ITransactionContext> BeginTransactionAsync(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
 ```
 
 ### SQL Container Creation
@@ -218,35 +209,53 @@ ISqlContainer CreateSqlContainer(string? query = null);
 
 ```csharp
 ISqlDialect Dialect { get; }                   // SQL dialect in use for this context
-TimeSpan? ModeLockTimeout { get; }             // Mode/transaction lock timeout; null = wait indefinitely
-DbMode ConnectionMode { get; }
-IDataSourceInformation DataSourceInfo { get; }
-SupportedDatabase Product { get; }
+SupportedDatabase Product { get; }             // Detected database product
+DbMode ConnectionMode { get; }                 // Connection strategy
+TimeSpan? ModeLockTimeout { get; }             // Lock timeout; null = wait indefinitely
 long NumberOfOpenConnections { get; }
 long PeakOpenConnections { get; }
 int? ReaderPlanCacheSize { get; }              // Plan cache size for reader connections
+int MaxParameterLimit { get; }                 // Provider-specific parameter limit
+DatabaseMetrics Metrics { get; }               // Real-time metrics snapshot
+string Name { get; set; }                      // Logical name for this context (for logging/multi-tenancy)
+Guid RootId { get; }                           // Unique identity of this context instance
+ReadWriteMode ReadWriteMode { get; }           // Read-only or read-write
+bool IsReadOnlyConnection { get; }             // True if context was opened read-only
+bool PrepareStatements { get; }                // Whether statements are auto-prepared
+string DatabaseProductName { get; }            // Database product name string
+```
+
+### Additional Methods
+
+```csharp
+string GetBaseSessionSettings();               // Session SQL applied to every new connection
+string GetReadOnlySessionSettings();           // Session SQL applied to read-only connections
+string GenerateParameterName();                // Generate a unique parameter name
 ```
 
 ## ITransactionContext
 
 Extends `IDatabaseContext`:
 
-### Transaction State
-
-```csharp
-bool WasCommitted { get; }
-bool WasRolledBack { get; }
-bool IsCompleted { get; }
-IsolationLevel IsolationLevel { get; }
-```
-
 ### Transaction Control
 
 ```csharp
 void Commit();
+Task CommitAsync(CancellationToken ct = default);
 void Rollback();
+Task RollbackAsync(CancellationToken ct = default);
 Task SavepointAsync(string name);
 Task RollbackToSavepointAsync(string name);
+```
+
+### Transaction State
+
+```csharp
+Guid TransactionId { get; }
+bool WasCommitted { get; }
+bool WasRolledBack { get; }
+bool IsCompleted { get; }
+IsolationLevel IsolationLevel { get; }
 ```
 
 ## Parameter Naming Convention
@@ -260,36 +269,6 @@ Task RollbackToSavepointAsync(string name);
 | `v{n}` | Optimistic lock version | `BuildUpdateAsync` (only with `[Version]` column) |
 | `j{n}` | JOIN conditions | Custom SQL |
 | `b{n}` | Batch row values | `BuildBatchCreate/Update/Upsert` |
-
-**Critical distinctions**:
-- `BuildRetrieve` → id slot is `w0` (scalar for single-element reuse, array for PostgreSQL ANY)
-- `BuildDelete` → id slot is `k0`
-- `BuildUpdateAsync` → SET slots are `s0`…`sN`, then WHERE id is `k0` (key counter, always starts at 0)
-
-Always pass the base name (no `@`/`:`/`$`) to `SetParameterValue()`:
-
-```csharp
-// BuildRetrieve reuse — scalar value, not array:
-_readSc.SetParameterValue("w0", nextId);        // ✓ scalar
-_readSc.SetParameterValue("w0", new[]{nextId}); // ✗ throws on non-PostgreSQL
-
-// BuildDelete reuse:
-_deleteSc.SetParameterValue("k0", idToDelete);
-
-// BuildUpdateAsync reuse — SET params then key:
-_updateSc.SetParameterValue("s2", newSalary);   // 3rd updatable column
-_updateSc.SetParameterValue("k0", targetId);    // WHERE id
-```
-
-## ExecutionType
-
-```csharp
-public enum ExecutionType
-{
-    Read,   // Read-only operation
-    Write   // Modifying operation
-}
-```
 
 ## Supported Databases
 
@@ -306,24 +285,26 @@ public enum SupportedDatabase
     MariaDb = 32,
     MySql = 64,
     Sqlite = 128,
-    DuckDB = 256
+    DuckDB = 256,
+    YugabyteDb = 512,
+    TiDb = 1024,
+    Snowflake = 2048,
+    AuroraMySql = 4096,
+    AuroraPostgreSql = 8192
 }
 ```
 
-## IAuditValueResolver
+## IAuditValueResolver / IAuditValues
 
 ```csharp
-public interface IAuditValueResolver
-{
-    IAuditValues Resolve();
-}
+public interface IAuditValueResolver { IAuditValues Resolve(); }
 
 public interface IAuditValues
 {
     object UserId { get; init; }
     DateTime UtcNow { get; }                 // Always UTC
-    DateTimeOffset? TimestampOffset { get; } // Always UTC offset; null falls back to UtcNow
-    T As<T>() { return (T)UserId; }
+    DateTimeOffset? TimestampOffset { get; } // Optional UTC offset
+    T As<T>();                               // Cast UserId
 }
 ```
 
@@ -337,5 +318,3 @@ public interface ITenantContextRegistry
     IDatabaseContext GetContext(string tenant);
 }
 ```
-
-`TenantContextRegistry` is the concrete implementation, constructed via DI with `IServiceProvider`, `ITenantConnectionResolver`, `IDatabaseContextFactory`, and `ILoggerFactory`.

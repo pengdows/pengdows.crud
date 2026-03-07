@@ -6,7 +6,7 @@
 
 | Tier | Purpose | Key Methods |
 |------|---------|-------------|
-| **1. Build** | SQL generation (no I/O). | `BuildCreate`, `BuildBaseRetrieve`, `BuildDelete`, `BuildUpsert`, `BuildUpdateAsync`. |
+| **1. Build** | SQL generation (no I/O). | `BuildCreate`, `BuildBaseRetrieve`, `BuildDelete`, `BuildUpsert`, `BuildUpdateAsync`, `BuildBatchCreate/Update/Upsert/Delete`. |
 | **2. Load** | Execute pre-built `ISqlContainer`. | `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`. |
 | **3. Convenience** | One-call Build + Execute. | `CreateAsync`, `RetrieveOneAsync`, `UpdateAsync`, `DeleteAsync`, `UpsertAsync`. |
 

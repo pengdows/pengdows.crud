@@ -39,6 +39,7 @@ Used to bind parameters to the command.
 - Parameters are created using `DbProviderFactory`
 - `AddParameterWithValue` creates and adds parameter in one call
 - Overloads with `ParameterDirection` support output/return parameters
+- `AddParameters(IEnumerable<DbParameter>)` and `AddParameters(IList<DbParameter>)` add multiple parameters at once
 
 ```csharp
 // Method 1: Create parameter, then add it

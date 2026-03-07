@@ -39,35 +39,37 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 
 | Tier | Methods | Purpose |
 |------|---------|---------|
-| **1. Build** | `BuildCreate`, `BuildBaseRetrieve`, `BuildDelete`, `BuildUpsert`, `BuildUpdateAsync` | SQL generation only; no DB I/O |
+| **1. Build** | `BuildCreate`, `BuildBaseRetrieve`, `BuildDelete`, `BuildUpsert`, `BuildUpdateAsync`, `BuildBatchCreate`, `BuildBatchUpdate`, `BuildBatchUpsert`, `BuildBatchDelete` | SQL generation only; no DB I/O |
 | **2. Load** | `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync` | Execute a pre-built `ISqlContainer` |
-| **3. Convenience** | `CreateAsync`, `RetrieveOneAsync`, `UpdateAsync`, `DeleteAsync`, `UpsertAsync` | Build + Execute in one call |
+| **3. Convenience** | `CreateAsync`, `RetrieveOneAsync`, `UpdateAsync`, `DeleteAsync`, `UpsertAsync`, `RetrieveAsync`, `RetrieveStreamAsync` | Build + Execute in one call. Supports single entities and collections. |
 
 ## Batch & Streaming
 
-- **Batch Operations:** Multi-row INSERT/UPSERT via `BatchCreateAsync` and `BatchUpsertAsync`. Auto-chunks based on database parameter limits.
-- **Streaming:** Process large result sets item-by-item via `LoadStreamAsync` or `RetrieveStreamAsync` without loading all into memory.
+- **Batch Operations:** Multi-row INSERT/UPDATE/UPSERT via `BatchCreateAsync`, `BatchUpdateAsync`, and `BatchUpsertAsync`. Auto-chunks based on database parameter limits and row limits.
+- **Efficient Deletes:** `BatchDeleteAsync` for high-performance removal of multiple rows by ID or Primary Key.
+- **Streaming:** Process large result sets item-by-item via `LoadStreamAsync` or `RetrieveStreamAsync` without loading all into memory. Uses `IAsyncEnumerable<T>`.
 
 ## Core Principles
 
-1. **SQL-First:** No LINQ or tracking. You write SQL; what you write is what executes.
+1. **SQL-First:** No LINQ or tracking. You write SQL (or use generated SQL); what you write is what executes.
 2. **[Id] vs [PrimaryKey]:** `[Id]` is a surrogate/pseudo key (single column); `[PrimaryKey]` is a natural/business key (can be composite). They are mutually exclusive on a column.
-3. **Open Late, Close Early:** Connections are acquired only at the moment of execution and released immediately.
+3. **Open Late, Close Early:** Connections are acquired only at the moment of execution and released immediately, unless pinned by a transaction or tracked reader.
 4. **Testable by Design:** Use `pengdows.crud.fakeDb` for fast, isolated unit tests.
 
 ## DI Lifetime & Connection Management
 
 - **DatabaseContext:** **Singleton** - Manages connection pool, metrics, and `DbMode`.
-- **TableGateway:** **Singleton** - Stateless, caches compiled accessors.
-- **DbMode.Best:** Auto-selects optimal mode (e.g., `SingleWriter` for SQLite, `Standard` for PostgreSQL).
+- **TableGateway:** **Singleton** - Stateless, caches compiled accessors and SQL templates.
+- **IAuditValueResolver:** **Singleton** - Must be thread-safe (e.g., using `IHttpContextAccessor`).
+- **DbMode.Best:** Auto-selects optimal mode (e.g., `SingleWriter` for SQLite files, `Standard` for PostgreSQL).
 - **Pool Governor:** Prevents pool exhaustion via semaphore-based backpressure.
 
 ## Core Invariants
 
-1. **Transactions are operation-scoped:** Use `using var tx = context.BeginTransaction();` inside methods.
-2. **ITrackedReader is a lease:** Pins connection until disposed. Long-lived readers can block writers in `SingleWriter` mode.
+1. **Transactions are operation-scoped:** Use `using var tx = context.BeginTransaction();` or `await using var tx = await context.BeginTransactionAsync();` inside methods.
+2. **ITrackedReader is a lease:** Pins connection until disposed. Long-lived readers can block writers in `SingleWriter` mode. Always use `await using`.
 3. **NEVER use TransactionScope:** Incompatible with connection management; use `context.BeginTransaction()`.
-4. **Audit Behavior:** Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on CREATE.
+4. **Audit Behavior:** Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on CREATE. Only `LastUpdatedBy/On` are updated on UPDATE.
 
 ## Reference Files
 

@@ -57,6 +57,32 @@ Why it matters:
 - Fewer surprises across providers
 - More reliable behavior under real-world workloads
 
+## Breaking Changes from 1.0
+
+### `EntityHelper<TEntity, TRowID>` renamed to `TableGateway<TEntity, TRowID>`
+Update all references. The `IEntityHelper<,>` interface is replaced by `ITableGateway<,>`.
+
+### `ITrackedConnection` is now internal
+`ITrackedConnection` has been moved from the public API to `internal`. Any code that referenced
+it by name (variable declarations, casts, method signatures) must be updated to use `IDbConnection`
+or `IDatabaseContext` instead. Internal test infrastructure can use `InternalsVisibleTo` to retain
+direct access.
+
+### `SessionSettingsPreamble` removed from `IDatabaseContext`
+The `SessionSettingsPreamble` property has been removed. Session settings are now pre-computed at
+context construction time and applied automatically per connection open. There is no equivalent
+public property; use `context.Dialect.GetFinalSessionSettings(readOnly: false)` if you need the
+raw SQL for diagnostics (cast to `ISqlDialect` implementation type).
+
+### Several `IDatabaseContext` properties renamed or added
+- `MaxNumberOfConnections` → `PeakOpenConnections`
+- `Name`, `RootId`, `ReadWriteMode`, `ModeLockTimeout`, `Metrics`, `MetricsUpdated` added
+- `Dialect` property added (was previously accessible only via `ISqlDialectProvider`)
+- `AssertIsReadConnection()` and `AssertIsWriteConnection()` removed from `IDatabaseContext` (internal-only checks)
+
+### `IColumnInfo` property rename
+- `IsIdIsWritable` → `IsIdWritable`
+
 ## From 1.0 to 2.0
 
 - API usage remains familiar

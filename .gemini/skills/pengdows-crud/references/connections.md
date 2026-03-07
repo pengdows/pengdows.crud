@@ -18,12 +18,16 @@ Manages connection pool, metrics, and session initialization. Create one instanc
 
 ## Transactions
 
-- **Explicit creation:** Use `using var tx = context.BeginTransaction();`.
-- **Pinned connection:** Transactions pin a connection until disposed.
+- **Explicit creation:** Use `using var tx = context.BeginTransaction();` or `await using var tx = await context.BeginTransactionAsync();`.
+- **Pinned connection:** Transactions pin a connection until disposed. No other commands can run on the context's shared connection while a transaction is active.
 - **Savepoints:** Supports `SavepointAsync` and `RollbackToSavepointAsync`.
 - **Isolation Profiles:** Portable profiles that map to optimal native levels:
   - `IsolationProfile.SafeNonBlockingReads`: MVCC snapshot (where supported).
   - `IsolationProfile.StrictConsistency`: Serializable / Full isolation.
+  - `IsolationProfile.FastWithRisks`: Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads.
+
+**Resource Safety:**
+Always use `await using` for `ITransactionContext` and `ITrackedReader` to ensure connections are released correctly, especially in `SingleWriter` and `SingleConnection` modes.
 
 ## Pool Governor
 

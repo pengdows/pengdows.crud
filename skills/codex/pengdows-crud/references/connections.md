@@ -81,6 +81,24 @@ services.AddSingleton<IDatabaseContext>(sp =>
 - Plays well with provider-managed pooling (see Connection Pooling)
 - Handles embedded/local DB quirks without manual intervention
 
+## IsolationProfile
+
+Portable transaction isolation profiles that map to the optimal native level for the connected database:
+
+```csharp
+public enum IsolationProfile
+{
+    SafeNonBlockingReads,  // MVCC snapshot (where supported) — avoids blocking reads
+    StrictConsistency,     // Serializable / full isolation
+    FastWithRisks          // Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads
+}
+```
+
+Usage:
+```csharp
+using var txn = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+```
+
 ## Integration with Transactions
 
 - Inside a `TransactionContext`, the pinned connection stays open for the life of the transaction

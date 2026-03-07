@@ -6,8 +6,9 @@
 
 - `[Table("name", Schema = "schema")]`: Maps a class to a database table.
 - `[Column("name", DbType.Int32, n)]`: Maps a property to a database column.
-- `[NonInsertable]`: Excludes column from INSERT statements.
-- `[NonUpdateable]`: Excludes column from UPDATE statements.
+- `[NonInsertable]`: Excludes column from INSERT statements (e.g., generated columns, some audit fields).
+- `[NonUpdateable]`: Excludes column from UPDATE statements (e.g., `[CreatedBy]`, `[CreatedOn]`).
+- `[Id]` and `[PrimaryKey]` are also excluded from UPDATE SET clauses.
 
 ## Primary Keys vs Pseudo Keys
 
@@ -27,11 +28,19 @@
 ## Audit & Concurrency
 
 - `[CreatedBy]`, `[CreatedOn]`, `[LastUpdatedBy]`, `[LastUpdatedOn]`: Auto-populated audit fields.
-- **IMPORTANT:** Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on CREATE.
-- `[Version]`: Optimistic concurrency column (e.g., `int` or `byte[]`).
+- **IMPORTANT:** Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on **CREATE**.
+- **Update Behavior:** Only `LastUpdatedBy/On` are updated during an **UPDATE** operation.
+- `[Version]`: Optimistic concurrency column (e.g., `int` or `long`). Incremented by 1 on each UPDATE.
+
+## Update Strategy
+
+- `UpdateAsync(entity)`: Generates an UPDATE for all updatable columns.
+- `UpdateAsync(entity, loadOriginal: true)`: Reloads the original row from the DB to detect changes and perform a concurrency check using the `[Version]` column. If no changes are detected or if a version mismatch occurs, it returns 0.
 
 ## Type Conversions
 
-- `[IsEnum]`: Auto-converts enums to `string` or `int` in the database.
-- `[IsJsonType]`: Auto-serializes objects to JSON using `System.Text.Json`.
-- `Uuid7Optimized`: High-performance, time-sortable sortable IDs (RFC 9562).
+- Enum properties typed directly as an enum are auto-detected (no attribute needed). Use `[EnumColumn(typeof(T))]` only when the property type is `object` and the enum type can't be inferred.
+- `[EnumLiteral("string")]`: Applied to **enum fields** (not properties) to map enum values to custom string literals in the database.
+- `[Json]`: Serializes/deserializes complex property types to/from JSON using `System.Text.Json`. Pair with `DbType.String`.
+- `[CorrelationToken]`: Marks a property used as a unique correlation token for generated-ID retrieval fallback (populated on INSERT, then queried back to get the DB-generated identity).
+- `Uuid7Optimized`: High-performance, time-sortable IDs (RFC 9562).
