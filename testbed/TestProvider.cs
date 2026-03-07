@@ -2093,20 +2093,16 @@ INSERT INTO {table} (
 
         var dialect = _context.Dialect;
         var idCol = _context.WrapObjectName("id");
-        var tableName = _helper.WrappedTableName;
+
+        // Use BuildRetrieve to scope the query to exactly our inserted rows via
+        // WHERE id IN (...) / WHERE id = ANY(...), then append ORDER BY + paging.
+        // This avoids any dependency on rows inserted by other test steps.
 
         // --- Page 1 (offset 0, limit 3) ---
-        await using var sc1 = _context.CreateSqlContainer();
-        sc1.Query.Append("SELECT ").Append(idCol)
-            .Append(" FROM ").Append(tableName)
-            .Append(" ORDER BY ").Append(idCol);
+        var sc1 = _helper.BuildRetrieve(ids, _context);
+        sc1.Query.Append(" ORDER BY ").Append(idCol);
         dialect.AppendPaging(sc1.Query, offset: 0, limit: pageSize);
-        await using var rdr1 = await sc1.ExecuteReaderAsync();
-        var page1 = new List<long>();
-        while (await rdr1.ReadAsync())
-        {
-            page1.Add(rdr1.GetInt64(0));
-        }
+        var page1 = (await _helper.LoadListAsync(sc1)).Select(r => r.Id).ToList();
 
         if (page1.Count != pageSize)
         {
@@ -2116,18 +2112,11 @@ INSERT INTO {table} (
 
         CheckOk($"[Paging] Page 1 returned {page1.Count} rows as expected");
 
-        // --- Page 2 (offset 3, limit 3) ---
-        await using var sc2 = _context.CreateSqlContainer();
-        sc2.Query.Append("SELECT ").Append(idCol)
-            .Append(" FROM ").Append(tableName)
-            .Append(" ORDER BY ").Append(idCol);
+        // --- Page 2 (offset pageSize, limit pageSize) ---
+        var sc2 = _helper.BuildRetrieve(ids, _context);
+        sc2.Query.Append(" ORDER BY ").Append(idCol);
         dialect.AppendPaging(sc2.Query, offset: pageSize, limit: pageSize);
-        await using var rdr2 = await sc2.ExecuteReaderAsync();
-        var page2 = new List<long>();
-        while (await rdr2.ReadAsync())
-        {
-            page2.Add(rdr2.GetInt64(0));
-        }
+        var page2 = (await _helper.LoadListAsync(sc2)).Select(r => r.Id).ToList();
 
         if (page2.Count != pageSize)
         {
@@ -2145,7 +2134,7 @@ INSERT INTO {table} (
 
         CheckOk("[Paging] Pages 1 and 2 are disjoint");
 
-        // Combined pages must be a subset of the IDs we inserted.
+        // All paged IDs must be from our inserted set.
         var combined = page1.Concat(page2).ToHashSet();
         if (!combined.IsSubsetOf(ids))
         {
@@ -2157,7 +2146,7 @@ INSERT INTO {table} (
         // Clean up the rows we inserted.
         foreach (var id in ids)
         {
-            var sc = _helper.BuildDelete(id);
+            await using var sc = _helper.BuildDelete(id);
             await sc.ExecuteNonQueryAsync();
         }
 

@@ -109,18 +109,10 @@ public class PagingDialectTests
     public void Firebird_SupportsOffsetFetch_IsTrue()
         => Assert.True(Firebird().SupportsOffsetFetch);
 
-    // MySQL version gates
+    // MySQL never supports OFFSET/FETCH — it uses LIMIT/OFFSET across all versions
     [Fact]
-    public void MySql_Pre8_SupportsOffsetFetch_IsFalse()
-        => Assert.False(MySql(new Version(5, 7, 0)).SupportsOffsetFetch);
-
-    [Fact]
-    public void MySql_8_0_22_SupportsOffsetFetch_IsTrue()
-        => Assert.True(MySql(new Version(8, 0, 22)).SupportsOffsetFetch);
-
-    [Fact]
-    public void MySql_9_SupportsOffsetFetch_IsTrue()
-        => Assert.True(MySql(new Version(9, 0, 0)).SupportsOffsetFetch);
+    public void MySql_NeverSupportsOffsetFetch()
+        => Assert.False(MySql(new Version(8, 0, 35)).SupportsOffsetFetch);
 
     [Fact]
     public void MySql_AlwaysSupportsLimitOffset()
@@ -197,17 +189,10 @@ public class PagingDialectTests
     }
 
     [Fact]
-    public void MySql_Pre8_AppendPaging_UsesLimitOffset()
+    public void MySql_AppendPaging_AlwaysUsesLimitOffset()
     {
-        var sql = Paging(MySql(new Version(5, 7, 0)), offset: 10, limit: 20);
+        var sql = Paging(MySql(new Version(8, 0, 35)), offset: 10, limit: 20);
         Assert.Equal(" LIMIT 20 OFFSET 10", sql);
-    }
-
-    [Fact]
-    public void MySql_8_0_22_AppendPaging_UsesOffsetFetch()
-    {
-        var sql = Paging(MySql(new Version(8, 0, 22)), offset: 10, limit: 20);
-        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 20 ROWS ONLY", sql);
     }
 
     [Fact]

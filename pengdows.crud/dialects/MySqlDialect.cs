@@ -140,9 +140,9 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
-    // MySQL 8.0.22+ supports OFFSET/FETCH NEXT; older versions use LIMIT/OFFSET only.
-    // MariaDB overrides this separately at 10.6+.
-    public override bool SupportsOffsetFetch => IsInitialized && IsVersionAtLeast(8, 0, 22);
+    // MySQL uses LIMIT/OFFSET only — it does not support SQL:2008 OFFSET/FETCH NEXT syntax.
+    // MariaDB (a separate fork) added OFFSET/FETCH in 10.6+ and overrides this property.
+    public override bool SupportsOffsetFetch => false;
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
