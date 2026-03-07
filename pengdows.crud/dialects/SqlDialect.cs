@@ -2087,16 +2087,6 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
                $"WHERE {WrapObjectName(correlationTokenColumn)} = {tokenParameterName}";
     }
 
-    /// <summary>
-    /// Generates a natural key lookup query (last resort, requires unique constraints).
-    /// Only safe when the lookup columns have a unique constraint and no data transformation occurs.
-    /// </summary>
-    /// <param name="tableName">The name of the table</param>
-    /// <param name="idColumnName">The name of the identity/ID column</param>
-    /// <param name="columnNames">List of non-identity column names (must have unique constraint)</param>
-    /// <param name="parameterNames">List of parameter names corresponding to the columns</param>
-    /// <returns>SQL query to find the inserted row by natural key</returns>
-    /// <exception cref="InvalidOperationException">Thrown when natural key lookup is unsafe</exception>
     /// <inheritdoc/>
     public virtual bool SupportsOffsetFetch => true;
 
@@ -2106,6 +2096,9 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
     /// <inheritdoc/>
     public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
+        if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
+        if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
+
         if (SupportsOffsetFetch)
         {
             query.Append(" OFFSET ").Append(offset)
@@ -2121,6 +2114,16 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
         }
     }
 
+    /// <summary>
+    /// Generates a natural key lookup query (last resort, requires unique constraints).
+    /// Only safe when the lookup columns have a unique constraint and no data transformation occurs.
+    /// </summary>
+    /// <param name="tableName">The name of the table</param>
+    /// <param name="idColumnName">The name of the identity/ID column</param>
+    /// <param name="columnNames">List of non-identity column names (must have unique constraint)</param>
+    /// <param name="parameterNames">List of parameter names corresponding to the columns</param>
+    /// <returns>SQL query to find the inserted row by natural key</returns>
+    /// <exception cref="InvalidOperationException">Thrown when natural key lookup is unsafe</exception>
     public virtual string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
         IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
     {

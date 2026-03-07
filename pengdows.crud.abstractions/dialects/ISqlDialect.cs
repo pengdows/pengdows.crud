@@ -673,6 +673,9 @@ public interface ISqlDialect
     /// When <paramref name="offset"/> is 0 and the dialect uses LIMIT/OFFSET, the OFFSET
     /// clause is omitted from the generated SQL.
     /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="offset"/> is negative or <paramref name="limit"/> is zero or negative.
+    /// </exception>
     void AppendPaging(ISqlQueryBuilder query, int offset, int limit);
 
     /// <summary>

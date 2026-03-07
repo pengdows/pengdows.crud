@@ -175,11 +175,6 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
-            Console.WriteLine("Running paging");
-            await TestPaging();
-            Console.WriteLine($"  Paging: {stepSw.ElapsedMilliseconds}ms");
-
-            stepSw.Restart();
             Console.WriteLine("Running pool isolation");
             await TestPoolIsolation();
             Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
@@ -1856,7 +1851,11 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Paging: pages overlap on IDs {string.Join(",", overlap)}");
 
-            CheckOk("  [Capabilities] Paging (2 × 5-row pages, no overlap): OK");
+            var allPaged = p1Ids.Concat(page2.Select(r => r.Id)).ToHashSet();
+            if (!allPaged.IsSubsetOf(ids))
+                throw new Exception("[Capabilities] Paging: paged rows contain IDs not inserted by this test");
+
+            CheckOk("  [Capabilities] Paging (2 × 5-row pages, no overlap, IDs in inserted set): OK");
         }
         finally
         {
@@ -2038,77 +2037,6 @@ INSERT INTO {table} (
     /// Base implementation is a no-op; override in dialects that require discriminator-based
     /// pool isolation (e.g., Oracle where ApplicationNameSettingName is not supported).
     /// </summary>
-    protected virtual async Task TestPaging()
-    {
-        const int totalRows = 7;
-        const int pageSize = 3;
-
-        // Insert totalRows rows with known sequential IDs so ORDER BY id is deterministic.
-        var ids = new List<long>(totalRows);
-        for (var i = 0; i < totalRows; i++)
-        {
-            ids.Add(await InsertTestRows());
-        }
-
-        ids.Sort();
-
-        var dialect = _context.Dialect;
-        var idCol = _context.WrapObjectName("id");
-
-        // Use BuildRetrieve to scope the query to exactly our inserted rows via
-        // WHERE id IN (...) / WHERE id = ANY(...), then append ORDER BY + paging.
-        // This avoids any dependency on rows inserted by other test steps.
-
-        // --- Page 1 (offset 0, limit 3) ---
-        var sc1 = _helper.BuildRetrieve(ids, _context);
-        sc1.Query.Append(" ORDER BY ").Append(idCol);
-        dialect.AppendPaging(sc1.Query, offset: 0, limit: pageSize);
-        var page1 = (await _helper.LoadListAsync(sc1)).Select(r => r.Id).ToList();
-
-        if (page1.Count != pageSize)
-        {
-            throw new Exception(
-                $"[Paging] Page 1 expected {pageSize} rows but got {page1.Count}");
-        }
-
-        CheckOk($"[Paging] Page 1 returned {page1.Count} rows as expected");
-
-        // --- Page 2 (offset pageSize, limit pageSize) ---
-        var sc2 = _helper.BuildRetrieve(ids, _context);
-        sc2.Query.Append(" ORDER BY ").Append(idCol);
-        dialect.AppendPaging(sc2.Query, offset: pageSize, limit: pageSize);
-        var page2 = (await _helper.LoadListAsync(sc2)).Select(r => r.Id).ToList();
-
-        if (page2.Count != pageSize)
-        {
-            throw new Exception(
-                $"[Paging] Page 2 expected {pageSize} rows but got {page2.Count}");
-        }
-
-        CheckOk($"[Paging] Page 2 returned {page2.Count} rows as expected");
-
-        // Pages must not overlap.
-        if (page1.Intersect(page2).Any())
-        {
-            throw new Exception("[Paging] Pages 1 and 2 overlap — offset not applied correctly");
-        }
-
-        CheckOk("[Paging] Pages 1 and 2 are disjoint");
-
-        // All paged IDs must be from our inserted set.
-        var combined = page1.Concat(page2).ToHashSet();
-        if (!combined.IsSubsetOf(ids))
-        {
-            throw new Exception("[Paging] Paged rows contain IDs not inserted by this test");
-        }
-
-        CheckOk("[Paging] All paged IDs are from inserted rows");
-
-        // Clean up the rows we inserted.
-        await _helper.DeleteAsync(ids);
-        CheckOk("[Paging] Cleanup complete");
-    }
-
     protected virtual Task TestPoolIsolation() => Task.CompletedTask;
 
     /// <summary>
