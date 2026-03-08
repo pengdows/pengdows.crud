@@ -11,6 +11,8 @@ using pengdows.crud.types;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
 /// <summary>
@@ -18,6 +20,7 @@ namespace CrudBenchmarks.Internal;
 /// Covers both AdvancedTypeRegistry (parameter configuration) and CoercionRegistry (type conversion).
 /// Ensures pengdows.crud maintains or exceeds Dapper performance for type coercion and parameter setup.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 [MarkdownExporter]

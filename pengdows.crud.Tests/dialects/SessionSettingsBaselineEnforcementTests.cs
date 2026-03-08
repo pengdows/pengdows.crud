@@ -46,7 +46,7 @@ public class SessionSettingsBaselineEnforcementTests
         // Must still contain the full baseline, not ""
         Assert.False(string.IsNullOrWhiteSpace(settings),
             "GetBaseSessionSettings must return a non-empty baseline even when cached diff is empty");
-        Assert.Contains("SET standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("client_min_messages", settings, StringComparison.OrdinalIgnoreCase);
     }
 

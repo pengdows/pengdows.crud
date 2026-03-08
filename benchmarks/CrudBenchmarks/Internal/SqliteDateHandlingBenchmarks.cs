@@ -20,6 +20,7 @@ namespace CrudBenchmarks;
 /// Focused SQLite benchmark to understand DateTime handling costs.
 /// Uses a string-backed DATETIME column to reflect SQLite storage behavior.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class SqliteDateHandlingBenchmarks : IDisposable

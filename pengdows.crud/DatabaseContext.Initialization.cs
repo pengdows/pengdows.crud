@@ -713,7 +713,13 @@ public partial class DatabaseContext
         //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration, effectiveApplicationName);
 
-        if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
+        // Strip pooling from the reader connection string only when writes are active.
+        // SingleWriter + ReadOnly is functionally identical to Standard + ReadOnly (no writers
+        // at all), so the reader should use normal pooled connections in that case.
+        // SingleConnection + ReadOnly is rejected earlier in the constructor, so that path
+        // is never reached here.
+        if (ConnectionMode == DbMode.SingleConnection ||
+            (ConnectionMode == DbMode.SingleWriter && _isWriteConnection))
         {
             _readerConnectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
                 _readerConnectionString,
@@ -731,7 +737,7 @@ public partial class DatabaseContext
                 _readerConnectionString,
                 readMaxPoolSize,
                 _dialect.MaxPoolSizeSettingName,
-                false,
+                overrideExisting: true,
                 readerBuilder);
             _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString);
         }
@@ -745,19 +751,40 @@ public partial class DatabaseContext
             WriteApplicationNameSuffix,
             effectiveApplicationName);
 
-        var writeMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
-        if (ConnectionMode == DbMode.SingleWriter)
-        {
-            writeMaxPoolSize = 1;
-        }
-
         var writerBuilder = GetFactoryConnectionStringBuilder(_connectionString);
-        _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
-            _connectionString,
-            writeMaxPoolSize,
-            _dialect?.MaxPoolSizeSettingName,
-            overrideExisting: ConnectionMode == DbMode.SingleWriter,
-            writerBuilder);
+        if (!_isWriteConnection)
+        {
+            // ReadOnly context: writes are forbidden by the governor. When no separate
+            // ReadOnlyConnectionString is configured the reader shares _connectionString,
+            // so stamp the resolved read pool size here — step 2 above was skipped for
+            // equal strings. When a separate read connection string exists this stamps
+            // the read size onto the write string too, which is harmless and keeps it
+            // validated and normalized.
+            var readPoolSizeForWriter = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _connectionString);
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, readPoolSizeForWriter, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
+        else if (ConnectionMode == DbMode.SingleWriter)
+        {
+            // SingleWriter: force the writer pool to exactly 1 to prevent concurrent writes.
+            // Readers use a separate pool (pooling is stripped from the reader connection string),
+            // so only the write slot needs to be sized here.
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, 1, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
+        else
+        {
+            // Standard/KeepAlive: reader and writer always use separate ADO.NET pools
+            // (differentiated via ApplicationName suffix or Connection Timeout delta).
+            // Stamp the resolved write size so the governor and the provider pool agree.
+            // Configuration wins over connection-string, which wins over the dialect default.
+            var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, writeMax, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
 
         if (_dialect != null)
         {
@@ -867,7 +894,13 @@ public partial class DatabaseContext
     /// </summary>
     private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString)
     {
-        // 1. Already present in the connection string?
+        // 1. Caller-supplied configuration — highest priority; wins over anything in the connection string.
+        if (configuredMax.HasValue && configuredMax.Value > 0)
+        {
+            return configuredMax.Value;
+        }
+
+        // 2. Already present in the connection string.
         if (_dialect?.MaxPoolSizeSettingName != null)
         {
             try
@@ -876,16 +909,30 @@ public partial class DatabaseContext
                 if (builder.ContainsKey(_dialect.MaxPoolSizeSettingName))
                 {
                     var raw = builder[_dialect.MaxPoolSizeSettingName];
-                    if (raw is int existing && existing > 0)
-                    {
-                        return existing;
-                    }
+                    int? csValue = raw is int i ? i
+                        : raw != null && int.TryParse(raw.ToString(), out var p) ? p
+                        : null;
 
-                    if (raw != null && int.TryParse(raw.ToString(), out var parsed) && parsed > 0)
+                    if (csValue.HasValue)
                     {
-                        return parsed;
+                        if (csValue.Value < 0)
+                        {
+                            throw new ArgumentOutOfRangeException(
+                                _dialect.MaxPoolSizeSettingName, csValue.Value,
+                                "MaxPoolSize in the connection string must be >= 0. " +
+                                "Use 0 to forbid connections.");
+                        }
+
+                        if (csValue.Value > 0)
+                        {
+                            return csValue.Value;
+                        }
                     }
                 }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                throw;
             }
             catch
             {
@@ -893,13 +940,7 @@ public partial class DatabaseContext
             }
         }
 
-        // 2. Caller-supplied context configuration
-        if (configuredMax.HasValue && configuredMax.Value > 0)
-        {
-            return configuredMax.Value;
-        }
-
-        // 3. Dialect default
+        // 3. Dialect default.
         return _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize;
     }
 
@@ -1744,70 +1785,120 @@ public partial class DatabaseContext
         return ConnectionStringHelper.Create(_factory, input);
     }
 
-    private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
+    /// <summary>
+    /// Returns the <c>CreateDataSource</c> method for <paramref name="parameterType"/> only if
+    /// the provider actually overrides it. Methods inherited directly from
+    /// <see cref="DbProviderFactory"/> (e.g. the base <c>NotSupportedException</c> stub) are
+    /// excluded so we never invoke a no-op and mistake it for provider capability.
+    /// </summary>
+    private static MethodInfo? FindProviderCreateDataSourceMethod(Type factoryType, Type parameterType)
     {
-        DbDataSource? nativeDataSource = null;
+        var method = factoryType.GetMethod("CreateDataSource", new[] { parameterType });
+        if (method == null || method.DeclaringType == typeof(DbProviderFactory))
+            return null;
+
+        return method;
+    }
+
+    /// <summary>
+    /// Attempts to obtain a provider-native <see cref="DbDataSource"/> by reflecting on the
+    /// factory. Returns <c>null</c> on all failure paths — callers should fall back to
+    /// <see cref="CreateGenericFallbackDataSource"/>.
+    /// <para>
+    /// Probe order: <c>string</c> overload first (avoids builder round-trip canonicalization),
+    /// then <c>DbConnectionStringBuilder</c> overload.
+    /// </para>
+    /// </summary>
+    private DbDataSource? TryCreateProviderDataSource(DbProviderFactory factory, string connectionString)
+    {
+        var factoryType = factory.GetType();
         try
         {
-            var factoryType = factory.GetType();
-            
-            // Priority 1: Check for DbConnectionStringBuilder overload
-            var dataSourceMethod =
-                factoryType.GetMethod("CreateDataSource", new[] { typeof(DbConnectionStringBuilder) });
-            if (dataSourceMethod != null)
+            // Priority 1: string overload — preferred because it avoids builder round-trip
+            // canonicalization that can drop or reorder provider-specific keys.
+            var stringMethod = FindProviderCreateDataSourceMethod(factoryType, typeof(string));
+            if (stringMethod != null)
+            {
+                if (stringMethod.Invoke(factory, new object?[] { connectionString }) is DbDataSource ds)
+                    return ds;
+            }
+
+            // Priority 2: DbConnectionStringBuilder overload — some providers only expose this.
+            var builderMethod = FindProviderCreateDataSourceMethod(factoryType, typeof(DbConnectionStringBuilder));
+            if (builderMethod != null)
             {
                 var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
                 builder.ConnectionString = connectionString;
-                nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { builder }) as DbDataSource;
+                if (builderMethod.Invoke(factory, new object?[] { builder }) is DbDataSource ds)
+                    return ds;
             }
 
-            // Priority 2: Check for string overload
-            if (nativeDataSource == null)
-            {
-                dataSourceMethod = factoryType.GetMethod("CreateDataSource", new[] { typeof(string) });
-                if (dataSourceMethod != null && dataSourceMethod.DeclaringType != typeof(DbProviderFactory))
-                {
-                    nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { connectionString }) as DbDataSource;
-                }
-            }
-
-            if (nativeDataSource != null)
-            {
-                var isProviderSpecific = nativeDataSource.GetType().Assembly != typeof(DbDataSource).Assembly;
-                _logger.LogInformation("Using {SourceType} DbDataSource from provider factory: {FactoryType}",
-                    isProviderSpecific ? "provider-specific" : "generic",
-                    factoryType.FullName);
-                
-                return nativeDataSource;
-            }
+            return null;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is NotSupportedException)
+        {
+            // Provider explicitly opts out of the DataSource pattern.
+            _logger.LogDebug(
+                "Provider {FactoryType} explicitly does not support DbDataSource.",
+                factoryType.FullName);
+            return null;
         }
         catch (Exception ex)
         {
-            // TargetInvocationException wrapping NotSupportedException = provider explicitly
-            // opts out of the DataSource pattern — fall through to GenericDbDataSource silently.
-            if (ex is System.Reflection.TargetInvocationException tie && tie.InnerException is NotSupportedException)
-            {
-                _logger.LogDebug("Provider {FactoryType} does not support DbDataSource; using generic wrapper.",
-                    factory.GetType().FullName);
-                return null;
-            }
-
-            // Any other exception is unexpected — warn so it can be investigated, but still
-            // fall through to GenericDbDataSource rather than failing context construction.
-            _logger.LogWarning(ex, "Unexpected exception probing for DbDataSource on {FactoryType}; falling back to generic wrapper.",
-                factory.GetType().FullName);
-        }
-
-        // Fallback: Use our own wrapper so the rest of the framework can always use the DataSource path.
-        // We only skip this if the factory is a ThrowingDataSourceFactory (used in tests to explicitly test null).
-        var typeName = factory.GetType().FullName ?? string.Empty;
-        if (typeName.Contains("ThrowingDataSourceFactory") || typeName.Contains("ThrowingFactory"))
-        {
+            // Unexpected failure during probe — log at debug because fallback is always attempted.
+            // A warning would be misleading since the context may still function correctly.
+            _logger.LogDebug(
+                ex,
+                "Failed probing provider-native DbDataSource support for {FactoryType}.",
+                factoryType.FullName);
             return null;
         }
+    }
 
-        _logger.LogDebug("Creating GenericDbDataSource wrapper for {FactoryType}", factory.GetType().FullName);
-        return new GenericDbDataSource(factory, connectionString);
+    /// <summary>
+    /// Creates the <see cref="GenericDbDataSource"/> fallback wrapper.
+    /// Overridable in tests to return <c>null</c> or a substitute without type-name sniffing.
+    /// </summary>
+    internal virtual DbDataSource? CreateGenericFallbackDataSource(DbProviderFactory factory, string connectionString)
+        => new GenericDbDataSource(factory, connectionString);
+
+    /// <summary>
+    /// Resolves the best available <see cref="DbDataSource"/> for <paramref name="factory"/>:
+    /// <list type="number">
+    ///   <item>Provider-native data source (via reflected <c>CreateDataSource</c> override).</item>
+    ///   <item><see cref="GenericDbDataSource"/> wrapper so the rest of the framework can always
+    ///         use the DataSource path uniformly.</item>
+    /// </list>
+    /// Returns <c>null</c> only if both paths fail.
+    /// </summary>
+    private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
+    {
+        var nativeDataSource = TryCreateProviderDataSource(factory, connectionString);
+        if (nativeDataSource != null)
+        {
+            var isProviderSpecific = nativeDataSource.GetType().Assembly != typeof(DbDataSource).Assembly;
+            _logger.LogInformation(
+                "Using {SourceType} DbDataSource from provider factory: {FactoryType}",
+                isProviderSpecific ? "provider-specific" : "generic",
+                factory.GetType().FullName);
+            return nativeDataSource;
+        }
+
+        try
+        {
+            _logger.LogDebug(
+                "Creating GenericDbDataSource wrapper for {FactoryType}",
+                factory.GetType().FullName);
+            return CreateGenericFallbackDataSource(factory, connectionString);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed creating GenericDbDataSource wrapper for {FactoryType}; DataSource path unavailable.",
+                factory.GetType().FullName);
+            return null;
+        }
     }
 
     /// <inheritdoc />

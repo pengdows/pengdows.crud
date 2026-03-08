@@ -5,8 +5,11 @@ using BenchmarkDotNet.Attributes;
 using pengdows.crud;
 using pengdows.crud.@internal;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 public class ConnectionStringNormalizationBenchmarks
 {

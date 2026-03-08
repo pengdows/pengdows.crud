@@ -13,12 +13,15 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
 /// <summary>
 /// Benchmarks for the performance optimizations implemented in Round 1 and Round 2.
 /// Measures actual performance gains of optimizations vs baseline implementations.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class PerformanceOptimizationBenchmarks

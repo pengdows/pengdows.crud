@@ -274,8 +274,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new NpgsqlConnection(_connStr);
-            await conn.OpenAsync();
+            await using var conn = await GetDapperEqualConnection();
             count += await conn.ExecuteAsync(sql, new
             {
                 Name = $"Created {i}", Age = 25, Salary = 50000.0,
@@ -331,8 +330,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new NpgsqlConnection(_connStr);
-            await conn.OpenAsync();
+            await using var conn = await GetDapperEqualConnection();
             result = await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
                 sql, new { Id = (i % SeedRows) + 1 });
         }
@@ -374,8 +372,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
-        await using var conn = new NpgsqlConnection(_connStr);
-        await conn.OpenAsync();
+        await using var conn = await GetDapperEqualConnection();
         var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { Age = 30, Limit = RecordCount });
         return rows.ToList();
@@ -424,8 +421,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new NpgsqlConnection(_connStr);
-            await conn.OpenAsync();
+            await using var conn = await GetDapperEqualConnection();
             count += await conn.ExecuteAsync(sql,
                 new { Salary = 60000.0 + i, Id = (i % SeedRows) + 1 });
         }
@@ -487,8 +483,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
             {
-                await using var conn = new NpgsqlConnection(_connStr);
-                await conn.OpenAsync();
+                await using var conn = await GetDapperEqualConnection();
                 await conn.ExecuteAsync(insertSql, new
                 {
                     Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
@@ -496,8 +491,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
                 });
             }
             {
-                await using var conn = new NpgsqlConnection(_connStr);
-                await conn.OpenAsync();
+                await using var conn = await GetDapperEqualConnection();
                 count += await conn.ExecuteAsync(deleteSql, new { Id = id });
             }
         }
@@ -552,8 +546,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
-        await using var conn = new NpgsqlConnection(_connStr);
-        await conn.OpenAsync();
+        await using var conn = await GetDapperEqualConnection();
         var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
         return rows.ToList();
@@ -599,8 +592,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new NpgsqlConnection(_connStr);
-            await conn.OpenAsync();
+            await using var conn = await GetDapperEqualConnection();
             result = await conn.ExecuteScalarAsync<double>(
                 "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
         }
@@ -674,14 +666,40 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             buildTicks += sw.ElapsedTicks;
 
             sw.Restart();
-            await using var conn = new NpgsqlConnection(_connStr);
-            await conn.OpenAsync();
+            await using var conn = await GetDapperEqualConnection();
             await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(sql, param);
+            await conn.CloseAsync();
             sw.Stop();
             executeTicks += sw.ElapsedTicks;
         }
 
         return (buildTicks, executeTicks);
+    }
+
+    /// <summary>
+    /// Opens an Npgsql connection and applies the same session settings that
+    /// pengdows.crud injects on every connection checkout. Without this, Dapper
+    /// benchmarks skip a round-trip that pengdows.crud always pays, making the
+    /// comparison unfair.
+    /// </summary>
+    private async Task<NpgsqlConnection> GetDapperEqualConnection()
+    {
+        NpgsqlConnection? conn = null;
+        try
+        {
+            conn = new NpgsqlConnection(_connStr);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET default_transaction_read_only = off;";
+            await cmd.ExecuteNonQueryAsync();
+            return conn;
+        }
+        catch
+        {
+            if (conn != null) await conn.DisposeAsync();
+            throw;
+        }
     }
 
     [Benchmark]
@@ -733,8 +751,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     public async Task<long> ConnectionHoldTime_Dapper()
     {
         var sw = Stopwatch.StartNew();
-        await using var conn = new NpgsqlConnection(_connStr);
-        await conn.OpenAsync();
+        await using var conn = await GetDapperEqualConnection();
         await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
             new { Id = 1 });

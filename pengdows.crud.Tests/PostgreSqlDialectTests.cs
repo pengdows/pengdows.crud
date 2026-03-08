@@ -340,8 +340,8 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
 
         Assert.NotEmpty(settings);
-        Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("client_min_messages = warning", settings);
+        Assert.Contains("standard_conforming_strings", settings);
+        Assert.Contains("client_min_messages", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 
@@ -355,7 +355,7 @@ public class PostgreSqlDialectTests
 
         Assert.NotEmpty(settings);
         Assert.Contains("SET default_transaction_read_only = on;", settings);
-        Assert.Contains("SET standard_conforming_strings = on", settings);
+        Assert.Contains("standard_conforming_strings", settings);
     }
 
     [Fact]
@@ -569,8 +569,8 @@ public class PostgreSqlDialectTests
     {
         var settings = _dialect.GetBaseSessionSettings();
 
-        Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("client_min_messages = warning", settings);
+        Assert.Contains("standard_conforming_strings", settings);
+        Assert.Contains("client_min_messages", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 

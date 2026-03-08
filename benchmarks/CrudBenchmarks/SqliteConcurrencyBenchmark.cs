@@ -40,9 +40,8 @@ public class SqliteConcurrencyBenchmark
     private long _efCoreSuccessCount;
     private long _efCoreErrorCount;
 
-    [Params(100)] public int Operations;
-
-    [Params(16)] public int Parallelism;
+    private const int Operations = 100;
+    private const int Parallelism = 16;
 
     [GlobalSetup]
     public void GlobalSetup()

@@ -79,7 +79,7 @@ public class fakeDbCommand : DbCommand
         {
             var trimmed = CommandText.TrimStart();
             var upper = trimmed.ToUpperInvariant();
-            if (upper.StartsWith("SET ") || upper.StartsWith("PRAGMA ") || upper.Contains("ALTER SESSION SET"))
+            if (upper.StartsWith("SET ") || upper.StartsWith("PRAGMA ") || upper.Contains("ALTER SESSION SET") || upper.StartsWith("SELECT SET_CONFIG("))
             {
                 if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
                 {

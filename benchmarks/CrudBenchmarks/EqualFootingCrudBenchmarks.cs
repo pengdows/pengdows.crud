@@ -71,7 +71,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    [Params(1, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN

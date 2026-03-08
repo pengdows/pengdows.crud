@@ -36,6 +36,7 @@ namespace CrudBenchmarks;
 ///   2. Plan cache bifurcation: 2 distinct set_options bitmasks in sys.dm_exec_cached_plans
 ///   3. Performance comparison: pengdows vs Dapper vs EF on full aggregate queries
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
@@ -54,7 +55,7 @@ public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
 
     [Params(5000, 10000)] public int CustomerCount;
 
-    [Params(50)] public int OrdersPerCustomer;
+    private const int OrdersPerCustomer = 50;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -408,6 +409,7 @@ public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
 /// Compares materialized-view look-ups (pre-computed) against live table-scan
 /// GROUP BY queries across pengdows.crud, Dapper, and Entity Framework.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
@@ -450,11 +452,9 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 
     [Params(2000, 5000)] public int CustomerCount;
 
-    [Params(15)] public int OrdersPerCustomer;
-
-    [Params(16)] public int Parallelism;
-
-    [Params(64)] public int OperationsPerRun;
+    private const int OrdersPerCustomer = 15;
+    private const int Parallelism = 16;
+    private const int OperationsPerRun = 64;
 
     [GlobalSetup]
     public async Task GlobalSetup()

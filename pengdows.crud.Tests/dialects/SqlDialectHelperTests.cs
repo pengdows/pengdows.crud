@@ -66,8 +66,8 @@ public class SqlDialectHelperTests
             CallSessionSettingsResult(dialect, "GetPostgreSqlSessionSettings", connection);
 
         Assert.False(usedFallback);
-        Assert.Contains("SET standard_conforming_strings = on", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("client_min_messages = warning", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages", settings, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

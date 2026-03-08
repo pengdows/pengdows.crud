@@ -61,7 +61,15 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    // pengdows.crud — SingleConnection mode (shared persistent connection).
+    // Eliminates open/close overhead per operation — isolates the coercion cost
+    // by putting pengdows on equal footing with a dedicated DuckDB connection.
+    private DatabaseContext _pengdowsSingleCtx = null!;
+    private TableGateway<DuckBenchEntity, int> _singleGateway = null!;
+    private ISqlContainer _readSingleScSingle = null!;
+    private ISqlContainer _readListScSingle = null!;
+
+    [Params(1, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN
@@ -114,18 +122,35 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         _pengdowsCtx = new DatabaseContext(cfg, DuckDBClientFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<DuckBenchEntity, int>(_pengdowsCtx);
 
+        // SingleConnection: shared persistent connection — eliminates open/close + session overhead.
+        var cfgSingle = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={_dbFile}",
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleConnection
+        };
+        _pengdowsSingleCtx = new DatabaseContext(cfgSingle, DuckDBClientFactory.Instance, null, _typeMap);
+        _singleGateway = new TableGateway<DuckBenchEntity, int>(_pengdowsSingleCtx);
+
         // Build reusable containers once using TableGateway's SQL generation.
         // SQL is dialect-aware and cached; SetParameterValue updates values in-place
         // each iteration with zero SQL re-generation.
         // RecordCount is set by BDN before GlobalSetup runs (one setup per Params combination).
 
         _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
+        _readSingleScSingle = _singleGateway.BuildRetrieve(new[] { 1 });
 
         _readListSc = _gateway.BuildBaseRetrieve("b");
         _readListSc.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.age")} > ");
         _readListSc.Query.Append(_readListSc.MakeParameterName("Age"));
         _readListSc.AddParameterWithValue("Age", DbType.Int32, 0);
         _readListSc.Query.Append($" LIMIT {RecordCount}");
+
+        _readListScSingle = _singleGateway.BuildBaseRetrieve("b");
+        _readListScSingle.Query.Append($" WHERE {_pengdowsSingleCtx.WrapObjectName("b.age")} > ");
+        _readListScSingle.Query.Append(_readListScSingle.MakeParameterName("Age"));
+        _readListScSingle.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListScSingle.Query.Append($" LIMIT {RecordCount}");
 
         _filteredQuerySc = _gateway.BuildBaseRetrieve("b");
         _filteredQuerySc.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.is_active")} = ");
@@ -169,12 +194,15 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
         _readSingleSc?.Dispose();
         _readListSc?.Dispose();
+        _readSingleScSingle?.Dispose();
+        _readListScSingle?.Dispose();
         _filteredQuerySc?.Dispose();
         _updateSc?.Dispose();
         _deleteSc?.Dispose();
         _aggregateSc?.Dispose();
 
         _pengdowsCtx?.Dispose();
+        _pengdowsSingleCtx?.Dispose();
 
         foreach (var f in new[] { _dbFile, _dbFile + ".wal" })
         {
@@ -270,6 +298,24 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// pengdows.crud SingleConnection — shared persistent connection, no open/close per op.
+    /// Isolates the type-coercion cost by eliminating connection overhead from the measurement.
+    /// Compare ratio (SingleConnection/Dapper) vs (Standard/Dapper) to quantify coercion impact.
+    /// </summary>
+    [Benchmark]
+    public async Task<DuckBenchEntity?> ReadSingle_Pengdows_SingleConnection()
+    {
+        DuckBenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            _readSingleScSingle.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _singleGateway.LoadSingleAsync(_readSingleScSingle);
+        }
+
+        return result;
+    }
+
     // ========================================================================
     // READ LIST BENCHMARKS
     // ========================================================================
@@ -290,6 +336,16 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > $Age LIMIT {RecordCount}",
             new { Age = 30 });
         return rows.AsList();
+    }
+
+    /// <summary>
+    /// pengdows.crud SingleConnection list read — shared persistent connection.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> ReadList_Pengdows_SingleConnection()
+    {
+        _readListScSingle.SetParameterValue("Age", 30);
+        return await _singleGateway.LoadListAsync(_readListScSingle);
     }
 
     // ========================================================================

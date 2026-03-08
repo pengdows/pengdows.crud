@@ -77,7 +77,7 @@ public class SessionSettingsEnforcementTests
         // Assert - session settings applied to at least one connection
         // (first connection may be probe, actual work connection gets settings)
         Assert.Contains(factory.CreatedConnections, conn =>
-            conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+            conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")));
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class SessionSettingsEnforcementTests
         // (first connection may be constructor probe, second is the actual working connection)
         var allExecuted = factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryTexts).ToList();
         Assert.NotEmpty(allExecuted);
-        Assert.Contains(allExecuted, cmd => cmd.StartsWith("SET "));
+        Assert.Contains(allExecuted, cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config("));
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public class SessionSettingsEnforcementTests
         // Assert - At least one connection should have session settings applied
         Assert.NotEmpty(factory.CreatedConnections);
         Assert.Contains(factory.CreatedConnections,
-            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")));
     }
 
     [Fact]
@@ -315,7 +315,7 @@ public class SessionSettingsEnforcementTests
 
         // Assert - Session settings MUST be applied to at least one connection
         var allCommands = factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryTexts).ToList();
-        Assert.True(allCommands.Any(cmd => cmd.StartsWith("SET ")),
+        Assert.True(allCommands.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")),
             $"Session settings were NOT applied for DbMode.{mode}. This is a critical regression!");
     }
 

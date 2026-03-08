@@ -13,8 +13,11 @@ using Dapper;
 // Uses FakeDb to isolate from external DB dependency while ensuring
 // each framework uses its OWN native infrastructure for fair comparison
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class IsolationBenchmarks

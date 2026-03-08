@@ -67,7 +67,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     private int _errorLogCount;
     private string _currentScenario = string.Empty;
 
-    [Params(2000)] public int OperationsPerRun;
+    private const int OperationsPerRun = 2000;
     [Params(32, 64, 128, 256)] public int Parallelism;
     [Params(MySqlBenchmarkProvider.MySqlData, MySqlBenchmarkProvider.MySqlConnector)]
     public MySqlBenchmarkProvider Provider;

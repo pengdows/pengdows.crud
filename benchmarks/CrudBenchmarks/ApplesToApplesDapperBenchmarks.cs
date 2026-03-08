@@ -53,7 +53,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
     private int _idSeed;
     private string? _fieldTypeDump;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    [Params(1, 100)] public int RecordCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()

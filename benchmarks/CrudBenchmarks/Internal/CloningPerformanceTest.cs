@@ -7,8 +7,11 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class CloningPerformanceTest

@@ -109,13 +109,13 @@ public class DatabaseContextConnectionTests
         context.ExecuteSessionSettings(connection, false);
         Assert.Single(connection.ExecutedStatements);
 
-        // Second call should NOT be skipped because we always apply baseline settings on every lease
-        // to ensure deterministic state even in a shared pool.
+        // Second call on the same connection must also apply — zero-trust policy: we cannot
+        // guarantee without a round-trip that a pooled connection's session hasn't been reset.
         connection.ExecutedStatements.Clear();
         context.ExecuteSessionSettings(connection, false);
         Assert.Single(connection.ExecutedStatements);
-        
-        // A DIFFERENT physical connection should also get initialized
+
+        // A different physical connection also gets settings applied
         var connection2 = new CapturingConnection();
         context.ExecuteSessionSettings(connection2, false);
         Assert.Single(connection2.ExecutedStatements);

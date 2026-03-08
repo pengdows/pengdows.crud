@@ -8,8 +8,11 @@ using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class TableGatewayClientOnlyBenchmarks

@@ -36,7 +36,7 @@ public class DatabaseContextLoggingTests
         ctx.ExecuteSessionSettings(good, false);
 
         Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Information &&
+            e => e.Level == LogLevel.Debug &&
                  e.Message.Contains("Applying session settings"));
 
         // Now simulate failure on command to hit error path

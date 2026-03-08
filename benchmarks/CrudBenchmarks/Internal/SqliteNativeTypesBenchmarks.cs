@@ -7,6 +7,8 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
 /// <summary>
@@ -33,6 +35,7 @@ namespace CrudBenchmarks.Internal;
 /// Recommended: run with [Params(1000)] to minimise fixed overhead and reveal
 /// per-row marginal cost.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
 public class SqliteNativeTypesBenchmarks : IDisposable
