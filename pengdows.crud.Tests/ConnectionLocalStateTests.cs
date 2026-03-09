@@ -1,4 +1,5 @@
-using pengdows.crud.connection;
+using pengdows.crud.fakeDb;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -8,10 +9,9 @@ public class ConnectionLocalStateTests
     [Fact]
     public void Reset_ClearsPreparedShape_AndKeepsDisableFlag()
     {
-        var state = new ConnectionLocalState
-        {
-            PrepareDisabled = true
-        };
+        using var stateOwner = new TrackedConnection(new fakeDbConnection());
+        var state = stateOwner.LocalState;
+        state.DisablePrepare();
 
         var sql = "SELECT 1";
         Assert.False(state.IsAlreadyPreparedForShape(sql));
@@ -29,7 +29,8 @@ public class ConnectionLocalStateTests
     [Fact]
     public void MarkShapePrepared_ReturnsFalse_WhenShapeAlreadyTracked()
     {
-        var state = new ConnectionLocalState();
+        using var stateOwner = new TrackedConnection(new fakeDbConnection());
+        var state = stateOwner.LocalState;
         var (addedFirst, evictedFirst) = state.MarkShapePrepared("SELECT 1");
         Assert.True(addedFirst);
         Assert.Equal(0, evictedFirst);
@@ -44,7 +45,8 @@ public class ConnectionLocalStateTests
     {
         // Add more than the _maxPrepared (32) distinct shapes.
         // The cache must cap itself so oldest entries are evicted to make room.
-        var state = new ConnectionLocalState();
+        using var stateOwner = new TrackedConnection(new fakeDbConnection());
+        var state = stateOwner.LocalState;
         var total = 40;
 
         for (var i = 0; i < total; i++)

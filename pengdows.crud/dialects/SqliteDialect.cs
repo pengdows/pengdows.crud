@@ -106,6 +106,20 @@ internal class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
     }
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        if (readOnly)
+        {
+            // PRAGMA journal_mode = WAL requires write access to the database file header.
+            // Connections opened with Mode=ReadOnly cannot execute it — WAL was already
+            // established by the first write connection and persists at the file level.
+            // PRAGMA foreign_keys is a session memory flag that works fine on read-only connections.
+            return "PRAGMA foreign_keys = ON;";
+        }
+
+        return base.GetConnectionSessionSettings(context, readOnly);
+    }
+
     // Read-only enforcement for SQLite uses Mode=ReadOnly in the connection string (see
     // GetReadOnlyConnectionString and ApplyConnectionSettingsCore), which opens the database
     // file read-only at the OS level. This is stronger and more reliable than PRAGMA query_only,

@@ -42,7 +42,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string ScenarioPoolExhaustion = "PoolExhaustion";
     private const string ScenarioWriteStorm = "WriteStorm";
-    private const string ScenarioMixedOps = "MixedOps";
     private const string ScenarioSustainedPressure = "SustainedPressure";
     private const string ScenarioConnectionHoldTime = "ConnectionHoldTime";
 
@@ -58,17 +57,9 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                                            SELECT id, value FROM stress_test WHERE id = {id}
                                            """;
 
-    private const string InsertSqlTemplate = """
-                                             INSERT INTO stress_test (value) VALUES ({value})
-                                             """;
-
     private const string UpdateSqlTemplate = """
                                              UPDATE stress_test SET value = {value} WHERE id = {id}
                                              """;
-
-    private const string ListSqlTemplate = """
-                                           SELECT id, value FROM stress_test WHERE value > {min}
-                                           """;
 
     private static string BusyTimeoutSql => $"PRAGMA busy_timeout={BusyTimeoutMs};";
 
@@ -368,232 +359,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     }
 
     // ============================================================================
-    // TEST 3: Mixed Operations (50 concurrent, random read/create/update/list)
-    // ============================================================================
-
-    [Benchmark]
-    public async Task MixedOps_Pengdows()
-    {
-        var tasks = new List<Task>();
-        var random = new Random(42);
-
-        for (int i = 0; i < HighConcurrency; i++)
-        {
-            var operation = random.Next(4);
-            tasks.Add(Task.Run(async () =>
-            {
-                switch (operation)
-                {
-                    case 0: // Read
-                    {
-                        await using var container = _pengdowsContext.CreateSqlContainer();
-                        await ApplyBusyTimeoutAsync(container);
-                        var sql = BuildReadSql(param => container.MakeParameterName(param));
-                        container.Query.Append(sql);
-                        container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
-                        var entity = await _pengdowsHelper.LoadSingleAsync(container);
-                        if (entity == null)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, "Read returned null");
-                        }
-                        break;
-                    }
-                    case 1: // Create
-                    {
-                        await using var container = _pengdowsContext.CreateSqlContainer();
-                        await ApplyBusyTimeoutAsync(container);
-                        var sql = BuildInsertSql(param => container.MakeParameterName(param));
-                        container.Query.Append(sql);
-                        container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
-                        var affected = await container.ExecuteNonQueryAsync();
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 2: // Update
-                    {
-                        await using var container = _pengdowsContext.CreateSqlContainer();
-                        await ApplyBusyTimeoutAsync(container);
-                        var sql = BuildUpdateSql(param => container.MakeParameterName(param));
-                        container.Query.Append(sql);
-                        container.AddParameterWithValue("value", DbType.Int32, Random.Shared.Next());
-                        container.AddParameterWithValue("id", DbType.Int32, Random.Shared.Next(1, 100));
-                        var affected = await container.ExecuteNonQueryAsync();
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 3: // List
-                    {
-                        await using var container = _pengdowsContext.CreateSqlContainer();
-                        await ApplyBusyTimeoutAsync(container);
-                        var sql = BuildListSql(param => container.MakeParameterName(param));
-                        container.Query.Append(sql);
-                        container.AddParameterWithValue("min", DbType.Int32, Random.Shared.Next(50));
-                        var rows = await _pengdowsHelper.LoadListAsync(container);
-                        if (rows.Count == 0)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkPengdows, "List query returned zero rows");
-                        }
-                        break;
-                    }
-                }
-            }));
-        }
-
-        await Task.WhenAll(tasks);
-    }
-
-    [Benchmark]
-    public async Task MixedOps_Dapper()
-    {
-        var tasks = new List<Task>();
-        var random = new Random(42);
-
-        for (int i = 0; i < HighConcurrency; i++)
-        {
-            var operation = random.Next(4);
-            tasks.Add(Task.Run(async () =>
-            {
-                await using var conn = new SqliteConnection(_connectionString);
-                await conn.OpenAsync();
-                await ApplyBusyTimeoutAsync(conn);
-
-                switch (operation)
-                {
-                    case 0:
-                    {
-                        var sql = BuildReadSql(param => $"@{param}");
-                        var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql,
-                            new { id = Random.Shared.Next(1, 100) });
-                        if (entity == null)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, "Read returned null");
-                        }
-                        break;
-                    }
-                    case 1:
-                    {
-                        var sql = BuildInsertSql(param => $"@{param}");
-                        var affected = await conn.ExecuteAsync(sql, new { value = Random.Shared.Next() });
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 2:
-                    {
-                        var sql = BuildUpdateSql(param => $"@{param}");
-                        var affected = await conn.ExecuteAsync(sql,
-                            new { id = Random.Shared.Next(1, 100), value = Random.Shared.Next() });
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 3:
-                    {
-                        var sql = BuildListSql(param => $"@{param}");
-                        var rows = (await conn.QueryAsync<PoolProtectEntity>(sql, new { min = Random.Shared.Next(50) }))
-                            .AsList();
-                        if (rows.Count == 0)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkDapper, "List query returned zero rows");
-                        }
-                        break;
-                    }
-                }
-            }));
-        }
-
-        await Task.WhenAll(tasks);
-    }
-
-    [Benchmark]
-    public async Task MixedOps_EntityFramework()
-    {
-        var tasks = new List<Task>();
-        var random = new Random(42);
-
-        for (int i = 0; i < HighConcurrency; i++)
-        {
-            var operation = random.Next(4);
-            tasks.Add(Task.Run(async () =>
-            {
-                await using var context = new EfPoolProtectContext(_efOptions);
-                await context.Database.OpenConnectionAsync();
-                await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
-
-                switch (operation)
-                {
-                    case 0:
-                    {
-                        var sql = BuildReadSql(param => $"@{param}");
-                        var entity = await context.Entities
-                            .FromSqlRaw(sql, new SqliteParameter("id", Random.Shared.Next(1, 100)))
-                            .AsNoTracking()
-                            .FirstOrDefaultAsync();
-                        if (entity == null)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework, "Read returned null");
-                        }
-                        break;
-                    }
-                    case 1:
-                    {
-                        var sql = BuildInsertSql(param => $"@{param}");
-                        var affected = await context.Database.ExecuteSqlRawAsync(
-                            sql,
-                            new SqliteParameter("value", Random.Shared.Next()));
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework,
-                                $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 2:
-                    {
-                        var sql = BuildUpdateSql(param => $"@{param}");
-                        var affected = await context.Database.ExecuteSqlRawAsync(
-                            sql,
-                            new SqliteParameter("value", Random.Shared.Next()),
-                            new SqliteParameter("id", Random.Shared.Next(1, 100)));
-                        if (affected != 1)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework,
-                                $"Expected 1 row affected, got {affected}");
-                        }
-                        break;
-                    }
-                    case 3:
-                    {
-                        var sql = BuildListSql(param => $"@{param}");
-                        var rows = await context.Entities
-                            .FromSqlRaw(sql, new SqliteParameter("min", Random.Shared.Next(50)))
-                            .AsNoTracking()
-                            .ToListAsync();
-                        if (rows.Count == 0)
-                        {
-                            MarkInvalid(ScenarioMixedOps, FrameworkEntityFramework, "List query returned zero rows");
-                        }
-                        break;
-                    }
-                }
-            }));
-        }
-
-        await Task.WhenAll(tasks);
-    }
-
-    // ============================================================================
-    // TEST 4: Sustained Pressure (100 sequential-async reads)
+    // TEST 3: Sustained Pressure (100 sequential-async reads)
     // ============================================================================
 
     [Benchmark]
@@ -652,7 +418,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     }
 
     // ============================================================================
-    // TEST 5: Connection Hold Time (measures actual elapsed time per operation)
+    // TEST 4: Connection Hold Time (measures actual elapsed time per operation)
     // ============================================================================
 
     [Benchmark]
@@ -752,21 +518,11 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         return ReadSqlTemplate.Replace("{id}", param("id"));
     }
 
-    private static string BuildInsertSql(Func<string, string> param)
-    {
-        return InsertSqlTemplate.Replace("{value}", param("value"));
-    }
-
     private static string BuildUpdateSql(Func<string, string> param)
     {
         return UpdateSqlTemplate
             .Replace("{value}", param("value"))
             .Replace("{id}", param("id"));
-    }
-
-    private static string BuildListSql(Func<string, string> param)
-    {
-        return ListSqlTemplate.Replace("{min}", param("min"));
     }
 
     private static async Task ApplyBusyTimeoutAsync(ISqlContainer container)

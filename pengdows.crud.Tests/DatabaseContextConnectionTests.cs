@@ -188,10 +188,9 @@ public class DatabaseContextConnectionTests
 
         // Wire up the onFirstOpen callback to call ExecuteSessionSettings — mirrors the production
         // path in FactoryCreateConnection where the firstOpenHandler delegates to ExecuteSessionSettings.
-        TrackedConnection? tracked = null;
-        tracked = new TrackedConnection(
+        using var tracked = new TrackedConnection(
             connection,
-            onFirstOpen: conn => context.ExecuteSessionSettings(tracked!, false));
+            onFirstOpen: tc => context.ExecuteSessionSettings(tc, false));
 
         // OpenAsync triggers TriggerFirstOpen → onFirstOpen → ExecuteSessionSettings (sync, but
         // reached via the async open path). The command failure is swallowed; applied = false.

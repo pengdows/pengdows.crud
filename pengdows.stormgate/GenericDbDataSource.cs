@@ -36,6 +36,7 @@ internal sealed class GenericDbDataSource : DbDataSource
     protected override void Dispose(bool disposing)
     {
         // No owned resources.
+        // Note: _factory is not disposed here as it is owned by the caller (typically a static singleton).
     }
 
     protected override ValueTask DisposeAsyncCore() => ValueTask.CompletedTask;

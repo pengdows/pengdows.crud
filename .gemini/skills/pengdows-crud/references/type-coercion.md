@@ -94,11 +94,13 @@ public UserSettings Settings { get; set; }
 pengdows.crud allows custom type conversion logic:
 
 ```csharp
-// Register custom converter in TypeMapRegistry
-typeMap.RegisterConverter<CustomType>(
-    toDb: value => value.ToString(),
-    fromDb: dbValue => CustomType.Parse((string)dbValue)
-);
+var registry = new AdvancedTypeRegistry();
+registry.RegisterConverter(new CustomTypeConverter());
+
+// Register provider-specific mapping when needed
+registry.RegisterMapping<CustomType>(
+    SupportedDatabase.PostgreSql,
+    new ProviderTypeMapping(DbType.String));
 ```
 
 ## Best Practices

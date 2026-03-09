@@ -1,73 +1,99 @@
-# Testing with `pengdows.crud`
+# Testing with fakeDb
 
-`pengdows.crud` is designed for high testability.
+`pengdows.crud.fakeDb` provides a fake ADO.NET provider for fast unit tests without a real database.
 
-## Unit Testing with `fakeDb`
+## Test Stack
 
-`pengdows.crud.fakeDb` provides a mock ADO.NET provider for fast, isolated unit tests.
+- Framework: xUnit (`[Fact]`, `[Theory]`)
+- Preferred provider for unit tests: `pengdows.crud.fakeDb`
+- Integration verification: `testbed/` and `pengdows.crud.IntegrationTests`
 
-- **What it does:** Implements full `DbConnection`, `DbCommand`, `DbDataReader` APIs; allows SQL generation and parameter verification.
-- **What it doesn't do:** Enforce SQL constraints, triggers, or data types.
+## Basic Setup
+
+```csharp
+using System.Data;
+using pengdows.crud;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
+using Xunit;
+
+public class BasicFakeDbTests
+{
+    [Fact]
+    public async Task BuildAndExecute_WorksWithFakeProvider()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=test;", factory);
+
+        using var sc = context.CreateSqlContainer("SELECT 1");
+        var value = await sc.ExecuteScalarRequiredAsync<int>();
+
+        Assert.Equal(1, value);
+    }
+}
+```
+
+## Queueing Fake Results
+
+Use `fakeDbConnection` queue APIs for deterministic command results:
 
 ```csharp
 [Fact]
-public async Task SearchByName_GeneratesCorrectSQL()
+public async Task QueuedScalarAndReaderResults_AreReturnedInOrder()
 {
-    // 1. Arrange - Use fakeDb
-    var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-    var context = new DatabaseContext("Data Source=:memory:", factory);
-    var gateway = new CustomerGateway(context);
+    var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+    var connection = (fakeDbConnection)factory.CreateConnection();
 
-    // 2. Act
-    var results = await gateway.SearchByNameAsync("Acme");
+    connection.EnqueueScalarResult(42);
+    connection.EnqueueReaderResult(new[]
+    {
+        new Dictionary<string, object?> { ["id"] = 1, ["name"] = "A" },
+        new Dictionary<string, object?> { ["id"] = 2, ["name"] = "B" }
+    });
 
-    // 3. Assert - Verify SQL generation without a DB
-    Assert.Contains("WHERE c.name LIKE @p0", gateway.LastGeneratedSql);
+    factory.Connections.Add(connection);
+
+    var context = new DatabaseContext("test", factory);
+
+    using var scalarSc = context.CreateSqlContainer("SELECT COUNT(*) FROM users");
+    var count = await scalarSc.ExecuteScalarRequiredAsync<int>();
+    Assert.Equal(42, count);
+
+    using var readerSc = context.CreateSqlContainer("SELECT id, name FROM users");
+    await using var reader = await readerSc.ExecuteReaderAsync();
+
+    Assert.True(await reader.ReadAsync());
+    Assert.Equal(1, reader.GetInt32(reader.GetOrdinal("id")));
 }
 ```
 
-## Integration Testing
-
-Use **Testcontainers** to validate behavior against real database engines.
+## Simulating Failures
 
 ```csharp
-public class CustomerIntegrationTests : IAsyncLifetime
+[Fact]
+public void OpenFailure_IsConfigurable()
 {
-    private PostgreSqlContainer _postgres;
-    private DatabaseContext _context;
+    var factory = fakeDbFactory.CreateFailingFactory(
+        SupportedDatabase.Sqlite,
+        ConnectionFailureMode.FailOnOpen);
 
-    public async Task InitializeAsync()
-    {
-        _postgres = new PostgreSqlBuilder().Build();
-        await _postgres.StartAsync();
+    var context = new DatabaseContext("test", factory);
 
-        _context = new DatabaseContext(
-            _postgres.GetConnectionString(),
-            NpgsqlFactory.Instance
-        );
-    }
-
-    [Fact]
-    public async Task CreateAndRetrieve_Roundtrips()
-    {
-        var gateway = new TableGateway<Customer, int>(_context);
-        var customer = new Customer { Name = "Test" };
-
-        await gateway.CreateAsync(customer);
-        var retrieved = await gateway.RetrieveOneAsync(customer.Id);
-
-        Assert.Equal("Test", retrieved.Name);
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _postgres.DisposeAsync();
-    }
+    using var sc = context.CreateSqlContainer("SELECT 1");
+    Assert.ThrowsAny<Exception>(() => sc.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult());
 }
 ```
 
-## Testing Standards
+Additional failure controls are available on `fakeDbConnection`, including:
 
-- **TDD (Mandatory):** Write failing test first, then implement.
-- **High Coverage:** 83% minimum (95% for new features).
-- **Fast Execution:** Unit tests should complete in seconds.
+- `SetFailOnOpen(...)`
+- `SetFailOnCommand(...)`
+- `SetFailOnBeginTransaction(...)`
+- `SetFailAfterOpenCount(...)`
+- `SetCustomFailureException(...)`
+
+## Recommended Coverage Pattern
+
+- Use fakeDb for unit tests of SQL generation, parameterization, mapping, and failure handling.
+- Use integration tests for provider-specific behavior and real transaction semantics.
+- If fakeDb lacks a behavior you need, extend `pengdows.crud.fakeDb` rather than introducing new mocking layers.

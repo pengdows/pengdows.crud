@@ -29,6 +29,7 @@
 
 #region
 
+using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -129,6 +130,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private string _redactedConnectionString = string.Empty;
     private string _redactedReaderConnectionString = string.Empty;
     private readonly Action<DbConnection> _disposeHandler;
+    private StateChangeEventHandler _stateChangeHandler = null!;
+    private Action<ITrackedConnection> _firstOpenHandlerRw = null!;
+    private Action<ITrackedConnection> _firstOpenHandlerRo = null!;
+    private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRw = null!;
+    private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRo = null!;
     private DataSourceInformation _dataSourceInfo = null!;
     private readonly SqlDialect _dialect = null!;
     private IIsolationResolver _isolationResolver = null!;
@@ -149,6 +155,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _sessionSettingsDetectionCompleted;
     private string? _cachedReadOnlySessionSettings;
     private string? _cachedReadWriteSessionSettings;
+    // Set to true when the corresponding DataSource has session settings baked into its
+    // startup Options parameter; allows skipping the per-checkout SET round-trip.
+    private bool _rwSettingsBakedIntoDataSource;
+    private bool _roSettingsBakedIntoDataSource;
     private string? _connectionNamePrefixWrite;
     private string? _connectionNamePrefixRead;
     private readonly MetricsCollector? _metricsCollector;

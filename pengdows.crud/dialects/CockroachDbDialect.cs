@@ -9,6 +9,7 @@
 // - Enables native UPSERT support and distributed transaction tuning.
 // =============================================================================
 
+using System.Collections.Generic;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -28,12 +29,18 @@ internal class CockroachDbDialect : PostgreSqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.CockroachDb;
 
-        // CockroachDB supports native UPSERT which is more efficient than ON CONFLICT
-        // in some distributed scenarios, though it also fully supports ON CONFLICT.
-    
-        public override string GetBaseSessionSettings()
-        {
-            return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
-        }
+    // CockroachDB supports native UPSERT which is more efficient than ON CONFLICT
+    // in some distributed scenarios, though it also fully supports ON CONFLICT.
+
+    public override string GetBaseSessionSettings()
+    {
+        return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
     }
-    
+
+    /// <inheritdoc/>
+    protected override IEnumerable<(string Key, string Value)> GetAdditionalStartupOptions(bool readOnly)
+    {
+        yield return ("client_encoding", "UTF8");
+        yield return ("lock_timeout", "30s");
+    }
+}

@@ -220,7 +220,7 @@ public class CoverageRaiseRestQuickWinsTests
             "PrepareConnectionStringForDataSource",
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(method);
-        return (string)method!.Invoke(dialect, new object[] { value })!;
+        return (string)method!.Invoke(dialect, new object[] { value, false })!;
     }
 
     private static T InvokeCreateTemplateRowId<T>()

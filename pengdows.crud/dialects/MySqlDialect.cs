@@ -254,7 +254,7 @@ internal class MySqlDialect : SqlDialect
     /// <summary>
     /// Pass through — Snowflake.Data handles warehouse/role/schema in the connection string.
     /// </summary>
-    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         if (!_isMySqlConnector || string.IsNullOrWhiteSpace(connectionString))
         {

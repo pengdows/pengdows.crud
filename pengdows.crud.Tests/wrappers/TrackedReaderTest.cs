@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
 using pengdows.crud.threading;
+using pengdows.crud.Tests;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -37,7 +38,7 @@ public class TrackedReaderTests
         public string DataSource => "localhost";
         public string ServerVersion => "1.0.0";
         public ConnectionState State => ConnectionState.Open;
-        public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
+        public IConnectionLocalState LocalState { get; } = new TestConnectionLocalState();
 
         public void Close()
         {

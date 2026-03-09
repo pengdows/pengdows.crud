@@ -17,6 +17,7 @@
 // - Stored procedure support via CALL statement.
 // =============================================================================
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -47,6 +48,12 @@ internal class PostgreSqlDialect : SqlDialect
     private const string StandardConformingStringsSetting = "standard_conforming_strings";
     private const string ClientMinMessagesSetting = "client_min_messages";
     private const string ReadOnlyTransactionSetting = "default_transaction_read_only";
+
+    // Connection string keys used when baking startup options
+    private const string NpgsqlOptionsKey = "Options";
+
+    private bool _settingsBaked;
+    internal override bool SessionSettingsBakedIntoDataSource => _settingsBaked;
 
     // Reflection-based property/type names used to stamp NpgsqlDbType on JSON parameters
     private const string DataTypeNameProperty = "DataTypeName";
@@ -342,7 +349,7 @@ internal class PostgreSqlDialect : SqlDialect
     /// string still carries credentials; NpgsqlConnectionStringBuilder preserves them on
     /// round-trip, unlike connection.ConnectionString on a DataSource-created connection.
     /// </summary>
-    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         try
         {
@@ -368,13 +375,124 @@ internal class PostgreSqlDialect : SqlDialect
                 modified = true;
             }
 
-            return modified ? builder.ConnectionString : connectionString;
+            // PERFORMANCE: Bake session settings into the PostgreSQL startup Options parameter.
+            // Values sent via the protocol startup message become GUC session defaults.
+            // PostgreSQL's RESET ALL (sent by Npgsql on pool return) restores parameters to
+            // their session defaults — i.e., back to these startup values — so the next
+            // checkout requires zero additional SET round-trips.
+            var existingOptions = builder.ContainsKey(NpgsqlOptionsKey)
+                ? builder[NpgsqlOptionsKey] as string ?? string.Empty
+                : string.Empty;
+            var mergedOptions = MergeStartupOptions(existingOptions, readOnly);
+            if (!string.Equals(existingOptions, mergedOptions, StringComparison.Ordinal))
+            {
+                builder[NpgsqlOptionsKey] = mergedOptions;
+                modified = true;
+            }
+
+            if (modified)
+            {
+                _settingsBaked = true;
+                return builder.ConnectionString;
+            }
+
+            // Options were already fully baked (user set all required keys to correct values)
+            _settingsBaked = true;
+            return connectionString;
         }
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Failed to prepare connection string for DataSource.");
+            _settingsBaked = false;
             return connectionString;
         }
+    }
+
+    /// <summary>
+    /// Override in subclasses to include additional GUC settings that should be baked
+    /// into the PostgreSQL startup <c>Options</c> parameter alongside the three base keys.
+    /// The base implementation returns an empty sequence.
+    /// </summary>
+    protected virtual IEnumerable<(string Key, string Value)> GetAdditionalStartupOptions(bool readOnly)
+        => [];
+
+    /// <summary>
+    /// Merges the required GUC session settings into the existing PostgreSQL
+    /// <c>options</c> startup string.  Format: <c>-c key=value -c key=value …</c>.
+    /// User-supplied options for other keys are preserved; our keys are
+    /// always overridden to ensure deterministic startup state.
+    /// </summary>
+    private string MergeStartupOptions(string existing, bool readOnly)
+    {
+        // Parse existing "-c key=value" tokens into an ordered list so we can
+        // detect and replace our specific keys while preserving user-supplied ones.
+        var tokens = new List<(string Key, string Value)>();
+        var rest = existing.AsSpan().Trim();
+        while (!rest.IsEmpty)
+        {
+            // Expect token to start with "-c " (possibly after whitespace)
+            if (rest.StartsWith("-c ", StringComparison.Ordinal) ||
+                rest.StartsWith("-c\t", StringComparison.Ordinal))
+            {
+                rest = rest[3..].TrimStart();
+            }
+            else
+            {
+                // Malformed token — skip to next '-c'
+                var next = rest.IndexOf("-c ", StringComparison.Ordinal);
+                if (next < 0) break;
+                rest = rest[next..];
+                continue;
+            }
+
+            var eqIdx = rest.IndexOf('=');
+            if (eqIdx <= 0) break;
+            var key = rest[..eqIdx].Trim().ToString();
+            rest = rest[(eqIdx + 1)..];
+
+            // Value ends at next " -c" or end of string
+            var nextFlag = rest.IndexOf(" -c", StringComparison.Ordinal);
+            string value;
+            if (nextFlag >= 0)
+            {
+                value = rest[..nextFlag].Trim().ToString();
+                rest = rest[nextFlag..].TrimStart();
+            }
+            else
+            {
+                value = rest.Trim().ToString();
+                rest = default;
+            }
+
+            tokens.Add((key, value));
+        }
+
+        // Apply required settings (overriding any existing values for these keys)
+        var allKeys = new List<(string Key, string Value)>
+        {
+            (StandardConformingStringsSetting, "on"),
+            (ClientMinMessagesSetting, "warning"),
+            (ReadOnlyTransactionSetting, readOnly ? "on" : "off")
+        };
+        allKeys.AddRange(GetAdditionalStartupOptions(readOnly));
+
+        foreach (var (ourKey, ourValue) in allKeys)
+        {
+            var found = false;
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                if (string.Equals(tokens[i].Key, ourKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    tokens[i] = (tokens[i].Key, ourValue);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                tokens.Add((ourKey, ourValue));
+        }
+
+        return string.Join(" ", tokens.Select(t => $"-c {t.Key}={t.Value}"));
     }
 
     public override void ConfigureProviderSpecificSettings(IDbConnection connection, IDatabaseContext context,

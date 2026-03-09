@@ -2,7 +2,7 @@
 # Run simple CRUD benchmarks comparing pengdows.crud vs Dapper vs Entity Framework
 # Uses SQLite in-memory, no Docker required
 
-cd "$(dirname "$0")/CrudBenchmarks"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "======================================================================="
 echo "Simple CRUD Benchmarks: pengdows.crud vs Dapper vs Entity Framework"
@@ -18,4 +18,4 @@ echo ""
 echo "Note: First run will be slower due to JIT compilation warmup."
 echo ""
 
-dotnet run -c Release --filter "*SimpleCrud*"
+dotnet run -c Release --project "${root}/CrudBenchmarks" --filter "*SimpleCrud*"

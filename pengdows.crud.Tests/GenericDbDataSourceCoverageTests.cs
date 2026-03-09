@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -53,6 +54,15 @@ public class GenericDbDataSourceCoverageTests
 
         Assert.NotNull(command);
         Assert.Equal("SELECT 1", command.CommandText);
+    }
+
+    [Fact]
+    public void GenericDbDataSource_DoesNotDeclareRedundantCreateDbCommandOverride()
+    {
+        var declared = typeof(GenericDbDataSource).GetMethod(
+            "CreateDbCommand",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+        Assert.Null(declared);
     }
 
     [Fact]

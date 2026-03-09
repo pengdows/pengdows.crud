@@ -1,46 +1,437 @@
-# Entity Mapping & Attributes
+# Entity Attributes Reference
 
-`pengdows.crud` uses attributes to map C# POCOs to database tables.
+All attributes for entity mapping in pengdows.crud.
 
-## Table & Column Mapping
+## Core Mapping Attributes
 
-- `[Table("name", Schema = "schema")]`: Maps a class to a database table.
-- `[Column("name", DbType.Int32, n)]`: Maps a property to a database column.
-- `[NonInsertable]`: Excludes column from INSERT statements (e.g., generated columns, some audit fields).
-- `[NonUpdateable]`: Excludes column from UPDATE statements (e.g., `[CreatedBy]`, `[CreatedOn]`).
-- `[Id]` and `[PrimaryKey]` are also excluded from UPDATE SET clauses.
+### TableAttribute
 
-## Primary Keys vs Pseudo Keys
+Specifies the database table name for an entity.
 
-| Concept | Attribute | Purpose |
-|---------|-----------|---------|
-| **Pseudo Key / Row ID** | `[Id]` | Surrogate identifier for TableGateway operations, FKs, easy lookup. |
-| **Primary Key / Business Key** | `[PrimaryKey(n)]` | Natural/business key — why the row exists (can be composite). |
+```csharp
+[Table("table_name")]
+[Table("schema.table_name")]  // With schema
+public class MyEntity { }
+```
+
+**Parameters:**
+- `name` (string) — Table name, optionally schema-qualified
+
+**Notes:**
+- Required on all entities used with TableGateway
+- Supports schema qualification (e.g., "dbo.users", "public.accounts")
+- Schema portion is automatically quoted per database requirements
+
+### ColumnAttribute
+
+Maps a property to a database column with type information.
+
+```csharp
+[Column("column_name", DbType.String)]
+[Column("column_name", DbType.Int32, 50)]  // With size
+public string Name { get; set; }
+```
+
+**Parameters:**
+- `name` (string) — Database column name
+- `type` (DbType) — ADO.NET database type
+- `size` (int, optional) — Column size for variable-length types
+
+**Supported DbTypes:**
+- `DbType.String` — Text/varchar columns
+- `DbType.Int32`, `Int64`, `Int16` — Integer columns
+- `DbType.Boolean` — Boolean/bit columns
+- `DbType.DateTime` — Date/time columns (stored as UTC)
+- `DbType.Decimal` — Decimal/numeric columns
+- `DbType.Guid` — UUID/uniqueidentifier columns
+- `DbType.Binary` — Binary/blob columns
+
+## Key Attributes
+
+### IdAttribute
+
+Marks the pseudokey (row ID) column for the entity.
+
+```csharp
+[Id]
+[Column("id", DbType.Int64)]
+public long Id { get; set; }
+
+[Id(writable: false)]  // For identity/auto-increment columns
+[Column("id", DbType.Int32)]
+public int Id { get; set; }
+```
+
+**Parameters:**
+- `writable` (bool, default: true) — Whether the ID can be set on insert
 
 **Rules:**
-1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column.
-2. `[Id(false)]` (default): DB-generated (autoincrement/identity). Column omitted from INSERT.
-3. `[Id(true)]`: Client-provided. Column included in INSERT.
-4. `RetrieveOneAsync(TRowID)` uses `[Id]`.
-5. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns.
-6. Upsert conflict key: `[PrimaryKey]` preferred; fallback to writable `[Id]`.
+- `[Id]` is required for row-id operations (`RetrieveOneAsync(TRowID)`, `UpdateAsync`, `DeleteAsync(TRowID)`)
+- Entities with only `[PrimaryKey]` can still use create and business-key retrieval paths
+- Must be a primitive type: `int`, `long`, `Guid`, or `string` (nullable allowed)
+- Non-writable IDs are excluded from INSERT statements (for identity columns)
+- Used for single-row lookups and as the `TRowID` generic parameter
 
-## Audit & Concurrency
+### PrimaryKeyAttribute
 
-- `[CreatedBy]`, `[CreatedOn]`, `[LastUpdatedBy]`, `[LastUpdatedOn]`: Auto-populated audit fields.
-- **IMPORTANT:** Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on **CREATE**.
-- **Update Behavior:** Only `LastUpdatedBy/On` are updated during an **UPDATE** operation.
-- `[Version]`: Optimistic concurrency column (e.g., `int` or `long`). Incremented by 1 on each UPDATE.
+Defines business/natural primary key columns (separate from pseudokey).
 
-## Update Strategy
+```csharp
+[PrimaryKey(1)]
+[Column("tenant_id", DbType.String)]
+public string TenantId { get; set; }
 
-- `UpdateAsync(entity)`: Generates an UPDATE for all updatable columns.
-- `UpdateAsync(entity, loadOriginal: true)`: Reloads the original row from the DB to detect changes and perform a concurrency check using the `[Version]` column. If no changes are detected or if a version mismatch occurs, it returns 0.
+[PrimaryKey(2)]
+[Column("email", DbType.String)]
+public string Email { get; set; }
+```
 
-## Type Conversions
+**Parameters:**
+- `order` (int) — Order of this column in composite key (1-based)
 
-- Enum properties typed directly as an enum are auto-detected (no attribute needed). Use `[EnumColumn(typeof(T))]` only when the property type is `object` and the enum type can't be inferred.
-- `[EnumLiteral("string")]`: Applied to **enum fields** (not properties) to map enum values to custom string literals in the database.
-- `[Json]`: Serializes/deserializes complex property types to/from JSON using `System.Text.Json`. Pair with `DbType.String`.
-- `[CorrelationToken]`: Marks a property used as a unique correlation token for generated-ID retrieval fallback (populated on INSERT, then queried back to get the DB-generated identity).
-- `Uuid7Optimized`: High-performance, time-sortable IDs (RFC 9562).
+**Rules:**
+- Can have multiple PrimaryKey columns with different orders
+- Used for composite key lookups and WHERE clause generation
+- Cannot overlap with `[Id]`, audit fields, or `[Version]`
+- Supports multi-column business keys (tenant_id + email, etc.)
+
+### VersionAttribute
+
+Enables optimistic concurrency control with version fields.
+
+```csharp
+[Version]
+[Column("row_version", DbType.Int32)]
+public int Version { get; set; }
+```
+
+**Behavior:**
+- Automatically incremented on each UPDATE
+- Added to WHERE clause during updates to detect concurrent changes
+- Protects against lost update problems
+- Only one version field allowed per entity
+
+## Audit Attributes
+
+### CreatedByAttribute
+
+Automatically populated with user ID on INSERT operations.
+
+```csharp
+[CreatedBy]
+[Column("created_by", DbType.String)]
+public string CreatedBy { get; set; }
+```
+
+**Behavior:**
+- Set once during INSERT, never updated
+- Populated from registered `IAuditValueResolver`
+- Excluded from UPDATE statements to preserve audit trail
+
+### CreatedOnAttribute
+
+Automatically populated with UTC timestamp on INSERT operations.
+
+```csharp
+[CreatedOn]
+[Column("created_at", DbType.DateTime)]
+public DateTime CreatedAt { get; set; }
+```
+
+**Behavior:**
+- Set once during INSERT with UTC timestamp
+- Never updated to preserve creation time
+- Excluded from UPDATE statements
+
+### LastUpdatedByAttribute
+
+Automatically updated with user ID on INSERT and UPDATE operations.
+
+```csharp
+[LastUpdatedBy]
+[Column("updated_by", DbType.String)]
+public string? UpdatedBy { get; set; }
+```
+
+**Behavior:**
+- Set during both INSERT and UPDATE
+- Populated from registered `IAuditValueResolver`
+- Tracks who last modified the record
+
+### LastUpdatedOnAttribute
+
+Automatically updated with UTC timestamp on INSERT and UPDATE operations.
+
+```csharp
+[LastUpdatedOn]
+[Column("updated_at", DbType.DateTime)]
+public DateTime? UpdatedAt { get; set; }
+```
+
+**Behavior:**
+- Set during both INSERT and UPDATE with current UTC time
+- Nullable to distinguish never-updated records (NULL) from updated ones
+- Automatically maintained by the framework
+
+## Behavior Modifier Attributes
+
+### NonInsertableAttribute
+
+Excludes property from INSERT statements.
+
+```csharp
+[NonInsertable]
+[Column("computed_field", DbType.String)]
+public string ComputedValue { get; set; }
+```
+
+**Use Cases:**
+- Database computed columns
+- Fields populated by triggers
+- Read-only columns that shouldn't be inserted
+
+### NonUpdateableAttribute
+
+Excludes property from UPDATE statements.
+
+```csharp
+[NonUpdateable]
+[Column("created_at", DbType.DateTime)]
+public DateTime CreatedAt { get; set; }
+```
+
+**Use Cases:**
+- Immutable fields (creation timestamps, etc.)
+- Fields that should only be set once
+- Computed columns that change based on other fields
+
+## Special Type Attributes
+
+### EnumColumnAttribute
+
+Explicitly specifies the enum type for a column when the property type cannot be inferred (e.g., `object`). Not needed when the property is already typed as the enum.
+
+```csharp
+// NOT needed — type is inferred automatically from the property type
+[Column("status", DbType.String)]
+public UserStatus Status { get; set; }
+
+// NEEDED — property type is object, enum type can't be inferred
+[EnumColumn(typeof(UserStatus))]
+[Column("status", DbType.String)]
+public object Status { get; set; }
+```
+
+**Parameters:**
+- `enumType` (Type) — The enum type; must actually be an enum (validated at construction)
+
+**Notes:**
+- Enum parsing behavior is configured at the TableGateway level via `EnumParseBehavior` property
+- Invalid enum values throw by default, or can be configured to return default/null
+- Supports both string and integer storage in the database (controlled by `DbType` on `[Column]`)
+
+### EnumLiteralAttribute
+
+Maps an enum **field** to a custom string literal in the database. Applied to enum fields, not properties.
+
+```csharp
+public enum OrderStatus
+{
+    [EnumLiteral("open")]
+    Open,
+
+    [EnumLiteral("closed")]
+    Closed,
+
+    [EnumLiteral("pending_review")]
+    PendingReview
+}
+```
+
+**Parameters:**
+- `literal` (string) — The string value stored in the database for this enum field
+
+### JsonAttribute
+
+Enables JSON serialization/deserialization for complex types.
+
+```csharp
+public class UserPreferences
+{
+    public string Theme { get; set; }
+    public bool Notifications { get; set; }
+}
+
+[Json]
+[Column("preferences", DbType.String)]
+public UserPreferences? Preferences { get; set; }
+
+// Custom serializer options
+[Json(SerializerOptions = customOptions)]
+[Column("metadata", DbType.String)]
+public Dictionary<string, object>? Metadata { get; set; }
+```
+
+**Properties:**
+- `SerializerOptions` (JsonSerializerOptions, optional) — Custom serialization settings
+
+**Behavior:**
+- Automatically serializes/deserializes to/from JSON strings
+- Supports nullable properties (NULL database values)
+- Uses System.Text.Json by default
+
+### CorrelationTokenAttribute
+
+Marks a property used as a unique correlation token for generated-ID retrieval fallback. Used when the database doesn't support `RETURNING`/`OUTPUT` and session-scoped identity functions are unreliable.
+
+```csharp
+[CorrelationToken]
+[Column("correlation_id", DbType.Guid)]
+public Guid CorrelationId { get; set; }
+```
+
+**Behavior:**
+- TableGateway generates a unique value (Guid or string), inserts it alongside the row, then immediately queries back using this token to retrieve the database-generated identity
+- Applied to a property on the entity, not to the ID column itself
+
+## Complete Examples
+
+### Basic Entity
+
+```csharp
+[Table("products")]
+public class Product
+{
+    [Id]
+    [Column("id", DbType.Int64)]
+    public long Id { get; set; }
+
+    [Column("name", DbType.String, 100)]
+    public string Name { get; set; } = string.Empty;
+
+    [Column("price", DbType.Decimal)]
+    public decimal Price { get; set; }
+
+    [Column("is_active", DbType.Boolean)]
+    public bool IsActive { get; set; } = true;
+
+    [CreatedOn]
+    [Column("created_at", DbType.DateTime)]
+    public DateTime CreatedAt { get; set; }
+
+    [LastUpdatedOn]
+    [Column("updated_at", DbType.DateTime)]
+    public DateTime? UpdatedAt { get; set; }
+}
+```
+
+### Multi-tenant Entity
+
+```csharp
+[Table("tenant_users")]
+public class TenantUser
+{
+    [Id]
+    [Column("id", DbType.Guid)]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [PrimaryKey(1)]
+    [Column("tenant_id", DbType.String, 50)]
+    public string TenantId { get; set; } = string.Empty;
+
+    [PrimaryKey(2)]
+    [Column("email", DbType.String, 255)]
+    public string Email { get; set; } = string.Empty;
+
+    [Column("name", DbType.String, 100)]
+    public string Name { get; set; } = string.Empty;
+
+    [EnumColumn(typeof(UserRole))]
+    [Column("role", DbType.String, 20)]
+    public UserRole Role { get; set; }
+
+    [Version]
+    [Column("version", DbType.Int32)]
+    public int Version { get; set; }
+
+    [CreatedBy]
+    [Column("created_by", DbType.String, 50)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    [CreatedOn]
+    [Column("created_at", DbType.DateTime)]
+    public DateTime CreatedAt { get; set; }
+
+    [LastUpdatedBy]
+    [Column("updated_by", DbType.String, 50)]
+    public string? UpdatedBy { get; set; }
+
+    [LastUpdatedOn]
+    [Column("updated_at", DbType.DateTime)]
+    public DateTime? UpdatedAt { get; set; }
+}
+```
+
+### Entity with JSON and Computed Fields
+
+```csharp
+public class UserSettings
+{
+    public string Theme { get; set; } = "light";
+    public bool EmailNotifications { get; set; } = true;
+    public string[] Tags { get; set; } = Array.Empty<string>();
+}
+
+[Table("user_profiles")]
+public class UserProfile
+{
+    [Id(writable: false)]  // Identity column
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("user_id", DbType.Guid)]
+    public Guid UserId { get; set; }
+
+    [Column("display_name", DbType.String, 100)]
+    public string DisplayName { get; set; } = string.Empty;
+
+    [Json]
+    [Column("settings", DbType.String)]
+    public UserSettings? Settings { get; set; }
+
+    [NonInsertable]
+    [NonUpdateable]
+    [Column("full_display_name", DbType.String)]
+    public string FullDisplayName { get; set; } = string.Empty; // Computed column
+
+    [NonUpdateable]
+    [Column("created_at", DbType.DateTime)]
+    public DateTime CreatedAt { get; set; }
+
+    [Column("updated_at", DbType.DateTime)]
+    public DateTime? UpdatedAt { get; set; }
+}
+```
+
+## Validation Rules
+
+### Required Combinations
+
+- Every entity must have `[Table]` and exactly one `[Id]` property
+- `[Id]` properties must also have `[Column]` attributes
+- All properties mapped to database must have `[Column]` attributes
+
+### Attribute Conflicts
+
+- `[Id]` cannot be combined with `[PrimaryKey]`, audit attributes, or `[Version]`
+- `[CreatedBy]` and `[CreatedOn]` should not be combined with `[NonInsertable]`
+- `[LastUpdatedBy]` and `[LastUpdatedOn]` should not be combined with `[NonUpdateable]`
+- Only one `[Version]` attribute allowed per entity
+
+### Type Compatibility
+
+- `[Id]` properties: `int`, `long`, `Guid`, `string` (and nullable versions)
+- `[Version]` properties: `int`, `long`, or other numeric types
+- Audit timestamp properties: `DateTime` or `DateTime?`
+- Audit user properties: `string`, `int`, `Guid`, or nullable versions
+- `[Json]` properties: Any serializable type

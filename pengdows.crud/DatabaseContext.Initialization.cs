@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System;
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Reflection;
@@ -193,6 +194,43 @@ public partial class DatabaseContext
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;
             _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
+            _stateChangeHandler = (sender, args) =>
+            {
+                switch (args.CurrentState)
+                {
+                    case ConnectionState.Open:
+                        _logger.LogDebug("Opening connection: " + Name);
+                        UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
+                        break;
+                    case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
+                    case ConnectionState.Broken:
+                        _logger.LogDebug("Closed or broken connection: " + Name);
+                        Interlocked.Decrement(ref _connectionCount);
+                        break;
+                }
+            };
+            _firstOpenHandlerRw = tc =>
+            {
+                try { ExecuteSessionSettings(tc, false); }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
+            _firstOpenHandlerRo = tc =>
+            {
+                try { ExecuteSessionSettings(tc, true); }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
+            _firstOpenHandlerAsyncRw = async (tc, ct) =>
+            {
+                try { await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
+            _firstOpenHandlerAsyncRo = async (tc, ct) =>
+            {
+                try { await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
             _forceManualPrepare = configuration.ForceManualPrepare;
             _disablePrepare = configuration.DisablePrepare;
             _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
@@ -404,7 +442,7 @@ public partial class DatabaseContext
         {
             // 2) Create + open
             var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
-            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true, IsReadOnlyConnection, null);
+            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true, IsReadOnlyConnection);
             try
             {
                 initConn.Open();
@@ -691,7 +729,7 @@ public partial class DatabaseContext
         var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
         try
         {
-            using var conn = FactoryCreateConnection(executionType, connectionString, true, isReadOnly, null);
+            using var conn = FactoryCreateConnection(executionType, connectionString, true, isReadOnly);
             conn.Open();
         }
         catch (Exception ex)
@@ -739,7 +777,7 @@ public partial class DatabaseContext
                 _dialect.MaxPoolSizeSettingName,
                 overrideExisting: true,
                 readerBuilder);
-            _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString);
+            _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString, readOnly: true);
         }
 
         // 3. Finalize writer connection string: -rw suffix → MaxPoolSize → provider
@@ -788,7 +826,7 @@ public partial class DatabaseContext
 
         if (_dialect != null)
         {
-            _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString);
+            _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString, readOnly: !_isWriteConnection);
         }
 
         // If suffix application was a no-op, keep reader/writer aligned so pool-key
@@ -811,6 +849,18 @@ public partial class DatabaseContext
             _dataSource = TryCreateDataSource(_factory, _connectionString);
         }
 
+        // Set baked flags only for native provider DataSources.
+        // GenericDbDataSource wraps a factory and does not send startup parameters, so
+        // the baked Options have no effect and the per-checkout SET must still run.
+        if (_dataSource is { } writerDs && writerDs is not GenericDbDataSource
+            && (_dialect?.SessionSettingsBakedIntoDataSource ?? false))
+        {
+            if (_isWriteConnection)
+                _rwSettingsBakedIntoDataSource = true;
+            else
+                _roSettingsBakedIntoDataSource = true;
+        }
+
         _readerDataSource = _dataSource;
 
         if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
@@ -824,6 +874,12 @@ public partial class DatabaseContext
             if (readDataSource != null)
             {
                 _readerDataSource = readDataSource;
+                // Reader DataSource is always used exclusively for read-only operations.
+                if (readDataSource is not GenericDbDataSource
+                    && (_dialect?.SessionSettingsBakedIntoDataSource ?? false))
+                {
+                    _roSettingsBakedIntoDataSource = true;
+                }
                 return;
             }
 

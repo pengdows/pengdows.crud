@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
@@ -40,6 +41,9 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
     private IContainer _container = null!;
     private string _connStr = null!;
+
+
+    private DbDataSource? _dataSource = null;
 
     // pengdows.crud
     private DatabaseContext _pengdowsContext = null!;
@@ -90,8 +94,8 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         await WaitForReadyAsync(_connStr);
 
         // Schema + seed
-        await using var conn = new NpgsqlConnection(_connStr);
-        await conn.OpenAsync();
+        await using var conn = await GetDapperEqualConnection();
+
 
         await using (var cmd = conn.CreateCommand())
         {
@@ -684,15 +688,17 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     /// </summary>
     private async Task<NpgsqlConnection> GetDapperEqualConnection()
     {
+        _dataSource ??= NpgsqlFactory.Instance.CreateDataSource(_connStr);
+
         NpgsqlConnection? conn = null;
         try
         {
-            conn = new NpgsqlConnection(_connStr);
+            conn = _dataSource.CreateConnection() as NpgsqlConnection;
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText =
-                "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET default_transaction_read_only = off;";
-            await cmd.ExecuteNonQueryAsync();
+            // cmd.CommandText =
+            //     "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET default_transaction_read_only = off;";
+            // await cmd.ExecuteNonQueryAsync();
             return conn;
         }
         catch
@@ -814,7 +820,9 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
     public class EfPgBenchContext : DbContext
     {
-        public EfPgBenchContext(DbContextOptions<EfPgBenchContext> options) : base(options) { }
+        public EfPgBenchContext(DbContextOptions<EfPgBenchContext> options) : base(options)
+        {
+        }
 
         public DbSet<EfBenchEntity> Benchmarks { get; set; } = null!;
 

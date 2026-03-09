@@ -28,17 +28,17 @@ context.MetricsUpdated += (sender, metrics) =>
 
 ## On-Demand Polling
 
-Retrieve current snapshots at any time via `GetMetrics()`.
+Retrieve current snapshots at any time via the `Metrics` property.
 
 ```csharp
-var snapshot = context.GetMetrics();
+var snapshot = context.Metrics;
 var openConns = context.NumberOfOpenConnections;
 var peakConns = context.PeakOpenConnections;
 ```
 
 ## Performance Hot Paths
 
-- **ValueTask:** Used on execution methods to reduce GC allocations.
+- **ValueTask:** Used on ISqlContainer execution methods to reduce GC allocations.
 - **Compiled Accessors:** Caches property setters/getters as delegates (~5.7x faster than reflection).
 - **SQL Template Caching:** Caches generated SQL templates for reuse.
 - **Bounded LRU Caches:** Prevents unbounded memory growth for plans and statements.

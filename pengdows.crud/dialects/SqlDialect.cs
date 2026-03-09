@@ -1618,13 +1618,29 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
 
     /// <summary>
     /// Prepares a connection string with provider-specific settings that must be present
-    /// before the DataSource is created (e.g. auto-prepare, multiplexing).
+    /// before the DataSource is created (e.g. auto-prepare, multiplexing, startup options).
     /// Override in dialect subclasses; base is a no-op.
     /// </summary>
-    internal virtual string PrepareConnectionStringForDataSource(string connectionString)
+    /// <param name="connectionString">The connection string to prepare.</param>
+    /// <param name="readOnly">
+    /// When <see langword="true"/>, the DataSource will be used exclusively for read-only
+    /// operations; dialects that support startup-parameter baking should embed the
+    /// read-only variant of their session settings.
+    /// </param>
+    internal virtual string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         return connectionString;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the dialect has successfully baked session
+    /// settings into the connection string as startup parameters (e.g. PostgreSQL
+    /// <c>Options=-c param=value</c>).  When <see langword="true"/>, the per-checkout
+    /// <c>ExecuteSessionSettings</c> round-trip can be skipped for the corresponding
+    /// DataSource because the pool-return reset restores the parameters to those
+    /// startup values.
+    /// </summary>
+    internal virtual bool SessionSettingsBakedIntoDataSource => false;
 
     // Async convenience for tests; default is no-op
     public virtual Task ConfigureProviderSpecificSettingsAsync(IDbConnection connection)

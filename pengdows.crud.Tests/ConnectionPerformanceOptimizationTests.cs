@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
-using pengdows.crud.connection;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -28,13 +27,16 @@ public sealed class ConnectionPerformanceOptimizationTestsCollection
 public sealed class ConnectionPerformanceOptimizationTests
 {
     [Fact]
-    public void ConnectionLocalState_LazyPrepareCache_AllocatesOnMark()
+    public void TrackedConnection_LocalState_LazyPrepareCache_AllocatesOnMark()
     {
-        var state = new ConnectionLocalState();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var inner = factory.CreateConnection();
+        using var tracked = new TrackedConnection(inner);
+        var state = tracked.LocalState;
 
-        var preparedField = typeof(ConnectionLocalState).GetField("_prepared",
+        var preparedField = typeof(TrackedConnection).GetField("_prepared",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var orderField = typeof(ConnectionLocalState).GetField("_order",
+        var orderField = typeof(TrackedConnection).GetField("_order",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
         Assert.NotNull(preparedField);

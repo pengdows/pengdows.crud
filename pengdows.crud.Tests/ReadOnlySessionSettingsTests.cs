@@ -90,6 +90,45 @@ public class ReadOnlySessionSettingsTests
         Assert.DoesNotContain(forbidden, settings, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── SQLite WAL-specific guards ────────────────────────────────────────────
+
+    [Fact]
+    public void SqliteDialect_GetConnectionSessionSettings_ReadOnly_ExcludesWalPragma()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=test.db", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: true);
+
+        Assert.DoesNotContain("journal_mode", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SqliteDialect_GetConnectionSessionSettings_ReadOnly_RetainsForeignKeysPragma()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=test.db", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: true);
+
+        Assert.Contains("foreign_keys", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SqliteDialect_GetConnectionSessionSettings_ReadWrite_IncludesWalPragma()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=test.db", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
+
+        Assert.Contains("journal_mode", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("WAL", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static SqlDialect CreateDialect(SupportedDatabase database, fakeDbFactory factory)
     {
         return database switch

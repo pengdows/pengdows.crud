@@ -1,44 +1,147 @@
-# Connections & Transactions
+# Connection Management and DbMode
 
-`pengdows.crud` provides robust, opinionated connection management.
+pengdows.crud handles connections with a strong bias toward performance, predictability, and safe concurrency. At the heart of this is **DbMode**, which defines how each DatabaseContext manages its connection lifecycle.
 
-## DatabaseContext (Singleton)
+## Overview
 
-Manages connection pool, metrics, and session initialization. Create one instance per connection string.
+The philosophy is simple:
 
-## DbMode & Connection Strategies
+- **Open connections late** — only when needed
+- **Close connections early** — as soon as possible
+- **Respect database-specific quirks** — see Connection Pooling for SQLite and LocalDB rules
 
-| Mode | Use Case | Behavior |
-|------|----------|----------|
-| **Standard** | Production (server DBs) | New connection per operation; relies on provider pooling. |
-| **KeepAlive** | LocalDB | Keeps a sentinel connection open to prevent unload. |
-| **SingleWriter** | SQLite file-based | Serializes writes via turnstile; readers use ephemeral connections. |
-| **SingleConnection** | SQLite `:memory:` | All operations share one pinned connection (thread-safe). |
-| **Best** (Default) | Recommended | Auto-selects based on dialect and connection string. |
+**Advantages:**
+- Prevents exhausting your connection pool
+- Avoids leaking resources or unclosed connections
+- Reduces cost in cloud environments by minimizing active resource usage
 
-## Transactions
+## DbMode Enum
 
-- **Explicit creation:** Use `using var tx = context.BeginTransaction();` or `await using var tx = await context.BeginTransactionAsync();`.
-- **Pinned connection:** Transactions pin a connection until disposed. No other commands can run on the context's shared connection while a transaction is active.
-- **Savepoints:** Supports `SavepointAsync` and `RollbackToSavepointAsync`.
-- **Isolation Profiles:** Portable profiles that map to optimal native levels:
-  - `IsolationProfile.SafeNonBlockingReads`: MVCC snapshot (where supported).
-  - `IsolationProfile.StrictConsistency`: Serializable / Full isolation.
-  - `IsolationProfile.FastWithRisks`: Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads.
+```csharp
+public enum DbMode
+{
+    Standard = 0,         // Recommended for production
+    KeepAlive = 1,        // Keeps one sentinel connection open
+    SingleWriter = 2,     // Governor-enforced single writer, concurrent ephemeral readers
+    SingleConnection = 4, // All work goes through one pinned connection
+    Best = 15             // Auto-select best mode for the database
+}
+```
 
-**Resource Safety:**
-Always use `await using` for `ITransactionContext` and `ITrackedReader` to ensure connections are released correctly, especially in `SingleWriter` and `SingleConnection` modes.
+## Mode Descriptions
 
-## Pool Governor
+**Use the lowest number (closest to Standard) possible for best results.** `Best` will select the optimal mode for the connected DB.
 
-Prevents connection pool exhaustion by limiting concurrent connections:
-- `MaxConcurrentReads` / `MaxConcurrentWrites`: Separate limits.
-- `PoolAcquireTimeout`: Throws `PoolSaturatedException` on timeout.
-- Turnstile fairness prevents writer starvation.
+### Standard
 
-## Multi-Tenancy
+- **Recommended for production**
+- Each operation opens a new connection from the pool and closes it after use, unless inside a transaction
+- Fully supports parallelism and provider connection pooling
 
-`ITenantContextRegistry` supports **tenant-per-database** physical isolation.
-- Each tenant gets a separate `DatabaseContext`.
-- Contexts are cached for reuse.
-- Different tenants can use different database engines (e.g., Tenant A on SQL Server, Tenant B on PostgreSQL).
+### KeepAlive
+
+- Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs
+- Otherwise behaves like `Standard`
+
+### SingleWriter
+
+- Uses the Standard lifecycle but enforces `MaxConcurrentWrites = 1` with a writer-preference gate, keeping readers ephemeral while writers serialize.
+- Ideal for file-based SQLite and shared in-memory databases where writes must serialize without pinning a dedicated connection.
+
+### SingleConnection
+
+- All work — reads and writes — is funneled through a single pinned connection
+- Used automatically for in-memory SQLite (see Connection Pooling)
+
+## DI Registration
+
+```csharp
+// Standard mode (default, recommended for production)
+services.AddSingleton<IDatabaseContext>(sp =>
+    new DatabaseContext(connectionString, SqlClientFactory.Instance));
+
+// Specific mode
+services.AddSingleton<IDatabaseContext>(sp =>
+    new DatabaseContext(connectionString, factory, null, DbMode.SingleWriter));
+
+// Auto-select best mode
+services.AddSingleton<IDatabaseContext>(sp =>
+    new DatabaseContext(connectionString, factory, null, DbMode.Best));
+```
+
+## Best Practices
+
+- **Use Standard in production** for scalability and correctness
+- KeepAlive, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test
+- Each DatabaseContext can be safely used as a singleton (via DI or subclassing)
+
+## Benefits
+
+- Avoids connection starvation and excessive licensing costs (per active connection)
+- Plays well with provider-managed pooling (see Connection Pooling)
+- Handles embedded/local DB quirks without manual intervention
+
+## IsolationProfile
+
+Portable transaction isolation profiles that map to the optimal native level for the connected database:
+
+```csharp
+public enum IsolationProfile
+{
+    SafeNonBlockingReads,  // MVCC snapshot (where supported) — avoids blocking reads
+    StrictConsistency,     // Serializable / full isolation
+    FastWithRisks          // Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads
+}
+```
+
+Usage:
+```csharp
+using var txn = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+```
+
+## Integration with Transactions
+
+- Inside a `TransactionContext`, the pinned connection stays open for the life of the transaction
+- Outside transactions, connections are opened per-operation and closed immediately after
+
+## Observability
+
+- Tracks current and max open connections with thread-safe `Interlocked` counters
+- Useful for tuning pool sizes and spotting load issues
+
+```csharp
+var openConns = context.NumberOfOpenConnections;  // Current count
+var maxConns = context.PeakOpenConnections;    // Peak observed
+var dbProduct = context.Product;                   // Detected database
+var mode = context.ConnectionMode;                 // Current DbMode
+```
+
+## Timeout Recommendations
+
+- Set connection timeouts as **low as reasonable** to avoid hanging on transient failures
+- Because pengdows.crud reconnects for every call, long timeouts are unnecessary
+
+```csharp
+// Good: Short timeout
+"Server=localhost;Database=MyDb;Connection Timeout=5;..."
+
+// Avoid: Long timeout
+"Server=localhost;Database=MyDb;Connection Timeout=300;..."
+```
+
+## Default Pool Sizes by Database
+
+| Database | Provider Default | Recommended |
+|----------|-----------------|-------------|
+| SQL Server | 100 | 50-200 |
+| PostgreSQL | 100 | 20-100 (use PgBouncer if more needed) |
+| MySQL/MariaDB | 100 | 50-200 |
+| Oracle | 100 | 50-200 |
+| SQLite | Unlimited | 1-20 |
+| DuckDB | Unlimited | 1-8 |
+
+## Related Pages
+
+- Connection Pooling — Database-specific pooling behavior
+- Transactions — Transaction management patterns
+- Supported Databases — Database provider support matrix

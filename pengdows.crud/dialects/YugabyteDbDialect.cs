@@ -55,7 +55,7 @@ internal class YugabyteDbDialect : PostgreSqlDialect
     /// causing Npgsql to treat the connection as broken ("Connection is not open").
     /// Setting MaxAutoPrepare=0 disables this behavior entirely.
     /// </summary>
-    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         try
         {

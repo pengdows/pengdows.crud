@@ -121,6 +121,9 @@ internal sealed class DataSourceResolver
 
         var sanitized = builder.ConnectionString;
 
+        // Note: DbConnectionStringBuilder normalization can sometimes reorder keys or strip 
+        // provider-specific attributes in edge cases. This is a trade-off for consistent 
+        // pooling behavior.
         if (!string.Equals(rawConnectionString, sanitized, StringComparison.Ordinal))
         {
             _logger.LogDebug(

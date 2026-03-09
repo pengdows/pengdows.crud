@@ -226,7 +226,7 @@ internal class SnowflakeDialect : SqlDialect
     /// <summary>
     /// Pass through — Snowflake.Data handles warehouse/role/schema in the connection string.
     /// </summary>
-    internal override string PrepareConnectionStringForDataSource(string connectionString)
+    internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         return connectionString;
     }

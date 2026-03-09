@@ -25,6 +25,7 @@
 // - DisposeManaged/Async: Closes connection, invokes callbacks, releases permit.
 // =============================================================================
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -88,23 +89,23 @@ namespace pengdows.crud.wrappers;
 ///   no synchronization needed (NoOpAsyncLocker), returned to provider pool on disposal.</description></item>
 /// </list>
 /// </remarks>
-public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, IInternalConnectionWrapper
+public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, IInternalConnectionWrapper,
+    IConnectionLocalState
 {
     private readonly DbConnection _connection;
-    
+
     /// <inheritdoc />
     DbConnection IInternalConnectionWrapper.UnderlyingConnection => _connection;
 
     private readonly bool _isSharedConnection;
-    private readonly Func<ILockerAsync> _lockFactory;
     private readonly ILogger<TrackedConnection> _logger;
     internal static Action? OpenTimingHook;
     private static long _nameCounter;
     private string? _name;
     private readonly string? _namePrefix;
     private readonly Action<DbConnection>? _onDispose;
-    private readonly Action<DbConnection>? _onFirstOpen;
-    private readonly Func<DbConnection, CancellationToken, Task>? _onFirstOpenAsync;
+    private readonly Action<ITrackedConnection>? _onFirstOpen;
+    private readonly Func<ITrackedConnection, CancellationToken, Task>? _onFirstOpenAsync;
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
@@ -120,16 +121,96 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     private int _slotAttached;
     private int _slotReleased;
 
+    // IConnectionLocalState — inlined to eliminate one heap allocation per connection checkout
+
+    /// <inheritdoc/>
+    public bool PrepareDisabled { get; set; }
+
+    /// <inheritdoc/>
+    public bool SessionSettingsApplied { get; set; }
+
+    private ConcurrentDictionary<string, byte>? _prepared;
+    private ConcurrentQueue<string>? _order;
+    private const int _maxPrepared = 32;
+
+    /// <inheritdoc/>
+    public void DisablePrepare() => PrepareDisabled = true;
+
+    /// <inheritdoc/>
+    public void MarkSessionSettingsApplied() => SessionSettingsApplied = true;
+
+    /// <inheritdoc/>
+    public bool IsAlreadyPreparedForShape(string shapeHash)
+    {
+        var prepared = Volatile.Read(ref _prepared);
+        return prepared != null && prepared.ContainsKey(shapeHash);
+    }
+
+    /// <inheritdoc/>
+    public (bool Added, int Evicted) MarkShapePrepared(string shapeHash)
+    {
+        var prepared = GetPreparedCache();
+        var order = GetPreparedOrder();
+        if (prepared.TryAdd(shapeHash, 0))
+        {
+            order.Enqueue(shapeHash);
+            var evicted = 0;
+            while (prepared.Count > _maxPrepared && order.TryDequeue(out var old))
+            {
+                if (prepared.TryRemove(old, out _))
+                {
+                    evicted++;
+                }
+            }
+
+            return (true, evicted);
+        }
+
+        return (false, 0);
+    }
+
+    /// <inheritdoc/>
+    public void Reset()
+    {
+        var order = Volatile.Read(ref _order);
+        while (order != null && order.TryDequeue(out _))
+        {
+        }
+
+        var prepared = Volatile.Read(ref _prepared);
+        prepared?.Clear();
+        // Don't reset PrepareDisabled - that should persist for the physical connection
+        SessionSettingsApplied = false;
+    }
+
+    private ConcurrentDictionary<string, byte> GetPreparedCache()
+    {
+        var prepared = Volatile.Read(ref _prepared);
+        if (prepared != null) return prepared;
+        prepared = new ConcurrentDictionary<string, byte>();
+        var existing = Interlocked.CompareExchange(ref _prepared, prepared, null);
+        return existing ?? prepared;
+    }
+
+    private ConcurrentQueue<string> GetPreparedOrder()
+    {
+        var order = Volatile.Read(ref _order);
+        if (order != null) return order;
+        order = new ConcurrentQueue<string>();
+        var existing = Interlocked.CompareExchange(ref _order, order, null);
+        return existing ?? order;
+    }
+
     /// <summary>
-    /// Per-connection state for prepare behavior tracking
+    /// Per-connection state (this instance implements IConnectionLocalState directly).
     /// </summary>
-    public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
+    public IConnectionLocalState LocalState => this;
 
 
     internal TrackedConnection(
         DbConnection conn,
         StateChangeEventHandler? onStateChange = null,
-        Action<DbConnection>? onFirstOpen = null,
+        Action<ITrackedConnection>? onFirstOpen = null,
         Action<DbConnection>? onDispose = null,
         ILogger<TrackedConnection>? logger = null,
         bool isSharedConnection = false,
@@ -139,7 +220,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         TimeSpan? modeLockTimeout = null,
         PoolSlot? slot = null,
         string? namePrefix = null,
-        Func<DbConnection, CancellationToken, Task>? onFirstOpenAsync = null
+        Func<ITrackedConnection, CancellationToken, Task>? onFirstOpenAsync = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
@@ -157,11 +238,6 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         {
             _isSharedConnection = true;
             _semaphoreSlim = new SemaphoreSlim(1, 1);
-            _lockFactory = () => new RealAsyncLocker(_semaphoreSlim, _modeContentionStats, _mode, _modeLockTimeout);
-        }
-        else
-        {
-            _lockFactory = () => NoOpAsyncLocker.Instance;
         }
 
         if (_onStateChange != null)
@@ -314,10 +390,9 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     /// lock is no-op for performance.
     /// </para>
     /// </remarks>
-    public ILockerAsync GetLock()
-    {
-        return _lockFactory();
-    }
+    public ILockerAsync GetLock() => _isSharedConnection
+        ? new RealAsyncLocker(_semaphoreSlim!, _modeContentionStats, _mode, _modeLockTimeout)
+        : NoOpAsyncLocker.Instance;
 
     public DataTable GetSchema()
     {
@@ -328,8 +403,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     {
         if (Interlocked.Exchange(ref _wasOpened, 1) == 0)
         {
-            _onFirstOpen?.Invoke(_connection);
-            _onFirstOpenAsync?.Invoke(_connection, CancellationToken.None).GetAwaiter().GetResult();
+            if (_onFirstOpen != null)
+                _onFirstOpen.Invoke(this);
+            else
+                _onFirstOpenAsync?.Invoke(this, CancellationToken.None).GetAwaiter().GetResult();
         }
     }
 
@@ -340,12 +417,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
             return;
         }
 
-        _onFirstOpen?.Invoke(_connection);
-
         if (_onFirstOpenAsync != null)
-        {
-            await _onFirstOpenAsync(_connection, cancellationToken).ConfigureAwait(false);
-        }
+            await _onFirstOpenAsync(this, cancellationToken).ConfigureAwait(false);
+        else
+            _onFirstOpen?.Invoke(this);
     }
 
     public async Task OpenAsync(CancellationToken cancellationToken = default)

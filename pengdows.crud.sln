@@ -22,6 +22,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "verify-novendor", "tools\ve
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.stormgate", "pengdows.stormgate\pengdows.stormgate.csproj", "{26724189-A9B2-4CD8-AEA4-87213203EBF9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.stormgate.Tests", "pengdows.stormgate.Tests\pengdows.stormgate.Tests.csproj", "{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -152,6 +154,18 @@ Global
 		{26724189-A9B2-4CD8-AEA4-87213203EBF9}.Release|x64.Build.0 = Release|Any CPU
 		{26724189-A9B2-4CD8-AEA4-87213203EBF9}.Release|x86.ActiveCfg = Release|Any CPU
 		{26724189-A9B2-4CD8-AEA4-87213203EBF9}.Release|x86.Build.0 = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|x64.Build.0 = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Debug|x86.Build.0 = Debug|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|x64.ActiveCfg = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|x64.Build.0 = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|x86.ActiveCfg = Release|Any CPU
+		{B9B54F56-69B9-44B8-9EE6-FDFAFB4E5D09}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

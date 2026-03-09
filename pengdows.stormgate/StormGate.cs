@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace pengdows.stormgate;
@@ -13,12 +14,14 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     private readonly DbDataSource _dataSource;
     private readonly SemaphoreSlim _semaphore;
     private readonly TimeSpan _acquireTimeout;
+    private readonly ILogger _logger;
     private int _disposed;
 
     public StormGate(
         DbDataSource dataSource,
         int maxConcurrentOpens,
-        TimeSpan acquireTimeout)
+        TimeSpan acquireTimeout,
+        ILogger? logger = null)
     {
         _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
 
@@ -30,6 +33,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
         _semaphore = new SemaphoreSlim(maxConcurrentOpens, maxConcurrentOpens);
         _acquireTimeout = acquireTimeout;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
     public static StormGate Create(
@@ -42,7 +46,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         var resolver = new DataSourceResolver(logger);
         var dataSource = resolver.CreateDataSource(factory, connectionString);
 
-        return new StormGate(dataSource, maxConcurrentOpens, acquireTimeout);
+        return new StormGate(dataSource, maxConcurrentOpens, acquireTimeout, logger);
     }
 
     public async Task<DbConnection> OpenAsync(CancellationToken ct = default)
@@ -53,15 +57,19 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         // In that case SemaphoreSlim may throw ObjectDisposedException.
         // That is acceptable: a disposed StormGate cannot open new connections.
         if (!await _semaphore.WaitAsync(_acquireTimeout, ct).ConfigureAwait(false))
+        {
+            _logger.LogWarning("StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.", _acquireTimeout.TotalMilliseconds);
             throw new TimeoutException("Database is saturated (storm gate).");
+        }
 
         try
         {
             var inner = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
             return new PermitConnection(inner, _semaphore);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to open connection after acquiring StormGate permit.");
             _semaphore.Release();
             throw;
         }
@@ -110,6 +118,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                 _semaphore.Release();
         }
 
+        [AllowNull]
         public override string ConnectionString
         {
             get => _inner.ConnectionString;
@@ -145,11 +154,39 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             }
         }
 
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) =>
-            _inner.BeginTransaction(isolationLevel);
+        public override async Task CloseAsync()
+        {
+            try
+            {
+                if (_inner.State != ConnectionState.Closed)
+                    await _inner.CloseAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                ReleasePermitOnce();
+            }
+        }
 
-        protected override DbCommand CreateDbCommand() =>
-            _inner.CreateCommand();
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            ThrowIfInnerClosed();
+            return _inner.BeginTransaction(isolationLevel);
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            ThrowIfInnerClosed();
+            return _inner.CreateCommand();
+        }
+
+        private void ThrowIfInnerClosed()
+        {
+            if (_inner.State == ConnectionState.Closed)
+                throw new InvalidOperationException("Connection is closed.");
+            
+            if (Volatile.Read(ref _disposed) != 0)
+                throw new ObjectDisposedException(nameof(PermitConnection));
+        }
 
         protected override void Dispose(bool disposing)
         {

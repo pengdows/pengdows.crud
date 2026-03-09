@@ -115,7 +115,7 @@ public partial class DatabaseContext
         {
             var useReader = ShouldUseReaderConnectionString(readOnly);
             var connectionString = useReader ? _readerConnectionString : _connectionString;
-            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, null, slot);
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, slot);
             return conn;
         }
         catch
@@ -141,6 +141,15 @@ public partial class DatabaseContext
     {
         if (!_sessionSettingsDetectionCompleted)
         {
+            return;
+        }
+
+        // If this DataSource has session settings baked into its PostgreSQL startup Options
+        // parameter, the pool-return RESET ALL already restored the correct values — skip.
+        if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
+        {
+            if (connection is ITrackedConnection bakedTc)
+                bakedTc.LocalState.MarkSessionSettingsApplied();
             return;
         }
 
@@ -170,7 +179,7 @@ public partial class DatabaseContext
             return;
         }
 
-        _logger.LogInformation("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
+        _logger.LogDebug("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
             Name, readOnly);
 
         var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -205,6 +214,15 @@ public partial class DatabaseContext
             return;
         }
 
+        // If this DataSource has session settings baked into its PostgreSQL startup Options
+        // parameter, the pool-return RESET ALL already restored the correct values — skip.
+        if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
+        {
+            if (connection is ITrackedConnection bakedTc)
+                bakedTc.LocalState.MarkSessionSettingsApplied();
+            return;
+        }
+
         var settingsToApply = readOnly
             ? _cachedReadOnlySessionSettings
             : _cachedReadWriteSessionSettings;
@@ -226,7 +244,7 @@ public partial class DatabaseContext
             return;
         }
 
-        _logger.LogInformation("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
+        _logger.LogDebug("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
             Name, readOnly);
 
         var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -275,7 +293,6 @@ public partial class DatabaseContext
         string? connectionString = null,
         bool isSharedConnection = false,
         bool readOnly = false,
-        Action<DbConnection>? onFirstOpen = null,
         PoolSlot? slot = null)
     {
         SanitizeConnectionString(connectionString);
@@ -283,8 +300,6 @@ public partial class DatabaseContext
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
             ? _connectionString
             : connectionString;
-
-        var isCustomConnectionString = !string.IsNullOrWhiteSpace(connectionString);
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -321,85 +336,16 @@ public partial class DatabaseContext
         // Increment total connections created counter when a new connection is actually created
         Interlocked.Increment(ref _totalConnectionsCreated);
 
-        TrackedConnection? trackedConnection = null;
-
-        // Ensure session settings from the active dialect are applied on first open for all modes.
-        Action<DbConnection>? firstOpenHandler = conn =>
-        {
-            try
-            {
-                if (trackedConnection != null)
-                {
-                    ExecuteSessionSettings(trackedConnection, readOnly);
-                }
-                else
-                {
-                    ExecuteSessionSettings(conn, readOnly);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
-            }
-
-            // Invoke any additional callback provided by caller
-            onFirstOpen?.Invoke(conn);
-        };
-
-        Func<DbConnection, CancellationToken, Task>? firstOpenHandlerAsync = async (conn, cancellationToken) =>
-        {
-            try
-            {
-                if (trackedConnection != null)
-                {
-                    await ExecuteSessionSettingsAsync(trackedConnection, readOnly, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                else
-                {
-                    await ExecuteSessionSettingsAsync(conn, readOnly, cancellationToken).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
-            }
-
-            // Invoke any additional callback provided by caller
-            onFirstOpen?.Invoke(conn);
-        };
+        // Use pre-built per-context handlers — zero allocation per connection checkout
+        var firstOpenHandler = readOnly ? _firstOpenHandlerRo : _firstOpenHandlerRw;
+        var firstOpenHandlerAsync = readOnly ? _firstOpenHandlerAsyncRo : _firstOpenHandlerAsyncRw;
 
         var metricsCollector = executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
         var useReaderPrefix = readOnly && ShouldUseReaderConnectionString(readOnly);
         var namePrefix = useReaderPrefix ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
-        var tracked = new TrackedConnection(
+        return new TrackedConnection(
             connection,
-            (sender, args) =>
-            {
-                var to = args.CurrentState;
-                var from = args.OriginalState;
-                switch (to)
-                {
-                    case ConnectionState.Open:
-                    {
-                        _logger.LogDebug("Opening connection: " + Name);
-                        var now = Interlocked.Increment(ref _connectionCount);
-                        UpdateMaxConnectionCount(now);
-                        break;
-                    }
-                    case ConnectionState.Closed when from != ConnectionState.Broken:
-                    case ConnectionState.Broken:
-                    {
-                        _logger.LogDebug("Closed or broken connection: " + Name);
-                        Interlocked.Decrement(ref _connectionCount);
-                        break;
-                    }
-                }
-            },
+            _stateChangeHandler,
             firstOpenHandler,
             _disposeHandler,
             null,
@@ -412,17 +358,15 @@ public partial class DatabaseContext
             namePrefix,
             firstOpenHandlerAsync
         );
-        trackedConnection = tracked;
-        return tracked;
     }
 
     /// <summary>
-    /// Overload of FactoryCreateConnection without custom first-open handler.
+    /// Overload of FactoryCreateConnection using read execution type.
     /// </summary>
     internal ITrackedConnection FactoryCreateConnection(string? connectionString = null,
         bool isSharedConnection = false, bool readOnly = false)
     {
-        return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection, readOnly, null);
+        return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection, readOnly);
     }
 
     private DbDataSource? ResolveDataSource(bool readOnly)

@@ -24,6 +24,9 @@ builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
 
 var host = builder.Build();
 
+// Run StormGate integration tests first
+await StormGateIntegrationTests.RunAsync();
+
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 

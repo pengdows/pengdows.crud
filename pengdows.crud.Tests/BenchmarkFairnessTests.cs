@@ -251,6 +251,21 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void ConnectionPoolProtectionBenchmarks_DoNotContainMixedOpsScenario()
+    {
+        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "ScenarioMixedOps",
+            "MixedOps_Pengdows",
+            "MixedOps_Dapper",
+            "MixedOps_EntityFramework"
+        });
+    }
+
+    [Fact]
     public void OptInBenchmarkAttribute_IsDefined()
     {
         const string fileName = "OptInBenchmarkAttribute.cs";

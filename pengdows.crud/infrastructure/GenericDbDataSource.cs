@@ -1,4 +1,3 @@
-using System.Data;
 using System.Data.Common;
 
 namespace pengdows.crud.infrastructure;
@@ -27,13 +26,6 @@ internal sealed class GenericDbDataSource : DbDataSource
                    ?? throw new InvalidOperationException("Provider factory returned null connection.");
         conn.ConnectionString = _connectionString;
         return conn;
-    }
-
-    protected override DbCommand CreateDbCommand(string? commandText = null)
-    {
-        // Base implementation wires this to the data source semantics.
-        var cmd = base.CreateDbCommand(commandText);
-        return cmd;
     }
 
     protected override void Dispose(bool disposing) { /* nothing owned */ }

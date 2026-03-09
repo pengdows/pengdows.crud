@@ -698,6 +698,77 @@ public class PostgreSqlDialectTests
         Assert.Equal(original.ToLowerInvariant(), connection.ConnectionString);
     }
 
+    // =========================================================================
+    // PrepareConnectionStringForDataSource — Options startup baking
+    // =========================================================================
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PrepareConnectionStringForDataSource_BakesAllThreeSessionSettingsIntoOptions(bool readOnly)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly);
+
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages=warning", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("default_transaction_read_only=" + (readOnly ? "on" : "off"), result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_ReadWrite_SetsSessionSettingsBakedFlag()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;";
+
+        dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.True(dialect.SessionSettingsBakedIntoDataSource);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_PreservesExistingUserOptions()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // User has a custom startup option we don't own
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;Options=-c search_path=myschema;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("search_path=myschema", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_OverridesUserReadOnlyIfPresent()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // User incorrectly baked read-only=on in a read-write context
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;Options=-c default_transaction_read_only=on;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        // We must override to the correct value for this mode
+        Assert.Contains("default_transaction_read_only=off", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("default_transaction_read_only=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_NoSessionSettingsBakedFlag_BeforeCall()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+
+        // Flag must start as false
+        Assert.False(dialect.SessionSettingsBakedIntoDataSource);
+    }
+
     private static (Mock<IDbConnection> Connection, Mock<IDbCommand> Command) CreateSettingsConnection(
         params (string Name, string Value)[] rows)
     {
