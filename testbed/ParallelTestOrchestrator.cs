@@ -20,14 +20,11 @@ public class ParallelTestOrchestrator
 {
     private readonly IServiceProvider _services;
     private readonly ConcurrentBag<TestResult> _results = new();
-    private readonly bool _includeOracle;
     private readonly bool _includeSnowflake;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false,
-        bool includeSnowflake = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false)
     {
         _services = services;
-        _includeOracle = includeOracle;
         _includeSnowflake = includeSnowflake;
     }
 
@@ -44,7 +41,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SqlServer => new SqlServerTestContainer(),
             SupportedDatabase.MySql => new MySqlTestContainer(),
             SupportedDatabase.MariaDb => new MariaDbContainer(),
-            SupportedDatabase.Oracle when _includeOracle => new OracleTestContainer(),
+            SupportedDatabase.Oracle => new OracleTestContainer(),
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
@@ -184,7 +181,7 @@ public class ParallelTestOrchestrator
     }
 
     // POLICY: Every new SupportedDatabase value requires an entry in this list.
-    // Only Oracle and Snowflake may be opt-in (they cannot run in a standard Docker container).
+    // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
     // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
     private List<TestConfiguration> GetTestConfigurations()
     {
@@ -259,11 +256,18 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "YugabyteDB",
                 Container = new YugabyteTestContainer(),
                 TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "Oracle",
+                DatabaseProvider = "Oracle",
+                Container = new OracleTestContainer(),
+                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             }
             // Add Sybase as needed
         };
 
-        // Snowflake — requires external credentials; opt-in via INCLUDE_SNOWFLAKE=true
+        // Snowflake — requires cloud credentials; no Docker image; opt-in via INCLUDE_SNOWFLAKE=true
         if (_includeSnowflake)
         {
             configurations.Add(new TestConfiguration
@@ -272,18 +276,6 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Snowflake",
                 Container = new SnowflakeTestContainer(),
                 TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
-            });
-        }
-
-        // Oracle - check if external Oracle is available
-        if (_includeOracle)
-        {
-            configurations.Add(new TestConfiguration
-            {
-                ContainerName = "Oracle",
-                DatabaseProvider = "Oracle",
-                Container = new OracleTestContainer(), // Use managed Testcontainer
-                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             });
         }
 

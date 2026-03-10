@@ -283,11 +283,6 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             return $"INTEGRATION_ONLY={integrationOnly} is set; this provider is not included in the filter";
         }
 
-        if (provider == SupportedDatabase.Oracle && !IntegrationTestConfiguration.ShouldIncludeOracle)
-        {
-            return "requires INCLUDE_ORACLE=true to enable Oracle tests";
-        }
-
         if (provider == SupportedDatabase.Snowflake && !IntegrationTestConfiguration.ShouldIncludeSnowflake)
         {
             return "requires INCLUDE_SNOWFLAKE=true to enable Snowflake tests";

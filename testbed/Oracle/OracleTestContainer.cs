@@ -62,7 +62,7 @@ public class OracleTestContainer : TestContainer
 
         // Wait for Oracle to be truly ready for connections
         await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container,
-            300); // Oracle can be slow to start
+            300); // 300s safety margin; gvenzl/oracle-free:slim typically starts in ~30s
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

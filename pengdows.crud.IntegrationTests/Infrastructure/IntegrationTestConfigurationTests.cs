@@ -8,7 +8,7 @@ public class IntegrationTestConfigurationTests
     [Fact]
     public void GetEnabledProviders_IncludesSnowflake_WhenRequested()
     {
-        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeOracle: false, includeSnowflake: true);
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: true);
 
         Assert.Contains(SupportedDatabase.Snowflake, providers);
     }
@@ -16,9 +16,17 @@ public class IntegrationTestConfigurationTests
     [Fact]
     public void GetEnabledProviders_ExcludesSnowflake_WhenNotRequested()
     {
-        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeOracle: false, includeSnowflake: false);
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: false);
 
         Assert.DoesNotContain(SupportedDatabase.Snowflake, providers);
+    }
+
+    [Fact]
+    public void GetEnabledProviders_AlwaysIncludesOracle()
+    {
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: false);
+
+        Assert.Contains(SupportedDatabase.Oracle, providers);
     }
 
     [Fact]

@@ -516,7 +516,6 @@ var results = await helper.LoadListAsync(sc);
 ### Opt-in exceptions (require env var)
 
 Only databases that **cannot run in a standard Docker container** may remain opt-in:
-- `INCLUDE_ORACLE=true` — Oracle image requires license acceptance
 - `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
 
 All other databases must run automatically with no env var gating.
