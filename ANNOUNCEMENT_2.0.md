@@ -242,6 +242,19 @@ raw SQL for diagnostics (cast to `ISqlDialect` implementation type).
 ### `IColumnInfo` property rename
 - `IsIdIsWritable` → `IsIdWritable`
 
+### `Pooling=false` in connection strings now throws at construction
+Setting `Pooling=false` in your connection string is no longer silently accepted.
+`DatabaseContext` will throw `InvalidOperationException` during construction if pooling
+is explicitly disabled.
+
+**Why:** pengdows.crud's "open late, close early" model assumes a pool is present on every
+checkout. Without pooling, each operation opens a new physical connection, defeating the
+pool governor slot budgets and breaking connection-count metrics.
+
+**Migration:** remove `Pooling=false` from your connection string. If you need a single
+persistent connection (e.g. SQLite in-memory), use `DbMode.SingleConnection` instead —
+it bypasses the pool entirely and holds one connection for the context's lifetime.
+
 ### Hot-path execution methods return `ValueTask` (not `Task`)
 `ExecuteNonQueryAsync`, `ExecuteScalarRequiredAsync`, `ExecuteScalarOrNullAsync`, and `ExecuteReaderAsync`
 all return `ValueTask` / `ValueTask<T>`. Any callers that stored the result as `Task<T>` must update

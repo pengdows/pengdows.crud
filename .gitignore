@@ -51,6 +51,10 @@ artifacts/
 # Debug/scratch files
 debug_*.cs
 *.log
+*.bak
+ORACLE_TALK.md
+check_constructors.csx
+valuetask-validation/
 
 # Build artifacts
 *.binlog

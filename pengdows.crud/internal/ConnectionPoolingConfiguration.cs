@@ -151,12 +151,20 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
-            // Reject Pooling=false — pengdows.crud requires connection pooling
+            // Reject Pooling=false — pengdows.crud requires connection pooling for the
+            // "open late, close early" model. Each operation checks out a connection from
+            // the pool; without a pool every checkout opens a new physical connection,
+            // which defeats governor slot budgets and breaks connection-count metrics.
+            //
+            // Migration: remove Pooling=false from your connection string. If you need
+            // a single persistent connection, use DbMode.SingleConnection instead.
             if (IsPoolingDisabled(builder))
             {
                 throw new InvalidOperationException(
                     $"Connection pooling must not be disabled ({poolingSettingName}=false detected). " +
-                    "pengdows.crud requires connection pooling for correct operation.");
+                    "pengdows.crud requires connection pooling for correct operation. " +
+                    "Remove the Pooling=false setting from your connection string, " +
+                    "or switch to DbMode.SingleConnection if you need a single persistent connection.");
             }
 
             var modified = false;

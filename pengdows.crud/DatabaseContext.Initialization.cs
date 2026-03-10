@@ -218,16 +218,10 @@ public partial class DatabaseContext
                         break;
                 }
             };
-            _firstOpenHandlerRw = tc =>
-            {
-                try { ExecuteSessionSettings(tc, false); }
-                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
-            };
-            _firstOpenHandlerRo = tc =>
-            {
-                try { ExecuteSessionSettings(tc, true); }
-                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
-            };
+            // ExecuteSessionSettings handles its own exceptions internally (logs + returns).
+            // No outer try-catch needed here.
+            _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
+            _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
             _firstOpenHandlerAsyncRw = async (tc, ct) =>
             {
                 try { await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false); }

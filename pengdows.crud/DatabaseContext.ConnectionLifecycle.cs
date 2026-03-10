@@ -194,6 +194,17 @@ public partial class DatabaseContext
         }
         catch (Exception ex)
         {
+            // Best-effort: log the failure and return the connection without marking settings
+            // applied. The connection proceeds in an unknown session state.
+            //
+            // Intentional trade-off: failing hard here would surface every transient SET
+            // failure (e.g., a momentary DB hiccup) as a connection acquisition exception.
+            // Instead, callers that require strict read-only enforcement should verify
+            // the transaction isolation level and not rely solely on session settings.
+            //
+            // MarkSessionSettingsApplied() is NOT called, so a second checkout of this
+            // logical connection will retry the SET on next first-open. For StandardMode
+            // (ephemeral connections) each TrackedConnection is fresh anyway.
             _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
             return;
         }
@@ -381,6 +392,10 @@ public partial class DatabaseContext
             return _readerDataSource;
         }
 
+        // If a DataSource was injected at construction (e.g., NpgsqlDataSource) but no
+        // dedicated reader DataSource exists, fall back to the factory path so the reader
+        // connection string is honoured. _dataSourceProvided is only true in DataSource-
+        // injected construction; in the factory-only path this branch is never reached.
         if (ShouldUseReaderConnectionString(readOnly) && _dataSourceProvided && _readerDataSource == null)
         {
             return null;

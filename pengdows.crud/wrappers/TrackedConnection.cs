@@ -405,8 +405,14 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         {
             if (_onFirstOpen != null)
                 _onFirstOpen.Invoke(this);
-            else
-                _onFirstOpenAsync?.Invoke(this, CancellationToken.None).GetAwaiter().GetResult();
+            else if (_onFirstOpenAsync != null)
+                // Invariant: callers that register an async-only handler must never call
+                // the synchronous Open() path (e.g. must use OpenAsync). Violating this
+                // would block a thread-pool thread via GetAwaiter().GetResult() and risk
+                // deadlock on contexts with a synchronization context.
+                throw new InvalidOperationException(
+                    "A synchronous Open() was called on a TrackedConnection that has only an " +
+                    "async first-open handler registered. Use OpenAsync() instead.");
         }
     }
 
