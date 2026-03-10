@@ -482,13 +482,6 @@ public class DbModeTests : DatabaseTestBase
         return provider == SupportedDatabase.Sqlite ? DbType.Int32 : DbType.Boolean;
     }
 
-    private static bool SupportsReadOnlyTransactions(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.PostgreSql or
-            SupportedDatabase.SqlServer or
-            SupportedDatabase.MySql;
-    }
-
     private static IsolationLevel GetReadCommittedCompatibleIsolationLevel(SupportedDatabase provider)
     {
         return provider is SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB

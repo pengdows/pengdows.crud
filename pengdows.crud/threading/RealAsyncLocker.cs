@@ -173,7 +173,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
 
             if (cancellationToken.IsCancellationRequested)
             {
-                throw new OperationCanceledException(cancellationToken);
+                throw new TaskCanceledException(null, null, cancellationToken);
             }
 
             throw;
@@ -224,7 +224,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             var waited = Stopwatch.GetTimestamp() - start;
             _stats?.RecordWaitEnd(waited);
-            throw new OperationCanceledException(cancellationToken);
+            throw new TaskCanceledException(null, null, cancellationToken);
         }
 
         var waitTicks = Stopwatch.GetTimestamp() - start;
@@ -239,7 +239,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         if (cancellationToken.IsCancellationRequested)
         {
             _stats?.RecordWaitEnd(waitTicks);
-            throw new OperationCanceledException(cancellationToken);
+            throw new TaskCanceledException(null, null, cancellationToken);
         }
 
         _stats?.RecordTimeout(waitTicks);

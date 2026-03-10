@@ -252,6 +252,14 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         return Fixture.CreateAdditionalContextAsync(provider);
     }
 
+    /// <summary>
+    /// Returns true for providers that enforce read-only at the transaction level.
+    /// Oracle is excluded: its read-only transactions pin a consistent snapshot, and the per-test
+    /// DDL reset path can cause ORA-01466 when Oracle later re-reads the recreated tables.
+    /// </summary>
+    protected static bool SupportsReadOnlyTransactions(SupportedDatabase provider) =>
+        provider is SupportedDatabase.PostgreSql or SupportedDatabase.SqlServer or SupportedDatabase.MySql;
+
     private static bool IsTableMissingException(Exception ex)
     {
         var message = ex.Message?.ToLowerInvariant() ?? string.Empty;

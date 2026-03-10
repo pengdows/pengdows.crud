@@ -431,16 +431,6 @@ public class TransactionTests : DatabaseTestBase
         };
     }
 
-    private static bool SupportsReadOnlyTransactions(SupportedDatabase provider)
-    {
-        // Oracle read-only transactions pin a consistent snapshot. In this suite the per-test
-        // DDL reset path can cause ORA-01466 when Oracle later re-reads the recreated tables,
-        // so keep the assertion to providers with stable transaction-level enforcement here.
-        return provider is SupportedDatabase.PostgreSql or
-            SupportedDatabase.SqlServer or
-            SupportedDatabase.MySql;
-    }
-
     private static bool SupportsSerializableIsolation(SupportedDatabase provider)
     {
         // Most databases support serializable, but behavior varies
