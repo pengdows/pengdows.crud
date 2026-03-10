@@ -186,7 +186,16 @@ public partial class DatabaseContext
                     _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             }
 
-            ReadWriteMode = configuration.ReadWriteMode;
+            var normalizedReadWriteMode = configuration.ReadWriteMode;
+            var normalizedReadPoolSize = configuration.MaxConcurrentReads;
+            var normalizedWritePoolSize = configuration.MaxConcurrentWrites;
+            NormalizePoolLimitConfiguration(
+                configuration.DbMode,
+                ref normalizedReadWriteMode,
+                ref normalizedReadPoolSize,
+                ref normalizedWritePoolSize);
+
+            ReadWriteMode = normalizedReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -237,8 +246,8 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
-            _configuredReadPoolSize = configuration.MaxConcurrentReads;
-            _configuredWritePoolSize = configuration.MaxConcurrentWrites;
+            _configuredReadPoolSize = normalizedReadPoolSize;
+            _configuredWritePoolSize = normalizedWritePoolSize;
             if (configuration.EnableMetrics)
             {
                 var options = configuration.MetricsOptions ?? MetricsOptions.Default;
@@ -435,7 +444,6 @@ public partial class DatabaseContext
         var rawConnectionString =
             config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
         _connectionString = NormalizeConnectionString(rawConnectionString);
-        ReadWriteMode = config.ReadWriteMode;
 
         ITrackedConnection? initConn = null;
         try
@@ -630,8 +638,8 @@ public partial class DatabaseContext
         var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, writerConnectionString);
         var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, readerConnectionString);
 
-        var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
-        var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
+        var rawWriterMax = ApplyAbsolutePoolLimit(ResolveGovernorMax(_configuredWritePoolSize, writerConfig));
+        var rawReaderMax = ApplyAbsolutePoolLimit(ResolveGovernorMax(_configuredReadPoolSize, readerConfig));
 
         // Validate explicit pool sizes — negative values are always invalid.
         if (rawWriterMax.HasValue && rawWriterMax.Value < 0)
@@ -676,6 +684,12 @@ public partial class DatabaseContext
         // ReadOnly context or an explicitly disabled write pool.
         if (ConnectionMode == DbMode.SingleWriter && rawWriterMax != 0)
         {
+            if (_isWriteConnection && rawWriterMax.HasValue && rawWriterMax.Value != 1)
+            {
+                _logger.LogWarning(
+                    "SingleWriter coerced the write pool size from {Requested} to 1 so the provider pool and governor stay aligned.",
+                    rawWriterMax.Value);
+            }
             writerLabelMax = 1;
         }
 
@@ -957,47 +971,110 @@ public partial class DatabaseContext
         }
 
         // 2. Already present in the connection string.
-        if (_dialect?.MaxPoolSizeSettingName != null)
+        if (_dialect != null)
         {
-            try
+            var effectiveConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, connectionString);
+            if (effectiveConfig.Source == PoolConfigSource.ConnectionString &&
+                effectiveConfig.MaxPoolSize is int csMaxPoolSize)
             {
-                var builder = GetFactoryConnectionStringBuilder(connectionString);
-                if (builder.ContainsKey(_dialect.MaxPoolSizeSettingName))
+                if (csMaxPoolSize < 0)
                 {
-                    var raw = builder[_dialect.MaxPoolSizeSettingName];
-                    int? csValue = raw is int i ? i
-                        : raw != null && int.TryParse(raw.ToString(), out var p) ? p
-                        : null;
-
-                    if (csValue.HasValue)
-                    {
-                        if (csValue.Value < 0)
-                        {
-                            throw new ArgumentOutOfRangeException(
-                                _dialect.MaxPoolSizeSettingName, csValue.Value,
-                                "MaxPoolSize in the connection string must be >= 0. " +
-                                "Use 0 to forbid connections.");
-                        }
-
-                        if (csValue.Value > 0)
-                        {
-                            return csValue.Value;
-                        }
-                    }
+                    throw new ArgumentOutOfRangeException(
+                        _dialect.MaxPoolSizeSettingName ?? "MaxPoolSize",
+                        csMaxPoolSize,
+                        "MaxPoolSize in the connection string must be >= 0. Use 0 to forbid connections.");
                 }
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-                throw;
-            }
-            catch
-            {
-                /* fall through */
+
+                if (csMaxPoolSize == 0)
+                {
+                    return _dialect.DefaultMaxPoolSize;
+                }
+
+                return ApplyAbsolutePoolLimit(
+                    csMaxPoolSize,
+                    "connection string");
             }
         }
 
         // 3. Dialect default.
-        return _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize;
+        return ApplyAbsolutePoolLimit(
+            _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize,
+            "dialect default");
+    }
+
+    private void NormalizePoolLimitConfiguration(
+        DbMode mode,
+        ref ReadWriteMode readWriteMode,
+        ref int? configuredReadPoolSize,
+        ref int? configuredWritePoolSize)
+    {
+        configuredReadPoolSize = ApplyAbsolutePoolLimit(
+            configuredReadPoolSize,
+            nameof(DatabaseContextConfiguration.MaxConcurrentReads));
+        configuredWritePoolSize = ApplyAbsolutePoolLimit(
+            configuredWritePoolSize,
+            nameof(DatabaseContextConfiguration.MaxConcurrentWrites));
+
+        if (readWriteMode == ReadWriteMode.ReadOnly)
+        {
+            if (configuredWritePoolSize.HasValue && configuredWritePoolSize.Value != 0)
+            {
+                _logger.LogWarning(
+                    "ReadOnly mode ignores {Setting}={Configured}; writes remain forbidden.",
+                    nameof(DatabaseContextConfiguration.MaxConcurrentWrites),
+                    configuredWritePoolSize.Value);
+            }
+
+            configuredWritePoolSize = 0;
+            return;
+        }
+
+        if (mode == DbMode.SingleWriter &&
+            configuredWritePoolSize.HasValue &&
+            configuredWritePoolSize.Value == 0)
+        {
+            _logger.LogWarning(
+                "SingleWriter with {Setting}=0 promotes the context to ReadOnly mode.",
+                nameof(DatabaseContextConfiguration.MaxConcurrentWrites));
+            readWriteMode = ReadWriteMode.ReadOnly;
+            configuredWritePoolSize = 0;
+        }
+    }
+
+    private int ApplyAbsolutePoolLimit(int value, string sourceDescription)
+    {
+        if (value <= AbsoluteMaxPoolSize)
+        {
+            return value;
+        }
+
+        _logger.LogWarning(
+            "{Source} requested pool size {Requested}, which exceeds the absolute limit of {Maximum}. Coercing to {CoercedMaximum}.",
+            sourceDescription,
+            value,
+            AbsoluteMaxPoolSize,
+            AbsoluteMaxPoolSize);
+        return AbsoluteMaxPoolSize;
+    }
+
+    private int? ApplyAbsolutePoolLimit(int? value)
+    {
+        if (!value.HasValue || value.Value <= AbsoluteMaxPoolSize)
+        {
+            return value;
+        }
+
+        return AbsoluteMaxPoolSize;
+    }
+
+    private int? ApplyAbsolutePoolLimit(int? value, string sourceDescription)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return ApplyAbsolutePoolLimit(value.Value, sourceDescription);
     }
 
     private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration,

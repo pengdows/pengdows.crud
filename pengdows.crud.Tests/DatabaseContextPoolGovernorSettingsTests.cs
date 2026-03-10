@@ -1,9 +1,11 @@
 using System;
 using System.Data.Common;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
+using pengdows.crud.Tests.Logging;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -313,5 +315,101 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
         var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
         Assert.True(builder.TryGetValue("Max Pool Size", out var raw));
         Assert.Equal(25, Convert.ToInt32(raw));
+    }
+
+    [Fact]
+    public void SingleWriter_MaxConcurrentWritesZero_PromotesReadOnlyAndLogsWarning()
+    {
+        var provider = new ListLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.SingleWriter,
+            MaxConcurrentWrites = 0,
+            MaxConcurrentReads = 8
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer), loggerFactory);
+
+        Assert.Equal(ReadWriteMode.ReadOnly, ctx.ReadWriteMode);
+        Assert.True(ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).Forbidden);
+        Assert.Equal(8, ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader).MaxSlots);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning &&
+                 e.Message.Contains("MaxConcurrentWrites", StringComparison.Ordinal) &&
+                 e.Message.Contains("ReadOnly", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SingleWriter_WritableMaxConcurrentWritesNonOne_CoercesToOneAndLogsWarning()
+    {
+        var provider = new ListLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer;Max Pool Size=200",
+            DbMode = DbMode.SingleWriter,
+            MaxConcurrentWrites = 7
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer), loggerFactory);
+
+        Assert.Equal(1, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).MaxSlots);
+        var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
+        Assert.True(builder.TryGetValue("Max Pool Size", out var raw));
+        Assert.Equal(1, Convert.ToInt32(raw));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning &&
+                 e.Message.Contains("SingleWriter", StringComparison.Ordinal) &&
+                 e.Message.Contains("coerced", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void MaxConcurrentReads_AboveAbsoluteCap_IsClampedTo512AndLogged()
+    {
+        var provider = new ListLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            MaxConcurrentReads = 4096
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer), loggerFactory);
+
+        Assert.Equal(512, ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader).MaxSlots);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning &&
+                 e.Message.Contains("512", StringComparison.Ordinal) &&
+                 e.Message.Contains("MaxConcurrentReads", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ConnectionStringMaxPoolSize_AboveAbsoluteCap_IsClampedTo512AndLogged()
+    {
+        var provider = new ListLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(provider));
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer;Max Pool Size=4096",
+            DbMode = DbMode.Standard
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer), loggerFactory);
+
+        Assert.Equal(512, ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).MaxSlots);
+        var builder = new DbConnectionStringBuilder { ConnectionString = ctx.ConnectionString };
+        Assert.True(builder.TryGetValue("Max Pool Size", out var raw));
+        Assert.Equal(512, Convert.ToInt32(raw));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning &&
+                 e.Message.Contains("connection string", StringComparison.OrdinalIgnoreCase) &&
+                 e.Message.Contains("512", StringComparison.Ordinal));
     }
 }

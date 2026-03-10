@@ -183,6 +183,48 @@ public class StormGateTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
     }
 
+    [Fact]
+    public async Task Dispose_WithActiveLease_DoesNotBreakLeaseDisposal()
+    {
+        var mockConn = new Mock<DbConnection>();
+        _mockDataSource.Protected()
+            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(mockConn.Object);
+
+        var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        gate.Dispose();
+
+        var ex = Record.Exception(conn.Dispose);
+
+        Assert.Null(ex);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
+    }
+
+    [Fact]
+    public async Task OpenAsync_WhenProviderOpenIsCanceled_DoesNotLogError()
+    {
+        var mockLogger = new Mock<ILogger>();
+
+        _mockDataSource.Protected()
+            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException("canceled by provider"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout, mockLogger.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => gate.OpenAsync());
+
+        mockLogger.Verify(
+            l => l.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<OperationCanceledException>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Never);
+    }
+
     private class TestDataSource : DbDataSource
     {
         public bool Disposed { get; private set; }

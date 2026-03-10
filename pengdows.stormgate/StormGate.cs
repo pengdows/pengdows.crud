@@ -15,7 +15,10 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     private readonly SemaphoreSlim _semaphore;
     private readonly TimeSpan _acquireTimeout;
     private readonly ILogger _logger;
+    private readonly object _lifecycleLock = new();
+    private int _activeLeases;
     private int _disposed;
+    private int _semaphoreDisposed;
 
     public StormGate(
         DbDataSource dataSource,
@@ -65,7 +68,13 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         try
         {
             var inner = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
-            return new PermitConnection(inner, _semaphore);
+            RegisterLease();
+            return new PermitConnection(inner, this);
+        }
+        catch (OperationCanceledException)
+        {
+            _semaphore.Release();
+            throw;
         }
         catch (Exception ex)
         {
@@ -73,6 +82,36 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             _semaphore.Release();
             throw;
         }
+    }
+
+    private void RegisterLease()
+    {
+        lock (_lifecycleLock)
+        {
+            _activeLeases++;
+        }
+    }
+
+    private void ReleaseLease()
+    {
+        var disposeSemaphore = false;
+
+        lock (_lifecycleLock)
+        {
+            _semaphore.Release();
+            _activeLeases--;
+
+            if (_activeLeases == 0 &&
+                Volatile.Read(ref _disposed) != 0 &&
+                _semaphoreDisposed == 0)
+            {
+                _semaphoreDisposed = 1;
+                disposeSemaphore = true;
+            }
+        }
+
+        if (disposeSemaphore)
+            _semaphore.Dispose();
     }
 
     private void ThrowIfDisposed()
@@ -86,8 +125,8 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _semaphore.Dispose();
         _dataSource.Dispose();
+        DisposeSemaphoreIfDrained();
     }
 
     public async ValueTask DisposeAsync()
@@ -95,27 +134,44 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        _semaphore.Dispose();
         await _dataSource.DisposeAsync().ConfigureAwait(false);
+        DisposeSemaphoreIfDrained();
+    }
+
+    private void DisposeSemaphoreIfDrained()
+    {
+        var disposeSemaphore = false;
+
+        lock (_lifecycleLock)
+        {
+            if (_activeLeases == 0 && _semaphoreDisposed == 0)
+            {
+                _semaphoreDisposed = 1;
+                disposeSemaphore = true;
+            }
+        }
+
+        if (disposeSemaphore)
+            _semaphore.Dispose();
     }
 
     private sealed class PermitConnection : DbConnection
     {
         private readonly DbConnection _inner;
-        private readonly SemaphoreSlim _semaphore;
+        private readonly StormGate _owner;
         private int _released;
         private int _disposed;
 
-        public PermitConnection(DbConnection inner, SemaphoreSlim semaphore)
+        public PermitConnection(DbConnection inner, StormGate owner)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-            _semaphore = semaphore ?? throw new ArgumentNullException(nameof(semaphore));
+            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         }
 
         private void ReleasePermitOnce()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
-                _semaphore.Release();
+                _owner.ReleaseLease();
         }
 
         [AllowNull]

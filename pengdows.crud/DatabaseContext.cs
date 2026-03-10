@@ -180,6 +180,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";
+    internal const int AbsoluteMaxPoolSize = 512;
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
@@ -474,6 +475,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenGate = null;
         }
 
+        DisposePoolGovernors();
         DisposeOwnedDataSources();
 
         base.DisposeManaged();
@@ -517,9 +519,76 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenGate = null;
         }
 
+        await DisposePoolGovernorsAsync().ConfigureAwait(false);
         await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
+    }
+
+    private void DisposePoolGovernors()
+    {
+        var readerGovernor = _readerGovernor;
+        var writerGovernor = _writerGovernor;
+        _readerGovernor = null;
+        _writerGovernor = null;
+
+        DisposeGovernorAfterDrain(writerGovernor);
+        DisposeGovernorAfterDrain(readerGovernor);
+    }
+
+    private async ValueTask DisposePoolGovernorsAsync()
+    {
+        var readerGovernor = _readerGovernor;
+        var writerGovernor = _writerGovernor;
+        _readerGovernor = null;
+        _writerGovernor = null;
+
+        await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
+        await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);
+    }
+
+    private void DisposeGovernorAfterDrain(PoolGovernor? governor)
+    {
+        if (governor == null)
+        {
+            return;
+        }
+
+        try
+        {
+            governor.WaitForDrainAsync(_poolAcquireTimeout).GetAwaiter().GetResult();
+            governor.Dispose();
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+        }
+    }
+
+    private async ValueTask DisposeGovernorAfterDrainAsync(PoolGovernor? governor)
+    {
+        if (governor == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await governor.WaitForDrainAsync(_poolAcquireTimeout).ConfigureAwait(false);
+            governor.Dispose();
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+        }
     }
 
     protected override ISqlDialect DialectCore => _dialect;
