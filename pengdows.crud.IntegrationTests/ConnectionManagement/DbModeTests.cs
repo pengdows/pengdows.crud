@@ -486,7 +486,6 @@ public class DbModeTests : DatabaseTestBase
     {
         return provider is SupportedDatabase.PostgreSql or
             SupportedDatabase.SqlServer or
-            SupportedDatabase.Oracle or
             SupportedDatabase.MySql;
     }
 
