@@ -1,17 +1,21 @@
 # Metrics & Observability
 
-`pengdows.crud` provides 25+ real-time metrics for deep operational visibility.
+`pengdows.crud` provides 36 real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
 
 ## Categories & Key Metrics
 
 | Category | Metrics Tracked |
 |----------|-----------------|
-| **Connections** | Current/Peak, Opened/Closed, Hold Time, Avg Duration. |
-| **Commands** | Total Executed/Failed, Avg Duration, P95/P99 latency. |
+| **Connections** | Current/Peak, Opened/Closed, Hold Time, Avg Duration, long-lived count. |
+| **Commands** | Total Executed/Failed/TimedOut/Cancelled, Avg Duration, P95/P99 latency. |
 | **Rows** | Total rows read/affected across operations. |
 | **Prepared Statements** | Total cached/evicted statements. |
-| **Transactions** | Active/Max Concurrent, Avg Duration. |
+| **Transactions** | Active/Max Concurrent, Committed/RolledBack, Avg/P95/P99 Duration. |
+| **Errors** | Deadlocks, SerializationFailures, ConstraintViolations. |
+| **Sessions** | Session init count, Avg session init time. |
 | **Pool Governor** | In-use/Peak Slots, Queued Requests, Timeouts, Cancellations. |
+
+Metrics are split into **read vs write roles** via `DatabaseRoleMetrics Read` and `DatabaseRoleMetrics Write` on the `DatabaseMetrics` record.
 
 ## Event-Based Updates
 
@@ -20,7 +24,8 @@ Subscribe to `MetricsUpdated` to receive real-time updates without polling.
 ```csharp
 context.MetricsUpdated += (sender, metrics) =>
 {
-    _logger.LogInformation("P95 Command Duration: {ms}ms", metrics.P95CommandMs);
+    _logger.LogInformation("Deadlocks: {n}, P99: {ms}ms",
+        metrics.ErrorDeadlocks, metrics.P99CommandMs);
 };
 ```
 

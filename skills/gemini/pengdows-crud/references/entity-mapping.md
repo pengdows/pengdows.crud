@@ -417,7 +417,8 @@ public class UserProfile
 
 ### Required Combinations
 
-- Every entity must have `[Table]` and exactly one `[Id]` property
+- Every entity must have `[Table]`
+- `[Id]` is required for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). Entities with only `[PrimaryKey]` (no `[Id]`) can still use `CreateAsync` and `RetrieveOneAsync(TEntity)`.
 - `[Id]` properties must also have `[Column]` attributes
 - All properties mapped to database must have `[Column]` attributes
 

@@ -45,6 +45,9 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return;
         }
 
+        // No timeout or cancellation: TransactionContext is single-threaded by design.
+        // Contention here means the caller is misusing the API (concurrent ops on one
+        // transaction), which is already documented as unsupported.
         _semaphore.Wait();
         SetHeld();
     }

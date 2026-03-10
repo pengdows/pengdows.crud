@@ -561,8 +561,15 @@ Use lowest number possible:
 | `Best` (15) | Auto-select optimal mode for the database |
 
 ```csharp
+// Using IDatabaseContextConfiguration to specify DbMode with a factory
 services.AddSingleton<IDatabaseContext>(sp =>
-    new DatabaseContext(connStr, factory, null, DbMode.SingleWriter));
+    new DatabaseContext(
+        new DatabaseContextConfiguration { ConnectionString = connStr, DbMode = DbMode.SingleWriter },
+        SqlClientFactory.Instance));
+
+// Or using the string-based constructor (also supports DbMode directly)
+services.AddSingleton<IDatabaseContext>(sp =>
+    new DatabaseContext(connStr, "Microsoft.Data.SqlClient", DbMode.SingleWriter));
 ```
 
 ## Transactions
@@ -691,7 +698,8 @@ public class OrderGatewayTests
 
 ## Supported Databases
 
-SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, Firebird, CockroachDB, DuckDB
+SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake
+(+ AuroraMySql and AuroraPostgreSql — auto-detected at runtime, no extra setup)
 
 Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 
@@ -717,7 +725,7 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** - SQLite :memory: = SingleConnection
+8. **DbMode.Best auto-selects** - SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB = SingleWriter; LocalDB = KeepAlive; all others = Standard
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations

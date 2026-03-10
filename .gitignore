@@ -52,6 +52,13 @@ artifacts/
 debug_*.cs
 *.log
 
+# Build artifacts
+*.binlog
+
+# Benchmark database files
+*.duckdb
+*.duckdb.wal
+
 # .NET SDK runtime artifacts
 .dotnet/
 *.DotSettings

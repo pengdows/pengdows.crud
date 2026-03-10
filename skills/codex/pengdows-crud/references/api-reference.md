@@ -211,6 +211,7 @@ ISqlContainer CreateSqlContainer(string? query = null);
 ISqlDialect Dialect { get; }                   // SQL dialect in use for this context
 SupportedDatabase Product { get; }             // Detected database product
 DbMode ConnectionMode { get; }                 // Connection strategy
+DbDataSource? DataSource { get; }              // Native data source (e.g. NpgsqlDataSource), or null if not available
 TimeSpan? ModeLockTimeout { get; }             // Lock timeout; null = wait indefinitely
 long NumberOfOpenConnections { get; }
 long PeakOpenConnections { get; }
