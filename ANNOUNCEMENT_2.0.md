@@ -149,7 +149,18 @@ Why it matters:
 - YugabyteDB auto-prepare is disabled to match YSQL semantics (prevents broken connection errors after pool reuse)
 - Aurora MySql/PostgreSQL are auto-detected at runtime and delegate to the correct dialect — no user configuration needed
 
-### 12) Real-time metrics (36 fields)
+### 12) DB Impact Notes (Dialect & Performance)
+2.0 introduces several database-specific optimizations that improve both throughput and reliability.
+
+- **PostgreSQL & CockroachDB**: Session settings (read-only intent, min messages, string conforming) are now **baked directly into startup parameters** via the connection string. This eliminates a mandatory `SET` round-trip per checkout on warm connections.
+- **Oracle**: Improved pool isolation for read-only vs read-write contexts via automatic connection string discrimination, preventing cross-intent pool pollution in the ODP.NET driver.
+- **Consolidated RTTs**: All dialects now consolidate baseline and intent session settings into a **single batched command (1 RTT)** during connection initialization.
+- **Standardized GUIDs**: GUID storage is now fully deterministic across all 13 providers:
+  - Native `uniqueidentifier` / `UUID`: SQL Server, PostgreSQL, MySQL
+  - RFC 4122 Big-Endian Binary: Firebird (`CHAR(16) OCTETS`)
+  - Hyphenated String ("D" format): SQLite, Oracle, DuckDB, Snowflake
+
+### 13) Real-time metrics (36 fields)
 `IDatabaseContext.Metrics` returns a `DatabaseMetrics` sealed record with full observability.
 
 Why it matters:

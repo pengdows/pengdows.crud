@@ -18,6 +18,8 @@ public class BuildPackagesScriptTests
         Assert.Contains("pengdows.crud/pengdows.crud.csproj", contents, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj", contents,
             StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pengdows.stormgate/pengdows.stormgate.csproj", contents,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

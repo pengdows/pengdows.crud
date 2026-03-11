@@ -278,7 +278,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             catch (Exception ex)
             {
                 MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Exception: {ex.GetType().Name}");
-                throw;
             }
         });
 
@@ -316,7 +315,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             catch (Exception ex)
             {
                 MarkInvalid(ScenarioWriteStorm, FrameworkDapper, $"Exception: {ex.GetType().Name}");
-                throw;
             }
         });
     }
@@ -353,7 +351,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             catch (Exception ex)
             {
                 MarkInvalid(ScenarioWriteStorm, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}");
-                throw;
             }
         });
     }

@@ -864,9 +864,13 @@ public partial class DatabaseContext
             && (_dialect?.SessionSettingsBakedIntoDataSource ?? false))
         {
             if (_isWriteConnection)
+            {
                 _rwSettingsBakedIntoDataSource = true;
+            }
             else
+            {
                 _roSettingsBakedIntoDataSource = true;
+            }
         }
 
         _readerDataSource = _dataSource;
@@ -1947,7 +1951,9 @@ public partial class DatabaseContext
             if (stringMethod != null)
             {
                 if (stringMethod.Invoke(factory, new object?[] { connectionString }) is DbDataSource ds)
+                {
                     return ds;
+                }
             }
 
             // Priority 2: DbConnectionStringBuilder overload — some providers only expose this.
@@ -1957,7 +1963,9 @@ public partial class DatabaseContext
                 var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
                 builder.ConnectionString = connectionString;
                 if (builderMethod.Invoke(factory, new object?[] { builder }) is DbDataSource ds)
+                {
                     return ds;
+                }
             }
 
             return null;

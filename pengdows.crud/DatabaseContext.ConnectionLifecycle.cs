@@ -149,7 +149,9 @@ public partial class DatabaseContext
         if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
         {
             if (connection is ITrackedConnection bakedTc)
+            {
                 bakedTc.LocalState.MarkSessionSettingsApplied();
+            }
             return;
         }
 
@@ -230,7 +232,9 @@ public partial class DatabaseContext
         if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
         {
             if (connection is ITrackedConnection bakedTc)
+            {
                 bakedTc.LocalState.MarkSessionSettingsApplied();
+            }
             return;
         }
 

@@ -91,7 +91,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         await using (var cmd = _sentinel.CreateCommand())
         {
             cmd.CommandText = @"
-                CREATE TABLE IF NOT EXISTS benchmark (
+                DROP TABLE IF EXISTS benchmark;
+                CREATE TABLE benchmark (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     age INTEGER NOT NULL,
@@ -206,6 +207,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         // Aggregate — no variable params; same container reused each iteration
         _aggregateSc = _pengdowsContext.CreateSqlContainer(
             "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
+
+        await PreWarmFrameworkCachesAsync();
     }
 
     [GlobalCleanup]
@@ -236,6 +239,179 @@ public class EqualFootingCrudBenchmarks : IDisposable
     public void Dispose()
     {
         GlobalCleanup();
+    }
+
+    private async Task PreWarmFrameworkCachesAsync()
+    {
+        const int prewarmDeleteIdBase = 6_000_000;
+        const string createSql =
+            "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES (@Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        const string readSingleSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
+        const string readListSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
+        const string updateSql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
+        const string deleteInsertSql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        const string filteredQuerySql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
+        const string aggregateSql = "SELECT AVG(salary) FROM benchmark WHERE is_active = 1";
+
+        var createdAt = DateTime.UtcNow.ToString("O");
+
+        // Prime pengdows containers and Dapper/EF client-side caches with the exact benchmark shapes.
+        for (var pw = 0; pw < 2; pw++)
+        {
+            var rowId = (pw % SeedRows) + 1;
+            var deleteId = prewarmDeleteIdBase + pw;
+
+            _readSingleSc.SetParameterValue("w0", rowId);
+            await _gateway.LoadSingleAsync(_readSingleSc);
+
+            _readListSc.SetParameterValue("Age", 30);
+            await _gateway.LoadListAsync(_readListSc);
+
+            _filteredQuerySc.SetParameterValue("IsActive", true);
+            _filteredQuerySc.SetParameterValue("MinAge", 25);
+            _filteredQuerySc.SetParameterValue("MaxAge", 45);
+            await _gateway.LoadListAsync(_filteredQuerySc);
+
+            _updateSc.SetParameterValue("s2", 60000.0 + pw);
+            _updateSc.SetParameterValue("k0", rowId);
+            await _updateSc.ExecuteNonQueryAsync();
+
+            await using (var tx = await _pengdowsContext.BeginTransactionAsync())
+            await using (var deleteInsertSc = _deleteInsertSc.Clone(tx))
+            await using (var deleteSc = _deleteSc.Clone(tx))
+            {
+                deleteInsertSc.SetParameterValue("Id", deleteId);
+                await deleteInsertSc.ExecuteNonQueryAsync();
+                deleteSc.SetParameterValue("k0", deleteId);
+                await deleteSc.ExecuteNonQueryAsync();
+                tx.Rollback();
+            }
+
+            await using (var tx = await _pengdowsContext.BeginTransactionAsync())
+            await using (var deleteOnlySc = _deleteSc.Clone(tx))
+            {
+                deleteOnlySc.SetParameterValue("k0", rowId);
+                await deleteOnlySc.ExecuteNonQueryAsync();
+                tx.Rollback();
+            }
+
+            await _aggregateSc.ExecuteScalarOrNullAsync<double>();
+
+            await using (var tx = await _pengdowsContext.BeginTransactionAsync())
+            await using (var createSc = _gateway.BuildCreate(new BenchEntity
+                         {
+                             Name = $"Warmup {pw}",
+                             Age = 25,
+                             Salary = 50000.0,
+                             IsActive = true,
+                             CreatedAt = createdAt
+                         }, tx))
+            {
+                await createSc.ExecuteNonQueryAsync();
+                tx.Rollback();
+            }
+
+            await using (var dapperConn = new SqliteConnection(ConnStr))
+            {
+                await dapperConn.OpenAsync();
+                await using var tx = await dapperConn.BeginTransactionAsync();
+                await dapperConn.ExecuteAsync(createSql, new
+                {
+                    Name = $"Warmup {pw}",
+                    Age = 25,
+                    Salary = 50000.0,
+                    IsActive = true,
+                    CreatedAt = createdAt
+                }, tx);
+                await dapperConn.QueryFirstOrDefaultAsync<DapperBenchEntity>(readSingleSql, new { Id = rowId });
+                await dapperConn.QueryAsync<DapperBenchEntity>(readListSql, new { Age = 30, Limit = RecordCount });
+                await dapperConn.QueryAsync<DapperBenchEntity>(filteredQuerySql,
+                    new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
+                await dapperConn.ExecuteAsync(updateSql, new { Salary = 60000.0 + pw, Id = rowId }, tx);
+                await dapperConn.ExecuteAsync(deleteInsertSql, new
+                {
+                    Id = deleteId,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = createdAt
+                }, tx);
+                await dapperConn.ExecuteAsync(deleteSql, new { Id = deleteId }, tx);
+                await dapperConn.ExecuteScalarAsync<double>(aggregateSql);
+                await tx.RollbackAsync();
+            }
+
+            await using (var dapperDeleteConn = new SqliteConnection(ConnStr))
+            {
+                await dapperDeleteConn.OpenAsync();
+                await using var tx = await dapperDeleteConn.BeginTransactionAsync();
+                await dapperDeleteConn.ExecuteAsync(deleteSql, new { Id = rowId }, tx);
+                await tx.RollbackAsync();
+            }
+
+            await using (var efCtx = new EfBenchContext(_efOptions))
+            {
+                await using var tx = await efCtx.Database.BeginTransactionAsync();
+                await efCtx.Database.ExecuteSqlRawAsync(createSql,
+                    new SqliteParameter("Name", $"Warmup {pw}"),
+                    new SqliteParameter("Age", 25),
+                    new SqliteParameter("Salary", 50000.0),
+                    new SqliteParameter("IsActive", true),
+                    new SqliteParameter("CreatedAt", createdAt));
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(readSingleSql, new SqliteParameter("Id", rowId))
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(readListSql,
+                        new SqliteParameter("Age", 30),
+                        new SqliteParameter("Limit", RecordCount))
+                    .AsNoTracking()
+                    .ToListAsync();
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(filteredQuerySql,
+                        new SqliteParameter("IsActive", true),
+                        new SqliteParameter("MinAge", 25),
+                        new SqliteParameter("MaxAge", 45),
+                        new SqliteParameter("Limit", RecordCount))
+                    .AsNoTracking()
+                    .ToListAsync();
+                await efCtx.Database.ExecuteSqlRawAsync(updateSql,
+                    new SqliteParameter("Salary", 60000.0 + pw),
+                    new SqliteParameter("Id", rowId));
+                await efCtx.Database.ExecuteSqlRawAsync(deleteInsertSql,
+                    new SqliteParameter("Id", deleteId),
+                    new SqliteParameter("Name", "ToDelete"),
+                    new SqliteParameter("Age", 99),
+                    new SqliteParameter("Salary", 1.0),
+                    new SqliteParameter("IsActive", false),
+                    new SqliteParameter("CreatedAt", createdAt));
+                await efCtx.Database.ExecuteSqlRawAsync(deleteSql, new SqliteParameter("Id", deleteId));
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw("SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = 1 LIMIT 1")
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+                var efConn = efCtx.Database.GetDbConnection();
+                await efConn.OpenAsync();
+                await using var efCmd = efConn.CreateCommand();
+                efCmd.CommandText = aggregateSql;
+                _ = Convert.ToDouble(await efCmd.ExecuteScalarAsync());
+                await tx.RollbackAsync();
+            }
+
+            await using (var efDeleteCtx = new EfBenchContext(_efOptions))
+            {
+                await using var tx = await efDeleteCtx.Database.BeginTransactionAsync();
+                await efDeleteCtx.Database.ExecuteSqlRawAsync(deleteSql, new SqliteParameter("Id", rowId));
+                await tx.RollbackAsync();
+            }
+        }
     }
 
     // ========================================================================
@@ -487,12 +663,66 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // ========================================================================
 
     /// <summary>
-    /// Uses reusable containers for both the insert and delete steps.
-    /// Insert uses a manually-built container (explicit id required; [Id(false)] means BuildCreate omits it).
-    /// Delete uses BuildDelete with SetParameterValue("k0", id).
+    /// Measures a true DELETE against an existing row.
+    /// Each operation runs inside a transaction and rolls back so the seeded row remains
+    /// available for subsequent iterations and BenchmarkDotNet invocations.
     /// </summary>
     [Benchmark]
-    public async Task<int> Delete_Pengdows()
+    public async Task<int> DeleteOnly_Pengdows()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var tx = await _pengdowsContext.BeginTransactionAsync();
+            await using var deleteSc = _deleteSc.Clone(tx);
+            deleteSc.SetParameterValue("k0", ((i % SeedRows) + 1));
+            count += await deleteSc.ExecuteNonQueryAsync();
+            tx.Rollback();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteOnly_Dapper()
+    {
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var conn = new SqliteConnection(ConnStr);
+            await conn.OpenAsync();
+            await using var tx = await conn.BeginTransactionAsync();
+            count += await conn.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
+            await tx.RollbackAsync();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteOnly_EntityFramework()
+    {
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var ctx = new EfBenchContext(_efOptions);
+            await using var tx = await ctx.Database.BeginTransactionAsync();
+            count += await ctx.Database.ExecuteSqlRawAsync(deleteSql,
+                new SqliteParameter("Id", (i % SeedRows) + 1));
+            await tx.RollbackAsync();
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Measures the full write lifecycle for "create a disposable row, then delete it".
+    /// This is intentionally not a pure delete benchmark.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> DeleteInsertCycle_Pengdows()
     {
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
@@ -510,7 +740,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     }
 
     [Benchmark]
-    public async Task<int> Delete_Dapper()
+    public async Task<int> DeleteInsertCycle_Dapper()
     {
         const string insertSql =
             "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
@@ -520,19 +750,20 @@ public class EqualFootingCrudBenchmarks : IDisposable
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
             {
-                await using var conn = new SqliteConnection(ConnStr);
-                await conn.OpenAsync();
-                await conn.ExecuteAsync(insertSql, new
-                {
-                    Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
-                    IsActive = false, CreatedAt = DateTime.UtcNow.ToString("O")
-                });
+                await using var ctx = new EfBenchContext(_efOptions);
+                await ctx.Database.ExecuteSqlRawAsync(insertSql,
+                    new SqliteParameter("Id", id),
+                    new SqliteParameter("Name", "ToDelete"),
+                    new SqliteParameter("Age", 99),
+                    new SqliteParameter("Salary", 1.0),
+                    new SqliteParameter("IsActive", false),
+                    new SqliteParameter("CreatedAt", DateTime.UtcNow.ToString("O")));
             }
 
             {
-                await using var conn = new SqliteConnection(ConnStr);
-                await conn.OpenAsync();
-                count += await conn.ExecuteAsync(deleteSql, new { Id = id });
+                await using var ctx = new EfBenchContext(_efOptions);
+                count += await ctx.Database.ExecuteSqlRawAsync(deleteSql,
+                    new SqliteParameter("Id", id));
             }
         }
 
@@ -540,7 +771,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     }
 
     [Benchmark]
-    public async Task<int> Delete_EntityFramework()
+    public async Task<int> DeleteInsertCycle_EntityFramework()
     {
         const string insertSql =
             "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";

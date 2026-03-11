@@ -115,6 +115,102 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void EqualFootingCrudBenchmarks_PrewarmAllFrameworks()
+    {
+        const string fileName = "EqualFootingCrudBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "PreWarmFrameworkCachesAsync",
+            "QueryFirstOrDefaultAsync<DapperBenchEntity>",
+            "QueryAsync<DapperBenchEntity>",
+            "ExecuteAsync(createSql",
+            "ExecuteAsync(updateSql",
+            "ExecuteAsync(deleteSql",
+            "ExecuteScalarAsync<double>",
+            "FromSqlRaw(readSingleSql",
+            "ExecuteSqlRawAsync(deleteSql",
+            "Database.ExecuteSqlRawAsync(updateSql"
+        });
+    }
+
+    [Fact]
+    public void PostgreSqlEqualFootingBenchmarks_PrewarmAllFrameworks()
+    {
+        const string fileName = "PostgreSqlEqualFootingBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "PreWarmFrameworkCachesAsync",
+            "QueryFirstOrDefaultAsync<DapperBenchEntity>",
+            "QueryAsync<DapperBenchEntity>",
+            "ExecuteAsync(insertSql",
+            "ExecuteAsync(updateSql",
+            "ExecuteAsync(deleteSql",
+            "ExecuteScalarAsync<double>",
+            "FromSqlRaw(readSingleSql",
+            "ExecuteSqlRawAsync(deleteSql",
+            "Database.ExecuteSqlRawAsync(updateSql"
+        });
+    }
+
+    [Fact]
+    public void EqualFootingCrudBenchmarks_SplitDeleteOnlyFromDeleteInsertCycle()
+    {
+        const string fileName = "EqualFootingCrudBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "DeleteOnly_Pengdows",
+            "DeleteOnly_Dapper",
+            "DeleteOnly_EntityFramework",
+            "DeleteInsertCycle_Pengdows",
+            "DeleteInsertCycle_Dapper",
+            "DeleteInsertCycle_EntityFramework",
+            "BeginTransactionAsync",
+            "Rollback()",
+            "Clone(tx)"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "public async Task<int> Delete_Pengdows()",
+            "public async Task<int> Delete_Dapper()",
+            "public async Task<int> Delete_EntityFramework()"
+        });
+    }
+
+    [Fact]
+    public void PostgreSqlEqualFootingBenchmarks_SplitDeleteOnlyFromDeleteInsertCycle()
+    {
+        const string fileName = "PostgreSqlEqualFootingBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "DeleteOnly_Pengdows",
+            "DeleteOnly_Dapper",
+            "DeleteOnly_EntityFramework",
+            "DeleteInsertCycle_Pengdows",
+            "DeleteInsertCycle_Dapper",
+            "DeleteInsertCycle_EntityFramework",
+            "BeginTransactionAsync",
+            "Rollback()",
+            "Clone(tx)"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "public async Task<int> Delete_Pengdows()",
+            "public async Task<int> Delete_Dapper()",
+            "public async Task<int> Delete_EntityFramework()"
+        });
+    }
+
+    [Fact]
     public void SqliteDateHandlingBenchmarks_ExposeFieldTypeDiagnostics()
     {
         var fileName = Path.Combine("Internal", "SqliteDateHandlingBenchmarks.cs");
@@ -143,6 +239,24 @@ public class BenchmarkFairnessTests
         AssertAllAbsent(fileName, text, new[]
         {
             "sealed class SqliteDateHandlingBenchmarks"
+        });
+    }
+
+    [Fact]
+    public void ReaderMappingBenchmark_UsesDuckDbParameterMarkersForSeedInsert()
+    {
+        var fileName = Path.Combine("Internal", "ReaderMappingBenchmark.cs");
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "INSERT INTO test_entities (id, name, email, age, salary, is_active, created_at, score) ",
+            "VALUES ($id, $name, $email, $age, $salary, $is_active, $created_at, $score)"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "VALUES (@id, @name, @email, @age, @salary, @is_active, @created_at, @score)"
         });
     }
 
@@ -203,6 +317,40 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void SqliteConcurrencyBenchmark_UsesIsolatedDatabaseFilesAndDefensiveSchemaCreation()
+    {
+        const string fileName = "SqliteConcurrencyBenchmark.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "Path.GetTempPath()",
+            "Guid.NewGuid()",
+            "CREATE TABLE IF NOT EXISTS TestEntities",
+            "DeleteDatabaseFileIfPresent",
+            "DisposeExistingContext"
+        });
+    }
+
+    [Fact]
+    public void SqliteConcurrencyBenchmark_UsesDatabaseGeneratedIds()
+    {
+        const string fileName = "SqliteConcurrencyBenchmark.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "[Id(writable: false)]",
+            "AUTOINCREMENT"
+        });
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "[Id(writable: true)]"
+        });
+    }
+
+    [Fact]
     public void CrossFrameworkRatioWriter_EmitsExplicitCrossFrameworkRatios()
     {
         const string fileName = "CrossFrameworkRatioWriter.cs";
@@ -248,6 +396,16 @@ public class BenchmarkFairnessTests
             "BenchmarkCorrectnessArtifacts.Write(",
             "nameof(ConnectionPoolProtectionBenchmarks)"
         });
+    }
+
+    [Fact]
+    public void ConnectionPoolProtectionBenchmarks_DoesNotRethrowWorkloadFailures()
+    {
+        const string fileName = "ConnectionPoolProtectionBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        Assert.Contains("catch (Exception ex)", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("throw;", text, StringComparison.Ordinal);
     }
 
     [Fact]

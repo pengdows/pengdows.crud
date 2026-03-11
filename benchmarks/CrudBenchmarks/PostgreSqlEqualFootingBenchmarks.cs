@@ -206,6 +206,177 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         // Aggregate — no variable params; same container reused each iteration
         _aggregateSc = _pengdowsContext.CreateSqlContainer(
             "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
+
+        // ---- Npgsql auto-prepare pre-warming ----
+        //
+        // DatabaseContext bakes MaxAutoPrepare=64 / AutoPrepareMinUsages=2 into the Npgsql
+        // DataSource, so Npgsql server-side prepares statements after 2 uses *per connection*.
+        // With Minimum Pool Size=5, all 5 connections are pre-created.  BenchmarkDotNet
+        // warmupCount=3 at RecordCount=1 gives only 3 sequential executions — too few to
+        // saturate all pool connections, so some stay unprepared when measurement begins.
+        //
+        // Fix: run each container (minPoolSize × threshold × safety) = 5 × 2 × 2 = 20 times
+        // before BDN warmup starts.  Sequential LIFO means traffic concentrates on 1-2
+        // connections, so 20 iterations reliably drives all 5 pool connections past the
+        // AutoPrepareMinUsages threshold.
+        const int prewarmCount = 20;
+        const int prewarmDeleteIdBase = 5_000_000; // separate range, won't collide with benchmark
+
+        await PreWarmFrameworkCachesAsync(prewarmCount, prewarmDeleteIdBase);
+    }
+
+    private async Task PreWarmFrameworkCachesAsync(int prewarmCount, int prewarmDeleteIdBase)
+    {
+        const string createSql =
+            "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES (@Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        const string readSingleSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
+        const string readListSql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
+        const string updateSql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
+        const string deleteInsertSql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        const string filteredQuerySql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
+        const string aggregateSql = "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE";
+
+        for (var pw = 0; pw < prewarmCount; pw++)
+        {
+            var createdAt = DateTime.UtcNow.ToString("O");
+
+            // ReadSingle
+            _readSingleSc.SetParameterValue("w0", (pw % SeedRows) + 1);
+            await _gateway.LoadSingleAsync(_readSingleSc);
+
+            // ReadList (Age=0 returns all rows limited by RecordCount — valid warmup)
+            _readListSc.SetParameterValue("Age", 0);
+            await _gateway.LoadListAsync(_readListSc);
+
+            // FilteredQuery
+            _filteredQuerySc.SetParameterValue("IsActive", true);
+            _filteredQuerySc.SetParameterValue("MinAge", 20);
+            _filteredQuerySc.SetParameterValue("MaxAge", 60);
+            await _gateway.LoadListAsync(_filteredQuerySc);
+
+            // Update
+            _updateSc.SetParameterValue("s2", 60000.0 + pw);
+            _updateSc.SetParameterValue("k0", (pw % SeedRows) + 1);
+            await _updateSc.ExecuteNonQueryAsync();
+
+            // Delete: insert then delete (separate ID range — no collision with benchmark iterations)
+            var prewarmId = prewarmDeleteIdBase + pw;
+            _deleteInsertSc.SetParameterValue("Id", prewarmId);
+            await _deleteInsertSc.ExecuteNonQueryAsync();
+            _deleteSc.SetParameterValue("k0", prewarmId);
+            await _deleteSc.ExecuteNonQueryAsync();
+
+            await using (var tx = await _pengdowsContext.BeginTransactionAsync())
+            await using (var deleteOnlySc = _deleteSc.Clone(tx))
+            {
+                deleteOnlySc.SetParameterValue("k0", (pw % SeedRows) + 1);
+                await deleteOnlySc.ExecuteNonQueryAsync();
+                tx.Rollback();
+            }
+
+            // Aggregate
+            await _aggregateSc.ExecuteScalarOrNullAsync<double>();
+
+            // Create — new container per call (same SQL text, so Npgsql still accumulates
+            // per-connection usage counts and prepares it after threshold is reached)
+            var warmupEntity = new BenchEntity
+            {
+                Name = $"Warmup {pw}", Age = 25, Salary = 50000.0,
+                IsActive = true, CreatedAt = createdAt
+            };
+            await using var warmupCreateSc = _gateway.BuildCreate(warmupEntity);
+            await warmupCreateSc.ExecuteNonQueryAsync();
+
+            await using (var conn = await GetDapperEqualConnection())
+            {
+                await conn.ExecuteAsync(createSql, new
+                {
+                    Name = $"Warmup {pw}",
+                    Age = 25,
+                    Salary = 50000.0,
+                    IsActive = true,
+                    CreatedAt = createdAt
+                });
+                await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(readSingleSql,
+                    new { Id = (pw % SeedRows) + 1 });
+                await conn.QueryAsync<DapperBenchEntity>(readListSql, new { Age = 0, Limit = RecordCount });
+                await conn.QueryAsync<DapperBenchEntity>(filteredQuerySql,
+                    new { IsActive = true, MinAge = 20, MaxAge = 60, Limit = RecordCount });
+                await conn.ExecuteAsync(updateSql, new { Salary = 60000.0 + pw, Id = (pw % SeedRows) + 1 });
+                await conn.ExecuteAsync(deleteInsertSql, new
+                {
+                    Id = prewarmDeleteIdBase + pw,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = createdAt
+                });
+                await conn.ExecuteAsync(deleteSql, new { Id = prewarmDeleteIdBase + pw });
+                await conn.ExecuteScalarAsync<double>(aggregateSql);
+            }
+
+            await using (var deleteOnlyConn = await GetDapperEqualConnection())
+            {
+                await using var tx = await deleteOnlyConn.BeginTransactionAsync();
+                await deleteOnlyConn.ExecuteAsync(deleteSql, new { Id = (pw % SeedRows) + 1 }, tx);
+                await tx.RollbackAsync();
+            }
+
+            await using (var efCtx = new EfPgBenchContext(_efOptions))
+            {
+                await efCtx.Database.ExecuteSqlRawAsync(createSql,
+                    new NpgsqlParameter("Name", $"Warmup {pw}"),
+                    new NpgsqlParameter("Age", 25),
+                    new NpgsqlParameter("Salary", 50000.0),
+                    new NpgsqlParameter("IsActive", true),
+                    new NpgsqlParameter("CreatedAt", createdAt));
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(readSingleSql, new NpgsqlParameter("Id", (pw % SeedRows) + 1))
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(readListSql,
+                        new NpgsqlParameter { ParameterName = "Age", Value = 0 },
+                        new NpgsqlParameter("Limit", RecordCount))
+                    .AsNoTracking()
+                    .ToListAsync();
+                _ = await efCtx.Benchmarks
+                    .FromSqlRaw(filteredQuerySql,
+                        new NpgsqlParameter("IsActive", true),
+                        new NpgsqlParameter("MinAge", 20),
+                        new NpgsqlParameter("MaxAge", 60),
+                        new NpgsqlParameter("Limit", RecordCount))
+                    .AsNoTracking()
+                    .ToListAsync();
+                await efCtx.Database.ExecuteSqlRawAsync(updateSql,
+                    new NpgsqlParameter("Salary", 60000.0 + pw),
+                    new NpgsqlParameter("Id", (pw % SeedRows) + 1));
+                await efCtx.Database.ExecuteSqlRawAsync(deleteInsertSql,
+                    new NpgsqlParameter("Id", prewarmDeleteIdBase + pw),
+                    new NpgsqlParameter("Name", "ToDelete"),
+                    new NpgsqlParameter("Age", 99),
+                    new NpgsqlParameter("Salary", 1.0),
+                    new NpgsqlParameter("IsActive", false),
+                    new NpgsqlParameter("CreatedAt", createdAt));
+                await efCtx.Database.ExecuteSqlRawAsync(deleteSql,
+                    new NpgsqlParameter("Id", prewarmDeleteIdBase + pw));
+                await efCtx.Database.SqlQueryRaw<double>(aggregateSql).FirstAsync();
+            }
+
+            await using (var efDeleteCtx = new EfPgBenchContext(_efOptions))
+            {
+                await using var tx = await efDeleteCtx.Database.BeginTransactionAsync();
+                await efDeleteCtx.Database.ExecuteSqlRawAsync(deleteSql,
+                    new NpgsqlParameter("Id", (pw % SeedRows) + 1));
+                await tx.RollbackAsync();
+            }
+        }
     }
 
     [GlobalCleanup]
@@ -450,16 +621,69 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     }
 
     // ========================================================================
-    // DELETE BENCHMARKS (insert-then-delete to avoid row depletion)
+    // DELETE BENCHMARKS
     // ========================================================================
 
     /// <summary>
-    /// Uses reusable containers for both the insert and delete steps.
-    /// Insert uses a manually-built container (explicit id required; SERIAL would otherwise auto-assign).
-    /// Delete uses BuildDelete with SetParameterValue("k0", id).
+    /// Measures a true DELETE against an existing row.
+    /// Each operation runs inside a transaction and rolls back so the seeded row remains
+    /// available for subsequent iterations and BenchmarkDotNet invocations.
     /// </summary>
     [Benchmark]
-    public async Task<int> Delete_Pengdows()
+    public async Task<int> DeleteOnly_Pengdows()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var tx = await _pengdowsContext.BeginTransactionAsync();
+            await using var deleteSc = _deleteSc.Clone(tx);
+            deleteSc.SetParameterValue("k0", (i % SeedRows) + 1);
+            count += await deleteSc.ExecuteNonQueryAsync();
+            tx.Rollback();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteOnly_Dapper()
+    {
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var conn = await GetDapperEqualConnection();
+            await using var tx = await conn.BeginTransactionAsync();
+            count += await conn.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
+            await tx.RollbackAsync();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteOnly_EntityFramework()
+    {
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var ctx = new EfPgBenchContext(_efOptions);
+            await using var tx = await ctx.Database.BeginTransactionAsync();
+            count += await ctx.Database.ExecuteSqlRawAsync(deleteSql,
+                new NpgsqlParameter("Id", (i % SeedRows) + 1));
+            await tx.RollbackAsync();
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Measures the full write lifecycle for "create a disposable row, then delete it".
+    /// This is intentionally not a pure delete benchmark.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> DeleteInsertCycle_Pengdows()
     {
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
@@ -477,7 +701,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     }
 
     [Benchmark]
-    public async Task<int> Delete_Dapper()
+    public async Task<int> DeleteInsertCycle_Dapper()
     {
         const string insertSql =
             "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
@@ -504,7 +728,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     }
 
     [Benchmark]
-    public async Task<int> Delete_EntityFramework()
+    public async Task<int> DeleteInsertCycle_EntityFramework()
     {
         const string insertSql =
             "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
@@ -525,7 +749,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             }
             {
                 await using var ctx = new EfPgBenchContext(_efOptions);
-                await ctx.Database.ExecuteSqlRawAsync(deleteSql, new NpgsqlParameter("Id", id));
+                count += await ctx.Database.ExecuteSqlRawAsync(deleteSql, new NpgsqlParameter("Id", id));
             }
         }
 

@@ -98,7 +98,7 @@ public class ReaderMappingBenchmark
 
         _dapperConnection.Execute(
             "INSERT INTO test_entities (id, name, email, age, salary, is_active, created_at, score) " +
-            "VALUES (@id, @name, @email, @age, @salary, @is_active, @created_at, @score)",
+            "VALUES ($id, $name, $email, $age, $salary, $is_active, $created_at, $score)",
             testData);
     }
 

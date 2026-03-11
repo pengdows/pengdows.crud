@@ -440,13 +440,19 @@ internal class PostgreSqlDialect : SqlDialect
             {
                 // Malformed token — skip to next '-c'
                 var next = rest.IndexOf("-c ", StringComparison.Ordinal);
-                if (next < 0) break;
+                if (next < 0)
+                {
+                    break;
+                }
                 rest = rest[next..];
                 continue;
             }
 
             var eqIdx = rest.IndexOf('=');
-            if (eqIdx <= 0) break;
+            if (eqIdx <= 0)
+            {
+                break;
+            }
             var key = rest[..eqIdx].Trim().ToString();
             rest = rest[(eqIdx + 1)..];
 
@@ -489,7 +495,9 @@ internal class PostgreSqlDialect : SqlDialect
                 }
             }
             if (!found)
+            {
                 tokens.Add((ourKey, ourValue));
+            }
         }
 
         return string.Join(" ", tokens.Select(t => $"-c {t.Key}={t.Value}"));
