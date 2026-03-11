@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -67,7 +67,7 @@ jobs:
         # 10.0.x: included for improved Roslyn analyzers and nullability checking;
         #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
         #         ready to ship a net10.0 TFM.
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
@@ -250,7 +250,7 @@ jobs:
           echo "✅ No TransactionScope usage found."
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: TestResults/**/coverage.cobertura.xml
           # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
@@ -260,13 +260,13 @@ jobs:
           disable_file_fixes: true
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage-report
 
       - name: Upload stormgate coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-stormgate
           path: coverage-report-stormgate
@@ -279,7 +279,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -289,7 +289,7 @@ jobs:
         # 10.0.x: included for improved Roslyn analyzers and nullability checking;
         #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
         #         ready to ship a net10.0 TFM.
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
