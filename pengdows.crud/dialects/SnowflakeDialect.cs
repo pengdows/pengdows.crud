@@ -43,6 +43,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SnowflakeDialect : SqlDialect
 {
+    private const string CanonicalSessionSettings =
+        "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
+
     internal SnowflakeDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -268,7 +271,7 @@ internal class SnowflakeDialect : SqlDialect
         // Note: Snowflake does not have a session-level read-only mode. TRANSACTION_READ_ONLY
         // is not a valid ALTER SESSION SET parameter. Read-only intent must be enforced through
         // Snowflake role/warehouse permissions or read-only credentials, not session SQL.
-        return "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
+        return CanonicalSessionSettings;
     }
 
     private SessionSettingsResult GetSnowflakeSessionSettings(IDbConnection connection)
@@ -279,7 +282,7 @@ internal class SnowflakeDialect : SqlDialect
             {
                 // Snowflake ALTER SESSION SET allows comma-separated assignments in a single command.
                 // This is the optimal "Always SET" pattern for Snowflake.
-                var script = "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
+                var script = CanonicalSessionSettings;
 
                 return new SessionSettingsResult(script, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -290,7 +293,7 @@ internal class SnowflakeDialect : SqlDialect
                 }, false);
             },
             () => new SessionSettingsResult(
-                "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;",
+                CanonicalSessionSettings,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 true),
             "Failed to configure Snowflake session settings");
@@ -298,7 +301,7 @@ internal class SnowflakeDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return _sessionSettings ?? "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
+        return CanonicalSessionSettings;
     }
 
     // Connection pooling properties for Snowflake

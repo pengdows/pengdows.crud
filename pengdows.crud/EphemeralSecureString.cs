@@ -67,8 +67,13 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
 {
     /// <summary>
     /// Time-to-live in milliseconds before the cached plaintext is cleared.
+    /// The TTL starts on the <em>first</em> call to <see cref="Reveal"/>; subsequent
+    /// calls within the window do not reset the countdown.
     /// </summary>
     private const int TTL_MS = 750;
+
+    // Reuse a single UTF8Encoding instance (no-BOM) to avoid per-call allocation.
+    private static readonly UTF8Encoding s_utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly byte[] _cipherText;
     private readonly Encoding _encoding;
@@ -86,7 +91,7 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
             throw new ArgumentNullException(nameof(input));
         }
 
-        _encoding = Encoding.UTF8;
+        _encoding = s_utf8NoBom;
 
         using var aes = Aes.Create();
         aes.GenerateKey();
@@ -108,8 +113,12 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
                 _cachedPlainBytes = DecryptBytes(_cipherText, _key, _iv);
             }
 
-            _timer?.Dispose();
-            _timer = new Timer(ClearPlainText, null, TTL_MS, Timeout.Infinite);
+            // Arm the TTL timer only on the first reveal — repeated calls within
+            // the window must not reset the countdown.
+            if (_timer == null)
+            {
+                _timer = new Timer(ClearPlainText, null, TTL_MS, Timeout.Infinite);
+            }
 
             return _encoding.GetString(_cachedPlainBytes);
         }
@@ -156,7 +165,7 @@ public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralS
         using var encryptor = aes.CreateEncryptor(key, iv);
         using var ms = new MemoryStream();
         using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
-        var encodingNoBom = encoding is UTF8Encoding ? new UTF8Encoding(false) : encoding;
+        var encodingNoBom = encoding is UTF8Encoding ? s_utf8NoBom : encoding;
         using var sw = new StreamWriter(cs, encodingNoBom);
         sw.Write(plainText);
         sw.Flush();

@@ -342,8 +342,6 @@ internal class PostgreSqlDialect : SqlDialect
     }
 
     /// <summary>
-
-    /// <summary>
     /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection
     /// string before the DataSource is created.  Must be called while the connection
     /// string still carries credentials; NpgsqlConnectionStringBuilder preserves them on

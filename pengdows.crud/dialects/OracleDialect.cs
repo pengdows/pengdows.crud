@@ -289,7 +289,8 @@ internal class OracleDialect : SqlDialect
         {
             try
             {
-                // Set StatementCacheSize for better performance with repeated queries
+                // Set StatementCacheSize for better performance with repeated queries.
+                // NOTE: "StatementCacheSize" is an intentional provider contract for Oracle.ManagedDataAccess.
                 var connectionType = connection.GetType();
                 var statementCacheSizeProperty = connectionType.GetProperty("StatementCacheSize");
                 if (statementCacheSizeProperty != null)

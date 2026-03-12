@@ -482,6 +482,9 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         await DisposeConnectionAsyncCore().ConfigureAwait(false);
     }
 
+    // Called only from the synchronous DisposeManaged() path — never from DisposeAsync().
+    // Blocking via Task.Run here is intentional: the synchronous Dispose() must complete
+    // the async cleanup on the thread-pool rather than leaving a dangling async operation.
     private void DisposeSharedConnectionSynchronously()
     {
         Task.Run(async () => { await DisposeSharedConnectionAsync().ConfigureAwait(false); }).GetAwaiter().GetResult();

@@ -291,7 +291,7 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn.PropertyInfo.SetValue(entity, converted);
             
             // Proceed with standard insert since ID is now populated
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
         }
 
@@ -299,7 +299,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
             _idColumn != null && !_idColumn.IsIdWritable)
         {
-            var sc = BuildCreateWithReturning(entity, true, ctx);
+            await using var sc = BuildCreateWithReturning(entity, true, ctx);
 
             object? generatedId;
             if (dialect.DatabaseType == SupportedDatabase.Oracle)
@@ -331,7 +331,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
             
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1) return false;
             
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
@@ -351,7 +351,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // 4. Default path: standard insert followed by optional session-scoped retrieval
         {
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
 
             if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
@@ -385,7 +385,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
             
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
         }
 
@@ -393,7 +393,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
             _idColumn != null && !_idColumn.IsIdWritable)
         {
-            var sc = BuildCreateWithReturning(entity, true, ctx);
+            await using var sc = BuildCreateWithReturning(entity, true, ctx);
 
             object? generatedId;
             if (dialect.DatabaseType == SupportedDatabase.Oracle)
@@ -427,7 +427,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
             
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1) return false;
             
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
@@ -447,7 +447,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
         // 4. Default path: standard insert followed by optional session-scoped retrieval
         {
-            var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
             {
@@ -485,7 +485,7 @@ public partial class TableGateway<TEntity, TRowID> :
             return;
         }
 
-        var sc = ctx.CreateSqlContainer(lastIdQuery);
+        await using var sc = ctx.CreateSqlContainer(lastIdQuery);
         var generatedId = await sc.ExecuteScalarOrNullAsync<object>(CommandType.Text, cancellationToken);
 
         if (generatedId != null && generatedId != DBNull.Value)
@@ -822,7 +822,7 @@ public partial class TableGateway<TEntity, TRowID> :
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
-        var sc = BuildDelete(id, ctx);
+        await using var sc = BuildDelete(id, ctx);
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
@@ -852,7 +852,7 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 var count = Math.Min(limit, list.Count - offset);
                 var chunk = list.GetRange(offset, count);
-                var sc = BuildRetrieve(chunk, ctx);
+                await using var sc = BuildRetrieve(chunk, ctx);
                 var chunkResults = await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
                 results.AddRange(chunkResults);
             }
@@ -899,20 +899,20 @@ public partial class TableGateway<TEntity, TRowID> :
             if (dialect.SupportsSetValuedParameters)
             {
                 // Prefer dynamic build for array-capable dialects to avoid provider type mismatches
-                var sc = BuildRetrieve(list, ctx);
+                await using var sc = BuildRetrieve(list, ctx);
                 return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 // Fall back to dynamic BuildRetrieve for larger lists on non-array dialects
-                var sc = BuildRetrieve(list, ctx);
+                await using var sc = BuildRetrieve(list, ctx);
                 return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
+        catch (Exception ex) when (ex.Message.Contains("Original record not found"))
         {
             // Fall back to traditional method during template building or other issues
-            var sc = BuildRetrieve(list, ctx);
+            await using var sc = BuildRetrieve(list, ctx);
             return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -937,7 +937,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var ctx = context ?? _context;
 
         // Get the container to use (with try-catch for error handling)
-        var container = GetRetrieveContainer(list, ctx);
+        await using var container = GetRetrieveContainer(list, ctx);
 
         // Stream results from the container
         await foreach (var entity in LoadStreamAsync(container, cancellationToken).ConfigureAwait(false))
@@ -989,7 +989,7 @@ public partial class TableGateway<TEntity, TRowID> :
             // Fall back to dynamic BuildRetrieve for larger lists
             return BuildRetrieve(list, ctx);
         }
-        catch (Exception ex) when (ex.Message.Contains("Original record not found") || ex is AggregateException)
+        catch (Exception ex) when (ex.Message.Contains("Original record not found"))
         {
             // Fall back to traditional method during template building or other issues
             return BuildRetrieve(list, ctx);
@@ -1045,8 +1045,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return totalAffected;
@@ -1114,8 +1116,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return totalAffected;
@@ -1221,7 +1225,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     /// <inheritdoc/>
-    public Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+    public async Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (objectToRetrieve == null)
@@ -1231,8 +1235,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
         var ctx = context ?? _context;
         var list = new List<TEntity> { objectToRetrieve };
-        var sc = BuildRetrieve(list, string.Empty, ctx);
-        return LoadSingleAsync(sc, cancellationToken);
+        await using var sc = BuildRetrieve(list, string.Empty, ctx);
+        return await LoadSingleAsync(sc, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -1475,7 +1479,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var ctx = context ?? _context;
         try
         {
-            var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
+            await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))

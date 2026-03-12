@@ -38,10 +38,9 @@ internal class TiDbDialect : MySqlDialect
     // TiDB's Go AST parser does not implement stored procedure DDL (*ast.ProcedureInfo).
     // Stored procedures cannot be created or called on TiDB.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
-    
-        public override string GetBaseSessionSettings()
-        {
-            return $"{base.GetBaseSessionSettings()}\nSET tidb_pessimistic_txn_default = ON;";
-        }
+
+    public override string GetBaseSessionSettings()
+    {
+        return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
     }
-    
+}

@@ -251,7 +251,7 @@ public partial class TableGateway<TEntity, TRowID>
             return string.Empty;
         }
 
-        return dialect.WrapSimpleName(alias) + ".";
+        return dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator;
     }
 
     private string BuildPrimaryKeyClause(TEntity entity, IReadOnlyList<IColumnInfo> keys, string alias,

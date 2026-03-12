@@ -17,4 +17,8 @@ public class NoColumnsFoundException : Exception
     public NoColumnsFoundException(string message) : base(message)
     {
     }
+
+    public NoColumnsFoundException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

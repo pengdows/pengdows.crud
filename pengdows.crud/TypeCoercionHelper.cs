@@ -946,10 +946,10 @@ public static class TypeCoercionHelper
             };
         }
 
-                return value => Utils.IsNullOrDbNull(value)
-                    ? null
-                    : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
-            }
+        return value => Utils.IsNullOrDbNull(value)
+            ? null
+            : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
+    }
         
             /// <summary>
             /// Optimized byte reader for compiled mappers. Uses a small stack buffer for small reads

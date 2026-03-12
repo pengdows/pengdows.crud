@@ -1,5 +1,14 @@
 # Repository Guidelines
 
+## Mandatory Workflow And Reviews
+- TDD is mandatory for every behavior change, bug fix, regression fix, and public-contract change.
+- Start by writing or updating an automated test that fails for the intended reason before changing implementation.
+- Do not start implementation until the test is red; after implementation, rerun the relevant automated tests and do not consider the work complete until they pass with no skipped tests introduced.
+- If automated coverage is genuinely not possible, say so explicitly and document the verification gap.
+- All reviews are done against [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- Review output, merge guidance, blocker/major/minor classification, required evidence, and minimal patch guidance must follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- If instructions overlap, follow the more stringent requirement. If this file conflicts with [REVIEW_POLICY.md](./REVIEW_POLICY.md) on review behavior, follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+
 ## Core Philosophy
 
 `pengdows.crud` is an opinionated, high-performance, SQL-first data access framework built on a **database-first** philosophy. It provides **"Prego features"** — expert-level, built-in solutions to difficult real-world data access problems that developers often assume are handled by their tools but usually are not. It is designed to be more robust and feature-rich than a micro-ORM like Dapper, while retaining high performance and developer control, without the pitfalls of heavier ORMs like EF Core.

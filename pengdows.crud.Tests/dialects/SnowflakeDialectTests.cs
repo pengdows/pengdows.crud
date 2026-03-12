@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -73,5 +74,25 @@ public class SnowflakeDialectTests
 
         Assert.Contains("CLIENT_TIMESTAMP_TYPE_MAPPING", settings, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("TIMESTAMP_NTZ", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SnowflakeDialect_SessionSettings_PublicApis_UseCanonicalScript()
+    {
+        var dialect = CreateDialect();
+        var cacheField = typeof(SnowflakeDialect).GetField("_sessionSettings",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(cacheField);
+        cacheField!.SetValue(dialect, "ALTER SESSION SET TIMEZONE = 'Mars';");
+
+        var baseSettings = dialect.GetBaseSessionSettings();
+        var readOnlySettings = dialect.GetFinalSessionSettings(readOnly: true);
+        var readWriteSettings = dialect.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Equal(readOnlySettings, baseSettings);
+        Assert.Equal(readWriteSettings, baseSettings);
+        Assert.Contains("CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ", baseSettings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TIMEZONE = 'Mars'", baseSettings, StringComparison.OrdinalIgnoreCase);
     }
 }

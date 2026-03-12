@@ -36,7 +36,13 @@ public partial class TableGateway<TEntity, TRowID>
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
-        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
+        // Optimization: for version-less entities without original load, building is fully synchronous
+        if (_versionColumn == null)
+        {
+            return Task.FromResult(BuildUpdate(objectToUpdate, ctx));
+        }
+        
+        return BuildUpdateAsync(objectToUpdate, true, ctx, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -55,17 +61,32 @@ public partial class TableGateway<TEntity, TRowID>
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
-        var sc = ctx.CreateSqlContainer();
-        var dialect = GetDialect(ctx);
-
-        var original = loadOriginal
-            ? await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false)
-            : null;
-        if (loadOriginal && original == null)
+        TEntity? original = null;
+        if (loadOriginal)
         {
-            throw new InvalidOperationException("Original record not found for update.");
+            original = await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
+            if (original == null)
+            {
+                throw new InvalidOperationException("Original record not found for update.");
+            }
         }
 
+        return BuildUpdateInternal(objectToUpdate, original, ctx);
+    }
+
+    /// <summary>
+    /// Synchronous version of BuildUpdate for internal framework use where original record 
+    /// loading is not required or already handled.
+    /// </summary>
+    internal ISqlContainer BuildUpdate(TEntity entity, IDatabaseContext? context = null)
+    {
+        return BuildUpdateInternal(entity, null, context ?? _context);
+    }
+
+    private ISqlContainer BuildUpdateInternal(TEntity objectToUpdate, TEntity? original, IDatabaseContext ctx)
+    {
+        var sc = ctx.CreateSqlContainer();
+        var dialect = GetDialect(ctx);
         var template = GetTemplatesForDialect(dialect);
 
         if (_hasAuditColumns)
@@ -88,7 +109,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var idName = counters.NextKey();
-        var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
+        var pId = dialect.CreateDbParameter(idName, _idColumn!.DbType,
             _idColumn.MakeParameterValueFromField(objectToUpdate));
         parameters.Add(pId);
 

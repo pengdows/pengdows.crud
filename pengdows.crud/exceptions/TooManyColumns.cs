@@ -18,4 +18,8 @@ public class TooManyColumns
     public TooManyColumns(string message) : base(message)
     {
     }
+
+    public TooManyColumns(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

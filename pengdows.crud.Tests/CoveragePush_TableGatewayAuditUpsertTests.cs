@@ -82,14 +82,6 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
             new[] { typeof(AuditEntity), typeof(bool), typeof(IAuditValues) },
             null)!;
 
-    private static readonly MethodInfo GetFirebirdDataTypeMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("GetFirebirdDataType",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    private static readonly MethodInfo FormatFirebirdValueExpressionMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("FormatFirebirdValueExpression",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
     [Fact]
     public void AuditHelpers_CoerceAndTimestampBranches_AreCovered()
     {
@@ -163,53 +155,6 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
             BindingFlags.NonPublic | BindingFlags.Instance)!;
         var ex = Assert.Throws<TargetInvocationException>(() => nonWritableMethod.Invoke(nonWritableGateway, null));
         Assert.IsType<NotSupportedException>(ex.InnerException);
-    }
-
-    [Theory]
-    [InlineData(DbType.Boolean, "SMALLINT")]
-    [InlineData(DbType.Byte, "SMALLINT")]
-    [InlineData(DbType.SByte, "SMALLINT")]
-    [InlineData(DbType.Int16, "SMALLINT")]
-    [InlineData(DbType.UInt16, "SMALLINT")]
-    [InlineData(DbType.Int32, "INTEGER")]
-    [InlineData(DbType.UInt32, "BIGINT")]
-    [InlineData(DbType.Int64, "BIGINT")]
-    [InlineData(DbType.UInt64, "BIGINT")]
-    [InlineData(DbType.Decimal, "DECIMAL(18,2)")]
-    [InlineData(DbType.Double, "DOUBLE PRECISION")]
-    [InlineData(DbType.Single, "DOUBLE PRECISION")]
-    [InlineData(DbType.Date, "DATE")]
-    [InlineData(DbType.DateTime, "TIMESTAMP")]
-    [InlineData(DbType.AnsiStringFixedLength, "VARCHAR(255)")]
-    [InlineData(DbType.AnsiString, "VARCHAR(255)")]
-    [InlineData(DbType.String, "VARCHAR(255)")]
-    [InlineData(DbType.StringFixedLength, "VARCHAR(255)")]
-    [InlineData(DbType.Guid, "CHAR(36)")]
-    [InlineData(DbType.Binary, "BLOB")]
-    [InlineData(DbType.Object, "VARCHAR(255)")]
-    public void FirebirdDataTypeMapping_CoversSwitchCases(DbType dbType, string expected)
-    {
-        var column = new StubColumnInfo { DbType = dbType };
-
-        var resolved = (string)GetFirebirdDataTypeMethod.Invoke(null, new object[] { column })!;
-
-        Assert.Equal(expected, resolved);
-    }
-
-    [Fact]
-    public void FormatFirebirdValueExpression_CastsNullAndParameter()
-    {
-        var column = new StubColumnInfo { DbType = DbType.Boolean };
-
-        var nullExpression = (string)FormatFirebirdValueExpressionMethod.Invoke(
-            null,
-            new object[] { "NULL", column })!;
-        Assert.Equal("CAST(NULL AS SMALLINT)", nullExpression);
-
-        var parameterExpression = (string)FormatFirebirdValueExpressionMethod.Invoke(
-            null,
-            new object[] { "@p0", column })!;
-        Assert.Equal("CAST(@p0 AS SMALLINT)", parameterExpression);
     }
 
     private static DatabaseContext CreateContext(SupportedDatabase database)

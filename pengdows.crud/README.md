@@ -1,136 +1,69 @@
 # pengdows.crud
 
-**pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who
-want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
+`pengdows.crud` is a SQL-first data access framework for .NET. It favors explicit SQL, provider-aware execution, and small inspectable abstractions over ORM-style query generation.
 
-> No LINQ. No tracking. No surprises.
+No LINQ. No tracking. No surprises.
 
----
+## Public Surface
 
-## 🔍 Why pengdows.crud?
+- `DatabaseContext` / `IDatabaseContext`: connection management, dialect behavior, parameter creation, metrics, quoting, and transactions
+- `TableGateway<TEntity, TRowID>` / `ITableGateway<TEntity, TRowID>`: CRUD builders, convenience methods, batch operations, and async streaming
+- `ISqlContainer`: composable SQL plus parameter collection and direct execution helpers
+- `ITransactionContext`: explicit transaction scope with `Commit`, `Rollback`, and savepoints
 
-- Built by a dev who actually **writes SQL**, understands **ACID**, and doesn’t want ORMs rewriting queries behind their
-  back.
-- Works **across databases** using consistent, standards-compliant behavior.
-- Handles **parameterization**, **enums**, **JSON**, **audit fields**, and **transactions**—out of the box.
-- Offers full **dependency injection**, fine-grained **connection control**, and true **multi-tenancy**.
+## What The Code Supports
 
----
+- Build-first CRUD: `BuildCreate`, `BuildRetrieve`, `BuildUpdateAsync`, `BuildDelete`, `BuildUpsert`
+- Execute later with `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`, or `ISqlContainer` execution methods
+- Convenience operations such as `CreateAsync`, `RetrieveOneAsync`, `RetrieveAsync`, `UpdateAsync`, `DeleteAsync`, and `UpsertAsync`
+- Batch create, update, delete, and upsert operations with parameter-limit chunking
+- Async streaming via `IAsyncEnumerable<TEntity>`
+- CancellationToken overloads across async APIs
+- `ISqlContainer` execution methods returning `ValueTask`
+- Automatic parameter naming through `MakeParameterName(...)`
+- Identifier quoting through `WrapObjectName(...)`
+- Optimistic concurrency via `[Version]`
+- Audit field support via `IAuditValueResolver`
+- JSON, enum, GUID, UTC date/time, and binary mappings
 
-## ✅ Key Features
+## Connection And Transaction Model
 
-> Starting with v2.0, `TableGateway<TEntity, TRowID>` is the canonical CRUD gateway. The legacy `EntityHelper` alias has
-> been removed.
+- `DbMode` values in the public API are `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, and `Best`
+- `DbMode.Best` auto-selects a mode from provider and connection-string characteristics
+- `ExecutionType.Read` and `ExecutionType.Write` are available on SQL container execution methods and transaction entry points
+- `BeginTransaction(...)` supports both `IsolationLevel` and portable `IsolationProfile`
+- `ITransactionContext` exposes `Commit`, `Rollback`, `SavepointAsync`, and `RollbackToSavepointAsync`
+- `ModeLockTimeout`, `Metrics`, `MetricsUpdated`, and `ReaderPlanCacheSize` are part of `IDatabaseContext`
+- `TransactionScope` is not the intended transaction model; use `BeginTransaction()`
 
-- `TableGateway<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
-- Full support for:
-    - Enums
-    - JSON
-    - GUIDs
-    - UTC timestamps
-- Built-in **audit tracking** per entity and per field.
-- **Safe SQL generation** with strict parameterization (`@`, `:`, or `?` depending on provider).
-- Connection lifecycle modes: `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, `Best`.
-- **Scoped transactions** via `TransactionContext`.
-- Works cleanly with DI and ADO.NET—**no leaky abstractions**.
+## Key Entity Mapping Facts
 
----
+- `[Id]` is the row identifier used by row-id CRUD operations
+- `[PrimaryKey]` is the business key and may be composite
+- `[Id]` and `[PrimaryKey]` are different concepts and should not be placed on the same property
+- `RetrieveOneAsync(TRowID)` uses `[Id]`
+- `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]`
+- Upsert conflict selection prefers `[PrimaryKey]` and falls back to a writable `[Id]`
 
-## 🧩 Supported Databases
+## Supported Databases
 
-Tested and tuned for:
+Tested support in this repository includes:
 
-- SQL Server / Express / LocalDB / Azure SQL
-- PostgreSQL / TimescaleDB / CockroachDB / YugabyteDB / Aurora PostgreSQL
+- SQL Server / Express / LocalDB
+- PostgreSQL / TimescaleDB / Aurora PostgreSQL
+- MySQL / MariaDB / Aurora MySQL
+- CockroachDB
+- YugabyteDB
+- TiDB
 - Oracle
-- MySQL / MariaDB / TiDB / Aurora MySQL
 - SQLite
 - Firebird
 - DuckDB
-- Snowflake (opt-in; cloud-only, requires credentials)
+- Snowflake (opt-in; requires credentials)
 
-> All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and
-`GetSchema("DataSourceInformation")`.
+Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
----
-
-## ❌ Not Supported
-
-Due to missing or outdated .NET providers:
-
-- TimesTen
-- DB2
-- Informix
-- Sybase ASE
-- SQL Anywhere
-
-Note: DB2 and Sybase ASE are not planned and will not be implemented.
-
-Want support? Ask the vendor to ship a **real** ADO.NET provider.
-
----
-
-## 🚫 Not an ORM — On Purpose
-
-`pengdows.crud` doesn't:
-
-- Track entities
-- Auto-generate complex queries
-- Obfuscate SQL
-
-Instead, it helps you write **real SQL** that's:
-
-- **Predictable**
-- **Testable**
-- **Secure**
-
----
-
-## 🧠 Philosophy
-
-- **Primary keys ≠ pseudokeys**
-- **Open late, close early** — manage connections responsibly
-- **Parameterize everything** — always
-- **Audit everything** — store in UTC
-- **Don't assume** — use provider metadata (`DbProviderFactory`, `GetSchema`)
-- **Test in production-like environments** — not theory
-
----
-
-## 🔬 Tool Comparison
-
-| Feature               | pengdows.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
-|-----------------------|---------------|-------------|--------|---------|------------|
-| Provider-Agnostic SQL | ✅             | ⚠️ Manual   | ⚠️     | ⚠️      | ⚠️         |
-| Safe Parameterization | ✅             | ❌ Risky     | ⚠️     | ✅       | ✅          |
-| Audit Field Support   | ✅ Built-in    | ❌           | ❌      | ⚠️      | ⚠️         |
-| Change Tracking       | ❌ Explicit    | ❌           | ❌      | ✅       | ✅          |
-| LINQ                  | ❌             | ❌           | ❌      | ✅       | ⚠️         |
-| Strong Typing         | ✅             | ⚠️ Manual   | ⚠️     | ✅       | ✅          |
-| Multi-tenancy         | ✅ Opt-in      | ❌           | ❌      | ⚠️      | ⚠️         |
-| Async/Await Support   | ✅ Fully       | ⚠️ Provider | ✅      | ✅       | ⚠️         |
-| Transaction Scoping   | ✅ Layered     | ❌           | ❌      | ✅       | ✅          |
-| Testability           | ✅ Interfaces  | ❌           | ⚠️     | ⚠️      | ⚠️         |
-| Migration Tooling     | ❌ By Design   | ❌           | ❌      | ✅       | ✅          |
-
----
-
-## 📚 Documentation
-
-Topics include:
-
-- `TableGateway<TEntity, TRowID>`: CRUD entry point (EntityHelper alias removed in v2.0)
-- `SqlContainer`
-- `DbMode` and connection management
-- Audit and UTC logging
-- Transaction scopes
-- Type coercion and mapping
-- Primary vs. pseudokeys
-- Extending core helpers
-
----
-
-## 🛠️ Getting Started
+## Getting Started
 
 ```bash
 dotnet add package pengdows.crud
@@ -140,6 +73,24 @@ dotnet add package pengdows.crud
 using Microsoft.Data.SqlClient;
 using pengdows.crud;
 
-var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var gateway = new TableGateway<MyEntity, long>(db);
+var context = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
+var gateway = new TableGateway<MyEntity, long>(context);
 ```
+
+```csharp
+var sc = gateway.BuildRetrieve(new[] { 1L, 2L });
+var rows = await gateway.LoadListAsync(sc);
+```
+
+```csharp
+await using var tx = await context.BeginTransactionAsync();
+await gateway.CreateAsync(entity, tx);
+await tx.CommitAsync();
+```
+
+## More Documentation
+
+Project documentation and provider notes live in the repository wiki and docs:
+
+- https://github.com/pengdows/pengdows.crud/wiki
+- https://github.com/pengdows/pengdows.crud/tree/main/docs

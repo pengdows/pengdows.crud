@@ -14,11 +14,7 @@
 //   values that might be null, DBNull, or empty collections.
 // =============================================================================
 
-#region
-
 using System.Collections;
-
-#endregion
 
 namespace pengdows.crud;
 

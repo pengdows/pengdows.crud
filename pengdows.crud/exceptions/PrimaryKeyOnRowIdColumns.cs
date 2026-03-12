@@ -19,4 +19,8 @@ public class PrimaryKeyOnRowIdColumn
     public PrimaryKeyOnRowIdColumn(string message) : base(message)
     {
     }
+
+    public PrimaryKeyOnRowIdColumn(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }

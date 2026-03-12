@@ -115,8 +115,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -166,8 +167,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -198,7 +200,7 @@ public partial class TableGateway<TEntity, TRowID>
             foreach (var entity in entities)
             {
                 // We assume sequential strategy here for fallback, skip original load (no change tracking)
-                fallback.Add(BuildUpdateAsync(entity, false, ctx).Result);
+                fallback.Add(BuildUpdate(entity, ctx));
             }
 
             return fallback;
@@ -369,8 +371,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 

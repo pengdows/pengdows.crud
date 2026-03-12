@@ -83,4 +83,27 @@ public class EphemeralSecureStringTests
 
         Assert.Equal(original, revealed);
     }
+
+    /// <summary>
+    /// Repeated Reveal() calls within the TTL window must not throw or corrupt data.
+    /// The cache must be cleared and re-decrypted correctly on the next call after the TTL.
+    /// </summary>
+    [Fact]
+    public void Reveal_RepeatedCallsWithinTtl_ThenClearsAndRedecrypts()
+    {
+        const string original = "ttl-repeat-test";
+        using var ess = new EphemeralSecureString(original);
+
+        // Call Reveal() several times in rapid succession within the TTL window.
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.Equal(original, ess.Reveal());
+        }
+
+        // Wait past the TTL (750 ms) — timer must fire and clear the cache.
+        Thread.Sleep(1000);
+
+        // Re-decryption after cache clear must still return the correct value.
+        Assert.Equal(original, ess.Reveal());
+    }
 }

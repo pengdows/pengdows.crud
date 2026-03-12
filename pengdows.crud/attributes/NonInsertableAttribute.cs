@@ -27,6 +27,6 @@ namespace pengdows.crud.attributes;
 /// <seealso cref="NonUpdateableAttribute"/>
 /// <seealso cref="IdAttribute"/>
 [AttributeUsage(AttributeTargets.Property)]
-public class NonInsertableAttribute : Attribute
+public sealed class NonInsertableAttribute : Attribute
 {
 }

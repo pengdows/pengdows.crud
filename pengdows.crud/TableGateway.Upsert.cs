@@ -209,45 +209,6 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
-    private static string FormatFirebirdValueExpression(string placeholder, IColumnInfo column)
-    {
-        var typeName = GetFirebirdDataType(column);
-        if (string.Equals(placeholder, "NULL", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"CAST(NULL AS {typeName})";
-        }
-
-        return $"CAST({placeholder} AS {typeName})";
-    }
-
-    private static string GetFirebirdDataType(IColumnInfo column)
-    {
-        return column.DbType switch
-        {
-            DbType.Boolean => "SMALLINT",
-            DbType.Byte => "SMALLINT",
-            DbType.SByte => "SMALLINT",
-            DbType.Int16 => "SMALLINT",
-            DbType.UInt16 => "SMALLINT",
-            DbType.Int32 => "INTEGER",
-            DbType.UInt32 => "BIGINT",
-            DbType.Int64 => "BIGINT",
-            DbType.UInt64 => "BIGINT",
-            DbType.Decimal => "DECIMAL(18,2)",
-            DbType.Double => "DOUBLE PRECISION",
-            DbType.Single => "DOUBLE PRECISION",
-            DbType.Date => "DATE",
-            DbType.DateTime => "TIMESTAMP",
-            DbType.AnsiStringFixedLength => "VARCHAR(255)",
-            DbType.AnsiString => "VARCHAR(255)",
-            DbType.String => "VARCHAR(255)",
-            DbType.StringFixedLength => "VARCHAR(255)",
-            DbType.Guid => "CHAR(36)",
-            DbType.Binary => "BLOB",
-            _ => "VARCHAR(255)"
-        };
-    }
-
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;
