@@ -93,7 +93,10 @@ internal class PostgreSqlDialect : SqlDialect
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
-        if (rowCount <= 0) return;
+        if (rowCount <= 0)
+        {
+            return;
+        }
 
         // PostgreSQL UPDATE FROM VALUES pattern:
         // UPDATE target SET col1 = s.col1, ...
@@ -106,7 +109,11 @@ internal class PostgreSqlDialect : SqlDialect
 
         for (var i = 0; i < columnNames.Count; i++)
         {
-            if (i > 0) query.Append(", ");
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append(columnNames[i]);
             query.Append(" = s.");
             query.Append(columnNames[i]);

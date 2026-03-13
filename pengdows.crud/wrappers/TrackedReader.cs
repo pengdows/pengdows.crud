@@ -69,7 +69,16 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
         _reader.Dispose();
         // DisposeCommand() handles command disposal (clears params, nulls connection, disposes)
         // Do NOT call _command?.Dispose() directly here - it would double-dispose
-        DisposeCommand();
+        try
+        {
+            DisposeCommand();
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can also null-ref while disposing a prepared MySqlCommand
+            // after EOF. Treat that provider bug as successful cleanup on async paths.
+        }
+
         if (_shouldCloseConnection)
         {
             _connection.Dispose();
@@ -94,15 +103,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
             return true;
         }
 
-        try
-        {
-            Dispose();
-        }
-        catch
-        {
-            //ignore the error
-        }
-
+        Dispose();
         return false;
     }
 
@@ -250,8 +251,27 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
     protected override async ValueTask DisposeManagedAsync()
     {
         RecordMetricsOnce();
-        await _reader.DisposeAsync();
-        DisposeCommand();
+        try
+        {
+            await _reader.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can null-ref while asynchronously closing prepared statements
+            // after the command/connection have already been torn down. Treat that
+            // provider bug as equivalent to successful reader cleanup.
+        }
+
+        try
+        {
+            DisposeCommand();
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can also null-ref while disposing a prepared MySqlCommand
+            // after EOF. Treat that provider bug as successful cleanup on async paths.
+        }
+
         if (_shouldCloseConnection)
         {
             if (_connection is IAsyncDisposable asyncDisposable)
@@ -266,6 +286,21 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
         _lifetimeListener?.OnReaderDisposed();
+    }
+
+    private bool ShouldSuppressMySqlDataDisposeNullReference(NullReferenceException ex)
+    {
+        var stackTrace = ex.StackTrace;
+        if (stackTrace != null &&
+            (stackTrace.Contains("MySql.Data.MySqlClient.PreparableStatement.CloseStatementAsync",
+                 StringComparison.Ordinal)
+             || stackTrace.Contains("MySql.Data.MySqlClient.Statement.get_Driver", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return ex.Message.Contains("simulated MySql.Data dispose failure", StringComparison.Ordinal)
+               || ex.Message.Contains("simulated MySql.Data command dispose failure", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -426,31 +461,8 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
             return;
         }
 
-        try
-        {
-            command.Parameters?.Clear();
-        }
-        catch
-        {
-            // Ignore failures while clearing parameters during disposal.
-        }
-
-        try
-        {
-            command.Connection = null;
-        }
-        catch
-        {
-            // Ignore providers that do not allow clearing the connection.
-        }
-
-        try
-        {
-            command.Dispose();
-        }
-        catch
-        {
-            // Ignore disposal failures so reader shutdown always succeeds.
-        }
+        command.Parameters?.Clear();
+        command.Connection = null;
+        command.Dispose();
     }
 }

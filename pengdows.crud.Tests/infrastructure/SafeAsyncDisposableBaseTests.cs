@@ -109,12 +109,13 @@ public class SafeAsyncDisposableBaseTests
     }
 
     [Fact]
-    public void Dispose_WithExceptionInDisposeManaged_DoesNotThrow()
+    public void Dispose_WithExceptionInDisposeManaged_PropagatesFailure()
     {
         var disposable = new TestAsyncDisposable { ThrowInDisposeManaged = true };
 
-        disposable.Dispose();
+        var ex = Assert.Throws<InvalidOperationException>(() => disposable.Dispose());
 
+        Assert.Equal("Test exception in DisposeManaged", ex.Message);
         Assert.True(disposable.IsDisposed);
     }
 

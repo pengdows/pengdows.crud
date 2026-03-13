@@ -154,6 +154,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Command reuse: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running reader disposal compatibility");
+            SnowflakeStep("Reader disposal compatibility: start");
+            await TestReaderDisposalCompatibility();
+            Console.WriteLine($"  Reader disposal compatibility: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Reader disposal compatibility: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running capability probes");
             SnowflakeStep("Capability probes: start");
             await TestCapabilityProbes();
@@ -1709,6 +1716,62 @@ INSERT INTO {table} (
         {
             await CleanupTestRow(id1);
             await CleanupTestRow(id2);
+        }
+    }
+
+    protected virtual async Task TestReaderDisposalCompatibility()
+    {
+        if (_context.Product != SupportedDatabase.MySql)
+        {
+            CheckSkip($"  [Reader disposal] Not applicable to {_context.Product}");
+            return;
+        }
+
+        var id = Interlocked.Increment(ref _nextId);
+        await _helper.CreateAsync(new TestTable
+        {
+            Id = id,
+            Name = NameEnum.Test,
+            Description = "reader-disposal-compat",
+            Value = 42,
+            IsActive = true
+        });
+
+        try
+        {
+            var select = _context.CreateSqlContainer();
+            select.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                _context.WrapObjectName("id"),
+                _context.WrapObjectName("test_table"),
+                _context.WrapObjectName("id"),
+                select.MakeParameterName("p0"));
+            select.AddParameterWithValue("p0", DbType.Int64, id);
+
+            await using (var reader = await select.ExecuteReaderAsync())
+            {
+                if (!await reader.ReadAsync())
+                {
+                    throw new Exception("[Reader disposal] Expected first row");
+                }
+
+                if (await reader.ReadAsync())
+                {
+                    throw new Exception("[Reader disposal] Expected EOF after single row");
+                }
+            }
+
+            var count = await CountTestRows();
+            if (count <= 0)
+            {
+                throw new Exception("[Reader disposal] Follow-up query failed after EOF disposal");
+            }
+
+            CheckOk("  [Reader disposal] MySql.Data EOF disposal compatibility: OK");
+        }
+        finally
+        {
+            await CleanupTestRow(id);
         }
     }
 

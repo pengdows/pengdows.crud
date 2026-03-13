@@ -114,8 +114,15 @@ public partial class TableGateway<TEntity, TRowID>
         parameters.Add(pId);
 
         sc.Query.Append(template.UpdateSqlSuffix);
-        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(idName); }
-        else { sc.Query.Append('?'); }
+        if (dialect.SupportsNamedParameters)
+        {
+            sc.Query.Append(dialect.ParameterMarker);
+            sc.Query.Append(idName);
+        }
+        else
+        {
+            sc.Query.Append('?');
+        }
 
         if (_versionColumn != null)
         {
@@ -486,8 +493,16 @@ public partial class TableGateway<TEntity, TRowID>
         var name = counters.NextVer();
         var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
         sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn.Name)).Append(" = ");
-        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(name); }
-        else { sc.Query.Append('?'); }
+        if (dialect.SupportsNamedParameters)
+        {
+            sc.Query.Append(dialect.ParameterMarker);
+            sc.Query.Append(name);
+        }
+        else
+        {
+            sc.Query.Append('?');
+        }
+
         return pVersion;
     }
 }
