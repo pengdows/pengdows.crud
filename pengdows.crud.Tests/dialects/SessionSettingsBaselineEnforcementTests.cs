@@ -147,4 +147,34 @@ public class SessionSettingsBaselineEnforcementTests
         Assert.False(string.IsNullOrWhiteSpace(settings));
         Assert.Contains("QUOTED_IDENTIFIER", settings, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ──────────────────────────────────────────────
+    //  Firebird — base-class GetFinalSessionSettings path
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public void Firebird_GetFinalSessionSettings_ReadOnly_IncludesBaselineAndReadOnlyIntent()
+    {
+        // Firebird does not override GetFinalSessionSettings; the base-class combines
+        // GetBaseSessionSettings() and GetReadOnlySessionSettings() into one batch.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: true);
+
+        Assert.Contains("SET NAMES UTF8", settings, StringComparison.Ordinal);
+        Assert.Contains("SET SQL DIALECT 3", settings, StringComparison.Ordinal);
+        Assert.Contains("SET TRANSACTION READ ONLY", settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Firebird_GetFinalSessionSettings_ReadWrite_IncludesBaselineAndReadWriteReset()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Contains("SET NAMES UTF8", settings, StringComparison.Ordinal);
+        Assert.Contains("SET SQL DIALECT 3", settings, StringComparison.Ordinal);
+        Assert.Contains("SET TRANSACTION READ WRITE", settings, StringComparison.Ordinal);
+    }
 }

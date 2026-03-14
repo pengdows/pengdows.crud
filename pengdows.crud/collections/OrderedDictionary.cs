@@ -112,7 +112,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
         get
         {
             ref var v = ref FindValue(key);
-            if (!Unsafe.IsNullRef(ref v)) return v;
+            if (!Unsafe.IsNullRef(ref v))
+            {
+                return v;
+            }
             throw new KeyNotFoundException($"The given key '{key}' was not present in the dictionary.");
         }
         set => TryInsert(key, value, InsertionBehavior.OverwriteExisting);
@@ -130,7 +133,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
 
     public void Clear()
     {
-        if (_count == 0) return;
+        if (_count == 0)
+        {
+            return;
+        }
 
         _entries = Array.Empty<Entry>();
         _buckets = Array.Empty<int>();
@@ -295,7 +301,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
     {
         ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
-        if (capacity <= _entries.Length) return;
+        if (capacity <= _entries.Length)
+        {
+            return;
+        }
 
         if (!IsHashMode && capacity <= SmallCapacity)
         {
@@ -311,7 +320,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
     public void TrimExcess()
     {
         var currentLen = _entries.Length;
-        if (currentLen == 0) return;
+        if (currentLen == 0)
+        {
+            return;
+        }
 
         var logical = Count;
 
@@ -322,7 +334,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
         }
 
         var threshold = (int)(currentLen * TrimThreshold);
-        if (logical >= threshold) return;
+        if (logical >= threshold)
+        {
+            return;
+        }
 
         if (logical <= SmallCapacity)
         {
@@ -685,14 +700,27 @@ public sealed class OrderedDictionary<TKey, TValue> :
 
     private static bool IsPrime(int candidate)
     {
-        if (candidate <= 1) return false;
-        if (candidate <= 3) return true;
-        if ((candidate & 1) == 0) return false;
+        if (candidate <= 1)
+        {
+            return false;
+        }
+        if (candidate <= 3)
+        {
+            return true;
+        }
+        if ((candidate & 1) == 0)
+        {
+            return false;
+        }
 
         var limit = (int)Math.Sqrt(candidate);
         for (var d = 3; d <= limit; d += 2)
+        {
             if (candidate % d == 0)
+            {
                 return false;
+            }
+        }
 
         return true;
     }
@@ -843,7 +871,10 @@ public sealed class OrderedDictionary<TKey, TValue> :
                     break;
                 }
 
-                if (cmp.Equals(_d._entries[idx].Value, item)) return true;
+                if (cmp.Equals(_d._entries[idx].Value, item))
+                {
+                    return true;
+                }
             }
 
             return false;

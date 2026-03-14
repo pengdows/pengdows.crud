@@ -298,7 +298,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             while (cursor < sql.Length)
             {
                 var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-                if (relIdx < 0) break;
+                if (relIdx < 0)
+                {
+                    break;
+                }
 
                 var matchStart = cursor + relIdx;
                 var nameStart = matchStart + 3; // skip past "{P}"
@@ -363,7 +366,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         while (cursor < sql.Length)
         {
             var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-            if (relIdx < 0) break;
+            if (relIdx < 0)
+            {
+                break;
+            }
 
             var matchStart = cursor + relIdx;
             var nameStart = matchStart + 3;
@@ -1470,8 +1476,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void AddParameters(IList<DbParameter> list)
     {
-        if (list == null) return;
-        
+        if (list == null)
+        {
+            return;
+        }
+
         // Optimize for the common case of monolithic binders
         for (var i = 0; i < list.Count; i++)
         {

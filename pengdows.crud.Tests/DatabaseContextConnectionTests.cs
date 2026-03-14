@@ -236,7 +236,7 @@ public class DatabaseContextConnectionTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => context.ExecuteSessionSettingsAsync(connection, readOnly: false, cts.Token));
+            () => context.ExecuteSessionSettingsAsync(connection, readOnly: false, cts.Token).AsTask());
     }
 
     private sealed class CapturingConnection : DbConnection

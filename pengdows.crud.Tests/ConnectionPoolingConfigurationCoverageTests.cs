@@ -29,7 +29,10 @@ internal sealed class PasswordStrippingBuilder : DbConnectionStringBuilder
         foreach (var segment in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             var eqIdx = segment.IndexOf('=');
-            if (eqIdx < 0) continue;
+            if (eqIdx < 0)
+            {
+                continue;
+            }
             var key = segment[..eqIdx].Trim();
             var value = segment[(eqIdx + 1)..].Trim();
             if (!SensitiveKeys.Contains(key))

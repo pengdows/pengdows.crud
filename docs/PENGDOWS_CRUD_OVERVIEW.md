@@ -18,7 +18,7 @@
 - **Pool governor** — Semaphore-based backpressure preventing connection pool exhaustion
 - **RFC 9562 UUIDv7** — `Uuid7Optimized` with configurable clock modes for database-friendly sortable IDs
 - **DbMode.Best** — Auto-selects optimal connection mode based on database type and connection string
-- **Metrics and observability** — 25+ real-time metrics with event-based updates
+- **Metrics and observability** — 36 real-time metrics with event-based updates, plus read/write role splits
 - **Session settings** — Per-connection session initialization (ANSI_QUOTES, isolation defaults, search_path)
 - **Isolation profiles** — Portable `IsolationProfile` abstraction across database engines
 - **DataSource support** — Native `DbDataSource`/`NpgsqlDataSource` integration
@@ -636,7 +636,7 @@ Uuid7Optimized.Configure(new Uuid7Options
 
 ## Metrics and Observability
 
-DatabaseContext tracks 25+ real-time metrics with minimal overhead:
+DatabaseContext tracks 36 top-level real-time metrics with minimal overhead, plus read/write role snapshots:
 
 ```csharp
 // Subscribe to metrics updates
@@ -646,7 +646,7 @@ context.MetricsUpdated += (sender, metrics) =>
 };
 
 // Or poll on demand
-var metrics = context.GetMetrics();
+var metrics = context.Metrics;
 ```
 
 **Metrics tracked:**
@@ -657,7 +657,9 @@ var metrics = context.GetMetrics();
 | **Commands** | Executed, failed, timed-out, cancelled, avg duration, P95, P99 |
 | **Rows** | Total read, total affected, max parameters observed |
 | **Prepared Statements** | Cached, evicted |
-| **Transactions** | Active, max concurrent, avg duration |
+| **Transactions** | Active, max concurrent, avg duration, committed, rolled back |
+| **Errors** | Deadlocks, serialization failures, constraint violations |
+| **Sessions** | Session initialization count and average init time |
 | **Read/Write Split** | Separate `DatabaseRoleMetrics` for read vs write operations |
 
 ```csharp
@@ -667,6 +669,8 @@ var peakConns = context.PeakOpenConnections;      // Peak observed
 var dbProduct = context.Product;                   // Detected database
 var mode = context.ConnectionMode;                 // Current DbMode
 ```
+
+See [`docs/metrics.md`](metrics.md) for the full field-by-field reference.
 
 ## Connection Modes and Strategies
 
@@ -1047,7 +1051,7 @@ public class TenantOrderService
 | **Batch Operations** | SaveChanges | None | None | BatchCreate/BatchUpsert |
 | **Transaction Mgmt** | Built-in | Manual | Manual | Built-in |
 | **Connection Mgmt** | Automatic | Manual | Manual | Strategies + Governor |
-| **Metrics** | None | None | None | 25+ real-time metrics |
+| **Metrics** | None | None | None | 36 real-time metrics + role splits |
 | **ValueTask** | No | No | No | Yes (execution hot paths) |
 | **Code Size** | Very Large | Small | Small | Medium |
 

@@ -1121,9 +1121,9 @@ var context = new DatabaseContext(
 context.MetricsUpdated += (sender, metrics) =>
 {
     Console.WriteLine($"Open connections: {metrics.ConnectionsCurrent}");
-    Console.WriteLine($"Total created: {metrics.TotalConnectionsCreated}");
-    Console.WriteLine($"Reused: {metrics.TotalConnectionsReused}");
-    Console.WriteLine($"Failures: {metrics.TotalConnectionFailures}");
+    Console.WriteLine($"Opened: {metrics.ConnectionsOpened}");
+    Console.WriteLine($"Closed: {metrics.ConnectionsClosed}");
+    Console.WriteLine($"Failures: {metrics.CommandsFailed}");
 };
 ```
 

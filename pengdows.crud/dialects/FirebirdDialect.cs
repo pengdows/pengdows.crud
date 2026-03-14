@@ -241,8 +241,7 @@ internal class FirebirdDialect : SqlDialect
     private const string DatabaseInfoQuery = "SELECT * FROM rdb$database";
     private const string MonitorVersionQuery = "SELECT mon$server_version FROM mon$database";
 
-    private const string DefaultSessionSettings =
-        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+    private const string DefaultNamesAndDialectSettings = "SET NAMES UTF8;\nSET SQL DIALECT 3;";
 
     public override string GetVersionQuery()
     {
@@ -284,10 +283,10 @@ internal class FirebirdDialect : SqlDialect
             conn =>
             {
                 // Always set names to UTF8 and dialect to 3 to ensure deterministic state.
-                return new SessionSettingsResult("SET NAMES UTF8;\nSET SQL DIALECT 3;", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), false);
+                return new SessionSettingsResult(DefaultNamesAndDialectSettings, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), false);
             },
             () => new SessionSettingsResult(
-                "SET NAMES UTF8;\nSET SQL DIALECT 3;",
+                DefaultNamesAndDialectSettings,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 true),
             "Failed to configure Firebird session settings");
@@ -295,7 +294,7 @@ internal class FirebirdDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return _sessionSettings ?? "SET NAMES UTF8;\nSET SQL DIALECT 3;";
+        return _sessionSettings ?? DefaultNamesAndDialectSettings;
     }
 
     public override string GetReadOnlySessionSettings()

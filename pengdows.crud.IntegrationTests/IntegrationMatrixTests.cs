@@ -49,6 +49,7 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         await _host.StartAsync();
         _orchestrator = new ParallelTestOrchestrator(
             _host.Services,
+            ShouldIncludeOracle(),
             ShouldIncludeSnowflake());
     }
 
@@ -56,6 +57,14 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
     {
         await _host.StopAsync();
         _host.Dispose();
+    }
+
+    internal static bool ShouldIncludeOracle()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("INCLUDE_ORACLE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool ShouldIncludeSnowflake()

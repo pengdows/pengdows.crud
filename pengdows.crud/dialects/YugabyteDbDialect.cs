@@ -57,6 +57,11 @@ internal class YugabyteDbDialect : PostgreSqlDialect
     /// </summary>
     internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
+        // Do NOT set _settingsBaked = true here.
+        // YugabyteDB does not bake session settings into startup Options — only disables
+        // MaxAutoPrepare. Session settings (client_encoding, lock_timeout) must be applied
+        // via SET commands on every checkout. The PostgreSQL startup-Options optimization
+        // (which eliminates per-checkout SET round-trips) does not apply to YugabyteDB.
         try
         {
             ConnectionStringBuilder.ConnectionString = connectionString;

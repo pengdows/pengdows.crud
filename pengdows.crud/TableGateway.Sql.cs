@@ -229,9 +229,18 @@ public partial class TableGateway<TEntity, TRowID>
                     var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                     foreach (var col in updateColumns)
                     {
-                        if (upsertKeySet?.Contains(col) == true) continue;
-                        if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
-                        if (frag.Length > 0) frag.Append(", ");
+                        if (upsertKeySet?.Contains(col) == true)
+                        {
+                            continue;
+                        }
+                        if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                        {
+                            continue;
+                        }
+                        if (frag.Length > 0)
+                        {
+                            frag.Append(", ");
+                        }
                         frag.Append(tp);
                         frag.Append(dialect.WrapSimpleName(col.Name));
                         frag.Append(" = s.");
@@ -256,9 +265,18 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         foreach (var col in updateColumns)
                         {
-                            if (upsertKeySet?.Contains(col) == true) continue;
-                            if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
-                            if (frag.Length > 0) frag.Append(", ");
+                            if (upsertKeySet?.Contains(col) == true)
+                            {
+                                continue;
+                            }
+                            if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                            {
+                                continue;
+                            }
+                            if (frag.Length > 0)
+                            {
+                                frag.Append(", ");
+                            }
                             frag.Append(dialect.WrapSimpleName(col.Name));
                             frag.Append(" = ");
                             frag.Append(dialect.UpsertIncomingColumn(col.Name));

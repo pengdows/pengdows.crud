@@ -633,7 +633,10 @@ internal sealed class PoolGovernor : IDisposable
 
     private void RecordWaitAndHold(long waitStart, long acquiredAt, long releasedAt)
     {
-        if (!_trackMetrics) return;
+        if (!_trackMetrics)
+        {
+            return;
+        }
         var waitTicks = acquiredAt - waitStart;
         var holdTicks = releasedAt - acquiredAt;
 
@@ -648,7 +651,10 @@ internal sealed class PoolGovernor : IDisposable
     private static TimeSpan GetRemainingTimeout(long deadlineTicks)
     {
         var remainingTicks = deadlineTicks - Stopwatch.GetTimestamp();
-        if (remainingTicks <= 0) return TimeSpan.Zero;
+        if (remainingTicks <= 0)
+        {
+            return TimeSpan.Zero;
+        }
         return TimeSpan.FromSeconds((double)remainingTicks / Stopwatch.Frequency);
     }
 

@@ -652,7 +652,10 @@ public class DataReaderMapperTests
         var tryGetValue = map.GetType().GetMethod("TryGetValue")!;
         var args = new object?[] { planCacheKey, null };
         var found = (bool)tryGetValue.Invoke(map, args)!;
-        if (!found) return null;
+        if (!found)
+        {
+            return null;
+        }
 
         var entry = args[1]!;
         var valueProp = entry.GetType().GetProperty("Value")

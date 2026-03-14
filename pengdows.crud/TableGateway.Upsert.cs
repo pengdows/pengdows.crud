@@ -192,7 +192,10 @@ public partial class TableGateway<TEntity, TRowID>
 
             for (var i = 0; i < conflictCols.Count; i++)
             {
-                if (i > 0) sc.Query.Append(", ");
+                if (i > 0)
+                {
+                    sc.Query.Append(", ");
+                }
                 sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
             }
 
@@ -305,8 +308,14 @@ public partial class TableGateway<TEntity, TRowID>
         {
             foreach (var column in insertableColumns)
             {
-                if (insertColSb.Length > 0) insertColSb.Append(", ");
-                if (insertValSb.Length > 0) insertValSb.Append(", ");
+                if (insertColSb.Length > 0)
+                {
+                    insertColSb.Append(", ");
+                }
+                if (insertValSb.Length > 0)
+                {
+                    insertValSb.Append(", ");
+                }
                 var wrapped = dialect.WrapSimpleName(column.Name);
                 insertColSb.Append(wrapped);
                 insertValSb.Append("s.");

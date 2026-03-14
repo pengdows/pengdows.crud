@@ -186,7 +186,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     private ConcurrentDictionary<string, byte> GetPreparedCache()
     {
         var prepared = Volatile.Read(ref _prepared);
-        if (prepared != null) return prepared;
+        if (prepared != null)
+        {
+            return prepared;
+        }
         prepared = new ConcurrentDictionary<string, byte>();
         var existing = Interlocked.CompareExchange(ref _prepared, prepared, null);
         return existing ?? prepared;
@@ -195,7 +198,10 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
     private ConcurrentQueue<string> GetPreparedOrder()
     {
         var order = Volatile.Read(ref _order);
-        if (order != null) return order;
+        if (order != null)
+        {
+            return order;
+        }
         order = new ConcurrentQueue<string>();
         var existing = Interlocked.CompareExchange(ref _order, order, null);
         return existing ?? order;

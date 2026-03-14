@@ -1723,7 +1723,8 @@ INSERT INTO {table} (
     {
         if (_context.Product != SupportedDatabase.MySql)
         {
-            CheckSkip($"  [Reader disposal] Not applicable to {_context.Product}");
+            // Not a MySQL.Data compatibility concern — other drivers don't have this problem.
+            // Return silently rather than recording a skip for every non-MySQL database.
             return;
         }
 

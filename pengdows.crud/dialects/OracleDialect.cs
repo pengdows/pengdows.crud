@@ -257,7 +257,6 @@ internal class OracleDialect : SqlDialect
 
     private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
-    private const string SetTransactionReadWriteSql = "SET TRANSACTION READ WRITE;";
 
     public override string GetBaseSessionSettings()
     {
@@ -362,7 +361,10 @@ internal class OracleDialect : SqlDialect
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (dbType == DbType.Boolean && value is bool b)
+        {
             return b ? (short)1 : (short)0;
+        }
+
         return base.PrepareParameterValue(value, dbType);
     }
 }

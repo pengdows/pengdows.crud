@@ -15,7 +15,7 @@
 - **SQL-first**: You write the SQL, we provide safety, parameterization, and cross-database portability
 - **Multi-tenant SaaS ready**: Each tenant can use a **different database type** (PostgreSQL for one, SQLite for another, SQL Server for another)
 - **Advanced type support**: Spatial types, network types, intervals, ranges, JSON, streaming LOBs—14 specialized converters
-- **Production observability**: 23+ real-time metrics (P95/P99 latency, connection tracking, query performance)
+- **Production observability**: 36 real-time metrics plus read/write role splits (P95/P99 latency, connection tracking, query performance)
 - **Memory-efficient streaming**: Process millions of rows without loading into memory via `IAsyncEnumerable<T>`
 - **Superior testability**: Complete fakeDb ADO.NET provider for fast unit tests + Testcontainers for integration tests
 - **Automatic optimization**: Database-specific features detected and used (MERGE, ON CONFLICT, set-valued params, RETURNING clauses)
@@ -127,7 +127,7 @@ public class Entity
 
 ### Real-Time Metrics & Observability
 
-**23+ metrics available** (enable metrics in context configuration):
+**36 top-level metrics available** (plus read/write role snapshots; enable metrics in context configuration):
 
 ```csharp
 var config = new DatabaseContextConfiguration
@@ -162,14 +162,16 @@ context.MetricsUpdated += (sender, m) =>
 ```
 
 **Metrics tracked:**
-- Connection lifecycle (opened, closed, current, max, reused, long-lived)
-- Connection timing (avg hold time, open time, close time)
-- Command execution (total, failed, timed-out, cancelled)
-- Command latency (average, P95, P99 percentiles)
-- Row operations (total read, total affected)
-- Prepared statement cache (cached, evicted, total)
-- Transaction tracking (active, max, average duration)
-- Read/write split metrics (per-role counts and timings)
+- Connection lifecycle and timing
+- Command execution, latency, and parameter counts
+- Row reads and rows affected
+- Prepared statement activity and cache churn
+- Transaction counts and latency
+- Classified database errors
+- Session initialization overhead
+- Read/write split metrics per execution role
+
+See [`docs/metrics.md`](docs/metrics.md) for the full metric-by-metric reference.
 
 **Neither EF Core nor Dapper has built-in metrics.**
 
@@ -379,7 +381,7 @@ Instead, it helps you write **real SQL** that's:
 | **Read-Only Enforcement** | ✅ **ConnString + Session SQL** | ❌ None | ❌ None |
 | **Advanced Types (Spatial, Network, Ranges)** | ✅ **14 converters** | ⚠️ Limited | ❌ None |
 | **Streaming Large Results** | ✅ **IAsyncEnumerable** | ⚠️ With overhead | ❌ Loads all |
-| **Real-Time Metrics (P95/P99, Connections)** | ✅ **23+ metrics** | ⚠️ Logging only | ❌ None |
+| **Real-Time Metrics (P95/P99, Connections)** | ✅ **36 metrics + role splits** | ⚠️ Logging only | ❌ None |
 | **Connection Strategies (4 modes)** | ✅ **Auto-detected** | ❌ None | ❌ Manual |
 | **Portable Isolation Levels** | ✅ **IsolationProfile** | ❌ DB-specific | ❌ Manual |
 | **Database Dialects** | ✅ **12 with feature detection** | ⚠️ Via providers | ⚠️ Manual |
@@ -939,8 +941,8 @@ var config = new DatabaseContextConfiguration
     EnableMetrics = true,
     MetricsOptions = new MetricsOptions
     {
-        PercentileWindowSize = 1024,        // Sliding window (power of 2)
-        LongLivedConnectionThreshold = 30   // Seconds before flagged
+        PercentileWindowSize = 1024,
+        LongConnectionThreshold = TimeSpan.FromSeconds(30)
     }
 };
 var context = new DatabaseContext(config, factory);
@@ -957,8 +959,8 @@ context.MetricsUpdated += (sender, m) =>
 
     // Connection leak detection
     if (m.LongLivedConnections > 5)
-        _logger.LogWarning("{Count} connections held > {Threshold}s",
-            m.LongLivedConnections, m.LongLivedConnectionThreshold);
+        _logger.LogWarning("{Count} long-lived connections observed",
+            m.LongLivedConnections);
 };
 
 // Poll metrics anytime
@@ -971,7 +973,7 @@ Console.WriteLine($"Timed out: {metrics.CommandsTimedOut}");
 Console.WriteLine($"Rows read: {metrics.RowsReadTotal}");
 ```
 
-**23+ tracked metrics:** Connections (current, max, reused, long-lived), commands (total, failed, timed-out, cancelled), latency (avg, P95, P99), rows (read, affected), prepared statements (cached, evicted), transactions (active, max, avg duration).
+**36 top-level metrics are tracked**, covering connections, commands, rows, prepared statements, transactions, error classification, session initialization, and read/write role splits. See [`docs/metrics.md`](docs/metrics.md) for the complete list.
 
 **When it matters:** Production systems with SLAs. Cost-conscious teams avoiding APM subscription fees.
 

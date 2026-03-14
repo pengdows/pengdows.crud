@@ -264,17 +264,50 @@ public static class TypeCoercionHelper
         // Handle empty strings for non-string types
         if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string))
         {
-            if (underlyingTarget == typeof(decimal)) return 0m;
-            if (underlyingTarget == typeof(Guid)) return Guid.Empty;
-            if (underlyingTarget == typeof(DateTime)) return default(DateTime);
-            if (underlyingTarget == typeof(DateTimeOffset)) return default(DateTimeOffset);
-            if (underlyingTarget == typeof(int)) return 0;
-            if (underlyingTarget == typeof(long)) return 0L;
-            if (underlyingTarget == typeof(double)) return 0d;
-            if (underlyingTarget == typeof(float)) return 0f;
-            if (underlyingTarget == typeof(bool)) return false;
-            if (underlyingTarget == typeof(short)) return (short)0;
-            if (underlyingTarget == typeof(byte)) return (byte)0;
+            if (underlyingTarget == typeof(decimal))
+            {
+                return 0m;
+            }
+            if (underlyingTarget == typeof(Guid))
+            {
+                return Guid.Empty;
+            }
+            if (underlyingTarget == typeof(DateTime))
+            {
+                return default(DateTime);
+            }
+            if (underlyingTarget == typeof(DateTimeOffset))
+            {
+                return default(DateTimeOffset);
+            }
+            if (underlyingTarget == typeof(int))
+            {
+                return 0;
+            }
+            if (underlyingTarget == typeof(long))
+            {
+                return 0L;
+            }
+            if (underlyingTarget == typeof(double))
+            {
+                return 0d;
+            }
+            if (underlyingTarget == typeof(float))
+            {
+                return 0f;
+            }
+            if (underlyingTarget == typeof(bool))
+            {
+                return false;
+            }
+            if (underlyingTarget == typeof(short))
+            {
+                return (short)0;
+            }
+            if (underlyingTarget == typeof(byte))
+            {
+                return (byte)0;
+            }
             
             return IsNumericClrType(underlyingTarget) ? Activator.CreateInstance(underlyingTarget) : null;
         }
@@ -958,7 +991,10 @@ public static class TypeCoercionHelper
             public static byte[] ReadBytes(IDataRecord reader, int ordinal)
             {
                 var length = reader.GetBytes(ordinal, 0, null, 0, 0);
-                if (length <= 0) return Array.Empty<byte>();
+                if (length <= 0)
+                {
+                    return Array.Empty<byte>();
+                }
         
                 // For small binary data (like small hashes), use a rented buffer to read,
                 // then copy to a new array of the exact size.

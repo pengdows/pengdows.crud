@@ -86,7 +86,10 @@ public partial class TableGateway<TEntity, TRowID>
         sb.Append("SELECT ");
         for (var i = 0; i < _tableInfo.OrderedColumns.Count; i++)
         {
-            if (i > 0) sb.Append(", ");
+            if (i > 0)
+            {
+                sb.Append(", ");
+            }
             sb.Append(wrappedAliasPrefix);
             sb.Append(dialect.WrapSimpleName(_tableInfo.OrderedColumns[i].Name));
         }
@@ -482,7 +485,10 @@ public partial class TableGateway<TEntity, TRowID>
                 sb.Append(SqlFragments.In);
                 for (var i = 0; i < names.Length; i++)
                 {
-                    if (i > 0) sb.Append(SqlFragments.Comma);
+                    if (i > 0)
+                    {
+                        sb.Append(SqlFragments.Comma);
+                    }
                     sb.Append(names[i]);
                 }
 

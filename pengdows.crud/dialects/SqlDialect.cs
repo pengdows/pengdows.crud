@@ -624,8 +624,15 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
         var baseline = GetBaseSessionSettings();
         var intent = readOnly ? GetReadOnlySessionSettings() : GetReadOnlyTransactionResetSql();
 
-        if (string.IsNullOrWhiteSpace(baseline)) return intent ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(intent)) return baseline;
+        if (string.IsNullOrWhiteSpace(baseline))
+        {
+            return intent ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(intent))
+        {
+            return baseline;
+        }
 
         // Default: Multiple statements in a single command batch (1 RTT)
         return baseline.TrimEnd(';') + ";\n" + intent;
@@ -2112,8 +2119,15 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
     /// <inheritdoc/>
     public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
-        if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
-        if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
+        }
 
         if (SupportsOffsetFetch)
         {

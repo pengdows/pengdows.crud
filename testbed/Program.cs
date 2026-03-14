@@ -30,9 +30,10 @@ await StormGateIntegrationTests.RunAsync();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true)
+// Use the new parallel orchestrator (Oracle and Snowflake are opt-in via env vars)
+var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake);
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

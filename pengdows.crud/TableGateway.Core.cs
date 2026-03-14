@@ -332,11 +332,14 @@ public partial class TableGateway<TEntity, TRowID> :
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
             
             await using var sc = BuildCreate(entity, ctx);
-            if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1) return false;
-            
+            if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
+            {
+                return false;
+            }
+
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
-                _tableInfo.Name, 
-                _idColumn.Name, 
+                _tableInfo.Name,
+                _idColumn.Name,
                 _tableInfo.CorrelationColumn.Name, 
                 dialect.MakeParameterName("p1"));
                 
@@ -428,10 +431,13 @@ public partial class TableGateway<TEntity, TRowID> :
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
             
             await using var sc = BuildCreate(entity, ctx);
-            if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1) return false;
-            
+            if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
+            {
+                return false;
+            }
+
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
-                _tableInfo.Name, 
+                _tableInfo.Name,
                 _idColumn.Name, 
                 _tableInfo.CorrelationColumn.Name, 
                 dialect.MakeParameterName("p1"));
@@ -1167,7 +1173,10 @@ public partial class TableGateway<TEntity, TRowID> :
         // unnecessary allocations for single-element lists.
         if (ids is IReadOnlyCollection<TRowID> roc)
         {
-            if (roc.Count == 0) return new List<TRowID>(0);
+            if (roc.Count == 0)
+            {
+                return new List<TRowID>(0);
+            }
             if (roc.Count == 1)
             {
                 var id = roc is IList<TRowID> list ? list[0] : roc.First();
@@ -1206,7 +1215,10 @@ public partial class TableGateway<TEntity, TRowID> :
                             break;
                         }
                     }
-                    if (!found) result.Add(id);
+                    if (!found)
+                    {
+                        result.Add(id);
+                    }
                     continue;
                 }
 

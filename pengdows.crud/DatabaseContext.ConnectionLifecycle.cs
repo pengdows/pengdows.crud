@@ -217,7 +217,7 @@ public partial class DatabaseContext
         }
     }
 
-    internal async Task ExecuteSessionSettingsAsync(
+    internal async ValueTask ExecuteSessionSettingsAsync(
         IDbConnection connection,
         bool readOnly,
         CancellationToken cancellationToken = default)

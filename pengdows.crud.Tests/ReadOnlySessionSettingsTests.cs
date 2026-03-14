@@ -37,7 +37,10 @@ public class ReadOnlySessionSettingsTests
     [MemberData(nameof(DialectData))]
     public void GetConnectionSessionSettings_NotReadOnly_DoesNotContainSnippet(SupportedDatabase db, string expected)
     {
-        if (string.IsNullOrEmpty(expected)) return;
+        if (string.IsNullOrEmpty(expected))
+        {
+            return;
+        }
         var factory = new fakeDbFactory(db);
         using var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={db}", factory);
         var dialect = CreateDialect(db, factory);
@@ -63,7 +66,10 @@ public class ReadOnlySessionSettingsTests
     [MemberData(nameof(DialectData))]
     public void SessionSettingsPreamble_ReadWriteContext_DoesNotContainSnippet(SupportedDatabase db, string expected)
     {
-        if (string.IsNullOrEmpty(expected)) return;
+        if (string.IsNullOrEmpty(expected))
+        {
+            return;
+        }
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={db}",

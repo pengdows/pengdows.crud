@@ -556,7 +556,10 @@ public class FakeDataStore
                 {
                     // Fallback for case-insensitive column matching in fake store
                     var key = row.Keys.FirstOrDefault(k => k.Equals(column, StringComparison.OrdinalIgnoreCase));
-                    if (key == null) return false;
+                    if (key == null)
+                    {
+                        return false;
+                    }
                     column = key;
                 }
 

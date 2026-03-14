@@ -265,14 +265,20 @@ public partial class TableGateway<TEntity, TRowID>
                 foreach (var col in keyColumns)
                 {
                     var val = col.MakeParameterValueFromField(entity);
-                    if (val == null || val == DBNull.Value) continue;
+                    if (val == null || val == DBNull.Value)
+                    {
+                        continue;
+                    }
                     sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
                 }
 
                 foreach (var col in updateableColumns)
                 {
                     var val = col.MakeParameterValueFromField(entity);
-                    if (val == null || val == DBNull.Value) continue;
+                    if (val == null || val == DBNull.Value)
+                    {
+                        continue;
+                    }
                     sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
                 }
             }

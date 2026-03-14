@@ -77,7 +77,10 @@ internal class SqlServerDialect : SqlDialect
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = 0; i < SessionSettingsDef.Length; i++)
         {
-            if (i > 0) sb.Append(";\n");
+            if (i > 0)
+            {
+                sb.Append(";\n");
+            }
             sb.Append("SET ");
             sb.Append(SessionSettingsDef[i].Name);
             sb.Append(' ');
@@ -148,7 +151,10 @@ internal class SqlServerDialect : SqlDialect
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
-        if (rowCount <= 0) return;
+        if (rowCount <= 0)
+        {
+            return;
+        }
 
         // SQL Server MERGE pattern:
         // MERGE INTO target AS t
@@ -166,11 +172,19 @@ internal class SqlServerDialect : SqlDialect
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
         {
-            if (row > 0) query.Append(", ");
+            if (row > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append('(');
             for (var col = 0; col < allCols.Count; col++)
             {
-                if (col > 0) query.Append(", ");
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
                 var val = getValue?.Invoke(row, col);
                 if (val == null || val == DBNull.Value)
                 {
@@ -190,14 +204,22 @@ internal class SqlServerDialect : SqlDialect
         query.Append(") AS s(");
         for (var i = 0; i < allCols.Count; i++)
         {
-            if (i > 0) query.Append(", ");
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append(allCols[i]);
         }
 
         query.Append(") ON (");
         for (var i = 0; i < keyColumns.Count; i++)
         {
-            if (i > 0) query.Append(" AND ");
+            if (i > 0)
+            {
+                query.Append(" AND ");
+            }
+
             query.Append("t.");
             query.Append(keyColumns[i]);
             query.Append(" = s.");
@@ -207,7 +229,11 @@ internal class SqlServerDialect : SqlDialect
         query.Append(") WHEN MATCHED THEN UPDATE SET ");
         for (var i = 0; i < columnNames.Count; i++)
         {
-            if (i > 0) query.Append(", ");
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append(columnNames[i]);
             query.Append(" = s.");
             query.Append(columnNames[i]);
