@@ -874,6 +874,7 @@ public partial class DatabaseContext
         }
 
         _readerDataSource = _dataSource;
+        RefreshRedactedConnectionStrings();
 
         if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
@@ -912,8 +913,7 @@ public partial class DatabaseContext
                 "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
         }
 
-        _redactedConnectionString = RedactConnectionString(_connectionString);
-        _redactedReaderConnectionString = RedactConnectionString(_readerConnectionString);
+        RefreshRedactedConnectionStrings();
     }
 
     /// <summary>
@@ -1592,6 +1592,12 @@ public partial class DatabaseContext
     }
 
     internal static Action? RedactionHook;
+
+    private void RefreshRedactedConnectionStrings()
+    {
+        _redactedConnectionString = RedactConnectionString(_connectionString);
+        _redactedReaderConnectionString = RedactConnectionString(_readerConnectionString);
+    }
 
     private static string RedactConnectionString(string connectionString)
     {

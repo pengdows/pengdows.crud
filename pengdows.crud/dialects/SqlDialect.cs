@@ -1289,7 +1289,7 @@ internal abstract class SqlDialect : ISqlDialect, IInternalSqlDialect
         string? connectionStringOverride)
     {
         var connectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         if (readOnly && !ConnectionStringHasReadOnlyParameter(connectionString))

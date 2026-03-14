@@ -211,7 +211,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     // Expose original requested mode for internal strategy decisions
     /// <inheritdoc/>
-    public string ConnectionString => _connectionString;
+    public string ConnectionString => _redactedConnectionString;
+
+    internal string RawConnectionString => _connectionString;
 
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).

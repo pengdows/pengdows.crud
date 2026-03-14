@@ -386,7 +386,7 @@ public class PostgreSqlDialectTests
         _dialect.ApplyConnectionSettings(connection, ctx, false);
 
         // Should get the context connection string 
-        Assert.Equal(ctx.ConnectionString, connection.ConnectionString);
+        Assert.Equal(GetRawConnectionString(ctx), connection.ConnectionString);
     }
 
     [Fact]
@@ -489,6 +489,14 @@ public class PostgreSqlDialectTests
         return new DatabaseContext(cfg, _factory);
     }
 
+    private static string GetRawConnectionString(DatabaseContext context)
+    {
+        var property = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(property);
+        return (string)property!.GetValue(context)!;
+    }
+
     [Fact]
     public void ApplyConnectionSettings_NonReadOnlyMode_DoesNotAddReadOnlyOptions()
     {
@@ -501,7 +509,7 @@ public class PostgreSqlDialectTests
 
         // Should not contain read-only options
         Assert.DoesNotContain("Options='-c default_transaction_read_only=on'", connection.ConnectionString);
-        Assert.Equal(ctx.ConnectionString, connection.ConnectionString);
+        Assert.Equal(GetRawConnectionString(ctx), connection.ConnectionString);
     }
 
     [Fact]

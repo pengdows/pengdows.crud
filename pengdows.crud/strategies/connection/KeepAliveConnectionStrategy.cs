@@ -118,7 +118,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         if (detectionTarget == null)
         {
             detectionTarget =
-                _context.FactoryCreateConnection(_context.ConnectionString, true, _context.IsReadOnlyConnection);
+                _context.FactoryCreateConnection(_context.RawConnectionString, true, _context.IsReadOnlyConnection);
             ownsConnection = true;
         }
 

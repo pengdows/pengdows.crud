@@ -96,6 +96,26 @@ public interface ITableGateway<TEntity, TRowID>
     ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
 
     /// <summary>
+    /// Returns a SELECT clause with no WHERE clause, including additional projected expressions
+    /// beyond the entity's mapped columns.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload when the query needs to SELECT columns from joined tables alongside
+    /// the entity's own columns. Each entry in <paramref name="extraSelectExpressions"/> is a
+    /// dotted alias.column string (e.g. <c>"tr.object_id"</c>) that is dialect-quoted and
+    /// appended to the SELECT list before the FROM clause. This avoids string-parsing the
+    /// generated SQL to inject extra columns.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sc = gateway.BuildBaseRetrieve("t", new[] { "tr.object_id" });
+    /// sc.Query.Append(" JOIN wp_term_relationships tr ON ...");
+    /// </code>
+    /// </example>
+    ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
+        IDatabaseContext? context = null);
+
+    /// <summary>
     /// Builds a SQL SELECT for a list of row IDs (pseudo keys).
     /// </summary>
     /// <remarks>

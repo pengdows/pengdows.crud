@@ -58,8 +58,9 @@ public class TypeCoercionHelperAdvancedTests
     public void CoerceDateTimeOffset_InvalidStringThrows()
     {
         var column = CreateJsonColumn();
-        var result = TypeCoercionHelper.Coerce("not-datetime", typeof(string), column);
-        Assert.Null(result);
+        var ex = Assert.Throws<JsonException>(() =>
+            TypeCoercionHelper.Coerce("not-datetime", typeof(string), column));
+        Assert.DoesNotContain("not-datetime", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

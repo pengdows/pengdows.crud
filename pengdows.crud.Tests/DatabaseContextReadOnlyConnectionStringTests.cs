@@ -25,7 +25,7 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
         var readerConnectionString = GetReaderConnectionString(ctx);
-        var writerConnectionString = ctx.ConnectionString;
+        var writerConnectionString = GetWriterConnectionString(ctx);
 
         Assert.Contains("Data Source=writer", readerConnectionString, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ApplicationIntent=ReadOnly", readerConnectionString, StringComparison.OrdinalIgnoreCase);
@@ -49,7 +49,7 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
         var readerConnectionString = GetReaderConnectionString(ctx);
-        var writerConnectionString = ctx.ConnectionString;
+        var writerConnectionString = GetWriterConnectionString(ctx);
 
         Assert.Contains("Data Source=reader", readerConnectionString, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ApplicationIntent=ReadOnly", readerConnectionString, StringComparison.OrdinalIgnoreCase);
@@ -71,7 +71,7 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
         var readerConnectionString = GetReaderConnectionString(ctx);
-        var writerConnectionString = ctx.ConnectionString;
+        var writerConnectionString = GetWriterConnectionString(ctx);
         var expectedApplicationName = GetExpectedDefaultApplicationName();
 
         Assert.Contains("ApplicationIntent=ReadOnly", readerConnectionString, StringComparison.OrdinalIgnoreCase);
@@ -109,7 +109,7 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Oracle));
 
         var reader = GetReaderConnectionString(ctx);
-        var writer = ctx.ConnectionString;
+        var writer = GetWriterConnectionString(ctx);
 
         Assert.Contains("Metadata Pooling", reader, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Metadata Pooling", writer, StringComparison.OrdinalIgnoreCase);
@@ -157,6 +157,14 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(field);
         return (string)field!.GetValue(ctx)!;
+    }
+
+    private static string GetWriterConnectionString(DatabaseContext ctx)
+    {
+        var property = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(property);
+        return (string)property!.GetValue(ctx)!;
     }
 
     private static string GetExpectedDefaultApplicationName()

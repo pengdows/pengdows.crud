@@ -157,6 +157,19 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void PostgreSqlEqualFootingBenchmarks_AliasesEfScalarAggregateAsValue()
+    {
+        const string fileName = "PostgreSqlEqualFootingBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "const string aggregateSql = \"SELECT AVG(salary) AS \\\"Value\\\" FROM benchmark WHERE is_active = TRUE\"",
+            "SqlQueryRaw<double>(aggregateSql)"
+        });
+    }
+
+    [Fact]
     public void EqualFootingCrudBenchmarks_SplitDeleteOnlyFromDeleteInsertCycle()
     {
         const string fileName = "EqualFootingCrudBenchmarks.cs";

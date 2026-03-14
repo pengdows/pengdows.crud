@@ -25,6 +25,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -137,7 +138,7 @@ internal class SqliteDialect : SqlDialect
         string? connectionStringOverride)
     {
         var baseConnectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         // SQLite: Only apply read-only connection parameter if not a memory database

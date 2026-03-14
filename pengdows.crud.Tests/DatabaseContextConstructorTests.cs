@@ -518,7 +518,10 @@ public class DatabaseContextConstructorTests
         using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
 
         // Assert - the original connection string should be retained verbatim
-        Assert.Equal(rawConnectionString, context.ConnectionString);
+        var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(rawProperty);
+        Assert.Equal(rawConnectionString, (string)rawProperty!.GetValue(context)!);
     }
 
     [Fact]

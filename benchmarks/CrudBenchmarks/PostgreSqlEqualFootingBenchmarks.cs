@@ -239,7 +239,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
         const string filteredQuerySql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
-        const string aggregateSql = "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE";
+        const string aggregateSql = "SELECT AVG(salary) AS \"Value\" FROM benchmark WHERE is_active = TRUE";
 
         for (var pw = 0; pw < prewarmCount; pw++)
         {

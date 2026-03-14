@@ -741,8 +741,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             case EnumParseFailureMode.SetNullAndLog:
                 TypeCoercionHelper.Logger.LogWarning(
                     exception,
-                    "Failed to coerce value '{Value}' to enum property {Property} of type {EnumType}.",
-                    value,
+                    "Failed to coerce value to enum property {Property} of type {EnumType}.",
                     property.Name,
                     enumType);
                 if (Nullable.GetUnderlyingType(property.PropertyType) != null)

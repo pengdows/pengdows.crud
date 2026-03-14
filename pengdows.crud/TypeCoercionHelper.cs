@@ -126,7 +126,7 @@ public static class TypeCoercionHelper
         catch (Exception ex)
         {
             throw new InvalidCastException(
-                $"Cannot convert value '{value}' from {sourceType.Name} to {actualTarget.Name}.",
+                $"Cannot convert value from {sourceType.Name} to {actualTarget.Name}.",
                 ex);
         }
     }
@@ -362,7 +362,7 @@ public static class TypeCoercionHelper
         }
         catch (Exception ex)
         {
-            throw new InvalidCastException($"Cannot convert value '{value}' ({sourceType}) to {targetType}.", ex);
+            throw new InvalidCastException($"Cannot convert value of type {sourceType} to {targetType}.", ex);
         }
     }
 
@@ -429,19 +429,19 @@ public static class TypeCoercionHelper
         }
     }
 
-    private static object? HandleEnumFailure(object value, Type enumType, EnumParseFailureMode parseMode,
+    private static object? HandleEnumFailure(object _, Type enumType, EnumParseFailureMode parseMode,
         bool targetNullable)
     {
         switch (parseMode)
         {
             case EnumParseFailureMode.Throw:
-                throw new ArgumentException($"Cannot convert '{value}' to enum {enumType}");
+                throw new ArgumentException($"Cannot convert value to enum {enumType}");
             case EnumParseFailureMode.SetDefaultValue:
                 return targetNullable
                     ? null
                     : Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
             case EnumParseFailureMode.SetNullAndLog:
-                TryLogWarning("Cannot convert '{Value}' to enum {EnumType}.", value, enumType);
+                TryLogWarning("Cannot convert value to enum {EnumType}.", enumType);
                 return null;
             default:
                 return null;
@@ -504,7 +504,7 @@ public static class TypeCoercionHelper
             return charGuid;
         }
 
-        throw new InvalidCastException($"Cannot convert value '{value}' to Guid.");
+        throw new InvalidCastException("Cannot convert value to Guid.");
     }
 
     private static object CoerceBoolean(object value)
@@ -542,7 +542,7 @@ public static class TypeCoercionHelper
                 return m != decimal.Zero;
         }
 
-        throw new InvalidCastException($"Cannot convert value '{value}' to Boolean.");
+        throw new InvalidCastException("Cannot convert value to Boolean.");
     }
 
     private static bool EvaluateCharBoolean(char lower)
@@ -558,7 +558,7 @@ public static class TypeCoercionHelper
             case '0':
                 return false;
             default:
-                throw new InvalidCastException($"Cannot convert character '{lower}' to Boolean.");
+                throw new InvalidCastException("Cannot convert character to Boolean.");
         }
     }
 
@@ -581,7 +581,7 @@ public static class TypeCoercionHelper
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
             default:
-                throw new InvalidCastException($"Cannot convert value '{value}' to DateTimeOffset.");
+                throw new InvalidCastException("Cannot convert value to DateTimeOffset.");
         }
     }
 
@@ -596,7 +596,7 @@ public static class TypeCoercionHelper
             case string s when string.IsNullOrWhiteSpace(s):
                 // Treat empty/whitespace strings as invalid for DateTime
                 // This handles SQLite returning empty strings for TIMESTAMP columns
-                throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
+                throw new InvalidCastException("Cannot convert value to DateTime.");
             case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
                 out var dto):
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
@@ -604,7 +604,7 @@ public static class TypeCoercionHelper
                 when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             default:
-                throw new InvalidCastException($"Cannot convert value '{value}' to DateTime.");
+                throw new InvalidCastException("Cannot convert value to DateTime.");
         }
     }
 
@@ -617,7 +617,7 @@ public static class TypeCoercionHelper
     {
         if (string.IsNullOrWhiteSpace(s))
         {
-            throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+            throw new InvalidCastException("Cannot convert value to DateTime.");
         }
 
         if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
@@ -630,7 +630,7 @@ public static class TypeCoercionHelper
             return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
         }
 
-        throw new InvalidCastException($"Cannot convert value '{s}' to DateTime.");
+        throw new InvalidCastException("Cannot convert value to DateTime.");
     }
 
     /// <summary>
@@ -649,7 +649,7 @@ public static class TypeCoercionHelper
             return CreateFlexibleOffset(dt);
         }
 
-        throw new InvalidCastException($"Cannot convert value '{s}' to DateTimeOffset.");
+        throw new InvalidCastException("Cannot convert value to DateTimeOffset.");
     }
 
     /// <summary>
@@ -756,40 +756,48 @@ public static class TypeCoercionHelper
         {
             return JsonSerializer.Deserialize(jsonText, actualTarget, serializerOptions);
         }
-        catch (JsonException) when (value is not Stream)
+        catch (JsonException ex) when (value is not Stream)
         {
-            TryLogDebug("Failed to deserialize JSON value '{Value}' into {TargetType}", value, actualTarget);
-            return null;
+            TryLogDebug("Failed to deserialize JSON payload into {TargetType}", actualTarget);
+            throw new JsonException($"Failed to deserialize JSON payload into {actualTarget}.", ex);
         }
     }
 
     private static JsonDocument ToJsonDocument(object value, JsonSerializerOptions options)
     {
-        switch (value)
+        try
         {
-            case JsonDocument doc:
-                return doc;
-            case JsonElement element:
-                return JsonDocument.Parse(element.GetRawText());
-            case JsonNode node:
-                return JsonDocument.Parse(node.ToJsonString(options));
-            case string s:
-                return JsonDocument.Parse(string.IsNullOrWhiteSpace(s) ? "null" : s);
-            case byte[] bytes when bytes.Length == 0:
-                return JsonDocument.Parse("null");
-            case byte[] bytes:
-                return JsonDocument.Parse(Encoding.UTF8.GetString(bytes));
-            case ArraySegment<byte> segment when segment.Count > 0:
-                return JsonDocument.Parse(Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count));
-            case ReadOnlyMemory<byte> memory when !memory.IsEmpty:
-                return JsonDocument.Parse(Encoding.UTF8.GetString(memory.Span));
-            case Stream stream:
-                return DeserializeStreamToDocument(stream);
-            case char[] chars:
-                return JsonDocument.Parse(new string(chars));
-            default:
-                var serialized = JsonSerializer.Serialize(value, options);
-                return JsonDocument.Parse(serialized);
+            switch (value)
+            {
+                case JsonDocument doc:
+                    return doc;
+                case JsonElement element:
+                    return JsonDocument.Parse(element.GetRawText());
+                case JsonNode node:
+                    return JsonDocument.Parse(node.ToJsonString(options));
+                case string s:
+                    return JsonDocument.Parse(string.IsNullOrWhiteSpace(s) ? "null" : s);
+                case byte[] bytes when bytes.Length == 0:
+                    return JsonDocument.Parse("null");
+                case byte[] bytes:
+                    return JsonDocument.Parse(Encoding.UTF8.GetString(bytes));
+                case ArraySegment<byte> segment when segment.Count > 0:
+                    return JsonDocument.Parse(Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count));
+                case ReadOnlyMemory<byte> memory when !memory.IsEmpty:
+                    return JsonDocument.Parse(Encoding.UTF8.GetString(memory.Span));
+                case Stream stream:
+                    return DeserializeStreamToDocument(stream);
+                case char[] chars:
+                    return JsonDocument.Parse(new string(chars));
+                default:
+                    var serialized = JsonSerializer.Serialize(value, options);
+                    return JsonDocument.Parse(serialized);
+            }
+        }
+        catch (JsonException ex) when (value is not Stream)
+        {
+            TryLogDebug("Failed to deserialize JSON payload into {TargetType}", typeof(JsonDocument));
+            throw new JsonException($"Failed to deserialize JSON payload into {typeof(JsonDocument)}.", ex);
         }
     }
 

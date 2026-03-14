@@ -288,6 +288,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public string ConnectionString => _context.ConnectionString;
 
+    internal string RawConnectionString => InternalConnectionStringAccess.GetRawConnectionString(_context);
+
     /// <inheritdoc/>
     public string Name
     {

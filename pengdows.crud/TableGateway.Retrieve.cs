@@ -76,7 +76,19 @@ public partial class TableGateway<TEntity, TRowID>
         return sc;
     }
 
-    private string BuildBaseRetrieveSql(string alias, ISqlDialect dialect)
+    /// <inheritdoc/>
+    public ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
+        IDatabaseContext? context = null)
+    {
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        var sc = ctx.CreateSqlContainer();
+        sc.Query.Append(BuildBaseRetrieveSql(alias, dialect, extraSelectExpressions));
+        return sc;
+    }
+
+    private string BuildBaseRetrieveSql(string alias, ISqlDialect dialect,
+        IReadOnlyCollection<string>? extraSelectExpressions = null)
     {
         var hasAlias = !string.IsNullOrWhiteSpace(alias);
         var wrappedAliasPrefix = hasAlias
@@ -92,6 +104,15 @@ public partial class TableGateway<TEntity, TRowID>
             }
             sb.Append(wrappedAliasPrefix);
             sb.Append(dialect.WrapSimpleName(_tableInfo.OrderedColumns[i].Name));
+        }
+
+        if (extraSelectExpressions != null)
+        {
+            foreach (var expr in extraSelectExpressions)
+            {
+                sb.Append(", ");
+                sb.Append(dialect.WrapObjectName(expr));
+            }
         }
 
         sb.Append("\nFROM ");

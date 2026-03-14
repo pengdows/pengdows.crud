@@ -23,6 +23,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -120,7 +121,7 @@ internal class DuckDbDialect : SqlDialect
         string? connectionStringOverride)
     {
         var cs = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         if (readOnly && !IsMemoryDatabase(cs) &&
