@@ -56,6 +56,22 @@ public partial class TableGateway<TEntity, TRowID>
         return sc;
     }
 
+    /// <inheritdoc/>
+    public ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
+        IDatabaseContext? context = null)
+    {
+        if (extraSelectExpressions.Count == 0)
+        {
+            return BuildBaseRetrieve(alias, context);
+        }
+
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        var sc = ctx.CreateSqlContainer();
+        sc.Query.Append(BuildBaseRetrieveSql(alias, dialect, extraSelectExpressions));
+        return sc;
+    }
+
     /// <summary>
     /// Builds base SELECT SQL directly without using cached container templates.
     /// Used during template initialization to avoid circular dependency.
@@ -73,17 +89,6 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         sc.Query.Append(sql);
-        return sc;
-    }
-
-    /// <inheritdoc/>
-    public ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
-        IDatabaseContext? context = null)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        var sc = ctx.CreateSqlContainer();
-        sc.Query.Append(BuildBaseRetrieveSql(alias, dialect, extraSelectExpressions));
         return sc;
     }
 

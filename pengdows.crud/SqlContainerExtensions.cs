@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
@@ -239,5 +240,98 @@ public static class SqlContainerExtensions
         }
 
         return container.ExecuteReaderAsync(executionType, CommandType.Text, cancellationToken);
+    }
+
+    // =========================================================================
+    // Fluent query-building helpers
+    //
+    // These methods write directly into sc.Query so call sites don't have to
+    // reach through sc.Query.Append(sc.WrapObjectName(...)) for every token.
+    // All identifier quoting delegates to WrapObjectName, which correctly
+    // splits dotted names (e.g. "p.col") into per-segment quoted tokens.
+    // =========================================================================
+
+    /// <summary>
+    /// Appends a dialect-quoted identifier to the query.
+    /// </summary>
+    /// <example><c>sc.AppendName("post_date")</c> → <c>"post_date"</c></example>
+    public static ISqlContainer AppendName(this ISqlContainer container, string name)
+    {
+        container.Query.Append(container.WrapObjectName(name));
+        return container;
+    }
+
+    /// <summary>
+    /// Appends a dialect-quoted alias-qualified identifier to the query.
+    /// Equivalent to <c>AppendName("alias.name")</c> — the dialect splits on the dot.
+    /// </summary>
+    /// <example><c>sc.AppendName("p", "post_date")</c> → <c>"p"."post_date"</c></example>
+    public static ISqlContainer AppendName(this ISqlContainer container, string alias, string name)
+    {
+        container.Query
+            .Append(container.WrapObjectName(alias))
+            .Append(container.CompositeIdentifierSeparator)
+            .Append(container.WrapObjectName(name));
+        return container;
+    }
+
+    /// <summary>
+    /// Appends the dialect-formatted parameter placeholder for an existing parameter.
+    /// </summary>
+    public static ISqlContainer AppendParam(this ISqlContainer container, DbParameter parameter)
+    {
+        container.Query.Append(container.MakeParameterName(parameter));
+        return container;
+    }
+
+    /// <summary>
+    /// Appends the dialect-formatted parameter placeholder for a named parameter.
+    /// </summary>
+    public static ISqlContainer AppendParam(this ISqlContainer container, string parameterName)
+    {
+        container.Query.Append(container.MakeParameterName(parameterName));
+        return container;
+    }
+
+    /// <summary>Appends <c> = </c> to the query.</summary>
+    public static ISqlContainer AppendEquals(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.EqualsOp);
+        return container;
+    }
+
+    /// <summary>Appends <c> AND </c> to the query.</summary>
+    public static ISqlContainer AppendAnd(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.And);
+        return container;
+    }
+
+    /// <summary>Appends <c> WHERE </c> to the query.</summary>
+    public static ISqlContainer AppendWhere(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.Where);
+        return container;
+    }
+
+    /// <summary>Appends <c> IN (</c> to the query.</summary>
+    public static ISqlContainer AppendIn(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.In);
+        return container;
+    }
+
+    /// <summary>Appends <c>)</c> to the query.</summary>
+    public static ISqlContainer AppendCloseParen(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.CloseParen);
+        return container;
+    }
+
+    /// <summary>Appends <c>, </c> to the query.</summary>
+    public static ISqlContainer AppendComma(this ISqlContainer container)
+    {
+        container.Query.Append(SqlFragments.Comma);
+        return container;
     }
 }
