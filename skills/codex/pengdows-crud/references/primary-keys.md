@@ -214,20 +214,37 @@ pengdows.crud enforces this philosophy through its attribute system:
 - `[Id]` is required for row-id based operations; `CreateAsync` can work with `[PrimaryKey]`-only entities
 - `RetrieveOneAsync(entity)` targets `[PrimaryKey]` columns, not `[Id]`
 
+### Choosing the Right Gateway
+
+| Entity has... | Gateway |
+|---------------|---------|
+| `[Id]` (surrogate key) | `TableGateway<TEntity, TRowID>` — full row-id operations |
+| Only `[PrimaryKey]` (no `[Id]`) | `PrimaryKeyTableGateway<TEntity>` — all ops keyed on business columns |
+| Both `[Id]` + `[PrimaryKey]` on different columns | `TableGateway<TEntity, TRowID>` |
+
+`PrimaryKeyTableGateway<TEntity>` is ideal for junction tables, legacy schemas, and DBA-owned tables with natural keys. It provides the same three-tier API (Build/Load/Convenience) without requiring a surrogate `[Id]` column.
+
 ### Flexible CRUD Operations
 
 ```csharp
-// By business primary key - optimal for most queries
-var user1 = await gateway.RetrieveOneAsync(new User { Username = "john_doe" });
+// TableGateway — entity has both [Id] and [PrimaryKey]
+var user1 = await gateway.RetrieveOneAsync(new User { Username = "john_doe" }); // By [PrimaryKey]
+var user2 = await gateway.RetrieveOneAsync(userId);  // By [Id]
+await gateway.UpsertAsync(new User { Username = "john_doe", Email = "john@example.com" });
 
-// By surrogate ID - useful for FK relationships
-var user2 = await gateway.RetrieveOneAsync(userId);
+// PrimaryKeyTableGateway — entity has only [PrimaryKey], no [Id]
+[Table("order_items")]
+public class OrderItem
+{
+    [PrimaryKey(1)] [Column("order_id")] public int OrderId { get; set; }
+    [PrimaryKey(2)] [Column("product_id")] public int ProductId { get; set; }
+    [Column("quantity")] public int Quantity { get; set; }
+}
 
-// Upsert by business key - handles conflicts naturally
-await gateway.UpsertAsync(new User {
-    Username = "john_doe",
-    Email = "john@example.com"
-});
+var pkGateway = new PrimaryKeyTableGateway<OrderItem>(context);
+await pkGateway.CreateAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 3 });
+var item = await pkGateway.RetrieveOneAsync(new OrderItem { OrderId = 1, ProductId = 42 });
+await pkGateway.BatchDeleteAsync(new[] { item });
 ```
 
 ### Benefits of This Approach

@@ -83,6 +83,73 @@ List<TEntity> list = await RetrieveAsync(ids);
 IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 ```
 
+### Three-Tier API (PrimaryKeyTableGateway)
+
+`PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) is for entities identified **solely by `[PrimaryKey]` columns** with **no surrogate `[Id]` column**. Use it for junction tables, legacy schemas, and DBA-owned tables with natural keys.
+
+**Throws `InvalidOperationException` at construction** if the entity has no `[PrimaryKey]` columns.
+
+**Tier 1 — Build methods:**
+```csharp
+ISqlContainer BuildCreate(entity);
+ISqlContainer BuildBaseRetrieve("alias");           // SELECT with no WHERE
+ISqlContainer BuildRetrieve(entityList, "alias");   // SELECT ... WHERE pk columns match
+ISqlContainer BuildUpsert(entity);
+ISqlContainer sc = await BuildUpdateAsync(entity);  // Only async Build method
+IReadOnlyList<ISqlContainer> BuildBatchCreate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(entities);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(entities);
+```
+
+**Tier 2 — Load methods** (same as TableGateway):
+```csharp
+TEntity? result                  = await LoadSingleAsync(container);
+List<TEntity> list               = await LoadListAsync(container);
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);
+```
+
+**Tier 3 — Convenience methods:**
+```csharp
+bool created  = await CreateAsync(entity);
+TEntity? e    = await RetrieveOneAsync(entityLookup); // By [PrimaryKey] only
+int affected  = await UpdateAsync(entity);
+int affected  = await DeleteAsync(entityCollection);  // No DeleteAsync(id) — batch only
+int affected  = await UpsertAsync(entity);
+// Batch shortcuts (also accept IReadOnlyList<TEntity>):
+int affected  = await BatchCreateAsync(entities);
+int affected  = await BatchUpdateAsync(entities);
+int affected  = await BatchUpsertAsync(entities);
+int affected  = await BatchDeleteAsync(entityCollection);
+```
+
+**Key differences from `TableGateway<TEntity, TRowID>`:**
+- No `TRowID` type parameter — all WHERE clauses use `[PrimaryKey]` columns
+- No `DeleteAsync(id)` / `BuildDelete(id)` — only entity-collection delete
+- No `RetrieveAsync(ids)` / `RetrieveStreamAsync(ids)` — retrieve by entity list
+- `loadOriginal` overload exists for API symmetry but is always ignored
+
+**Example — junction table with composite natural key:**
+```csharp
+[Table("order_items")]
+public class OrderItem
+{
+    [PrimaryKey(1)]
+    [Column("order_id")] public int OrderId { get; set; }
+
+    [PrimaryKey(2)]
+    [Column("product_id")] public int ProductId { get; set; }
+
+    [Column("quantity")] public int Quantity { get; set; }
+    [Column("unit_price")] public decimal UnitPrice { get; set; }
+}
+
+var gateway = new PrimaryKeyTableGateway<OrderItem>(context);
+await gateway.CreateAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 3, UnitPrice = 9.99m });
+var item = await gateway.RetrieveOneAsync(new OrderItem { OrderId = 1, ProductId = 42 });
+await gateway.BatchDeleteAsync(new[] { item });
+```
+
 ### Key Patterns
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
@@ -161,11 +228,12 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
-2. TableGateway requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
+2. `TableGateway<T,TId>` requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
 6. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns; `DeleteAsync(TRowID)` uses `[Id]`
+7. **Choosing the gateway:** entity has `[Id]` → use `TableGateway<TEntity, TRowID>`; entity has only `[PrimaryKey]` (no `[Id]`) → use `PrimaryKeyTableGateway<TEntity>`
 
 ```csharp
 [Table("order_items")]
@@ -208,11 +276,12 @@ public int Version { get; set; }
 
 ## Upsert Behavior
 
-`UpsertAsync` / `BuildUpsert` determines insert vs update based on conflict key:
-
+**`TableGateway<T,TId>`** — determines conflict key as:
 1. **Primary choice:** `[PrimaryKey]` columns (if any defined)
 2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
+
+**`PrimaryKeyTableGateway<T>`** — always uses `[PrimaryKey]` columns as the conflict key. Throws `NotSupportedException` if the entity has no updateable non-key columns (pure junction table with only PK columns), unless the dialect supports pure-key upsert (Firebird).
 
 **SQL generated depends on database:**
 - SQL Server/Oracle: `MERGE`
@@ -444,6 +513,33 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
         sc.Query.Append(sc.WrapObjectName("o.customer_id"));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
+        sc.Query.Append(sc.MakeParameterName(p));
+        return await LoadListAsync(sc);
+    }
+}
+```
+
+## Extending PrimaryKeyTableGateway — The Correct Pattern
+
+Same inheritance pattern as `TableGateway` — inherit to add custom query methods.
+
+```csharp
+public interface IOrderItemGateway : IPrimaryKeyTableGateway<OrderItem>
+{
+    Task<List<OrderItem>> GetByOrderAsync(int orderId);
+}
+
+public class OrderItemGateway : PrimaryKeyTableGateway<OrderItem>, IOrderItemGateway
+{
+    public OrderItemGateway(IDatabaseContext context) : base(context) { }
+
+    public async Task<List<OrderItem>> GetByOrderAsync(int orderId)
+    {
+        var sc = BuildBaseRetrieve("oi");
+        sc.Query.Append(" WHERE ");
+        sc.Query.Append(sc.WrapObjectName("oi.order_id"));
+        sc.Query.Append(" = ");
+        var p = sc.AddParameterWithValue("oid", DbType.Int32, orderId);
         sc.Query.Append(sc.MakeParameterName(p));
         return await LoadListAsync(sc);
     }

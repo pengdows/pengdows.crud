@@ -61,22 +61,24 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         public string Value { get; set; } = string.Empty;
     }
 
+    // Coerce, IsDefaultTimestamp, and SetAuditFields are declared on BaseTableGateway<TEntity>
+    // (moved from TableGateway during the BaseTableGateway refactor).
     private static readonly MethodInfo CoerceMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("Coerce", BindingFlags.NonPublic | BindingFlags.Static)!;
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("Coerce", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo IsDefaultTimestampMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("IsDefaultTimestamp",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("IsDefaultTimestamp",
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo SetAuditFieldsMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("SetAuditFields",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("SetAuditFields",
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             new[] { typeof(AuditEntity), typeof(bool) },
             null)!;
 
     private static readonly MethodInfo SetAuditFieldsWithValuesMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("SetAuditFields",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("SetAuditFields",
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             new[] { typeof(AuditEntity), typeof(bool), typeof(IAuditValues) },

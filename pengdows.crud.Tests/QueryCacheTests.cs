@@ -211,7 +211,8 @@ public class QueryCacheTests : SqlLiteContextTestBase
         helper.BuildBaseRetrieve("a0");
         var cache = GetQueryCache(helper);
 
-        var limit = (int)typeof(TableGateway<CacheEntity, int>)
+        // MaxCacheSize is declared on BaseTableGateway<TEntity> (moved from TableGateway during refactor).
+        var limit = (int)typeof(BaseTableGateway<CacheEntity>)
             .GetField("MaxCacheSize", BindingFlags.NonPublic | BindingFlags.Static)!
             .GetValue(null)!;
 
@@ -249,9 +250,10 @@ public class QueryCacheTests : SqlLiteContextTestBase
     private static Dictionary<string, string> GetQueryCache<TEntity, TId>(TableGateway<TEntity, TId> helper)
         where TEntity : class, new()
     {
-        // _queryCache is ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>>
+        // _queryCache is declared on BaseTableGateway<TEntity> (moved from TableGateway during refactor).
+        // ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>>
         // Aggregate all dialect caches into one dictionary for test inspection.
-        var field = typeof(TableGateway<TEntity, TId>)
+        var field = typeof(BaseTableGateway<TEntity>)
             .GetField("_queryCache", BindingFlags.NonPublic | BindingFlags.Instance);
         var outerDict = field!.GetValue(helper)!;
 

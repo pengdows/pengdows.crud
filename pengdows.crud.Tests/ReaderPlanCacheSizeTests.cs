@@ -104,7 +104,8 @@ public class ReaderPlanCacheSizeTests
 
         var gateway = new TableGateway<EntityA, int>(ctx);
 
-        var cacheField = typeof(TableGateway<EntityA, int>)
+        // _readerPlans is declared on BaseTableGateway<TEntity> (moved from TableGateway during refactor).
+        var cacheField = typeof(BaseTableGateway<EntityA>)
             .GetField("_readerPlans",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.NotNull(cacheField);
@@ -128,7 +129,8 @@ public class ReaderPlanCacheSizeTests
 
         var gateway = new TableGateway<EntityA, int>(ctx);
 
-        var cacheField = typeof(TableGateway<EntityA, int>)
+        // _readerPlans is declared on BaseTableGateway<TEntity> (moved from TableGateway during refactor).
+        var cacheField = typeof(BaseTableGateway<EntityA>)
             .GetField("_readerPlans",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var cache = cacheField!.GetValue(gateway);

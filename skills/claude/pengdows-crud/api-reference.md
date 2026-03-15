@@ -109,6 +109,91 @@ Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
 TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ```
 
+## IPrimaryKeyTableGateway<TEntity>
+
+For entities with **no surrogate `[Id]` column** — all operations use `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if no `[PrimaryKey]` defined.
+
+### Tier 1: Build Methods
+
+```csharp
+ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
+ISqlContainer BuildBaseRetrieve(string alias, string[]? extraSelectExpressions = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, string alias = "");
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
+ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchCreate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null);
+```
+
+### Tier 2: Load Methods
+
+```csharp
+Task<TEntity?> LoadSingleAsync(ISqlContainer sc);
+Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken ct);
+Task<List<TEntity>> LoadListAsync(ISqlContainer sc);
+Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken ct);
+IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc);
+IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken ct);
+```
+
+### Tier 3: Convenience Methods
+
+```csharp
+// Create
+Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchCreateAsync
+
+// Retrieve (by [PrimaryKey] only — no TRowID overload)
+Task<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+
+// Update
+Task<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default); // loadOriginal ignored
+Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchUpdateAsync
+
+// Delete (entity collection only — no DeleteAsync(id) overload)
+Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchDeleteAsync
+
+// Upsert
+Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchUpsertAsync
+
+// Explicit Batch Operations
+Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+```
+
+### WHERE Clause Helpers
+
+```csharp
+void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? entities, ISqlContainer sc, string alias = "");
+```
+
+### Other Members
+
+```csharp
+string WrappedTableName { get; }
+EnumParseFailureMode EnumParseBehavior { get; set; }
+Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
+TEntity MapReaderToObject(ITrackedReader reader);
+```
+
+### Key Differences from `ITableGateway<TEntity, TRowID>`
+
+| Feature | `ITableGateway<T,TId>` | `IPrimaryKeyTableGateway<T>` |
+|---------|------------------------|------------------------------|
+| WHERE basis | `[Id]` column (TRowID) | `[PrimaryKey]` columns |
+| `DeleteAsync(id)` | Yes | No — only entity collection |
+| `RetrieveAsync(ids)` | Yes | No — only by entity list |
+| `RetrieveOneAsync(id)` | Yes | No — only by entity |
+| `loadOriginal` flag | Reloads by TRowID | Accepted but ignored |
+| Type param | `<TEntity, TRowID>` | `<TEntity>` only |
+
 ## ISqlContainer
 
 ### Query Building

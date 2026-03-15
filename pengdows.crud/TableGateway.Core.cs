@@ -63,110 +63,24 @@ namespace pengdows.crud;
 /// </para>
 /// </remarks>
 public partial class TableGateway<TEntity, TRowID> :
+    BaseTableGateway<TEntity>,
     ITableGateway<TEntity, TRowID> where TEntity : class, new()
 {
     private const string EmptyIdListMessage = "List of IDs cannot be empty.";
     private const string UpsertNoKeyMessage = "Upsert requires an Id or a composite primary key.";
     private const string UpsertNoWritableKeyMessage = "Upsert requires client-assigned Id or [PrimaryKey] attributes.";
 
-    // Cache for compiled property setters
-    private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> _propertySetters = new();
-
-    // Per-dialect templates are cached in _templatesByDialect
-
-
-    private static volatile ILogger _logger = NullLogger.Instance;
-
-    public static ILogger Logger
-    {
-        get => _logger;
-        set => _logger = value ?? NullLogger.Instance;
-    }
-
     static TableGateway()
     {
         ValidateRowIdType();
     }
 
-    private readonly IAuditValueResolver? _auditValueResolver;
-    private IDatabaseContext _context = null!;
-    protected IDatabaseContext Context => _context;
-    private ISqlDialect _dialect = null!;
-
     private IColumnInfo? _idColumn;
-
-    private ITableInfo _tableInfo = null!;
-    private IReadOnlyDictionary<string, IColumnInfo> _columnsByNameCI = null!;
-    private bool _hasAuditColumns;
-
-    private IColumnInfo? _versionColumn;
-
-    // Cached compiled setters for audit fields — initialized once in Initialize(), eliminating
-    // repeated ConcurrentDictionary lookups in GetOrCreateSetter on every Create/Update call.
-    private Action<object, object?>? _auditLastUpdatedOnSetter;
-    private Action<object, object?>? _auditLastUpdatedBySetter;
-    private Action<object, object?>? _auditCreatedOnSetter;
-    private Action<object, object?>? _auditCreatedBySetter;
-
-    private TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
-
-    private readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
-
-    // Keyed by dialect (SupportedDatabase) so that different dialects used with the same
-    // TableGateway instance never share cached SQL strings that embed dialect-specific content
-    // (identifier quoting, parameter markers).  Sharing within the same dialect is intentional.
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>> _queryCache = new();
-
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames =
-        new();
-
-    // Cache for wrapped table names per dialect (table name + schema never change, only dialect quoting varies)
-    // Expected 3-5% reduction in SQL generation when the same TableGateway is used with different contexts/dialects
-    private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
-
-    // Thread-safe cache for hybrid reader plans by recordset shape hash (long key avoids int-hash collisions)
-    private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
-        new(DefaultReaderPlanCapacity);
 
     // Monolithic parameter binders, cached per dialect
     private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
     private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
     private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
-
-    private const int DefaultReaderPlanCapacity = 32;
-
-    private static int ResolveReaderPlanCacheSize(IDatabaseContext context)
-    {
-        int? configured = null;
-        try
-        {
-            configured = context.ReaderPlanCacheSize;
-        }
-        catch
-        {
-            // Ignore fallback property access failures (e.g., strict mocks).
-        }
-
-        if (configured is int size && size > 0)
-        {
-            return size;
-        }
-
-        return DefaultReaderPlanCapacity;
-    }
-
-    // Hybrid plan: Monolithic compiled expression that handles all columns (direct and coerced).
-    // Compiled once per schema shape for maximum performance.
-    private sealed class HybridRecordsetPlan
-    {
-        // Compiled mapper for all columns (zero delegate overhead)
-        public Func<ITrackedReader, TEntity> CompiledMapper { get; }
-
-        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper)
-        {
-            CompiledMapper = compiledMapper ?? throw new ArgumentNullException(nameof(compiledMapper));
-        }
-    }
 
     // Per-dialect templates are cached in _templatesByDialect
 
@@ -183,84 +97,11 @@ public partial class TableGateway<TEntity, TRowID> :
         IAuditValueResolver? auditValueResolver = null,
         EnumParseFailureMode enumParseBehavior = EnumParseFailureMode.Throw,
         ILogger? logger = null)
+        : base(databaseContext, auditValueResolver, enumParseBehavior, logger)
     {
-        _auditValueResolver = auditValueResolver;
-        if (logger != null)
-        {
-            Logger = logger;
-        }
-
-        Initialize(databaseContext, enumParseBehavior);
-        // Templates are now built directly per dialect
-    }
-
-    private void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
-    {
-        _context = databaseContext;
-        if (databaseContext is not ITypeMapAccessor accessor)
-        {
-            throw new InvalidOperationException(
-                "IDatabaseContext must expose an internal TypeMapRegistry.");
-        }
-
-        _dialect = databaseContext.GetDialect();
-        _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
-        _readerPlans = new BoundedCache<long, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
-        _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
-                     throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
-        _columnsByNameCI =
-            _tableInfo.Columns.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
-        _hasAuditColumns = _tableInfo.HasAuditColumns;
-
-        if (_hasAuditColumns && _auditValueResolver is null)
-        {
-            Logger.LogWarning(
-                "Entity {EntityType} declares audit columns but no IAuditValueResolver is provided; audit fields may not be populated.",
-                typeof(TEntity).FullName
-            );
-        }
-
-        WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
-                               ? _dialect.WrapSimpleName(_tableInfo.Schema) +
-                                 _dialect.CompositeIdentifierSeparator
-                               : "")
-                           + _dialect.WrapSimpleName(_tableInfo.Name);
-
+        // Id-specific initialization: locate the [Id] column after base Initialize()
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
-        _versionColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsVersion);
-
-        // Cache compiled setters for audit fields once at construction time to avoid repeated
-        // ConcurrentDictionary lookups (GetOrCreateSetter) on every Create/Update call.
-        if (_hasAuditColumns)
-        {
-            if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
-                _auditLastUpdatedOnSetter = GetOrCreateSetter(_tableInfo.LastUpdatedOn.PropertyInfo);
-            if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
-                _auditLastUpdatedBySetter = GetOrCreateSetter(_tableInfo.LastUpdatedBy.PropertyInfo);
-            if (_tableInfo.CreatedOn?.PropertyInfo != null)
-                _auditCreatedOnSetter = GetOrCreateSetter(_tableInfo.CreatedOn.PropertyInfo);
-            if (_tableInfo.CreatedBy?.PropertyInfo != null)
-                _auditCreatedBySetter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
-        }
-
-        // Note: Validation for missing audit resolver with user fields is now handled
-        // in SetAuditFields method where it throws InvalidOperationException
-
-        EnumParseBehavior = enumParseBehavior;
     }
-
-    /// <inheritdoc/>
-    public string WrappedTableName { get; set; } = null!;
-
-    /// <inheritdoc/>
-    public EnumParseFailureMode EnumParseBehavior { get; set; }
-
-    private BoundedCache<string, string> GetOrCreateQueryCache(ISqlDialect dialect) =>
-        _queryCache.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string>(MaxCacheSize));
-
-    private BoundedCache<string, string[]> GetOrCreateParamNamesCache(ISqlDialect dialect) =>
-        _whereParameterNames.GetOrAdd(dialect.DatabaseType,
-            static _ => new BoundedCache<string, string[]>(MaxCacheSize));
 
 
     /// <inheritdoc/>
@@ -1131,41 +972,7 @@ public partial class TableGateway<TEntity, TRowID> :
         return totalAffected;
     }
 
-    private static IReadOnlyList<IReadOnlyList<T>> ChunkList<T>(
-        IReadOnlyList<T> list, int paramsPerRow, int maxParameterLimit, int maxRowsPerBatch)
-    {
-        if (maxParameterLimit <= 0 || paramsPerRow <= 0)
-        {
-            return new List<IReadOnlyList<T>> { list };
-        }
-
-        // 10% headroom to be safe
-        var usableParams = (int)(maxParameterLimit * 0.9);
-        var rowsPerChunkByParams = Math.Max(1, usableParams / Math.Max(1, paramsPerRow));
-        
-        // Take the smaller of the two limits
-        var rowsPerChunk = Math.Min(rowsPerChunkByParams, maxRowsPerBatch > 0 ? maxRowsPerBatch : int.MaxValue);
-
-        if (list.Count <= rowsPerChunk)
-        {
-            return new List<IReadOnlyList<T>> { list };
-        }
-
-        var chunks = new List<IReadOnlyList<T>>();
-        for (var i = 0; i < list.Count; i += rowsPerChunk)
-        {
-            var end = Math.Min(i + rowsPerChunk, list.Count);
-            var chunk = new List<T>(end - i);
-            for (var j = i; j < end; j++)
-            {
-                chunk.Add(list[j]);
-            }
-
-            chunks.Add(chunk);
-        }
-
-        return chunks;
-    }
+    // ChunkList moved to BaseTableGateway.Core.cs
 
     private static List<TRowID> MaterializeDistinctIds(IEnumerable<TRowID> ids)
     {
@@ -1270,172 +1077,11 @@ public partial class TableGateway<TEntity, TRowID> :
         return await LoadSingleAsync(container, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc/>
-    public Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
-    {
-        return LoadSingleAsync(sc, CancellationToken.None);
-    }
+    // LoadSingleAsync, LoadListAsync, LoadStreamAsync moved to BaseTableGateway.Core.cs
 
-    /// <inheritdoc/>
-    public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken)
-    {
-        if (sc == null)
-        {
-            throw new ArgumentNullException(nameof(sc));
-        }
+    // GetCachedInsertableColumns moved to BaseTableGateway.Core.cs
 
-        // Hint provider/ADO.NET to expect a single row for minimal overhead
-        await using var reader = await sc.ExecuteReaderSingleRowAsync(cancellationToken).ConfigureAwait(false);
-        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            // Reader optimization: build plan once before processing row
-            var plan = GetOrBuildRecordsetPlan(reader);
-            return MapReaderToObjectWithPlan(reader, plan);
-        }
-
-        return null;
-    }
-
-    /// <inheritdoc/>
-    public Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
-    {
-        return LoadListAsync(sc, CancellationToken.None);
-    }
-
-    /// <inheritdoc/>
-    public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken)
-    {
-        if (sc == null)
-        {
-            throw new ArgumentNullException(nameof(sc));
-        }
-
-        var list = new List<TEntity>();
-
-        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-        // Reader optimization: hoist plan building outside the loop
-        // Build plan once based on first row's schema, then reuse for all rows
-        // This avoids hash calculation and GetName/GetFieldType calls on every row
-        HybridRecordsetPlan? plan = null;
-
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            // Build plan on first row
-            if (plan == null)
-            {
-                plan = GetOrBuildRecordsetPlan(reader);
-            }
-
-            var obj = MapReaderToObjectWithPlan(reader, plan);
-            if (obj != null)
-            {
-                list.Add(obj);
-            }
-        }
-
-        return list;
-    }
-
-    /// <inheritdoc/>
-    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc)
-    {
-        if (sc == null)
-        {
-            throw new ArgumentNullException(nameof(sc));
-        }
-
-        await using var reader =
-            await sc.ExecuteReaderAsync(CommandType.Text, CancellationToken.None).ConfigureAwait(false);
-
-        // Reader optimization: hoist plan building outside the loop
-        // Build plan once based on first row's schema, then reuse for all rows
-        // This avoids hash calculation and GetName/GetFieldType calls on every row
-        HybridRecordsetPlan? plan = null;
-
-        while (await reader.ReadAsync(CancellationToken.None).ConfigureAwait(false))
-        {
-            // Build plan on first row
-            if (plan == null)
-            {
-                plan = GetOrBuildRecordsetPlan(reader);
-            }
-
-            var obj = MapReaderToObjectWithPlan(reader, plan);
-            if (obj != null)
-            {
-                yield return obj;
-            }
-        }
-    }
-
-    /// <inheritdoc/>
-    public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        if (sc == null)
-        {
-            throw new ArgumentNullException(nameof(sc));
-        }
-
-        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-        // Reader optimization: hoist plan building outside the loop
-        // Build plan once based on first row's schema, then reuse for all rows
-        // This avoids hash calculation and GetName/GetFieldType calls on every row
-        HybridRecordsetPlan? plan = null;
-
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            // Build plan on first row
-            if (plan == null)
-            {
-                plan = GetOrBuildRecordsetPlan(reader);
-            }
-
-            var obj = MapReaderToObjectWithPlan(reader, plan);
-            if (obj != null)
-            {
-                yield return obj;
-            }
-        }
-    }
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    internal IReadOnlyList<IColumnInfo> GetCachedInsertableColumns()
-    {
-        if (_columnListCache.TryGet("Insertable", out var cached))
-        {
-            return cached;
-        }
-
-        // Avoid LINQ allocations in hot path
-        var insertable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
-        foreach (var c in _tableInfo.OrderedColumns)
-        {
-            if (!c.IsNonInsertable && (!c.IsId || c.IsIdWritable))
-            {
-                insertable.Add(c);
-            }
-        }
-
-        return _columnListCache.GetOrAdd("Insertable", _ => insertable);
-    }
+    // CheckParameterLimit moved to BaseTableGateway.Core.cs
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
@@ -1455,15 +1101,7 @@ public partial class TableGateway<TEntity, TRowID> :
             CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
     }
 
-    private void CheckParameterLimit(ISqlContainer sc, int? toAdd)
-    {
-        var count = sc.ParameterCount + (toAdd ?? 0);
-        if (count > _context.MaxParameterLimit)
-        {
-            // For large batches consider chunking inputs; this method fails fast when exceeding limits.
-            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
-        }
-    }
+    // CheckParameterLimit moved to BaseTableGateway.Core.cs
 
     // moved to TableGateway.Retrieve.cs
 
@@ -1659,35 +1297,7 @@ public partial class TableGateway<TEntity, TRowID> :
         return string.Concat(_tableInfo.Name, "_seq");
     }
 
-    private string BuildWrappedTableName(ISqlDialect dialect)
-    {
-        // Cache wrapped table names per dialect since table/schema never change
-        return _wrappedTableNameCache.GetOrAdd(dialect, d =>
-        {
-            if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
-            {
-                return d.WrapSimpleName(_tableInfo.Name);
-            }
-
-            var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            try
-            {
-                sb.Append(d.WrapSimpleName(_tableInfo.Schema));
-                sb.Append(d.CompositeIdentifierSeparator);
-                sb.Append(d.WrapSimpleName(_tableInfo.Name));
-                return sb.ToString();
-            }
-            finally
-            {
-                sb.Dispose();
-            }
-        });
-    }
-
-    private static ISqlDialect GetDialect(IDatabaseContext ctx)
-    {
-        return ctx.GetDialect();
-    }
+    // BuildWrappedTableName and GetDialect moved to BaseTableGateway.Core.cs
 
     private static void ValidateRowIdType()
     {

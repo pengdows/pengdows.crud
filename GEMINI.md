@@ -126,6 +126,32 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 **All execution methods return `ValueTask` (not `Task`)** for reduced allocations. Clone containers for reuse: `container.Clone()` or `container.Clone(otherContext)`.
 
+## Three-Tier API (PrimaryKeyTableGateway)
+
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` if entity has no `[PrimaryKey]`.
+
+```csharp
+// Tier 1 — Build
+ISqlContainer BuildCreate(entity);
+ISqlContainer BuildBaseRetrieve("alias");
+ISqlContainer BuildRetrieve(entityList, "alias");   // WHERE by [PrimaryKey]
+ISqlContainer BuildUpsert(entity);
+ISqlContainer sc = await BuildUpdateAsync(entity);
+IReadOnlyList<ISqlContainer> BuildBatchCreate/Update/Upsert/Delete(entities);
+
+// Tier 2 — Load (same as TableGateway)
+TEntity? result = await LoadSingleAsync(container);
+List<TEntity> list = await LoadListAsync(container);
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);
+
+// Tier 3 — Convenience
+bool created  = await CreateAsync(entity);
+TEntity? e    = await RetrieveOneAsync(entityLookup); // By [PrimaryKey] only — no id overload
+int affected  = await UpdateAsync(entity);
+int affected  = await DeleteAsync(entityCollection);  // No DeleteAsync(id)
+int affected  = await UpsertAsync(entity);
+```
+
 ## CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)
 
 **DO NOT CONFUSE THESE CONCEPTS.**
@@ -140,6 +166,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 2. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 3. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns; `DeleteAsync(TRowID)` uses `[Id]`
 4. Upsert conflict key: `[PrimaryKey]` preferred; fallback to writable `[Id]`; error if neither
+5. **Choosing the gateway:** entity has `[Id]` → `TableGateway<TEntity, TRowID>`; entity has only `[PrimaryKey]` → `PrimaryKeyTableGateway<TEntity>`
 
 ```csharp
 [Table("order_items")]

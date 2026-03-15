@@ -1,14 +1,14 @@
-# pengdows.crud 2.0: Pool Governor, SingleWriter Re-Architecture, Faster Hydration, and Snowflake Support
+# pengdows.crud 2.0: Pool Governor, SingleWriter Re-Architecture, and 13-Database Coverage
 
 `pengdows.crud` is **not an ORM**.
 
-It is a high-performance, SQL-first framework for:
-- fast hydration of table objects, and
-- CRUD operations with minimal ceremony,
+It is a SQL-first, high-performance data access framework for .NET 8. 2.0 makes a significant
+architectural bet: that connection governance, multi-provider reliability, and execution safety
+belong inside the framework, not on the application team.
 
-so developers can eliminate repetitive ADO.NET boilerplate without giving up SQL control.
+**Requires:** .NET 8+. Available on NuGet: `pengdows.crud`, `pengdows.crud.abstractions`, `pengdows.crud.fakeDb`.
 
-## What’s New in 2.0
+## What's New in 2.0
 
 ### 1) Pool Governor — and `pengdows.stormgate` (major)
 
@@ -21,14 +21,19 @@ Why it matters:
 - Predictable slot acquisition and timeout behavior
 - Separate read and write slot budgets; configurable per pool
 
-While building the pool governor I extracted the core thundering-herd protection into a
-separate, minimal library: **`pengdows.stormgate`**.
+While building the full pool governor for `pengdows.crud`, the minimal connection-admission
+component was extracted as a separate library: **`pengdows.stormgate`**. StormGate provides
+only bounded connection admission; the full governor in `pengdows.crud` adds fairness, read/write
+lane separation, and full telemetry. These are different layers:
+
+- **StormGate**: connection admission control — limits how many connections can open concurrently
+- **PoolGovernor** (in `pengdows.crud`): database workload governance — controls read/write slot budgets, scheduling, and fairness across the execution pipeline
 
 StormGate is a stripped-down admission controller for teams that aren't on `pengdows.crud`
 yet — Dapper shops, raw ADO.NET, Hangfire workers, anything that just needs to stop
-connection storms without adopting a full framework. It does one thing: gate concurrent
-connection opens behind a `SemaphoreSlim` and fail fast with a `TimeoutException` when the
-gate is saturated.
+connection storms without adopting a full framework. It gates connection opens behind a semaphore
+and returns wrapped connections that release their permit automatically when disposed — no manual
+bookkeeping, no double-counting. Fail fast with a `TimeoutException` when the gate is saturated.
 
 ```csharp
 // Drop-in with Dapper — no other changes required
@@ -43,10 +48,8 @@ await using var conn = await gate.OpenAsync();
 var orders = await conn.QueryAsync<Order>("SELECT * FROM orders WHERE customer_id = @id", new { id });
 ```
 
-The permit is tied to the connection and released automatically on close or dispose —
-no manual bookkeeping. Pass an `ILogger` and you get a saturation warning the moment a
-permit times out, which is the key signal that you are under-provisioned or leaking
-connections.
+Pass an `ILogger` and you get a saturation warning the moment a permit times out, which is
+the key signal that you are under-provisioned or leaking connections.
 
 `pengdows.stormgate` is available as a separate NuGet package (MIT, .NET 8+). It is the
 on-ramp: when you need read/write lane separation, writer-starvation prevention, per-pool
@@ -54,45 +57,37 @@ metrics, and first-class support for 13 databases, that's where `pengdows.crud`'
 governor picks up.
 
 ### 2) SingleWriter was fundamentally redesigned
+
 SingleWriter in 2.0 is structurally different from 1.0:
 - Turnstile-based coordination
 - Two connection strings (read vs write intent)
 - Separate connection pool behavior by intent
 - Better fairness and reduced writer starvation risk
 
+The key architectural shift: writes are no longer just serialized — they are scheduled.
+Connection ownership has been replaced by execution scheduling, which means readers and
+writers are coordinated at the task level rather than the connection level.
+
 This is a core architecture change, not a tuning tweak.
 
 ### 3) Dual connection-string model + pool split
-2.0 formalizes read/write separation via connection-string strategy and pool governance.
 
-Why it matters:
-- Cleaner read/write intent routing
-- Better compatibility with replica/read-only patterns
-- Less accidental contention between readers and writers
+2.0 formalizes read/write separation via connection-string strategy and pool governance,
+enabling cleaner read/write intent routing, better compatibility with replica/read-only
+patterns, and less accidental contention between readers and writers.
 
 ### 4) Vastly improved hydration path
-Reader hydration and coercion paths were heavily optimized.
+
+Reader hydration and coercion paths were restructured, not just tuned.
 
 Why it matters:
-- Lower per-row overhead
-- Better mapping throughput at scale
-- More predictable hot-path performance in real workloads
+- Fewer allocations per row — reduced boxing and intermediate object creation
+- Fewer reflection paths — compiled accessors replace runtime property lookup on the hot path
+- Reduced coercion branching — type dispatch consolidated to minimize per-column decision cost
+- More predictable hot-path performance in real workloads at scale
 
-### 5) Expanded database support, including Snowflake
-2.0 extends provider coverage and behavior support, with Snowflake now included.
+### 5) Native `DbDataSource` support
 
-Why it matters:
-- More teams can use `pengdows.crud` without provider-specific forks
-- Better cross-database consistency for SQL-first apps
-
-### 6) Improved transactional behavior and isolation handling
-We tightened isolation-level behavior and provider-specific handling for transactional correctness.
-
-Why it matters:
-- Fewer surprises across providers
-- More reliable behavior under real-world workloads
-
-### 7) Native `DbDataSource` support
 `DatabaseContext` now accepts a `DbDataSource` directly (e.g., `NpgsqlDataSource`), and auto-creates
 one when not supplied.
 
@@ -107,7 +102,41 @@ Why it matters:
 - `IDatabaseContext.DataSource` exposes the resolved data source for diagnostics or advanced use
 - Separate read and write data sources are created when read/write connection strings differ
 
-### 8) Batch operations (complete suite)
+### 6) PrimaryKeyTableGateway — first-class natural-key entities
+
+2.0 introduces `PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) for entities that have **no surrogate `[Id]` column** — junction tables, legacy schemas, and DBA-owned tables where the business key IS the only key.
+
+Previously, you had to use raw `ISqlContainer` queries or work around `TableGateway<,>`'s requirement for an `[Id]` column. Now you get the full three-tier API (Build/Load/Convenience) keyed entirely on `[PrimaryKey]` columns:
+
+```csharp
+// Before 2.0: manual SQL or awkward workarounds
+// After 2.0:
+[Table("order_items")]
+public class OrderItem
+{
+    [PrimaryKey(1)] [Column("order_id")] public int OrderId { get; set; }
+    [PrimaryKey(2)] [Column("product_id")] public int ProductId { get; set; }
+    [Column("quantity")] public int Quantity { get; set; }
+}
+
+var gateway = new PrimaryKeyTableGateway<OrderItem>(context);
+await gateway.CreateAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 3 });
+var item = await gateway.RetrieveOneAsync(new OrderItem { OrderId = 1, ProductId = 42 });
+await gateway.BatchDeleteAsync(new[] { item });
+await gateway.UpsertAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 5 });
+```
+
+Why it matters:
+- Full batch support (`BatchCreateAsync`, `BatchUpdateAsync`, `BatchUpsertAsync`, `BatchDeleteAsync`) — all with automatic chunking
+- Streaming (`LoadStreamAsync` → `IAsyncEnumerable<TEntity>`) for large result sets
+- Audit field support via `IAuditValueResolver` — called once per batch, not per row
+- Dialect-specific upsert (MERGE, ON CONFLICT, ON DUPLICATE KEY) keyed on `[PrimaryKey]` columns
+- Constructor guard: throws `InvalidOperationException` at startup if entity has no `[PrimaryKey]`
+
+See `docs/primary-keys-pseudokeys.md` for the gateway selection decision guide.
+
+### 7) Batch operations (complete suite)
+
 `BatchCreateAsync`, `BatchUpdateAsync`, `BatchUpsertAsync`, and `BatchDeleteAsync` are all new.
 `BuildBatch*` variants build SQL without executing — inspect or modify before sending.
 
@@ -120,15 +149,15 @@ Why it matters:
 
 See `docs/BATCH_OPERATIONS.md` for the full reference.
 
-### 9) Streaming (memory-efficient large result sets)
+### 8) Streaming (memory-efficient large result sets)
+
 `LoadStreamAsync` and `RetrieveStreamAsync` return `IAsyncEnumerable<TEntity>`.
+Process large result sets row-by-row without buffering into `List<T>`, with full
+`CancellationToken` support throughout. No code changes needed beyond switching from
+`LoadListAsync` to `LoadStreamAsync`.
 
-Why it matters:
-- Process large result sets row-by-row without buffering into `List<T>`
-- Full `CancellationToken` support throughout
-- No code changes needed beyond switching from `LoadListAsync` to `LoadStreamAsync`
+### 9) Dialect-aware paging (`AppendPaging`)
 
-### 10) Dialect-aware paging (`AppendPaging`)
 `ISqlDialect.AppendPaging(sc, offset, limit)` appends correct pagination SQL for the target database.
 
 Why it matters:
@@ -137,43 +166,47 @@ Why it matters:
 - Guard clauses validate inputs (offset ≥ 0, limit > 0) before touching SQL
 - `SupportsOffsetFetch` / `SupportsLimitOffset` flags available for custom logic
 
-### 11) 13 supported databases
-The 1.0 announcement said "Snowflake now included" but that undersells the full scope.
-2.0 ships with first-class, integration-tested support for 13 databases:
+### 10) Improved transactional behavior and isolation handling
 
-SQL Server, PostgreSQL, MySQL, **MariaDB**, Oracle, SQLite, DuckDB, Firebird,
-CockroachDB, **YugabyteDB**, **TiDB**, Snowflake, and Aurora variants (auto-detected, no extra setup).
+We tightened isolation-level behavior and provider-specific handling for transactional
+correctness, reducing cross-provider surprises and improving reliability under real-world
+workloads.
 
-Why it matters:
-- MariaDB, YugabyteDB, and TiDB all have dedicated dialects and always-on integration tests
-- YugabyteDB auto-prepare is disabled to match YSQL semantics (prevents broken connection errors after pool reuse)
-- Aurora MySql/PostgreSQL are auto-detected at runtime and delegate to the correct dialect — no user configuration needed
+### 11) Portable isolation profiles
 
-### 12) DB Impact Notes (Dialect & Performance)
-2.0 introduces several database-specific optimizations that improve both throughput and reliability.
-
-- **PostgreSQL & CockroachDB**: Session settings (read-only intent, min messages, string conforming) are now **baked directly into startup parameters** via the connection string. This eliminates a mandatory `SET` round-trip per checkout on warm connections.
-- **Oracle**: Improved pool isolation for read-only vs read-write contexts via automatic connection string discrimination, preventing cross-intent pool pollution in the ODP.NET driver.
-- **Consolidated RTTs**: All dialects now consolidate baseline and intent session settings into a **single batched command (1 RTT)** during connection initialization.
-- **Standardized GUIDs**: GUID storage is now fully deterministic across all 13 providers:
-  - Native `uniqueidentifier` / `UUID`: SQL Server, PostgreSQL, MySQL
-  - RFC 4122 Big-Endian Binary: Firebird (`CHAR(16) OCTETS`)
-  - Hyphenated String ("D" format): SQLite, Oracle, DuckDB, Snowflake
-
-### 13) Real-time metrics (36 fields)
-`IDatabaseContext.Metrics` returns a `DatabaseMetrics` sealed record with full observability.
+`IsolationProfile` maps a portable intent to the safest available native isolation level per database.
 
 Why it matters:
-- **Connections**: current count, peak, opens/closes, hold durations, long-lived count
-- **Commands**: executed, failed, timed out, cancelled, P95/P99 duration
-- **Rows**: total read, total affected
-- **Transactions**: active, max concurrent, committed, rolled back, P95/P99 duration
-- **Errors**: deadlocks, serialization failures, constraint violations
-- **Sessions**: initialization count and average init time
-- Role-based split: separate `DatabaseRoleMetrics` for read vs write paths
-- `MetricsUpdated` event fires without holding locks — safe to subscribe from any thread
+- `SafeNonBlockingReads` — MVCC snapshot, no dirty reads, no blocking writers
+- `StrictConsistency` — Serializable, fully isolated (financial / critical logic)
+- `FastWithRisks` — ReadUncommitted / dirty reads
+- `Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads)` works correctly across all 13 providers
+  without per-database conditionals in application code
 
-### 13) Read-only enforcement (dual-layer)
+### 12) Transaction savepoints
+
+`ITransactionContext` now exposes savepoints.
+
+```csharp
+await txn.SavepointAsync("checkpoint");
+// ... partial work ...
+await txn.RollbackToSavepointAsync("checkpoint");
+```
+
+Supported on PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, Firebird, and CockroachDB.
+
+### 13) `DbMode.Best` — auto-selected connection strategy
+
+Pass `DbMode.Best` and the context selects the optimal mode automatically:
+- `:memory:` SQLite/DuckDB → `SingleConnection`
+- File-based SQLite/DuckDB → `SingleWriter`
+- SQL Server LocalDB → `KeepAlive`
+- Everything else → `Standard`
+
+Removes guesswork for new projects and avoids file-locking errors in embedded databases.
+
+### 14) Read-only enforcement (dual-layer)
+
 Read-only intent is now enforced at two independent layers for supported databases.
 
 Why it matters:
@@ -186,38 +219,44 @@ Why it matters:
 
 See `docs/read-only-enforcement.md`.
 
-### 14) Portable isolation profiles
-`IsolationProfile` maps a portable intent to the safest available native isolation level per database.
+### 15) Real-time metrics (36 fields)
+
+`IDatabaseContext.Metrics` returns a `DatabaseMetrics` sealed record with full observability.
+Metrics are collected inside the execution pipeline rather than inferred externally — because
+the pool governor owns admission and execution, every connection open, slot acquisition, and
+command dispatch is a measured event.
 
 Why it matters:
-- `SafeNonBlockingReads` — MVCC snapshot, no dirty reads, no blocking writers
-- `StrictConsistency` — Serializable, fully isolated (financial / critical logic)
-- `FastWithRisks` — ReadUncommitted / dirty reads
-- `Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads)` works correctly across all 13 providers
-  without per-database conditionals in application code
+- **Connections**: current count, peak, opens/closes, hold durations, long-lived count
+- **Commands**: executed, failed, timed out, cancelled, P95/P99 duration
+- **Rows**: total read, total affected
+- **Transactions**: active, max concurrent, committed, rolled back, P95/P99 duration
+- **Errors**: deadlocks, serialization failures, constraint violations
+- **Sessions**: initialization count and average init time
+- Role-based split: separate `DatabaseRoleMetrics` for read vs write paths
+- `MetricsUpdated` event fires without holding locks — safe to subscribe from any thread
 
-### 15) Transaction savepoints
-`ITransactionContext` now exposes savepoints.
+### 16) Expanded database support — 13 databases
 
-```csharp
-await txn.SavepointAsync("checkpoint");
-// ... partial work ...
-await txn.RollbackToSavepointAsync("checkpoint");
-```
+2.0 ships with first-class, integration-tested support for 13 databases:
 
-Supported on PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, Firebird, and CockroachDB.
+SQL Server, PostgreSQL, MySQL, **MariaDB**, Oracle, SQLite, DuckDB, Firebird,
+CockroachDB, **YugabyteDB**, **TiDB**, Snowflake, and Aurora variants (auto-detected, no extra setup).
 
-### 16) `DbMode.Best` — auto-selected connection strategy
-Pass `DbMode.Best` and the context selects the optimal mode automatically.
+- MariaDB, YugabyteDB, and TiDB all have dedicated dialects and always-on integration tests
+- YugabyteDB auto-prepare is disabled to match YSQL semantics (prevents broken connection errors after pool reuse)
+- Aurora MySql/PostgreSQL are auto-detected at runtime and delegate to the correct dialect — no user configuration needed
 
-Why it matters:
-- `:memory:` SQLite/DuckDB → `SingleConnection`
-- File-based SQLite/DuckDB → `SingleWriter`
-- SQL Server LocalDB → `KeepAlive`
-- Everything else → `Standard`
-- Removes guesswork for new projects and avoids file-locking errors in embedded databases
+### 17) Database-specific optimizations (dialect & performance)
 
-### 17) Unified GUID storage
+2.0 introduces several database-specific optimizations that improve both throughput and reliability.
+
+- **Oracle**: Improved pool isolation for read-only vs read-write contexts via automatic connection string discrimination, preventing cross-intent pool pollution in the ODP.NET driver.
+- **Consolidated RTTs**: All dialects now consolidate baseline and intent session settings into a **single batched command (1 RTT)** during connection initialization.
+- **Standardized GUIDs**: GUID storage is now fully deterministic across all 13 providers — see [Unified GUID storage](#18-unified-guid-storage) below.
+
+### 18) Unified GUID storage
+
 GUIDs are stored in the correct format for each database, automatically.
 
 Why it matters:
@@ -344,9 +383,10 @@ connection-lifecycle tracking.
 - Internal behavior is significantly stronger under load
 - Concurrency and execution semantics are more explicit and robust
 
-If you’re already on 1.0, 2.0 gives you better safety and performance while preserving explicit SQL control.
+If you're already on 1.0, 2.0 gives you better safety and performance while preserving explicit SQL control.
 
-## Why this release matters
+## Migrating from 1.0
 
-`pengdows.crud` has always focused on explicit SQL, high performance hydration, and pragmatic CRUD support. 
-2.0 strengthens the internals where it matters most: connection management, contention control, hydration speed, and multi-provider reliability.
+The breaking changes above cover everything that requires a code update. API usage
+stays familiar — the work is in removing calls to internals that shouldn't have been
+public in the first place.

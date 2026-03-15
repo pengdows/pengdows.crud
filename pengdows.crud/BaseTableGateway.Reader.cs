@@ -1,14 +1,11 @@
 // =============================================================================
-// FILE: TableGateway.Reader.cs
+// FILE: BaseTableGateway.Reader.cs
 // PURPOSE: Monolithic DataReader-to-entity mapping using compiled expression trees.
 //
 // AI SUMMARY:
-// - MapReaderToObject() - Converts current DataReader row to TEntity using a monolithic plan.
+// - MapReaderToObject() - Converts current DataReader row to TEntity using a compiled plan.
 // - Caches plans by recordset shape hash (long).
-// - GetOrBuildRecordsetPlan() - Builds a single compiled Func<ITrackedReader, TEntity>
-//   per unique schema shape, eliminating loop-over-delegates and boxing.
-// - Uses CompiledMapperFactory to unroll IsDBNull checks and inlines coercion.
-// - Performance: Zero per-row delegate dispatch, near-manual mapping speed.
+// - Shared by all gateway variants.
 // =============================================================================
 
 using System.Buffers;
@@ -22,9 +19,9 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud;
 
 /// <summary>
-/// TableGateway partial: DataReader mapping to entities.
+/// BaseTableGateway partial: DataReader mapping to entities.
 /// </summary>
-public partial class TableGateway<TEntity, TRowID>
+public abstract partial class BaseTableGateway<TEntity>
 {
     private const int FieldPoolMaxLength = 64;
     private const int FieldPoolArraysPerBucket = 32;
@@ -34,6 +31,10 @@ public partial class TableGateway<TEntity, TRowID>
 
     private static readonly ArrayPool<Type> FieldTypePool =
         ArrayPool<Type>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
+
+    // Hot path cache: most recently used plan to avoid hash/dictionary overhead
+    private HybridRecordsetPlan? _hotPlan;
+    private long _hotHash;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEntity MapReaderToObject(ITrackedReader reader)
@@ -45,21 +46,13 @@ public partial class TableGateway<TEntity, TRowID>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TEntity MapReaderToObjectWithPlan(ITrackedReader reader, HybridRecordsetPlan plan)
     {
-        // Execute the monolithic compiled mapper (zero delegate dispatch overhead)
         return plan.CompiledMapper(reader);
     }
-
-    // Hot path cache: Stores the most recently used plan to avoid hash/dictionary
-    // overhead for high-throughput single-row reads (200k+ loops).
-    // Using simple instance fields is faster than ThreadLocal/AsyncLocal for single-thread loops.
-    private HybridRecordsetPlan? _hotPlan;
-    private long _hotHash;
 
     private HybridRecordsetPlan GetOrBuildRecordsetPlan(ITrackedReader reader)
     {
         var fieldCount = reader.FieldCount;
 
-        // Use ArrayPool to reduce allocations during hash calculation
         var names = RentStringArray(fieldCount);
         var fieldTypes = RentTypeArray(fieldCount);
 
@@ -78,7 +71,6 @@ public partial class TableGateway<TEntity, TRowID>
 
             var hash = (long)hashBuilder.ToHashCode();
 
-            // Optimization: check hot plan first
             var hotPlan = Volatile.Read(ref _hotPlan);
             if (hotPlan != null && hash == _hotHash)
             {
@@ -92,14 +84,13 @@ public partial class TableGateway<TEntity, TRowID>
                 return existingPlan;
             }
 
-            // Build monolithic compiled mapper using factory
             var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes);
             var plan = new HybridRecordsetPlan(compiledMapper);
 
             var added = _readerPlans.GetOrAdd(hash, _ => plan);
             _hotHash = hash;
             Volatile.Write(ref _hotPlan, added);
-            
+
             return added;
         }
         finally

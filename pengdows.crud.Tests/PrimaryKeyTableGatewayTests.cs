@@ -7,6 +7,7 @@
 
 using System;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
@@ -63,6 +64,66 @@ public class PrimaryKeyTableGatewayTests
     {
         [Column("value", DbType.String)]
         public string Value { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Pure junction entity: only [PrimaryKey] columns, no other updateable columns.
+    /// Upsert must throw NotSupportedException because the ON CONFLICT DO UPDATE SET
+    /// clause would be empty — there is nothing to update.
+    /// </summary>
+    [Table("pure_junction")]
+    public class PureJunctionEntity
+    {
+        [PrimaryKey(1)]
+        [Column("left_id", DbType.Int32)]
+        public int LeftId { get; set; }
+
+        [PrimaryKey(2)]
+        [Column("right_id", DbType.Int32)]
+        public int RightId { get; set; }
+    }
+
+    /// <summary>Entity with a [LastUpdatedBy] audit column for P0-2 double-audit test.</summary>
+    [Table("audited_pk_entity")]
+    public class AuditedPkEntity
+    {
+        [PrimaryKey(1)]
+        [Column("code", DbType.String)]
+        public string Code { get; set; } = string.Empty;
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
+
+        [LastUpdatedBy]
+        [Column("updated_by", DbType.String)]
+        public string? UpdatedBy { get; set; }
+
+        [LastUpdatedOn]
+        [Column("updated_on", DbType.DateTime)]
+        public DateTime? UpdatedOn { get; set; }
+    }
+
+    /// <summary>
+    /// Counting IAuditValueResolver — tracks how many times Resolve() is called.
+    /// </summary>
+    private sealed class CountingAuditResolver : IAuditValueResolver
+    {
+        private int _callCount;
+        public int CallCount => _callCount;
+
+        public IAuditValues Resolve()
+        {
+            Interlocked.Increment(ref _callCount);
+            return new SimpleAuditValues("test-user");
+        }
+    }
+
+    private sealed class SimpleAuditValues : IAuditValues
+    {
+        public SimpleAuditValues(string userId) => UserId = userId;
+        public object UserId { get; init; }
+        public DateTime UtcNow => DateTime.UtcNow;
+        public DateTimeOffset? TimestampOffset => null;
     }
 
     // -------------------------------------------------------------------------
@@ -415,5 +476,89 @@ public class PrimaryKeyTableGatewayTests
 
         var result = await gw.LoadSingleAsync(sc);
         Assert.Null(result);
+    }
+
+    // =========================================================================
+    // P0-1: BuildUpsert on a pure-junction entity (no updateable columns)
+    //       must throw NotSupportedException — the DO UPDATE SET clause would
+    //       be empty, producing invalid SQL.
+    // =========================================================================
+
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    public void BuildUpsert_PureJunctionEntity_ThrowsNotSupportedException(SupportedDatabase db)
+    {
+        using var ctx = MakeContext(db);
+        var gw = new PrimaryKeyTableGateway<PureJunctionEntity>(ctx);
+        var entity = new PureJunctionEntity { LeftId = 1, RightId = 2 };
+
+        Assert.Throws<NotSupportedException>(() => gw.BuildUpsert(entity));
+    }
+
+    // =========================================================================
+    // P0-2: BuildBatchUpdate must not set audit fields twice per entity.
+    //       The resolver must be invoked exactly once per batch (not once per
+    //       entity) regardless of how many entities are in the batch.
+    // =========================================================================
+
+    [Fact]
+    public void BuildBatchUpdate_AuditResolverCalledOncePerBatch_NotPerEntity()
+    {
+        var resolver = new CountingAuditResolver();
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        var gw = new PrimaryKeyTableGateway<AuditedPkEntity>(ctx, resolver);
+
+        var entities = new[]
+        {
+            new AuditedPkEntity { Code = "A", Value = "v1" },
+            new AuditedPkEntity { Code = "B", Value = "v2" },
+            new AuditedPkEntity { Code = "C", Value = "v3" }
+        };
+
+        _ = gw.BuildBatchUpdate(entities);
+
+        // Resolver must be called exactly once (for the batch pre-resolve),
+        // NOT once-per-entity from BuildUpdateByPk's unconditional SetAuditFields.
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    // =========================================================================
+    // BATCH UPSERT (missing coverage)
+    // =========================================================================
+
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.MySql)]
+    public void BuildBatchUpsert_MultipleEntities_ProducesContainers(SupportedDatabase db)
+    {
+        using var ctx = MakeContext(db);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+        var entities = new[]
+        {
+            new OrderLine { OrderId = 1, LineNumber = 1, ProductCode = "A", Quantity = 1 },
+            new OrderLine { OrderId = 1, LineNumber = 2, ProductCode = "B", Quantity = 2 }
+        };
+
+        var containers = gw.BuildBatchUpsert(entities);
+        Assert.NotEmpty(containers);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_MultipleEntities_ReturnsNonNegative()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+        var entities = new[]
+        {
+            new OrderLine { OrderId = 1, LineNumber = 1, ProductCode = "A", Quantity = 1 },
+            new OrderLine { OrderId = 1, LineNumber = 2, ProductCode = "B", Quantity = 2 }
+        };
+
+        var rows = await gw.BatchUpsertAsync(entities);
+        Assert.True(rows >= 0);
     }
 }

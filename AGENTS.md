@@ -128,6 +128,33 @@ List<TEntity> list = await RetrieveAsync(ids);
 IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 ```
 
+**Three-Tier API (PrimaryKeyTableGateway)**
+
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` if entity has no `[PrimaryKey]`.
+
+```csharp
+// Tier 1 — Build
+ISqlContainer BuildCreate(entity);
+ISqlContainer BuildBaseRetrieve("alias");
+ISqlContainer BuildRetrieve(entityList, "alias");   // WHERE by [PrimaryKey]
+ISqlContainer BuildUpsert(entity);
+ISqlContainer sc = await BuildUpdateAsync(entity);
+IReadOnlyList<ISqlContainer> BuildBatchCreate/Update/Upsert/Delete(entities);
+
+// Tier 2 — Load (same as TableGateway)
+TEntity? result = await LoadSingleAsync(container);
+List<TEntity> list = await LoadListAsync(container);
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);
+
+// Tier 3 — Convenience
+bool created  = await CreateAsync(entity);
+TEntity? e    = await RetrieveOneAsync(entityLookup); // By [PrimaryKey] only — no id overload
+int affected  = await UpdateAsync(entity);
+int affected  = await DeleteAsync(entityCollection);  // No DeleteAsync(id)
+int affected  = await UpsertAsync(entity);
+// Batch: BatchCreateAsync / BatchUpdateAsync / BatchUpsertAsync / BatchDeleteAsync
+```
+
 **ISqlContainer execution methods return `ValueTask` (not `Task`):**
 ```csharp
 ValueTask<int>            ExecuteNonQueryAsync(commandType);
@@ -154,11 +181,12 @@ var clone = container.Clone(txContext);     // Different context (transaction, m
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
-2. TableGateway requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
+2. `TableGateway<T,TId>` requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
 6. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns; `DeleteAsync(TRowID)` uses `[Id]`
+7. **Choosing the gateway:** entity has `[Id]` → `TableGateway<TEntity, TRowID>`; entity has only `[PrimaryKey]` → `PrimaryKeyTableGateway<TEntity>`
 
 ```csharp
 [Table("order_items")]

@@ -10,4 +10,14 @@
 `TypeMapRegistry` hooks enforce the contract: every entity must declare either `[Id]` or at least one `[PrimaryKey]`, `[Id]` columns may not also carry `[PrimaryKey]`, and explicit `Order` values on composite keys must form a contiguous sequence starting at 1 (unchecked orders are assigned sequentially). These checks ensure the helper APIs can always tell which columns to use for surrogates, uniqueness checks, and upserts.【F:pengdows.crud/TypeMapRegistry.cs†L266-L345】
 
 ## CRUD and upsert behavior
-`TableGateway` prefers the `[Id]` column for updates and deletes and falls back to `[PrimaryKey]` columns for `Upsert` conflict detection only when the surrogate ID is not writable. That means `[PrimaryKey]` attributes are the go-to choice for composite business keys, while `[Id]` (with `Writable=false`) is the safest choice when the database autogenerates the row ID yet you still need a stable handle for `Update`/`Delete`. Never mix the two annotations on the same property—`TypeMapRegistry` will throw, keeping the contract unambiguous.【F:pengdows.crud/TypeMapRegistry.cs†L266-L345】【F:pengdows.crud/TableGateway.Update.cs†L1-L92】【F:pengdows.crud/TableGateway.Upsert.cs†L66-L79】
+`TableGateway<TEntity, TRowID>` prefers the `[Id]` column for updates and deletes and falls back to `[PrimaryKey]` columns for `Upsert` conflict detection only when the surrogate ID is not writable. That means `[PrimaryKey]` attributes are the go-to choice for composite business keys, while `[Id]` (with `Writable=false`) is the safest choice when the database autogenerates the row ID yet you still need a stable handle for `Update`/`Delete`. Never mix the two annotations on the same property—`TypeMapRegistry` will throw, keeping the contract unambiguous.【F:pengdows.crud/TypeMapRegistry.cs†L266-L345】【F:pengdows.crud/BaseTableGateway.Core.cs†L1-L50】
+
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column at all** — junction tables, legacy schemas, and DBA-owned tables with natural keys. All WHERE clauses (update, delete, upsert, retrieve) use `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if no `[PrimaryKey]` is defined.
+
+## Choosing the right gateway
+
+| Entity has... | Gateway to use |
+|---------------|----------------|
+| `[Id]` column (surrogate) | `TableGateway<TEntity, TRowID>` |
+| Only `[PrimaryKey]` columns (no `[Id]`) | `PrimaryKeyTableGateway<TEntity>` |
+| Both `[Id]` and `[PrimaryKey]` on different columns | `TableGateway<TEntity, TRowID>` — uses `[Id]` for CRUD, `[PrimaryKey]` for upsert and `RetrieveOneAsync(entity)` |

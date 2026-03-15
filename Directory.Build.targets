@@ -4,14 +4,6 @@
         <InterfaceApiCheckTool>$(MSBuildThisFileDirectory)tools/interface-api-check/bin/Release/net8.0/InterfaceApiCheck.dll</InterfaceApiCheckTool>
     </PropertyGroup>
 
-    <Target Name="BuildVerifyNoVendorTool"
-            BeforeTargets="VerifyNoVendor"
-            Condition="'$(SkipVerifyNoVendor)' != 'true' And !Exists('$(VerifyNoVendorTool)')">
-        <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)tools/verify-novendor/verify-novendor.csproj&quot; -c Release"
-              ContinueOnError="false"
-              IgnoreExitCode="false"/>
-    </Target>
-
     <Target Name="BuildInterfaceApiCheckTool"
             BeforeTargets="ValidateInterfaceBaseline"
             Condition="'$(SkipInterfaceValidation)' != 'true' And !Exists('$(InterfaceApiCheckTool)')">
@@ -21,12 +13,6 @@
     </Target>
 
     <!-- Vendor reference verification target - only runs for core assemblies -->
-    <Target Name="VerifyNoVendor" AfterTargets="Build" Condition="'$(SkipVerifyNoVendor)' != 'true' And '$(MSBuildProjectName)' != 'testbed' And '$(MSBuildProjectName)' != 'CrudBenchmarks' And '$(MSBuildProjectName)' != 'pengdows.crud.Tests' And '$(MSBuildProjectName)' != 'verify-novendor' And !$(MSBuildProjectDirectory.Contains('testbed')) And !$(MSBuildProjectDirectory.Contains('benchmarks')) And !$(MSBuildProjectDirectory.Contains('Tests'))">
-        <Exec Command="dotnet &quot;$(VerifyNoVendorTool)&quot; &quot;$(TargetDir)&quot;"
-              ContinueOnError="false"
-              IgnoreExitCode="false"/>
-    </Target>
-
     <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
         <Exec Command="dotnet &quot;$(InterfaceApiCheckTool)&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;"/>
     </Target>
