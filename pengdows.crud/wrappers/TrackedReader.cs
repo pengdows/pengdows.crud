@@ -310,7 +310,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
     /// <remarks>
     /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
     /// </remarks>
-    public Task<bool> ReadAsync()
+    public ValueTask<bool> ReadAsync()
     {
         return ReadAsync(CancellationToken.None);
     }
@@ -323,7 +323,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalT
     /// <remarks>
     /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
     /// </remarks>
-    public async Task<bool> ReadAsync(CancellationToken cancellationToken)
+    public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
     {
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

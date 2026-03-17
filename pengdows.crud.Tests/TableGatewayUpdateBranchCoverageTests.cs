@@ -193,8 +193,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
             Name = "default-id"
         };
 
-        var task = (Task<TestEntity?>)method.Invoke(gateway, new object?[] { entity, Context })!;
-        var result = await task;
+        var result = await (dynamic)method.Invoke(gateway, new object?[] { entity, Context })!;
 
         Assert.Null(result);
     }

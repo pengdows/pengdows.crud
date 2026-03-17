@@ -103,7 +103,7 @@ public class DataReaderMapperNegativeTests
             var options = new MapperOptions(true);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                DataReaderMapper.LoadAsync<SampleEntity>(reader, options));
+                DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
         }
         finally
         {
@@ -129,7 +129,7 @@ public class DataReaderMapperNegativeTests
         var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(true);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            DataReaderMapper.LoadAsync<SampleEntity>(reader, options));
+            DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
     }
 
     [Fact]
@@ -162,10 +162,8 @@ public class DataReaderMapperNegativeTests
     {
         IDataReader reader = new NonDbDataReader();
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-        {
-            await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
-        });
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader).AsTask());
     }
 
     [Fact]

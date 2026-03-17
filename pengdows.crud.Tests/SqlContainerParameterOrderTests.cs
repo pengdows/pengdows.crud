@@ -124,14 +124,13 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
-        var task = (Task<DbCommand>)method!.Invoke(container, new object[]
+        var cmd = await (dynamic)method!.Invoke(container, new object[]
         {
             tracked,
             CommandType.Text,
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task;
         try
         {
             Assert.Equal(2, container.ParamSequence.Count);
@@ -160,14 +159,13 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
-        var task = (Task<DbCommand>)method!.Invoke(container, new object[]
+        var cmd = await (dynamic)method!.Invoke(container, new object[]
         {
             tracked,
             CommandType.Text,
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task;
         try
         {
             Assert.Equal("a", cmd.Parameters[0].ParameterName);

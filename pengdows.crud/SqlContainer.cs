@@ -1549,7 +1549,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-    private async Task<DbCommand> PrepareAndCreateCommandAsync(
+    private async ValueTask<DbCommand> PrepareAndCreateCommandAsync(
         ITrackedConnection conn,
         CommandType commandType,
         ExecutionType executionType,
@@ -1841,7 +1841,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return ticks * 1_000_000d / Stopwatch.Frequency;
     }
 
-    private async Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
+    private async ValueTask OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
     {
         if (conn.State == ConnectionState.Open)
         {

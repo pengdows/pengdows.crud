@@ -141,7 +141,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         bool ColumnsOnly,
         EnumParseFailureMode EnumMode);
 
-    public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
+    public static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
         ITrackedReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
@@ -149,7 +149,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    public static Task<List<T>> LoadAsync<T>(
+    public static ValueTask<List<T>> LoadAsync<T>(
         ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
@@ -175,7 +175,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    internal static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
+    internal static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
@@ -183,7 +183,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    internal static Task<List<T>> LoadAsync<T>(
+    internal static ValueTask<List<T>> LoadAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
@@ -209,14 +209,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
+    ValueTask<List<T>> IDataReaderMapper.LoadAsync<T>(
         ITrackedReader reader,
         CancellationToken cancellationToken)
     {
         return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
+    ValueTask<List<T>> IDataReaderMapper.LoadAsync<T>(
         ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
@@ -232,7 +232,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    private static async Task<List<T>> LoadInternalAsync<T>(
+    private static async ValueTask<List<T>> LoadInternalAsync<T>(
         ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
@@ -254,7 +254,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return result;
     }
 
-    private static async Task<List<T>> LoadInternalAsync<T>(
+    private static async ValueTask<List<T>> LoadInternalAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)

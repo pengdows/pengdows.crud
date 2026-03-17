@@ -30,8 +30,8 @@ interface pengdows.crud.wrappers.ITrackedReader : System.Data.IDataReader, Syste
 method pengdows.crud.IAuditValueResolver::Resolve() -> pengdows.crud.IAuditValues
 method pengdows.crud.IAuditValues::As<T>() -> T
 method pengdows.crud.IColumnInfo::MakeParameterValueFromField<T>(T) -> object
-method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<T>>
-method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<T>>
+method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<T>>
+method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<T>>
 method pengdows.crud.IDataReaderMapper::StreamAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<T>
 method pengdows.crud.IDataSourceInformation::GetCompatibilityWarning() -> string
 method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
@@ -257,8 +257,8 @@ method pengdows.crud.tenant.ITenantContextRegistry::InvalidateAll() -> void
 method pengdows.crud.threading.ILockerAsync::Lock() -> void
 method pengdows.crud.threading.ILockerAsync::LockAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.threading.ILockerAsync::TryLockAsync(System.TimeSpan, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
-method pengdows.crud.wrappers.ITrackedReader::ReadAsync() -> System.Threading.Tasks.Task`1<bool>
-method pengdows.crud.wrappers.ITrackedReader::ReadAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
+method pengdows.crud.wrappers.ITrackedReader::ReadAsync() -> System.Threading.Tasks.ValueTask`1<bool>
+method pengdows.crud.wrappers.ITrackedReader::ReadAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
 property pengdows.crud.IAuditValues::TimestampOffset : System.Nullable`1<System.DateTimeOffset> { get; }
 property pengdows.crud.IAuditValues::UserId : object { get; set; }
 property pengdows.crud.IAuditValues::UtcNow : System.DateTime { get; }

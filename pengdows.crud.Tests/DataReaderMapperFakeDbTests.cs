@@ -87,14 +87,14 @@ public class DataReaderMapperFakeDbTests : IAsyncLifetime
         var options = new MapperOptions { Strict = true };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            DataReaderMapper.LoadAsync<CountDto>(reader, options));
+            DataReaderMapper.LoadAsync<CountDto>(reader, options).AsTask());
     }
 
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_WithNonDbReader_ThrowsArgumentException()
     {
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()));
+            DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()).AsTask());
     }
 
     private sealed class EntityDto

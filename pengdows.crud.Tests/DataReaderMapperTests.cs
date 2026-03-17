@@ -297,7 +297,7 @@ public class DataReaderMapperTests
         });
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)));
+            DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)).AsTask());
     }
 
     [Fact]
@@ -497,7 +497,7 @@ public class DataReaderMapperTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => DataReaderMapper.LoadAsync<DuplicateColumnNamesEntity>(
             reader,
-            new MapperOptions(ColumnsOnly: true)));
+            new MapperOptions(ColumnsOnly: true)).AsTask());
     }
 
     [Fact]

@@ -14,7 +14,7 @@ public interface IDataReaderMapper
     /// <param name="reader">Tracked reader containing the rows to map.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of hydrated objects.</returns>
-    Task<List<T>> LoadAsync<T>(ITrackedReader reader, CancellationToken cancellationToken = default)
+    ValueTask<List<T>> LoadAsync<T>(ITrackedReader reader, CancellationToken cancellationToken = default)
         where T : class, new();
 
     /// <summary>
@@ -25,7 +25,7 @@ public interface IDataReaderMapper
     /// <param name="options">Mapping options controlling hydration behavior.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of hydrated objects.</returns>
-    Task<List<T>> LoadAsync<T>(ITrackedReader reader, IMapperOptions options,
+    ValueTask<List<T>> LoadAsync<T>(ITrackedReader reader, IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new();
 
