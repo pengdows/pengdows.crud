@@ -444,7 +444,7 @@ public partial class DatabaseContext
         {
             // 2) Create + open
             var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
-            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true, IsReadOnlyConnection);
+            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true);
             try
             {
                 initConn.Open();
@@ -737,7 +737,7 @@ public partial class DatabaseContext
         var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
         try
         {
-            using var conn = FactoryCreateConnection(executionType, connectionString, true, isReadOnly);
+            using var conn = FactoryCreateConnection(executionType, connectionString, true);
             conn.Open();
         }
         catch (Exception ex)

@@ -42,18 +42,7 @@ public class CoverageRaiseRestQuickWinsTests
         };
 
         using var context = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
-        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(readOnly: true));
-    }
-
-    [Fact]
-    public void BeginTransaction_WriteModeWithReadExecutionType_Throws()
-    {
-        using var context = new DatabaseContext(
-            "Data Source=:memory:",
-            new fakeDbFactory(SupportedDatabase.Sqlite));
-
-        Assert.Throws<InvalidOperationException>(() =>
-            context.BeginTransaction(executionType: ExecutionType.Read, readOnly: false));
+        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(executionType: ExecutionType.Read));
     }
 
     [Fact]

@@ -59,6 +59,11 @@ public interface IFakeDbConnection : IDbConnection, IAsyncDisposable
     IReadOnlyCollection<string> ExecutedNonQueryTexts { get; }
 
     /// <summary>
+    /// All commands created by this connection.
+    /// </summary>
+    IReadOnlyCollection<fakeDbCommand> CreatedCommands { get; }
+
+    /// <summary>
     /// Enqueues a result set to be returned by the next reader execution.
     /// </summary>
     /// <param name="rows">Rows to return.</param>

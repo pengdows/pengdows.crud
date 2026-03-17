@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PackageId>pengdows.crud.opentelemetry</PackageId>
+        <Description>OpenTelemetry adapter for pengdows.crud</Description>
+        <Authors>Pengdows</Authors>
+        <PackageTags>crud,opentelemetry,metrics,otel</PackageTags>
+        <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
+        <WarningsAsErrors>true</WarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj" />
+    </ItemGroup>
+</Project>

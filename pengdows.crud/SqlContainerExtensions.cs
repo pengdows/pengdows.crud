@@ -276,7 +276,7 @@ public static class SqlContainerExtensions
     }
 
     /// <summary>
-    /// Appends the dialect-formatted parameter placeholder for an existing parameter.
+    /// Appends the dialect-formatted parameter placeholder for an existing parameter, does not add it to the parameter list
     /// </summary>
     public static ISqlContainer AppendParam(this ISqlContainer container, DbParameter parameter)
     {
@@ -285,7 +285,7 @@ public static class SqlContainerExtensions
     }
 
     /// <summary>
-    /// Appends the dialect-formatted parameter placeholder for a named parameter.
+    /// Appends the dialect-formatted parameter placeholder for a named parameter, does not add it to the parameter list
     /// </summary>
     public static ISqlContainer AppendParam(this ISqlContainer container, string parameterName)
     {

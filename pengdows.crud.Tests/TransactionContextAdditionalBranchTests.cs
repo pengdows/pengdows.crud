@@ -35,7 +35,7 @@ public class TransactionContextAdditionalBranchTests
             new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
 
         Assert.Throws<NotSupportedException>(() =>
-            TransactionContext.Create(ctx, IsolationLevel.ReadCommitted, ExecutionType.Write, false));
+            TransactionContext.Create(ctx, IsolationLevel.ReadCommitted, ExecutionType.Write));
     }
 
     [Fact]

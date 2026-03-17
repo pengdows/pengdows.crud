@@ -102,6 +102,8 @@ namespace pengdows.crud;
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
+    private static readonly ActivitySource ActivitySource = new("pengdows.crud", "2.0.1");
+
     private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>>
         ProviderSpecificCopiers = new();
 
@@ -1107,6 +1109,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        using var activity = StartActivity("ExecuteNonQuery");
         try
         {
             contextLocker = _context.GetLock();
@@ -1114,11 +1117,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
-            
+
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
-            
+
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
@@ -1128,16 +1131,34 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, result);
             metrics?.RecordRowsAffected(result);
+
+            if (activity != null)
+            {
+                activity.SetTag("db.rows_affected", result);
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+
             return result;
         }
         catch (OperationCanceledException)
         {
             metrics?.CommandCancelled(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
         catch (Exception ex) when (IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            if (activity != null)
+            {
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", ex.GetType().FullName },
+                    { "exception.message", ex.Message },
+                    { "exception.stacktrace", ex.ToString() }
+                }));
+            }
             throw;
         }
         catch (Exception ex)
@@ -1146,6 +1167,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (metrics != null)
             {
                 metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+            }
+
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", ex.GetType().FullName },
+                    { "exception.message", ex.Message },
+                    { "exception.stacktrace", ex.ToString() }
+                }));
             }
 
             throw;
@@ -1363,6 +1395,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        using var activity = StartActivity("ExecuteReader");
         var lockTransferred = false;
         try
         {
@@ -1408,16 +1441,33 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 this);
             cmd = null;
             lockTransferred = true; // TrackedReader now owns the lock
+            
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+            
             return trackedReader;
         }
         catch (OperationCanceledException)
         {
             metrics?.CommandCancelled(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
         catch (Exception ex) when (IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            if (activity != null)
+            {
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", ex.GetType().FullName },
+                    { "exception.message", ex.Message },
+                    { "exception.stacktrace", ex.ToString() }
+                }));
+            }
             throw;
         }
         catch (Exception ex)
@@ -1426,6 +1476,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (metrics != null)
             {
                 metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+            }
+            
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", ex.GetType().FullName },
+                    { "exception.message", ex.Message },
+                    { "exception.stacktrace", ex.ToString() }
+                }));
             }
 
             throw;
@@ -1745,6 +1806,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             DbMode.SingleConnection => true,
             _ => false
         };
+    }
+
+    private Activity? StartActivity(string operationName)
+    {
+        var activity = ActivitySource.StartActivity(operationName, ActivityKind.Client);
+        if (activity != null)
+        {
+            activity.SetTag("db.system", _context.Product.ToString().ToLowerInvariant());
+            activity.SetTag("db.name", _context.Name);
+            activity.SetTag("db.statement", Query.ToString());
+            activity.SetTag("db.operation", operationName);
+        }
+        return activity;
     }
 
     private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)

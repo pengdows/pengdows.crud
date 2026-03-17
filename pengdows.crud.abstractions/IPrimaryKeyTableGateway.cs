@@ -234,4 +234,31 @@ public interface IPrimaryKeyTableGateway<TEntity>
 
     /// <summary>Materializes a <typeparamref name="TEntity"/> from a data reader row.</summary>
     TEntity MapReaderToObject(ITrackedReader reader);
+
+    // =========================================================================
+    // COUNT helpers
+    // =========================================================================
+
+    /// <summary>Returns <c>SELECT COUNT(*)</c> of all rows in this table.</summary>
+    ValueTask<long> CountAllAsync(IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Returns <c>SELECT COUNT(*)</c> filtered by a single column equality (or LIKE when
+    /// <paramref name="isLike"/> is <see langword="true"/>) check.
+    /// All identifiers are quoted and values parameterized.
+    /// </summary>
+    ValueTask<long> CountWhereAsync(string column, string value, bool isLike = false,
+        IDatabaseContext? context = null);
+
+    /// <summary>Returns <c>SELECT COUNT(*)</c> of rows where <paramref name="column"/> IS NULL.</summary>
+    ValueTask<long> CountWhereNullAsync(string column, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Returns <c>SELECT COUNT(*)</c> where <paramref name="column"/> equals <paramref name="value"/>,
+    /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
+    /// Exactly one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> may be set.
+    /// </summary>
+    ValueTask<long> CountWhereEqualsAsync(string column, string value,
+        string? andWhereNull = null, string? andWhereNotNull = null,
+        IDatabaseContext? context = null);
 }

@@ -122,7 +122,7 @@ public class PrepareBehaviorTests
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
         await using var ctx = CreateContext(factory, forcePrepare: true);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
         {
             sc!.AddParameterWithValue("p0", DbType.Int32, 1);
@@ -164,7 +164,7 @@ public class PrepareBehaviorTests
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
         await using var ctx = CreateContext(factory, disablePrepare: true);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
         sc!.AddParameterWithValue("p0", DbType.Int32, 1);
         _ = await sc.ExecuteNonQueryAsync();
@@ -192,7 +192,7 @@ public class PrepareBehaviorTests
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
         sc!.AddParameterWithValue("p0", DbType.Int32, 1);
         _ = await sc.ExecuteNonQueryAsync();
@@ -213,7 +213,7 @@ public class PrepareBehaviorTests
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
         await using var ctx = CreateContext(factory, forcePrepare: true);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
 
         // First command throws from Prepare()
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
@@ -254,7 +254,7 @@ public class PrepareBehaviorTests
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
-        await using (var tx1 = ctx.BeginTransaction(readOnly: false))
+        await using (var tx1 = ctx.BeginTransaction(executionType: ExecutionType.Write))
         {
             factory.Connections[^1].ThrowOnNextPrepareException = new FakeMySqlDbException(
                 1461,
@@ -265,7 +265,7 @@ public class PrepareBehaviorTests
             _ = await sc.ExecuteNonQueryAsync();
         }
 
-        await using (var tx2 = ctx.BeginTransaction(readOnly: false))
+        await using (var tx2 = ctx.BeginTransaction(executionType: ExecutionType.Write))
         {
             await using var sc = tx2.CreateSqlContainer("SELECT @p0") as SqlContainer;
             sc!.AddParameterWithValue("p0", DbType.Int32, 2);
@@ -295,7 +295,7 @@ public class PrepareBehaviorTests
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         factory.Connections[^1].ThrowOnNextPrepareException = new FakeMySqlDbException(1205, "Lock wait timeout exceeded");
 
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
@@ -337,7 +337,7 @@ public class PrepareBehaviorTests
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
         sc!.AddParameterWithValue("p0", DbType.Int32, 1);
         _ = await sc.ExecuteNonQueryAsync();

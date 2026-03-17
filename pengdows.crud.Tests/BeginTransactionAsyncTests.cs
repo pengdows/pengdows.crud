@@ -102,7 +102,7 @@ public class BeginTransactionAsyncTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        await using var tx = await context.BeginTransactionAsync(readOnly: true);
+        await using var tx = await context.BeginTransactionAsync(executionType: ExecutionType.Read);
         await tx.CommitAsync();
 
         // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string
@@ -177,7 +177,7 @@ public class BeginTransactionAsyncTests
     }
 
     /// <summary>
-    /// Sync BeginTransaction(readOnly: true) on DuckDB must use access_mode=READ_ONLY in the
+    /// Sync BeginTransaction(executionType: ExecutionType.Read) on DuckDB must use access_mode=READ_ONLY in the
     /// connection string (set by ApplyConnectionSettingsCore). No session SQL is emitted.
     /// </summary>
     [Fact]
@@ -193,7 +193,7 @@ public class BeginTransactionAsyncTests
 
         using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string

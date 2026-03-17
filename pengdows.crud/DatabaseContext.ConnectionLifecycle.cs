@@ -91,9 +91,9 @@ public partial class DatabaseContext
     /// <summary>
     /// Creates a standard (ephemeral) connection from the factory or data source.
     /// </summary>
-    internal ITrackedConnection GetStandardConnection(bool isShared = false, bool readOnly = false)
+    internal ITrackedConnection GetStandardConnection(ExecutionType executionType, bool isShared = false)
     {
-        return GetStandardConnectionWithExecutionType(ExecutionType.Read, isShared, readOnly);
+        return GetStandardConnectionWithExecutionType(executionType, isShared);
     }
 
     internal ILockerAsync GetConnectionOpenLock()
@@ -108,14 +108,15 @@ public partial class DatabaseContext
     }
 
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
-        bool isShared = false, bool readOnly = false)
+        bool isShared = false)
     {
         var slot = AcquireSlot(executionType);
         try
         {
-            var useReader = ShouldUseReaderConnectionString(readOnly);
+            var roIntent = executionType == ExecutionType.Read;
+            var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
             var connectionString = useReader ? _readerConnectionString : _connectionString;
-            var conn = FactoryCreateConnection(executionType, connectionString, isShared, readOnly, slot);
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
             return conn;
         }
         catch
@@ -307,13 +308,15 @@ public partial class DatabaseContext
         ExecutionType executionType,
         string? connectionString = null,
         bool isSharedConnection = false,
-        bool readOnly = false,
         PoolSlot? slot = null)
     {
         SanitizeConnectionString(connectionString);
 
+        var roIntent = executionType == ExecutionType.Read;
+        var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
+
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
-            ? _connectionString
+            ? (useReader ? _readerConnectionString : _connectionString)
             : connectionString;
 
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -321,14 +324,14 @@ public partial class DatabaseContext
             _logger.LogDebug("Preparing connection for {ExecutionType}", executionType);
         }
 
-        var dataSource = ResolveDataSource(readOnly);
+        var dataSource = ResolveDataSource(useReader);
 
         // Prefer DataSource over Factory for better performance (shared prepared statement cache)
         DbConnection connection;
         if (dataSource != null)
         {
             connection = dataSource.CreateConnection();
-            _dialect?.ConfigureProviderSpecificSettings(connection, this, readOnly);
+            _dialect?.ConfigureProviderSpecificSettings(connection, this, roIntent);
         }
         else if (_factory != null)
         {
@@ -336,7 +339,7 @@ public partial class DatabaseContext
                          throw new InvalidOperationException("Factory returned null DbConnection.");
             if (_dialect != null)
             {
-                _dialect.ApplyConnectionSettingsCore(connection, this, readOnly, activeConnectionString);
+                _dialect.ApplyConnectionSettingsCore(connection, this, roIntent, activeConnectionString);
             }
             else
             {
@@ -352,12 +355,11 @@ public partial class DatabaseContext
         Interlocked.Increment(ref _totalConnectionsCreated);
 
         // Use pre-built per-context handlers — zero allocation per connection checkout
-        var firstOpenHandler = readOnly ? _firstOpenHandlerRo : _firstOpenHandlerRw;
-        var firstOpenHandlerAsync = readOnly ? _firstOpenHandlerAsyncRo : _firstOpenHandlerAsyncRw;
+        var firstOpenHandler = roIntent ? _firstOpenHandlerRo : _firstOpenHandlerRw;
+        var firstOpenHandlerAsync = roIntent ? _firstOpenHandlerAsyncRo : _firstOpenHandlerAsyncRw;
 
         var metricsCollector = executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
-        var useReaderPrefix = readOnly && ShouldUseReaderConnectionString(readOnly);
-        var namePrefix = useReaderPrefix ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
+        var namePrefix = useReader ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
         return new TrackedConnection(
             connection,
             _stateChangeHandler,
@@ -379,9 +381,9 @@ public partial class DatabaseContext
     /// Overload of FactoryCreateConnection using read execution type.
     /// </summary>
     internal ITrackedConnection FactoryCreateConnection(string? connectionString = null,
-        bool isSharedConnection = false, bool readOnly = false)
+        bool isSharedConnection = false)
     {
-        return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection, readOnly);
+        return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection);
     }
 
     private DbDataSource? ResolveDataSource(bool readOnly)

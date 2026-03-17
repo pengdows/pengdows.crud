@@ -1,0 +1,39 @@
+    // Internal async factory used by DatabaseContext
+    internal static async Task<TransactionContext> CreateAsync(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+
+        var transaction = context.Product == SupportedDatabase.DuckDB
+            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+
+        if (tx.IsReadOnlyConnection)
+        {
+            try
+            {
+                await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Release the pinned connection and roll back — do NOT dispose the parent context,
+                // which is a singleton that must remain usable after a failed BeginTransactionAsync.
+                // (The sync constructor path only closes the connection; this matches that behaviour.)
+                await tx.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        return tx;
+    }

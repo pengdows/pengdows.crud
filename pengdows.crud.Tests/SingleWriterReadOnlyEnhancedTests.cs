@@ -120,7 +120,7 @@ public class SingleWriterReadOnlyEnhancedTests
         {
             try
             {
-                await using var tx = ctx.BeginTransaction(readOnly: true);
+                await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
                 Assert.True(factory.Connections.Count >= 1);
 
@@ -174,7 +174,7 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using (var ctx = CreateContext(factory))
         {
-            await using var tx = ctx.BeginTransaction(readOnly: true);
+            await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
             // Verify that a separate read-only connection was created
             Assert.True(factory.Connections.Count >= 1);
@@ -200,7 +200,7 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using (var ctx = CreateContext(factory, SupportedDatabase.Sqlite, connectionString))
         {
-            await using var tx = ctx.BeginTransaction(readOnly: true);
+            await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
             Assert.True(factory.Connections.Count >= 1);
 
@@ -227,7 +227,7 @@ public class SingleWriterReadOnlyEnhancedTests
         await using (var ctx = CreateContext(factory, SupportedDatabase.Sqlite,
             "Data Source=:memory:;EmulatedProduct=Sqlite"))
         {
-            await using var tx = ctx.BeginTransaction(readOnly: true);
+            await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
             Assert.True(factory.Connections.Count >= 1);
             var readOnlyConnection = factory.Connections.Last();
@@ -245,7 +245,7 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: true);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         await using var container = tx.CreateSqlContainer("INSERT INTO t VALUES (1)");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
@@ -257,7 +257,7 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: true);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         await using var container = tx.CreateSqlContainer("SELECT 1");
 
         // Should not throw - the operation should succeed even though FakeDb may not return results
@@ -279,7 +279,7 @@ public class SingleWriterReadOnlyEnhancedTests
         var factory = new RecordingFactory();
         await using (var ctx = CreateContext(factory))
         {
-            await using var tx = ctx.BeginTransaction(readOnly: false);
+            await using var tx = ctx.BeginTransaction();
 
             Assert.True(factory.Connections.Count >= 1, "At least one connection should be recorded.");
 
@@ -342,7 +342,7 @@ public class SingleWriterReadOnlyEnhancedTests
         await readConn.OpenAsync();
 
         // Create a read-only transaction to ensure we're in the right context
-        await using var tx = ctx.BeginTransaction(readOnly: true);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         await using var container = tx.CreateSqlContainer("CREATE TABLE t(id INTEGER)");
 
         // This should fail because the transaction is read-only

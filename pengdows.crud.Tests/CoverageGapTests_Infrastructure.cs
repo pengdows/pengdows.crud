@@ -155,19 +155,19 @@ public class CoverageGapTests_Infrastructure
         public string MakeParameterName(string parameterName) => throw new NotImplementedException();
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            ExecutionType executionType = ExecutionType.Write) =>
             throw new NotImplementedException();
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            ExecutionType executionType = ExecutionType.Write) =>
             throw new NotImplementedException();
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         public string GenerateParameterName() => throw new NotImplementedException();

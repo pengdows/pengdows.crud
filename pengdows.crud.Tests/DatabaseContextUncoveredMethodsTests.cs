@@ -47,7 +47,7 @@ public class DatabaseContextUncoveredMethodsTests
         var method = typeof(DatabaseContext).GetMethod("GetStandardConnection",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        var connection = method!.Invoke(context, new object[] { false, false });
+        var connection = method!.Invoke(context, new object[] { ExecutionType.Read, false });
 
         Assert.NotNull(connection);
     }
@@ -67,7 +67,7 @@ public class DatabaseContextUncoveredMethodsTests
         var method = typeof(DatabaseContext).GetMethod("GetStandardConnection",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        var connection = method!.Invoke(context, new object[] { true, false });
+        var connection = method!.Invoke(context, new object[] { ExecutionType.Read, true });
 
         Assert.NotNull(connection);
     }

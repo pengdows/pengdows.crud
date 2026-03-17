@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -238,36 +238,36 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Begins a transaction using the native ADO.NET IsolationLevel.
     /// Not portable across all providers.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null);
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null);
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     Task<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     Task<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

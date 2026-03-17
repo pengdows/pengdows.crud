@@ -1,0 +1,2 @@
+interface pengdows.crud.opentelemetry.IPengdowsMetricsObserver : System.IDisposable
+method pengdows.crud.opentelemetry.IPengdowsMetricsObserver::Track(pengdows.crud.IDatabaseContext) -> void

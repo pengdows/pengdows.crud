@@ -38,23 +38,16 @@ public partial class DatabaseContext
     /// <inheritdoc/>
     public ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null)
+        ExecutionType executionType = ExecutionType.Write)
     {
-        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType, readOnly);
-        if (ro)
-        {
-            executionType = ExecutionType.Read;
-        }
-
-        return TransactionContext.Create(this, resolved, executionType, ro);
+        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType);
+        return TransactionContext.Create(this, resolved, executionType);
     }
 
     /// <inheritdoc/>
     public ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null)
+        ExecutionType executionType = ExecutionType.Write)
     {
         if (isolationProfile == IsolationProfile.SafeNonBlockingReads
             && Product == SupportedDatabase.PostgreSql)
@@ -64,23 +57,17 @@ public partial class DatabaseContext
         }
 
         var level = _isolationResolver.Resolve(isolationProfile);
-        return BeginTransaction(level, executionType, readOnly);
+        return BeginTransaction(level, executionType);
     }
 
     /// <inheritdoc/>
     public async Task<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default)
     {
-        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType, readOnly);
-        if (ro)
-        {
-            executionType = ExecutionType.Read;
-        }
-
-        return await TransactionContext.CreateAsync(this, resolved, executionType, ro,
+        var (ro, resolved) = ResolveTransactionParameters(isolationLevel, executionType);
+        return await TransactionContext.CreateAsync(this, resolved, executionType,
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -88,7 +75,6 @@ public partial class DatabaseContext
     public async Task<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default)
     {
         if (isolationProfile == IsolationProfile.SafeNonBlockingReads
@@ -99,7 +85,7 @@ public partial class DatabaseContext
         }
 
         var level = _isolationResolver.Resolve(isolationProfile);
-        return await BeginTransactionAsync(level, executionType, readOnly, cancellationToken)
+        return await BeginTransactionAsync(level, executionType, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -109,10 +95,9 @@ public partial class DatabaseContext
     /// </summary>
     private (bool readOnly, IsolationLevel isolationLevel) ResolveTransactionParameters(
         IsolationLevel? isolationLevel,
-        ExecutionType executionType,
-        bool? readOnly)
+        ExecutionType executionType)
     {
-        var ro = readOnly ?? executionType == ExecutionType.Read;
+        var ro = executionType == ExecutionType.Read;
         if (ro)
         {
             if (!_isReadConnection)
@@ -145,11 +130,6 @@ public partial class DatabaseContext
             if (!_isWriteConnection)
             {
                 throw new NotSupportedException("Context is read-only.");
-            }
-
-            if (executionType == ExecutionType.Read)
-            {
-                throw new InvalidOperationException("Write transaction requested with read execution type.");
             }
 
             if (isolationLevel is null)

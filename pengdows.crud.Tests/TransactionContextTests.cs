@@ -178,7 +178,7 @@ public class TransactionContextTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read);
         });
 
         Assert.True(context.ConnectionReleased);
@@ -201,7 +201,7 @@ public class TransactionContextTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read);
         });
 
         Assert.True(context.ConnectionReleased); // connection released ✓
@@ -402,28 +402,26 @@ public class TransactionContextTests
             return CreateDbParameter(null, type, value);
         }
 
-        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
-            bool? readOnly)
+        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
         {
             throw new NotSupportedException();
         }
 
-        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType,
-            bool? readOnly)
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
         {
             throw new NotSupportedException();
         }
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
             ExecutionType executionType,
-            bool? readOnly, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType,
-            bool? readOnly, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

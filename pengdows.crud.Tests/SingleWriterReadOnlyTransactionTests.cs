@@ -95,7 +95,7 @@ public class SingleWriterReadOnlyTransactionTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
-        await using (ctx.BeginTransaction(readOnly: true))
+        await using (ctx.BeginTransaction(executionType: ExecutionType.Read))
         {
         }
 
@@ -112,7 +112,7 @@ public class SingleWriterReadOnlyTransactionTests
         var factory = new RecordingFactory();
         await using var ctx = CreateContext(factory);
 
-        await using (ctx.BeginTransaction(readOnly: false))
+        await using (ctx.BeginTransaction(executionType: ExecutionType.Write))
         {
         }
 

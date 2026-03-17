@@ -267,8 +267,7 @@ public class DbModeTests : DatabaseTestBase
             // Act - Begin read-only transaction
             await using var readTransaction = context.BeginTransaction(
                 GetReadCommittedCompatibleIsolationLevel(provider),
-                ExecutionType.Read,
-                true);
+                ExecutionType.Read);
 
             var helper = CreateTableGateway(context);
 

@@ -71,7 +71,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
     // DuckDB read-only is enforced via access_mode=READ_ONLY in the connection string when
     // using DbMode.SingleWriter or DbMode.SingleConnection (where a dedicated read connection
-    // is created). In DbMode.Standard, BeginTransaction(readOnly: true) uses the standard
+    // is created). In DbMode.Standard, BeginTransaction(executionType: ExecutionType.Read) uses the standard
     // connection pool and relies on the DuckDB file/connection-level access control.
     // These tests verify that no SET access_mode session SQL is emitted (regression guard).
 
@@ -88,7 +88,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         // No SET access_mode SQL should be emitted — enforcement is via connection string only
@@ -110,7 +110,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Rollback();
 
         // No SET access_mode SQL should be emitted — enforcement is via connection string only
@@ -135,7 +135,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         var exception = Record.Exception(() => tx.Commit());
         Assert.Null(exception);
 
@@ -157,7 +157,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         var allCommands = new List<string>();

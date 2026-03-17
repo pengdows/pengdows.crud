@@ -110,16 +110,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ResolveCreationParameters(
             IDatabaseContext context,
             IsolationLevel isolationLevel,
-            ExecutionType? executionType,
-            bool isReadOnly)
+            ExecutionType? executionType)
     {
-        executionType ??= context.IsReadOnlyConnection || isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+        executionType ??= context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
-        if ((context.IsReadOnlyConnection || isReadOnly) && executionType != ExecutionType.Read)
+        if (context.IsReadOnlyConnection && executionType != ExecutionType.Read)
         {
             throw new NotSupportedException("DatabaseContext is read-only");
         }
-
         if (context.Product == SupportedDatabase.CockroachDb)
         {
             isolationLevel = IsolationLevel.Serializable;
@@ -141,12 +139,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ITrackedConnection connection,
         IDbTransaction transaction,
         IsolationLevel isolationLevel,
-        bool isReadOnly,
+        ExecutionType executionType,
         ILogger<TransactionContext>? logger)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _isReadOnly = isReadOnly;
+        _isReadOnly = executionType == ExecutionType.Read;
         _dialect = context.GetDialect();
         RootId = ((IContextIdentity)_context).RootId;
         var metricsAccessor = context as IMetricsCollectorAccessor;
@@ -170,14 +168,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
         : this(context,
-            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType, isReadOnly,
+            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType,
                 out var transaction),
             transaction,
             isolationLevel,
-            isReadOnly,
+            executionType!.Value,
             logger)
     {
         if (_isReadOnly)
@@ -203,11 +200,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         ref IsolationLevel isolationLevel,
         ref ExecutionType? executionType,
-        bool isReadOnly,
         out IDbTransaction transaction)
     {
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
-            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+            ResolveCreationParameters(context, isolationLevel, executionType);
         executionType = resolvedExecType;
         isolationLevel = resolvedIsolation;
 
@@ -477,26 +473,25 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile,
-        ExecutionType executionType, bool? readOnly)
+        ExecutionType executionType)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
-        bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
     Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
-        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+        ExecutionType executionType, CancellationToken cancellationToken)
     {
         return Task.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
     Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
-        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+        ExecutionType executionType, CancellationToken cancellationToken)
     {
         return Task.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
@@ -887,10 +882,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
     {
-        return new TransactionContext(context, isolationLevel, executionType, isReadOnly, logger);
+        return new TransactionContext(context, isolationLevel, executionType, logger);
     }
 
     // Internal async factory used by DatabaseContext
@@ -898,12 +892,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null,
         CancellationToken cancellationToken = default)
     {
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
-            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+            ResolveCreationParameters(context, isolationLevel, executionType);
 
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
         await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
@@ -912,9 +905,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
             : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
 
-        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger);
 
-        if (isReadOnly)
+        if (tx.IsReadOnlyConnection)
         {
             try
             {

@@ -171,15 +171,15 @@ public class FakeDataStore
         try
         {
             // Simple INSERT parsing - matches "INSERT INTO table_name (col1, col2) VALUES (val1, val2)"
-            var insertMatch = Regex.Match(commandText,
-                @"INSERT\s+INTO\s+([`\[\]""'\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+                var insertMatch = Regex.Match(commandText,
+                    @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
                 RegexOptions.IgnoreCase);
 
             if (!insertMatch.Success)
             {
                 // Try simple INSERT INTO table VALUES format
-                var simpleMatch = Regex.Match(commandText,
-                    @"INSERT\s+INTO\s+([`\[\]""'\w]+)\s+VALUES\s*\(([^)]+)\)",
+                    var simpleMatch = Regex.Match(commandText,
+                        @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
                     RegexOptions.IgnoreCase);
                 if (simpleMatch.Success)
                 {
@@ -261,7 +261,7 @@ public class FakeDataStore
         {
             // Simple UPDATE parsing
             var updateMatch = Regex.Match(commandText,
-                @"UPDATE\s+([`\[\]""'\w]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
+                @"UPDATE\s+([`\[\]""'.\w]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
                 RegexOptions.IgnoreCase);
 
             if (!updateMatch.Success)
@@ -304,7 +304,7 @@ public class FakeDataStore
         {
             // Simple DELETE parsing
             var deleteMatch = Regex.Match(commandText,
-                @"DELETE\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+(.+))?$",
+                @"DELETE\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
                 RegexOptions.IgnoreCase);
 
             if (!deleteMatch.Success)
@@ -348,6 +348,13 @@ public class FakeDataStore
     {
         try
         {
+            // Handle COUNT queries via reader path (ExecuteScalarCore uses ExecuteReader, not ExecuteScalar)
+            if (commandText.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))
+            {
+                var countValue = HandleCountQuery(commandText, parameters) ?? 0L;
+                return [new Dictionary<string, object?> { ["count"] = countValue }];
+            }
+
             // Handle literal SELECT without FROM (e.g., SELECT 1 as id, 'test' as name)
             var literalMatch = Regex.Match(commandText,
                 @"^SELECT\s+(.+?)(?:\s+FROM\s|$)", RegexOptions.IgnoreCase);
@@ -359,7 +366,7 @@ public class FakeDataStore
 
             // Handle SELECT * FROM table
             var selectMatch = Regex.Match(commandText,
-                @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
+                @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
                 RegexOptions.IgnoreCase);
 
             if (!selectMatch.Success)
@@ -420,7 +427,7 @@ public class FakeDataStore
         {
             // Extract table name from COUNT query
             var countMatch = Regex.Match(commandText,
-                @"SELECT\s+COUNT\([^)]*\)\s+FROM\s+([`\[\]""'\w]+)(?:\s+WHERE\s+(.+))?$",
+                @"SELECT\s+COUNT\([^)]*\)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
                 RegexOptions.IgnoreCase);
 
             if (!countMatch.Success)
@@ -541,41 +548,87 @@ public class FakeDataStore
     private bool EvaluateWhereClause(Dictionary<string, object?> row, string whereClause,
         DbParameterCollection? parameters)
     {
-        // Simple WHERE clause evaluation - handles basic equality checks
         try
         {
-            // Handle "column = value" or "column = @param"
-            // Improved regex to handle quoted identifiers like "Id" = @p0
-            var match = Regex.Match(whereClause, @"([`\[\]""'\w.]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
-            if (match.Success)
+            var trimmed = whereClause.Trim();
+
+            // AND: split and evaluate each part
+            var andParts = Regex.Split(trimmed, @"\s+AND\s+", RegexOptions.IgnoreCase);
+            if (andParts.Length > 1)
+                return andParts.All(part => EvaluateWhereClause(row, part.Trim(), parameters));
+
+            // IS NOT NULL
+            var isNotNullMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s+IS\s+NOT\s+NULL$", RegexOptions.IgnoreCase);
+            if (isNotNullMatch.Success)
             {
-                var column = CleanIdentifier(match.Groups[1].Value);
-                var valueExpression = match.Groups[2].Value.Trim();
-
-                if (!row.ContainsKey(column))
-                {
-                    // Fallback for case-insensitive column matching in fake store
-                    var key = row.Keys.FirstOrDefault(k => k.Equals(column, StringComparison.OrdinalIgnoreCase));
-                    if (key == null)
-                    {
-                        return false;
-                    }
-                    column = key;
-                }
-
-                var rowValue = row[column];
-                var compareValue = GetCompareValue(valueExpression, parameters);
-
-                return Equals(rowValue, compareValue);
+                var col = ResolveRowKey(row, CleanIdentifier(isNotNullMatch.Groups[1].Value));
+                return col != null && row[col] != null && !(row[col] is DBNull);
             }
 
-            // Default to true for complex WHERE clauses we can't parse
+            // IS NULL
+            var isNullMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s+IS\s+NULL$", RegexOptions.IgnoreCase);
+            if (isNullMatch.Success)
+            {
+                var col = ResolveRowKey(row, CleanIdentifier(isNullMatch.Groups[1].Value));
+                return col == null || row[col] == null || row[col] is DBNull;
+            }
+
+            // LIKE
+            var likeMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s+LIKE\s+(.+)$", RegexOptions.IgnoreCase);
+            if (likeMatch.Success)
+            {
+                var col = ResolveRowKey(row, CleanIdentifier(likeMatch.Groups[1].Value));
+                if (col == null) return false;
+                var pattern = GetCompareValue(likeMatch.Groups[2].Value.Trim(), parameters)?.ToString() ?? "";
+                var rowVal = row[col]?.ToString() ?? "";
+                return MatchesSqlLike(rowVal, pattern);
+            }
+
+            // Equality: col = value / col = @param
+            var eqMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s*=\s*(.+)$", RegexOptions.IgnoreCase);
+            if (eqMatch.Success)
+            {
+                var col = ResolveRowKey(row, CleanIdentifier(eqMatch.Groups[1].Value));
+                if (col == null) return false;
+                var compareValue = GetCompareValue(eqMatch.Groups[2].Value.Trim(), parameters);
+                return Equals(row[col], compareValue);
+            }
+
+            // Default: can't parse → assume match
             return true;
         }
         catch
         {
             return true;
         }
+    }
+
+    private string? ResolveRowKey(Dictionary<string, object?> row, string column)
+    {
+        if (row.ContainsKey(column)) return column;
+        return row.Keys.FirstOrDefault(k => k.Equals(column, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchesSqlLike(string value, string pattern)
+    {
+        // Convert SQL LIKE wildcards to regex char-by-char so % → .* and _ → .
+        // without relying on Regex.Escape to escape % (it doesn't).
+        var sb = new System.Text.StringBuilder("^");
+        foreach (var c in pattern)
+        {
+            switch (c)
+            {
+                case '%': sb.Append(".*"); break;
+                case '_': sb.Append('.'); break;
+                default:  sb.Append(Regex.Escape(c.ToString())); break;
+            }
+        }
+        sb.Append('$');
+        return Regex.IsMatch(value, sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.Singleline);
     }
 
     private object? GetCompareValue(string valueExpression, DbParameterCollection? parameters)

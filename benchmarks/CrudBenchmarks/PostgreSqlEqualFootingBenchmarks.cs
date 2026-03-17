@@ -42,8 +42,10 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     private IContainer _container = null!;
     private string _connStr = null!;
 
-
-    private DbDataSource? _dataSource = null;
+    // Shared DataSource for Dapper — initialized in GlobalSetup with the same
+    // MaxAutoPrepare/AutoPrepareMinUsages settings that DatabaseContext bakes in,
+    // so all three frameworks operate from identical Npgsql auto-prepare configuration.
+    private DbDataSource _dapperDataSource = null!;
 
     // pengdows.crud
     private DatabaseContext _pengdowsContext = null!;
@@ -93,9 +95,14 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
         await WaitForReadyAsync(_connStr);
 
+        // Equal-footing auto-prepare connection string — same settings DatabaseContext bakes in.
+        // Must be initialized before GetDapperEqualConnection() is called for schema/seed below.
+        // All three frameworks use identical Npgsql auto-prepare configuration.
+        var equalConnStr = _connStr + "MaxAutoPrepare=64;AutoPrepareMinUsages=2;";
+        _dapperDataSource = new NpgsqlDataSourceBuilder(equalConnStr).Build();
+
         // Schema + seed
         await using var conn = await GetDapperEqualConnection();
-
 
         await using (var cmd = conn.CreateCommand())
         {
@@ -137,7 +144,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
         // Entity Framework
         _efOptions = new DbContextOptionsBuilder<EfPgBenchContext>()
-            .UseNpgsql(_connStr)
+            .UseNpgsql(equalConnStr)
             .Options;
 
         // ---- Build reusable containers once ----
@@ -390,6 +397,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         _deleteSc?.Dispose();
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
+        _dapperDataSource?.Dispose();
         if (_container != null) await _container.DisposeAsync();
     }
 
@@ -905,24 +913,18 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     }
 
     /// <summary>
-    /// Opens an Npgsql connection and applies the same session settings that
-    /// pengdows.crud injects on every connection checkout. Without this, Dapper
-    /// benchmarks skip a round-trip that pengdows.crud always pays, making the
-    /// comparison unfair.
+    /// Opens a pooled Npgsql connection from _dapperDataSource, which is built with
+    /// MaxAutoPrepare=64/AutoPrepareMinUsages=2 — the same settings DatabaseContext bakes
+    /// in for pengdows.  All three frameworks therefore operate under identical Npgsql
+    /// auto-prepare configuration.
     /// </summary>
     private async Task<NpgsqlConnection> GetDapperEqualConnection()
     {
-        _dataSource ??= NpgsqlFactory.Instance.CreateDataSource(_connStr);
-
         NpgsqlConnection? conn = null;
         try
         {
-            conn = _dataSource.CreateConnection() as NpgsqlConnection;
+            conn = (NpgsqlConnection)_dapperDataSource.CreateConnection();
             await conn.OpenAsync();
-            await using var cmd = conn.CreateCommand();
-            // cmd.CommandText =
-            //     "SET standard_conforming_strings = on;\nSET client_min_messages = warning;\nSET default_transaction_read_only = off;";
-            // await cmd.ExecuteNonQueryAsync();
             return conn;
         }
         catch

@@ -92,8 +92,7 @@ public sealed class CoveragePush_TransactionAndLockerTests
             {
                 context.Object,
                 IsolationLevel.ReadCommitted,
-                null,
-                false
+                null
             }));
 
         Assert.IsType<InvalidOperationException>(ex.InnerException);

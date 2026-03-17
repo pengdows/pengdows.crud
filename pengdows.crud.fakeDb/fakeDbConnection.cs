@@ -47,6 +47,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
     public readonly List<string> ExecutedReaderTexts = new();
+    public readonly List<fakeDbCommand> CreatedCommands = new();
     public fakeDbCommand? LastCreatedCommand { get; private set; }
 
     /// <summary>
@@ -344,6 +345,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     IReadOnlyCollection<int> IFakeDbConnection.RemainingNonQueryResults => NonQueryResults.ToArray();
 
     IReadOnlyCollection<string> IFakeDbConnection.ExecutedNonQueryTexts => ExecutedNonQueryTexts.ToArray();
+    IReadOnlyCollection<fakeDbCommand> IFakeDbConnection.CreatedCommands => CreatedCommands.ToArray();
 
     private static Dictionary<string, object> CloneRow(Dictionary<string, object?> row)
     {
@@ -662,6 +664,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _customCommandBehavior?.Invoke();
 
         var command = new fakeDbCommand(this);
+        CreatedCommands.Add(command);
         LastCreatedCommand = command;
         return command;
     }

@@ -121,7 +121,7 @@ public class SingleWriterConnectionBehaviorTest
         var factory = new RecordingFactory();
         await using var ctx = CreateSingleWriterContext(factory);
 
-        await using var tx = ctx.BeginTransaction(readOnly: false);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
 
         Assert.True(factory.Connections.Count >= 1);
         var writeConnection = factory.Connections.Last();

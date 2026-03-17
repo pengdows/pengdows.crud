@@ -865,29 +865,29 @@ public class TableGatewayBatchTests : IAsyncLifetime
         }
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)
+            ExecutionType executionType = ExecutionType.Write)
         {
-            return _context.BeginTransaction(isolationLevel, executionType, readOnly);
+            return _context.BeginTransaction(isolationLevel, executionType);
         }
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)
+            ExecutionType executionType = ExecutionType.Write)
         {
-            return _context.BeginTransaction(isolationProfile, executionType, readOnly);
+            return _context.BeginTransaction(isolationProfile, executionType);
         }
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {
-            return _context.BeginTransactionAsync(isolationLevel, executionType, readOnly, cancellationToken);
+            return _context.BeginTransactionAsync(isolationLevel, executionType, cancellationToken);
         }
 
         public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {
-            return _context.BeginTransactionAsync(isolationProfile, executionType, readOnly, cancellationToken);
+            return _context.BeginTransactionAsync(isolationProfile, executionType, cancellationToken);
         }
 
         public string GenerateParameterName()

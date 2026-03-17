@@ -1,3 +1,10 @@
+> **⚠ Pre-fix results — Dapper and EF Core ran WITHOUT Npgsql auto-prepare.**
+> In this run `DatabaseContext` had `MaxAutoPrepare=64` baked in; Dapper and EF Core used the raw
+> connection string (`MaxAutoPrepare=0`, default — auto-prepare disabled).  The read-speed advantage
+> shown for pengdows reflects prepared-statement execution vs ad-hoc queries, not framework overhead.
+> Re-run after the fairness fix with:
+> `cd benchmarks/CrudBenchmarks && dotnet run -c Release --filter "*PostgreSqlEqualFootingBenchmarks*"`
+
 ```
 
 BenchmarkDotNet v0.14.0, Ubuntu 24.04.4 LTS (Noble Numbat)

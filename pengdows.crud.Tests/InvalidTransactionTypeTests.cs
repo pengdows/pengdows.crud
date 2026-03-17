@@ -96,21 +96,6 @@ public class InvalidTransactionTypeTests
     }
 
     // -------------------------------------------------------------------------
-    // Contradictory parameters: write=false but ExecutionType=Read
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void BeginTransaction_ReadOnlyFalse_WithReadExecutionType_ThrowsInvalidOperationException()
-    {
-        var context = new DatabaseContext(
-            $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}",
-            new fakeDbFactory(SupportedDatabase.SqlServer));
-
-        Assert.Throws<InvalidOperationException>(() =>
-            context.BeginTransaction(readOnly: false, executionType: ExecutionType.Read));
-    }
-
-    // -------------------------------------------------------------------------
     // Async path mirrors sync path for the same validations
     // -------------------------------------------------------------------------
 
@@ -147,16 +132,5 @@ public class InvalidTransactionTypeTests
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
         await Assert.ThrowsAsync<NotSupportedException>(() => context.BeginTransactionAsync());
-    }
-
-    [Fact]
-    public async Task BeginTransactionAsync_ReadOnlyFalse_WithReadExecutionType_ThrowsInvalidOperationException()
-    {
-        var context = new DatabaseContext(
-            $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}",
-            new fakeDbFactory(SupportedDatabase.SqlServer));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            context.BeginTransactionAsync(readOnly: false, executionType: ExecutionType.Read));
     }
 }

@@ -301,7 +301,7 @@ public class DatabaseContextTests
         var product = SupportedDatabase.Sqlite;
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         var expected = new IsolationResolver(product, context.RCSIEnabled, context.SnapshotIsolationEnabled)
             .Resolve(IsolationProfile.SafeNonBlockingReads);
         Assert.Equal(expected, tx.IsolationLevel);

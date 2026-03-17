@@ -83,7 +83,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         var commands = CollectCommands(factory);
@@ -109,7 +109,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Rollback();
 
         var commands = CollectCommands(factory);
@@ -134,7 +134,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         var commands = CollectCommands(factory);
@@ -159,7 +159,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Rollback();
 
         var commands = CollectCommands(factory);
@@ -183,7 +183,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         var commands = CollectCommands(factory);
@@ -208,7 +208,7 @@ public class ReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Rollback();
 
         var commands = CollectCommands(factory);
