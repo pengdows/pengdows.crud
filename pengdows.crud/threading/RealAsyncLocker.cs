@@ -126,10 +126,10 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
             return ValueTask.CompletedTask;
         }
 
-        return new ValueTask(LockAsyncSlow(cancellationToken));
+        return LockAsyncSlow(cancellationToken);
     }
 
-    private async Task LockAsyncSlow(CancellationToken cancellationToken)
+    private async ValueTask LockAsyncSlow(CancellationToken cancellationToken)
     {
         _stats?.RecordWaitStart();
         var start = Stopwatch.GetTimestamp();
@@ -208,10 +208,10 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
             return ValueTask.FromResult(true);
         }
 
-        return new ValueTask<bool>(TryLockAsyncSlow(timeout, cancellationToken));
+        return TryLockAsyncSlow(timeout, cancellationToken);
     }
 
-    private async Task<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)
+    private async ValueTask<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)
     {
         _stats?.RecordWaitStart();
         var start = Stopwatch.GetTimestamp();
