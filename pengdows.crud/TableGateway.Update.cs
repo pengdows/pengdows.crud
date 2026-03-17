@@ -32,21 +32,21 @@ namespace pengdows.crud;
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
         // Optimization: for version-less entities without original load, building is fully synchronous
         if (_versionColumn == null)
         {
-            return Task.FromResult(BuildUpdate(objectToUpdate, ctx));
+            return ValueTask.FromResult(BuildUpdate(objectToUpdate, ctx));
         }
         
         return BuildUpdateAsync(objectToUpdate, true, ctx, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+    public async ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         if (objectToUpdate == null)
@@ -138,12 +138,12 @@ public partial class TableGateway<TEntity, TRowID>
         return sc;
     }
 
-    private Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    private ValueTask<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         return LoadOriginalAsync(objectToUpdate, context, CancellationToken.None);
     }
 
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context,
+    private async ValueTask<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;

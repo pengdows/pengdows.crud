@@ -207,7 +207,7 @@ public class MagicStringRegressionTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         var helper = new TableGateway<PinEntity, int>(ctx);
         var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            helper.RetrieveAsync(Array.Empty<int>()));
+            helper.RetrieveAsync(Array.Empty<int>()).AsTask());
         Assert.StartsWith("List of IDs cannot be empty.", ex.Message);
         Assert.Equal("ids", ex.ParamName);
     }
@@ -218,7 +218,7 @@ public class MagicStringRegressionTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         var helper = new TableGateway<PinEntity, int>(ctx);
         var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            helper.DeleteAsync(Array.Empty<int>()));
+            helper.DeleteAsync(Array.Empty<int>()).AsTask());
         Assert.StartsWith("List of IDs cannot be empty.", ex.Message);
         Assert.Equal("ids", ex.ParamName);
     }

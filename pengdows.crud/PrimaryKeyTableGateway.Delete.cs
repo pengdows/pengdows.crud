@@ -71,7 +71,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public async ValueTask<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entities == null)
@@ -179,7 +179,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    public async ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entities == null)

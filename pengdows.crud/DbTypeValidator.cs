@@ -88,14 +88,18 @@ internal static class DbTypeValidator
     internal static void Validate(DbType dbType, Type? clrType)
     {
         if (clrType == null)
+        {
             return; // value was null — always valid
+        }
 
         // clrType is already nullable-unwrapped by ResolveClrType.
 
         if (clrType.IsEnum)
         {
             if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)
+            {
                 return;
+            }
 
             throw new ArgumentException(
                 $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
@@ -103,12 +107,16 @@ internal static class DbTypeValidator
         }
 
         if (dbType == DbType.Object)
+        {
             return;
+        }
 
         if (NumericDbTypes.Contains(dbType))
         {
             if (NumericTypes.Contains(clrType))
+            {
                 return;
+            }
 
             throw new ArgumentException(
                 $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
@@ -118,7 +126,9 @@ internal static class DbTypeValidator
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
             if (acceptable.Count == 0 || acceptable.Contains(clrType))
+            {
                 return;
+            }
 
             throw new ArgumentException(
                 $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
@@ -147,7 +157,9 @@ internal static class DbTypeValidator
     internal static void Validate(DbType dbType, object? value)
     {
         if (value == null || value is DBNull)
+        {
             return;
+        }
 
         var clrType = value.GetType();
 
@@ -158,7 +170,9 @@ internal static class DbTypeValidator
         if (clrType.IsEnum)
         {
             if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)
+            {
                 return;
+            }
 
             throw new ArgumentException(
                 $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
@@ -167,14 +181,18 @@ internal static class DbTypeValidator
 
         // DbType.Object accepts anything
         if (dbType == DbType.Object)
+        {
             return;
+        }
 
         // Any numeric CLR type is accepted for any numeric DbType.
         // The provider handles narrowing and will throw on overflow at execution time.
         if (NumericDbTypes.Contains(dbType))
         {
             if (NumericTypes.Contains(clrType))
+            {
                 return;
+            }
 
             // Non-numeric CLR type with numeric DbType — reject
             throw new ArgumentException(
@@ -186,7 +204,9 @@ internal static class DbTypeValidator
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
             if (acceptable.Count == 0 || acceptable.Contains(clrType))
+            {
                 return; // Empty set (Object) or explicit match
+            }
 
             throw new ArgumentException(
                 $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +

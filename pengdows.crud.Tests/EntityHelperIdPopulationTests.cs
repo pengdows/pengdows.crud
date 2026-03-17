@@ -134,7 +134,7 @@ public class TableGatewayIdPopulationTests
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity).AsTask());
     }
 
     [Fact]

@@ -167,7 +167,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var gateway = new TableGateway<TestDeleteIdOnlyEntity, int>(_sqliteContext);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => gateway.BatchDeleteAsync(new[] { 1, 2, 3 }));
+        var exception = await Record.ExceptionAsync(() => gateway.BatchDeleteAsync(new[] { 1, 2, 3 }).AsTask());
 
         // Assert
         Assert.Null(exception);

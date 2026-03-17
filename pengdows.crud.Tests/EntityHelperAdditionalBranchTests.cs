@@ -90,7 +90,7 @@ public class TableGatewayAdditionalBranchTests : RealSqliteContextTestBase
         Assert.NotNull(loaded);
 
         // No changes to Name/Version
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true).AsTask());
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class TableGatewayAdditionalBranchTests : RealSqliteContextTestBase
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
         var helper = new TableGateway<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
-        var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true));
+        var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true).AsTask());
         Assert.NotNull(ex);
         Assert.IsAssignableFrom<DbException>(ex);
         Assert.Contains("Simulated database error", ex!.Message);

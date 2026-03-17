@@ -26,7 +26,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
         var gateway = new TableGateway<NoIdEntity, string>(Context);
         var entity = new NoIdEntity { Key = "k1", Name = "n1" };
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => gateway.BuildUpdateAsync(entity, false, Context));
+        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => gateway.BuildUpdateAsync(entity, false, Context).AsTask());
         Assert.Contains("Id column", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 

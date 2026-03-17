@@ -16,7 +16,7 @@ namespace pengdows.crud;
 public partial class PrimaryKeyTableGateway<TEntity>
 {
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (objectToUpdate == null)
@@ -25,11 +25,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
-        return Task.FromResult(BuildUpdateByPk(objectToUpdate, ctx));
+        return ValueTask.FromResult(BuildUpdateByPk(objectToUpdate, ctx));
     }
 
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+    public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         // TODO: PrimaryKeyTableGateway does not support loading the original entity by row ID
@@ -38,7 +38,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (objectToUpdate == null)
@@ -51,7 +51,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+    public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         await using var sc =
@@ -99,7 +99,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public async ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entities == null)

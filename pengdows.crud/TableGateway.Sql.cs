@@ -388,9 +388,17 @@ public partial class TableGateway<TEntity, TRowID>
 
     private CachedContainerTemplates GetContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
     {
-        return _containersByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
-                BuildCachedContainerTemplatesForDialect(dialect, context)))
-            .Value;
+        try
+        {
+            return _containersByDialect
+                .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
+                    BuildCachedContainerTemplatesForDialect(dialect, context)))
+                .Value;
+        }
+        catch (Exception ex)
+        {
+            throw new exceptions.TemplateInitializationException(
+                $"Failed to build SQL container templates for {dialect.DatabaseType}.", ex);
+        }
     }
 }

@@ -156,7 +156,7 @@ public class AuditTimestampOptionsTests : SqlLiteContextTestBase
 
         var entity = new DateTimeOffsetAuditEntity { Name = "utc-check" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreateAsync(entity, Context));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreateAsync(entity, Context).AsTask());
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class AuditTimestampOptionsTests : SqlLiteContextTestBase
 
         var entity = new DateTimeOffsetAuditEntity { Name = "message-check" };
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreateAsync(entity, Context));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreateAsync(entity, Context).AsTask());
 
         // Message must mention TimeSpan.Zero requirement and the actual offset value.
         Assert.Contains("TimeSpan.Zero", ex.Message);

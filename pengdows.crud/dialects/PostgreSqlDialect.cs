@@ -441,6 +441,11 @@ internal class PostgreSqlDialect : SqlDialect
     /// User-supplied options for other keys are preserved; our keys are
     /// always overridden to ensure deterministic startup state.
     /// </summary>
+    /// <remarks>
+    /// SECURITY: <paramref name="existing"/> must come from a trusted source (the
+    /// connection string provided by the application).  This method does not
+    /// sanitize arbitrary user-supplied values; never pass end-user input here.
+    /// </remarks>
     private string MergeStartupOptions(string existing, bool readOnly)
     {
         // Parse existing "-c key=value" tokens into an ordered list so we can

@@ -43,16 +43,16 @@ public interface IPrimaryKeyTableGateway<TEntity>
     ISqlContainer BuildCreate(TEntity objectToCreate, IDatabaseContext? context = null);
 
     /// <summary>Executes a SQL INSERT. Returns true when exactly one row was affected.</summary>
-    Task<bool> CreateAsync(TEntity entity);
+    ValueTask<bool> CreateAsync(TEntity entity);
 
     /// <summary>Executes a SQL INSERT with optional context and cancellation support.</summary>
-    Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+    ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Inserts a list of entities. Delegates to <see cref="BatchCreateAsync"/>.
     /// </summary>
-    Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchCreateAsync(entities, context, cancellationToken);
 
@@ -84,7 +84,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Retrieves a single entity by its <c>[PrimaryKey]</c> column values.
     /// </summary>
-    Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+    ValueTask<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     // =========================================================================
@@ -94,31 +94,31 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Builds an UPDATE statement. WHERE clause is built from <c>[PrimaryKey]</c> columns.
     /// </summary>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Builds an UPDATE statement, optionally reloading the original row first.
     /// </summary>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+    ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Executes an UPDATE keyed on <c>[PrimaryKey]</c> columns. Returns rows affected.
     /// </summary>
-    Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Executes an UPDATE, optionally reloading original. Returns rows affected.
     /// </summary>
-    Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Updates a list of entities. Delegates to <see cref="BatchUpdateAsync"/>.
     /// </summary>
-    Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpdateAsync(entities, context, cancellationToken);
 
@@ -135,14 +135,14 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Executes DELETE for all given entities (by <c>[PrimaryKey]</c>). Returns rows affected.
     /// </summary>
-    Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes the given entities by <c>[PrimaryKey]</c>. Delegates to
     /// <see cref="BatchDeleteAsync(IReadOnlyCollection{TEntity}, IDatabaseContext?, CancellationToken)"/>.
     /// </summary>
-    Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchDeleteAsync(entities, context, cancellationToken);
 
@@ -158,13 +158,13 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Executes a provider-specific UPSERT keyed on <c>[PrimaryKey]</c> columns.
     /// </summary>
-    Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
+    ValueTask<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Upserts a list of entities. Delegates to <see cref="BatchUpsertAsync"/>.
     /// </summary>
-    Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpsertAsync(entities, context, cancellationToken);
 
@@ -173,16 +173,16 @@ public interface IPrimaryKeyTableGateway<TEntity>
     // =========================================================================
 
     /// <summary>Executes the container and returns the first mapped entity, or null.</summary>
-    Task<TEntity?> LoadSingleAsync(ISqlContainer sc);
+    ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc);
 
     /// <inheritdoc cref="LoadSingleAsync(ISqlContainer)"/>
-    Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken);
+    ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
     /// <summary>Executes the container and returns all mapped entities.</summary>
-    Task<List<TEntity>> LoadListAsync(ISqlContainer sc);
+    ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc);
 
     /// <inheritdoc cref="LoadListAsync(ISqlContainer)"/>
-    Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken);
+    ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
     /// <summary>Streams entities from the container without materializing the full result set.</summary>
     IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc);
@@ -199,7 +199,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>Executes a batch INSERT. Returns total rows affected.</summary>
-    Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Builds one or more batch UPDATE statements keyed on <c>[PrimaryKey]</c>.</summary>
@@ -207,7 +207,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>Executes a batch UPDATE keyed on <c>[PrimaryKey]</c>. Returns total rows affected.</summary>
-    Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>Builds one or more batch UPSERT statements keyed on <c>[PrimaryKey]</c>.</summary>
@@ -215,7 +215,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>Executes a batch UPSERT keyed on <c>[PrimaryKey]</c>. Returns total rows affected.</summary>
-    Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     // =========================================================================

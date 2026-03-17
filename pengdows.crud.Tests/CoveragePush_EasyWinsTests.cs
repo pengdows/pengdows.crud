@@ -128,7 +128,7 @@ public class CoveragePush_EasyWinsTests
         var gateway = new TableGateway<TestEntitySimple, int>(ctx);
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => gateway.CreateAsync((TestEntitySimple)null!, null, CancellationToken.None));
+            () => gateway.CreateAsync((TestEntitySimple)null!, null, CancellationToken.None).AsTask());
     }
 
     // =========================================================================

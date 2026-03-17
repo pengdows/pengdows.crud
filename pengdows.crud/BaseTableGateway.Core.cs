@@ -203,13 +203,24 @@ public abstract partial class BaseTableGateway<TEntity>
         if (_hasAuditColumns)
         {
             if (_tableInfo.LastUpdatedOn?.PropertyInfo != null)
+            {
                 _auditLastUpdatedOnSetter = GetOrCreateSetter(_tableInfo.LastUpdatedOn.PropertyInfo);
+            }
+
             if (_tableInfo.LastUpdatedBy?.PropertyInfo != null)
+            {
                 _auditLastUpdatedBySetter = GetOrCreateSetter(_tableInfo.LastUpdatedBy.PropertyInfo);
+            }
+
             if (_tableInfo.CreatedOn?.PropertyInfo != null)
+            {
                 _auditCreatedOnSetter = GetOrCreateSetter(_tableInfo.CreatedOn.PropertyInfo);
+            }
+
             if (_tableInfo.CreatedBy?.PropertyInfo != null)
+            {
                 _auditCreatedBySetter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
+            }
         }
 
         EnumParseBehavior = enumParseBehavior;
@@ -220,13 +231,13 @@ public abstract partial class BaseTableGateway<TEntity>
     // =========================================================================
 
     /// <inheritdoc/>
-    public Task<TEntity?> LoadSingleAsync(ISqlContainer sc)
+    public ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         return LoadSingleAsync(sc, CancellationToken.None);
     }
 
     /// <inheritdoc/>
-    public async Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken)
+    public async ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
         {
@@ -244,13 +255,13 @@ public abstract partial class BaseTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public Task<List<TEntity>> LoadListAsync(ISqlContainer sc)
+    public ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc)
     {
         return LoadListAsync(sc, CancellationToken.None);
     }
 
     /// <inheritdoc/>
-    public async Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken)
+    public async ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken)
     {
         if (sc == null)
         {

@@ -77,7 +77,7 @@ public class TableGatewayCreateAsyncErrorTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            helper.CreateAsync(entity));
+            helper.CreateAsync(entity).AsTask());
 
         Assert.Equal("Connection timeout", exception.Message);
     }
@@ -95,7 +95,7 @@ public class TableGatewayCreateAsyncErrorTests
         var entity = new TestEntity { Name = "Duplicate" };
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity).AsTask());
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class TableGatewayCreateAsyncErrorTests
         var helper = new TableGateway<TestEntity, int>(context);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!).AsTask());
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class TableGatewayCreateAsyncErrorTests
         var entity = new TestEntitySimple { Name = "Test" };
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => helper.CreateAsync(entity));
+        await Assert.ThrowsAsync<ArgumentException>(() => helper.CreateAsync(entity).AsTask());
     }
 
     [Fact]

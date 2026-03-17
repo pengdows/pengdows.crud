@@ -86,7 +86,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchCreateAsync(
+    public async ValueTask<int> BatchCreateAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
@@ -125,22 +125,22 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchCreateAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpdateAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpsertAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<int> BatchUpdateAsync(
+    public async ValueTask<int> BatchUpdateAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
@@ -350,7 +350,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchUpsertAsync(
+    public async ValueTask<int> BatchUpsertAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {

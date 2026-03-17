@@ -77,7 +77,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync((TestEntity)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpdateAsync((TestEntity)null!).AsTask());
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync((TestEntity)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.UpsertAsync((TestEntity)null!).AsTask());
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, Context));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, Context).AsTask());
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.DeleteAsync((IEnumerable<long>)null!).AsTask());
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => helper.DeleteAsync(new long[0]));
+        await Assert.ThrowsAsync<ArgumentException>(() => helper.DeleteAsync(new long[0]).AsTask());
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveAsync(null!).AsTask());
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => helper.RetrieveAsync(new long[0]));
+        await Assert.ThrowsAsync<ArgumentException>(() => helper.RetrieveAsync(new long[0]).AsTask());
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
         var helper = new TableGateway<TestEntity, long>(Context);
         var entity = new TestEntity { Id = 999, Name = "NonExistent" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.UpdateAsync(entity, true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.UpdateAsync(entity, true).AsTask());
     }
 
     [Fact]
@@ -217,7 +217,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadSingleAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadSingleAsync(null!).AsTask());
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadListAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.LoadListAsync(null!).AsTask());
     }
 
     [Fact]
@@ -272,6 +272,6 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     {
         var helper = new TableGateway<TestEntity, long>(Context);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.RetrieveOneAsync(null!).AsTask());
     }
 }

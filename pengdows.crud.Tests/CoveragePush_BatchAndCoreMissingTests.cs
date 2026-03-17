@@ -193,7 +193,7 @@ public class CoveragePush_BatchAndCoreMissingTests : IAsyncLifetime
         // RetrieveOneAsync(TRowID) throws at lines 1247-1248 in Core.cs.
         var gateway = new TableGateway<PkOnlyEntity, int>(_sqliteContext);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => gateway.RetrieveOneAsync(1));
+            () => gateway.RetrieveOneAsync(1).AsTask());
         Assert.Contains("designated Id column", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 

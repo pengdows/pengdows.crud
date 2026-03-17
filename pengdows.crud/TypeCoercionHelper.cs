@@ -1038,7 +1038,9 @@ public static class TypeCoercionHelper
                 {
                     var read = reader.GetBytes(ordinal, 0, temp, 0, 16);
                     if (read < 16)
+                    {
                         throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
+                    }
                     return new Guid(temp.AsSpan(0, 16));
                 }
                 finally

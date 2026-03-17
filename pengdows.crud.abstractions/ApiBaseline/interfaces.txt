@@ -53,10 +53,10 @@ method pengdows.crud.IDatabaseContextFactory::Create(pengdows.crud.configuration
 method pengdows.crud.IEphemeralSecureString::Reveal() -> string
 method pengdows.crud.IEphemeralSecureString::WithRevealed(System.Action`1<string>) -> void
 method pengdows.crud.IEphemeralSecureString::WithRevealedAsync(System.Func`2<string, System.Threading.Tasks.ValueTask>) -> System.Threading.Tasks.ValueTask
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildBaseRetrieve(string, System.Collections.Generic.IReadOnlyCollection`1<string>, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildBaseRetrieve(string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildBatchCreate(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
@@ -66,32 +66,32 @@ method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildBatchUpsert(System
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildCreate(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ISqlContainer>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpsert(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildWhereByPrimaryKey(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.ISqlContainer, string) -> void
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountAllAsync(pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountWhereAsync(string, string, bool, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountWhereEqualsAsync(string, string, string, string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountWhereNullAsync(string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(TEntity) -> System.Threading.Tasks.Task`1<bool>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::DeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(TEntity) -> System.Threading.Tasks.ValueTask`1<bool>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CreateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::DeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::GetOrCreateSetter(System.Reflection.PropertyInfo) -> System.Action`2<object, object>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadListAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadListAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadSingleAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.Task`1<TEntity>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadSingleAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadListAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<TEntity>>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadListAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<TEntity>>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadSingleAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.ValueTask`1<TEntity>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadSingleAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<TEntity>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadStreamAsync(pengdows.crud.ISqlContainer) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::LoadStreamAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::MapReaderToObject(pengdows.crud.wrappers.ITrackedReader) -> TEntity
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<TEntity>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ISqlContainer::AddParameter(System.Data.Common.DbParameter) -> void
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
@@ -147,11 +147,11 @@ method pengdows.crud.ISqlQueryBuilder::AppendLine(string) -> pengdows.crud.ISqlQ
 method pengdows.crud.ISqlQueryBuilder::Clear() -> pengdows.crud.ISqlQueryBuilder
 method pengdows.crud.ISqlQueryBuilder::Replace(string, string) -> pengdows.crud.ISqlQueryBuilder
 method pengdows.crud.ISqlQueryBuilder::ToString() -> string
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BatchUpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBaseRetrieve(string, System.Collections.Generic.IReadOnlyCollection`1<string>, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBaseRetrieve(string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildBatchCreate(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext) -> System.Collections.Generic.IReadOnlyList`1<pengdows.crud.ISqlContainer>
@@ -165,8 +165,8 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildRetrieve(System.Coll
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TRowID>, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildRetrieve(System.Collections.Generic.IReadOnlyCollection`1<TRowID>, string, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ISqlContainer>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ISqlContainer>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpsert(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhere(string, System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.ISqlContainer) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhereByPrimaryKey(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.ISqlContainer, string) -> void
@@ -174,29 +174,29 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountAllAsync(pengdows.cr
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountWhereAsync(string, string, bool, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountWhereEqualsAsync(string, string, string, string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountWhereNullAsync(string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity) -> System.Threading.Tasks.Task`1<bool>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<bool>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity) -> System.Threading.Tasks.ValueTask`1<bool>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CreateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::DeleteAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::GetOrCreateSetter(System.Reflection.PropertyInfo) -> System.Action`2<object, object>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadListAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadListAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.Task`1<TEntity>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadListAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<TEntity>>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadListAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<TEntity>>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.crud.ISqlContainer) -> System.Threading.Tasks.ValueTask`1<TEntity>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadSingleAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadStreamAsync(pengdows.crud.ISqlContainer) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::LoadStreamAsync(pengdows.crud.ISqlContainer, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::MapReaderToObject(pengdows.crud.wrappers.ITrackedReader) -> TEntity
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<System.Collections.Generic.List`1<TEntity>>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<TEntity>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<System.Collections.Generic.List`1<TEntity>>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<TEntity>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveOneAsync(TRowID, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<TEntity>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::RetrieveStreamAsync(System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<TEntity>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
-method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, bool, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITransactionContext::Commit() -> void
 method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
 method pengdows.crud.ITransactionContext::Rollback() -> void

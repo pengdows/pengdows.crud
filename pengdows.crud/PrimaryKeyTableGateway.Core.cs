@@ -227,10 +227,10 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     }
 
     /// <inheritdoc/>
-    public Task<bool> CreateAsync(TEntity entity) => CreateAsync(entity, null, CancellationToken.None);
+    public ValueTask<bool> CreateAsync(TEntity entity) => CreateAsync(entity, null, CancellationToken.None);
 
     /// <inheritdoc/>
-    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+    public async ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entity == null)
@@ -248,7 +248,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // =========================================================================
 
     /// <inheritdoc/>
-    public async Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+    public async ValueTask<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (objectToRetrieve == null)

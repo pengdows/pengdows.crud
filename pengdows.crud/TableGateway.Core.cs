@@ -105,13 +105,13 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     /// <inheritdoc/>
-    public Task<bool> CreateAsync(TEntity entity)
+    public ValueTask<bool> CreateAsync(TEntity entity)
     {
         return CreateAsync(entity, _context);
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null)
+    public async ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null)
     {
         if (entity == null)
         {
@@ -208,7 +208,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+    public async ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entity == null)
@@ -665,7 +665,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
+    public async ValueTask<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
@@ -674,7 +674,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    public async ValueTask<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (ids == null)
@@ -743,22 +743,13 @@ public partial class TableGateway<TEntity, TRowID> :
                 return await LoadListAsync(container, cancellationToken).ConfigureAwait(false);
             }
 
-            if (dialect.SupportsSetValuedParameters)
-            {
-                // Prefer dynamic build for array-capable dialects to avoid provider type mismatches
-                await using var sc = BuildRetrieve(list, ctx);
-                return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                // Fall back to dynamic BuildRetrieve for larger lists on non-array dialects
-                await using var sc = BuildRetrieve(list, ctx);
-                return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
-            }
+            // For n>2: BuildRetrieve handles dialect-specific parameterization internally
+            await using var sc = BuildRetrieve(list, ctx);
+            return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex.Message.Contains("Original record not found"))
+        catch (exceptions.TemplateInitializationException)
         {
-            // Fall back to traditional method during template building or other issues
+            // Template build failed for this dialect; fall back to direct BuildRetrieve path
             await using var sc = BuildRetrieve(list, ctx);
             return await LoadListAsync(sc, cancellationToken).ConfigureAwait(false);
         }
@@ -836,9 +827,9 @@ public partial class TableGateway<TEntity, TRowID> :
             // Fall back to dynamic BuildRetrieve for larger lists
             return BuildRetrieve(list, ctx);
         }
-        catch (Exception ex) when (ex.Message.Contains("Original record not found"))
+        catch (exceptions.TemplateInitializationException)
         {
-            // Fall back to traditional method during template building or other issues
+            // Template build failed for this dialect; fall back to direct BuildRetrieve path
             return BuildRetrieve(list, ctx);
         }
     }
@@ -884,7 +875,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
     /// <inheritdoc/>
     /// <inheritdoc/>
-    public async Task<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    public async ValueTask<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var containers = BuildBatchDelete(ids, context);
@@ -902,12 +893,12 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    public ValueTask<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchDeleteAsync(ids, context, cancellationToken);
 
     /// <inheritdoc/>
-    public Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchDeleteAsync(entities, context, cancellationToken);
 
@@ -945,7 +936,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    public async ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entities == null)
@@ -1044,7 +1035,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     /// <inheritdoc/>
-    public async Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+    public async ValueTask<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (objectToRetrieve == null)
@@ -1059,7 +1050,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
+    public async ValueTask<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
@@ -1115,7 +1106,7 @@ public partial class TableGateway<TEntity, TRowID> :
     // moved to TableGateway.Update.cs
 
     /// <inheritdoc/>
-    public Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    public ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
@@ -1123,7 +1114,7 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+    public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
