@@ -876,14 +876,14 @@ public class TableGatewayBatchTests : IAsyncLifetime
             return _context.BeginTransaction(isolationProfile, executionType);
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
             ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {
             return _context.BeginTransactionAsync(isolationLevel, executionType, cancellationToken);
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {

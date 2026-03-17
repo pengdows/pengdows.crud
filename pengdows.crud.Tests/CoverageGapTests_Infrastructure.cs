@@ -162,11 +162,11 @@ public class CoverageGapTests_Infrastructure
             ExecutionType executionType = ExecutionType.Write) =>
             throw new NotImplementedException();
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
             ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 

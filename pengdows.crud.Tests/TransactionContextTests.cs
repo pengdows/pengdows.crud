@@ -412,14 +412,14 @@ public class TransactionContextTests
             throw new NotSupportedException();
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
             ExecutionType executionType,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType,
             CancellationToken cancellationToken = default)
         {
@@ -958,7 +958,7 @@ public class TransactionContextTests
         var method =
             typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        await (Task)method!.Invoke(tx, null)!;
+        await (ValueTask)method!.Invoke(tx, null)!;
 
         Assert.True(tx.WasRolledBack);
         Assert.True(tx.IsCompleted);
@@ -972,10 +972,10 @@ public class TransactionContextTests
         var method =
             typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        await (Task)method!.Invoke(tx, null)!;
+        await (ValueTask)method!.Invoke(tx, null)!;
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await (Task)method.Invoke(tx, null)!);
+            await (ValueTask)method.Invoke(tx, null)!);
     }
 
     [Fact]

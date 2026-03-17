@@ -56,14 +56,14 @@ internal interface ITrackedConnection : IDbConnection
     /// Begins a transaction asynchronously with the default isolation level.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    ValueTask<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Begins a transaction asynchronously with the specified isolation level.
     /// </summary>
     /// <param name="isolationLevel">Isolation level to use.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+    ValueTask<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -91,7 +91,7 @@ internal interface ITrackedConnection : IDbConnection
     /// Opens the connection asynchronously.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task OpenAsync(CancellationToken cancellationToken = default);
+    ValueTask OpenAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets schema information for the specified collection name.

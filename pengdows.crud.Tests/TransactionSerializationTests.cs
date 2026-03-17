@@ -106,7 +106,7 @@ public class TransactionSerializationTests
         await tx.CommitAsync();
 
         // Second async completion attempt throws
-        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await tx.CommitAsync());
 
         tx.Dispose();
     }

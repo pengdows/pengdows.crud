@@ -61,7 +61,7 @@ public partial class DatabaseContext
     }
 
     /// <inheritdoc/>
-    public async Task<ITransactionContext> BeginTransactionAsync(
+    public async ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default)
@@ -72,7 +72,7 @@ public partial class DatabaseContext
     }
 
     /// <inheritdoc/>
-    public async Task<ITransactionContext> BeginTransactionAsync(
+    public async ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default)

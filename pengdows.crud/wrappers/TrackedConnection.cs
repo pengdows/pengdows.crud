@@ -422,7 +422,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         }
     }
 
-    private async Task TriggerFirstOpenAsync(CancellationToken cancellationToken)
+    private async ValueTask TriggerFirstOpenAsync(CancellationToken cancellationToken)
     {
         if (Interlocked.Exchange(ref _wasOpened, 1) != 0)
         {
@@ -435,7 +435,7 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
             _onFirstOpen?.Invoke(this);
     }
 
-    public async Task OpenAsync(CancellationToken cancellationToken = default)
+    public async ValueTask OpenAsync(CancellationToken cancellationToken = default)
     {
         var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
         var shouldTime = debugEnabled || _metricsCollector != null;
@@ -658,12 +658,12 @@ public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, II
         return _connection.BeginTransaction(isolationLevel);
     }
 
-    public async Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        return await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        return BeginTransactionAsync(IsolationLevel.Unspecified, cancellationToken);
     }
 
-    public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+    public async ValueTask<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
         CancellationToken cancellationToken = default)
     {
         return await _connection.BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);

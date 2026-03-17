@@ -36,8 +36,8 @@ method pengdows.crud.IDataReaderMapper::StreamAsync<T>(pengdows.crud.wrappers.IT
 method pengdows.crud.IDataSourceInformation::GetCompatibilityWarning() -> string
 method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
-method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ITransactionContext>
-method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.ITransactionContext>
+method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
+method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
@@ -198,13 +198,13 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpdateAsync(TEntity, peng
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITransactionContext::Commit() -> void
-method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
+method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.ITransactionContext::Rollback() -> void
-method pengdows.crud.ITransactionContext::RollbackAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.Task
-method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string) -> System.Threading.Tasks.Task
-method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task
-method pengdows.crud.ITransactionContext::SavepointAsync(string) -> System.Threading.Tasks.Task
-method pengdows.crud.ITransactionContext::SavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task
+method pengdows.crud.ITransactionContext::RollbackAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::SavepointAsync(string) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::SavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.ITypeMapRegistry::GetTableInfo<T>() -> pengdows.crud.ITableInfo
 method pengdows.crud.configuration.IDbProviderLoader::LoadAndRegisterProviders(Microsoft.Extensions.DependencyInjection.IServiceCollection) -> void
 method pengdows.crud.connection.IConnectionLocalState::DisablePrepare() -> void

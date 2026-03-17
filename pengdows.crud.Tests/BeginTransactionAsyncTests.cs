@@ -150,7 +150,7 @@ public class BeginTransactionAsyncTests
         await using var tx = await context.BeginTransactionAsync();
 
         // Nested BeginTransactionAsync should throw
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransactionAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await ((IDatabaseContext)tx).BeginTransactionAsync());
 
         await tx.CommitAsync();
     }
@@ -231,7 +231,7 @@ public class BeginTransactionAsyncTests
         Task<ITransactionContext>? task = null;
         var syncEx = Record.Exception(() =>
         {
-            task = ((IDatabaseContext)tx).BeginTransactionAsync();
+            task = ((IDatabaseContext)tx).BeginTransactionAsync().AsTask();
         });
 
         // The exception must NOT have been thrown synchronously.
@@ -293,7 +293,7 @@ public class BeginTransactionAsyncTests
         Task<ITransactionContext>? task = null;
         var syncEx = Record.Exception(() =>
         {
-            task = ((IDatabaseContext)tx).BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+            task = ((IDatabaseContext)tx).BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads).AsTask();
         });
 
         Assert.Null(syncEx);

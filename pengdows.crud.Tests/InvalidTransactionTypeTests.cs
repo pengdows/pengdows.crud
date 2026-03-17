@@ -106,8 +106,8 @@ public class InvalidTransactionTypeTests
             $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(() =>
-            context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
+            await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public class InvalidTransactionTypeTests
             $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            context.BeginTransactionAsync(IsolationLevel.ReadUncommitted));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await context.BeginTransactionAsync(IsolationLevel.ReadUncommitted));
     }
 
     [Fact]
@@ -131,6 +131,6 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => context.BeginTransactionAsync());
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await context.BeginTransactionAsync());
     }
 }

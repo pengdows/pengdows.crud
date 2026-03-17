@@ -60,14 +60,14 @@ public class TrackedReaderTests
         {
         }
 
-        public Task OpenAsync()
+        public ValueTask OpenAsync()
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
-        public Task OpenAsync(CancellationToken cancellationToken)
+        public ValueTask OpenAsync(CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
         public IDbTransaction BeginTransaction()
@@ -80,12 +80,12 @@ public class TrackedReaderTests
             throw new NotImplementedException();
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+        public ValueTask<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
             CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();

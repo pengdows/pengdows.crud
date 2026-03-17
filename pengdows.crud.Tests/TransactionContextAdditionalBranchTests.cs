@@ -143,15 +143,15 @@ public class TransactionContextAdditionalBranchTests
             return new StubTransaction(this, isolationLevel);
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(BeginTransaction());
+            return new ValueTask<IDbTransaction>(BeginTransaction());
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+        public ValueTask<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(BeginTransaction(isolationLevel));
+            return new ValueTask<IDbTransaction>(BeginTransaction(isolationLevel));
         }
 
         public void ChangeDatabase(string databaseName)
@@ -175,10 +175,10 @@ public class TransactionContextAdditionalBranchTests
             _state = ConnectionState.Open;
         }
 
-        public Task OpenAsync(CancellationToken cancellationToken = default)
+        public ValueTask OpenAsync(CancellationToken cancellationToken = default)
         {
             _state = ConnectionState.Open;
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
         public DataTable GetSchema(string dataSourceInformation)

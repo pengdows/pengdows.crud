@@ -369,7 +369,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         cmd.ExecuteNonQuery();
     }
 
-    internal async Task ExecuteSessionNonQueryAsync(string sql)
+    internal async ValueTask ExecuteSessionNonQueryAsync(string sql)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -407,7 +407,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task TryResetReadOnlySessionAsync()
+    private async ValueTask TryResetReadOnlySessionAsync()
     {
         if (_isReadOnly && _dialect is SqlDialect sd)
         {
@@ -483,17 +483,17 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
+    ValueTask<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
         ExecutionType executionType, CancellationToken cancellationToken)
     {
-        return Task.FromException<ITransactionContext>(
+        return ValueTask.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
-    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
+    ValueTask<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
         ExecutionType executionType, CancellationToken cancellationToken)
     {
-        return Task.FromException<ITransactionContext>(
+        return ValueTask.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
@@ -547,13 +547,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         CommitAsync().GetAwaiter().GetResult();
     }
 
-    public Task CommitAsync(CancellationToken cancellationToken = default)
+    public ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return CompleteTransactionWithWaitAsync(() =>
         {
             _transaction.Commit();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }, true, cancellationToken);
     }
 
@@ -564,23 +564,23 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         RollbackAsync().GetAwaiter().GetResult();
     }
 
-    public Task RollbackAsync(CancellationToken cancellationToken = default)
+    public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return CompleteTransactionWithWaitAsync(() =>
         {
             _transaction.Rollback();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }, false, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public Task SavepointAsync(string name)
+    public ValueTask SavepointAsync(string name)
     {
         return SavepointAsync(name, default);
     }
 
-    public async Task SavepointAsync(string name, CancellationToken cancellationToken = default)
+    public async ValueTask SavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -601,12 +601,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     /// <inheritdoc/>
-    public Task RollbackToSavepointAsync(string name)
+    public ValueTask RollbackToSavepointAsync(string name)
     {
         return RollbackToSavepointAsync(name, default);
     }
 
-    public async Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
+    public async ValueTask RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -648,7 +648,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
+    private async ValueTask CompleteTransactionWithWaitAsync(Func<ValueTask> action, bool markCommitted,
         CancellationToken cancellationToken = default)
     {
         if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken)
@@ -702,7 +702,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
+    private async ValueTask CompleteTransactionAsync(Func<ValueTask> action, bool markCommitted)
     {
         if (Interlocked.Exchange(ref _completedState, 1) != 0)
         {
@@ -758,7 +758,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     // Kept for backward compatibility with existing internal calls
-    private Task RollbackAsync()
+    private ValueTask RollbackAsync()
     {
         return RollbackAsync(default);
     }
@@ -824,7 +824,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                         await CompleteTransactionAsync(() =>
                         {
                             _transaction.Rollback();
-                            return Task.CompletedTask;
+                            return ValueTask.CompletedTask;
                         }, false).ConfigureAwait(false);
                     }
                     finally
@@ -888,7 +888,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     // Internal async factory used by DatabaseContext
-    internal static async Task<TransactionContext> CreateAsync(
+    internal static async ValueTask<TransactionContext> CreateAsync(
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
@@ -926,7 +926,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return tx;
     }
 
-    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+    private static async ValueTask OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
         ITrackedConnection connection,
         CancellationToken cancellationToken)
     {

@@ -43,7 +43,7 @@ public interface ITransactionContext : IDatabaseContext
     /// Commits the transaction asynchronously.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task CommitAsync(CancellationToken cancellationToken = default);
+    ValueTask CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Rolls back the transaction.
@@ -54,20 +54,20 @@ public interface ITransactionContext : IDatabaseContext
     /// Rolls back the transaction asynchronously.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task RollbackAsync(CancellationToken cancellationToken = default);
+    ValueTask RollbackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a named savepoint within the transaction scope.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
-    Task SavepointAsync(string name);
+    ValueTask SavepointAsync(string name);
 
     /// <summary>
     /// Creates a named savepoint within the transaction scope.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task SavepointAsync(string name, CancellationToken cancellationToken)
+    ValueTask SavepointAsync(string name, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return SavepointAsync(name);
@@ -77,14 +77,14 @@ public interface ITransactionContext : IDatabaseContext
     /// Rolls back the transaction to the specified savepoint.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
-    Task RollbackToSavepointAsync(string name);
+    ValueTask RollbackToSavepointAsync(string name);
 
     /// <summary>
     /// Rolls back the transaction to the specified savepoint.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken)
+    ValueTask RollbackToSavepointAsync(string name, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return RollbackToSavepointAsync(name);

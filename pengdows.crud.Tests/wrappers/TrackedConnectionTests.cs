@@ -116,7 +116,7 @@ public class TrackedConnectionTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tracked.OpenAsync(cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await tracked.OpenAsync(cts.Token));
     }
 
     [Fact]

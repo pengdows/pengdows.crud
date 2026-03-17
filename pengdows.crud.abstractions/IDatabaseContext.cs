@@ -256,7 +256,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
-    Task<ITransactionContext> BeginTransactionAsync(
+    ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default);
@@ -265,7 +265,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
-    Task<ITransactionContext> BeginTransactionAsync(
+    ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default);

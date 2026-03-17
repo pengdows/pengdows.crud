@@ -29,7 +29,7 @@ public class CoverageRaiseRestQuickWinsTests
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
         await Assert.ThrowsAsync<TransactionModeNotSupportedException>(
-            () => context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+            async () => await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
     }
 
     [Fact]
