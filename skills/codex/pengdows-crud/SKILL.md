@@ -8,6 +8,14 @@ allowed-tools: Read, Grep, Glob, Bash
 
 pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NET 8+. No LINQ, no tracking, no surprises - explicit SQL control with database-agnostic features.
 
+## What pengdows.crud Is NOT
+
+- **Not an ORM** — no LINQ, no change tracking, no migrations
+- **Not a Dapper replacement** — it's infrastructure; Dapper is a mapper
+- **Not like EF Core** — `DatabaseContext` is NOT `DbContext`
+- **Not a repository pattern** — `TableGateway` is a database concept, not a domain concept
+- **Not a query builder** — SQL is yours; the framework makes it safe and correct
+
 ## Quick Start
 
 ```csharp
@@ -322,6 +330,15 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
 
 ## Audit Handling
 
+> **CRITICAL: Audit handling is structural, not optional.**
+> You declare intent with attributes. The framework enforces it. You cannot accidentally skip it.
+>
+> - `[CreatedBy]`, `[CreatedOn]` — set on CREATE only, never on UPDATE
+> - `[LastUpdatedBy]`, `[LastUpdatedOn]` — set on CREATE **and** UPDATE
+> - **Both created and updated fields are set on CREATE** (allows "last modified" queries without checking history)
+> - `IAuditValueResolver` is called once per operation, not once per entity
+> - Throws `InvalidOperationException` at execution time if resolver is missing and entity has user audit fields (`[CreatedBy]`, `[LastUpdatedBy]`)
+
 ### IAuditValueResolver
 
 Register as **singleton** and pass to TableGateway for entities with audit fields:
@@ -368,6 +385,9 @@ public class Order
 **Important:** Both CreatedBy/On AND LastUpdatedBy/On are SET on CREATE.
 
 ## Multi-Tenancy
+
+> **CRITICAL: tenant = database.**
+> Each tenant gets a completely isolated `DatabaseContext`. Different tenants can use completely different database engines. One API serves hundreds of tenants. Zero code changes to add a tenant. `TenantContextRegistry` is a singleton. `DatabaseContext` per tenant is lazy-created. Pass the tenant context to any CRUD method — the SQL dialect, session settings, pool governor, and connection pool are all automatically correct for that tenant.
 
 ### Pattern 1: TenantContextRegistry
 
@@ -555,7 +575,7 @@ Use lowest number possible:
 | Mode | Use Case |
 |------|----------|
 | `Standard` (0) | **Production default** - pool per operation |
-| `KeepAlive` (1) | Embedded DBs needing sentinel connection |
+| `KeepAlive` (1) | Embedded DBs, long-running Lambda, Aurora Serverless, RDS Proxy idle disconnection |
 | `SingleWriter` (2) | File-based SQLite/DuckDB |
 | `SingleConnection` (4) | In-memory `:memory:` databases |
 | `Best` (15) | Auto-select optimal mode for the database |
@@ -703,17 +723,13 @@ SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, Cockro
 
 Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 
-## TDD Requirements
+## Testing Requirements
 
-**ALL code changes MUST follow TDD:**
-1. Write test FIRST
-2. Run test - verify it fails
-3. Write minimal implementation
-4. Refactor while green
-5. Repeat
+Tests are required. Coverage minimums are enforced in CI.
 
-- Minimum 83% coverage (CI enforced)
-- Target 95%+ for new features
+- Minimum **83% branch coverage** (CI blocks merge if below)
+- Target **95%+** for new features and public API changes
+- Write tests once the design stabilizes
 - NO skipped tests
 
 ## Core Invariants
@@ -730,3 +746,5 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations
 12. **All async methods have CancellationToken overloads** - pass tokens through for proper cancellation
+13. **Multi-tenancy: tenant = database** — `TenantContextRegistry` is singleton; pass tenant context to CRUD methods; one gateway serves all tenants; dialect, pool, and session settings are all per-tenant automatically
+14. **Audit handling is structural** — declare with attributes, framework enforces; `IAuditValueResolver` missing + user audit fields = `InvalidOperationException`; cannot be accidentally skipped

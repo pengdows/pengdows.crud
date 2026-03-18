@@ -40,8 +40,9 @@ public enum DbMode
 
 ### KeepAlive
 
-- Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs
+- Keeps a single sentinel connection open (never used for work) to prevent idle disconnection
 - Otherwise behaves like `Standard`
+- Modern use cases: long-running Lambda, Aurora Serverless cold-start prevention, RDS Proxy idle disconnection, LocalDB unload prevention
 
 ### SingleWriter
 
