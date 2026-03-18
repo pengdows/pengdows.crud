@@ -774,11 +774,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
         public string ConnectionString => _context.ConnectionString;
 
-        public string Name
-        {
-            get => _context.Name;
-            set => _context.Name = value;
-        }
+        public string Name => _context.Name;
 
         public DbDataSource? DataSource => _context.DataSource;
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
@@ -791,8 +787,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public ISqlDialect Dialect => _context.GetDialect();
         public SupportedDatabase Product => _context.Product;
         public long PeakOpenConnections => _context.PeakOpenConnections;
-        public bool? ForceManualPrepare => _context.ForceManualPrepare;
-        public bool? DisablePrepare => _context.DisablePrepare;
+        public CommandPrepareMode PrepareMode => _context.PrepareMode;
         public bool SupportsInsertReturning => _context.SupportsInsertReturning;
         public string QuotePrefix => _context.QuotePrefix;
         public string QuoteSuffix => _context.QuoteSuffix;
@@ -938,11 +933,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public bool IsDisposed { get; private set; }
         public ISqlQueryBuilder Query => _inner.Query;
         public int ParameterCount => _inner.ParameterCount;
-        public bool HasWhereAppended
-        {
-            get => _inner.HasWhereAppended;
-            set => _inner.HasWhereAppended = value;
-        }
+        public bool HasWhereAppended => _inner.HasWhereAppended;
 
         public string QuotePrefix => _inner.QuotePrefix;
         public string QuoteSuffix => _inner.QuoteSuffix;

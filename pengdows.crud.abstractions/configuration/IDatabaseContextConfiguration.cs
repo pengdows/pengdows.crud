@@ -41,16 +41,9 @@ public interface IDatabaseContextConfiguration
     ReadWriteMode ReadWriteMode { get; set; }
 
     /// <summary>
-    /// Override to force manual prepare on or off for all commands.
-    /// When set, this overrides the dialect's PrepareStatements setting.
+    /// Specifies how database commands should handle statement preparation.
     /// </summary>
-    bool? ForceManualPrepare { get; set; }
-
-    /// <summary>
-    /// When true, disables prepare for all commands regardless of dialect settings.
-    /// Takes precedence over ForceManualPrepare.
-    /// </summary>
-    bool? DisablePrepare { get; set; }
+    CommandPrepareMode PrepareMode { get; set; }
 
     /// <summary>
     /// Maximum number of reader plan cache entries to maintain per TableGateway instance.

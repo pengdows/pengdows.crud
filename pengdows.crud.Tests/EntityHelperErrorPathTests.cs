@@ -17,7 +17,7 @@ namespace pengdows.crud.Tests;
 
 public class TableGatewayErrorPathTests : IAsyncLifetime
 {
-    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    internal ITypeMapRegistry TypeMap { get; private set; } = null!;
     public IDatabaseContext Context { get; private set; } = null!;
     public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
 

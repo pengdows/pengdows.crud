@@ -52,7 +52,7 @@ namespace pengdows.crud;
 /// <seealso cref="IDataSourceInformation"/>
 /// <seealso cref="ISqlDialect"/>
 /// <seealso cref="DatabaseContext"/>
-public class DataSourceInformation : IDataSourceInformation
+internal class DataSourceInformation : IDataSourceInformation
 {
     private readonly ISqlDialect _dialect;
     private int? _maxOutputParameters;
@@ -109,7 +109,7 @@ public class DataSourceInformation : IDataSourceInformation
     public int ParameterNameMaxLength => _dialect.ParameterNameMaxLength;
     public Regex ParameterNamePatternRegex { get; }
     public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
-    public bool PrepareStatements => _dialect.PrepareStatements;
+    public bool DefaultPrepareStatements => _dialect.PrepareStatements;
     public ProcWrappingStyle ProcWrappingStyle => _dialect.ProcWrappingStyle;
     public int MaxParameterLimit => _dialect.MaxParameterLimit;
 

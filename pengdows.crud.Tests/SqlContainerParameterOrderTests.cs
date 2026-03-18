@@ -106,8 +106,6 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.SetupGet(c => c.SupportsNamedParameters).Returns(false);
         ctx.SetupGet(c => c.MaxParameterLimit).Returns(100);
         ctx.SetupGet(c => c.DatabaseProductName).Returns(dsi.DatabaseProductName);
-        ctx.SetupGet(c => c.DisablePrepare).Returns(true);
-        ctx.SetupGet(c => c.ForceManualPrepare).Returns((bool?)null);
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
         using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");

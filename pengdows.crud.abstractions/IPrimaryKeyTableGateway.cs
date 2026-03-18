@@ -31,10 +31,10 @@ public interface IPrimaryKeyTableGateway<TEntity>
 {
     /// <summary>Fully qualified, quoted table name used by this entity.</summary>
     string WrappedTableName { get; }
-
-    /// <summary>Determines what happens when enum parsing fails.</summary>
-    EnumParseFailureMode EnumParseBehavior { get; set; }
-
+/// <summary>
+/// Determines what happens when enum parsing fails.
+/// </summary>
+EnumParseFailureMode EnumParseBehavior { get; }
     // =========================================================================
     // CREATE
     // =========================================================================
@@ -228,12 +228,6 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// </summary>
     void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc,
         string alias = "");
-
-    /// <summary>Returns a compiled setter delegate for a property.</summary>
-    Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
-
-    /// <summary>Materializes a <typeparamref name="TEntity"/> from a data reader row.</summary>
-    TEntity MapReaderToObject(ITrackedReader reader);
 
     // =========================================================================
     // COUNT helpers

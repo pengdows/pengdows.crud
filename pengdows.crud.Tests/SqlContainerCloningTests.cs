@@ -207,7 +207,7 @@ public class SqlContainerCloningTests : IDisposable
     {
         // Arrange
         using var originalContainer = _sqliteContext.CreateSqlContainer("SELECT * FROM users WHERE id = 1");
-        originalContainer.HasWhereAppended = true;
+        ((SqlContainer)originalContainer).HasWhereAppended = true;
 
         // Act
         using var clonedContainer = originalContainer.Clone(_duckDbContext);

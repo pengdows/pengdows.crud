@@ -28,7 +28,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.isolation;
 
-public sealed class IsolationResolver : IIsolationResolver
+internal sealed class IsolationResolver : IIsolationResolver
 {
     private readonly SupportedDatabase _product;
     private readonly Dictionary<IsolationProfile, IsolationLevel> _profileMap;

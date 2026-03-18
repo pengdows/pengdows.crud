@@ -78,11 +78,7 @@ public class SqlContainerConnectionSharingTests
         public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
         public string ConnectionString => _context.ConnectionString;
 
-        public string Name
-        {
-            get => _context.Name;
-            set => _context.Name = value;
-        }
+        public string Name => _context.Name;
 
         public DbDataSource? DataSource => _context.DataSource;
 
@@ -101,8 +97,7 @@ public class SqlContainerConnectionSharingTests
         public DatabaseMetrics Metrics => _context.Metrics;
         public SupportedDatabase Product => _context.Product;
         public long PeakOpenConnections => _context.PeakOpenConnections;
-        public bool? ForceManualPrepare => _context.ForceManualPrepare;
-        public bool? DisablePrepare => _context.DisablePrepare;
+        public CommandPrepareMode PrepareMode => _context.PrepareMode;
         public string QuotePrefix => _context.QuotePrefix;
         public string QuoteSuffix => _context.QuoteSuffix;
         public bool SupportsInsertReturning => _context.SupportsInsertReturning;

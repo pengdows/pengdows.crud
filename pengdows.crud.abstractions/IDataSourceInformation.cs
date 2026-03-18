@@ -66,9 +66,9 @@ public interface IDataSourceInformation
     string CompositeIdentifierSeparator { get; }
 
     /// <summary>
-    /// Gets a value indicating whether prepared statements should be used when available.
+    /// Whether cmd.Prepare() is recommended for this product and should be used by default.
     /// </summary>
-    bool PrepareStatements { get; }
+    bool DefaultPrepareStatements { get; }
 
     /// <summary>
     /// Gets the wrapping style to use when invoking stored procedures.

@@ -37,7 +37,7 @@ namespace pengdows.crud.collections;
 /// This is intentional for the database parameter use case where dictionaries are short-lived.
 /// </summary>
 [DebuggerDisplay("Count = {Count}")]
-public sealed class OrderedDictionary<TKey, TValue> :
+internal sealed class OrderedDictionary<TKey, TValue> :
     IDictionary<TKey, TValue>,
     IReadOnlyDictionary<TKey, TValue>
     where TKey : notnull

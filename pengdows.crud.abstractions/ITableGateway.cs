@@ -29,7 +29,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Determines what happens when enum parsing fails.
     /// </summary>
-    EnumParseFailureMode EnumParseBehavior { get; set; }
+    EnumParseFailureMode EnumParseBehavior { get; }
 
     /// <summary>
     /// Builds a SQL INSERT for the given object.
@@ -630,16 +630,6 @@ public interface ITableGateway<TEntity, TRowID>
     /// </code>
     /// </example>
     IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Returns a compiled setter delegate for a property.
-    /// </summary>
-    Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
-
-    /// <summary>
-    /// Materializes a TEntity from a data reader.
-    /// </summary>
-    TEntity MapReaderToObject(ITrackedReader reader);
 
     // =========================================================================
     // Batch Operations

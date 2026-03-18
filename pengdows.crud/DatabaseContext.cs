@@ -147,8 +147,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
-    private readonly bool? _forceManualPrepare;
-    private readonly bool? _disablePrepare;
+    private readonly CommandPrepareMode _prepareMode;
     private readonly int? _readerPlanCacheSize;
     private bool? _rcsiPrefetch;
     private bool? _snapshotIsolationPrefetch;
@@ -207,7 +206,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     /// <inheritdoc/>
-    public string Name { get; set; }
+    public string Name { get; private set; }
 
     // Expose original requested mode for internal strategy decisions
     /// <inheritdoc/>
@@ -316,10 +315,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public override string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
 
     /// <inheritdoc/>
-    public bool? ForceManualPrepare => _forceManualPrepare;
-
-    /// <inheritdoc/>
-    public bool? DisablePrepare => _disablePrepare;
+    public CommandPrepareMode PrepareMode => _prepareMode;
 
     internal void AssertIsReadConnection()
     {

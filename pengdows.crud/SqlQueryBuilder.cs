@@ -6,7 +6,7 @@ namespace pengdows.crud;
 /// <summary>
 /// High-performance, pooled SQL query builder optimized for repeated appends.
 /// </summary>
-public sealed class SqlQueryBuilder : ISqlQueryBuilder
+internal sealed class SqlQueryBuilder : ISqlQueryBuilder
 {
     private const int DefaultCapacity = 256;
     private char[]? _buffer;

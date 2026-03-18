@@ -239,7 +239,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public int ParameterCount => _parameters.Count;
 
-    public bool HasWhereAppended { get; set; }
+    public bool HasWhereAppended { get; internal set; }
 
     public string QuotePrefix => _dialect.QuotePrefix;
 
@@ -1757,26 +1757,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private bool ComputeEffectivePrepareSettings()
     {
         // Hard veto from dialect (e.g. MySQL max_prepared_stmt_count exhaustion).
-        // Overrides ForceManualPrepare — retrying after server exhaustion only makes things worse.
+        // Overrides configuration — retrying after server exhaustion only makes things worse.
         if (_dialect.IsPrepareExhausted)
         {
             return false;
         }
 
-        // Check if prepare is hard-disabled via configuration
-        if (_context.DisablePrepare == true)
+        return _context.PrepareMode switch
         {
-            return false;
-        }
-
-        // Check if prepare is explicitly forced on or off via configuration
-        if (_context.ForceManualPrepare.HasValue)
-        {
-            return _context.ForceManualPrepare.Value;
-        }
-
-        // Fall back to dialect default
-        return _dialect.PrepareStatements;
+            CommandPrepareMode.Always => true,
+            CommandPrepareMode.Never => false,
+            _ => _dialect.PrepareStatements // Auto: use dialect recommendation
+        };
     }
 
     // Backward-compatible helper for tests using reflection to invoke a simplified prepare

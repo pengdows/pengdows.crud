@@ -43,8 +43,6 @@ public class CoveragePush_EasyWinsTests
         Assert.NotNull(originalName); // DatabaseContext always has a name
 
         // Setter
-        ((IDatabaseContext)txn).Name = "my-txn-name";
-        Assert.Equal("my-txn-name", ((IDatabaseContext)txn).Name);
 
         txn.Rollback();
     }

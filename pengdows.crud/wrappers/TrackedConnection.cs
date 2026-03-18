@@ -89,7 +89,7 @@ namespace pengdows.crud.wrappers;
 ///   no synchronization needed (NoOpAsyncLocker), returned to provider pool on disposal.</description></item>
 /// </list>
 /// </remarks>
-public class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, IInternalConnectionWrapper,
+internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, IInternalConnectionWrapper,
     IConnectionLocalState
 {
     private readonly DbConnection _connection;

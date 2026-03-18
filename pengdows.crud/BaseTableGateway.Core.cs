@@ -38,7 +38,7 @@ namespace pengdows.crud;
 /// Contains shared fields, initialization, load methods, and SQL helpers.
 /// </summary>
 /// <typeparam name="TEntity">Entity type mapped to the table. Must have a parameterless constructor.</typeparam>
-public abstract partial class BaseTableGateway<TEntity>
+public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastructure<TEntity>
     where TEntity : class, new()
 {
     // =========================================================================
@@ -53,7 +53,7 @@ public abstract partial class BaseTableGateway<TEntity>
     public static ILogger Logger
     {
         get => _logger;
-        set => _logger = value ?? NullLogger.Instance;
+        internal set => _logger = value ?? NullLogger.Instance;
     }
 
     // =========================================================================
@@ -75,11 +75,11 @@ public abstract partial class BaseTableGateway<TEntity>
     protected IDatabaseContext _context = null!;
     private ISqlDialect _dialect = null!;
 
-    protected ITableInfo _tableInfo = null!;
+    internal ITableInfo _tableInfo = null!;
     private IReadOnlyDictionary<string, IColumnInfo> _columnsByNameCI = null!;
 
     protected bool _hasAuditColumns;
-    protected IColumnInfo? _versionColumn;
+    internal IColumnInfo? _versionColumn;
     private TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
 
     // Cached compiled setters for audit fields — initialized once in Initialize()
@@ -112,10 +112,10 @@ public abstract partial class BaseTableGateway<TEntity>
     // =========================================================================
 
     /// <inheritdoc/>
-    public string WrappedTableName { get; set; } = null!;
+    public string WrappedTableName { get; init; } = null!;
 
     /// <inheritdoc/>
-    public EnumParseFailureMode EnumParseBehavior { get; set; }
+    public EnumParseFailureMode EnumParseBehavior { get; init; }
 
     protected IDatabaseContext Context => _context;
 
@@ -155,15 +155,7 @@ public abstract partial class BaseTableGateway<TEntity>
             Logger = logger;
         }
 
-        Initialize(databaseContext, enumParseBehavior);
-    }
-
-    // =========================================================================
-    // Initialization
-    // =========================================================================
-
-    protected void Initialize(IDatabaseContext databaseContext, EnumParseFailureMode enumParseBehavior)
-    {
+        EnumParseBehavior = enumParseBehavior;
         _context = databaseContext;
         if (databaseContext is not ITypeMapAccessor accessor)
         {
@@ -222,9 +214,11 @@ public abstract partial class BaseTableGateway<TEntity>
                 _auditCreatedBySetter = GetOrCreateSetter(_tableInfo.CreatedBy.PropertyInfo);
             }
         }
-
-        EnumParseBehavior = enumParseBehavior;
     }
+
+    // =========================================================================
+    // Initialization (Internal helpers only)
+    // =========================================================================
 
     // =========================================================================
     // Load methods

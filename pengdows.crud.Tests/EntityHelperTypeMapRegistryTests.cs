@@ -14,7 +14,7 @@ public class TableGatewayTypeMapRegistryTests
         public ITableInfo GetTableInfo<T>()
         {
             var info = _inner.GetTableInfo<T>();
-            info.Name = "custom_" + info.Name;
+            ((TableInfo)info).Name = "custom_" + info.Name;
             return info;
         }
 

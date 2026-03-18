@@ -26,7 +26,7 @@ namespace pengdows.crud.diagnostics;
 /// <summary>
 /// Structured event IDs for logging and diagnostics.
 /// </summary>
-public static class EventIds
+internal static class EventIds
 {
     /// <summary>
     /// Connection mode does not match database characteristics (performance warning).

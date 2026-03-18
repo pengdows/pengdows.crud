@@ -25,7 +25,7 @@ namespace CrudBenchmarks.Internal;
 public class ReaderMappingBenchmark
 {
     private TableGateway<TestEntity, int> _helper = null!;
-    private TypeMapRegistry _typeMap = null!;
+    private ITypeMapRegistry _typeMap = null!;
     private DatabaseContext _context = null!;
     private PropertyInfo[] _properties = null!;
     private DuckDBConnection _dapperConnection = null!;
@@ -252,14 +252,14 @@ public class ReaderMappingBenchmark
         {
         }
 
-        public new Task<bool> ReadAsync()
+        public new ValueTask<bool> ReadAsync()
         {
-            return base.ReadAsync(CancellationToken.None);
+            return new ValueTask<bool>(base.ReadAsync(CancellationToken.None));
         }
 
-        public new Task<bool> ReadAsync(CancellationToken cancellationToken)
+        public new ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
         {
-            return base.ReadAsync(cancellationToken);
+            return new ValueTask<bool>(base.ReadAsync(cancellationToken));
         }
     }
 }

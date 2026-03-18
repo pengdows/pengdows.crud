@@ -54,21 +54,6 @@ public interface ISqlDialect
     bool SupportsRepeatedNamedParameters { get; }
 
     /// <summary>
-    /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
-    /// </summary>
-    /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
-    /// <param name="column">Column metadata describing the JSON column.</param>
-    /// <returns>Dialect-specific SQL fragment.</returns>
-    string RenderJsonArgument(string parameterMarker, IColumnInfo column);
-
-    /// <summary>
-    /// Gives the dialect a chance to stamp provider-specific metadata on JSON parameters.
-    /// </summary>
-    /// <param name="parameter">Parameter instance to update.</param>
-    /// <param name="column">Column metadata describing the JSON column.</param>
-    void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
-
-    /// <summary>
     /// True when the dialect supports set-valued parameters for IN-lists.
     /// </summary>
     bool SupportsSetValuedParameters { get; }
@@ -433,47 +418,6 @@ public interface ISqlDialect
     /// Optional alias that points to the incoming row during upsert operations.
     /// </summary>
     string? UpsertIncomingAlias { get; }
-
-    /// <summary>
-    /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
-    /// </summary>
-    /// <param name="columns">Columns included in the source row.</param>
-    /// <param name="parameterNames">Parameter names (without markers) corresponding to columns.</param>
-    /// <returns>Dialect-specific USING clause with source alias 's'.</returns>
-    string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
-    {
-        if (columns == null)
-        {
-            throw new ArgumentNullException(nameof(columns));
-        }
-
-        if (parameterNames == null)
-        {
-            throw new ArgumentNullException(nameof(parameterNames));
-        }
-
-        if (columns.Count != parameterNames.Count)
-        {
-            throw new ArgumentException("Column and parameter counts must match.");
-        }
-
-        var values = new string[columns.Count];
-        var names = new string[columns.Count];
-
-        for (var i = 0; i < columns.Count; i++)
-        {
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (columns[i].IsJsonType)
-            {
-                placeholder = RenderJsonArgument(placeholder, columns[i]);
-            }
-
-            values[i] = placeholder;
-            names[i] = WrapSimpleName(columns[i].Name);
-        }
-
-        return $"USING (VALUES ({string.Join(", ", values)})) AS s ({string.Join(", ", names)})";
-    }
 
     /// <summary>
     /// Formats the MERGE ON clause predicate for the dialect.

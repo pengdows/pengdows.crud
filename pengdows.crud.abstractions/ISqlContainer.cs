@@ -26,7 +26,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <summary>
     /// Indicates whether a WHERE clause has already been appended to the query.
     /// </summary>
-    bool HasWhereAppended { get; set; }
+    bool HasWhereAppended { get; }
 
     /// <summary>
     /// Prefix used for quoting identifiers.

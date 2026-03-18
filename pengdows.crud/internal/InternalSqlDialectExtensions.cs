@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.dialects;
@@ -75,6 +76,22 @@ internal static class InternalSqlDialectExtensions
     internal static IDatabaseProductInfo DetectDatabaseInfo(this ISqlDialect dialect, ITrackedConnection connection)
     {
         return GetInternal(dialect).DetectDatabaseInfo(connection);
+    }
+
+    internal static string RenderJsonArgument(this ISqlDialect dialect, string parameterMarker, IColumnInfo column)
+    {
+        return GetInternal(dialect).RenderJsonArgument(parameterMarker, column);
+    }
+
+    internal static void TryMarkJsonParameter(this ISqlDialect dialect, DbParameter parameter, IColumnInfo column)
+    {
+        GetInternal(dialect).TryMarkJsonParameter(parameter, column);
+    }
+
+    internal static string RenderMergeSource(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames)
+    {
+        return GetInternal(dialect).RenderMergeSource(columns, parameterNames);
     }
 
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)

@@ -95,7 +95,7 @@ file static class EnumLiteralCache<TEnum> where TEnum : struct, Enum
 /// <seealso cref="IColumnInfo"/>
 /// <seealso cref="TableInfo"/>
 /// <seealso cref="TypeMapRegistry"/>
-public class ColumnInfo : IColumnInfo
+internal class ColumnInfo : IColumnInfo
 {
     /// <summary>
     /// Non-generic helper to invoke the generic enum cache via reflection.
@@ -160,12 +160,12 @@ public class ColumnInfo : IColumnInfo
     /// <summary>
     /// Gets the database column name as specified in the <see cref="Attributes.ColumnAttribute"/>.
     /// </summary>
-    public string Name { get; init; } = null!;
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Gets the <see cref="PropertyInfo"/> for the mapped entity property.
     /// </summary>
-    public PropertyInfo PropertyInfo { get; init; } = null!;
+    public PropertyInfo PropertyInfo { get; set; } = null!;
 
     /// <summary>
     /// Gets a value indicating whether this column is the entity's row identifier (pseudo key).
@@ -174,7 +174,7 @@ public class ColumnInfo : IColumnInfo
     /// Marked with <see cref="Attributes.IdAttribute"/>. Used by TableGateway for
     /// single-entity operations like RetrieveOneAsync(TRowID) and DeleteAsync(TRowID).
     /// </remarks>
-    public bool IsId { get; init; } = false;
+    public bool IsId { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the ADO.NET <see cref="System.Data.DbType"/> for parameter creation.

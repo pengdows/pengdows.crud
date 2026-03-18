@@ -21,6 +21,7 @@
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 

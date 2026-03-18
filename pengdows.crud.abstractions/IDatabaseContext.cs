@@ -38,7 +38,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Human-readable name assigned to the context for diagnostics/scoping.
     /// </summary>
-    string Name { get; set; }
+    string Name { get; }
 
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
@@ -122,21 +122,9 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string DatabaseProductName => DataSourceInfo.DatabaseProductName;
 
     /// <summary>
-    /// Whether cmd.Prepare() is supported and should be used.
+    /// Specifies how database commands should handle statement preparation.
     /// </summary>
-    bool PrepareStatements => DataSourceInfo.PrepareStatements;
-
-    /// <summary>
-    /// Override to force manual prepare on or off for all commands.
-    /// When set, this overrides the dialect's PrepareStatements setting.
-    /// </summary>
-    bool? ForceManualPrepare { get; }
-
-    /// <summary>
-    /// When true, disables prepare for all commands regardless of dialect settings.
-    /// Takes precedence over ForceManualPrepare.
-    /// </summary>
-    bool? DisablePrepare { get; }
+    CommandPrepareMode PrepareMode { get; }
 
     /// <summary>
     /// True if the provider supports named parameters (e.g., :name, @param).

@@ -47,7 +47,7 @@ namespace pengdows.crud;
 /// </example>
 /// <seealso cref="AuditValueResolver"/>
 /// <seealso cref="OidcAuditFieldResolver"/>
-public class StubAuditValueResolver : AuditValueResolver
+internal class StubAuditValueResolver : AuditValueResolver
 {
     private readonly object _userId;
 

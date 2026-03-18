@@ -324,7 +324,7 @@ public class TransactionContextTests
 
         public string ConnectionString => "Data Source=test";
 
-        public string Name { get; set; } = "TestContext";
+        public string Name { get; } = "TestContext";
 
         public DbDataSource? DataSource => null;
 
@@ -454,11 +454,10 @@ public class TransactionContextTests
 
         public Regex ParameterNamePattern => _dialect.ParameterNamePattern;
 
-        public bool PrepareStatements => _dataSourceInfo.PrepareStatements;
+        public bool DefaultPrepareStatements => _dataSourceInfo.DefaultPrepareStatements;
 
-        public bool? ForceManualPrepare => null;
 
-        public bool? DisablePrepare => null;
+        public CommandPrepareMode PrepareMode => CommandPrepareMode.Auto;
 
         public bool SupportsNamedParameters => _dataSourceInfo.SupportsNamedParameters;
 

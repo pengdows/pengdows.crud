@@ -71,7 +71,7 @@ namespace pengdows.crud;
 /// <seealso cref="ITypeMapRegistry"/>
 /// <seealso cref="ITableInfo"/>
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
-public sealed class TypeMapRegistry : ITypeMapRegistry
+internal sealed class TypeMapRegistry : ITypeMapRegistry
 {
     private readonly ConcurrentDictionary<Type, TableInfo> _typeMap = new();
 
@@ -384,7 +384,7 @@ public sealed class TypeMapRegistry : ITypeMapRegistry
     private static void ValidatePrimaryKeys(Type entityType, TableInfo tableInfo)
     {
         var hasId = tableInfo.Id != null;
-        var pks = tableInfo.Columns.Values.Where(c => c.IsPrimaryKey).ToList();
+        var pks = tableInfo.Columns.Values.OfType<ColumnInfo>().Where(c => c.IsPrimaryKey).ToList();
 
         if (!hasId && pks.Count == 0)
         {

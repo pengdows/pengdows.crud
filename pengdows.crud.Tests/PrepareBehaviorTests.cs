@@ -103,15 +103,15 @@ public class PrepareBehaviorTests
     }
 
     private static DatabaseContext CreateContext(RecordingPrepareFactory factory,
-        ReadWriteMode mode = ReadWriteMode.ReadWrite, bool? forcePrepare = null, bool? disablePrepare = null)
+        ReadWriteMode mode = ReadWriteMode.ReadWrite, CommandPrepareMode prepareMode = CommandPrepareMode.Auto)
     {
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             DbMode = DbMode.Standard,
             ReadWriteMode = mode,
-            ForceManualPrepare = forcePrepare,
-            DisablePrepare = disablePrepare
+            PrepareMode = prepareMode,
+            
         };
         return new DatabaseContext(cfg, factory);
     }
@@ -120,7 +120,7 @@ public class PrepareBehaviorTests
     public async Task Prepare_CallsOncePerText_ThenCachesForConnection()
     {
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
-        await using var ctx = CreateContext(factory, forcePrepare: true);
+        await using var ctx = CreateContext(factory, prepareMode: CommandPrepareMode.Always);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
@@ -162,7 +162,7 @@ public class PrepareBehaviorTests
     public async Task Prepare_DisabledGlobally_SkipsPrepare()
     {
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
-        await using var ctx = CreateContext(factory, disablePrepare: true);
+        await using var ctx = CreateContext(factory, prepareMode: CommandPrepareMode.Never);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
         await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
@@ -188,7 +188,7 @@ public class PrepareBehaviorTests
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            ForceManualPrepare = true
+            PrepareMode = CommandPrepareMode.Always
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
@@ -211,7 +211,7 @@ public class PrepareBehaviorTests
     public async Task Prepare_Failure_DisablesSubsequentPrepareAttempts()
     {
         var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
-        await using var ctx = CreateContext(factory, forcePrepare: true);
+        await using var ctx = CreateContext(factory, prepareMode: CommandPrepareMode.Always);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
 
@@ -250,7 +250,7 @@ public class PrepareBehaviorTests
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test degradation
+            PrepareMode = CommandPrepareMode.Always  // MySQL defaults to OFF; opt-in required to test degradation
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
@@ -291,7 +291,7 @@ public class PrepareBehaviorTests
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            ForceManualPrepare = true  // MySQL defaults to OFF; opt-in required to test this path
+            PrepareMode = CommandPrepareMode.Always  // MySQL defaults to OFF; opt-in required to test this path
         };
         await using var ctx = new DatabaseContext(cfg, factory);
 
@@ -344,6 +344,65 @@ public class PrepareBehaviorTests
 
         var attempts = factory.Connections.Sum(c => c.Commands.Sum(cmd => cmd.PrepareAttempts));
         Assert.Equal(0, attempts);
+    }
+
+    [Fact]
+    public async Task Auto_PostgreSql_DefaultPrepare_IsEnabled()
+    {
+        // PostgreSQL defaults to PrepareStatements = true.
+        // Auto mode must read the dialect recommendation, not hard-code a value.
+        var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            PrepareMode = CommandPrepareMode.Auto
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
+        await using var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer;
+        sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+        _ = await sc.ExecuteNonQueryAsync();
+
+        var attempts = factory.Connections.Sum(c => c.Commands.Sum(cmd => cmd.PrepareAttempts));
+        Assert.True(attempts >= 1, "Auto mode for PostgreSQL should prepare (dialect default is true)");
+    }
+
+    [Fact]
+    public async Task Auto_Failure_DisablesPrepareForRemainingCommands()
+    {
+        // Auto mode with a dialect that defaults to prepare-on; then a NotSupportedException
+        // from Prepare() should disable further prepare attempts — same as Always mode.
+        var factory = new RecordingPrepareFactory(SupportedDatabase.PostgreSql);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            PrepareMode = CommandPrepareMode.Auto
+        };
+        await using var ctx = new DatabaseContext(cfg, factory);
+
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
+
+        factory.Connections[0].ThrowOnNextPrepare = true;
+        await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
+        {
+            sc!.AddParameterWithValue("p0", DbType.Int32, 1);
+            _ = await sc.ExecuteNonQueryAsync();
+        }
+
+        // After the prepare failure the dialect should be exhausted; no further attempts.
+        await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
+        {
+            sc!.AddParameterWithValue("p0", DbType.Int32, 2);
+            _ = await sc.ExecuteNonQueryAsync();
+        }
+
+        var attempts = factory.Connections.Sum(c => c.Commands.Sum(cmd => cmd.PrepareAttempts));
+        Assert.Equal(1, attempts);
     }
 
     private sealed class FakeMySqlDbException : DbException

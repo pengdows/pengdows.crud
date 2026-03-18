@@ -67,7 +67,7 @@ namespace pengdows.crud;
 /// </remarks>
 /// <seealso cref="TypeCoercionOptions"/>
 /// <seealso cref="EnumParseFailureMode"/>
-public static class TypeCoercionHelper
+internal static class TypeCoercionHelper
 {
     private static readonly Type GuidType = typeof(Guid);
     private static readonly Type GuidArrayType = typeof(byte[]);
@@ -192,7 +192,7 @@ public static class TypeCoercionHelper
         return lambda.Compile();
     }
 
-    public static object? Coerce(
+    internal static object? Coerce(
         object? value,
         Type dbFieldType,
         IColumnInfo columnInfo,

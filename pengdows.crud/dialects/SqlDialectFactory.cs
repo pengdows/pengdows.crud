@@ -25,7 +25,7 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Factory for creating database-specific dialect instances with automatic detection.
 /// </summary>
-public static class SqlDialectFactory
+internal static class SqlDialectFactory
 {
     internal static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,

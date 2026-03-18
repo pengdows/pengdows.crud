@@ -25,7 +25,7 @@ namespace pengdows.crud;
 /// This class is used internally to determine the precision and scale of decimal
 /// values for SQL parameter configuration and validation.
 /// </remarks>
-public static class DecimalHelpers
+internal static class DecimalHelpers
 {
     /// <summary>
     /// Pre-computed powers of 10 for fast decimal multiplication.

@@ -74,7 +74,7 @@ namespace pengdows.crud;
 /// <seealso cref="IDataReaderMapper"/>
 /// <seealso cref="MapperOptions"/>
 /// <seealso cref="TypeCoercionHelper"/>
-public sealed class DataReaderMapper : IDataReaderMapper
+internal sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 

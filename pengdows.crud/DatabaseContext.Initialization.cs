@@ -234,8 +234,7 @@ public partial class DatabaseContext
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
             };
-            _forceManualPrepare = configuration.ForceManualPrepare;
-            _disablePrepare = configuration.DisablePrepare;
+            _prepareMode = configuration.PrepareMode;
             _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;

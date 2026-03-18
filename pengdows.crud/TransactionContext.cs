@@ -147,6 +147,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _isReadOnly = executionType == ExecutionType.Read;
         _dialect = context.GetDialect();
         RootId = ((IContextIdentity)_context).RootId;
+        Name = _context.Name;
         var metricsAccessor = context as IMetricsCollectorAccessor;
         _metricsCollector = metricsAccessor?.MetricsCollector;
         _readMetricsCollector = metricsAccessor?.ReadMetricsCollector;
@@ -270,6 +271,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public SupportedDatabase Product => _context.Product;
 
     /// <inheritdoc/>
+    public CommandPrepareMode PrepareMode => _context.PrepareMode;
+
+    /// <inheritdoc/>
     public long PeakOpenConnections => _context.PeakOpenConnections;
 
     /// <inheritdoc/>
@@ -287,11 +291,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     internal string RawConnectionString => InternalConnectionStringAccess.GetRawConnectionString(_context);
 
     /// <inheritdoc/>
-    public string Name
-    {
-        get => _context.Name;
-        set => _context.Name = value;
-    }
+    public string Name { get; init; }
 
     /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
@@ -441,24 +441,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         _context.AssertIsReadConnection();
     }
-
-    internal void AssertIsWriteConnection()
+/// <inheritdoc/>
+public void AssertIsWriteConnection()
+{
+    if (_isReadOnly)
     {
-        if (_isReadOnly)
-        {
-            throw new InvalidOperationException("Transaction is read-only.");
-        }
-
-        _context.AssertIsWriteConnection();
+        throw new InvalidOperationException("Transaction is read-only.");
     }
 
-    /// <inheritdoc/>
-    public bool? ForceManualPrepare => _context.ForceManualPrepare;
+    _context.AssertIsWriteConnection();
+}
 
-    /// <inheritdoc/>
-    public bool? DisablePrepare => _context.DisablePrepare;
-
-    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
 

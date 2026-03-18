@@ -25,7 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace pengdows.crud.collections;
 
 // Extension methods for common DB parameter scenarios
-public static class OrderedDictionaryExtensions
+internal static class OrderedDictionaryExtensions
 {
     /// <summary>
     /// Generic property cache that eliminates reflection overhead for FromObject&lt;T&gt;().

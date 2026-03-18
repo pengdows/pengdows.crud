@@ -1,6 +1,7 @@
 #region
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using pengdows.crud.attributes;
@@ -125,6 +126,24 @@ public class TypeMapRegistryTests
         var registry = new TypeMapRegistry();
         var info = registry.GetTableInfo<PkOnlyEntity>();
         Assert.NotNull(info);
+    }
+
+    [Fact]
+    public void ITableInfo_Columns_ReturnsReadOnlyDictionary_PreventingAccidentalMutation()
+    {
+        // P0-1 regression: ITableInfo.Columns must be typed as IReadOnlyDictionary so that
+        // code holding ITableInfo cannot call .Clear(), .Add(), or the set indexer without
+        // an explicit downcast. The compile-time type must not be Dictionary<,>.
+        var registry = new TypeMapRegistry();
+        ITableInfo info = registry.GetTableInfo<MixedOrdinalEntity>()!;
+
+        // The interface property must expose IReadOnlyDictionary (not the mutable Dictionary).
+        IReadOnlyDictionary<string, IColumnInfo> columns = info.Columns;
+        Assert.NotNull(columns);
+        Assert.True(columns.ContainsKey("First"));
+
+        // Verify the read path works: ordinal lookup via IReadOnlyDictionary indexer.
+        Assert.Equal(1, columns["First"].Ordinal);
     }
 
     [Fact]
@@ -255,7 +274,7 @@ public class TypeMapRegistryTests
         var registry2 = new TypeMapRegistry();
 
         var info1 = registry1.GetTableInfo<MyEntity>();
-        info1.Name = "Changed";
+        ((TableInfo)info1).Name = "Changed";
 
         var info2 = registry2.GetTableInfo<MyEntity>();
 

@@ -187,7 +187,7 @@ public abstract partial class BaseTableGateway<TEntity>
         }
     }
 
-    protected IReadOnlyList<IColumnInfo> GetPrimaryKeys()
+    internal IReadOnlyList<IColumnInfo> GetPrimaryKeys()
     {
         var keys = _tableInfo.PrimaryKeys;
         if (keys.Count < 1)
@@ -258,7 +258,10 @@ public abstract partial class BaseTableGateway<TEntity>
         {
             sc.Query.Append('\n');
             sc.Query.Append(SqlFragments.Where);
-            sc.HasWhereAppended = true;
+            if (sc is SqlContainer sqlContainer)
+            {
+                sqlContainer.HasWhereAppended = true;
+            }
         }
         else
         {

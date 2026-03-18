@@ -3,7 +3,7 @@ namespace pengdows.crud;
 /// <summary>
 /// Provides access to mapping metadata for entity types.
 /// </summary>
-public interface ITypeMapRegistry
+internal interface ITypeMapRegistry
 {
     /// <summary>
     /// Retrieves table information for the specified entity type.

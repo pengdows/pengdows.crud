@@ -31,7 +31,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
+internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
