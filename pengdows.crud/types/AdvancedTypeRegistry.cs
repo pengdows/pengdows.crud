@@ -87,7 +87,7 @@ internal readonly struct CachedParameterConfig
 /// Handles spatial, JSON, arrays, ranges, network types, etc.
 /// Thread-safe: all mutable state uses ConcurrentDictionary.
 /// </summary>
-public class AdvancedTypeRegistry
+internal class AdvancedTypeRegistry
 {
     // Provider-specific reflection property names.  Typos here fail silently at
     // runtime; centralising makes them grep-able and keeps them in sync.
@@ -893,7 +893,7 @@ public class AdvancedTypeRegistry
 /// <summary>
 /// Provider-specific type mapping configuration.
 /// </summary>
-public class ProviderTypeMapping
+internal class ProviderTypeMapping
 {
     public DbType DbType { get; init; }
     public Action<DbParameter, object?>? ConfigureParameter { get; init; }

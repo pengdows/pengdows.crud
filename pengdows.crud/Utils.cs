@@ -25,7 +25,7 @@ namespace pengdows.crud;
 /// These utilities handle common patterns when working with ADO.NET and database values,
 /// particularly the distinction between null references and <see cref="DBNull.Value"/>.
 /// </remarks>
-public class Utils
+internal class Utils
 {
     /// <summary>
     /// Determines whether the specified value is null or <see cref="DBNull.Value"/>.

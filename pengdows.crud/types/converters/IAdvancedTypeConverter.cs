@@ -17,7 +17,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.types.converters;
 
-public interface IAdvancedTypeConverter
+internal interface IAdvancedTypeConverter
 {
     /// <summary>
     /// .NET type handled by this converter.
@@ -41,7 +41,7 @@ public interface IAdvancedTypeConverter
     object? FromProviderValue(object value, SupportedDatabase provider);
 }
 
-public abstract class AdvancedTypeConverter<T> : IAdvancedTypeConverter
+internal abstract class AdvancedTypeConverter<T> : IAdvancedTypeConverter
 {
     public Type TargetType => typeof(T);
 
