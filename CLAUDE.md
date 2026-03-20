@@ -87,7 +87,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 `PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) is for entities identified **solely by `[PrimaryKey]` columns** with **no surrogate `[Id]` column**. Use it for junction tables, legacy schemas, and DBA-owned tables with natural keys.
 
-**Throws `InvalidOperationException` at construction** if the entity has no `[PrimaryKey]` columns.
+**Throws `SqlGenerationException` at construction** if the entity has no `[PrimaryKey]` columns.
 
 **Tier 1 — Build methods:**
 ```csharp
@@ -429,8 +429,9 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 - `WasCommitted` / `WasRolledBack` / `IsCompleted` - Transaction state
 - `IsolationLevel` - Current isolation level
-- `Commit()` / `Rollback()` - Transaction control
+- `Commit()` / `Rollback()` - Transaction control; throw `TransactionException` on failure
 - `SavepointAsync(string name)` / `RollbackToSavepointAsync(string name)` - Savepoints
+- **After a commit or rollback failure**: `IsCompleted` is `true` (the connection has been released). `Dispose` will not attempt a second rollback.
 
 ## Connection Management and DbMode
 
@@ -482,6 +483,41 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 3. **Broken semantics** — Connections closing between operations lose transactional guarantees
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
+
+## Exception Hierarchy
+
+All database and framework errors surface as typed `DatabaseException` subclasses:
+
+```
+DatabaseException (abstract)                — namespace pengdows.crud.exceptions
+    Properties: Database, SqlState, ErrorCode, ConstraintName, IsTransient
+    InnerException: raw provider exception, always preserved
+├── DatabaseOperationException              — runtime database failures
+│   ├── ConstraintViolationException (abstract)
+│   │   ├── UniqueConstraintViolationException
+│   │   ├── ForeignKeyViolationException
+│   │   ├── NotNullViolationException
+│   │   └── CheckConstraintViolationException
+│   ├── TransientWriteConflictException (abstract, IsTransient = true)
+│   │   ├── DeadlockException
+│   │   └── SerializationConflictException
+│   ├── ConcurrencyConflictException        — [Version] UPDATE returned 0 rows affected
+│   ├── CommandTimeoutException             — command timed out (IsTransient = true)
+│   ├── ConnectionException                 — connection-level failure
+│   └── TransactionException               — begin/commit/rollback failure
+├── SqlGenerationException                  — entity metadata programmer error
+└── DataMappingException                    — strict-mode coercion failure
+```
+
+**Throw sites:**
+- `SqlGenerationException` — thrown by `TypeMapRegistry` for entity metadata errors: missing `[Table]`, empty column name, enum `DbType` not string/numeric, duplicate column names, no `[Id]`/`[PrimaryKey]`, `[PrimaryKey]` order errors, invalid `[Version]` or audit field types. Uses `SupportedDatabase.Unknown`. Fires at registration/gateway construction, never during query execution.
+- `DataMappingException` — thrown by `DataReaderMapper` in strict mode when column→property coercion fails. Uses `SupportedDatabase.Unknown`. Fires during `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`.
+- `ConnectionException` — thrown by provider translators for connection-level failures (SQL Server error codes 10053/10054/10060/233/10061, Postgres SQLSTATE 08xx, MySQL codes 1040–1044, SQLite codes 14/26).
+- `TransactionException` — thrown by `TransactionContext` when begin/commit/rollback fails. After failure, `IsCompleted = true` (connection already released); `Dispose` will not attempt a second rollback.
+
+`OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
+
+**Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
 
 ## DI Lifetime Rules
 

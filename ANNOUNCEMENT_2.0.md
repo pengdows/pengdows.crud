@@ -131,7 +131,7 @@ Why it matters:
 - Streaming (`LoadStreamAsync` → `IAsyncEnumerable<TEntity>`) for large result sets
 - Audit field support via `IAuditValueResolver` — called once per batch, not per row
 - Dialect-specific upsert (MERGE, ON CONFLICT, ON DUPLICATE KEY) keyed on `[PrimaryKey]` columns
-- Constructor guard: throws `InvalidOperationException` at startup if entity has no `[PrimaryKey]`
+- Constructor guard: throws `SqlGenerationException` at startup if entity has no `[PrimaryKey]`
 
 See `docs/primary-keys-pseudokeys.md` for the gateway selection decision guide.
 
@@ -266,6 +266,58 @@ Why it matters:
 - PostgreSQL: native UUID type via `AdvancedTypeRegistry` — no format conversion needed
 - Round-trips correctly across all 13 databases without any manual handling
 
+### 19) Uniform exception hierarchy
+
+2.0 introduces a typed, provider-agnostic exception hierarchy. Every database failure the
+framework translates becomes a typed `DatabaseException` subclass — independent of which of
+the 13 providers threw it.
+
+```
+DatabaseException (abstract root — namespace pengdows.crud.exceptions)
+    Properties: Database, SqlState, ErrorCode, ConstraintName, IsTransient
+    InnerException: raw provider exception, always preserved for diagnostics
+├── DatabaseOperationException
+│   ├── ConstraintViolationException (abstract)
+│   │   ├── UniqueConstraintViolationException   — duplicate key / PK / unique index
+│   │   ├── ForeignKeyViolationException         — missing FK reference or blocked delete
+│   │   ├── NotNullViolationException            — required column missing
+│   │   └── CheckConstraintViolationException    — database check rule rejected values
+│   ├── TransientWriteConflictException (abstract, IsTransient = true)
+│   │   ├── DeadlockException                   — DB chose this txn as deadlock victim
+│   │   └── SerializationConflictException      — snapshot/serializable write conflict
+│   ├── ConcurrencyConflictException            — [Version] UPDATE returned 0 rows affected
+│   │                                             (framework-generated, not provider-translated)
+│   ├── CommandTimeoutException                 — command timed out (IsTransient = true)
+│   ├── ConnectionException                     — connection-level failure
+│   └── TransactionException                    — transaction state failure
+├── DataMappingException                        — hydration/coercion failure
+└── SqlGenerationException                      — framework SQL generation error
+```
+
+Why it matters:
+- Catch `UniqueConstraintViolationException` regardless of whether the database is SQL Server,
+  PostgreSQL, MySQL, SQLite, or any of the other 11 providers — no provider-specific `catch` blocks
+- `IsTransient` and the `TransientWriteConflictException` base class make retry logic portable
+- `ConstraintName` identifies which constraint fired, independent of the provider error format
+- `InnerException` preserves the raw provider exception — diagnostic detail is never discarded
+- `ConcurrencyConflictException` is framework-generated from `[Version]` column returning
+  0 rows affected; it is not a translated provider exception
+
+Translation is automatic. The framework intercepts raw provider exceptions at execution time
+and translates them via per-family translators (SQL Server, PostgreSQL/CockroachDB/YugabyteDB,
+MySQL/MariaDB/TiDB, SQLite). Non-database exceptions and internal exceptions propagate unchanged.
+The translator infrastructure is entirely `internal` — `DatabaseException` and its subclasses
+are the public surface.
+
+**Throw sites for `ConnectionException`, `TransactionException`, `SqlGenerationException`, `DataMappingException`:**
+
+- `ConnectionException` — thrown by provider translators when connection-level errors are detected (SQL Server error codes 10053/10054/10060/233/10061; Postgres SQLSTATE class `08xx`; MySQL error codes 1040/1042/1043/1044; SQLite error codes 14 `SQLITE_CANTOPEN` / 26 `SQLITE_NOTADB`).
+- `TransactionException` — thrown by `TransactionContext` when `BeginTransaction`, `Commit`, or `Rollback` fails at the driver level. After a failure, `IsCompleted` is `true` (the connection has already been released); `Dispose` will not attempt a second rollback.
+- `SqlGenerationException` — thrown by `TypeMapRegistry` for entity metadata programmer errors (missing `[Table]` attribute, empty column name, enum `DbType` not string/numeric, duplicate column names, no `[Id]`/`[PrimaryKey]`, `[PrimaryKey]` order errors, invalid `[Version]` or audit field types). Always uses `SupportedDatabase.Unknown`. Fires at entity registration or gateway construction, never during query execution.
+- `DataMappingException` — thrown by `DataReaderMapper` in strict mode (`MapperOptions.Strict = true`) when a column value cannot be coerced to the target property type. Always uses `SupportedDatabase.Unknown`. `InnerException` contains the original coercion error.
+
+`OperationCanceledException` is never wrapped — it propagates as-is.
+
 ## Breaking Changes from 1.0
 
 ### `EntityHelper<TEntity, TRowID>` renamed to `TableGateway<TEntity, TRowID>`
@@ -310,15 +362,30 @@ it bypasses the pool entirely and holds one connection for the context's lifetim
 all return `ValueTask` / `ValueTask<T>`. Any callers that stored the result as `Task<T>` must update
 their variable declarations. `await` calls require no change.
 
-### `AppendPaging` added to `ISqlDialect`
-Custom dialect implementations must add this method. If you have a dialect outside this library,
-implement `AppendPaging(ISqlContainer sc, int offset, int limit)` to avoid a compile error.
+### `AppendPaging` and `IsUniqueViolation` added to `ISqlDialect`
+Two new non-default members were added to `ISqlDialect`. If you have a custom dialect
+implementation outside this library, both must be implemented to avoid a compile error:
+
+- `void AppendPaging(ISqlQueryBuilder query, int offset, int limit)` — appends dialect-specific
+  paging SQL; see "What's New #9" for behavior details.
+- `bool IsUniqueViolation(DbException ex)` — returns true when the exception represents a
+  unique/primary-key constraint violation; used by the exception translation pipeline.
+
+All other new `ISqlDialect` members added in 2.0 (`ClassifyException`, `AnalyzeException`,
+`IsForeignKeyViolation`, `IsNotNullViolation`, `IsCheckConstraintViolation`, `WrapSimpleName`,
+`ReplaceNeutralTokens`, `RenderMergeOnClause`, `PrepareParameterValue`) have default
+implementations and require no action from custom dialect implementors.
 
 ### Public API surface reduction — implementation details removed
 
 A large number of members that leaked internal implementation details in 1.0 have been
 removed or moved to `internal`. These were never intended as public API and existed only
 because the 1.0 interface boundaries were drawn too broadly.
+
+The tables below are representative of the categories of removal. The complete diff is
+tracked in `pengdows.crud.abstractions/ApiBaseline/interfaces.txt`. Net change across the
+full public surface: approximately **40 fewer signatures** after removals, with additions
+for `Dialect`, `DataSource`, `AppendPaging`, metrics members, and the exception hierarchy.
 
 If you referenced any of these directly, the migration path is noted for each group.
 

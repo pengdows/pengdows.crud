@@ -38,18 +38,15 @@ It is built on a **database-first** philosophy, treating the database schema as 
 The framework provides intelligent, adaptive connection strategies to ensure optimal performance and resilience.
 
 - **"Open Late, Close Early" Architecture:** In `Standard` mode (for server databases), connections are acquired from the provider's pool only at the moment of execution and released immediately after. This maximizes connection pool efficiency and prevents pool exhaustion under high load.
-- **`SingleWriter` Mode:** For file-based databases like SQLite, this mode provides a unique, built-in solution for safe concurrent writes. An application-level turnstile governor serializes write *tasks* (not connections), preventing database locking errors, while still using ephemeral connections for maximum efficiency. Note: readers already queued before a writer grabs the turnstile are not displaced.
+- **Pool Governor:** 2.0 introduces a true pool governor for read/write slot control and fairness. It provides better protection against pool saturation, safer high-concurrency operation, and separate read and write slot budgets. It is more advanced than the standalone `pengdows.stormgate` admission controller, adding fairness and full telemetry.
+- **`SingleWriter` Mode:** For file-based databases like SQLite, this mode provides a unique, built-in solution for safe concurrent writes. Re-architected in 2.0 to use a turnstile-based coordination that schedules write tasks rather than just serializing connections, significantly reducing writer starvation risk.
 - **`SingleConnection` Mode:** A dedicated mode for handling thread-safe access to a single, persistent connection, designed specifically for ephemeral `:memory:` databases, which is invaluable for testing.
-- **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
+- **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
+    - `:memory:` SQLite/DuckDB → `SingleConnection`
+    - File-based SQLite/DuckDB → `SingleWriter`
+    - SQL Server LocalDB → `KeepAlive`
+    - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
-
-| Mode | Value | Use Case |
-|------|-------|----------|
-| `Standard` | 0 | **Production default** — pool per operation |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB |
-| `SingleConnection` | 4 | In-memory `:memory:` databases |
-| `Best` | 15 | Auto-select optimal mode |
 
 ### 2. Intelligent Dialect System
 
@@ -57,14 +54,16 @@ A powerful abstraction layer that makes application code portable across differe
 
 - **Portable Upsert:** Automatically translates a single `Upsert` command into the correct native SQL (`MERGE`, `INSERT ... ON CONFLICT`, etc.) for the target database.
 - **Intelligent Prepared Statements:** Selectively enables or disables prepared statements based on what is most performant for the target database (e.g., ON for PostgreSQL, OFF for SQL Server).
+- **Native `DbDataSource` support:** `DatabaseContext` now accepts a `DbDataSource` directly (e.g., `NpgsqlDataSource`), providing shared prepared-statement caching — a significant throughput win for PostgreSQL.
 - **Stored Procedure Wrapping (`ProcWrappingStyle`):** Automatically wraps stored procedure calls in the correct, vendor-specific syntax (`EXEC`, `CALL`, `BEGIN/END`, etc.).
-- **`IsolationProfile`:** Portable transaction isolation profiles that map to the safest and most optimal `System.Data.IsolationLevel` for the target database.
+- **`IsolationProfile`:** Portable transaction isolation profiles that map to the safest and most optimal `System.Data.IsolationLevel` for the target database (e.g., `SafeNonBlockingReads`, `StrictConsistency`, `FastWithRisks`).
 - **`ISqlDialect`** is accessible directly via `context.Dialect` on any `IDatabaseContext` — no internal casts required.
 
 ### 3. Advanced Type System
 
 A multi-layered, high-performance, and extensible type coercion system.
 - Provides built-in support for advanced types like **JSON, spatial data, arrays, and network addresses**.
+- **Unified GUID storage:** GUIDs are stored in the correct format for each database automatically (e.g., native UUID for Postgres, VARCHAR(36) for SQLite/Oracle, BINARY(16) for Firebird).
 - Allows developers to register their own custom handlers and converters for domain-specific types, which are then used seamlessly for both parameter writing and data reading.
 - All timestamps normalized to UTC; DateTime, DateTimeOffset, and TimestampOffset all supported.
 
@@ -77,12 +76,13 @@ A multi-layered, high-performance, and extensible type coercion system.
 
 - **Resource Safety:** The strict use of `IAsyncDisposable` on `TransactionContext` and `SqlContainer` makes accidental connection leaks virtually impossible.
 - **Audit Handling:** An `IAuditValueResolver` interface allows for easy, decoupled, and automatic population of audit columns. **Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on CREATE** — this is intentional design allowing "last modified" queries without checking if the entity was ever updated.
+- **Read-only enforcement:** Dual-layer enforcement for supported databases (PostgreSQL, SQLite, DuckDB) using both connection-string-level and session SQL settings to guarantee data integrity.
 - **Multi-Tenancy:** First-class support for the robust **database-per-tenant** model via `ITenantContextRegistry` — no WHERE tenant_id filtering, physical database separation.
-- **NEVER use `TransactionScope`** — incompatible with the "open late, close early" philosophy. Use `context.BeginTransaction()` which pins the connection for the transaction's lifetime.
+- **NEVER use `TransactionScope`** — incompatible with the "open late, close early" philosophy. Use `context.BeginTransaction()` which pins the connection for the transaction's lifetime. 2.0 adds support for **Transaction Savepoints** on supported databases.
 
 ### 6. Comprehensive Metrics
 
-Provides deep operational visibility by tracking detailed metrics for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. This is invaluable for debugging, performance tuning, and production monitoring.
+Provides deep operational visibility by tracking 36 detailed metrics for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. Metrics are collected inside the execution pipeline, providing precise observability into every connection open, slot acquisition, and command dispatch.
 
 ## Coding Style & Naming
 
@@ -103,13 +103,15 @@ ISqlContainer BuildRetrieve(ids, "alias");  // SELECT ... WHERE id IN (...)
 ISqlContainer BuildDelete(id);
 ISqlContainer BuildUpsert(entity);
 ISqlContainer sc = await BuildUpdateAsync(entity);  // Only async Build method
+// 2.0 Batch Build
+IReadOnlyList<ISqlContainer> BuildBatchCreate/Update/Upsert/Delete(entities);
 ```
 
 **Tier 2 — Load methods** (execute a pre-built container):
 ```csharp
 TEntity? result                  = await LoadSingleAsync(container);
 List<TEntity> list               = await LoadListAsync(container);
-IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);  // Memory-efficient streaming
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);  // 2.0 Memory-efficient streaming
 ```
 
 **Tier 3 — Convenience methods** (Build + Execute in one call):
@@ -121,14 +123,18 @@ int affected = await UpsertAsync(entity);
 TEntity? e   = await RetrieveOneAsync(id);           // By [Id]
 TEntity? e   = await RetrieveOneAsync(entityLookup); // By [PrimaryKey]
 List<TEntity> list = await RetrieveAsync(ids);
-IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
+IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids); // 2.0 Streaming
+
+// 2.0 Batch Operations (chunked by MaxParameterLimit)
+int affected = await BatchCreate/Update/Upsert/DeleteAsync(entities);
 ```
+
 
 **All execution methods return `ValueTask` (not `Task`)** for reduced allocations. Clone containers for reuse: `container.Clone()` or `container.Clone(otherContext)`.
 
 ## Three-Tier API (PrimaryKeyTableGateway)
 
-`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` if entity has no `[PrimaryKey]`.
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if entity has no `[PrimaryKey]`.
 
 ```csharp
 // Tier 1 — Build

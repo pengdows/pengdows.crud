@@ -130,7 +130,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 **Three-Tier API (PrimaryKeyTableGateway)**
 
-`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` if entity has no `[PrimaryKey]`.
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if entity has no `[PrimaryKey]`.
 
 ```csharp
 // Tier 1 — Build
