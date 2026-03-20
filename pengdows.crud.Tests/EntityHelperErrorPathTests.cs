@@ -6,6 +6,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -67,9 +68,9 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public void Constructor_EntityWithoutTableAttribute_ThrowsInvalidOperationException()
+    public void Constructor_EntityWithoutTableAttribute_ThrowsSqlGenerationException()
     {
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<object, int>(Context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<object, int>(Context));
     }
 
     [Fact]
@@ -83,7 +84,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     [Fact]
     public void UpdateAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     [Fact]
     public void UpsertAsync_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<EntityWithNoPrimaryKey, int>(Context));
     }
 
     [Fact]
@@ -264,7 +265,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     [Fact]
     public void BuildUpsert_EntityWithNoPrimaryKey_ThrowsNotSupportedException()
     {
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<EntityWithNoPkAttributes, string>(Context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<EntityWithNoPkAttributes, string>(Context));
     }
 
     [Fact]

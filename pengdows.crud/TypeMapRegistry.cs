@@ -33,6 +33,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using pengdows.crud.attributes;
+using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.types.valueobjects;
 
@@ -96,13 +97,14 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
     private TableInfo BuildTableInfo(Type entityType)
     {
         var tattr = entityType.GetCustomAttribute<TableAttribute>()
-                    ?? throw new InvalidOperationException(
-                        $"Type {entityType.Name} does not have a TableAttribute.");
+                    ?? throw new SqlGenerationException(
+                        $"Type {entityType.Name} does not have a TableAttribute.",
+                        SupportedDatabase.Unknown);
 
         var tableName = (tattr.Name ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(tableName))
         {
-            throw new InvalidOperationException($"TableAttribute.Name cannot be empty for {entityType.FullName}.");
+            throw new SqlGenerationException($"TableAttribute.Name cannot be empty for {entityType.FullName}.", SupportedDatabase.Unknown);
         }
 
         var schemaName = (tattr.Schema ?? string.Empty).Trim();
@@ -158,8 +160,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         var columnName = (colAttr.Name ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(columnName))
         {
-            throw new InvalidOperationException(
-                $"ColumnAttribute.Name cannot be null/empty on {entityType.FullName}.{prop.Name}");
+            throw new SqlGenerationException(
+                $"ColumnAttribute.Name cannot be null/empty on {entityType.FullName}.{prop.Name}",
+                SupportedDatabase.Unknown);
         }
 
         var idAttr = A<IdAttribute>(attrs);
@@ -296,8 +299,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
 
         if (!ci.EnumAsString && !IsNumericDbType(ci.DbType))
         {
-            throw new InvalidOperationException(
-                $"Enum column {entityType.FullName}.{prop.Name} must use string or numeric DbType; found {ci.DbType}.");
+            throw new SqlGenerationException(
+                $"Enum column {entityType.FullName}.{prop.Name} must use string or numeric DbType; found {ci.DbType}.",
+                SupportedDatabase.Unknown);
         }
 
         if (ci.EnumAsString)
@@ -335,8 +339,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
     {
         if (tableInfo.Columns.ContainsKey(ci.Name))
         {
-            throw new InvalidOperationException(
-                $"Duplicate [Column(\"{ci.Name}\")] on {entityType.FullName}.{prop.Name}");
+            throw new SqlGenerationException(
+                $"Duplicate [Column(\"{ci.Name}\")] on {entityType.FullName}.{prop.Name}",
+                SupportedDatabase.Unknown);
         }
 
         tableInfo.Columns[ci.Name] = ci;
@@ -388,8 +393,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
 
         if (!hasId && pks.Count == 0)
         {
-            throw new InvalidOperationException(
-                $"Type {entityType.FullName} must define either [Id] or [PrimaryKey].");
+            throw new SqlGenerationException(
+                $"Type {entityType.FullName} must define either [Id] or [PrimaryKey].",
+                SupportedDatabase.Unknown);
         }
 
         if (pks.Count == 0)
@@ -400,8 +406,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         var specified = pks.Where(k => k.PkOrder > 0).ToList();
         if (specified.Count > 0 && specified.Count != pks.Count)
         {
-            throw new InvalidOperationException(
-                $"Type {entityType.FullName} mixes PrimaryKey definitions with and without explicit Order values. Specify Order on all or none.");
+            throw new SqlGenerationException(
+                $"Type {entityType.FullName} mixes PrimaryKey definitions with and without explicit Order values. Specify Order on all or none.",
+                SupportedDatabase.Unknown);
         }
 
         if (specified.Count > 0)
@@ -411,16 +418,18 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             {
                 if (!seen.Add(key.PkOrder))
                 {
-                    throw new InvalidOperationException(
-                        $"Type {entityType.FullName} has duplicate PrimaryKey order value {key.PkOrder}.");
+                    throw new SqlGenerationException(
+                        $"Type {entityType.FullName} has duplicate PrimaryKey order value {key.PkOrder}.",
+                        SupportedDatabase.Unknown);
                 }
             }
 
             var expectedCount = pks.Count;
             if (seen.Min() != 1 || seen.Max() != expectedCount || seen.Count != expectedCount)
             {
-                throw new InvalidOperationException(
-                    $"PrimaryKey orders for {entityType.FullName} must form a contiguous sequence starting at 1.");
+                throw new SqlGenerationException(
+                    $"PrimaryKey orders for {entityType.FullName} must form a contiguous sequence starting at 1.",
+                    SupportedDatabase.Unknown);
             }
 
             return;
@@ -464,8 +473,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             case TypeCode.UInt64:
                 return;
             default:
-                throw new InvalidOperationException(
-                    $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [Version] must be a byte array or integral type.");
+                throw new SqlGenerationException(
+                    $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [Version] must be a byte array or integral type.",
+                    SupportedDatabase.Unknown);
         }
     }
 
@@ -474,8 +484,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
         if (type != typeof(DateTime) && type != typeof(DateTimeOffset))
         {
-            throw new InvalidOperationException(
-                $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [LastUpdatedOn] must be DateTime or DateTimeOffset.");
+            throw new SqlGenerationException(
+                $"Property {property.DeclaringType?.FullName}.{property.Name} marked with [LastUpdatedOn] must be DateTime or DateTimeOffset.",
+                SupportedDatabase.Unknown);
         }
     }
 
@@ -490,8 +501,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         {
             if (column.Ordinal < 0)
             {
-                throw new InvalidOperationException(
-                    $"Negative ColumnAttribute.Ordinal detected in {entityType.FullName}");
+                throw new SqlGenerationException(
+                    $"Negative ColumnAttribute.Ordinal detected in {entityType.FullName}",
+                    SupportedDatabase.Unknown);
             }
         }
 
@@ -500,8 +512,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         {
             if (column.Ordinal > 0 && !specified.Add(column.Ordinal))
             {
-                throw new InvalidOperationException(
-                    $"Duplicate ColumnAttribute.Ordinal {column.Ordinal} in {entityType.FullName}");
+                throw new SqlGenerationException(
+                    $"Duplicate ColumnAttribute.Ordinal {column.Ordinal} in {entityType.FullName}",
+                    SupportedDatabase.Unknown);
             }
         }
 
@@ -552,8 +565,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             return;
         }
 
-        throw new InvalidOperationException(
-            $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be a string, Guid, or numeric type.");
+        throw new SqlGenerationException(
+            $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be a string, Guid, or numeric type.",
+            SupportedDatabase.Unknown);
     }
 
     private static bool IsNumericClrType(Type type)
@@ -575,8 +589,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
                            column.PropertyInfo.PropertyType;
         if (propertyType != typeof(DateTime) && propertyType != typeof(DateTimeOffset))
         {
-            throw new InvalidOperationException(
-                $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be DateTime or DateTimeOffset.");
+            throw new SqlGenerationException(
+                $"Property {entityType.FullName}.{column.PropertyInfo.Name} must be DateTime or DateTimeOffset.",
+                SupportedDatabase.Unknown);
         }
     }
 
@@ -606,8 +621,9 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             case TypeCode.UInt64:
                 return;
             default:
-                throw new InvalidOperationException(
-                    $"Property {entityType.FullName}.{column.PropertyInfo.Name} marked with [Version] must be an integer or byte array.");
+                throw new SqlGenerationException(
+                    $"Property {entityType.FullName}.{column.PropertyInfo.Name} marked with [Version] must be an integer or byte array.",
+                    SupportedDatabase.Unknown);
         }
     }
 

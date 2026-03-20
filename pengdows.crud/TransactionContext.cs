@@ -29,6 +29,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -216,9 +217,19 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
         // but preserve the resolved isolation level for reporting and logic.
-        transaction = context.Product == SupportedDatabase.DuckDB
-            ? connection.BeginTransaction()
-            : connection.BeginTransaction(resolvedIsolation);
+        try
+        {
+            transaction = context.Product == SupportedDatabase.DuckDB
+                ? connection.BeginTransaction()
+                : connection.BeginTransaction(resolvedIsolation);
+        }
+        catch (Exception ex)
+        {
+            context.CloseAndDisposeConnection(connection);
+            throw new TransactionException(
+                $"Failed to begin transaction on {context.Product}: {ex.Message}",
+                context.Product, ex);
+        }
 
         return connection;
     }
@@ -683,10 +694,13 @@ MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollecto
                 Interlocked.Exchange(ref _rolledBack, 1);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            Interlocked.Exchange(ref _completedState, 0);
-            throw;
+            // Do NOT reset _completedState — connection is already closed in finally.
+            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+            throw new TransactionException(
+                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                _context.Product, ex);
         }
         finally
         {
@@ -716,10 +730,13 @@ MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollecto
                 Interlocked.Exchange(ref _rolledBack, 1);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            Interlocked.Exchange(ref _completedState, 0);
-            throw;
+            // Do NOT reset _completedState — connection is already closed in finally.
+            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+            throw new TransactionException(
+                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                _context.Product, ex);
         }
         finally
         {
@@ -895,9 +912,20 @@ MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollecto
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
         await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
 
-        var transaction = context.Product == SupportedDatabase.DuckDB
-            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
-            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+        IDbTransaction transaction;
+        try
+        {
+            transaction = context.Product == SupportedDatabase.DuckDB
+                ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+                : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            throw new TransactionException(
+                $"Failed to begin transaction on {context.Product}: {ex.Message}",
+                context.Product, ex);
+        }
 
         var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger);
 

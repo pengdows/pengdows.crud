@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using pengdows.crud.attributes;
+using pengdows.crud.exceptions;
 using Xunit;
 
 #endregion
@@ -124,7 +125,7 @@ public class TableGatewayOrderingTests : SqlLiteContextTestBase
     public void BuildWhereByPrimaryKey_NoKeys_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.Register<NoKeyEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.Register<NoKeyEntity>());
     }
 
     [Table("Ordered")]

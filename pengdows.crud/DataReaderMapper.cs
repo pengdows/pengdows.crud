@@ -34,6 +34,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
@@ -384,8 +385,9 @@ internal sealed class DataReaderMapper : IDataReaderMapper
             {
                 if (options.Strict)
                 {
-                    throw new InvalidOperationException(
+                    throw new DataMappingException(
                         $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
+                        SupportedDatabase.Unknown,
                         ex);
                 }
 

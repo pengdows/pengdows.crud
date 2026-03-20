@@ -59,7 +59,7 @@ public class TypeMapRegistryTests
     public void GetTableInfo_ThrowsIfMissingTableAttribute()
     {
         var registry = new TypeMapRegistry();
-        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NoTable>());
+        var ex = Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<NoTable>());
         Assert.Contains("does not have a TableAttribute", ex.Message);
     }
 
@@ -150,7 +150,7 @@ public class TypeMapRegistryTests
     public void GetTableInfo_ThrowsIfNoKeyDefined()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NoKeyEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<NoKeyEntity>());
     }
 
     [Fact]
@@ -229,42 +229,42 @@ public class TypeMapRegistryTests
     public void GetTableInfo_ThrowsOnDuplicateColumnName()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateColumns>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateColumns>());
     }
 
     [Fact]
     public void GetTableInfo_ValidatesPrimaryKeyOrderingRules()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<BadPkOrder>());
 
         var info = registry.GetTableInfo<ZeroPkOrder>();
         Assert.Single(info.PrimaryKeys);
         Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
 
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<MixedPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<MixedPkOrder>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsForInvalidVersionType()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidVersionEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidVersionEntity>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsForInvalidLastUpdatedOnType()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidLastUpdatedEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidLastUpdatedEntity>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsOnDuplicateOrdinal()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
     }
 
     [Fact]

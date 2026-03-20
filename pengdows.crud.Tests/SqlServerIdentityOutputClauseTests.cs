@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -270,7 +271,7 @@ public class SqlServerIdentityOutputClauseTests
         var context = new DatabaseContext("test", factory, _typeMap);
 
         // Assert: constructing helper should fail due to missing [Id]/[PrimaryKey]
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
     }
 
     [Fact]

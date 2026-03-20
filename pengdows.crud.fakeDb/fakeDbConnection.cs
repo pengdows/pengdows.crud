@@ -21,6 +21,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _shouldFailOnOpen;
     private bool _shouldFailOnCommand;
     private bool _shouldFailOnBeginTransaction;
+    private Exception? _transactionCommitException;
+    private Exception? _transactionRollbackException;
     private Exception? _closeFailureException;
     private Exception? _customFailureException;
     private int _openCallCount;
@@ -200,6 +202,22 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void SetFailOnBeginTransaction(bool shouldFail = true)
     {
         _shouldFailOnBeginTransaction = shouldFail;
+    }
+
+    /// <summary>
+    /// Sets an exception to be thrown when the transaction's Commit() is called.
+    /// </summary>
+    public void SetTransactionCommitException(Exception exception)
+    {
+        _transactionCommitException = exception;
+    }
+
+    /// <summary>
+    /// Sets an exception to be thrown when the transaction's Rollback() is called.
+    /// </summary>
+    public void SetTransactionRollbackException(Exception exception)
+    {
+        _transactionRollbackException = exception;
     }
 
     /// <summary>
@@ -645,7 +663,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw new InvalidOperationException("Connection must be open to begin transaction");
         }
 
-        return new fakeDbTransaction(this, isolationLevel);
+        var tx = new fakeDbTransaction(this, isolationLevel);
+        if (_transactionCommitException != null)
+        {
+            tx.CommitException = _transactionCommitException;
+        }
+
+        if (_transactionRollbackException != null)
+        {
+            tx.RollbackException = _transactionRollbackException;
+        }
+
+        return tx;
     }
 
     protected override DbCommand CreateDbCommand()

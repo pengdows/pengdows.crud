@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -102,7 +103,7 @@ public class DataReaderMapperNegativeTests
             var reader = new fakeDbDataReader(rows);
             var options = new MapperOptions(true);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            await Assert.ThrowsAsync<DataMappingException>(() =>
                 DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
         }
         finally
@@ -128,7 +129,7 @@ public class DataReaderMapperNegativeTests
 
         var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(true);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<DataMappingException>(() =>
             DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
     }
 
@@ -149,7 +150,7 @@ public class DataReaderMapperNegativeTests
         var options = new MapperOptions(true);
         var stream = DataReaderMapper.StreamAsync<SampleEntity>(reader, options);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<DataMappingException>(async () =>
         {
             await foreach (var _ in stream)
             {

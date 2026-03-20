@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -161,7 +162,7 @@ public class PrimaryKeyTableGatewayTests
     public void Constructor_EntityWithNoPrimaryKey_Throws()
     {
         using var ctx = MakeContext(SupportedDatabase.Sqlite);
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<SqlGenerationException>(() =>
             new PrimaryKeyTableGateway<NoKeyEntity>(ctx));
     }
 

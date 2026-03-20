@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -296,7 +297,7 @@ public class DataReaderMapperTests
             }
         });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<DataMappingException>(() =>
             DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)).AsTask());
     }
 

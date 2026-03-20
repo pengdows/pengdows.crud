@@ -21,6 +21,7 @@ using pengdows.crud.strategies.connection;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.metrics;
 using Xunit;
@@ -142,8 +143,8 @@ public class TransactionContextTests
         var context = CreateTestContext(throwOnCommit: true);
         var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
 
-        Assert.Throws<InvalidOperationException>(() => tx.Commit());
-        Assert.False(tx.IsCompleted);
+        Assert.Throws<TransactionException>(() => tx.Commit());
+        Assert.True(tx.IsCompleted);
         Assert.False(tx.WasCommitted);
         Assert.False(tx.WasRolledBack);
         Assert.True(context.ConnectionReleased);
@@ -157,8 +158,8 @@ public class TransactionContextTests
         var context = CreateTestContext(throwOnRollback: true);
         var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
 
-        Assert.Throws<InvalidOperationException>(() => tx.Rollback());
-        Assert.False(tx.IsCompleted);
+        Assert.Throws<TransactionException>(() => tx.Rollback());
+        Assert.True(tx.IsCompleted);
         Assert.False(tx.WasRolledBack);
         Assert.True(context.ConnectionReleased);
 
