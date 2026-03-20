@@ -209,9 +209,12 @@ Uuid7Optimized.NewUuid7Bytes(buffer);
 
 pengdows.crud enforces this philosophy through its attribute system:
 
-- `[Id]` marks a unique surrogate key column — single column only
+- `[Id]` marks a unique surrogate/pseudo key column — only one `[Id]` column per entity class
 - `[PrimaryKey]` may be used on one or more fields for business identity
-- `[Id]` is required for row-id based operations; `CreateAsync` can work with `[PrimaryKey]`-only entities
+- **`[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on the same column** — never apply both to the same property
+- `[Id]` and `[PrimaryKey]` CAN coexist on **different** columns of the same entity (surrogate + business key)
+- `[Id]` drives the `TRowID` type parameter of `TableGateway<TEntity, TRowID>`
+- `[Id]` is required for row-id based operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`); `CreateAsync` can work with `[PrimaryKey]`-only entities
 - `RetrieveOneAsync(entity)` targets `[PrimaryKey]` columns, not `[Id]`
 
 ### Choosing the Right Gateway

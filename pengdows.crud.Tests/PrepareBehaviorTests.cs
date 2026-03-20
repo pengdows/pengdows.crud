@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -301,10 +302,11 @@ public class PrepareBehaviorTests
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)
         {
             sc!.AddParameterWithValue("p0", DbType.Int32, 1);
-            _ = await Assert.ThrowsAsync<FakeMySqlDbException>(async () =>
+            var ex = await Assert.ThrowsAsync<CommandTimeoutException>(async () =>
             {
                 _ = await sc.ExecuteNonQueryAsync();
             });
+            Assert.IsType<FakeMySqlDbException>(ex.InnerException);
         }
 
         await using (var sc = tx.CreateSqlContainer("SELECT @p0") as SqlContainer)

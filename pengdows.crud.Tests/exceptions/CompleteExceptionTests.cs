@@ -151,4 +151,58 @@ public class CompleteExceptionTests
         Assert.Equal("", connectionFailedException.Message);
         Assert.Equal("", transactionModeNotSupportedException.Message);
     }
+
+    // -------------------------------------------------------------------------
+    // Inner-exception constructor coverage
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void InvalidValueException_WithInnerException_StoresInnerAndMessage()
+    {
+        var inner = new InvalidOperationException("root cause");
+        var ex = new InvalidValueException("outer message", inner);
+
+        Assert.Equal("outer message", ex.Message);
+        Assert.Same(inner, ex.InnerException);
+    }
+
+    [Fact]
+    public void NoColumnsFoundException_WithInnerException_StoresInnerAndMessage()
+    {
+        var inner = new InvalidOperationException("root cause");
+        var ex = new NoColumnsFoundException("outer message", inner);
+
+        Assert.Equal("outer message", ex.Message);
+        Assert.Same(inner, ex.InnerException);
+    }
+
+    [Fact]
+    public void TooManyColumns_WithInnerException_StoresInnerAndMessage()
+    {
+        var inner = new InvalidOperationException("root cause");
+        var ex = new TooManyColumns("outer message", inner);
+
+        Assert.Equal("outer message", ex.Message);
+        Assert.Same(inner, ex.InnerException);
+    }
+
+    [Fact]
+    public void PrimaryKeyOnRowIdColumn_WithMessage_CreatesException()
+    {
+        var ex = new PrimaryKeyOnRowIdColumn("test message");
+
+        Assert.Equal("test message", ex.Message);
+        Assert.IsType<PrimaryKeyOnRowIdColumn>(ex);
+        Assert.IsAssignableFrom<Exception>(ex);
+    }
+
+    [Fact]
+    public void PrimaryKeyOnRowIdColumn_WithInnerException_StoresInnerAndMessage()
+    {
+        var inner = new InvalidOperationException("root cause");
+        var ex = new PrimaryKeyOnRowIdColumn("outer message", inner);
+
+        Assert.Equal("outer message", ex.Message);
+        Assert.Same(inner, ex.InnerException);
+    }
 }

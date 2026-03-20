@@ -64,6 +64,9 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     private readonly IDatabaseContextFactory _contextFactory;
     private readonly int? _maxTenantCount;
 
+    public event Action<IDatabaseContext>? ContextCreated;
+    public event Action<IDatabaseContext>? ContextRemoved;
+
     /// <param name="serviceProvider">DI service provider used to resolve keyed <see cref="DbProviderFactory"/> instances.</param>
     /// <param name="resolver">Maps tenant identifiers to their database configurations.</param>
     /// <param name="contextFactory">Factory used to construct <see cref="IDatabaseContext"/> instances.</param>
@@ -127,14 +130,19 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     {
         if (_contexts.TryRemove(tenant, out var lazy) && lazy.IsValueCreated)
         {
+            var context = lazy.Value;
             try
             {
-                lazy.Value.Dispose();
+                context.Dispose();
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error disposing tenant context during invalidation for tenant '{Tenant}'.",
                     tenant);
+            }
+            finally
+            {
+                ContextRemoved?.Invoke(context);
             }
         }
     }
@@ -155,7 +163,9 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         var factory = _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
                       ?? throw new InvalidOperationException($"No factory registered for '{config.ProviderName}'.");
 
-        return _contextFactory.Create(config, factory, _loggerFactory);
+        var context = _contextFactory.Create(config, factory, _loggerFactory);
+        ContextCreated?.Invoke(context);
+        return context;
     }
 
     protected override void DisposeManaged()
@@ -169,7 +179,9 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
             try
             {
-                lazy.Value.Dispose();
+                var context = lazy.Value;
+                context.Dispose();
+                ContextRemoved?.Invoke(context);
             }
             catch (Exception ex)
             {
@@ -200,6 +212,8 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                 {
                     context.Dispose();
                 }
+
+                ContextRemoved?.Invoke(context);
             }
             catch (Exception ex)
             {

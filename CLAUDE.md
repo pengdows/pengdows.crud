@@ -272,7 +272,7 @@ public int Version { get; set; }
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
 
-**Conflict detection:** If `UpdateAsync` returns 0 rows affected, another process modified the row (version mismatch).
+**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
 
 ## Upsert Behavior
 
@@ -313,6 +313,7 @@ pengdows.crud uses **context-per-tenant** (not query filtering):
 - **No "WHERE tenant_id = X" injection** — tenants are physically separated
 - Each tenant can use a different database type (SQL Server, PostgreSQL, MySQL, etc.)
 - Use `ITenantContextRegistry` as a singleton to manage per-tenant `DatabaseContext` instances
+- `TenantContextRegistry` exposes `ContextCreated` and `ContextRemoved` events (`Action<IDatabaseContext>`) — fired when a context is created or disposed/invalidated
 
 ```csharp
 // Pass tenant context to CRUD methods to route to tenant's database
@@ -501,7 +502,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   ├── TransientWriteConflictException (abstract, IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
-│   ├── ConcurrencyConflictException        — [Version] UPDATE returned 0 rows affected
+│   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
 │   └── TransactionException               — begin/commit/rollback failure
@@ -518,6 +519,29 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 `OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
 
 **Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
+
+### ISqlDialect.AnalyzeException — provider-agnostic exception analysis
+
+`ISqlDialect.AnalyzeException(Exception)` returns a `DbExceptionInfo` record with provider-neutral fields for control flow:
+
+```csharp
+var info = context.Dialect.AnalyzeException(ex);
+if (info.IsRetryable) { /* retry */ }
+if (info.ConstraintKind == DbConstraintKind.ForeignKey) { /* 409 response */ }
+```
+
+`DbExceptionInfo` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Category` | `DbErrorCategory` | High-level category (ConstraintViolation, Deadlock, Timeout, …) |
+| `ConstraintKind` | `DbConstraintKind` | Specific constraint: None, Unique, ForeignKey, NotNull, Check, Unknown |
+| `IsTransient` | `bool` | True for deadlock, serialization failure, timeout |
+| `IsRetryable` | `bool` | True when the caller should generally retry |
+| `ProviderErrorCode` | `int?` | Provider-specific numeric error code when available |
+| `SqlState` | `string?` | SQLSTATE code when available |
+
+`ISqlDialect` also exposes targeted boolean helpers: `IsUniqueViolation`, `IsForeignKeyViolation`, `IsNotNullViolation`, `IsCheckConstraintViolation` — all accept `DbException` and default to `false` in the interface (overridden per dialect).
 
 ## DI Lifetime Rules
 

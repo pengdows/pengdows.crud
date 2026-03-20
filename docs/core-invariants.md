@@ -37,6 +37,17 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - It simulates provider behavior, not SQL execution or constraints.
    - Integration tests remain required for real database behavior.
 
+9. **TryExecuteScalarAsync returns ScalarResult<T> — three distinct outcomes.**
+   - `None` = query returned no rows.
+   - `Null` = query returned a row with a NULL value.
+   - `Value` = query returned a non-null value.
+   - Do not conflate `None` and `Null` — they represent different database states.
+   - Use `ExecuteScalarOrNullAsync<T>` only when you intentionally treat no-rows and null as equivalent.
+
+10. **ISqlContainer.Query is ISqlQueryBuilder, not StringBuilder.**
+    - `Query` exposes a fluent `ISqlQueryBuilder` API: `Append`, `AppendLine`, `AppendFormat`, `Replace`, `Clear`.
+    - All hot-path execute methods on `ISqlContainer` return `ValueTask` (not `Task`).
+
 ## Common Failure Modes (Symptoms → Likely Cause)
 
 - **SQLITE_BUSY or data not shared across requests** → scoped/transient DatabaseContext or wrong DbMode.

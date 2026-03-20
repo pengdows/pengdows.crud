@@ -1,5 +1,12 @@
 # OpenTelemetry Metrics Adapter Plan
 
+> **STATUS: PLANNED — Not yet implemented in 2.0**
+>
+> Nothing described in this document exists in the current codebase. No OpenTelemetry package,
+> adapter, or instrumentation hooks have been implemented. This document records the proposed
+> design for a future optional package. Do not reference any of the APIs, package names, or
+> registration helpers below as if they are available — they are not.
+
 This document records the proposed design for exposing `pengdows.crud` metrics through
 OpenTelemetry in a future package. It is intentionally a plan, not a commitment.
 

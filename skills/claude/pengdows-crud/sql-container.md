@@ -57,15 +57,38 @@ var outParam = sc.AddParameterWithValue("result", DbType.Int32, 0, ParameterDire
 
 ## Execution Methods
 
-All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads.
+All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads and `ExecutionType` overloads for explicit read/write pool routing.
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `ExecuteReaderAsync(CommandType)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
-| `ExecuteNonQueryAsync(CommandType)` | `ValueTask<int>` | Returns affected row count |
-| `ExecuteScalarRequiredAsync<T>(CommandType)` | `ValueTask<T>` | Returns value — throws if no rows or null |
-| `ExecuteScalarOrNullAsync<T>(CommandType)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
-| `TryExecuteScalarAsync<T>(CommandType)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
+| `ExecuteNonQueryAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<int>` | Returns affected row count |
+| `ExecuteScalarRequiredAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows or null |
+| `ExecuteScalarOrNullAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
+| `TryExecuteScalarAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
+| `ExecuteReaderAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
+
+## ScalarResult\<T\>
+
+`TryExecuteScalarAsync<T>` returns `ScalarResult<T>` to unambiguously distinguish three outcomes:
+
+| `Status` | Meaning |
+|----------|---------|
+| `ScalarStatus.None` | Query returned no rows |
+| `ScalarStatus.Null` | Row returned but column value was `DBNull` |
+| `ScalarStatus.Value` | Row returned with a non-null value |
+
+```csharp
+var result = await sc.TryExecuteScalarAsync<int>();
+if (result.HasValue)
+{
+    Console.WriteLine(result.Required); // returns Value or throws if not Value
+}
+// or switch on result.Status for full control
+```
+
+Use `ExecuteScalarRequiredAsync<T>` when you expect a value and want an exception on absence.
+Use `ExecuteScalarOrNullAsync<T>` when no-rows and DBNull should both map to `null`.
+Use `TryExecuteScalarAsync<T>` when you need to distinguish no-rows from DBNull.
 
 ## Clone for Reuse
 
@@ -145,6 +168,7 @@ Returns the wrapped SQL string. The `captureReturn` parameter enables capturing 
 
 ## Disposal and Cleanup
 
+- `Clear()` — resets the query builder and all parameters, reusing the container for a new statement
 - `Dispose()` clears parameters and query buffer
 - Finalizer calls `Dispose(false)` to ensure unmanaged cleanup
 - `Cleanup()` handles connection and command cleanup based on execution mode

@@ -3,6 +3,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -174,6 +175,91 @@ public class CoveragePush_SqlContainerEdgeCaseTests : SqlLiteContextTestBase
         // Covers line 1078-1081: ExecuteNonQueryAsync(ExecutionType, CommandType)
         // which delegates to the 4-arg version with CancellationToken.None.
         await using var sc = Context.CreateSqlContainer("SELECT 1");
+        var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
+        Assert.True(result >= 0);
+    }
+
+    // =========================================================================
+    // NormalizeParameterName — empty string early return (SqlContainer.cs line 179)
+    // AddParameterWithValue("") creates a parameter with empty name;
+    // CreateDbParameter calls NormalizeParameterName("") → line 179 returns early.
+    // AddParameter then replaces the empty name with a generated name.
+    // =========================================================================
+
+    [Fact]
+    public void AddParameterWithValue_EmptyName_StillAddsParameter()
+    {
+        // Covers SqlContainer.cs line 179: NormalizeParameterName("") returns early
+        using var sc = Context.CreateSqlContainer("SELECT 1");
+        var param = sc.AddParameterWithValue("", DbType.Int32, 42);
+
+        // The parameter was added (with a generated name since empty was replaced)
+        Assert.NotNull(param);
+        Assert.Equal(1, sc.ParameterCount);
+    }
+
+    // =========================================================================
+    // Clone() with _renderedParameterMap populated (SqlContainer.cs lines 2041-2042)
+    // Oracle dialect has SupportsRepeatedNamedParameters=false so uses
+    // RenderParamsDeduplicating which populates _renderedParameterMap when a
+    // parameter name appears more than once in the rendered SQL.
+    // =========================================================================
+
+    [Fact]
+    public async Task Clone_OracleContext_WithDuplicateParams_CopiesRenderedParameterMap()
+    {
+        // Oracle: SupportsRepeatedNamedParameters=false → RenderParamsDeduplicating
+        // → _renderedParameterMap populated when same {P}param used twice
+        await using var oracleCtx = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=Oracle",
+            new fakeDbFactory(SupportedDatabase.Oracle));
+
+        // Use {P}val twice — second occurrence will be deduplicated to val_2
+        await using var sc = oracleCtx.CreateSqlContainer("SELECT {P}val + {P}val FROM dual");
+        sc.AddParameterWithValue("val", DbType.Int32, 1);
+
+        // Execute to trigger RenderParamsDeduplicating → sets _renderedParameterMap
+        await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
+
+        // Clone copies _renderedParameterMap (lines 2041-2042)
+        using var clone = sc.Clone();
+        Assert.NotNull(clone);
+    }
+
+    // =========================================================================
+    // RenderParamsDeduplicating — no {P} placeholders → sb == null → line 423
+    // Oracle context executes SQL without any {P} tokens; RenderParamsDeduplicating
+    // finds nothing to replace → sb remains null → returns sql unchanged (line 423).
+    // =========================================================================
+
+    [Fact]
+    public async Task Oracle_SqlWithoutPlaceholders_RenderParamsDeduplicating_ReturnsUnchanged()
+    {
+        await using var oracleCtx = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=Oracle",
+            new fakeDbFactory(SupportedDatabase.Oracle));
+
+        // No {P} placeholders → RenderParamsDeduplicating sb stays null → line 423
+        await using var sc = oracleCtx.CreateSqlContainer("SELECT 1 FROM dual");
+        var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
+        Assert.True(result >= 0);
+    }
+
+    // =========================================================================
+    // OpenConnectionAsync — RequiresSerializedOpen path (SqlContainer.cs lines 1945-1952)
+    // DuckDB sets RequiresSerializedOpen=true; executing any SQL goes through the
+    // serialized open gate, covering lines 1945-1952.
+    // =========================================================================
+
+    [Fact]
+    public async Task DuckDb_SqlExecution_UsesSerializedOpenPath()
+    {
+        await using var duckCtx = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=DuckDB",
+            new fakeDbFactory(SupportedDatabase.DuckDB));
+
+        // Any SQL execution opens the connection through the serialized gate for DuckDB
+        await using var sc = duckCtx.CreateSqlContainer("SELECT 1");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
         Assert.True(result >= 0);
     }

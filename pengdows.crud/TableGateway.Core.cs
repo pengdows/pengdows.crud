@@ -1121,7 +1121,15 @@ public partial class TableGateway<TEntity, TRowID> :
         try
         {
             await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
-            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            if (rowsAffected == 0 && _versionColumn != null)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                    ctx.Product);
+            }
+
+            return rowsAffected;
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
         {

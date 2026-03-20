@@ -24,7 +24,13 @@ The core coercion logic provides:
 
 ## Enum Parsing
 
-pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
+pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`. Set it on the gateway via the `EnumParseBehavior` property:
+
+```csharp
+gateway.EnumParseBehavior = EnumParseFailureMode.SetNullAndLog;
+```
+
+`EnumParseFailureMode` has three values:
 
 ### EnumParseFailureMode.Throw (Default)
 
@@ -32,19 +38,26 @@ pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
 - Recommended for strict validation scenarios
 - Ensures data integrity by failing fast on invalid values
 
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.Throw);
-```
+### EnumParseFailureMode.SetNullAndLog
 
-### EnumParseFailureMode.ReturnDefault
+- Sets the property to `null` (requires a nullable enum type) on parse failure
+- Logs a warning so the failure is visible without crashing
+- Useful when bad data is expected and the application can tolerate a null
 
-- Returns the enum's default value (typically 0) on parse failure
-- Useful for data migration scenarios
-- Logs warnings for failed conversions
+### EnumParseFailureMode.SetDefaultValue
 
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.ReturnDefault);
-```
+- Sets the property to the enum's default value (value `0`) on parse failure
+- Useful for data migration or legacy-data scenarios where the default is a safe sentinel
+
+## Enum Column Attributes
+
+Three attributes control how enum columns are mapped:
+
+| Attribute | Purpose |
+|-----------|---------|
+| `[EnumColumn(Type enumType)]` | Explicitly declares the enum type for a column |
+| `[EnumLiteral(string literal)]` | Overrides the database string for a specific enum member |
+| `[Json]` | Serializes the value as JSON (works for complex types and enums stored as JSON objects) |
 
 ## Cross-Database Type Mapping
 
@@ -79,8 +92,32 @@ public UserSettings Settings { get; set; }
 
 - Automatically serializes/deserializes complex types
 - Uses `System.Text.Json` by default
+- The `[Json]` attribute exposes a `SerializerOptions` property for supplying a custom `JsonSerializerOptions` instance
 - Supports nullable reference types
 - Works across all supported databases
+
+## Special-Purpose Coercion Attributes
+
+### [CorrelationToken]
+
+Marks a column used as a fallback correlation identifier on databases that do not support `RETURNING` / `OUTPUT` clauses. When the database cannot return the generated row ID inline, pengdows.crud uses this column to locate the newly inserted row.
+
+### [Version]
+
+Enables optimistic concurrency control:
+
+```csharp
+[Version]
+[Column("version")]
+public int Version { get; set; }
+```
+
+| Operation | Behavior |
+|-----------|----------|
+| **Create** | Version is automatically set to `1` if null or `0` |
+| **Update** | Version is incremented by 1 in the `SET` clause; `WHERE version = @currentVersion` is appended |
+
+`UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch — optimistic concurrency conflict).
 
 ## Null Handling
 

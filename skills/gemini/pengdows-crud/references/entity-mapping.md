@@ -10,17 +10,18 @@ Specifies the database table name for an entity.
 
 ```csharp
 [Table("table_name")]
-[Table("schema.table_name")]  // With schema
+[Table("table_name", "schema_name")]  // With schema as second argument
 public class MyEntity { }
 ```
 
 **Parameters:**
-- `name` (string) — Table name, optionally schema-qualified
+- `name` (string) — Table name
+- `schema` (string, optional) — Schema name (e.g., "dbo", "public", "wiki")
 
 **Notes:**
 - Required on all entities used with TableGateway
-- Supports schema qualification (e.g., "dbo.users", "public.accounts")
-- Schema portion is automatically quoted per database requirements
+- Schema is passed as a separate second argument, not dot-prefixed in the name
+- Schema and table name are automatically quoted per database requirements
 
 ### ColumnAttribute
 
@@ -28,14 +29,14 @@ Maps a property to a database column with type information.
 
 ```csharp
 [Column("column_name", DbType.String)]
-[Column("column_name", DbType.Int32, 50)]  // With size
+[Column("column_name", DbType.Int32, 2)]  // With explicit ordinal
 public string Name { get; set; }
 ```
 
 **Parameters:**
 - `name` (string) — Database column name
 - `type` (DbType) — ADO.NET database type
-- `size` (int, optional) — Column size for variable-length types
+- `ordinal` (int, optional, default: 0) — Column ordinal position in SELECT results
 
 **Supported DbTypes:**
 - `DbType.String` — Text/varchar columns
@@ -306,7 +307,7 @@ public class Product
     [Column("id", DbType.Int64)]
     public long Id { get; set; }
 
-    [Column("name", DbType.String, 100)]
+    [Column("name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
     [Column("price", DbType.Decimal)]
@@ -336,18 +337,18 @@ public class TenantUser
     public Guid Id { get; set; } = Guid.NewGuid();
 
     [PrimaryKey(1)]
-    [Column("tenant_id", DbType.String, 50)]
+    [Column("tenant_id", DbType.String)]
     public string TenantId { get; set; } = string.Empty;
 
     [PrimaryKey(2)]
-    [Column("email", DbType.String, 255)]
+    [Column("email", DbType.String)]
     public string Email { get; set; } = string.Empty;
 
-    [Column("name", DbType.String, 100)]
+    [Column("name", DbType.String)]
     public string Name { get; set; } = string.Empty;
 
     [EnumColumn(typeof(UserRole))]
-    [Column("role", DbType.String, 20)]
+    [Column("role", DbType.String)]
     public UserRole Role { get; set; }
 
     [Version]
@@ -355,7 +356,7 @@ public class TenantUser
     public int Version { get; set; }
 
     [CreatedBy]
-    [Column("created_by", DbType.String, 50)]
+    [Column("created_by", DbType.String)]
     public string CreatedBy { get; set; } = string.Empty;
 
     [CreatedOn]
@@ -363,7 +364,7 @@ public class TenantUser
     public DateTime CreatedAt { get; set; }
 
     [LastUpdatedBy]
-    [Column("updated_by", DbType.String, 50)]
+    [Column("updated_by", DbType.String)]
     public string? UpdatedBy { get; set; }
 
     [LastUpdatedOn]
@@ -392,7 +393,7 @@ public class UserProfile
     [Column("user_id", DbType.Guid)]
     public Guid UserId { get; set; }
 
-    [Column("display_name", DbType.String, 100)]
+    [Column("display_name", DbType.String)]
     public string DisplayName { get; set; } = string.Empty;
 
     [Json]

@@ -2,6 +2,7 @@
 
 using System.Data.Common;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -127,6 +128,21 @@ public class DatabaseContextUncoveredMethodsTests
         Assert.Equal(SupportedDatabase.Sqlite, context.Product);
 
         context.Dispose();
+    }
+
+    // -------------------------------------------------------------------------
+    // ISqlDialectProvider.Dialect — explicit interface (DatabaseContext.cs line 597)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ISqlDialectProvider_Dialect_ReturnsDialect()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
+        using var context = new DatabaseContext(
+            $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
+
+        var dialectProvider = (ISqlDialectProvider)context;
+        Assert.NotNull(dialectProvider.Dialect);
     }
 
     [Fact]

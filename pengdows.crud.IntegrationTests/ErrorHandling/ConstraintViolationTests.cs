@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
@@ -69,11 +70,44 @@ public class ConstraintViolationTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 200);
             entity2.Id = entity1.Id; // Same ID as first entity
 
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await Assert.ThrowsAsync<UniqueConstraintViolationException>(async () =>
             {
                 await using var container = helper.BuildCreate(entity2, context);
                 await container.ExecuteNonQueryAsync();
             });
+        });
+    }
+
+    [SkippableFact]
+    public async Task PrimaryKeyViolation_DuplicateId_ClassifiesAsUniqueConstraintViolation()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            var helper = CreateTableGateway(context);
+            var entity1 = CreateTestEntity(NameEnum.Test, 101);
+            await helper.CreateAsync(entity1, context);
+
+            var entity2 = CreateTestEntity(NameEnum.Test2, 201);
+            entity2.Id = entity1.Id;
+
+            var ex = await CaptureDatabaseExceptionAsync(async () =>
+            {
+                await using var container = helper.BuildCreate(entity2, context);
+                await container.ExecuteNonQueryAsync();
+            });
+
+            Assert.Equal(provider, ex.Database);
+            Assert.IsType<UniqueConstraintViolationException>(ex);
+            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+            Assert.Equal(DbConstraintKind.Unique, info.ConstraintKind);
+            Assert.True(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
         });
     }
 
@@ -122,7 +156,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             }
 
             // Act & Assert - Try to insert duplicate
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await Assert.ThrowsAsync<UniqueConstraintViolationException>(async () =>
             {
                 await using var container = context.CreateSqlContainer();
                 container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
@@ -177,7 +211,43 @@ public class ConstraintViolationTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 200);
             entity2.Name = entity1.Name; // Same as entity1
 
-            await Assert.ThrowsAnyAsync<DbException>(async () => { await helper.CreateAsync(entity2, context); });
+            await Assert.ThrowsAsync<UniqueConstraintViolationException>(async () => { await helper.CreateAsync(entity2, context); });
+        });
+    }
+
+    [SkippableFact]
+    public async Task UniqueConstraint_DuplicateValue_ClassifiesAsUniqueConstraintViolation()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping unique constraint test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            if (!SupportsUniqueConstraints(provider))
+            {
+                Output.WriteLine($"Skipping unique constraint test for {provider}");
+                return;
+            }
+
+            await AddUniqueConstraintAsync(provider, context);
+
+            var helper = CreateTableGateway(context);
+            var entity1 = CreateTestEntity(NameEnum.Test, 110);
+            await helper.CreateAsync(entity1, context);
+
+            var entity2 = CreateTestEntity(NameEnum.Test2, 210);
+            entity2.Name = entity1.Name;
+
+            var ex = await CaptureDatabaseExceptionAsync(() => helper.CreateAsync(entity2, context).AsTask());
+
+            Assert.IsType<UniqueConstraintViolationException>(ex);
+            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+            Assert.Equal(DbConstraintKind.Unique, info.ConstraintKind);
+            Assert.True(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
         });
     }
 
@@ -203,12 +273,44 @@ public class ConstraintViolationTests : DatabaseTestBase
             var nonExistentId = -99999L;
 
             // Act & Assert
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await Assert.ThrowsAsync<ForeignKeyViolationException>(async () =>
             {
                 await using var container = context.CreateSqlContainer();
                 AppendInsertRelatedTable(container, provider, nonExistentId, "Related Item");
                 await container.ExecuteNonQueryAsync();
             });
+        });
+    }
+
+    [SkippableFact]
+    public async Task ForeignKeyViolation_InvalidReference_ClassifiesAsConstraintButNotUnique()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping FK constraint test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            if (provider == SupportedDatabase.Sqlite)
+            {
+                Output.WriteLine("Skipping FK test for SQLite");
+                return;
+            }
+
+            var ex = await CaptureDatabaseExceptionAsync(async () =>
+            {
+                await using var container = context.CreateSqlContainer();
+                AppendInsertRelatedTable(container, provider, -99999L, "Related Item");
+                await container.ExecuteNonQueryAsync();
+            });
+
+            Assert.IsType<ForeignKeyViolationException>(ex);
+            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+            Assert.Equal(DbConstraintKind.ForeignKey, info.ConstraintKind);
+            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
         });
     }
 
@@ -242,7 +344,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             }
 
             // Act & Assert - Try to delete parent (should fail due to FK)
-            await Assert.ThrowsAnyAsync<DbException>(async () => { await helper.DeleteAsync(parent.Id, context); });
+            await Assert.ThrowsAsync<ForeignKeyViolationException>(async () => { await helper.DeleteAsync(parent.Id, context); });
         });
     }
 
@@ -265,7 +367,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             var createdColumn = context.WrapObjectName("created_at");
 
             // Act & Assert - Try to insert NULL into NOT NULL column
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await Assert.ThrowsAsync<NotNullViolationException>(async () =>
             {
                 await using var container = context.CreateSqlContainer();
 
@@ -289,6 +391,55 @@ public class ConstraintViolationTests : DatabaseTestBase
 
                 await container.ExecuteNonQueryAsync();
             });
+        });
+    }
+
+    [SkippableFact]
+    public async Task NotNullViolation_NullRequiredField_ClassifiesAsConstraintButNotUnique()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
+
+            var ex = await CaptureDatabaseExceptionAsync(async () =>
+            {
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
+                container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                container.Query.Append("NULL, ");
+                container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                container.Query.Append(container.MakeParameterName("created")).Append(")");
+
+                container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
+                container.AddParameterWithValue("value", DbType.Int32, 401);
+                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
+
+                await container.ExecuteNonQueryAsync();
+            });
+
+            Assert.IsType<NotNullViolationException>(ex);
+            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+            Assert.Equal(DbConstraintKind.NotNull, info.ConstraintKind);
+            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
         });
     }
 
@@ -321,7 +472,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             var createdColumn = context.WrapObjectName("created_at");
 
             // Act & Assert - Try to insert value that violates CHECK
-            await Assert.ThrowsAnyAsync<DbException>(async () =>
+            await Assert.ThrowsAsync<CheckConstraintViolationException>(async () =>
             {
                 await using var container = context.CreateSqlContainer();
                 container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
@@ -344,6 +495,64 @@ public class ConstraintViolationTests : DatabaseTestBase
 
                 await container.ExecuteNonQueryAsync();
             });
+        });
+    }
+
+    [SkippableFact]
+    public async Task CheckConstraint_InvalidValue_ClassifiesAsCheckConstraint()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider == SupportedDatabase.Snowflake)
+            {
+                Output.WriteLine("Skipping CHECK constraint test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            if (!SupportsCheckConstraints(provider))
+            {
+                Output.WriteLine($"Skipping CHECK constraint test for {provider}");
+                return;
+            }
+
+            await AddCheckConstraintAsync(provider, context);
+
+            var tableName = IntegrationObjectNameHelper.Table(context, "test_table");
+            var idColumn = context.WrapObjectName("id");
+            var nameColumn = context.WrapObjectName("name");
+            var valueColumn = context.WrapObjectName("value");
+            var activeColumn = context.WrapObjectName("is_active");
+            var createdColumn = context.WrapObjectName("created_at");
+
+            var ex = await CaptureDatabaseExceptionAsync(async () =>
+            {
+                await using var container = context.CreateSqlContainer();
+                container.Query.Append("INSERT INTO ").Append(tableName).Append(" (");
+                container.Query.Append(idColumn).Append(", ");
+                container.Query.Append(nameColumn).Append(", ");
+                container.Query.Append(valueColumn).Append(", ");
+                container.Query.Append(activeColumn).Append(", ");
+                container.Query.Append(createdColumn).Append(") VALUES (");
+                container.Query.Append(container.MakeParameterName("id")).Append(", ");
+                container.Query.Append(container.MakeParameterName("name")).Append(", ");
+                container.Query.Append(container.MakeParameterName("value")).Append(", ");
+                container.Query.Append(container.MakeParameterName("active")).Append(", ");
+                container.Query.Append(container.MakeParameterName("created")).Append(")");
+
+                container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
+                container.AddParameterWithValue("name", DbType.String, "Test");
+                container.AddParameterWithValue("value", DbType.Int32, -100);
+                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
+
+                await container.ExecuteNonQueryAsync();
+            });
+
+            Assert.IsType<CheckConstraintViolationException>(ex);
+            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+            Assert.Equal(DbConstraintKind.Check, info.ConstraintKind);
+            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
         });
     }
 
@@ -380,7 +589,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
                 transaction.Commit(); // Should never reach here
             }
-            catch (DbException)
+            catch (DatabaseException)
             {
                 // Expected - constraint violation
             }
@@ -425,7 +634,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                     await helper.CreateAsync(entity, context);
                     successCount++;
                 }
-                catch (DbException)
+                catch (ConstraintViolationException)
                 {
                     failureCount++;
                 }
@@ -566,7 +775,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 await using var container = context.CreateSqlContainer(sql);
                 await container.ExecuteNonQueryAsync();
             }
-            catch (DbException)
+            catch (DatabaseException)
             {
                 // Constraint might already exist, ignore
             }
@@ -597,7 +806,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 await using var container = context.CreateSqlContainer(sql);
                 await container.ExecuteNonQueryAsync();
             }
-            catch (DbException)
+            catch (DatabaseException)
             {
                 // Constraint might already exist, ignore
             }
@@ -625,5 +834,24 @@ public class ConstraintViolationTests : DatabaseTestBase
             SupportedDatabase.MySql or
             SupportedDatabase.MariaDb or
             SupportedDatabase.Oracle;
+    }
+
+    private static DbException ExtractInnerDbException(DatabaseException exception)
+    {
+        return Assert.IsAssignableFrom<DbException>(exception.InnerException);
+    }
+
+    private static async Task<DatabaseException> CaptureDatabaseExceptionAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (DatabaseException ex)
+        {
+            return ex;
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected a DatabaseException to be thrown.");
     }
 }

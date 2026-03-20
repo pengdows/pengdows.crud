@@ -10,6 +10,8 @@
 
 ## Basic Setup
 
+When creating a `DatabaseContext` for unit tests with `fakeDb`, always use `DbMode.SingleConnection`. This prevents the fake provider from being called with multi-connection patterns it does not support.
+
 ```csharp
 using System.Data;
 using pengdows.crud;
@@ -23,7 +25,9 @@ public class BasicFakeDbTests
     public async Task BuildAndExecute_WorksWithFakeProvider()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=test;", factory);
+        var context = new DatabaseContext(
+            new DatabaseContextConfiguration { ConnectionString = "Data Source=test;", DbMode = DbMode.SingleConnection },
+            factory);
 
         using var sc = context.CreateSqlContainer("SELECT 1");
         var value = await sc.ExecuteScalarRequiredAsync<int>();
@@ -32,6 +36,8 @@ public class BasicFakeDbTests
     }
 }
 ```
+
+Tests should target `TableGateway<TEntity, TRowID>` (not `EntityHelper`, which was the 1.0 name).
 
 ## Queueing Fake Results
 
@@ -84,13 +90,25 @@ public void OpenFailure_IsConfigurable()
 }
 ```
 
+The five supported failure modes on `ConnectionFailureMode` are:
+
+| Mode | Behavior |
+|------|----------|
+| `FailOnOpen` | Throws when the connection is opened |
+| `FailOnCommand` | Throws when any command is executed |
+| `FailOnTransaction` | Throws when a transaction is begun |
+| `FailAfterCount` | Succeeds for N opens, then throws |
+| `Broken` | Simulates a fully broken/unusable connection |
+
 Additional failure controls are available on `fakeDbConnection`, including:
 
 - `SetFailOnOpen(...)`
 - `SetFailOnCommand(...)`
-- `SetFailOnBeginTransaction(...)`
+- `SetFailOnTransaction(...)`
 - `SetFailAfterOpenCount(...)`
 - `SetCustomFailureException(...)`
+
+Custom exception injection is supported — pass a specific exception instance to `SetCustomFailureException` to control exactly what is thrown. Connection tracking and disposal verification are also available for asserting correct resource cleanup.
 
 ## Recommended Coverage Pattern
 

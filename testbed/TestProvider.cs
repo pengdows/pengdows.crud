@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using testbed.Snowflake;
 
@@ -1947,7 +1948,7 @@ INSERT INTO {table} (
         // Insert first copy
         await _helper.CreateAsync(t, _context);
 
-        // 12a: Duplicate PK → must surface as DbException (except Snowflake, which doesn't enforce constraints)
+        // 12a: Duplicate PK → must surface as DatabaseException (except Snowflake, which doesn't enforce constraints)
         if (_context.Product == SupportedDatabase.Snowflake)
         {
             await _helper.CreateAsync(t, _context);
@@ -1958,11 +1959,11 @@ INSERT INTO {table} (
             try
             {
                 await _helper.CreateAsync(t, _context);
-                throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
+                throw new Exception("[ErrorMapping] Expected DatabaseException for duplicate PK — none thrown");
             }
-            catch (DbException ex)
+            catch (DatabaseException ex)
             {
-                CheckOk($"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+                CheckOk($"  [ErrorMapping] Unique violation → DatabaseException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
             }
         }
 
@@ -1972,15 +1973,15 @@ INSERT INTO {table} (
 
         await CleanupTestRow(id);
 
-        // 12c: Syntax error → must always surface as DbException with non-empty message
+        // 12c: Syntax error → must always surface as DatabaseException with non-empty message
         var badSc = _context.CreateSqlContainer("SELECT * FROM");
-        DbException? syntaxEx = null;
+        DatabaseException? syntaxEx = null;
         try
         {
             await badSc.ExecuteNonQueryAsync();
-            throw new Exception("[ErrorMapping] Expected DbException for syntax error — none thrown");
+            throw new Exception("[ErrorMapping] Expected DatabaseException for syntax error — none thrown");
         }
-        catch (DbException ex)
+        catch (DatabaseException ex)
         {
             syntaxEx = ex;
         }
@@ -1988,7 +1989,7 @@ INSERT INTO {table} (
         if (string.IsNullOrWhiteSpace(syntaxEx?.Message))
             throw new Exception("[ErrorMapping] Syntax error exception had empty message");
 
-        CheckOk($"  [ErrorMapping] Syntax error → DbException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
+        CheckOk($"  [ErrorMapping] Syntax error → DatabaseException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
     }
 
     // -------------------------------------------------------------------------

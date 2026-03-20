@@ -221,7 +221,7 @@ The `[Version]` attribute enables optimistic concurrency control:
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
 
-**Conflict detection:** If `UpdateAsync` returns 0 rows affected, another process modified the row (version mismatch).
+**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
 
 ## Upsert Behavior
 

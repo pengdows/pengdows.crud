@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -234,7 +235,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         factory.SetScalarException(new TimeoutException("Command timeout"));
 
-        await Assert.ThrowsAsync<TimeoutException>(() => helper.CreateAsync(entity, context).AsTask()
+        await Assert.ThrowsAsync<CommandTimeoutException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -291,6 +292,32 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context).AsTask()
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // CT CreateAsync default path + CT PopulateGeneratedIdAsync (TableGateway.Core.cs)
+    // MySQL: SupportsInsertReturning=false, HasSessionScopedLastIdFunction=true
+    // → GetGeneratedKeyPlan() = SessionScopedFunction → falls to default path (line 296)
+    // → rowsAffected==1 && _idColumn!=null && !IsIdWritable → PopulateGeneratedIdAsync called (line 301)
+    // PopulateGeneratedIdAsync: GetLastInsertedIdQuery()="SELECT LAST_INSERT_ID()" → non-empty
+    // → fakeDb returns 42 → generatedId non-null → TypeCoercionHelper.ConvertWithCache (lines 361-362)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CreateAsync_CT_MySql_DefaultPath_PopulatesGeneratedIntId()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<TestEntityWithAutoId>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        factory.SetNonQueryResult(1);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Test" };
+
+        // CT overload → CT CreateAsync → default path → CT PopulateGeneratedIdAsync
+        var result = await helper.CreateAsync(entity, context, CancellationToken.None);
+
+        Assert.True(result);
     }
 
     [Fact]

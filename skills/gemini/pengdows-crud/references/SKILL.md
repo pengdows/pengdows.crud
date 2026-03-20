@@ -20,7 +20,7 @@ public class Order
     public long Id { get; set; }
 
     [PrimaryKey(1)]  // Business key
-    [Column("order_number", DbType.String, 50)]
+    [Column("order_number", DbType.String)]
     public string OrderNumber { get; set; }
 
     [Column("customer_id", DbType.Int64)]
@@ -33,8 +33,8 @@ public class Order
 // 2. Extend TableGateway with custom methods
 public interface IOrderGateway : ITableGateway<Order, long>
 {
-    Task<Order?> GetByOrderNumberAsync(string orderNumber);
-    Task<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null);
+    ValueTask<Order?> GetByOrderNumberAsync(string orderNumber);
+    ValueTask<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null);
 }
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
@@ -43,13 +43,13 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
     {
     }
 
-    public async Task<Order?> GetByOrderNumberAsync(string orderNumber)
+    public async ValueTask<Order?> GetByOrderNumberAsync(string orderNumber)
     {
         var lookup = new Order { OrderNumber = orderNumber };
         return await RetrieveOneAsync(lookup);
     }
 
-    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null)
+    public async ValueTask<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null)
     {
         var sc = BuildBaseRetrieve("o");
 
@@ -269,9 +269,9 @@ services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 ```csharp
 public interface ICustomerGateway : ITableGateway<Customer, long>
 {
-    Task<Customer?> GetByEmailAsync(string email);
-    Task<List<Customer>> GetActiveCustomersAsync();
-    Task<List<Customer>> SearchByNameAsync(string namePattern);
+    ValueTask<Customer?> GetByEmailAsync(string email);
+    ValueTask<List<Customer>> GetActiveCustomersAsync();
+    ValueTask<List<Customer>> SearchByNameAsync(string namePattern);
 }
 
 public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
@@ -281,14 +281,14 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
     }
 
     // Lookup by business key
-    public async Task<Customer?> GetByEmailAsync(string email)
+    public async ValueTask<Customer?> GetByEmailAsync(string email)
     {
         var lookup = new Customer { Email = email };
         return await RetrieveOneAsync(lookup);
     }
 
     // Custom filtered query
-    public async Task<List<Customer>> GetActiveCustomersAsync()
+    public async ValueTask<List<Customer>> GetActiveCustomersAsync()
     {
         var sc = BuildBaseRetrieve("c");
 
@@ -305,7 +305,7 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
     }
 
     // Search with LIKE
-    public async Task<List<Customer>> SearchByNameAsync(string namePattern)
+    public async ValueTask<List<Customer>> SearchByNameAsync(string namePattern)
     {
         var sc = BuildBaseRetrieve("c");
 
@@ -518,7 +518,7 @@ public class OrderItem
 
 ```csharp
 // Inside your extended gateway class
-public async Task<List<Order>> GetRecentLargeOrdersAsync(decimal minTotal)
+public async ValueTask<List<Order>> GetRecentLargeOrdersAsync(decimal minTotal)
 {
     var sc = BuildBaseRetrieve("o");
 
@@ -578,7 +578,7 @@ Transactions are **operation-scoped** - create inside methods, never store as fi
 
 ```csharp
 // Inside your extended gateway
-public async Task<bool> CancelOrderAsync(long orderId)
+public async ValueTask<bool> CancelOrderAsync(long orderId)
 {
     await using var txn = await Context.BeginTransactionAsync();
     try
@@ -639,7 +639,7 @@ public int Version { get; set; }
 
 - **Create:** Auto-set to 1
 - **Update:** Increments and adds `WHERE version = @current`
-- **Conflict:** Returns 0 rows affected
+- **Conflict:** `UpdateAsync` automatically throws `ConcurrencyConflictException`
 
 ## Parameter Naming Convention
 

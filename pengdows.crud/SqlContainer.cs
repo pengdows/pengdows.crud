@@ -40,6 +40,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
 using pengdows.crud.threading;
@@ -106,6 +108,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>>
         ProviderSpecificCopiers = new();
+    private static readonly IDbExceptionTranslatorRegistry ExceptionTranslatorRegistry = new DbExceptionTranslatorRegistry();
 
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -1089,6 +1092,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public async ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType,
         CancellationToken cancellationToken)
     {
+        var operationKind = DetermineOperationKind(commandType, executionType);
         if (executionType == ExecutionType.Write)
         {
             // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
@@ -1146,41 +1150,65 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
-        catch (Exception ex) when (IsTimeout(ex))
+        catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            var translated = TranslateDatabaseException(ex, operationKind);
             if (activity != null)
             {
                 activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                 {
-                    { "exception.type", ex.GetType().FullName },
-                    { "exception.message", ex.Message },
-                    { "exception.stacktrace", ex.ToString() }
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
                 }));
             }
-            throw;
+            throw translated;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not DatabaseException)
         {
+            if (ex is not DbException)
+            {
+                metrics?.CommandFailed(startTimestamp);
+                if (metrics != null)
+                {
+                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                }
+
+                if (activity != null)
+                {
+                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.ToString() }
+                    }));
+                }
+
+                throw;
+            }
+
             metrics?.CommandFailed(startTimestamp);
+            var translated = TranslateDatabaseException(ex, operationKind);
             if (metrics != null)
             {
-                metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                metrics.RecordDbError(ClassifyTranslatedException(translated));
             }
 
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
                 activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                 {
-                    { "exception.type", ex.GetType().FullName },
-                    { "exception.message", ex.Message },
-                    { "exception.stacktrace", ex.ToString() }
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
                 }));
             }
 
-            throw;
+            throw translated;
         }
         finally
         {
@@ -1380,6 +1408,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         CancellationToken cancellationToken,
         bool singleRow)
     {
+        var operationKind = commandType == CommandType.StoredProcedure ? DbOperationKind.Unknown : DbOperationKind.Query;
         if (executionType == ExecutionType.Write)
         {
             _context.AssertIsWriteConnection();
@@ -1455,41 +1484,65 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
-        catch (Exception ex) when (IsTimeout(ex))
+        catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            var translated = TranslateDatabaseException(ex, operationKind);
             if (activity != null)
             {
                 activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                 {
-                    { "exception.type", ex.GetType().FullName },
-                    { "exception.message", ex.Message },
-                    { "exception.stacktrace", ex.ToString() }
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
                 }));
             }
-            throw;
+            throw translated;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not DatabaseException)
         {
+            if (ex is not DbException)
+            {
+                metrics?.CommandFailed(startTimestamp);
+                if (metrics != null)
+                {
+                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                }
+                
+                if (activity != null)
+                {
+                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.ToString() }
+                    }));
+                }
+
+                throw;
+            }
+
             metrics?.CommandFailed(startTimestamp);
+            var translated = TranslateDatabaseException(ex, operationKind);
             if (metrics != null)
             {
-                metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                metrics.RecordDbError(ClassifyTranslatedException(translated));
             }
             
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
                 activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
                 {
-                    { "exception.type", ex.GetType().FullName },
-                    { "exception.message", ex.Message },
-                    { "exception.stacktrace", ex.ToString() }
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
                 }));
             }
 
-            throw;
+            throw translated;
         }
         finally
         {
@@ -1782,7 +1835,54 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         return exception is TimeoutException ||
                exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+               (exception is DbException &&
+                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
+    {
+        return ExceptionTranslatorRegistry.Get(_dialect.DatabaseType)
+            .Translate(_dialect.DatabaseType, exception, operationKind);
+    }
+
+    private static DbErrorCategory ClassifyTranslatedException(DatabaseException exception)
+    {
+        return exception switch
+        {
+            DeadlockException => DbErrorCategory.Deadlock,
+            SerializationConflictException => DbErrorCategory.SerializationFailure,
+            ConstraintViolationException => DbErrorCategory.ConstraintViolation,
+            CommandTimeoutException => DbErrorCategory.Timeout,
+            _ => DbErrorCategory.Unknown
+        };
+    }
+
+    private DbOperationKind DetermineOperationKind(CommandType commandType, ExecutionType executionType)
+    {
+        if (commandType == CommandType.StoredProcedure)
+        {
+            return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
+        }
+
+        var sql = Query.ToString().TrimStart();
+        if (sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+            sql.StartsWith("MERGE", StringComparison.OrdinalIgnoreCase) ||
+            sql.StartsWith("UPSERT", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Insert;
+        }
+
+        if (sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Update;
+        }
+
+        if (sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Delete;
+        }
+
+        return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
     }
 
     private static bool ShouldUseSharedConnection(IDatabaseContext context, ExecutionType executionType,

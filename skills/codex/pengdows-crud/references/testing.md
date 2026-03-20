@@ -86,11 +86,13 @@ public void OpenFailure_IsConfigurable()
 
 Additional failure controls are available on `fakeDbConnection`, including:
 
-- `SetFailOnOpen(...)`
-- `SetFailOnCommand(...)`
-- `SetFailOnBeginTransaction(...)`
-- `SetFailAfterOpenCount(...)`
-- `SetCustomFailureException(...)`
+- `SetFailOnOpen(...)` — corresponds to `ConnectionFailureMode.FailOnOpen`
+- `SetFailOnCommand(...)` — corresponds to `ConnectionFailureMode.FailOnCommand`
+- `SetFailOnBeginTransaction(...)` — corresponds to `ConnectionFailureMode.FailOnTransaction`
+- `SetFailAfterOpenCount(...)` — corresponds to `ConnectionFailureMode.FailAfterCount`
+- `SetCustomFailureException(...)` — override the exception thrown on failure
+
+The `ConnectionFailureMode` enum values are: `FailOnOpen`, `FailOnCommand`, `FailOnTransaction`, `FailAfterCount`, `Broken`.
 
 ## Recommended Coverage Pattern
 

@@ -5,6 +5,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.exceptions;
 using pengdows.crud.Tests.fakeDb;
 using Xunit;
 
@@ -113,7 +114,8 @@ public class TableGatewayAdditionalBranchTests : RealSqliteContextTestBase
         var e = new BranchEntity { Id = 1, Name = "x" };
         var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true).AsTask());
         Assert.NotNull(ex);
-        Assert.IsAssignableFrom<DbException>(ex);
+        Assert.IsType<DatabaseOperationException>(ex);
+        Assert.IsAssignableFrom<DbException>(ex.InnerException);
         Assert.Contains("Simulated database error", ex!.Message);
     }
 

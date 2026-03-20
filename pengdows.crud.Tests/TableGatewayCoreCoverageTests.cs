@@ -209,6 +209,24 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         Assert.True((bool)method.Invoke(null, new object?[] { (Guid?)null })!);
     }
 
+    // -------------------------------------------------------------------------
+    // IsDefaultId — string TRowID, empty string (TableGateway.Core.cs line 1252)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void IsDefaultId_StringType_EmptyString_ReturnsTrue()
+    {
+        TypeMap.Register<StringWritableEntity>();
+        var method = typeof(TableGateway<StringWritableEntity, string>)
+                         .GetMethod("IsDefaultId", BindingFlags.NonPublic | BindingFlags.Static)
+                     ?? throw new InvalidOperationException("Missing helper");
+
+        // Empty string is the default for string TRowID → should return true
+        Assert.True((bool)method.Invoke(null, new object?[] { string.Empty })!);
+        // Non-empty string is not default → should return false
+        Assert.False((bool)method.Invoke(null, new object?[] { "non-empty" })!);
+    }
+
     [Fact]
     public void TryParseMajorVersion_ReturnsMajorDigits()
     {

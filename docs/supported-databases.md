@@ -1,18 +1,27 @@
 # Supported Databases
 
-pengdows.crud supports 13 directly supported databases with tested ADO.NET providers:
+pengdows.crud supports 14 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
-- SQL Server / Express / LocalDB
-- PostgreSQL / TimescaleDB / Aurora PostgreSQL
-- MySQL / MariaDB / Aurora MySQL
-- CockroachDB
-- YugabyteDB
-- TiDB
-- Oracle
-- SQLite
-- Firebird
-- DuckDB
-- Snowflake (opt-in; cloud-only, requires credentials)
+| Enum Value | Product |
+|---|---|
+| `PostgreSql=1` | PostgreSQL (including TimescaleDB) |
+| `SqlServer=2` | SQL Server / Express / LocalDB |
+| `Oracle=4` | Oracle |
+| `Firebird=8` | Firebird |
+| `CockroachDb=16` | CockroachDB |
+| `MariaDb=32` | MariaDB |
+| `MySql=64` | MySQL |
+| `Sqlite=128` | SQLite |
+| `DuckDB=256` | DuckDB |
+| `YugabyteDb=512` | YugabyteDB |
+| `TiDb=1024` | TiDB |
+| `Snowflake=2048` | Snowflake (opt-in; cloud-only, requires credentials) |
+| `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
+| `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
+
+> **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
+
+> **Aurora variants:** `AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image. They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL dialect respectively. No separate integration suite is required.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
@@ -79,7 +88,6 @@ The following features have no version gate in the dialect code but require a mi
 | Oracle (Oracle.ManagedDataAccess) | 100 | 50-200 | Sessions are heavier (few MB each). Practical max often 100-300 before session/memory limits kick in. Enterprise tuning often caps at 100-150 per instance. |
 | Sqlite (Microsoft.Data.Sqlite) | Effectively unlimited (pooling enabled by default since v6, no hard max) | 1-20 (or unlimited for in-memory) | Single-writer lock means >1-4 concurrent writers kills perf. Practical: keep pool small (5-20) or disable pooling for high concurrency. In-memory/shared can handle more, but still file-lock limited on disk. |
 | DuckDb (.NET DuckDB) | Effectively unlimited (no hard pool limit in most impls) | 1-8 (or up to threads count) | Embedded: connection creation is cheap. Practical: single connection often best; multiple only if parallelizing queries. Limit to CPU cores or threads setting. No real pool exhaustion; bottleneck is CPU/RAM for queries, not connections. |
-| Sql92 fallback / unknown | 100 | 50-100 | Conservative defaults for generic relational DBs. |
 
 ---
 

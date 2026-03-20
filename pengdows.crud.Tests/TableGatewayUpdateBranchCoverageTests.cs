@@ -18,6 +18,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         TypeMap.Register<NoIdEntity>();
+        TypeMap.Register<OnlyIdEntity>();
     }
 
     [Fact]
@@ -196,6 +197,34 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
         var result = await (dynamic)method.Invoke(gateway, new object?[] { entity, Context })!;
 
         Assert.Null(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // UpdateAsync CT overload — "No changes detected" catch (Core.cs lines 1133-1136)
+    // An entity with only [Id] and no other updateable columns causes BuildSetClause
+    // to return 0 columns → throws "No changes detected for update." → caught → returns 0
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateAsync_EntityWithNoUpdateableColumns_CatchesNoChanges_ReturnsZero()
+    {
+        TypeMap.Register<OnlyIdEntity>();
+        var gateway = new TableGateway<OnlyIdEntity, int>(Context);
+        var entity = new OnlyIdEntity { Id = 1 };
+
+        // Passes cancellationToken explicitly to exercise the CT UpdateAsync overload (Core.cs line 1117)
+        // BuildUpdateInternal finds 0 updateable columns → throws "No changes detected"
+        // CT UpdateAsync catch block at lines 1133-1136 returns 0
+        var result = await gateway.UpdateAsync(entity, false, null, System.Threading.CancellationToken.None);
+        Assert.Equal(0, result);
+    }
+
+    [Table("OnlyIdEntities")]
+    private sealed class OnlyIdEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
     }
 
     [Table("NoIdEntities")]

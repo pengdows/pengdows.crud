@@ -98,12 +98,14 @@ public class SqliteDialectLimitTests
     }
 
     [Fact]
-    public void IsUniqueViolation_UsesDbExceptionErrorCode()
+    public void IsUniqueViolation_UsesSpecificSqliteCodesOrMessages()
     {
         var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
 
-        Assert.True(dialect.IsUniqueViolation(new SqliteDbException(19)));
+        Assert.True(dialect.IsUniqueViolation(new SqliteDbException(19, "UNIQUE constraint failed")));
+        Assert.True(dialect.IsUniqueViolation(new SqliteDbException(1555)));
         Assert.False(dialect.IsUniqueViolation(new SqliteDbException(1)));
+        Assert.False(dialect.IsUniqueViolation(new SqliteDbException(19, "FOREIGN KEY constraint failed")));
     }
 
     [Fact]
@@ -118,7 +120,8 @@ public class SqliteDialectLimitTests
 
     private sealed class SqliteDbException : DbException
     {
-        public SqliteDbException(int errorCode)
+        public SqliteDbException(int errorCode, string message = "sqlite error")
+            : base(message)
         {
             HResult = errorCode;
         }

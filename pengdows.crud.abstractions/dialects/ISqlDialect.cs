@@ -483,6 +483,27 @@ public interface ISqlDialect
     bool IsUniqueViolation(DbException ex);
 
     /// <summary>
+    /// Determines whether the given exception represents a foreign-key constraint violation.
+    /// </summary>
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a foreign-key violation.</returns>
+    bool IsForeignKeyViolation(DbException ex) => false;
+
+    /// <summary>
+    /// Determines whether the given exception represents a not-null constraint violation.
+    /// </summary>
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a not-null violation.</returns>
+    bool IsNotNullViolation(DbException ex) => false;
+
+    /// <summary>
+    /// Determines whether the given exception represents a check-constraint violation.
+    /// </summary>
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a check-constraint violation.</returns>
+    bool IsCheckConstraintViolation(DbException ex) => false;
+
+    /// <summary>
     /// Generates a unique parameter name for the current operation.
     /// </summary>
     /// <returns>A unique parameter name (e.g., p1, p2, p42).</returns>
@@ -669,5 +690,72 @@ public interface ISqlDialect
         }
 
         return DbErrorCategory.Unknown;
+    }
+
+    /// <summary>
+    /// Analyzes an exception into a provider-agnostic structure suitable for control flow.
+    /// </summary>
+    /// <param name="exception">The exception thrown by the database operation.</param>
+    /// <returns>A structured analysis containing category, constraint kind, and retry hints.</returns>
+    DbExceptionInfo AnalyzeException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return new DbExceptionInfo(
+                DbErrorCategory.None,
+                DbConstraintKind.None,
+                false,
+                false,
+                null,
+                null);
+        }
+
+        var category = ClassifyException(exception);
+        var constraintKind = DbConstraintKind.None;
+        int? providerErrorCode = null;
+        string? sqlState = null;
+
+        if (exception is DbException dbEx)
+        {
+            providerErrorCode = dbEx.ErrorCode;
+            sqlState = dbEx.SqlState;
+
+            if (category == DbErrorCategory.ConstraintViolation)
+            {
+                if (IsUniqueViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Unique;
+                }
+                else if (IsForeignKeyViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.ForeignKey;
+                }
+                else if (IsNotNullViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.NotNull;
+                }
+                else if (IsCheckConstraintViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Check;
+                }
+                else
+                {
+                    constraintKind = DbConstraintKind.Unknown;
+                }
+            }
+        }
+
+        var isTransient = category is DbErrorCategory.Deadlock or
+            DbErrorCategory.SerializationFailure or
+            DbErrorCategory.Timeout;
+        var isRetryable = isTransient;
+
+        return new DbExceptionInfo(
+            category,
+            constraintKind,
+            isTransient,
+            isRetryable,
+            providerErrorCode,
+            sqlState);
     }
 }

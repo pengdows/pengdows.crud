@@ -285,7 +285,7 @@ DatabaseException (abstract root — namespace pengdows.crud.exceptions)
 │   ├── TransientWriteConflictException (abstract, IsTransient = true)
 │   │   ├── DeadlockException                   — DB chose this txn as deadlock victim
 │   │   └── SerializationConflictException      — snapshot/serializable write conflict
-│   ├── ConcurrencyConflictException            — [Version] UPDATE returned 0 rows affected
+│   ├── ConcurrencyConflictException            — auto-thrown by UpdateAsync on [Version] mismatch
 │   │                                             (framework-generated, not provider-translated)
 │   ├── CommandTimeoutException                 — command timed out (IsTransient = true)
 │   ├── ConnectionException                     — connection-level failure
@@ -300,8 +300,8 @@ Why it matters:
 - `IsTransient` and the `TransientWriteConflictException` base class make retry logic portable
 - `ConstraintName` identifies which constraint fired, independent of the provider error format
 - `InnerException` preserves the raw provider exception — diagnostic detail is never discarded
-- `ConcurrencyConflictException` is framework-generated from `[Version]` column returning
-  0 rows affected; it is not a translated provider exception
+- `ConcurrencyConflictException` is auto-thrown by `UpdateAsync` when a `[Version]` column
+  is present and UPDATE affects 0 rows; it is not a translated provider exception
 
 Translation is automatic. The framework intercepts raw provider exceptions at execution time
 and translates them via per-family translators (SQL Server, PostgreSQL/CockroachDB/YugabyteDB,

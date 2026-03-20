@@ -231,7 +231,18 @@ internal class SqliteDialect : SqlDialect
 
     public override bool IsUniqueViolation(DbException ex)
     {
-        return ex is DbException dbEx && dbEx.ErrorCode == 19;
+        if (ex is not DbException dbEx)
+        {
+            return false;
+        }
+
+        return dbEx.ErrorCode == 1555 ||
+               dbEx.ErrorCode == 2067 ||
+               (dbEx.ErrorCode == 19 &&
+                (dbEx.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                 dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase))) ||
+               dbEx.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+               dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
     }
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)

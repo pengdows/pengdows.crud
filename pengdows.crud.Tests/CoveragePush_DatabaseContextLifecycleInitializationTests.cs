@@ -316,4 +316,45 @@ public sealed class CoveragePush_DatabaseContextLifecycleInitializationTests
             throw new InvalidOperationException("builder failure");
         }
     }
+
+    // =========================================================================
+    // String-based provider name constructor (lines 69-83)
+    // =========================================================================
+
+    [Fact]
+    public void Constructor_StringProviderName_InitializesContext()
+    {
+        // Register fakeDb factory under a provider name so DbProviderFactories.GetFactory can find it
+        const string providerName = "pengdows.crud.fakeDb.test.init";
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        try
+        {
+            System.Data.Common.DbProviderFactories.RegisterFactory(providerName, factory);
+        }
+        catch (InvalidOperationException)
+        {
+            // Already registered from a previous test run — that's fine
+        }
+
+        using var ctx = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=Sqlite",
+            providerName);
+
+        Assert.NotNull(ctx);
+        Assert.NotNull(ctx.GetDialect());
+    }
+
+    [Fact]
+    public void Constructor_StringProviderName_NullConnectionString_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new DatabaseContext(null!, "some-provider"));
+    }
+
+    [Fact]
+    public void Constructor_StringProviderName_NullProviderName_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new DatabaseContext("Data Source=:memory:", (string)null!));
+    }
 }

@@ -1404,7 +1404,255 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual bool IsUniqueViolation(DbException ex)
     {
-        return false;
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode is 2601 or 2627;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode == 1062;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 1;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 1555 ||
+                       errorCode == 2067 ||
+                       (errorCode == 19 &&
+                        (ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                         ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase))) ||
+                       ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return MessageIndicatesUniqueViolation(ex.Message);
+        }
+    }
+
+    public virtual bool IsForeignKeyViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 547 &&
+                       message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode is 1451 or 1452;
+
+            case SupportedDatabase.Oracle:
+                return errorCode is 2291 or 2292;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 787 ||
+                       message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual bool IsNotNullViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 515;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode == 1048;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 1400;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 1299 ||
+                       message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("not null", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual bool IsCheckConstraintViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 547 &&
+                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode is 3819 or 4025;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 2290;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 275 ||
+                       message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual DbErrorCategory ClassifyException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return DbErrorCategory.None;
+        }
+
+        if (exception is DbException dbEx &&
+            TryClassifyProviderException(dbEx, out var providerCategory))
+        {
+            return providerCategory;
+        }
+
+        var message = exception.Message;
+
+        if (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Deadlock;
+        }
+
+        if (message.Contains("serializ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("serialize", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.SerializationFailure;
+        }
+
+        if (message.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unique ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("violates", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.ConstraintViolation;
+        }
+
+        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Timeout;
+        }
+
+        return DbErrorCategory.Unknown;
+    }
+
+    public virtual DbExceptionInfo AnalyzeException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return new DbExceptionInfo(
+                DbErrorCategory.None,
+                DbConstraintKind.None,
+                false,
+                false,
+                null,
+                null);
+        }
+
+        var category = ClassifyException(exception);
+        var constraintKind = DbConstraintKind.None;
+        int? providerErrorCode = null;
+        string? sqlState = null;
+
+        if (exception is DbException dbEx)
+        {
+            providerErrorCode = TryGetProviderErrorCode(dbEx);
+            sqlState = TryGetProviderSqlState(dbEx);
+
+            if (category == DbErrorCategory.ConstraintViolation)
+            {
+                if (IsUniqueViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Unique;
+                }
+                else if (IsForeignKeyViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.ForeignKey;
+                }
+                else if (IsNotNullViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.NotNull;
+                }
+                else if (IsCheckConstraintViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Check;
+                }
+                else
+                {
+                    constraintKind = DbConstraintKind.Unknown;
+                }
+            }
+        }
+
+        var isTransient = category is DbErrorCategory.Deadlock or
+            DbErrorCategory.SerializationFailure or
+            DbErrorCategory.Timeout;
+        var isRetryable = isTransient;
+
+        return new DbExceptionInfo(
+            category,
+            constraintKind,
+            isTransient,
+            isRetryable,
+            providerErrorCode,
+            sqlState);
     }
 
     /// <summary>
@@ -2294,6 +2542,172 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
 
         return false;
+    }
+
+    private bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                if (errorCode == 1205)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 3960)
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode == -2)
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (errorCode is 515 or 547 or 2601 or 2627)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                if (string.Equals(sqlState, "40P01", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "55P03", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(sqlState, "57014", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                if (errorCode == 1213)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 1205)
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode is 1048 or 1062 or 1451 or 1452 or 3819 or 4025)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Oracle:
+                if (errorCode == 60)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 8177)
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode is 1 or 1400 or 2290 or 2291 or 2292)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Sqlite:
+                if (errorCode == 19 ||
+                    errorCode == 1555 ||
+                    errorCode == 2067 ||
+                    (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
+    private static bool MessageIndicatesUniqueViolation(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("duplicate entry", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("PRIMARY KEY constraint", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int? TryGetProviderErrorCode(Exception ex)
+    {
+        var numberProperty = ex.GetType().GetProperty("Number");
+        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
+        {
+            return number;
+        }
+
+        return ex is DbException dbEx ? dbEx.ErrorCode : null;
+    }
+
+    private static string? TryGetProviderSqlState(Exception ex)
+    {
+        var sqlStateProperty = ex.GetType().GetProperty("SqlState");
+        if (sqlStateProperty?.PropertyType == typeof(string) &&
+            sqlStateProperty.GetValue(ex) is string sqlState &&
+            !string.IsNullOrWhiteSpace(sqlState))
+        {
+            return sqlState;
+        }
+
+        return ex is DbException dbEx ? dbEx.SqlState : null;
     }
 
     // These helpers are intentionally private to match historical usage in tests via reflection.

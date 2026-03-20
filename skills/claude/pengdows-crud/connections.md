@@ -123,7 +123,17 @@ public enum IsolationProfile
 
 Usage:
 ```csharp
-using var txn = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+await using var txn = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads, ExecutionType.Write, ct);
+try
+{
+    // perform operations using txn
+    await txn.CommitAsync(ct);
+}
+catch
+{
+    await txn.RollbackAsync(ct);
+    throw;
+}
 ```
 
 ## Integration with Transactions

@@ -393,7 +393,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   ├── TransientWriteConflictException (abstract, IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
-│   ├── ConcurrencyConflictException        — [Version] UPDATE returned 0 rows affected
+│   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure (provider translators)
 │   └── TransactionException               — begin/commit/rollback failure

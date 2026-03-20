@@ -10,17 +10,18 @@ Specifies the database table name for an entity.
 
 ```csharp
 [Table("table_name")]
-[Table("schema.table_name")]  // With schema
+[Table("table_name", "schema_name")]  // With explicit schema
 public class MyEntity { }
 ```
 
 **Parameters:**
-- `name` (string) — Table name, optionally schema-qualified
+- `name` (string) — Table name
+- `schema` (string, optional) — Database schema name (e.g., "dbo", "public", "wiki")
 
 **Notes:**
 - Required on all entities used with TableGateway
-- Supports schema qualification (e.g., "dbo.users", "public.accounts")
-- Schema portion is automatically quoted per database requirements
+- Provide schema as a second argument, not dot-notation in the name
+- Both table name and schema are automatically quoted per database requirements
 
 ### ColumnAttribute
 

@@ -36,14 +36,24 @@ pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
 var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.Throw);
 ```
 
-### EnumParseFailureMode.ReturnDefault
+### EnumParseFailureMode.SetNullAndLog
+
+- Sets the property to null on parse failure and logs a warning
+- Useful for nullable enum properties where missing values should be tolerated
+- Requires the property to be nullable
+
+```csharp
+var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+```
+
+### EnumParseFailureMode.SetDefaultValue
 
 - Returns the enum's default value (typically 0) on parse failure
 - Useful for data migration scenarios
 - Logs warnings for failed conversions
 
 ```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.ReturnDefault);
+var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
 ```
 
 ## Cross-Database Type Mapping
@@ -66,6 +76,18 @@ pengdows.crud normalizes types across database providers:
 - Database-specific timezone handling is abstracted away
 - Audit timestamps (`[CreatedOn]`, `[LastUpdatedOn]`) are always UTC
 - Local time conversion is handled at the application layer
+
+## CorrelationToken
+
+The `[CorrelationToken]` attribute marks a property used as a unique correlation token for generated-ID retrieval fallback. Used when the database doesn't support `RETURNING`/`OUTPUT` and session-scoped identity functions are unreliable.
+
+```csharp
+[CorrelationToken]
+[Column("correlation_id", DbType.Guid)]
+public Guid CorrelationId { get; set; }
+```
+
+TableGateway generates a unique value, inserts it alongside the row, then immediately queries back using this token to retrieve the database-generated identity. The `CorrelationId` property is separate from the `[Id]` column.
 
 ## JSON Support
 
@@ -106,6 +128,8 @@ registry.RegisterMapping<CustomType>(
 ## Best Practices
 
 - Use `EnumParseFailureMode.Throw` in production for data integrity
+- Use `EnumParseFailureMode.SetNullAndLog` for nullable enum properties where missing values are tolerated
+- Use `EnumParseFailureMode.SetDefaultValue` for non-nullable enum properties in data migration scenarios
 - Store complex types as JSON for cross-database portability
 - Always use UTC for timestamp fields
 - Leverage nullable reference types for proper null handling

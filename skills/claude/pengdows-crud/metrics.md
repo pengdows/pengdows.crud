@@ -1,19 +1,17 @@
 # Metrics & Observability
 
-`pengdows.crud` provides 36 real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
+`pengdows.crud` provides 36+ real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
 
 ## Categories & Key Metrics
 
-| Category | Metrics Tracked |
-|----------|-----------------|
-| **Connections** | Current/Peak, Opened/Closed, Hold Time, Avg Duration, long-lived count. |
-| **Commands** | Total Executed/Failed/TimedOut/Cancelled, Avg Duration, P95/P99 latency. |
-| **Rows** | Total rows read/affected across operations. |
-| **Prepared Statements** | Total cached/evicted statements. |
-| **Transactions** | Active/Max Concurrent, Committed/RolledBack, Avg/P95/P99 Duration. |
-| **Errors** | Deadlocks, SerializationFailures, ConstraintViolations. |
-| **Sessions** | Session init count, Avg session init time. |
-| **Pool Governor** | In-use/Peak Slots, Queued Requests, Timeouts, Cancellations. |
+| Category | Key Fields |
+|----------|------------|
+| **Connections** | `TotalOpened`, `TotalClosed`, `PeakConcurrent`, `AvgHoldMs`, `MaxHoldMs` |
+| **Commands** | `TotalExecuted`, `TotalFailed`, `TotalTimeouts`, `P95LatencyMs`, `P99LatencyMs` |
+| **Rows** | `TotalRead`, `TotalAffected` |
+| **Transactions** | `TotalStarted`, `TotalCommitted`, `TotalRolledBack`, `ActiveCount` |
+| **Errors** | `Deadlocks`, `SerializationFailures`, `ConstraintViolations`, `OtherErrors` |
+| **Prepared Statement Cache** | `CacheSize`, `CacheHits`, `CacheMisses`, `Evictions` |
 
 Metrics are split into **read vs write roles** via `DatabaseRoleMetrics Read` and `DatabaseRoleMetrics Write` on the `DatabaseMetrics` record.
 
@@ -25,7 +23,7 @@ Subscribe to `MetricsUpdated` to receive real-time updates without polling.
 context.MetricsUpdated += (sender, metrics) =>
 {
     _logger.LogInformation("Deadlocks: {n}, P99: {ms}ms",
-        metrics.ErrorDeadlocks, metrics.P99CommandMs);
+        metrics.Deadlocks, metrics.P99LatencyMs);
 };
 ```
 
