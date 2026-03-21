@@ -462,7 +462,22 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
 
         command.Parameters?.Clear();
-        command.Connection = null;
+        // REVIEW-POLICY-WAIVER: bare catch is intentional — do not narrow or remove.
+        // This assignment is purely defensive cleanup to break GC circular references;
+        // it carries no correctness invariant. Multiple providers across the supported
+        // database matrix (Snowflake VendorCode 270009, SQLite, and others) throw
+        // provider-specific, undocumented exceptions when Connection is set to null after
+        // the command has already executed. The exception type and message differ per
+        // provider, making a typed/filtered catch brittle. command.Dispose() below
+        // always executes regardless of whether this assignment succeeds.
+        try
+        {
+            command.Connection = null;
+        }
+        catch
+        {
+            // Provider rejected Connection=null after execution — swallowed by design.
+        }
         command.Dispose();
     }
 }
