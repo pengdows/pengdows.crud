@@ -18,7 +18,7 @@ riderModule.iml
 *.snk
 
 # Coverage
-TestResults/
+TestResults*/
 coverage-report/
 coverage-report-full/
 coveragereport*/
