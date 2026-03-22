@@ -205,11 +205,17 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         public override void ChangeDatabase(string databaseName) =>
             _inner.ChangeDatabase(databaseName);
 
-        // P2: Return silently if already open — Dapper and EF Core call Open() defensively
+        // Return silently if already open — Dapper and EF Core call Open() defensively
         // on connections they didn't open. NotSupportedException signals that direct open
         // is not valid for this wrapper type (the BCL convention for "invalid on this type").
+        // Check _disposed first to give callers a clear ObjectDisposedException.
         public override void Open()
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(PermitConnection));
+            }
+
             if (_inner.State == ConnectionState.Open)
             {
                 return;
@@ -220,6 +226,11 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
         public override Task OpenAsync(CancellationToken cancellationToken)
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(PermitConnection));
+            }
+
             if (_inner.State == ConnectionState.Open)
             {
                 return Task.CompletedTask;
@@ -284,32 +295,31 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             return _inner.CreateCommand();
         }
 
-        // P1: Check _released first. If Close() threw, the finally block still released the
+        // Check _disposed first so methods throw ObjectDisposedException when appropriate.
+        // Then check _released. If Close() threw, the finally block still released the
         // permit (_released = 1) but inner.State may remain Open. Without this check,
         // CreateCommand/BeginTransaction would succeed on a connection whose permit was returned.
-        // _disposed is checked last: a disposed connection is also unusable, but _released
-        // is the more reliable signal that this wrapper's lifetime has ended.
         private void ThrowIfInnerClosed()
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                throw new ObjectDisposedException(nameof(PermitConnection));
+            }
+
             if (Volatile.Read(ref _released) != 0)
             {
-                throw new InvalidOperationException("Connection is closed.");
+                throw new InvalidOperationException("Connection permit has been released.");
             }
 
             if (_inner.State == ConnectionState.Closed)
             {
                 throw new InvalidOperationException("Connection is closed.");
             }
-
-            if (Volatile.Read(ref _disposed) != 0)
-            {
-                throw new ObjectDisposedException(nameof(PermitConnection));
-            }
         }
 
-        // Note: _released is volatile and Read outside _lifecycleLock by design — the lock
-        // provides the memory barrier for mutations; the volatile read provides a fast-path
-        // check. A future contributor should NOT move this into the lock (deadlock risk).
+        // _released uses Volatile.Read for the fast-path check; mutations use Interlocked.Exchange
+        // which acts as a full memory barrier. Do not add a lock here — calling into owner
+        // under any lock would risk deadlock with StormGate's _lifecycleLock.
         protected override void Dispose(bool disposing)
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -318,17 +328,23 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             }
 
             // DbConnection.Dispose(bool) does not call Close() in .NET 8+.
-            // Call Close() explicitly: closes _inner and releases the permit.
+            // Call Close() explicitly so the inner connection is closed before dispose.
             // Some providers are not idempotent if Close() is called after Dispose(),
-            // so we close first, then dispose.
-            Close();
-
-            if (disposing)
+            // so we close first. Use try/finally to guarantee _inner.Dispose() runs
+            // even if Close() throws (e.g. provider already in a bad state).
+            try
             {
-                _inner.Dispose();      // safe: inner has already been closed above
+                Close();
             }
+            finally
+            {
+                if (disposing)
+                {
+                    _inner.Dispose();
+                }
 
-            base.Dispose(disposing);
+                base.Dispose(disposing);
+            }
         }
 
         public override async ValueTask DisposeAsync()
@@ -338,19 +354,27 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                 return;
             }
 
+            // Close before dispose (same provider-idempotency reason as sync path).
+            // Use nested try/finally so _inner.DisposeAsync() is guaranteed to run
+            // even if CloseAsync() throws (permit is also always released).
             try
             {
                 if (_inner.State != ConnectionState.Closed)
                 {
                     await _inner.CloseAsync().ConfigureAwait(false);
                 }
-
-                await _inner.DisposeAsync().ConfigureAwait(false);
             }
             finally
             {
-                ReleasePermitOnce();
-                await base.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await _inner.DisposeAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    ReleasePermitOnce();
+                    await base.DisposeAsync().ConfigureAwait(false);
+                }
             }
         }
     }
