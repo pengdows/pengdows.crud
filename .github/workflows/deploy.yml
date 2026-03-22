@@ -51,7 +51,7 @@ jobs:
           # Only block changes to coverage exclusion/inclusion patterns.
           # Timing settings (TestSessionTimeout) may legitimately differ between branches.
           exclusion_changes=$(git diff "$base_ref...HEAD" -- coverage.runsettings \
-            | grep '^[+-]' | grep -v '^---' | grep -v '^+++' \
+            | { grep '^[+-]' || true; } | { grep -v '^---' || true; } | { grep -v '^+++' || true; } \
             | { grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' || true; } \
             | wc -l)
           if [[ "$exclusion_changes" -gt 0 ]]; then
