@@ -199,7 +199,7 @@ public class ParallelTestOrchestrator
                 ContainerName = "DuckDB",
                 DatabaseProvider = "DuckDB",
                 Container = new DuckDbTestContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp)
             },
             new()
             {

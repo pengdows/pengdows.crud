@@ -4,6 +4,7 @@ using System;
 using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -395,5 +396,48 @@ public class DuckDbDialectAdvancedTests
     {
         // Enhanced window functions should always be true for DuckDB
         Assert.True(_dialect.SupportsEnhancedWindowFunctions);
+    }
+
+    [Theory]
+    [InlineData("\"id\"", " RETURNING \"id\"")]
+    [InlineData("\"order\"", " RETURNING \"order\"")]                         // reserved word
+    [InlineData("\"my column\"", " RETURNING \"my column\"")]                  // space in name
+    [InlineData("\"schema\".\"id\"", " RETURNING \"schema\".\"id\"")]          // schema-qualified
+    [InlineData("\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"", " RETURNING \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"")] // 128-char name
+    public void RenderInsertReturningClause_DuckDb_ReturnsReturningClause(string wrapped, string expected)
+    {
+        var clause = _dialect.RenderInsertReturningClause(wrapped);
+
+        Assert.Equal(expected, clause);
+    }
+
+    [Fact]
+    public void GetGeneratedKeyPlan_DuckDb_ReturnsReturning()
+    {
+        var plan = _dialect.GetGeneratedKeyPlan();
+
+        Assert.Equal(GeneratedKeyPlan.Returning, plan);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_DuckDb_IncludesReturningClause()
+    {
+        var context = new DatabaseContext("Data Source=:memory:", _factory);
+        var gateway = new TableGateway<DuckDbAutoIdEntity, int>(context);
+
+        using var sc = gateway.BuildCreateWithReturning(new DuckDbAutoIdEntity { Name = "test" }, withReturning: true);
+
+        Assert.Contains("RETURNING", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Table("duckdb_auto_id_entity")]
+    private class DuckDbAutoIdEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
     }
 }

@@ -2470,6 +2470,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
             SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
             SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.DuckDB => $" RETURNING {idColumnWrapped}",
             _ => string.Empty
             // Oracle is handled by OracleDialect.RenderInsertReturningClause override.
             // Oracle RETURNING INTO requires an output parameter, not an inline placeholder.

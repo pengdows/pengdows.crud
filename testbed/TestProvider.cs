@@ -186,6 +186,8 @@ public class TestProvider : IAsyncTestProvider
             Console.WriteLine("Running pool isolation");
             await TestPoolIsolation();
             Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
+
+            await RunAdditionalTestsAsync();
         }
         catch (Exception ex)
         {
@@ -197,6 +199,8 @@ public class TestProvider : IAsyncTestProvider
             Console.WriteLine($"[{_context.Product}] Test run completed in {totalSw.ElapsedMilliseconds}ms");
         }
     }
+
+    protected virtual Task RunAdditionalTestsAsync() => Task.CompletedTask;
 
     private void SnowflakeStep(string message)
     {

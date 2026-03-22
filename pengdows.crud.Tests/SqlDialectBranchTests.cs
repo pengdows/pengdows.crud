@@ -50,7 +50,7 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.Sqlite, " RETURNING \"id\"")]
     [InlineData(SupportedDatabase.Oracle, " RETURNING \"id\" INTO :1")]
     [InlineData(SupportedDatabase.Firebird, " RETURNING \"id\"")]
-    [InlineData(SupportedDatabase.DuckDB, "")]
+    [InlineData(SupportedDatabase.DuckDB, " RETURNING \"id\"")]
     public void RenderInsertReturningClause_UsesProviderSyntax(SupportedDatabase db, string expected)
     {
         var dialect = CreateDialect(db);
