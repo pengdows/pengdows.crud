@@ -136,18 +136,26 @@ END;", triggerName, tableName, idColumn, sequenceName);
 
     /// <summary>
     /// Validates that Oracle reader and writer connections draw from separate ODP.NET pools.
-    /// Uses Max Pool Size=1 and Connection Timeout=3 so any pool sharing causes an immediate
-    /// timeout, while separate pools allow both connections to open concurrently.
+    /// Uses Max Pool Size=1 so any pool sharing causes an immediate timeout,
+    /// while separate pools allow both connections to open concurrently.
     /// </summary>
     protected override async Task TestPoolIsolation()
     {
         // Build a fresh context with a tiny pool to make contention detectable.
+        // Connection Timeout is set to 30s so ODP.NET can establish the first physical
+        // connection to a cold pool. The pool isolation assertion still holds: if the reader
+        // mistakenly shares the writer's pool (Max Pool Size=1, already occupied), the reader
+        // blocks for 30s and the test times out visibly. With separate pools (Metadata Pooling
+        // discriminator), the reader opens from its own empty pool and completes immediately.
+        // Use the raw (non-redacted) connection string so credentials are intact.
+        // testbed has InternalsVisibleTo access to pengdows.crud for this purpose.
+        var rawCs = (_context as DatabaseContext)?.RawConnectionString ?? _context.ConnectionString;
         var builder = new DbConnectionStringBuilder
         {
-            ConnectionString = _context.ConnectionString
+            ConnectionString = rawCs
         };
         builder["Max Pool Size"] = 1;
-        builder["Connection Timeout"] = 3;
+        builder["Connection Timeout"] = 30;
 
         var cfg = new DatabaseContextConfiguration
         {

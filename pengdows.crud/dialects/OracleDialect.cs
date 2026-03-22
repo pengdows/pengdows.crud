@@ -256,11 +256,17 @@ internal class OracleDialect : SqlDialect
     }
 
     private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+
+    // TIMESTAMP columns (and TIMESTAMP WITH TIME ZONE) use a separate NLS parameter.
+    // Without this pin the format is locale-dependent, making TIMESTAMP round-trips non-portable.
+    private const string NlsTimestampFormatSetting =
+        "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';";
+
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
 
     public override string GetBaseSessionSettings()
     {
-        return NlsDateFormatSetting;
+        return NlsDateFormatSetting + "\n" + NlsTimestampFormatSetting;
     }
 
     public override string GetReadOnlySessionSettings()

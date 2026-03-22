@@ -92,9 +92,11 @@ public class OracleDialectAdditionalTests
         var ro = d.GetConnectionSessionSettings(ctx, true);
         // Oracle has no session-level read-only mode
         Assert.DoesNotContain("READ ONLY", ro);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT", ro);
 
         var rw = d.GetConnectionSessionSettings(ctx, false);
         Assert.DoesNotContain("READ ONLY", rw);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT", rw);
     }
 
     [Fact]
@@ -126,6 +128,15 @@ public class OracleDialectAdditionalTests
         var param = d.CreateDbParameter("p", DbType.Boolean, false);
         Assert.Equal(DbType.Int16, param.DbType);
         Assert.Equal(0, Convert.ToInt32(param.Value));
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IncludesNlsTimestampFormat()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings();
+        Assert.Contains("NLS_TIMESTAMP_FORMAT", settings);
+        Assert.Contains("YYYY-MM-DD HH24:MI:SS.FF", settings);
     }
 
     [Fact]

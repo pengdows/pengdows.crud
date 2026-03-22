@@ -85,10 +85,12 @@ public class MagicStringRegressionTests
     // ── Oracle dialect SQL pins ──────────────────────────────────────────
 
     [Fact]
-    public void OracleDialect_ReadWriteSettings_IsNlsOnly()
+    public void OracleDialect_ReadWriteSettings_ContainsBothNlsFormats()
     {
         var d = CreateOracleDialect();
-        Assert.Equal("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';", d.GetBaseSessionSettings());
+        var settings = d.GetBaseSessionSettings();
+        Assert.Contains("NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
     }
 
     [Fact]

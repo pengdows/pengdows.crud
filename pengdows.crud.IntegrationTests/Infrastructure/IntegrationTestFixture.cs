@@ -17,30 +17,22 @@ internal static class IntegrationTestConfiguration
         SupportedDatabase.MariaDb,
         SupportedDatabase.Firebird,
         SupportedDatabase.CockroachDb,
-        SupportedDatabase.DuckDB
+        SupportedDatabase.DuckDB,
+        SupportedDatabase.Oracle
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
         FilterIntegrationOnly(
-            GetEnabledProviders(ShouldIncludeOracle, ShouldIncludeSnowflake),
+            GetEnabledProviders(ShouldIncludeSnowflake),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
-
-    public static bool ShouldIncludeOracle =>
-        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_ORACLE"), "true",
-            StringComparison.OrdinalIgnoreCase);
 
     public static bool ShouldIncludeSnowflake =>
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
-    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeOracle, bool includeSnowflake)
+    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake)
     {
         var providers = BaseProviders.ToList();
-
-        if (includeOracle)
-        {
-            providers.Add(SupportedDatabase.Oracle);
-        }
 
         if (includeSnowflake)
         {
@@ -109,7 +101,6 @@ public class IntegrationTestFixture : IAsyncLifetime
 
         var orchestrator = new ParallelTestOrchestrator(
             _host.Services,
-            IntegrationTestConfiguration.ShouldIncludeOracle,
             IntegrationTestConfiguration.ShouldIncludeSnowflake);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)

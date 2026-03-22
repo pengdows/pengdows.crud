@@ -418,6 +418,7 @@ public class OracleDialectAdvancedTests
         var settings = _dialect.GetConnectionSessionSettings(context, false);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
         Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
     }
 
@@ -429,6 +430,7 @@ public class OracleDialectAdvancedTests
         var settings = _dialect.GetConnectionSessionSettings(context, true);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
         // Oracle has no session-level read-only mode, so it should NOT be in the connection session settings string
         Assert.DoesNotContain("READ ONLY", settings);
     }
