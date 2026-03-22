@@ -2,7 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/pengdows.crud.svg)](https://www.nuget.org/packages/pengdows.crud)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/build.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/build.yml)
+[![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml)
 
 `pengdows.crud` is a SQL-first data access library for .NET 8+. It favors explicit SQL, inspectable command builders, and provider-aware execution over ORM-style query generation.
 
