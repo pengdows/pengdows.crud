@@ -1,128 +1,138 @@
 # pengdows.stormgate
 
+[![NuGet](https://img.shields.io/nuget/v/pengdows.stormgate.svg)](https://www.nuget.org/packages/pengdows.stormgate)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A lightweight ADO.NET connection admission controller for .NET 8+.
 
 ---
 
 ## The Problem
 
-When traffic spikes, every request tries to open a database connection at the same time.
-The provider's connection pool can't queue fast enough. Threads pile up. The application
-falls over.
+When traffic spikes, every request tries to open a database connection simultaneously. Even with a connection pool, the provider may struggle to queue fast enough, leading to thread pool starvation, high latency, or the "connection storm" that brings applications down.
 
-This is a connection storm. StormGate stops it.
+The standard ADO.NET pool is excellent at managing idle connections, but it isn't designed to protect the database from an aggressive "thundering herd" of opening requests.
+
+**StormGate stops the storm.**
 
 ---
 
 ## How It Works
 
-StormGate places a `SemaphoreSlim` gate in front of connection opens. At most
-`maxConcurrentOpens` connections can be opened concurrently. If the gate can't be
-acquired within `acquireTimeout`, a `TimeoutException` is thrown rather than letting
-the caller pile up indefinitely.
+StormGate places a `SemaphoreSlim` gate in front of your connection opens.
 
-The permit is tied to the connection. When the connection is closed or disposed —
-however that happens — the permit is released automatically. No manual bookkeeping.
+1.  **Gated Opens**: At most `maxConcurrentOpens` connections can be in the process of opening or being held by the application.
+2.  **Backpressure**: If the gate cannot be acquired within the `acquireTimeout`, a `TimeoutException` is thrown immediately. This provides fast-fail backpressure instead of letting callers pile up indefinitely.
+3.  **Automatic Release**: The permit is tied to the `DbConnection` wrapper. When the connection is closed or disposed — through any path — the permit is released back to the gate automatically.
+4.  **Provider Aware**: It uses the provider's native `DbDataSource` when available (for features like prepared-statement caching) and falls back to a generic wrapper otherwise.
 
 ---
 
 ## Quickstart
 
 ```csharp
+using pengdows.stormgate;
+using MySqlConnector;
+
+// 1. Create the gate (typically a singleton)
 var gate = StormGate.Create(
     MySqlConnectorFactory.Instance,
     connectionString,
     maxConcurrentOpens: 32,
     acquireTimeout: TimeSpan.FromMilliseconds(750));
 
+// 2. Open a gated connection
 await using var conn = await gate.OpenAsync();
-// use conn with Dapper, raw ADO.NET, Hangfire, etc.
-```
 
-`StormGate` accepts any `DbProviderFactory`. It uses the provider's native `DbDataSource`
-when one is available, and falls back to a generic wrapper when not.
+// 3. Use conn with Dapper, raw ADO.NET, EF Core, etc.
+// The permit is released when 'conn' is disposed or closed.
+```
 
 ---
 
 ## Public API
 
-```
-IConnectionFactory       — OpenAsync(CancellationToken) → DbConnection
-StormGate                — Create(...) factory method, IConnectionFactory, IDisposable, IAsyncDisposable
-```
+```csharp
+public interface IConnectionFactory
+{
+    // The core abstraction for obtaining a gated, opened connection
+    Task<DbConnection> OpenAsync(CancellationToken ct = default);
+}
 
-Everything else is internal.
+public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposable
+{
+    // Factory method to create a gate from a provider factory
+    public static StormGate Create(
+        DbProviderFactory factory,
+        string connectionString,
+        int maxConcurrentOpens,
+        TimeSpan acquireTimeout,
+        ILogger? logger = null);
+}
+```
 
 ---
 
-## What StormGate Is Not
-
-StormGate is not a connection pool. It does not replace your provider's pool.
-
-StormGate is not a retry library, an ORM, or a policy engine.
-
-It does one thing: limit how many connections can be opened at once so a burst of
-requests does not exhaust the pool before it has a chance to queue.
-
----
-
-## Logging
+## Logging & Observability
 
 Pass an `ILogger` to get operational visibility:
 
 ```csharp
-var gate = StormGate.Create(
-    factory, connectionString,
-    maxConcurrentOpens: 32,
-    acquireTimeout: TimeSpan.FromMilliseconds(750),
-    logger: loggerFactory.CreateLogger<StormGate>());
+var gate = StormGate.Create(..., logger: loggerFactory.CreateLogger<StormGate>());
 ```
 
-- **Warning** — logged when a permit times out (saturation signal)
-- **Error** — logged when the underlying connection fails to open after a permit is acquired
-- **Debug** — provider resolution and connection string normalization
-
-The saturation warning is the key operational signal. If you see it, you are either
-leaking connections, under-provisioned on `maxConcurrentOpens`, or the database itself
-is the bottleneck.
+*   **Warning**: Logged when a permit times out (**Saturation Signal**). If you see this, you are either leaking connections, under-provisioned, or the database is the bottleneck.
+*   **Error**: Logged when the underlying connection fails to open after a permit was successfully acquired.
+*   **Debug**: Information about provider resolution and connection string normalization.
 
 ---
 
-## DI Registration
+## Dependency Injection
 
 ```csharp
 services.AddSingleton<IConnectionFactory>(_ =>
     StormGate.Create(
-        MySqlConnectorFactory.Instance,
-        connectionString,
+        SqlClientFactory.Instance,
+        Configuration.GetConnectionString("Default"),
         maxConcurrentOpens: 32,
-        acquireTimeout: TimeSpan.FromMilliseconds(750),
-        logger: loggerFactory.CreateLogger<StormGate>()));
+        acquireTimeout: TimeSpan.FromSeconds(1)));
 ```
+
+---
+
+## When to use StormGate vs pengdows.crud
+
+| Feature | StormGate | pengdows.crud |
+| :--- | :--- | :--- |
+| **Primary Goal** | Stop connection storms | High-performance SQL-first ORM |
+| **Complexity** | Minimal (1 class) | Full-featured Framework |
+| **Admission Control** | Single Global Gate | Read/Write Lane Separation |
+| **Metrics** | Basic (Logging) | 36+ Detailed Metrics |
+| **Multi-Dialect** | No (Provider Agnostic) | Yes (14+ DB specific optimizations) |
+| **Legacy Apps** | **Perfect** (Dapper, etc.) | Requires migration |
 
 ---
 
 ## This Is a Bandage
 
-StormGate is a minimal stopgap. It will prevent connection storms and give you
-operational breathing room.
+StormGate is a minimal stopgap. It will prevent connection storms and give you operational breathing room in existing applications using Dapper, EF Core, or raw ADO.NET.
 
-When you are ready for proper connection governance — read/write lane separation,
-writer starvation prevention, drain support, per-pool metrics, and support for
-14 databases out of the box — migrate to [`pengdows.crud`](https://github.com/pengdows/pengdows.crud).
+When you are ready for proper connection governance — including fairness, writer starvation prevention, drain support, and advanced type systems — migrate to [**pengdows.crud**](https://github.com/pengdows/pengdows.crud).
 
 ---
 
 ## Requirements
 
-- .NET 8.0+
-- `Microsoft.Extensions.Logging.Abstractions` 9.0+
+*   .NET 8.0+
+*   `Microsoft.Extensions.Logging.Abstractions` 9.0+
 
 ---
 
 ## License
 
 MIT
+
+---
 
 ## Support
 

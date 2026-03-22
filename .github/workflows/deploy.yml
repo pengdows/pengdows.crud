@@ -243,7 +243,9 @@ jobs:
             pengdows.crud.fakeDb \
             testbed \
             pengdows.crud.Tests \
-            pengdows.crud.IntegrationTests; then
+            pengdows.crud.IntegrationTests \
+            pengdows.stormgate \
+            pengdows.stormgate.Tests; then
             echo "❌ TransactionScope usage is forbidden. Use ctx.BeginTransaction()."
             exit 1
           fi

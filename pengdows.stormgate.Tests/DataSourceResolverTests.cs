@@ -188,12 +188,14 @@ public class DataSourceResolverTests
         // "Unknown=secret" is stripped by the filtering builder; "Server=localhost" is kept.
         var ds = _resolver.CreateDataSource(factory, "Server=localhost;Unknown=secret");
 
-        // Must warn and include the removed key name
+        // Must warn and include the removed key name.
+        // DbConnectionStringBuilder normalizes keys to lowercase, so the warning message
+        // will contain "unknown" (not "Unknown") regardless of the original casing.
         _mockLogger.Verify(l => l.Log(
             LogLevel.Warning,
             It.IsAny<EventId>(),
             It.Is<It.IsAnyType>((v, _) =>
-                v.ToString()!.Contains("Unknown") &&
+                v.ToString()!.Contains("unknown", StringComparison.OrdinalIgnoreCase) &&
                 v.ToString()!.Contains("removed")),
             null,
             It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
@@ -205,19 +207,23 @@ public class DataSourceResolverTests
             => new KeyFilteringBuilder();
 
         // Accepts only "server"; any other keyword is silently dropped on assignment.
+        // The virtual indexer IS called by DbConnectionStringBuilder.ConnectionString's setter,
+        // so overriding this[keyword] is sufficient to filter keys at parse time.
         private sealed class KeyFilteringBuilder : DbConnectionStringBuilder
         {
             private static readonly HashSet<string> AllowedKeys =
                 new(StringComparer.OrdinalIgnoreCase) { "server" };
 
+            [System.Diagnostics.CodeAnalysis.AllowNull]
             public override object this[string keyword]
             {
                 get => base[keyword];
                 set
                 {
                     if (AllowedKeys.Contains(keyword))
+                    {
                         base[keyword] = value;
-                    // else: silently dropped — this simulates MySQL builder ignoring unknown keys
+                    }
                 }
             }
         }

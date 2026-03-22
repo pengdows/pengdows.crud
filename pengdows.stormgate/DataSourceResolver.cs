@@ -53,14 +53,18 @@ internal sealed class DataSourceResolver
         var support = ProbeCache.GetOrAdd(factoryType, ProbeProviderCreateDataSourceSupport);
 
         if (!support.HasAnySupportedOverload)
+        {
             return null;
+        }
 
         try
         {
             if (support.StringOverload is not null)
             {
                 if (support.StringOverload.Invoke(factory, new object?[] { connectionString }) is DbDataSource ds)
+                {
                     return ds;
+                }
             }
 
             if (support.BuilderOverload is not null)
@@ -69,7 +73,9 @@ internal sealed class DataSourceResolver
                 builder.ConnectionString = connectionString;
 
                 if (support.BuilderOverload.Invoke(factory, new object?[] { builder }) is DbDataSource ds)
+                {
                     return ds;
+                }
             }
 
             return null;
@@ -111,7 +117,9 @@ internal sealed class DataSourceResolver
             modifiers: null);
 
         if (method is null)
+        {
             return null;
+        }
 
         return method.DeclaringType == typeof(DbProviderFactory) ? null : method;
     }
@@ -119,7 +127,9 @@ internal sealed class DataSourceResolver
     private string SanitizeConnectionString(DbProviderFactory factory, string rawConnectionString)
     {
         if (string.IsNullOrWhiteSpace(rawConnectionString))
+        {
             throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(rawConnectionString));
+        }
 
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         builder.ConnectionString = rawConnectionString;

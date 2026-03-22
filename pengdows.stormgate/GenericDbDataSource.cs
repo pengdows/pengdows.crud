@@ -16,7 +16,9 @@ internal sealed class GenericDbDataSource : DbDataSource
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
         if (string.IsNullOrWhiteSpace(connectionString))
+        {
             throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+        }
 
         _connectionString = connectionString;
     }
