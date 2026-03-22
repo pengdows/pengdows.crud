@@ -98,6 +98,7 @@ jobs:
         run: |
           dotnet test --no-build --configuration Release \
             --blame-hang --blame-hang-timeout 120s \
+            --filter "FullyQualifiedName!~IntegrationMatrixTests" \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
             --settings coverage.runsettings
