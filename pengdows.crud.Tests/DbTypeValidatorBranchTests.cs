@@ -61,4 +61,35 @@ public class DbTypeValidatorBranchTests
         DbTypeValidator.Validate(unknown, "pass-through");
         DbTypeValidator.Validate(unknown, DBNull.Value);
     }
+
+    [Fact]
+    public void Validate_Object_EnumWithNumericDbType_DoesNotThrow()
+    {
+        DbTypeValidator.Validate(DbType.Int32, DayOfWeek.Monday);
+    }
+
+    [Fact]
+    public void Validate_Object_DbTypeObject_AcceptsAnyType()
+    {
+        DbTypeValidator.Validate(DbType.Object, new object());
+    }
+
+    [Fact]
+    public void Validate_Object_NumericDbType_WithNumericValue_DoesNotThrow()
+    {
+        DbTypeValidator.Validate(DbType.Int64, 123);
+    }
+
+    [Fact]
+    public void Validate_Object_NumericDbType_WithNonNumeric_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(DbType.Int32, "abc"));
+        Assert.Contains("String", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_Object_AcceptableMappedType_DoesNotThrow()
+    {
+        DbTypeValidator.Validate(DbType.String, "ok");
+    }
 }

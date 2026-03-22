@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
@@ -9,7 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TableGatewayPrimaryKeyCoverageTests : SqlLiteContextTestBase
+public class TableGatewayPrimaryKeyCoverageTests : RealSqliteContextTestBase
 {
     public TableGatewayPrimaryKeyCoverageTests()
     {
@@ -23,7 +24,7 @@ public class TableGatewayPrimaryKeyCoverageTests : SqlLiteContextTestBase
         var helper = new TableGateway<PrimaryKeyEntity, long>(Context);
         var entity = new PrimaryKeyEntity
         {
-            Code = "PK-1",
+            Code = $"PK-{Guid.NewGuid():N}",
             Payload = "first"
         };
 
@@ -32,21 +33,24 @@ public class TableGatewayPrimaryKeyCoverageTests : SqlLiteContextTestBase
         entity.Payload = "updated";
         Assert.Equal(1, await helper.UpsertAsync(entity));
 
-        var retrieved = await helper.RetrieveOneAsync(entity);
-        Assert.NotNull(retrieved);
-        Assert.Equal(entity.Code, retrieved!.Code);
+        await using var verify = Context.CreateSqlContainer("SELECT payload FROM primary_key_entities WHERE code = @code");
+        verify.AddParameterWithValue("@code", DbType.String, entity.Code);
+        var payload = await verify.ExecuteScalarRequiredAsync<string>();
+        Assert.Equal("updated", payload);
     }
 
     private void CreatePrimaryKeyTable()
     {
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
         using var container = Context.CreateSqlContainer();
-        container.Query.Append("""
-                               CREATE TABLE primary_key_entities (
-                                   id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                   code TEXT NOT NULL UNIQUE,
-                                   payload TEXT
-                               );
-                               """);
+        container.Query.Append($"""
+                                CREATE TABLE IF NOT EXISTS {qp}primary_key_entities{qs} (
+                                    {qp}id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    {qp}code{qs} TEXT NOT NULL UNIQUE,
+                                    {qp}payload{qs} TEXT
+                                );
+                                """);
         container.ExecuteNonQueryAsync().GetAwaiter().GetResult();
     }
 

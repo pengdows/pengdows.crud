@@ -10,17 +10,18 @@ Specifies the database table name for an entity.
 
 ```csharp
 [Table("table_name")]
-[Table("schema.table_name")]  // With schema
+[Table("table_name", "schema_name")]  // With explicit schema
 public class MyEntity { }
 ```
 
 **Parameters:**
-- `name` (string) — Table name, optionally schema-qualified
+- `name` (string) — Table name
+- `schema` (string, optional) — Database schema name (e.g., "dbo", "public", "wiki")
 
 **Notes:**
 - Required on all entities used with TableGateway
-- Supports schema qualification (e.g., "dbo.users", "public.accounts")
-- Schema portion is automatically quoted per database requirements
+- Provide schema as a second argument, not dot-notation in the name
+- Both table name and schema are automatically quoted per database requirements
 
 ### ColumnAttribute
 
@@ -66,7 +67,8 @@ public int Id { get; set; }
 - `writable` (bool, default: true) — Whether the ID can be set on insert
 
 **Rules:**
-- Exactly one `[Id]` property required per entity
+- `[Id]` is required for row-id operations (`RetrieveOneAsync(TRowID)`, `UpdateAsync`, `DeleteAsync(TRowID)`)
+- Entities with only `[PrimaryKey]` can still use create and business-key retrieval paths
 - Must be a primitive type: `int`, `long`, `Guid`, or `string` (nullable allowed)
 - Non-writable IDs are excluded from INSERT statements (for identity columns)
 - Used for single-row lookups and as the `TRowID` generic parameter
@@ -208,23 +210,47 @@ public DateTime CreatedAt { get; set; }
 
 ### EnumColumnAttribute
 
-Configures enum handling for columns.
+Explicitly specifies the enum type for a column when the property type cannot be inferred (e.g., `object`). Not needed when the property is already typed as the enum.
 
 ```csharp
-public enum UserStatus { Active, Inactive, Suspended }
-
-[EnumColumn(typeof(UserStatus))]
+// NOT needed — type is inferred automatically from the property type
 [Column("status", DbType.String)]
 public UserStatus Status { get; set; }
+
+// NEEDED — property type is object, enum type can't be inferred
+[EnumColumn(typeof(UserStatus))]
+[Column("status", DbType.String)]
+public object Status { get; set; }
 ```
 
 **Parameters:**
-- `enumType` (Type) — The enum type for conversion
+- `enumType` (Type) — The enum type; must actually be an enum (validated at construction)
 
 **Notes:**
 - Enum parsing behavior is configured at the TableGateway level via `EnumParseBehavior` property
 - Invalid enum values throw by default, or can be configured to return default/null
-- Supports both string and integer storage in the database
+- Supports both string and integer storage in the database (controlled by `DbType` on `[Column]`)
+
+### EnumLiteralAttribute
+
+Maps an enum **field** to a custom string literal in the database. Applied to enum fields, not properties.
+
+```csharp
+public enum OrderStatus
+{
+    [EnumLiteral("open")]
+    Open,
+
+    [EnumLiteral("closed")]
+    Closed,
+
+    [EnumLiteral("pending_review")]
+    PendingReview
+}
+```
+
+**Parameters:**
+- `literal` (string) — The string value stored in the database for this enum field
 
 ### JsonAttribute
 
@@ -254,6 +280,20 @@ public Dictionary<string, object>? Metadata { get; set; }
 - Automatically serializes/deserializes to/from JSON strings
 - Supports nullable properties (NULL database values)
 - Uses System.Text.Json by default
+
+### CorrelationTokenAttribute
+
+Marks a property used as a unique correlation token for generated-ID retrieval fallback. Used when the database doesn't support `RETURNING`/`OUTPUT` and session-scoped identity functions are unreliable.
+
+```csharp
+[CorrelationToken]
+[Column("correlation_id", DbType.Guid)]
+public Guid CorrelationId { get; set; }
+```
+
+**Behavior:**
+- TableGateway generates a unique value (Guid or string), inserts it alongside the row, then immediately queries back using this token to retrieve the database-generated identity
+- Applied to a property on the entity, not to the ID column itself
 
 ## Complete Examples
 
@@ -378,7 +418,8 @@ public class UserProfile
 
 ### Required Combinations
 
-- Every entity must have `[Table]` and exactly one `[Id]` property
+- Every entity must have `[Table]`
+- `[Id]` is required for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). Entities with only `[PrimaryKey]` (no `[Id]`) can still use `CreateAsync` and `RetrieveOneAsync(TEntity)`.
 - `[Id]` properties must also have `[Column]` attributes
 - All properties mapped to database must have `[Column]` attributes
 

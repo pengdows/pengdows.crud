@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -49,11 +50,11 @@ public class TableGatewayCriticalPathTests
     }
 
     [Fact]
-    public void Constructor_WithoutIdColumn_ThrowsInvalidOperation()
+    public void Constructor_WithoutIdColumn_ThrowsSqlGenerationException()
     {
         using var context = CreateContext();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<SqlGenerationException>(() =>
             new TableGateway<EntityWithoutId, int>(context));
     }
 

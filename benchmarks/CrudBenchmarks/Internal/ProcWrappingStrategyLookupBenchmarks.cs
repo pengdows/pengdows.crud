@@ -3,8 +3,11 @@ using BenchmarkDotNet.Attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 12)]
 public class ProcWrappingStrategyLookupBenchmarks

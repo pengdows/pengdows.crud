@@ -92,8 +92,7 @@ public sealed class CoveragePush_TransactionAndLockerTests
             {
                 context.Object,
                 IsolationLevel.ReadCommitted,
-                null,
-                false
+                null
             }));
 
         Assert.IsType<InvalidOperationException>(ex.InnerException);
@@ -109,8 +108,8 @@ public sealed class CoveragePush_TransactionAndLockerTests
 
         ExecuteSessionNonQueryMethod.Invoke(tx, new object[] { "   " });
 
-        var task = Assert.IsAssignableFrom<Task>(ExecuteSessionNonQueryAsyncMethod.Invoke(tx, new object[] { "   " }));
-        await task;
+        var vt = Assert.IsAssignableFrom<ValueTask>(ExecuteSessionNonQueryAsyncMethod.Invoke(tx, new object[] { "   " }));
+        await vt;
 
         tx.Rollback();
     }

@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -100,7 +101,7 @@ public class ConnectionBreakingExamples
         // Connection that fails when trying to begin transactions
         using var context = ConnectionFailureHelper.CreateFailOnTransactionContext();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<TransactionException>(() =>
             context.BeginTransaction());
     }
 

@@ -4,410 +4,23 @@ using Dapper;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
 using Npgsql;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.stormgate;
+using SqlKata.Compilers;
 
 namespace CrudBenchmarks;
-
-/// <summary>
-/// Thesis: pengdows does the right thing automatically — EF and Dapper do not
-/// properly handle SQL Server session settings for indexed view usage.
-///
-/// SQL Server requires 7 specific SET options for indexed view usage. SqlClient
-/// defaults leave ARITHABORT OFF. pengdows detects this via DBCC USEROPTIONS and
-/// automatically applies SET ARITHABORT ON on each connection.
-///
-/// Proven consequences of ARITHABORT OFF (Dapper/EF default):
-///   - Plan cache bifurcation: the same query gets two separate cached plans
-///     (ARITHABORT ON from SSMS vs OFF from the app), wasting SQL Server memory
-///     and causing the classic "slow in app, fast in SSMS" diagnostic trap.
-///   - On older SQL Server versions or Standard/Express editions, incorrect SET
-///     options silently prevent automatic view matching.
-///   - Even on SQL Server 2022 where ANSI_WARNINGS provides implicit ARITHABORT
-///     behavior, relying on undocumented implicit behavior is fragile.
-///
-/// This benchmark proves the thesis empirically:
-///   1. Session settings diff: pengdows vs bare SqlClient
-///   2. Plan cache bifurcation: 2 distinct set_options bitmasks in sys.dm_exec_cached_plans
-///   3. Performance comparison: pengdows vs Dapper vs EF on full aggregate queries
-/// </summary>
-[MemoryDiagnoser]
-[SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
-public class IndexedViewPerformanceBenchmarks : IAsyncDisposable
-{
-    private IndexedViewEnvironment _env = new();
-
-    private IDatabaseContext _pengdowsContext = null!;
-    private TypeMapRegistry _map = null!;
-    private TableGateway<CustomerOrderSummary, int> _summaryHelper = null!;
-    private IndexedViewEfContext _efContext = null!;
-    private DbContextOptions<IndexedViewEfContext> _efOptions = null!;
-
-    private string _pengdowsConnStr = string.Empty;
-    private string _efConnStr = string.Empty;
-    private string _dapperConnStr = string.Empty;
-
-    [Params(5000, 10000)] public int CustomerCount;
-
-    [Params(50)] public int OrdersPerCustomer;
-
-    [GlobalSetup]
-    public async Task GlobalSetup()
-    {
-        await _env.InitializeAsync(CustomerCount, OrdersPerCustomer);
-
-        // Separate connection pools per library via Application Name
-        _pengdowsConnStr = _env.GetConnectionStringWithApplicationName("Benchmark_Pengdows_ViewPerf");
-        _efConnStr = _env.GetConnectionStringWithApplicationName("Benchmark_EF_ViewPerf");
-        _dapperConnStr = _env.GetConnectionStringWithApplicationName("Benchmark_Dapper_ViewPerf");
-
-        // Setup pengdows.crud
-        _map = new TypeMapRegistry();
-        _map.Register<CustomerOrderSummary>();
-
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = _pengdowsConnStr,
-            ReadWriteMode = ReadWriteMode.ReadWrite,
-            DbMode = DbMode.Standard
-        };
-        _pengdowsContext = new DatabaseContext(cfg, SqlClientFactory.Instance, null, _map);
-        _summaryHelper = new TableGateway<CustomerOrderSummary, int>(_pengdowsContext);
-
-        // Setup Entity Framework
-        _efOptions = new DbContextOptionsBuilder<IndexedViewEfContext>()
-            .UseSqlServer(_efConnStr)
-            .Options;
-        _efContext = new IndexedViewEfContext(_efOptions);
-
-        Console.WriteLine(
-            $"[BENCHMARK] IndexedViewPerformance: {CustomerCount} customers, {OrdersPerCustomer} orders/customer");
-        Console.WriteLine($"[BENCHMARK] pengdows.crud ConnectionMode: {_pengdowsContext.ConnectionMode}");
-
-        // Prove the thesis with empirical evidence
-        await ProveThesisAsync();
-    }
-
-    [GlobalCleanup]
-    public async Task GlobalCleanup()
-    {
-        if (_pengdowsContext is IAsyncDisposable pad)
-        {
-            await pad.DisposeAsync();
-        }
-
-        if (_efContext != null)
-        {
-            await _efContext.DisposeAsync();
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Thesis proof — runs once during GlobalSetup, not during timing
-    // ═══════════════════════════════════════════════════════════════════
-
-    private async Task ProveThesisAsync()
-    {
-        Console.WriteLine("\n[PROOF] ═══════════════════════════════════════════════════");
-        Console.WriteLine("[PROOF] Indexed View Thesis Proof");
-        Console.WriteLine("[PROOF] ═══════════════════════════════════════════════════\n");
-
-        // Proof 1: Session settings comparison
-        await ProveSessionSettingsDiffAsync();
-
-        // Proof 2: Plan cache bifurcation
-        await ProvePlanCacheBifurcationAsync();
-
-        Console.WriteLine("[PROOF] ═══════════════════════════════════════════════════\n");
-    }
-
-    private async Task ProveSessionSettingsDiffAsync()
-    {
-        var settingsScript = _pengdowsContext.SessionSettingsPreamble;
-        Console.WriteLine(string.IsNullOrWhiteSpace(settingsScript)
-            ? "[PROOF] pengdows session diff: (empty — all settings already compliant)"
-            : $"[PROOF] pengdows session diff: {settingsScript.Replace("\n", " ").Trim()}");
-
-        var pengdowsSettings = await GetPengdowsSessionSettingsAsync();
-
-        // Bare SqlClient connection (Dapper/EF default)
-        await using var bareConn = new SqlConnection(_dapperConnStr);
-        await bareConn.OpenAsync();
-
-        var bareSettings = await GetSessionSettingsAsync(bareConn);
-
-        var relevantSettings = new[]
-        {
-            "ARITHABORT", "ANSI_NULLS", "ANSI_PADDING", "ANSI_WARNINGS",
-            "CONCAT_NULL_YIELDS_NULL", "QUOTED_IDENTIFIER", "NUMERIC_ROUNDABORT"
-        };
-
-        Console.WriteLine("[PROOF]   {0,-30} {1,-12} {2,-12}", "Setting", "pengdows", "Dapper/EF");
-        Console.WriteLine("[PROOF]   {0,-30} {1,-12} {2,-12}", "-------", "--------", "---------");
-        foreach (var key in relevantSettings)
-        {
-            var pVal = pengdowsSettings.TryGetValue(key, out var pv) ? pv : "OFF";
-            var bVal = bareSettings.TryGetValue(key, out var bv) ? bv : "OFF";
-            var marker = pVal != bVal ? " << DIFF" : "";
-            Console.WriteLine("[PROOF]   {0,-30} {1,-12} {2,-12}{3}", key, pVal, bVal, marker);
-        }
-    }
-
-    private async Task ProvePlanCacheBifurcationAsync()
-    {
-        Console.WriteLine("\n[PROOF] --- Plan cache bifurcation ---");
-
-        // Warm up both paths to populate plan cache
-        var customerId = _env.SampleCustomerId;
-        var viewSql = _env.BuildViewSql(p => $"@{p}");
-
-        await using (var container = _pengdowsContext.CreateSqlContainer())
-        {
-            var pengdowsSql = _env.BuildViewSql(param => container.MakeParameterName(param));
-            container.Query.Append(pengdowsSql);
-            container.AddParameterWithValue("customerId", DbType.Int32, customerId);
-            await _summaryHelper.LoadSingleAsync(container);
-        }
-
-        await using var bareConn = new SqlConnection(_dapperConnStr);
-        await bareConn.OpenAsync();
-        await bareConn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(viewSql, new { customerId });
-
-        // Query plan cache
-        await using var diagConn = new SqlConnection(_env.ConnectionString);
-        await diagConn.OpenAsync();
-        await using var cmd = diagConn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT
-                st.text,
-                cp.usecounts,
-                pa.value AS set_options,
-                cp.size_in_bytes
-            FROM sys.dm_exec_cached_plans cp
-            CROSS APPLY sys.dm_exec_sql_text(cp.plan_handle) st
-            OUTER APPLY (
-                SELECT pa.value
-                FROM sys.dm_exec_plan_attributes(cp.plan_handle) pa
-                WHERE pa.attribute = 'set_options'
-            ) pa
-            WHERE st.text LIKE '%vw_CustomerOrderSummary%'
-              AND st.text NOT LIKE '%dm_exec%'
-              AND st.text NOT LIKE '%STATISTICS%'
-              AND cp.cacheobjtype = 'Compiled Plan'
-            ORDER BY st.text, pa.value";
-
-        var entries = new List<(string text, int useCount, long setOptions, int sizeBytes)>();
-        await using (var reader = await cmd.ExecuteReaderAsync())
-        {
-            while (await reader.ReadAsync())
-            {
-                var text = reader.GetString(0).Trim();
-                if (text.Length > 80) text = text[..80] + "...";
-                entries.Add((
-                    text,
-                    reader.GetInt32(1),
-                    reader.IsDBNull(2) ? 0L : Convert.ToInt64(reader.GetValue(2)),
-                    reader.GetInt32(3)));
-            }
-        }
-
-        if (entries.Count == 0)
-        {
-            Console.WriteLine("[PROOF]   No cached plans found for view queries.");
-            return;
-        }
-
-        const long arithabortBit = 0x1000; // 4096
-        Console.WriteLine($"[PROOF]   Found {entries.Count} cached plan(s):");
-        foreach (var (text, useCount, setOpts, size) in entries)
-        {
-            var arithabort = (setOpts & arithabortBit) != 0 ? "ON" : "OFF";
-            Console.WriteLine(
-                $"[PROOF]     set_options=0x{setOpts:X4} (ARITHABORT={arithabort}) uses={useCount} size={size}B");
-            Console.WriteLine($"[PROOF]       {text}");
-        }
-
-        var distinctSetOptions = entries.Select(e => e.setOptions).Distinct().ToList();
-        if (distinctSetOptions.Count > 1)
-        {
-            Console.WriteLine(
-                $"[PROOF]   >> PLAN CACHE BIFURCATION: {distinctSetOptions.Count} distinct set_options bitmasks");
-            Console.WriteLine(
-                "[PROOF]   >> pengdows shares plan cache with SSMS. Dapper/EF get separate (wasted) entries.");
-        }
-        else
-        {
-            Console.WriteLine("[PROOF]   No bifurcation detected (all plans share same set_options).");
-        }
-    }
-
-    private static async Task<Dictionary<string, string>> GetSessionSettingsAsync(SqlConnection conn)
-    {
-        var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DBCC USEROPTIONS WITH NO_INFOMSGS";
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            var name = reader.GetString(0).Trim().ToUpperInvariant();
-            var value = reader.GetString(1).Trim();
-            settings[name] = string.Equals(value, "SET", StringComparison.OrdinalIgnoreCase) ? "ON" : value;
-        }
-
-        return settings;
-    }
-
-    private async Task<Dictionary<string, string>> GetPengdowsSessionSettingsAsync()
-    {
-        await using var container = _pengdowsContext.CreateSqlContainer("DBCC USEROPTIONS WITH NO_INFOMSGS");
-        await using var reader = await container.ExecuteReaderAsync();
-        var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        while (await reader.ReadAsync())
-        {
-            var name = reader.GetString(0).Trim().ToUpperInvariant();
-            var value = reader.GetString(1).Trim();
-            settings[name] = string.Equals(value, "SET", StringComparison.OrdinalIgnoreCase) ? "ON" : value;
-        }
-
-        return settings;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Benchmarks — the full aggregate is the key differentiator
-    // ═══════════════════════════════════════════════════════════════════
-
-    // ── Full aggregate (THE differentiator) ─────────────────────────────
-    // Scans ALL orders grouped by customer_id — matches the indexed view
-    // definition exactly. With correct SET options (pengdows), the optimizer
-    // substitutes the indexed view. Without (Dapper/EF), it scans the
-    // entire Orders table.
-
-    [Benchmark]
-    public async Task<List<CustomerOrderSummary>> FullAggregate_Pengdows()
-    {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        container.Query.Append(_env.BuildFullAggregateSql());
-        return await _summaryHelper.LoadListAsync(container);
-    }
-
-    [Benchmark]
-    public async Task<IEnumerable<CustomerOrderSummary>> FullAggregate_Dapper()
-    {
-        await using var conn = new SqlConnection(_dapperConnStr);
-        await conn.OpenAsync();
-        return await conn.QueryAsync<CustomerOrderSummary>(_env.BuildFullAggregateSql());
-    }
-
-    [Benchmark]
-    public async Task<List<CustomerOrderSummary>> FullAggregate_EntityFramework()
-    {
-        await using var ctx = new IndexedViewEfContext(_efOptions);
-        return await ctx.CustomerOrderSummaries
-            .FromSqlRaw(_env.BuildFullAggregateSql())
-            .AsNoTracking()
-            .ToListAsync();
-    }
-
-    // ── Per-customer view query (baseline — equal for all) ─────────────
-
-    [Benchmark]
-    public async Task<CustomerOrderSummary?> QueryIndexedView_Pengdows()
-    {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        var sql = _env.BuildViewSql(param => container.MakeParameterName(param));
-        container.Query.Append(sql);
-        container.AddParameterWithValue("customerId", DbType.Int32, _env.SampleCustomerId);
-        return await _summaryHelper.LoadSingleAsync(container);
-    }
-
-    [Benchmark]
-    public async Task<CustomerOrderSummary?> QueryIndexedView_Dapper()
-    {
-        await using var conn = new SqlConnection(_dapperConnStr);
-        await conn.OpenAsync();
-        var sql = _env.BuildViewSql(param => $"@{param}");
-        return await conn.QuerySingleOrDefaultAsync<CustomerOrderSummary>(
-            sql,
-            new { customerId = _env.SampleCustomerId });
-    }
-
-    [Benchmark]
-    public async Task<CustomerOrderSummary?> QueryIndexedView_EntityFramework()
-    {
-        var sql = _env.BuildViewSql(param => $"@{param}");
-        return await _efContext.CustomerOrderSummaries
-            .FromSqlRaw(sql, new SqlParameter("customerId", _env.SampleCustomerId))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await GlobalCleanup();
-        await _env.DisposeAsync();
-    }
-
-    // ── Entity ──────────────────────────────────────────────────────────
-
-    [pengdows.crud.attributes.Table("vw_CustomerOrderSummary", "dbo")]
-    public class CustomerOrderSummary
-    {
-        [Id(false)]
-        [pengdows.crud.attributes.Column("customer_id", DbType.Int32)]
-        public int CustomerId { get; set; }
-
-        [pengdows.crud.attributes.Column("order_count", DbType.Int64)]
-        public long OrderCount { get; set; }
-
-        [pengdows.crud.attributes.Column("total_amount", DbType.Decimal)]
-        public decimal TotalAmount { get; set; }
-
-        [pengdows.crud.attributes.Column("sum_order_amount", DbType.Decimal)]
-        public decimal SumOrderAmount { get; set; }
-
-        [pengdows.crud.attributes.Column("count_for_avg", DbType.Int64)]
-        public long CountForAvg { get; set; }
-
-        public decimal AvgOrderAmount => CountForAvg > 0 ? SumOrderAmount / CountForAvg : 0;
-    }
-
-    // ── EF Context ──────────────────────────────────────────────────────
-
-    public class IndexedViewEfContext : DbContext
-    {
-        public IndexedViewEfContext(DbContextOptions<IndexedViewEfContext> options) : base(options)
-        {
-        }
-
-        public DbSet<CustomerOrderSummary> CustomerOrderSummaries { get; set; }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<CustomerOrderSummary>(entity =>
-            {
-                entity.HasNoKey();
-                entity.ToView(null);
-                entity.Property(e => e.CustomerId).HasColumnName("CustomerId");
-                entity.Property(e => e.OrderCount).HasColumnName("OrderCount");
-                entity.Property(e => e.TotalAmount).HasColumnName("TotalAmount");
-                entity.Property(e => e.SumOrderAmount).HasColumnName("SumOrderAmount");
-                entity.Property(e => e.CountForAvg).HasColumnName("CountForAvg");
-                entity.Ignore(e => e.AvgOrderAmount);
-            });
-        }
-    }
-}
 
 /// <summary>
 /// Thesis point #3 (continued): PostgreSQL materialized view benchmark.
 /// Compares materialized-view look-ups (pre-computed) against live table-scan
 /// GROUP BY queries across pengdows.crud, Dapper, and Entity Framework.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5, invocationCount: 50)]
 public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
@@ -438,23 +51,32 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
     private IContainer? _container;
     private string _connStr = string.Empty;
 
+    // Singletons — one instance for the lifetime of the benchmark run
     private IDatabaseContext _pengdowsContext = null!;
     private TypeMapRegistry _map = null!;
     private TableGateway<PgCustomerOrderSummary, int> _summaryHelper = null!;
     private MatViewEfContext _efContext = null!;
     private DbContextOptions<MatViewEfContext> _efOptions = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
+    private StormGate _stormGate = null!;
+    private PostgresCompiler _sqlKataCompiler = null!;
+
+    // Pre-built containers for the PreBuilt variants (SQL building excluded from timing)
+    private ISqlContainer? _matViewSc;
+    private ISqlContainer? _tableScanSc;
+
+    // Pre-built raw SQL strings for Dapper (avoids string.Replace in timed region)
+    private string _matViewDapperSql = null!;
+    private string _tableScanDapperSql = null!;
 
     private readonly List<int> _customerIds = new();
     private int _testCustomerId;
 
     [Params(2000, 5000)] public int CustomerCount;
 
-    [Params(15)] public int OrdersPerCustomer;
-
-    [Params(16)] public int Parallelism;
-
-    [Params(64)] public int OperationsPerRun;
+    private const int OrdersPerCustomer = 15;
+    private const int Parallelism = 128;
+    private const int OperationsPerRun = 512;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -466,6 +88,9 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
             .WithEnvironment("POSTGRES_PASSWORD", "postgres")
             .WithEnvironment("POSTGRES_DB", "matview_perf_test")
             .WithPortBinding(0, 5432)
+            // Raise max_connections so multiple independent pools (pengdows, Dapper, EF, StormGate)
+            // can each hold up to 100 connections without competing with postgres's default limit of 100.
+            .WithCommand("-c", "max_connections=300")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
             .Build();
 
@@ -474,6 +99,10 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
         var mappedPort = _container.GetMappedPublicPort(5432);
         _connStr =
             $"Host=localhost;Port={mappedPort};Database=matview_perf_test;Username=postgres;Password=postgres";
+
+        // Create the shared data source first so WaitForReady and seeding use the same
+        // pool as the Dapper/StormGate benchmarks — no orphan connections in the global pool.
+        _dapperDataSource = NpgsqlDataSource.Create(_connStr);
 
         await WaitForReady();
         await CreateSchemaAndSeedAsync();
@@ -497,10 +126,33 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
             .Options;
         _efContext = new MatViewEfContext(_efOptions);
 
-        // Setup Dapper data source
-        _dapperDataSource = NpgsqlDataSource.Create(_connStr);
+        // SQL Kata compiler singleton
+        _sqlKataCompiler = new PostgresCompiler();
+
+        // StormGate: connection rate governor wrapping the same data source
+        // 100 permits matches the default Npgsql/ADO.NET connection pool max size
+        _stormGate = new StormGate(_dapperDataSource, 100, TimeSpan.FromSeconds(5));
 
         _testCustomerId = _customerIds[0];
+
+        // Pre-built containers (SQL building excluded from timed region)
+        // MaterializedView — BuildBaseRetrieve generates SELECT from [Column] attributes
+        _matViewSc = _summaryHelper.BuildBaseRetrieve("mv");
+        _matViewSc.Query.Append(" WHERE ");
+        _matViewSc.Query.Append(_matViewSc.WrapObjectName("mv.customer_id"));
+        _matViewSc.Query.Append(" = ");
+        var mvParam = _matViewSc.AddParameterWithValue(DbType.Int32, _testCustomerId);
+        _matViewSc.Query.Append(_matViewSc.MakeParameterName(mvParam));
+
+        // TableScan — raw SQL appropriate for GROUP BY aggregates
+        _tableScanSc = _pengdowsContext.CreateSqlContainer();
+        _tableScanSc.Query.Append(BuildTableScanSql(p => _tableScanSc.MakeParameterName(p)));
+        _tableScanSc.AddParameterWithValue("customerId", DbType.Int32, _testCustomerId);
+        _tableScanSc.AddParameterWithValue("status", DbType.String, "Active");
+
+        // Pre-built raw SQL strings for Dapper (constant — avoids string.Replace in timed region)
+        _matViewDapperSql = BuildViewSql(p => $"@{p}");
+        _tableScanDapperSql = BuildTableScanSql(p => $"@{p}");
 
         Console.WriteLine(
             $"[BENCHMARK] MaterializedViewPerformance: {CustomerCount} customers, {OrdersPerCustomer} orders/customer");
@@ -513,9 +165,7 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
         {
             try
             {
-                await using var conn = new NpgsqlConnection(_connStr);
-                await conn.OpenAsync();
-                await conn.CloseAsync();
+                await using var conn = await _dapperDataSource.OpenConnectionAsync();
                 return;
             }
             catch
@@ -529,8 +179,7 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
 
     private async Task CreateSchemaAndSeedAsync()
     {
-        await using var conn = new NpgsqlConnection(_connStr);
-        await conn.OpenAsync();
+        await using var conn = await _dapperDataSource.OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
         await conn.ExecuteAsync(@"
@@ -613,6 +262,9 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        _matViewSc?.Dispose();
+        _tableScanSc?.Dispose();
+
         if (_pengdowsContext is IAsyncDisposable pad)
         {
             await pad.DisposeAsync();
@@ -622,6 +274,8 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
         {
             await _efContext.DisposeAsync();
         }
+
+        _stormGate?.Dispose();
 
         if (_dapperDataSource != null)
         {
@@ -635,157 +289,164 @@ public class MaterializedViewPerformanceBenchmarks : IAsyncDisposable
         }
     }
 
-    // ── Single-call benchmarks: materialized view ───────────────────────
+    // ── Materialized view: pre-built (SQL building excluded from timing) ─
 
+    /// <summary>Pre-built container — measures pure execution cost only.</summary>
     [Benchmark]
-    public async Task<PgCustomerOrderSummary?> MaterializedView_Pengdows()
+    public async Task<PgCustomerOrderSummary?> MatView_Pengdows_PreBuilt()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        var sql = BuildViewSql(param => container.MakeParameterName(param));
-        container.Query.Append(sql);
-        container.AddParameterWithValue("customerId", DbType.Int32, _testCustomerId);
-        return await _summaryHelper.LoadSingleAsync(container);
+        return await _summaryHelper.LoadSingleAsync(_matViewSc!);
     }
 
+    /// <summary>Pre-built SQL string — measures pure execution cost only.</summary>
     [Benchmark]
-    public async Task<PgCustomerOrderSummary?> MaterializedView_Dapper()
+    public async Task<PgCustomerOrderSummary?> MatView_Dapper_PreBuilt()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var sql = BuildViewSql(param => $"@{param}");
         return await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
-            sql,
+            _matViewDapperSql,
+            new { customerId = _testCustomerId });
+    }
+
+    // ── Materialized view: build + run (level set — fair SQL-builder comparison) ─
+
+    /// <summary>
+    /// Builds query via TableGateway (BuildBaseRetrieve + WHERE) then executes.
+    /// Represents real developer usage of pengdows.crud.
+    /// </summary>
+    [Benchmark]
+    public async Task<PgCustomerOrderSummary?> MatView_Pengdows_BuildAndRun()
+    {
+        await using var sc = _summaryHelper.BuildBaseRetrieve("mv");
+        sc.Query.Append(" WHERE ");
+        sc.Query.Append(sc.WrapObjectName("mv.customer_id"));
+        sc.Query.Append(" = ");
+        var p = sc.AddParameterWithValue(DbType.Int32, _testCustomerId);
+        sc.Query.Append(sc.MakeParameterName(p));
+        return await _summaryHelper.LoadSingleAsync(sc);
+    }
+
+    /// <summary>
+    /// Builds query via SQL Kata (singleton compiler) then executes with Dapper.
+    /// Represents real developer usage of Dapper with a query builder.
+    /// </summary>
+    [Benchmark]
+    public async Task<PgCustomerOrderSummary?> MatView_Dapper_SqlKata()
+    {
+        var q = new SqlKata.Query("customer_order_summary")
+            .Where("customer_id", _testCustomerId)
+            .Select("customer_id", "order_count", "total_amount", "avg_order_amount", "last_order_date");
+        var compiled = _sqlKataCompiler.Compile(q);
+        await using var conn = await _dapperDataSource.OpenConnectionAsync();
+        return await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
+            compiled.Sql,
+            compiled.NamedBindings);
+    }
+
+    /// <summary>
+    /// Dapper with StormGate connection governor — pre-built SQL, governed connection acquire.
+    /// Represents a DIY connection-governance wrapper on top of Dapper.
+    /// </summary>
+    [Benchmark]
+    public async Task<PgCustomerOrderSummary?> MatView_Dapper_StormGate()
+    {
+        await using var conn = await _stormGate.OpenAsync();
+        return await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
+            _matViewDapperSql,
             new { customerId = _testCustomerId });
     }
 
     [Benchmark]
-    public async Task<CustomerOrderSummaryRow?> MaterializedView_EntityFramework()
+    public async Task<CustomerOrderSummaryRow?> MatView_EntityFramework()
     {
-        var sql = BuildViewSql(param => $"@{param}");
         return await _efContext.CustomerOrderSummaryRows
-            .FromSqlRaw(sql, new NpgsqlParameter("customerId", _testCustomerId))
+            .FromSqlRaw(_matViewDapperSql, new NpgsqlParameter("customerId", _testCustomerId))
             .AsNoTracking()
             .FirstOrDefaultAsync();
     }
 
-    // ── Single-call benchmarks: table scan ──────────────────────────────
+    // ── Table scan: pre-built (SQL building excluded from timing) ────────
 
     [Benchmark]
-    public async Task<PgCustomerOrderSummary?> TableScan_Pengdows()
+    public async Task<PgCustomerOrderSummary?> TableScan_Pengdows_PreBuilt()
     {
-        await using var container = _pengdowsContext.CreateSqlContainer();
-        var sql = BuildTableScanSql(param => container.MakeParameterName(param));
-        container.Query.Append(sql);
-        container.AddParameterWithValue("customerId", DbType.Int32, _testCustomerId);
-        container.AddParameterWithValue("status", DbType.String, "Active");
-        return await _summaryHelper.LoadSingleAsync(container);
+        return await _summaryHelper.LoadSingleAsync(_tableScanSc!);
     }
 
     [Benchmark]
-    public async Task<PgCustomerOrderSummary?> TableScan_Dapper()
+    public async Task<PgCustomerOrderSummary?> TableScan_Dapper_PreBuilt()
     {
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
-        var sql = BuildTableScanSql(param => $"@{param}");
         return await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
-            sql,
+            _tableScanDapperSql,
             new { customerId = _testCustomerId, status = "Active" });
     }
 
     [Benchmark]
     public async Task<CustomerOrderSummaryRow?> TableScan_EntityFramework()
     {
-        var sql = BuildTableScanSql(param => $"@{param}");
         return await _efContext.CustomerOrderSummaryRows
             .FromSqlRaw(
-                sql,
+                _tableScanDapperSql,
                 new NpgsqlParameter("customerId", _testCustomerId),
                 new NpgsqlParameter("status", "Active"))
             .AsNoTracking()
             .FirstOrDefaultAsync();
     }
 
-    // ── Concurrent benchmarks: materialized view ────────────────────────
+    // ── Concurrent: materialized view ────────────────────────────────────
 
     [Benchmark]
-    public async Task MaterializedView_Pengdows_Concurrent()
+    public async Task MatView_Pengdows_BuildAndRun_Concurrent()
     {
         await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
         {
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            var sql = BuildViewSql(param => container.MakeParameterName(param));
-            container.Query.Append(sql);
-            container.AddParameterWithValue("customerId", DbType.Int32, _testCustomerId);
-            await _summaryHelper.LoadSingleAsync(container);
+            await using var sc = _summaryHelper.BuildBaseRetrieve("mv");
+            sc.Query.Append(" WHERE ");
+            sc.Query.Append(sc.WrapObjectName("mv.customer_id"));
+            sc.Query.Append(" = ");
+            var p = sc.AddParameterWithValue(DbType.Int32, _testCustomerId);
+            sc.Query.Append(sc.MakeParameterName(p));
+            await _summaryHelper.LoadSingleAsync(sc);
         });
     }
 
     [Benchmark]
-    public async Task MaterializedView_Dapper_Concurrent()
+    public async Task MatView_Dapper_SqlKata_Concurrent()
     {
         await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
         {
+            var q = new SqlKata.Query("customer_order_summary")
+                .Where("customer_id", _testCustomerId)
+                .Select("customer_id", "order_count", "total_amount", "avg_order_amount", "last_order_date");
+            var compiled = _sqlKataCompiler.Compile(q);
             await using var conn = await _dapperDataSource.OpenConnectionAsync();
-            var sql = BuildViewSql(param => $"@{param}");
             await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
-                sql,
+                compiled.Sql,
+                compiled.NamedBindings);
+        });
+    }
+
+    [Benchmark]
+    public async Task MatView_Dapper_StormGate_Concurrent()
+    {
+        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        {
+            await using var conn = await _stormGate.OpenAsync();
+            await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
+                _matViewDapperSql,
                 new { customerId = _testCustomerId });
         });
     }
 
     [Benchmark]
-    public async Task MaterializedView_EntityFramework_Concurrent()
+    public async Task MatView_EntityFramework_Concurrent()
     {
         await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
         {
             await using var ctx = new MatViewEfContext(_efOptions);
-            var sql = BuildViewSql(param => $"@{param}");
             await ctx.CustomerOrderSummaryRows
-                .FromSqlRaw(sql, new NpgsqlParameter("customerId", _testCustomerId))
-                .AsNoTracking()
-                .FirstOrDefaultAsync();
-        });
-    }
-
-    // ── Concurrent benchmarks: table scan ───────────────────────────────
-
-    [Benchmark]
-    public async Task TableScan_Pengdows_Concurrent()
-    {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
-        {
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            var sql = BuildTableScanSql(param => container.MakeParameterName(param));
-            container.Query.Append(sql);
-            container.AddParameterWithValue("customerId", DbType.Int32, _testCustomerId);
-            container.AddParameterWithValue("status", DbType.String, "Active");
-            await _summaryHelper.LoadSingleAsync(container);
-        });
-    }
-
-    [Benchmark]
-    public async Task TableScan_Dapper_Concurrent()
-    {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
-        {
-            await using var conn = await _dapperDataSource.OpenConnectionAsync();
-            var sql = BuildTableScanSql(param => $"@{param}");
-            await conn.QuerySingleOrDefaultAsync<PgCustomerOrderSummary>(
-                sql,
-                new { customerId = _testCustomerId, status = "Active" });
-        });
-    }
-
-    [Benchmark]
-    public async Task TableScan_EntityFramework_Concurrent()
-    {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
-        {
-            await using var ctx = new MatViewEfContext(_efOptions);
-            var sql = BuildTableScanSql(param => $"@{param}");
-            await ctx.CustomerOrderSummaryRows
-                .FromSqlRaw(
-                    sql,
-                    new NpgsqlParameter("customerId", _testCustomerId),
-                    new NpgsqlParameter("status", "Active"))
+                .FromSqlRaw(_matViewDapperSql, new NpgsqlParameter("customerId", _testCustomerId))
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
         });

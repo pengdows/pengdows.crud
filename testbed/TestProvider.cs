@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using testbed.Snowflake;
 
@@ -19,6 +20,24 @@ public class TestProvider : IAsyncTestProvider
 
     protected readonly IDatabaseContext _context;
     protected readonly TableGateway<TestTable, long> _helper;
+
+    private int _checksPassed;
+    private int _checksSkipped;
+
+    public int ChecksPassed => _checksPassed;
+    public int ChecksSkipped => _checksSkipped;
+
+    protected void CheckOk(string message)
+    {
+        Console.WriteLine(message);
+        _checksPassed++;
+    }
+
+    protected void CheckSkip(string message)
+    {
+        Console.WriteLine(message);
+        _checksSkipped++;
+    }
 
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
     {
@@ -94,6 +113,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Stored procedure: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running scalar UDF test");
+            SnowflakeStep("Scalar UDF: start");
+            await TestScalarUdf();
+            Console.WriteLine($"  Scalar UDF: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Scalar UDF: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running parameter binding");
             SnowflakeStep("Parameter binding: start");
             await TestParameterBinding();
@@ -129,6 +155,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Command reuse: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running reader disposal compatibility");
+            SnowflakeStep("Reader disposal compatibility: start");
+            await TestReaderDisposalCompatibility();
+            Console.WriteLine($"  Reader disposal compatibility: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Reader disposal compatibility: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running capability probes");
             SnowflakeStep("Capability probes: start");
             await TestCapabilityProbes();
@@ -148,6 +181,11 @@ public class TestProvider : IAsyncTestProvider
             await TestIdentifierQuoting();
             Console.WriteLine($"  Identifier quoting: {stepSw.ElapsedMilliseconds}ms");
             SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
+            Console.WriteLine("Running pool isolation");
+            await TestPoolIsolation();
+            Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
         }
         catch (Exception ex)
         {
@@ -221,9 +259,17 @@ public class TestProvider : IAsyncTestProvider
     {
         var databaseContext = _context;
         var sqlContainer = databaseContext.CreateSqlContainer();
-        var qp = databaseContext.QuotePrefix;
-        var qs = databaseContext.QuoteSuffix;
-        sqlContainer.Query.AppendFormat(@"DROP TABLE IF EXISTS {0}test_table{1}", qp, qs);
+        var tableName = databaseContext.WrapObjectName("test_table");
+        var idColumn = databaseContext.WrapObjectName("id");
+        var nameColumn = databaseContext.WrapObjectName("name");
+        var descriptionColumn = databaseContext.WrapObjectName("description");
+        var valueColumn = databaseContext.WrapObjectName("value");
+        var isActiveColumn = databaseContext.WrapObjectName("is_active");
+        var createdAtColumn = databaseContext.WrapObjectName("created_at");
+        var createdByColumn = databaseContext.WrapObjectName("created_by");
+        var updatedAtColumn = databaseContext.WrapObjectName("updated_at");
+        var updatedByColumn = databaseContext.WrapObjectName("updated_by");
+        sqlContainer.Query.AppendFormat("DROP TABLE IF EXISTS {0}", tableName);
         try
         {
             await sqlContainer.ExecuteNonQueryAsync();
@@ -239,17 +285,17 @@ public class TestProvider : IAsyncTestProvider
         var longType = GetLongType(databaseContext.Product);
         var boolType = GetBooleanType(databaseContext.Product);
         sqlContainer.Query.Append($@"
-CREATE TABLE {qp}test_table{qs} (
-    {qp}id{qs} {longType} NOT NULL,
-    {qp}name{qs} VARCHAR(100) NOT NULL,
-    {qp}description{qs} VARCHAR(1000) NOT NULL,
-    {qp}value{qs} {intType} NOT NULL,
-    {qp}is_active{qs} {boolType} NOT NULL,
-    {qp}created_at{qs} {dateType} NOT NULL,
-    {qp}created_by{qs} VARCHAR(100) NOT NULL,
-    {qp}updated_at{qs} {dateType} NOT NULL,
-    {qp}updated_by{qs} VARCHAR(100) NOT NULL,
-    PRIMARY KEY ({qp}id{qs})
+CREATE TABLE {tableName} (
+    {idColumn} {longType} NOT NULL,
+    {nameColumn} VARCHAR(100) NOT NULL,
+    {descriptionColumn} VARCHAR(1000) NOT NULL,
+    {valueColumn} {intType} NOT NULL,
+    {isActiveColumn} {boolType} NOT NULL,
+    {createdAtColumn} {dateType} NOT NULL,
+    {createdByColumn} VARCHAR(100) NOT NULL,
+    {updatedAtColumn} {dateType} NOT NULL,
+    {updatedByColumn} VARCHAR(100) NOT NULL,
+    PRIMARY KEY ({idColumn})
 );");
         await sqlContainer.ExecuteNonQueryAsync();
     }
@@ -265,9 +311,8 @@ CREATE TABLE {qp}test_table{qs} (
             Name = name,
             Description = ctx.GenerateRandomName()
         };
-        var sq = _helper.BuildCreate(t, ctx);
-        var rows = await sq.ExecuteNonQueryAsync();
-        if (rows != 1)
+        var ok = await _helper.CreateAsync(t, ctx);
+        if (!ok)
         {
             throw new Exception("Insert failed");
         }
@@ -277,22 +322,15 @@ CREATE TABLE {qp}test_table{qs} (
 
     private async Task<TestTable> RetrieveRows(long id, IDatabaseContext? db = null)
     {
-        var arr = new List<long> { id };
         var ctx = db ?? _context;
-        var sc = _helper.BuildRetrieve(arr, ctx);
-
-        Console.WriteLine(sc.Query.ToString());
-
-        var x = await _helper.LoadListAsync(sc);
-
-        return x.First();
+        return await _helper.RetrieveOneAsync(id, ctx)
+               ?? throw new Exception($"Row {id} not found");
     }
 
     protected virtual async Task DeletedRow(TestTable t, IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
-        var sc = _helper.BuildDelete(t.Id, ctx);
-        var count = await sc.ExecuteNonQueryAsync();
+        var count = await _helper.DeleteAsync(t.Id, ctx);
         if (count != 1)
         {
             throw new Exception("Delete failed");
@@ -419,6 +457,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.DuckDB => true,
             SupportedDatabase.Sqlite => true,
             SupportedDatabase.Oracle => true,
+            SupportedDatabase.Firebird => true,
             _ => false
         };
     }
@@ -437,15 +476,6 @@ CREATE TABLE {qp}test_table{qs} (
         };
     }
 
-    private static bool SupportsSavepoints(SupportedDatabase product)
-    {
-        return product switch
-        {
-            SupportedDatabase.DuckDB => false,
-            SupportedDatabase.Snowflake => false,
-            _ => true
-        };
-    }
 
     private static string GetGuidType(SupportedDatabase product, bool supportsGuid)
     {
@@ -463,6 +493,7 @@ CREATE TABLE {qp}test_table{qs} (
             SupportedDatabase.DuckDB => "UUID",
             SupportedDatabase.Oracle => "VARCHAR2(36)",
             SupportedDatabase.Sqlite => "TEXT",
+            SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             _ => "UUID"
         };
     }
@@ -519,12 +550,22 @@ CREATE TABLE {qp}test_table{qs} (
 
     private async Task TestStoredProcReturnValue()
     {
+        if (_context.ProcWrappingStyle == ProcWrappingStyle.None)
+        {
+            CheckSkip($"  [StoredProc] Stored procedures not supported by {_context.Product} — skip");
+            return;
+        }
+
         var sc = _context.CreateSqlContainer();
         switch (_context.Product)
         {
             case SupportedDatabase.SqlServer:
+                var sqlServerProcName = _context.WrapObjectName("ReturnFive");
+                var sqlServerSchema = _context.WrapObjectName("dbo");
+                var sqlServerQualifiedProcName = sqlServerSchema + _context.CompositeIdentifierSeparator +
+                                                 sqlServerProcName;
                 sc.Query.Append(
-                    "CREATE OR ALTER PROCEDURE dbo.ReturnFive AS BEGIN RETURN 5 END");
+                    $"CREATE OR ALTER PROCEDURE {sqlServerQualifiedProcName} AS BEGIN RETURN 5 END");
                 await sc.ExecuteNonQueryAsync();
 
                 sc.Clear();
@@ -539,16 +580,48 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 sc.Clear();
-                sc.Query.Append("DROP PROCEDURE dbo.ReturnFive");
+                sc.Query.Append($"DROP PROCEDURE {sqlServerQualifiedProcName}");
                 await sc.ExecuteNonQueryAsync();
                 break;
 
-            default:
+            case SupportedDatabase.Snowflake:
+                var snowflakeProcName = _context.WrapObjectName("sp_pengdows_test");
+                // Create a minimal stored procedure that returns the current timestamp as VARCHAR.
+                // Snowflake SQL Scripting syntax: AS $$ BEGIN RETURN ...; END $$.
+                sc.Query.Append(
+                    $"CREATE OR REPLACE PROCEDURE {snowflakeProcName}()\n" +
+                    "  RETURNS VARCHAR\n" +
+                    "  LANGUAGE SQL\n" +
+                    "AS $$\n" +
+                    "  BEGIN\n" +
+                    "    RETURN CURRENT_TIMESTAMP()::VARCHAR;\n" +
+                    "  END\n" +
+                    "$$");
+                await sc.ExecuteNonQueryAsync();
+
+                // Call via WrapForStoredProc — generates: CALL "sp_pengdows_test"()
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var snowflakeWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(snowflakeWrapped);
+                var snowflakeResult = await sc.ExecuteScalarOrNullAsync<string>();
+                if (string.IsNullOrWhiteSpace(snowflakeResult))
+                {
+                    throw new Exception("Snowflake stored proc returned null or empty");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {snowflakeProcName}()");
+                await sc.ExecuteNonQueryAsync();
+
+                // Verify captureReturn is not supported (Snowflake uses CALL, not EXEC with return)
+                sc.Clear();
                 sc.Query.Append("dummy_proc");
                 try
                 {
                     sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
-                    throw new Exception("Expected NotSupportedException for captureReturn");
+                    throw new Exception("Expected NotSupportedException for captureReturn on Snowflake");
                 }
                 catch (NotSupportedException)
                 {
@@ -556,8 +629,150 @@ CREATE TABLE {qp}test_table{qs} (
                 }
 
                 break;
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.AuroraMySql:
+            case SupportedDatabase.MariaDb:
+            {
+                var mysqlProcName = _context.WrapObjectName("sp_pengdows_test");
+                // MySQL/MariaDB: CALL `proc_name`() — proc body uses BEGIN...END with SELECT.
+                // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
+                // no DELIMITER change needed over ADO.NET.
+                //
+                // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
+                // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
+                // error and skip gracefully so TiDB does not fail the run.
+                sc.Query.Append(
+                    $"CREATE PROCEDURE {mysqlProcName}()\n" +
+                    "BEGIN\n" +
+                    "  SELECT 42;\n" +
+                    "END");
+                await sc.ExecuteNonQueryAsync();
+
+                // CALL `sp_pengdows_test`() — result set contains one row with value 42.
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var mysqlWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                sc.Clear();
+                sc.Query.Append(mysqlWrapped);
+                var mysqlResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (mysqlResult != 42)
+                {
+                    throw new Exception($"[MySQL/MariaDB proc] Expected 42 but got {mysqlResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {mysqlProcName}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.AuroraPostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            {
+                var pgFunctionName = _context.WrapObjectName("fn_pengdows_test");
+                // PostgreSQL: Read path → SELECT * FROM "fn_name"(); Write path → CALL "proc_name"().
+                // Use a SQL function (CREATE OR REPLACE FUNCTION) which supports SELECT * FROM invocation
+                // and is compatible across PostgreSQL, CockroachDB (22.2+), and YugabyteDB.
+                sc.Query.Append(
+                    $"CREATE OR REPLACE FUNCTION {pgFunctionName}()\n" +
+                    "RETURNS INTEGER\n" +
+                    "LANGUAGE SQL\n" +
+                    "AS $$\n" +
+                    "  SELECT 42;\n" +
+                    "$$");
+                await sc.ExecuteNonQueryAsync();
+
+                // SELECT * FROM "fn_pengdows_test"() — returns one row, one column: 42.
+                sc.Clear();
+                sc.Query.Append("fn_pengdows_test");
+                var pgWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(pgWrapped);
+                var pgResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (pgResult != 42)
+                {
+                    throw new Exception($"[PostgreSQL func] Expected 42 but got {pgResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP FUNCTION {pgFunctionName}()");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.Oracle:
+            {
+                var oracleProcName = _context.WrapObjectName("sp_pengdows_test");
+                // Oracle: BEGIN "proc_name"; END; (anonymous PL/SQL block invocation).
+                // Oracle stored procs don't return result sets; verify the call executes without error.
+                // Quote the proc name in CREATE so Oracle stores it case-sensitively as lowercase,
+                // matching the quoted reference that WrapForStoredProc generates.
+                sc.Query.Append(
+                    $"CREATE OR REPLACE PROCEDURE {oracleProcName} AS BEGIN NULL; END;");
+                await sc.ExecuteNonQueryAsync();
+
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var oracleWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                sc.Clear();
+                sc.Query.Append(oracleWrapped);
+                await sc.ExecuteNonQueryAsync(); // Just verify it runs without error.
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {oracleProcName}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            case SupportedDatabase.Firebird:
+            {
+                var firebirdProcName = _context.WrapObjectName("sp_pengdows_test");
+                // Firebird: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read path.
+                // Identifiers must be quoted in DDL to preserve case so the quoted invocation
+                // generated by WrapForStoredProc (which calls WrapObjectName) matches at runtime.
+                sc.Query.Append(
+                    $"CREATE OR ALTER PROCEDURE {firebirdProcName}\n" +
+                    "RETURNS (result_val INTEGER)\n" +
+                    "AS\n" +
+                    "BEGIN\n" +
+                    "  result_val = 42;\n" +
+                    "  SUSPEND;\n" +
+                    "END");
+                await sc.ExecuteNonQueryAsync();
+
+                // SELECT * FROM "sp_pengdows_test" — returns one row, result_val = 42.
+                sc.Clear();
+                sc.Query.Append("sp_pengdows_test");
+                var fbWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                sc.Clear();
+                sc.Query.Append(fbWrapped);
+                var fbResult = await sc.ExecuteScalarOrNullAsync<int>();
+                if (fbResult != 42)
+                {
+                    throw new Exception($"[Firebird proc] Expected 42 but got {fbResult}");
+                }
+
+                sc.Clear();
+                sc.Query.Append($"DROP PROCEDURE {firebirdProcName}");
+                await sc.ExecuteNonQueryAsync();
+                break;
+            }
+
+            default:
+                throw new Exception(
+                    $"[StoredProc] Unhandled database {_context.Product} in stored proc test — add a case or override ProcWrappingStyle.None.");
         }
     }
+
+    /// <summary>
+    /// Tests scalar UDF invocation inline in a SELECT statement.
+    /// Default implementation is a no-op; override in database-specific providers
+    /// where UDF creation and inline invocation is meaningful to exercise.
+    /// </summary>
+    protected virtual Task TestScalarUdf() => Task.CompletedTask;
 
     // -------------------------------------------------------------------------
     // § 5  Parameter binding semantics
@@ -572,7 +787,7 @@ CREATE TABLE {qp}test_table{qs} (
         sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
             _helper.WrappedTableName,
             _context.WrapObjectName("description"),
-            _context.MakeParameterName("p0"));
+            sc.MakeParameterName("p0"));
         sc.AddParameterWithValue("p0", DbType.String, DBNull.Value);
         var nullCount = await sc.ExecuteScalarOrNullAsync<int>();
         if (nullCount != 0)
@@ -587,7 +802,7 @@ CREATE TABLE {qp}test_table{qs} (
         if (isNullCount != 0)
             throw new Exception($"[ParamBinding] IS NULL predicate: expected 0 rows, got {isNullCount}");
 
-        Console.WriteLine("  [ParamBinding] NULL semantics: OK");
+        CheckOk("  [ParamBinding] NULL semantics: OK");
 
         // 5a: duplicate named parameter
         await TestDuplicateParameter();
@@ -603,8 +818,7 @@ CREATE TABLE {qp}test_table{qs} (
             Value = 99,
             IsActive = true
         };
-        var createSc = _helper.BuildCreate(t, _context);
-        await createSc.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
 
         try
         {
@@ -613,7 +827,7 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("value"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 99);
             var valueCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (valueCount < 1)
@@ -624,7 +838,7 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("description"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.String, knownDesc);
             var strCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (strCount != 1)
@@ -635,13 +849,13 @@ CREATE TABLE {qp}test_table{qs} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int64, id);
             var idCount = await sc.ExecuteScalarOrNullAsync<int>();
             if (idCount != 1)
                 throw new Exception($"[ParamBinding] Int64 binding: expected 1, got {idCount}");
 
-            Console.WriteLine("  [ParamBinding] Type matrix (int32, string, int64): OK");
+            CheckOk("  [ParamBinding] Type matrix (int32, string, int64): OK");
         }
         finally
         {
@@ -661,7 +875,7 @@ CREATE TABLE {qp}test_table{qs} (
                 $"[ParamBinding] Parameter marker: expected prefix '{expected}', got '{rendered}'");
         }
 
-        Console.WriteLine($"  [ParamBinding] Marker prefix '{expected}': OK");
+        CheckOk($"  [ParamBinding] Marker prefix '{expected}': OK");
     }
 
     private async Task TestTypeBindingMatrix()
@@ -718,15 +932,15 @@ INSERT INTO {table} (
     {_context.WrapObjectName("guid_val")},
     {_context.WrapObjectName("bin_val")}
 ) VALUES (
-    {_context.MakeParameterName("p0")},
-    {_context.MakeParameterName("p1")},
-    {_context.MakeParameterName("p2")},
-    {_context.MakeParameterName("p3")},
-    {_context.MakeParameterName("p4")},
-    {_context.MakeParameterName("p5")},
-    {_context.MakeParameterName("p6")},
-    {_context.MakeParameterName("p7")},
-    {_context.MakeParameterName("p8")}
+    {sc.MakeParameterName("p0")},
+    {sc.MakeParameterName("p1")},
+    {sc.MakeParameterName("p2")},
+    {sc.MakeParameterName("p3")},
+    {sc.MakeParameterName("p4")},
+    {sc.MakeParameterName("p5")},
+    {sc.MakeParameterName("p6")},
+    {sc.MakeParameterName("p7")},
+    {sc.MakeParameterName("p8")}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.Int32, intVal);
@@ -769,8 +983,7 @@ INSERT INTO {table} (
             }
             else
             {
-                Console.WriteLine(
-                    $"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
+                CheckSkip($"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
             }
 
             if (supportsGuid)
@@ -779,12 +992,11 @@ INSERT INTO {table} (
             }
             else
             {
-                Console.WriteLine(
-                    $"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
+                CheckSkip($"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
             }
 
             await AssertBindingCount("bin_val", DbType.Binary, binVal);
-            Console.WriteLine("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
+            CheckOk("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
         }
         finally
         {
@@ -797,7 +1009,7 @@ INSERT INTO {table} (
             query.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 table,
                 _context.WrapObjectName(column),
-                _context.MakeParameterName("p0"));
+                query.MakeParameterName("p0"));
             query.AddParameterWithValue("p0", type, value);
             var count = await query.ExecuteScalarOrNullAsync<int>();
             if (count != 1)
@@ -812,8 +1024,7 @@ INSERT INTO {table} (
     {
         if (!_context.SupportsRepeatedNamedParameters)
         {
-            Console.WriteLine(
-                "  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
+            CheckSkip("  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
             return;
         }
 
@@ -822,13 +1033,13 @@ INSERT INTO {table} (
             "SELECT COUNT(*) FROM {0} WHERE {1} = {2} OR {3} = {2}",
             _helper.WrappedTableName,
             _context.WrapObjectName("created_by"),
-            _context.MakeParameterName("p0"),
+            sc.MakeParameterName("p0"),
             _context.WrapObjectName("updated_by"));
         sc.AddParameterWithValue("p0", DbType.String, "__nonexistent_user_xyzzy__");
         var count = await sc.ExecuteScalarOrNullAsync<int>();
         if (count < 0)
             throw new Exception($"[ParamBinding] Duplicate param returned invalid count: {count}");
-        Console.WriteLine($"  [ParamBinding] Duplicate param (same @p0 twice): OK ({count} rows matched)");
+        CheckOk($"  [ParamBinding] Duplicate param (same logical parameter twice): OK ({count} rows matched)");
     }
 
     // -------------------------------------------------------------------------
@@ -867,8 +1078,7 @@ INSERT INTO {table} (
         };
 
         var beforeInsert = DateTime.UtcNow;
-        var createSc = _helper.BuildCreate(t, _context);
-        await createSc.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
         var afterInsert = DateTime.UtcNow;
 
         try
@@ -981,17 +1191,17 @@ INSERT INTO {table} (
     {_context.WrapObjectName("guid_value")},
     {_context.WrapObjectName("bin_value")}
 ) VALUES (
-    {_context.MakeParameterName("p0")},
-    {_context.MakeParameterName("p1")},
-    {_context.MakeParameterName("p2")},
-    {_context.MakeParameterName("p3")},
-    {_context.MakeParameterName("p4")},
-    {_context.MakeParameterName("p5")},
-    {_context.MakeParameterName("p6")},
-    {_context.MakeParameterName("p7")},
-    {_context.MakeParameterName("p8")},
-    {_context.MakeParameterName("p9")},
-    {_context.MakeParameterName("p10")}
+    {sc.MakeParameterName("p0")},
+    {sc.MakeParameterName("p1")},
+    {sc.MakeParameterName("p2")},
+    {sc.MakeParameterName("p3")},
+    {sc.MakeParameterName("p4")},
+    {sc.MakeParameterName("p5")},
+    {sc.MakeParameterName("p6")},
+    {sc.MakeParameterName("p7")},
+    {sc.MakeParameterName("p8")},
+    {sc.MakeParameterName("p9")},
+    {sc.MakeParameterName("p10")}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.String, unicodeText);
@@ -1039,7 +1249,7 @@ INSERT INTO {table} (
                 _context.WrapObjectName("bin_value"),
                 table,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                select.MakeParameterName("p0"));
             select.AddParameterWithValue("p0", DbType.Int64, id);
 
             await using (var reader = await select.ExecuteReaderAsync())
@@ -1113,7 +1323,7 @@ INSERT INTO {table} (
                 }
                 else
                 {
-                    Console.WriteLine($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
+                    CheckSkip($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
                 }
 
                 if (supportsDto)
@@ -1130,7 +1340,7 @@ INSERT INTO {table} (
                 }
                 else
                 {
-                    Console.WriteLine($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
+                    CheckSkip($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
                 }
             }
 
@@ -1139,14 +1349,13 @@ INSERT INTO {table} (
                 "SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 table,
                 _context.WrapObjectName("is_active"),
-                _context.MakeParameterName("p0"));
+                boolPredicate.MakeParameterName("p0"));
             boolPredicate.AddParameterWithValue("p0", DbType.Boolean, true);
             var predicateCount = await boolPredicate.ExecuteScalarOrNullAsync<int>();
             if (predicateCount != 1)
                 throw new Exception($"[RoundTrip] Bool predicate expected 1, got {predicateCount}");
 
-            Console.WriteLine(
-                "  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
+            CheckOk("  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
         }
         finally
         {
@@ -1311,6 +1520,55 @@ INSERT INTO {table} (
         await TestRollbackOnException();
         await TestReadYourWrites();
         await TestSavepoints();
+        await TestInvalidIsolationLevels();
+    }
+
+    protected virtual Task TestInvalidIsolationLevels()
+    {
+        // IsolationLevel.Chaos is universally invalid for all supported databases
+        try
+        {
+            _context.BeginTransaction(IsolationLevel.Chaos);
+            throw new Exception("[InvalidTxType] Chaos isolation level should have been rejected");
+        }
+        catch (InvalidOperationException)
+        {
+            CheckOk("  [InvalidTxType] Chaos isolation level rejected: OK");
+        }
+
+        // Database-specific: pick one level that is not supported by this database
+        IsolationLevel? unsupported = _context.Product switch
+        {
+            SupportedDatabase.PostgreSql
+                or SupportedDatabase.Firebird
+                or SupportedDatabase.Sqlite
+                or SupportedDatabase.YugabyteDb => IsolationLevel.ReadUncommitted,
+            SupportedDatabase.Oracle           => IsolationLevel.RepeatableRead,
+            SupportedDatabase.CockroachDb
+                or SupportedDatabase.DuckDB    => IsolationLevel.ReadCommitted,
+            SupportedDatabase.TiDb             => IsolationLevel.Serializable,
+            SupportedDatabase.Snowflake        => IsolationLevel.RepeatableRead,
+            _                                  => null
+        };
+
+        if (unsupported is null)
+        {
+            CheckSkip($"  [InvalidTxType] No database-specific unsupported level test for {_context.Product}");
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            _context.BeginTransaction(unsupported.Value);
+            throw new Exception(
+                $"[InvalidTxType] {unsupported.Value} isolation on {_context.Product} should have been rejected");
+        }
+        catch (InvalidOperationException)
+        {
+            CheckOk($"  [InvalidTxType] {unsupported.Value} isolation level rejected for {_context.Product}: OK");
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task TestRollbackOnException()
@@ -1334,7 +1592,7 @@ INSERT INTO {table} (
         if (after != before)
             throw new Exception(
                 $"[ExtendedTx] Rollback-on-exception: expected {before} rows, got {after}");
-        Console.WriteLine("  [ExtendedTx] Rollback-on-exception: OK");
+        CheckOk("  [ExtendedTx] Rollback-on-exception: OK");
     }
 
     private async Task TestReadYourWrites()
@@ -1348,41 +1606,34 @@ INSERT INTO {table} (
         if (during != before + 1)
             throw new Exception(
                 $"[ExtendedTx] Read-your-writes: expected {before + 1} inside tx, got {during}");
-        Console.WriteLine("  [ExtendedTx] Read-your-writes: OK");
+        CheckOk("  [ExtendedTx] Read-your-writes: OK");
     }
 
     private async Task TestSavepoints()
     {
-        if (!SupportsSavepoints(_context.Product))
+        if (!_context.Dialect.SupportsSavepoints)
         {
-            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
+            CheckSkip("  [ExtendedTx] Savepoints not supported — skip");
             return;
         }
 
-        try
+        await using var tx = _context.BeginTransaction();
+        var before = await CountTestRows(tx);
+
+        await InsertTestRows(tx);
+        await tx.SavepointAsync("sp1");
+        await InsertTestRows(tx);
+        await tx.RollbackToSavepointAsync("sp1");
+        tx.Commit();
+
+        var after = await CountTestRows();
+        if (after != before + 1)
         {
-            await using var tx = _context.BeginTransaction();
-            var before = await CountTestRows(tx);
-
-            await InsertTestRows(tx);
-            await tx.SavepointAsync("sp1");
-            await InsertTestRows(tx);
-            await tx.RollbackToSavepointAsync("sp1");
-            tx.Commit();
-
-            var after = await CountTestRows();
-            if (after != before + 1)
-            {
-                throw new Exception(
-                    $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
-            }
-
-            Console.WriteLine("  [ExtendedTx] Savepoint rollback: OK");
+            throw new Exception(
+                $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
         }
-        catch (NotSupportedException)
-        {
-            Console.WriteLine("  [ExtendedTx] Savepoints not supported — skip");
-        }
+
+        CheckOk("  [ExtendedTx] Savepoint rollback: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1403,17 +1654,13 @@ INSERT INTO {table} (
                 Value = 0,
                 IsActive = true
             };
-            var createSc = _helper.BuildCreate(t, _context);
-            await createSc.ExecuteNonQueryAsync();
-
-            var sc = _helper.BuildRetrieve(new List<long> { id }, _context);
-            await _helper.LoadListAsync(sc);
-
+            await _helper.CreateAsync(t, _context);
+            await _helper.RetrieveOneAsync(id, _context);
             await CleanupTestRow(id);
         });
 
         await Task.WhenAll(tasks);
-        Console.WriteLine($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
+        CheckOk($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1443,10 +1690,7 @@ INSERT INTO {table} (
             IsActive = true
         };
 
-        var sc1 = _helper.BuildCreate(t1, _context);
-        await sc1.ExecuteNonQueryAsync();
-        var sc2 = _helper.BuildCreate(t2, _context);
-        await sc2.ExecuteNonQueryAsync();
+        await _helper.BatchCreateAsync([t1, t2], _context);
 
         try
         {
@@ -1454,7 +1698,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat("SELECT COUNT(*) FROM {0} WHERE {1} = {2}",
                 _helper.WrappedTableName,
                 _context.WrapObjectName("id"),
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int64, id1);
 
             var count1 = await sc.ExecuteScalarOrNullAsync<int>();
@@ -1467,7 +1711,7 @@ INSERT INTO {table} (
                     $"[Batch] Command reuse expected counts 1/1, got {count1}/{count2}");
             }
 
-            Console.WriteLine("  [Batch] Reuse container with new parameters: OK");
+            CheckOk("  [Batch] Reuse container with new parameters: OK");
         }
         finally
         {
@@ -1476,14 +1720,105 @@ INSERT INTO {table} (
         }
     }
 
+    protected virtual async Task TestReaderDisposalCompatibility()
+    {
+        if (_context.Product != SupportedDatabase.MySql)
+        {
+            // Not a MySQL.Data compatibility concern — other drivers don't have this problem.
+            // Return silently rather than recording a skip for every non-MySQL database.
+            return;
+        }
+
+        var id = Interlocked.Increment(ref _nextId);
+        await _helper.CreateAsync(new TestTable
+        {
+            Id = id,
+            Name = NameEnum.Test,
+            Description = "reader-disposal-compat",
+            Value = 42,
+            IsActive = true
+        });
+
+        try
+        {
+            var select = _context.CreateSqlContainer();
+            select.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                _context.WrapObjectName("id"),
+                _context.WrapObjectName("test_table"),
+                _context.WrapObjectName("id"),
+                select.MakeParameterName("p0"));
+            select.AddParameterWithValue("p0", DbType.Int64, id);
+
+            await using (var reader = await select.ExecuteReaderAsync())
+            {
+                if (!await reader.ReadAsync())
+                {
+                    throw new Exception("[Reader disposal] Expected first row");
+                }
+
+                if (await reader.ReadAsync())
+                {
+                    throw new Exception("[Reader disposal] Expected EOF after single row");
+                }
+            }
+
+            var count = await CountTestRows();
+            if (count <= 0)
+            {
+                throw new Exception("[Reader disposal] Follow-up query failed after EOF disposal");
+            }
+
+            CheckOk("  [Reader disposal] MySql.Data EOF disposal compatibility: OK");
+        }
+        finally
+        {
+            await CleanupTestRow(id);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // § 11  Capability probes
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Runs a capability test with enforcement:
+    /// - A test that returns without calling CheckOk or CheckSkip is a silent skip → failure.
+    /// - A test that calls CheckSkip when the dialect claims support for that capability → failure.
+    /// </summary>
+    private async Task RunCapabilityTest(string capabilityName, bool dialectClaimsSupport, Func<Task> test)
+    {
+        var passedBefore = _checksPassed;
+        var skippedBefore = _checksSkipped;
+
+        await test();
+
+        var passed = _checksPassed > passedBefore;
+        var skipped = _checksSkipped > skippedBefore;
+
+        if (!passed && !skipped)
+        {
+            throw new Exception(
+                $"[{capabilityName}] capability test for {_context.Product} returned without recording " +
+                "a result. Override must call CheckOk on success or CheckSkip when not supported.");
+        }
+
+        if (dialectClaimsSupport && skipped && !passed)
+        {
+            throw new Exception(
+                $"[{capabilityName}] was skipped but {_context.Product} dialect reports this capability " +
+                "as supported. Fix the test implementation or correct the dialect capability flag.");
+        }
+    }
+
     protected virtual async Task TestCapabilityProbes()
     {
-        await TestUpsertCapability();
-        await TestPagingCapability();
+        var supportsUpsert = _context.DataSourceInfo.SupportsMerge
+                             || _context.DataSourceInfo.SupportsInsertOnConflict
+                             || _context.DataSourceInfo.SupportsOnDuplicateKey;
+
+        await RunCapabilityTest("Upsert", supportsUpsert, TestUpsertCapability);
+        await RunCapabilityTest("Paging", true, TestPagingCapability);
     }
 
     protected virtual async Task TestUpsertCapability()
@@ -1494,8 +1829,7 @@ INSERT INTO {table} (
 
         if (!supports)
         {
-            Console.WriteLine(
-                $"  [Capabilities] Upsert: not supported by {_context.Product} — skip");
+            CheckSkip($"  [Capabilities] Upsert: not supported by {_context.Product} — skip");
             return;
         }
 
@@ -1529,7 +1863,7 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Upsert: expected 'upsert-updated', got '{retrieved.Description}'");
 
-            Console.WriteLine("  [Capabilities] Upsert (insert + update): OK");
+            CheckOk("  [Capabilities] Upsert (insert + update): OK");
         }
         finally
         {
@@ -1553,24 +1887,22 @@ INSERT INTO {table} (
                 Value = i,
                 IsActive = true
             };
-            var createSc = _helper.BuildCreate(t, _context);
-            await createSc.ExecuteNonQueryAsync();
+            await _helper.CreateAsync(t, _context);
         }
 
+        var idCol = _context.WrapObjectName("id");
         try
         {
             // Page 1: first 5 of our IDs
             var sc1 = _helper.BuildRetrieve(ids, _context);
-            sc1.Query.AppendFormat(" ORDER BY {0} {1}",
-                _context.WrapObjectName("id"),
-                BuildPagingClause(0, 5));
+            sc1.Query.Append(" ORDER BY ").Append(idCol);
+            _context.Dialect.AppendPaging(sc1.Query, 0, 5);
             var page1 = await _helper.LoadListAsync(sc1);
 
             // Page 2: next 5 of our IDs
             var sc2 = _helper.BuildRetrieve(ids, _context);
-            sc2.Query.AppendFormat(" ORDER BY {0} {1}",
-                _context.WrapObjectName("id"),
-                BuildPagingClause(5, 5));
+            sc2.Query.Append(" ORDER BY ").Append(idCol);
+            _context.Dialect.AppendPaging(sc2.Query, 5, 5);
             var page2 = await _helper.LoadListAsync(sc2);
 
             if (page1.Count != 5)
@@ -1584,29 +1916,16 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Paging: pages overlap on IDs {string.Join(",", overlap)}");
 
-            Console.WriteLine("  [Capabilities] Paging (2 × 5-row pages, no overlap): OK");
+            var allPaged = p1Ids.Concat(page2.Select(r => r.Id)).ToHashSet();
+            if (!allPaged.IsSubsetOf(ids))
+                throw new Exception("[Capabilities] Paging: paged rows contain IDs not inserted by this test");
+
+            CheckOk("  [Capabilities] Paging (2 × 5-row pages, no overlap, IDs in inserted set): OK");
         }
         finally
         {
-            foreach (var id in ids)
-                await CleanupTestRow(id);
+            await _helper.DeleteAsync(ids);
         }
-    }
-
-    /// <summary>
-    /// Returns the dialect-appropriate SQL clause for paging appended after ORDER BY.
-    /// </summary>
-    protected virtual string BuildPagingClause(int skip, int count)
-    {
-        return _context.Product switch
-        {
-            SupportedDatabase.SqlServer or SupportedDatabase.Oracle =>
-                $"OFFSET {skip} ROWS FETCH NEXT {count} ROWS ONLY",
-            SupportedDatabase.Firebird =>
-                $"ROWS {skip + 1} TO {skip + count}",
-            _ =>
-                $"LIMIT {count} OFFSET {skip}"
-        };
     }
 
     // -------------------------------------------------------------------------
@@ -1627,46 +1946,42 @@ INSERT INTO {table} (
         };
 
         // Insert first copy
-        var sc1 = _helper.BuildCreate(t, _context);
-        await sc1.ExecuteNonQueryAsync();
+        await _helper.CreateAsync(t, _context);
 
-        // 12a: Duplicate PK → must surface as DbException (except Snowflake, which doesn't enforce constraints)
+        // 12a: Duplicate PK → must surface as DatabaseException (except Snowflake, which doesn't enforce constraints)
         if (_context.Product == SupportedDatabase.Snowflake)
         {
-            var sc2 = _helper.BuildCreate(t, _context);
-            await sc2.ExecuteNonQueryAsync();
-            Console.WriteLine("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
+            await _helper.CreateAsync(t, _context);
+            CheckSkip("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
         }
         else
         {
             try
             {
-                var sc2 = _helper.BuildCreate(t, _context);
-                await sc2.ExecuteNonQueryAsync();
-                throw new Exception("[ErrorMapping] Expected DbException for duplicate PK — none thrown");
+                await _helper.CreateAsync(t, _context);
+                throw new Exception("[ErrorMapping] Expected DatabaseException for duplicate PK — none thrown");
             }
-            catch (DbException ex)
+            catch (DatabaseException ex)
             {
-                Console.WriteLine(
-                    $"  [ErrorMapping] Unique violation → DbException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+                CheckOk($"  [ErrorMapping] Unique violation → DatabaseException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
             }
         }
 
         // 12b: Connection must still be usable after the exception
         var healthCount = await CountTestRows();
-        Console.WriteLine($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
+        CheckOk($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
 
         await CleanupTestRow(id);
 
-        // 12c: Syntax error → must always surface as DbException with non-empty message
+        // 12c: Syntax error → must always surface as DatabaseException with non-empty message
         var badSc = _context.CreateSqlContainer("SELECT * FROM");
-        DbException? syntaxEx = null;
+        DatabaseException? syntaxEx = null;
         try
         {
             await badSc.ExecuteNonQueryAsync();
-            throw new Exception("[ErrorMapping] Expected DbException for syntax error — none thrown");
+            throw new Exception("[ErrorMapping] Expected DatabaseException for syntax error — none thrown");
         }
-        catch (DbException ex)
+        catch (DatabaseException ex)
         {
             syntaxEx = ex;
         }
@@ -1674,8 +1989,7 @@ INSERT INTO {table} (
         if (string.IsNullOrWhiteSpace(syntaxEx?.Message))
             throw new Exception("[ErrorMapping] Syntax error exception had empty message");
 
-        Console.WriteLine(
-            $"  [ErrorMapping] Syntax error → DbException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
+        CheckOk($"  [ErrorMapping] Syntax error → DatabaseException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
     }
 
     // -------------------------------------------------------------------------
@@ -1708,12 +2022,12 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "INSERT INTO {0} ({1}, {2}, {3}, {4}, {5}, {6}) VALUES ({7}, {8}, {9}, {10}, {11}, {12})",
                 wrappedTable, wrappedId, wrappedOrder, wrappedUser, wrappedDefault, wrappedDisplay, wrappedCamel,
-                _context.MakeParameterName("p0"),
-                _context.MakeParameterName("p1"),
-                _context.MakeParameterName("p2"),
-                _context.MakeParameterName("p3"),
-                _context.MakeParameterName("p4"),
-                _context.MakeParameterName("p5"));
+                sc.MakeParameterName("p0"),
+                sc.MakeParameterName("p1"),
+                sc.MakeParameterName("p2"),
+                sc.MakeParameterName("p3"),
+                sc.MakeParameterName("p4"),
+                sc.MakeParameterName("p5"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             sc.AddParameterWithValue("p1", DbType.Int32, 42);
             sc.AddParameterWithValue("p2", DbType.Int32, 7);
@@ -1727,7 +2041,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedOrder, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var val = await sc.ExecuteScalarOrNullAsync<int>();
             if (val != 42)
@@ -1737,7 +2051,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedUser, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var userVal = await sc.ExecuteScalarOrNullAsync<int>();
             if (userVal != 7)
@@ -1747,7 +2061,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedDefault, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var defaultVal = await sc.ExecuteScalarOrNullAsync<int>();
             if (defaultVal != 9)
@@ -1757,7 +2071,7 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedDisplay, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var displayVal = await sc.ExecuteScalarOrNullAsync<string>();
             if (displayVal != "display value")
@@ -1767,13 +2081,13 @@ INSERT INTO {table} (
             sc.Query.AppendFormat(
                 "SELECT {0} FROM {1} WHERE {2} = {3}",
                 wrappedCamel, wrappedTable, wrappedId,
-                _context.MakeParameterName("p0"));
+                sc.MakeParameterName("p0"));
             sc.AddParameterWithValue("p0", DbType.Int32, 1);
             var camelVal = await sc.ExecuteScalarOrNullAsync<string>();
             if (camelVal != "CamelValue")
                 throw new Exception($"[Quoting] Expected 'CamelValue', got '{camelVal}'");
 
-            Console.WriteLine("  [Quoting] Reserved words, spaces, and mixed case: OK");
+            CheckOk("  [Quoting] Reserved words, spaces, and mixed case: OK");
         }
         finally
         {
@@ -1784,13 +2098,19 @@ INSERT INTO {table} (
     }
 
     /// <summary>
+    /// Validates that reader and writer connections use separate connection pools.
+    /// Base implementation is a no-op; override in dialects that require discriminator-based
+    /// pool isolation (e.g., Oracle where ApplicationNameSettingName is not supported).
+    /// </summary>
+    protected virtual Task TestPoolIsolation() => Task.CompletedTask;
+
+    /// <summary>
     /// Deletes a single row by ID.
     /// </summary>
     protected virtual async Task CleanupTestRow(long id, IDatabaseContext? db = null)
     {
         var ctx = db ?? _context;
-        var del = _helper.BuildDelete(id, ctx);
-        await del.ExecuteNonQueryAsync();
+        await _helper.DeleteAsync(id, ctx);
     }
 
     /// <summary>

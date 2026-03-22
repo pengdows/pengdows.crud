@@ -168,12 +168,13 @@ public class SafeAsyncDisposableBaseTests
     }
 
     [Fact]
-    public void Dispose_SwallowsExceptions()
+    public void Dispose_PropagatesFirstException()
     {
         var d = new SyncThrowsDisposable();
 
-        d.Dispose();
+        var ex = Assert.Throws<InvalidOperationException>(() => d.Dispose());
 
+        Assert.Equal("sync", ex.Message);
         Assert.True(d.IsDisposed);
     }
 

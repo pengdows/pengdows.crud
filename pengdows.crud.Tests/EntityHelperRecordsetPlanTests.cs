@@ -49,6 +49,29 @@ public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
         Assert.Equal("123", e2.Name);
     }
 
+    [Fact]
+    public void MapReaderToObject_WithMoreThanPoolThresholdFields_UsesSharedArrayPoolPaths()
+    {
+        var helper = new TableGateway<NameEntity, int>(Context);
+        var row = new Dictionary<string, object>
+        {
+            ["Id"] = 11,
+            ["Name"] = "Large"
+        };
+
+        for (var i = 0; i < 70; i++)
+        {
+            row[$"Extra{i}"] = i;
+        }
+
+        using var reader = new FakeTrackedReader(new[] { row });
+        reader.Read();
+        var entity = helper.MapReaderToObject(reader);
+
+        Assert.Equal(11, entity.Id);
+        Assert.Equal("Large", entity.Name);
+    }
+
     [Table("NameEntity")]
     private class NameEntity
     {
@@ -65,9 +88,14 @@ public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
         {
         }
 
-        public new Task<bool> ReadAsync()
+        public new ValueTask<bool> ReadAsync()
         {
-            return base.ReadAsync(CancellationToken.None);
+            return new ValueTask<bool>(base.ReadAsync(CancellationToken.None));
+        }
+
+        public new ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
+        {
+            return new ValueTask<bool>(base.ReadAsync(cancellationToken));
         }
 
         public override ValueTask DisposeAsync()

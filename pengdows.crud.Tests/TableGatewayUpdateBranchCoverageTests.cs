@@ -18,6 +18,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
     {
         TypeMap.Register<TestEntity>();
         TypeMap.Register<NoIdEntity>();
+        TypeMap.Register<OnlyIdEntity>();
     }
 
     [Fact]
@@ -26,7 +27,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
         var gateway = new TableGateway<NoIdEntity, string>(Context);
         var entity = new NoIdEntity { Key = "k1", Name = "n1" };
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => gateway.BuildUpdateAsync(entity, false, Context));
+        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => gateway.BuildUpdateAsync(entity, false, Context).AsTask());
         Assert.Contains("Id column", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -133,7 +134,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
         };
 
         var result = ((string sql, System.Collections.Generic.List<System.Data.Common.DbParameter> parameters))
-            buildUpdateByKey.Invoke(gateway, new object[] { entity, keyColumns, Context.Dialect })!;
+            buildUpdateByKey.Invoke(gateway, new object[] { entity, keyColumns, Context.GetDialect() })!;
 
         Assert.Contains("SET", result.sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Version", result.sql, StringComparison.OrdinalIgnoreCase);
@@ -149,7 +150,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
 
         var container = Context.CreateSqlContainer("UPDATE Test SET Name = @p0 WHERE 1=1");
         var counters = new ClauseCounters();
-        var args = new object?[] { container, null, Context.Dialect, counters };
+        var args = new object?[] { container, null, Context.GetDialect(), counters };
 
         var result = method.Invoke(gateway, args);
         _ = (ClauseCounters)args[3]!;
@@ -171,7 +172,7 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
 
         var container = unknownContext.CreateSqlContainer("UPDATE Test SET Name = ? WHERE 1=1");
         var counters = new ClauseCounters();
-        var args = new object?[] { container, 42, unknownContext.Dialect, counters };
+        var args = new object?[] { container, 42, unknownContext.GetDialect(), counters };
 
         var result = method.Invoke(gateway, args);
 
@@ -193,10 +194,37 @@ public class TableGatewayUpdateBranchCoverageTests : SqlLiteContextTestBase
             Name = "default-id"
         };
 
-        var task = (Task<TestEntity?>)method.Invoke(gateway, new object?[] { entity, Context })!;
-        var result = await task;
+        var result = await (dynamic)method.Invoke(gateway, new object?[] { entity, Context })!;
 
         Assert.Null(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // UpdateAsync CT overload — "No changes detected" catch (Core.cs lines 1133-1136)
+    // An entity with only [Id] and no other updateable columns causes BuildSetClause
+    // to return 0 columns → throws "No changes detected for update." → caught → returns 0
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateAsync_EntityWithNoUpdateableColumns_CatchesNoChanges_ReturnsZero()
+    {
+        TypeMap.Register<OnlyIdEntity>();
+        var gateway = new TableGateway<OnlyIdEntity, int>(Context);
+        var entity = new OnlyIdEntity { Id = 1 };
+
+        // Passes cancellationToken explicitly to exercise the CT UpdateAsync overload (Core.cs line 1117)
+        // BuildUpdateInternal finds 0 updateable columns → throws "No changes detected"
+        // CT UpdateAsync catch block at lines 1133-1136 returns 0
+        var result = await gateway.UpdateAsync(entity, false, null, System.Threading.CancellationToken.None);
+        Assert.Equal(0, result);
+    }
+
+    [Table("OnlyIdEntities")]
+    private sealed class OnlyIdEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
     }
 
     [Table("NoIdEntities")]

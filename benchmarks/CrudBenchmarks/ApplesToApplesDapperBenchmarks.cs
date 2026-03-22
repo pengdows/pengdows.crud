@@ -18,8 +18,12 @@ namespace CrudBenchmarks;
 /// Apples-to-apples comparison between Dapper and pengdows.crud:
 /// - Same SQLite in-memory database
 /// - New connection per operation (factory -> connection string -> open)
-/// - Prebuilt SQL reused across iterations (no per-iteration SQL generation)
-/// - Per-iteration cost is parameters + execution + mapping
+/// - Container built once via BuildRetrieve, reused across iterations via SetParameterValue
+/// - Per-iteration cost is parameter update + execution + mapping
+///
+/// Two pengdows.crud variants:
+///   ProductionStandard — connection-per-op (governor + open/close overhead, same as Dapper)
+///   PureMapping        — SingleConnection mode (shared persistent connection; mapping engine only)
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
@@ -39,13 +43,17 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
 
     private string _connectionString = string.Empty;
 
-    private string _pengdowsSql = string.Empty;
+    // Reusable ISqlContainer fields — built once via BuildRetrieve; loop calls SetParameterValue
+    private ISqlContainer _readSingleSc = null!;
+    private ISqlContainer _readSingleScSingle = null!;
+
+    // Dapper SQL kept for DumpFieldTypes benchmark
     private string _dapperSql = string.Empty;
 
     private int _idSeed;
     private string? _fieldTypeDump;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    [Params(1, 100)] public int RecordCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -72,11 +80,24 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         {
             using var cmd = _sentinel.CreateCommand();
             cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO benchmark (id, name, age) VALUES (@id, @name, @age)";
+            var idParam = cmd.CreateParameter();
+            idParam.ParameterName = "@id";
+            idParam.DbType = DbType.Int32;
+            var nameParam = cmd.CreateParameter();
+            nameParam.ParameterName = "@name";
+            nameParam.DbType = DbType.String;
+            var ageParam = cmd.CreateParameter();
+            ageParam.ParameterName = "@age";
+            ageParam.DbType = DbType.Int32;
+            cmd.Parameters.Add(idParam);
+            cmd.Parameters.Add(nameParam);
+            cmd.Parameters.Add(ageParam);
             for (var i = 1; i <= SeedRows; i++)
             {
-                cmd.CommandText =
-                    "INSERT INTO benchmark (id, name, age) " +
-                    $"VALUES ({i}, 'Person {i}', {20 + (i % 50)})";
+                idParam.Value = i;
+                nameParam.Value = $"Person {i}";
+                ageParam.Value = 20 + (i % 50);
                 cmd.ExecuteNonQuery();
             }
 
@@ -106,13 +127,20 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         _pengdowsSingleContext = new DatabaseContext(cfgSingle, SqliteFactory.Instance, null, _typeMap);
         _singleGateway = new TableGateway<BenchEntity, int>(_pengdowsSingleContext);
 
-        _pengdowsSql = BuildSingleReadSql(p => _pengdowsContext.MakeParameterName(p));
-        _dapperSql = BuildSingleReadSql(p => $"@{p}");
+        // Build reusable read-single containers — one per context/gateway pair.
+        // Loop calls SetParameterValue("w0", id) each iteration (scalar, not array).
+        _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
+        _readSingleScSingle = _singleGateway.BuildRetrieve(new[] { 1 });
+
+        // Dapper SQL kept for DumpFieldTypes diagnostic benchmark
+        _dapperSql = "SELECT id, name, age FROM benchmark WHERE id = @id";
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
+        _readSingleSc?.Dispose();
+        _readSingleScSingle?.Dispose();
         _pengdowsContext?.Dispose();
         _pengdowsSingleContext?.Dispose();
         _sentinel?.Dispose();
@@ -134,9 +162,8 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = NextId();
-            await using var container = _pengdowsContext.CreateSqlContainer(_pengdowsSql);
-            container.AddParameterWithValue("id", DbType.Int32, id);
-            var result = await _gateway.LoadSingleAsync(container);
+            _readSingleSc.SetParameterValue("w0", id);
+            var result = await _gateway.LoadSingleAsync(_readSingleSc);
             if (result != null)
             {
                 hits++;
@@ -157,9 +184,8 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = NextId();
-            await using var container = _pengdowsSingleContext.CreateSqlContainer(_pengdowsSql);
-            container.AddParameterWithValue("id", DbType.Int32, id);
-            var result = await _singleGateway.LoadSingleAsync(container);
+            _readSingleScSingle.SetParameterValue("w0", id);
+            var result = await _singleGateway.LoadSingleAsync(_readSingleScSingle);
             if (result != null)
             {
                 hits++;
@@ -215,7 +241,6 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         return hits;
     }
 
-    [Benchmark]
     public string DumpFieldTypes()
     {
         if (_fieldTypeDump != null)
@@ -226,7 +251,7 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         using var cmd = _sentinel.CreateCommand();
         cmd.CommandText = _dapperSql;
         var param = cmd.CreateParameter();
-        param.ParameterName = "id";
+        param.ParameterName = "@id";
         param.DbType = DbType.Int32;
         param.Value = 1;
         cmd.Parameters.Add(param);
@@ -273,11 +298,6 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         return normalized;
     }
 
-    private static string BuildSingleReadSql(Func<string, string> param)
-    {
-        return "SELECT id, name, age FROM benchmark WHERE id = " + param("id");
-    }
-
     [Table("benchmark")]
     public sealed class BenchEntity
     {
@@ -285,9 +305,11 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+        [Column("name", DbType.String)] 
+        public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)] public int Age { get; set; }
+        [Column("age", DbType.Int32)] 
+        public int Age { get; set; }
     }
 
     public sealed class DapperBenchEntity

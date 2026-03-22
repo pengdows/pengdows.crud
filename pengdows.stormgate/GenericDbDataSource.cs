@@ -1,0 +1,43 @@
+using System.Data.Common;
+
+namespace pengdows.stormgate;
+
+/// <summary>
+/// Generic DbDataSource adapter over DbProviderFactory.
+/// Used when the provider does not expose a native DbDataSource.
+/// </summary>
+internal sealed class GenericDbDataSource : DbDataSource
+{
+    private readonly DbProviderFactory _factory;
+    private readonly string _connectionString;
+
+    public GenericDbDataSource(DbProviderFactory factory, string connectionString)
+    {
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new ArgumentException("Connection string cannot be null or whitespace.", nameof(connectionString));
+
+        _connectionString = connectionString;
+    }
+
+    public override string ConnectionString => _connectionString;
+
+    protected override DbConnection CreateDbConnection()
+    {
+        var connection = _factory.CreateConnection()
+            ?? throw new InvalidOperationException(
+                $"Provider factory '{_factory.GetType().FullName}' returned null from CreateConnection().");
+
+        connection.ConnectionString = _connectionString;
+        return connection;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        // No owned resources.
+        // Note: _factory is not disposed here as it is owned by the caller (typically a static singleton).
+    }
+
+    protected override ValueTask DisposeAsyncCore() => ValueTask.CompletedTask;
+}

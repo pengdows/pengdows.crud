@@ -24,10 +24,10 @@ public static class ProfileHarness
 
     public static async Task Run()
     {
-        using var sentinel = new SqliteConnection(ConnStr);
+        await using var sentinel = new SqliteConnection(ConnStr);
         sentinel.Open();
 
-        using (var cmd = sentinel.CreateCommand())
+        await using (var cmd = sentinel.CreateCommand())
         {
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS benchmark (
@@ -38,9 +38,9 @@ public static class ProfileHarness
             cmd.ExecuteNonQuery();
         }
 
-        using (var tx = sentinel.BeginTransaction())
+        await using (var tx = sentinel.BeginTransaction())
         {
-            using var cmd = sentinel.CreateCommand();
+            await using var cmd = sentinel.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = "INSERT INTO benchmark (id, name, age) VALUES (@id, @name, @age)";
             var idParam = cmd.Parameters.Add("@id", SqliteType.Integer);
@@ -68,7 +68,7 @@ public static class ProfileHarness
             ReadWriteMode = ReadWriteMode.ReadWrite,
             DbMode = DbMode.Standard
         };
-        using var context = new DatabaseContext(cfg, SqliteFactory.Instance, null, typeMap);
+        await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, null, typeMap);
         var gateway = new TableGateway<ProfileEntity, int>(context);
         var pengdowsSql = $"SELECT id, name, age FROM benchmark WHERE id = {context.MakeParameterName("id")}";
 

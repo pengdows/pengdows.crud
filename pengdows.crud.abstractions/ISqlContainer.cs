@@ -26,7 +26,7 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <summary>
     /// Indicates whether a WHERE clause has already been appended to the query.
     /// </summary>
-    bool HasWhereAppended { get; set; }
+    bool HasWhereAppended { get; }
 
     /// <summary>
     /// Prefix used for quoting identifiers.
@@ -395,13 +395,6 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// </summary>
     /// <param name="list">The parameters to add.</param>
     void AddParameters(IList<DbParameter> list);
-
-    /// <summary>
-    /// Creates a <see cref="DbCommand"/> for the given tracked connection.
-    /// </summary>
-    /// <param name="conn">The connection to associate with the command.</param>
-    /// <returns>The created command.</returns>
-    DbCommand CreateCommand(ITrackedConnection conn);
 
     /// <summary>
     /// Clears the accumulated query and parameters.

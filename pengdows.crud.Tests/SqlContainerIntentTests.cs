@@ -88,4 +88,92 @@ public class SqlContainerIntentTests
 
         Assert.True(result >= 0);
     }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_WriteIntent_ThrowsOnReadOnlyContext()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+        await using var container = context.CreateSqlContainer("SELECT 1");
+
+        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.ExecuteScalarOrNullAsync<int?>(ExecutionType.Write));
+        Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TryExecuteScalarAsync_WriteIntent_ThrowsOnReadOnlyContext()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+        await using var container = context.CreateSqlContainer("SELECT 1");
+
+        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await container.TryExecuteScalarAsync<int>(ExecutionType.Write));
+        Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WriteIntent_ThrowsOnReadOnlyContext()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+        await using var container = context.CreateSqlContainer("SELECT 1");
+
+        // ExecuteReaderAsync goes through AssertIsWriteConnection rather than the
+        // ReadWriteMode guard, so the exception type is InvalidOperationException.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_DefaultIntent_UsesRead_AllowedOnReadOnlyContext()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
+        await using var container = context.CreateSqlContainer("SELECT 1");
+
+        // Default overload routes to ExecutionType.Read — must not throw on a read-only context.
+        await using var reader = await container.ExecuteReaderAsync();
+        Assert.NotNull(reader);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarRequiredAsync_DefaultIntent_UsesRead_AllowedOnReadOnlyContext()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetScalarResult(42);
+        using var context = new DatabaseContext(config, factory);
+        await using var container = context.CreateSqlContainer("SELECT 42");
+
+        // Default overload routes to ExecutionType.Read — must not throw on a read-only context.
+        var result = await container.ExecuteScalarRequiredAsync<int>();
+        Assert.Equal(42, result);
+    }
 }

@@ -90,6 +90,7 @@ public class Program
     {
         public InProcessConfig()
         {
+            ArtifactsPath = Path.Combine(Directory.GetCurrentDirectory(), "BenchmarkDotNet.Artifacts");
             AddLogger(ConsoleLogger.Default);
             AddColumnProvider(DefaultColumnProviders.Instance);
             AddColumn(StatisticColumn.P95);
@@ -104,6 +105,7 @@ public class Program
     {
         public BenchmarkConfig()
         {
+            ArtifactsPath = Path.Combine(Directory.GetCurrentDirectory(), "BenchmarkDotNet.Artifacts");
             AddLogger(ConsoleLogger.Default);
             AddColumnProvider(DefaultColumnProviders.Instance);
             AddColumn(StatisticColumn.P95);

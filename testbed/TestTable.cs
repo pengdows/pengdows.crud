@@ -39,7 +39,7 @@ public class TestTable
 
     [LastUpdatedOn]
     [Column("updated_at", DbType.DateTime)]
-    public DateTime UpdatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 
     [LastUpdatedBy]
     [Column("updated_by", DbType.String)]

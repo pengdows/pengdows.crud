@@ -24,6 +24,7 @@ namespace CrudBenchmarks;
 /// It attempts each operation and fails visibly, printing [BROKEN] messages.
 /// pengdows and Dapper handle native PostgreSQL types with zero special configuration.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 2, iterationCount: 3, invocationCount: 10)]
 public class DatabaseFeatureBenchmarks : IAsyncDisposable
@@ -98,9 +99,9 @@ public class DatabaseFeatureBenchmarks : IAsyncDisposable
 
     private readonly List<long> _transactionIds = new();
 
-    [Params(5000)] public int TransactionCount;
-    [Params(16)] public int Parallelism;
-    [Params(64)] public int OperationsPerRun;
+    private const int TransactionCount = 5000;
+    private const int Parallelism = 16;
+    private const int OperationsPerRun = 64;
 
     [GlobalSetup]
     public async Task GlobalSetup()

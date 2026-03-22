@@ -38,8 +38,10 @@ internal class ExecuteProcedureWrappingStrategy : IProcWrappingStrategy
         Func<string, string>? wrapObjectName = null)
     {
         var wrappedProcName = IProcWrappingStrategy.ValidateAndWrap(procName, wrapObjectName);
+        // Firebird does not permit empty parentheses — omit them entirely when there are no args.
+        var argClause = string.IsNullOrEmpty(args) ? string.Empty : $"({args})";
         return executionType == ExecutionType.Read
-            ? $"SELECT * FROM {wrappedProcName}({args})"
-            : $"EXECUTE PROCEDURE {wrappedProcName}({args})";
+            ? $"SELECT * FROM {wrappedProcName}{argClause}"
+            : $"EXECUTE PROCEDURE {wrappedProcName}{argClause}";
     }
 }

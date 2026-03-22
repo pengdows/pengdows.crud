@@ -39,9 +39,13 @@ public class YugabyteTestContainer : TestContainer
             $@"Host=localhost;Port={hostPort};Username={_username};Database={_database};Pooling=true;Minimum Pool Size=1;Maximum Pool Size=100;Timeout=30;CommandTimeout=60;";
         await WaitForDbToStart(NpgsqlFactory.Instance, _connectionString, _container);
 
-        // Poll until YSQL catalogs are fully initialized
+        // Poll until YSQL catalogs are fully initialized.
+        // SELECT 1 becomes available very early (before catalog init), but detection probes such
+        // as SELECT version() and pg_settings queries require the YSQL catalog to be ready.
+        // Using SELECT version() as the readiness signal ensures that by the time DatabaseContext
+        // runs product detection, all catalog-level queries will succeed.
         var startTime = DateTime.UtcNow;
-        var timeout = TimeSpan.FromSeconds(60);
+        var timeout = TimeSpan.FromSeconds(120);
         while (DateTime.UtcNow - startTime < timeout)
         {
             try
@@ -49,14 +53,17 @@ public class YugabyteTestContainer : TestContainer
                 await using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
                 await using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT 1";
-                await cmd.ExecuteScalarAsync();
-                return;
+                cmd.CommandText = "SELECT version()";
+                var ver = await cmd.ExecuteScalarAsync() as string;
+                if (!string.IsNullOrEmpty(ver))
+                    return;
             }
             catch
             {
-                await Task.Delay(2000);
+                // Not ready yet — wait and retry
             }
+
+            await Task.Delay(2000);
         }
 
         throw new TimeoutException("Yugabyte YSQL did not become ready in time.");
@@ -69,8 +76,8 @@ public class YugabyteTestContainer : TestContainer
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, NpgsqlFactory.Instance, new TypeMapRegistry()));
+        var ctx = new DatabaseContext(_connectionString, NpgsqlFactory.Instance, new TypeMapRegistry());
+        return Task.FromResult<IDatabaseContext>(ctx);
     }
 
     protected override ValueTask DisposeAsyncCore()

@@ -45,7 +45,7 @@ namespace pengdows.crud.attributes;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Property)]
-public class JsonAttribute : Attribute
+public sealed class JsonAttribute : Attribute
 {
     /// <summary>
     /// Gets or sets the JSON serializer options for this property.

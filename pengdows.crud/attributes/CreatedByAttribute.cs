@@ -30,6 +30,6 @@ namespace pengdows.crud.attributes;
 /// <seealso cref="CreatedOnAttribute"/>
 /// <seealso cref="LastUpdatedByAttribute"/>
 [AttributeUsage(AttributeTargets.Property)]
-public class CreatedByAttribute : Attribute
+public sealed class CreatedByAttribute : Attribute
 {
 }

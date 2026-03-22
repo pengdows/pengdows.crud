@@ -15,7 +15,7 @@ public abstract class SqliteTestBase : IAsyncLifetime
     protected readonly ITestOutputHelper Output;
     protected readonly IHost Host;
     protected IDatabaseContext Context = null!;
-    protected TypeMapRegistry TypeMap = null!;
+    internal ITypeMapRegistry TypeMap = null!;
 
     protected SqliteTestBase(ITestOutputHelper output)
     {

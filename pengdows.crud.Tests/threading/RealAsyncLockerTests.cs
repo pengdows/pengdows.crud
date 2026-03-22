@@ -1,3 +1,19 @@
+// =============================================================================
+// FILE: RealAsyncLockerTests.cs
+// PURPOSE: Unit tests for RealAsyncLocker semaphore-based locking.
+//
+// AI SUMMARY:
+// - Covers Lock(), LockAsync(), TryLockAsync() happy paths and error paths.
+// - Key scenarios:
+//   * Double-lock on same instance throws immediately (Volatile.Read pre-check)
+//     — verified for both LockAsync and TryLockAsync with SemaphoreSlim(1,1)
+//   * Cancellation propagates as OperationCanceledException / TaskCanceledException
+//   * Timeout (via _lockTimeout ctor param) throws ModeContentionException
+//   * TryLockAsync returns false on timeout, true on acquisition
+//   * DisposeAsync releases the semaphore (CurrentCount restored to 1)
+//   * ModeContentionStats contention tracking recorded on wait/timeout
+// =============================================================================
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,6 +56,22 @@ public class RealAsyncLockerTests
     }
 
     [Fact]
+    public async Task LockAsync_AlreadyAcquired_WithCount1_Throws()
+    {
+        // Production scenario: SemaphoreSlim(1,1). Guard must fire immediately, not deadlock.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var semaphore = new SemaphoreSlim(1, 1);
+        var locker = new RealAsyncLocker(semaphore);
+
+        await locker.LockAsync(cts.Token);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await locker.LockAsync(cts.Token));
+        Assert.Equal(0, semaphore.CurrentCount); // still held by first acquisition
+
+        await locker.DisposeAsync();
+        Assert.Equal(1, semaphore.CurrentCount);
+    }
+
+    [Fact]
     public async Task LockAsync_AlreadyAcquired_Throws()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -62,7 +94,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.LockAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await locker.LockAsync(cts.Token));
         semaphore.Release();
     }
 
@@ -89,6 +121,24 @@ public class RealAsyncLockerTests
         Assert.False(result);
         await second.DisposeAsync();
         await first.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TryLockAsync_AlreadyAcquired_WithCount1_Throws()
+    {
+        // Production scenario: SemaphoreSlim(1,1). Guard must fire immediately, not wait for timeout.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var semaphore = new SemaphoreSlim(1, 1);
+        var locker = new RealAsyncLocker(semaphore);
+
+        var first = await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token);
+        Assert.True(first);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        Assert.Equal(0, semaphore.CurrentCount); // still held by first acquisition
+
+        await locker.DisposeAsync();
+        Assert.Equal(1, semaphore.CurrentCount);
     }
 
     [Fact]
@@ -126,7 +176,7 @@ public class RealAsyncLockerTests
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
         using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<TaskCanceledException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
         semaphore.Release();
     }
 
@@ -187,37 +237,4 @@ public class RealAsyncLockerTests
         await Assert.ThrowsAsync<ObjectDisposedException>(async () => await locker.LockAsync(cts.Token));
     }
 
-    [Fact]
-    public async Task LockAsync_CalledTwiceWithCount1_DeadlocksInProduction()
-    {
-        // CRITICAL BUG INVESTIGATION: With SemaphoreSlim(1,1) (the real production scenario),
-        // calling LockAsync() twice on the same instance causes a DEADLOCK
-
-        // In production, shared connections use count 1
-        var semaphore = new SemaphoreSlim(1, 1);
-        var locker = new RealAsyncLocker(semaphore);
-
-        // First call succeeds
-        await locker.LockAsync();
-        Assert.Equal(0, semaphore.CurrentCount);
-
-        // Second call on SAME instance should ideally throw InvalidOperationException,
-        // but instead it DEADLOCKS because:
-        // 1. It waits on semaphore (line 23 of RealAsyncLocker)
-        // 2. Semaphore is held by the first call (same instance!)
-        // 3. The _lockState check on line 24 never executes
-        // 4. Infinite wait for itself to release
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-
-        // This demonstrates the deadlock - it will timeout
-        await Assert.ThrowsAsync<TaskCanceledException>(async () => { await locker.LockAsync(cts.Token); });
-
-        // After timeout, semaphore is still held (deadlocked state)
-        Assert.Equal(0, semaphore.CurrentCount);
-
-        // NOTE: The existing test "LockAsync_AlreadyAcquired_Throws" uses SemaphoreSlim(2,2)
-        // which is why it doesn't deadlock - both WaitAsync() calls succeed immediately.
-        // That's not the real production scenario.
-    }
 }

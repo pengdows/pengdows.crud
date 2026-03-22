@@ -136,7 +136,9 @@ public class DateTimeNormalizationTests : SqlLiteContextTestBase
     {
         public SimpleDateTimeTrackedReader(IEnumerable<Dictionary<string, object>> rows) : base(rows) { }
 
-        public new Task<bool> ReadAsync() => base.ReadAsync(CancellationToken.None);
+        public new ValueTask<bool> ReadAsync() => new(base.ReadAsync(CancellationToken.None));
+
+        public new ValueTask<bool> ReadAsync(CancellationToken cancellationToken) => new(base.ReadAsync(cancellationToken));
 
         public override ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

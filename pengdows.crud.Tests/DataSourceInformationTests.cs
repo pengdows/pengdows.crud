@@ -105,6 +105,17 @@ public static class DataSourceTestData
             [versionSql] = versionString
         };
 
+        // Prevent the YugabyteDB pg_settings probe from false-positive matching in fakeDb.
+        // The probe runs for any PostgreSQL-family base detection (detected == PostgreSql or Unknown).
+        // Without this entry, the fakeDb fallback scalar ("PostgreSQL 15.0") satisfies
+        // `is string { Length: > 0 }` and incorrectly identifies these databases as YugabyteDB.
+        if (db is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql)
+        {
+            const string pgSettingsProbe =
+                "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
+            scalars[pgSettingsProbe] = DBNull.Value;
+        }
+
         return (schema, scalars);
     }
 }
@@ -183,7 +194,8 @@ public class DataSourceInformationTests
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => ProcWrappingStyle.Call,
+                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake => ProcWrappingStyle.Call,
+            SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
@@ -213,7 +225,8 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.SqlServer => 1024,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => 65535,
+                or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.Snowflake => 65535,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
             SupportedDatabase.Oracle => 1024,

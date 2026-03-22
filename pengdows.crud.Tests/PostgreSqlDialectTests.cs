@@ -340,8 +340,8 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, false);
 
         Assert.NotEmpty(settings);
-        Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("SET client_min_messages = warning", settings);
+        Assert.Contains("standard_conforming_strings", settings);
+        Assert.Contains("client_min_messages", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 
@@ -354,8 +354,8 @@ public class PostgreSqlDialectTests
         var settings = _dialect.GetConnectionSessionSettings(ctx, true);
 
         Assert.NotEmpty(settings);
-        Assert.Contains("SET default_transaction_read_only = on", settings);
-        Assert.Contains("SET standard_conforming_strings = on", settings);
+        Assert.Contains("SET default_transaction_read_only = on;", settings);
+        Assert.Contains("standard_conforming_strings", settings);
     }
 
     [Fact]
@@ -386,7 +386,7 @@ public class PostgreSqlDialectTests
         _dialect.ApplyConnectionSettings(connection, ctx, false);
 
         // Should get the context connection string 
-        Assert.Equal(ctx.ConnectionString, connection.ConnectionString);
+        Assert.Equal(GetRawConnectionString(ctx), connection.ConnectionString);
     }
 
     [Fact]
@@ -489,6 +489,14 @@ public class PostgreSqlDialectTests
         return new DatabaseContext(cfg, _factory);
     }
 
+    private static string GetRawConnectionString(DatabaseContext context)
+    {
+        var property = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(property);
+        return (string)property!.GetValue(context)!;
+    }
+
     [Fact]
     public void ApplyConnectionSettings_NonReadOnlyMode_DoesNotAddReadOnlyOptions()
     {
@@ -501,7 +509,7 @@ public class PostgreSqlDialectTests
 
         // Should not contain read-only options
         Assert.DoesNotContain("Options='-c default_transaction_read_only=on'", connection.ConnectionString);
-        Assert.Equal(ctx.ConnectionString, connection.ConnectionString);
+        Assert.Equal(GetRawConnectionString(ctx), connection.ConnectionString);
     }
 
     [Fact]
@@ -569,8 +577,8 @@ public class PostgreSqlDialectTests
     {
         var settings = _dialect.GetBaseSessionSettings();
 
-        Assert.Contains("SET standard_conforming_strings = on", settings);
-        Assert.Contains("SET client_min_messages = warning", settings);
+        Assert.Contains("standard_conforming_strings", settings);
+        Assert.Contains("client_min_messages", settings);
         Assert.DoesNotContain("SET search_path", settings);
     }
 
@@ -579,7 +587,7 @@ public class PostgreSqlDialectTests
     {
         var settings = _dialect.GetReadOnlySessionSettings();
 
-        Assert.Equal("SET default_transaction_read_only = on", settings);
+        Assert.Equal("SET default_transaction_read_only = on;", settings);
     }
 
     [Fact]
@@ -663,89 +671,6 @@ public class PostgreSqlDialectTests
     }
 
     [Fact]
-    public void CheckPostgreSqlSettingsWithDetails_WhenSettingsMatch_ReturnsEmptyScript()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-        var (connectionMock, commandMock) = CreateSettingsConnection(
-            ("standard_conforming_strings", "on"),
-            ("client_min_messages", "warning"));
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettingsWithDetails",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var (settingsToApply, currentSettings) = ((string Settings, Dictionary<string, string> Current))method.Invoke(
-            dialect,
-            new object[] { connectionMock.Object })!;
-
-        Assert.Equal(string.Empty, settingsToApply);
-        Assert.Equal("on", currentSettings["standard_conforming_strings"]);
-        Assert.Equal("warning", currentSettings["client_min_messages"]);
-
-        commandMock.Verify(c => c.ExecuteReader(), Times.Once);
-        commandMock.Verify(c => c.Dispose(), Times.Once);
-        connectionMock.Verify(c => c.CreateCommand(), Times.Once);
-    }
-
-    [Fact]
-    public void CheckPostgreSqlSettingsWithDetails_WhenCommandFails_ReturnsFallbackScript()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-
-        var commandMock = new Mock<IDbCommand>(MockBehavior.Strict);
-        commandMock.SetupProperty(c => c.CommandText);
-        commandMock.Setup(c => c.ExecuteReader()).Throws(new InvalidOperationException("boom"));
-        commandMock.Setup(c => c.Dispose());
-
-        var connectionMock = new Mock<IDbConnection>(MockBehavior.Strict);
-        connectionMock.Setup(c => c.CreateCommand()).Returns(commandMock.Object);
-        connectionMock.Setup(c => c.Dispose());
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettingsWithDetails",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var (settingsToApply, currentSettings) = ((string Settings, Dictionary<string, string> Current))method.Invoke(
-            dialect,
-            new object[] { connectionMock.Object })!;
-
-        Assert.Contains("SET standard_conforming_strings = on", settingsToApply);
-        Assert.Contains("SET client_min_messages = warning", settingsToApply);
-        Assert.Equal("unknown", currentSettings["standard_conforming_strings"]);
-        Assert.Equal("unknown", currentSettings["client_min_messages"]);
-
-        commandMock.Verify(c => c.Dispose(), Times.Once);
-        connectionMock.Verify(c => c.CreateCommand(), Times.Once);
-    }
-
-    [Fact]
-    public void CheckPostgreSqlSettings_CachesComputedSessionSettings()
-    {
-        var dialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-        var (connectionMock, commandMock) = CreateSettingsConnection(
-            ("standard_conforming_strings", "off"),
-            ("client_min_messages", "warning"));
-
-        var method = typeof(PostgreSqlDialect).GetMethod(
-            "CheckPostgreSqlSettings",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var firstResult = (string)method.Invoke(dialect, new object[] { connectionMock.Object })!;
-
-        Assert.Contains("SET standard_conforming_strings = on", firstResult);
-
-        commandMock.Verify(c => c.ExecuteReader(), Times.Once);
-
-        var secondConnection = new Mock<IDbConnection>(MockBehavior.Strict);
-        secondConnection.Setup(c => c.Dispose());
-
-        var secondResult = (string)method.Invoke(dialect, new object[] { secondConnection.Object })!;
-
-        Assert.Equal(firstResult, secondResult);
-        secondConnection.VerifyNoOtherCalls();
-    }
-
-    [Fact]
     public void ConfigureProviderSpecificSettings_WhenNpgsqlConnection_AdjustsAutoPrepareDefaults()
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
@@ -779,6 +704,77 @@ public class PostgreSqlDialectTests
         dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
         Assert.Equal(original.ToLowerInvariant(), connection.ConnectionString);
+    }
+
+    // =========================================================================
+    // PrepareConnectionStringForDataSource — Options startup baking
+    // =========================================================================
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PrepareConnectionStringForDataSource_BakesAllThreeSessionSettingsIntoOptions(bool readOnly)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly);
+
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages=warning", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("default_transaction_read_only=" + (readOnly ? "on" : "off"), result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_ReadWrite_SetsSessionSettingsBakedFlag()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;";
+
+        dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.True(dialect.SessionSettingsBakedIntoDataSource);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_PreservesExistingUserOptions()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // User has a custom startup option we don't own
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;Options=-c search_path=myschema;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("search_path=myschema", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_OverridesUserReadOnlyIfPresent()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // User incorrectly baked read-only=on in a read-write context
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;Options=-c default_transaction_read_only=on;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        // We must override to the correct value for this mode
+        Assert.Contains("default_transaction_read_only=off", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("default_transaction_read_only=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_NoSessionSettingsBakedFlag_BeforeCall()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+
+        // Flag must start as false
+        Assert.False(dialect.SessionSettingsBakedIntoDataSource);
     }
 
     private static (Mock<IDbConnection> Connection, Mock<IDbCommand> Command) CreateSettingsConnection(

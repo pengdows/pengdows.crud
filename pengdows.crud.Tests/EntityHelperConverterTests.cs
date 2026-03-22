@@ -167,9 +167,14 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         {
         }
 
-        public new Task<bool> ReadAsync()
+        public new ValueTask<bool> ReadAsync()
         {
-            return base.ReadAsync(CancellationToken.None);
+            return new ValueTask<bool>(base.ReadAsync(CancellationToken.None));
+        }
+
+        public new ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
+        {
+            return new ValueTask<bool>(base.ReadAsync(cancellationToken));
         }
 
         public override ValueTask DisposeAsync()
@@ -375,14 +380,14 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
             return _inner.Read();
         }
 
-        public Task<bool> ReadAsync()
+        public ValueTask<bool> ReadAsync()
         {
-            return Task.FromResult(Read());
+            return new ValueTask<bool>(Read());
         }
 
-        public Task<bool> ReadAsync(CancellationToken cancellationToken)
+        public ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult(Read());
+            return new ValueTask<bool>(Read());
         }
     }
 

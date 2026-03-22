@@ -209,25 +209,45 @@ Uuid7Optimized.NewUuid7Bytes(buffer);
 
 pengdows.crud enforces this philosophy through its attribute system:
 
-- `[Id]` marks a unique surrogate key column — single column only
+- `[Id]` marks a unique surrogate/pseudo key column — only one `[Id]` column per entity class
 - `[PrimaryKey]` may be used on one or more fields for business identity
-- Tables must have a unique single-column `[Id]` to use full TableGateway automation
+- **`[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on the same column** — never apply both to the same property
+- `[Id]` and `[PrimaryKey]` CAN coexist on **different** columns of the same entity (surrogate + business key)
+- `[Id]` drives the `TRowID` type parameter of `TableGateway<TEntity, TRowID>`
+- `[Id]` is required for row-id based operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`); `CreateAsync` can work with `[PrimaryKey]`-only entities
 - `RetrieveOneAsync(entity)` targets `[PrimaryKey]` columns, not `[Id]`
+
+### Choosing the Right Gateway
+
+| Entity has... | Gateway |
+|---------------|---------|
+| `[Id]` (surrogate key) | `TableGateway<TEntity, TRowID>` — full row-id operations |
+| Only `[PrimaryKey]` (no `[Id]`) | `PrimaryKeyTableGateway<TEntity>` — all ops keyed on business columns |
+| Both `[Id]` + `[PrimaryKey]` on different columns | `TableGateway<TEntity, TRowID>` |
+
+`PrimaryKeyTableGateway<TEntity>` is ideal for junction tables, legacy schemas, and DBA-owned tables with natural keys. It provides the same three-tier API (Build/Load/Convenience) without requiring a surrogate `[Id]` column.
 
 ### Flexible CRUD Operations
 
 ```csharp
-// By business primary key - optimal for most queries
-var user1 = await gateway.RetrieveOneAsync(new User { Username = "john_doe" });
+// TableGateway — entity has both [Id] and [PrimaryKey]
+var user1 = await gateway.RetrieveOneAsync(new User { Username = "john_doe" }); // By [PrimaryKey]
+var user2 = await gateway.RetrieveOneAsync(userId);  // By [Id]
+await gateway.UpsertAsync(new User { Username = "john_doe", Email = "john@example.com" });
 
-// By surrogate ID - useful for FK relationships
-var user2 = await gateway.RetrieveOneAsync(userId);
+// PrimaryKeyTableGateway — entity has only [PrimaryKey], no [Id]
+[Table("order_items")]
+public class OrderItem
+{
+    [PrimaryKey(1)] [Column("order_id")] public int OrderId { get; set; }
+    [PrimaryKey(2)] [Column("product_id")] public int ProductId { get; set; }
+    [Column("quantity")] public int Quantity { get; set; }
+}
 
-// Upsert by business key - handles conflicts naturally
-await gateway.UpsertAsync(new User {
-    Username = "john_doe",
-    Email = "john@example.com"
-});
+var pkGateway = new PrimaryKeyTableGateway<OrderItem>(context);
+await pkGateway.CreateAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 3 });
+var item = await pkGateway.RetrieveOneAsync(new OrderItem { OrderId = 1, ProductId = 42 });
+await pkGateway.BatchDeleteAsync(new[] { item });
 ```
 
 ### Benefits of This Approach

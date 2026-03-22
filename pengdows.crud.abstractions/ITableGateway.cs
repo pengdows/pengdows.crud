@@ -29,7 +29,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Determines what happens when enum parsing fails.
     /// </summary>
-    EnumParseFailureMode EnumParseBehavior { get; set; }
+    EnumParseFailureMode EnumParseBehavior { get; }
 
     /// <summary>
     /// Builds a SQL INSERT for the given object.
@@ -53,13 +53,13 @@ public interface ITableGateway<TEntity, TRowID>
     /// Executes a SQL INSERT for the given object.
     /// Returns true when exactly one row was affected.
     /// </summary>
-    Task<bool> CreateAsync(TEntity entity);
+    ValueTask<bool> CreateAsync(TEntity entity);
 
     /// <summary>
     /// Executes a SQL INSERT for the given object with cancellation support.
     /// Returns true when exactly one row was affected.
     /// </summary>
-    Task<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+    ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -71,7 +71,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of rows inserted.</returns>
-    Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchCreateAsync(entities, context, cancellationToken);
 
@@ -94,6 +94,26 @@ public interface ITableGateway<TEntity, TRowID>
     /// </code>
     /// </example>
     ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Returns a SELECT clause with no WHERE clause, including additional projected expressions
+    /// beyond the entity's mapped columns.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload when the query needs to SELECT columns from joined tables alongside
+    /// the entity's own columns. Each entry in <paramref name="extraSelectExpressions"/> is a
+    /// dotted alias.column string (e.g. <c>"tr.object_id"</c>) that is dialect-quoted and
+    /// appended to the SELECT list before the FROM clause. This avoids string-parsing the
+    /// generated SQL to inject extra columns.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sc = gateway.BuildBaseRetrieve("t", new[] { "tr.object_id" });
+    /// sc.Query.Append(" JOIN wp_term_relationships tr ON ...");
+    /// </code>
+    /// </example>
+    ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
+        IDatabaseContext? context = null);
 
     /// <summary>
     /// Builds a SQL SELECT for a list of row IDs (pseudo keys).
@@ -192,7 +212,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await sc.ExecuteNonQueryAsync();
     /// </code>
     /// </example>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -216,7 +236,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await sc.ExecuteNonQueryAsync();
     /// </code>
     /// </example>
-    Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+    ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -250,7 +270,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await helper.DeleteAsync(42);
     /// </code>
     /// </example>
-    Task<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
+    ValueTask<int> DeleteAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -270,7 +290,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var entities = await helper.RetrieveAsync(new[] { 1, 2 });
     /// </code>
     /// </example>
-    Task<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    ValueTask<List<TEntity>> RetrieveAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -319,7 +339,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await helper.BatchDeleteAsync(new[] { 1, 2, 3 });
     /// </code>
     /// </example>
-    Task<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    ValueTask<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -334,7 +354,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await helper.DeleteAsync(new[] { 1, 2, 3 });
     /// </code>
     /// </example>
-    Task<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
+    ValueTask<int> DeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchDeleteAsync(ids, context, cancellationToken);
 
@@ -369,7 +389,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
-    Task<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -380,7 +400,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
-    Task<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchDeleteAsync(entities, context, cancellationToken);
 
@@ -400,7 +420,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await helper.UpdateAsync(entity);
     /// </code>
     /// </example>
-    Task<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -413,7 +433,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of rows affected.</returns>
-    Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpdateAsync(entities, context, cancellationToken);
 
@@ -434,7 +454,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var rows = await helper.UpdateAsync(entity, loadOriginal: true);
     /// </code>
     /// </example>
-    Task<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
+    ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -460,7 +480,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="entity">The entity to insert or update.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
+    ValueTask<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -473,7 +493,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of rows affected.</returns>
-    Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpsertAsync(entities, context, cancellationToken);
 
@@ -495,7 +515,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var found = await helper.RetrieveOneAsync(entity);
     /// </code>
     /// </example>
-    Task<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
+    ValueTask<TEntity?> RetrieveOneAsync(TEntity objectToRetrieve, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -515,7 +535,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// var found = await helper.RetrieveOneAsync(42);
     /// </code>
     /// </example>
-    Task<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
+    ValueTask<TEntity?> RetrieveOneAsync(TRowID id, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -532,12 +552,12 @@ public interface ITableGateway<TEntity, TRowID>
     /// var entity = await helper.LoadSingleAsync(sc);
     /// </code>
     /// </example>
-    Task<TEntity?> LoadSingleAsync(ISqlContainer sc);
+    ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc);
 
     /// <summary>
     /// Loads a single object using a custom SQL container with cancellation support.
     /// </summary>
-    Task<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken);
+    ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
     /// <summary>
     /// Loads a list of objects using the provided SQL container.
@@ -553,12 +573,12 @@ public interface ITableGateway<TEntity, TRowID>
     /// var list = await helper.LoadListAsync(sc);
     /// </code>
     /// </example>
-    Task<List<TEntity>> LoadListAsync(ISqlContainer sc);
+    ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc);
 
     /// <summary>
     /// Loads a list of objects using the provided SQL container with cancellation support.
     /// </summary>
-    Task<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken);
+    ValueTask<List<TEntity>> LoadListAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
     /// <summary>
     /// Streams objects using the provided SQL container, yielding results as they are read from the database.
@@ -611,16 +631,6 @@ public interface ITableGateway<TEntity, TRowID>
     /// </example>
     IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Returns a compiled setter delegate for a property.
-    /// </summary>
-    Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
-
-    /// <summary>
-    /// Materializes a TEntity from a data reader.
-    /// </summary>
-    TEntity MapReaderToObject(ITrackedReader reader);
-
     // =========================================================================
     // Batch Operations
     // =========================================================================
@@ -665,7 +675,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Total number of affected rows across all chunks.</returns>
-    Task<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -692,7 +702,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="context">Optional database context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Optional token to cancel the operation.</param>
     /// <returns>A Task representing the total number of rows affected across all chunks.</returns>
-    Task<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -724,7 +734,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="entities">The entities to upsert. Must not be null.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    Task<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    ValueTask<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -762,4 +772,31 @@ public interface ITableGateway<TEntity, TRowID>
     /// </code>
     /// </example>
     void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc, string alias = "");
+
+    // =========================================================================
+    // COUNT helpers
+    // =========================================================================
+
+    /// <summary>Returns <c>SELECT COUNT(*)</c> of all rows in this table.</summary>
+    ValueTask<long> CountAllAsync(IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Returns <c>SELECT COUNT(*)</c> filtered by a single column equality (or LIKE when
+    /// <paramref name="isLike"/> is <see langword="true"/>) check.
+    /// All identifiers are quoted and values parameterized.
+    /// </summary>
+    ValueTask<long> CountWhereAsync(string column, string value, bool isLike = false,
+        IDatabaseContext? context = null);
+
+    /// <summary>Returns <c>SELECT COUNT(*)</c> of rows where <paramref name="column"/> IS NULL.</summary>
+    ValueTask<long> CountWhereNullAsync(string column, IDatabaseContext? context = null);
+
+    /// <summary>
+    /// Returns <c>SELECT COUNT(*)</c> where <paramref name="column"/> equals <paramref name="value"/>,
+    /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
+    /// Exactly one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> may be set.
+    /// </summary>
+    ValueTask<long> CountWhereEqualsAsync(string column, string value,
+        string? andWhereNull = null, string? andWhereNotNull = null,
+        IDatabaseContext? context = null);
 }

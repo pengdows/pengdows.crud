@@ -70,7 +70,7 @@ public class SqlContainerConnectionSharingTests
 
         public bool? LastIsShared { get; private set; }
 
-        public ISqlDialect Dialect => _context.Dialect;
+        public ISqlDialect Dialect => _context.GetDialect();
         public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
 
         public DbMode ConnectionMode => _context.ConnectionMode;
@@ -78,11 +78,7 @@ public class SqlContainerConnectionSharingTests
         public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
         public string ConnectionString => _context.ConnectionString;
 
-        public string Name
-        {
-            get => _context.Name;
-            set => _context.Name = value;
-        }
+        public string Name => _context.Name;
 
         public DbDataSource? DataSource => _context.DataSource;
 
@@ -91,7 +87,7 @@ public class SqlContainerConnectionSharingTests
             throw new InvalidOperationException("IDatabaseContext must expose an internal TypeMapRegistry.");
 
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
-        public string SessionSettingsPreamble => _context.SessionSettingsPreamble;
+        public string SessionSettingsPreamble => _context.GetSessionSettingsPreamble();
         public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
         public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
@@ -101,8 +97,7 @@ public class SqlContainerConnectionSharingTests
         public DatabaseMetrics Metrics => _context.Metrics;
         public SupportedDatabase Product => _context.Product;
         public long PeakOpenConnections => _context.PeakOpenConnections;
-        public bool? ForceManualPrepare => _context.ForceManualPrepare;
-        public bool? DisablePrepare => _context.DisablePrepare;
+        public CommandPrepareMode PrepareMode => _context.PrepareMode;
         public string QuotePrefix => _context.QuotePrefix;
         public string QuoteSuffix => _context.QuoteSuffix;
         public bool SupportsInsertReturning => _context.SupportsInsertReturning;
@@ -171,29 +166,29 @@ public class SqlContainerConnectionSharingTests
         }
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)
+            ExecutionType executionType = ExecutionType.Write)
         {
-            return _context.BeginTransaction(isolationLevel, executionType, readOnly);
+            return _context.BeginTransaction(isolationLevel, executionType);
         }
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null)
+            ExecutionType executionType = ExecutionType.Write)
         {
-            return _context.BeginTransaction(isolationProfile, executionType, readOnly);
+            return _context.BeginTransaction(isolationProfile, executionType);
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {
-            return _context.BeginTransactionAsync(isolationLevel, executionType, readOnly, cancellationToken);
+            return _context.BeginTransactionAsync(isolationLevel, executionType, cancellationToken);
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default)
         {
-            return _context.BeginTransactionAsync(isolationProfile, executionType, readOnly, cancellationToken);
+            return _context.BeginTransactionAsync(isolationProfile, executionType, cancellationToken);
         }
 
         public string GenerateParameterName()
@@ -204,16 +199,6 @@ public class SqlContainerConnectionSharingTests
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
         {
             return _context.GenerateRandomName(length, parameterNameMaxLength);
-        }
-
-        public void AssertIsWriteConnection()
-        {
-            _context.AssertIsWriteConnection();
-        }
-
-        public void AssertIsReadConnection()
-        {
-            _context.AssertIsReadConnection();
         }
 
         public void CloseAndDisposeConnection(ITrackedConnection? conn)

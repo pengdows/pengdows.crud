@@ -61,34 +61,28 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         public string Value { get; set; } = string.Empty;
     }
 
+    // Coerce, IsDefaultTimestamp, and SetAuditFields are declared on BaseTableGateway<TEntity>
+    // (moved from TableGateway during the BaseTableGateway refactor).
     private static readonly MethodInfo CoerceMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("Coerce", BindingFlags.NonPublic | BindingFlags.Static)!;
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("Coerce", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo IsDefaultTimestampMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("IsDefaultTimestamp",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("IsDefaultTimestamp",
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo SetAuditFieldsMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("SetAuditFields",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("SetAuditFields",
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             new[] { typeof(AuditEntity), typeof(bool) },
             null)!;
 
     private static readonly MethodInfo SetAuditFieldsWithValuesMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("SetAuditFields",
+        typeof(BaseTableGateway<AuditEntity>).GetMethod("SetAuditFields",
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             new[] { typeof(AuditEntity), typeof(bool), typeof(IAuditValues) },
             null)!;
-
-    private static readonly MethodInfo GetFirebirdDataTypeMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("GetFirebirdDataType",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    private static readonly MethodInfo FormatFirebirdValueExpressionMethod =
-        typeof(TableGateway<AuditEntity, int>).GetMethod("FormatFirebirdValueExpression",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
 
     [Fact]
     public void AuditHelpers_CoerceAndTimestampBranches_AreCovered()
@@ -165,41 +159,6 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         Assert.IsType<NotSupportedException>(ex.InnerException);
     }
 
-    [Theory]
-    [InlineData(DbType.Boolean, "SMALLINT")]
-    [InlineData(DbType.Int32, "INTEGER")]
-    [InlineData(DbType.UInt32, "BIGINT")]
-    [InlineData(DbType.Decimal, "DECIMAL(18,2)")]
-    [InlineData(DbType.Double, "DOUBLE PRECISION")]
-    [InlineData(DbType.DateTime, "TIMESTAMP")]
-    [InlineData(DbType.Guid, "CHAR(36)")]
-    [InlineData(DbType.Binary, "BLOB")]
-    [InlineData(DbType.Object, "VARCHAR(255)")]
-    public void FirebirdDataTypeMapping_CoversSwitchCases(DbType dbType, string expected)
-    {
-        var column = new StubColumnInfo { DbType = dbType };
-
-        var resolved = (string)GetFirebirdDataTypeMethod.Invoke(null, new object[] { column })!;
-
-        Assert.Equal(expected, resolved);
-    }
-
-    [Fact]
-    public void FormatFirebirdValueExpression_CastsNullAndParameter()
-    {
-        var column = new StubColumnInfo { DbType = DbType.Boolean };
-
-        var nullExpression = (string)FormatFirebirdValueExpressionMethod.Invoke(
-            null,
-            new object[] { "NULL", column })!;
-        Assert.Equal("CAST(NULL AS SMALLINT)", nullExpression);
-
-        var parameterExpression = (string)FormatFirebirdValueExpressionMethod.Invoke(
-            null,
-            new object[] { "@p0", column })!;
-        Assert.Equal("CAST(@p0 AS SMALLINT)", parameterExpression);
-    }
-
     private static DatabaseContext CreateContext(SupportedDatabase database)
     {
         return new DatabaseContext(
@@ -229,7 +188,7 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
-        public bool IsIdIsWritable { get; set; }
+        public bool IsIdWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }

@@ -1,10 +1,9 @@
-﻿using System.Data;
+using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
-using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -39,7 +38,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Human-readable name assigned to the context for diagnostics/scoping.
     /// </summary>
-    string Name { get; set; }
+    string Name { get; }
 
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
@@ -52,11 +51,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Metadata gathered from connection.GetSchema and provider heuristics.
     /// </summary>
     IDataSourceInformation DataSourceInfo { get; }
-
-    /// <summary>
-    /// The SQL dialect in use for this context.
-    /// </summary>
-    ISqlDialect Dialect { get; }
 
     /// <summary>
     /// Timeout for internal mode locks (SingleWriter / SingleConnection) and
@@ -94,7 +88,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Raised whenever the metrics collector records a new observation.
     /// Subscribers receive the latest snapshot for the context.
     /// </summary>
+    /// <remarks>
+    /// Handlers must NOT call back into the context (no queries, no transactions).
+    /// Always unsubscribe when the subscriber is disposed — DatabaseContext is a
+    /// singleton and the event outlives short-lived handlers, causing memory leaks
+    /// if handlers are not removed.
+    /// </remarks>
     event EventHandler<DatabaseMetrics> MetricsUpdated;
+
+    /// <summary>
+    /// The SQL dialect in use for this context.
+    /// </summary>
+    ISqlDialect Dialect { get; }
 
     /// <summary>
     /// Detected database product (e.g., PostgreSQL, Oracle).
@@ -117,21 +122,9 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string DatabaseProductName => DataSourceInfo.DatabaseProductName;
 
     /// <summary>
-    /// Whether cmd.Prepare() is supported and should be used.
+    /// Specifies how database commands should handle statement preparation.
     /// </summary>
-    bool PrepareStatements => DataSourceInfo.PrepareStatements;
-
-    /// <summary>
-    /// Override to force manual prepare on or off for all commands.
-    /// When set, this overrides the dialect's PrepareStatements setting.
-    /// </summary>
-    bool? ForceManualPrepare { get; }
-
-    /// <summary>
-    /// When true, disables prepare for all commands regardless of dialect settings.
-    /// Takes precedence over ForceManualPrepare.
-    /// </summary>
-    bool? DisablePrepare { get; }
+    CommandPrepareMode PrepareMode { get; }
 
     /// <summary>
     /// True if the provider supports named parameters (e.g., :name, @param).
@@ -195,12 +188,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool RCSIEnabled { get; }
 
     /// <summary>
-    /// Returns the session settings SQL preamble for the current context.
-    /// </summary>
-    [Obsolete("Use GetBaseSessionSettings() and GetReadOnlySessionSettings() instead.")]
-    string SessionSettingsPreamble { get; }
-
-    /// <summary>
     /// Returns the baseline session settings SQL for the current context.
     /// These are settings that apply regardless of execution intent (e.g. syntax, quoting).
     /// </summary>
@@ -215,12 +202,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if snapshot isolation is enabled on the database.
     /// </summary>
     bool SnapshotIsolationEnabled { get; }
-
-    /// <summary>
-    /// Returns an async-compatible lock for this context instance.
-    /// This is intended for internal coordination within pengdows.crud and should not be required by consumers.
-    /// </summary>
-    ILockerAsync GetLock();
 
     /// <summary>
     /// Creates a new SQL container for building statements.
@@ -245,36 +226,36 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Begins a transaction using the native ADO.NET IsolationLevel.
     /// Not portable across all providers.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null);
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null);
+        ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
-    Task<ITransactionContext> BeginTransactionAsync(
+    ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
-    Task<ITransactionContext> BeginTransactionAsync(
+    ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
-        bool? readOnly = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -287,24 +268,4 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30);
 
-    /// <summary>
-    /// Throws if this context is not writable.
-    /// </summary>
-    void AssertIsWriteConnection();
-
-    /// <summary>
-    /// Throws if this context is not readable.
-    /// </summary>
-    void AssertIsReadConnection();
-
-
-    /// <summary>
-    /// Returns a connection to the strategy, disposing it if necessary.
-    /// </summary>
-    void CloseAndDisposeConnection(ITrackedConnection? conn);
-
-    /// <summary>
-    /// Returns a connection to the strategy asynchronously, disposing it if necessary.
-    /// </summary>
-    ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn);
 }

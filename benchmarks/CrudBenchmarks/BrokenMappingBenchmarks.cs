@@ -671,7 +671,7 @@ public class BrokenMappingBenchmarks : IDisposable
             // so we use a connection-level approach via the context
             var conn = _efContext.Database.GetDbConnection();
             if (conn.State != ConnectionState.Open) await conn.OpenAsync();
-            using var cmd = conn.CreateCommand();
+            await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
             var p = cmd.CreateParameter();
             p.ParameterName = "isActive";

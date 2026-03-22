@@ -4,7 +4,11 @@
 //
 // AI SUMMARY:
 // - Contains cached SQL template classes:
-//   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings
+//   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings + upsert fragments
+//     Fields include: InsertSql, UpsertColumns, UpsertParameterNames, UpsertUpdateFragment,
+//     UpsertOnConflictVersionWhere (PostgreSQL/CockroachDB ON CONFLICT WHERE predicate),
+//     UpsertMergeVersionCondition (MERGE WHEN MATCHED AND condition), VersionIncrementClause,
+//     UpdateSqlPrefix/Suffix, IdEqualityWhereBody/Nullable, UpdateColumns/WrappedNames.
 //   * CachedContainerTemplates - Pre-configured SqlContainer instances
 // - SQL templates are cached per dialect (SQL Server, PostgreSQL, etc.).
 // - Template building methods:
@@ -15,7 +19,6 @@
 // - Performance: Templates built once per dialect, then cloned for use.
 // =============================================================================
 
-using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 
@@ -64,6 +67,10 @@ public partial class TableGateway<TEntity, TRowID>
         // e.g., "(\"Id\" = @p0 OR \"Id\" IS NULL)"
         // Null when entity has no [Id] column.
         public string? IdEqualityNullableWhereBody;
+
+        // "WHERE \"table\".\"Version\" = EXCLUDED.\"Version\"" for ON CONFLICT WHERE dialects.
+        // Null when entity has no [Version] column or dialect does not support SupportsOnConflictWhere.
+        public string? UpsertOnConflictVersionWhere;
     }
 
     private class CachedContainerTemplates
@@ -90,29 +97,8 @@ public partial class TableGateway<TEntity, TRowID>
             return (TRowID)(object)string.Empty;
         }
 
-        if (typeof(TRowID).IsArray)
-        {
-            var elementType = typeof(TRowID).GetElementType() ?? typeof(object);
-            var instance = Array.CreateInstance(elementType, 1);
-            return (TRowID)(object)instance;
-        }
-
-        try
-        {
-            return (TRowID)Activator.CreateInstance(typeof(TRowID), true)!;
-        }
-        catch
-        {
-            try
-            {
-                return (TRowID)RuntimeHelpers.GetUninitializedObject(typeof(TRowID));
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    $"Unable to create a template identifier instance for {typeof(TRowID)}.", ex);
-            }
-        }
+        throw new InvalidOperationException(
+            $"Unsupported row-id type for template generation: {typeof(TRowID)}.");
     }
 
     private static IReadOnlyCollection<TRowID> CreateTemplateRowIds(int count)
@@ -149,7 +135,7 @@ public partial class TableGateway<TEntity, TRowID>
         var idCol = _tableInfo.Columns.Values.FirstOrDefault(c => c.IsId);
 
         var insertColumns = _tableInfo.Columns.Values
-            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdIsWritable))
+            .Where(c => !c.IsNonInsertable && (!c.IsId || c.IsIdWritable))
             .Where(c => _auditValueResolver != null || (!c.IsCreatedBy && !c.IsLastUpdatedBy))
             .OrderBy(c => c.Ordinal)
             .ToList();
@@ -220,6 +206,16 @@ public partial class TableGateway<TEntity, TRowID>
                 $"({wrappedIdName} = {pName}{SqlFragments.Or}{wrappedIdName} IS NULL)";
         }
 
+        // Pre-build ON CONFLICT WHERE version predicate for PostgreSQL/CockroachDB batch upsert.
+        string? upsertOnConflictVersionWhere = null;
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[])
+            && dialect.SupportsOnConflictWhere)
+        {
+            var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
+            var wrappedTable = BuildWrappedTableName(dialect);
+            upsertOnConflictVersionWhere = $"WHERE {wrappedTable}.{wrappedVer} = EXCLUDED.{wrappedVer}";
+        }
+
         // Cache version increment clause; null for byte[] (rowversion/timestamp — DB handles increment)
         string? versionIncrementClause = null;
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
@@ -251,9 +247,18 @@ public partial class TableGateway<TEntity, TRowID>
                     var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                     foreach (var col in updateColumns)
                     {
-                        if (upsertKeySet?.Contains(col) == true) continue;
-                        if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
-                        if (frag.Length > 0) frag.Append(", ");
+                        if (upsertKeySet?.Contains(col) == true)
+                        {
+                            continue;
+                        }
+                        if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                        {
+                            continue;
+                        }
+                        if (frag.Length > 0)
+                        {
+                            frag.Append(", ");
+                        }
                         frag.Append(tp);
                         frag.Append(dialect.WrapSimpleName(col.Name));
                         frag.Append(" = s.");
@@ -262,12 +267,13 @@ public partial class TableGateway<TEntity, TRowID>
 
                     if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                     {
+                        var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                         frag.Append(", ");
                         frag.Append(tp);
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                        frag.Append(wrappedVersion);
                         frag.Append(" = ");
                         frag.Append(tp);
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                        frag.Append(wrappedVersion);
                         frag.Append(" + 1");
                     }
                 }
@@ -278,9 +284,18 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         foreach (var col in updateColumns)
                         {
-                            if (upsertKeySet?.Contains(col) == true) continue;
-                            if (_auditValueResolver == null && col.IsLastUpdatedBy) continue;
-                            if (frag.Length > 0) frag.Append(", ");
+                            if (upsertKeySet?.Contains(col) == true)
+                            {
+                                continue;
+                            }
+                            if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                            {
+                                continue;
+                            }
+                            if (frag.Length > 0)
+                            {
+                                frag.Append(", ");
+                            }
                             frag.Append(dialect.WrapSimpleName(col.Name));
                             frag.Append(" = ");
                             frag.Append(dialect.UpsertIncomingColumn(col.Name));
@@ -343,7 +358,8 @@ public partial class TableGateway<TEntity, TRowID>
             UpdateColumns = updateColumns!,
             UpdateColumnWrappedNames = updateColumnWrappedNames,
             IdEqualityWhereBody = idEqualityWhereBody,
-            IdEqualityNullableWhereBody = idEqualityNullableWhereBody
+            IdEqualityNullableWhereBody = idEqualityNullableWhereBody,
+            UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
 
@@ -392,9 +408,17 @@ public partial class TableGateway<TEntity, TRowID>
 
     private CachedContainerTemplates GetContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
     {
-        return _containersByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
-                BuildCachedContainerTemplatesForDialect(dialect, context)))
-            .Value;
+        try
+        {
+            return _containersByDialect
+                .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
+                    BuildCachedContainerTemplatesForDialect(dialect, context)))
+                .Value;
+        }
+        catch (Exception ex)
+        {
+            throw new exceptions.TemplateInitializationException(
+                $"Failed to build SQL container templates for {dialect.DatabaseType}.", ex);
+        }
     }
 }

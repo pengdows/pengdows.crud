@@ -45,6 +45,9 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return;
         }
 
+        // No timeout or cancellation: TransactionContext is single-threaded by design.
+        // Contention here means the caller is misusing the API (concurrent ops on one
+        // transaction), which is already documented as unsupported.
         _semaphore.Wait();
         SetHeld();
     }
@@ -64,10 +67,10 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return ValueTask.CompletedTask;
         }
 
-        return new ValueTask(LockAsyncSlow(cancellationToken));
+        return LockAsyncSlow(cancellationToken);
     }
 
-    private async Task LockAsyncSlow(CancellationToken cancellationToken)
+    private async ValueTask LockAsyncSlow(CancellationToken cancellationToken)
     {
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         SetHeld();
@@ -87,10 +90,10 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return ValueTask.FromResult(true);
         }
 
-        return new ValueTask<bool>(TryLockAsyncSlow(timeout, cancellationToken));
+        return TryLockAsyncSlow(timeout, cancellationToken);
     }
 
-    private async Task<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)
+    private async ValueTask<bool> TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken)
     {
         var acquired = await _semaphore.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
         if (acquired)

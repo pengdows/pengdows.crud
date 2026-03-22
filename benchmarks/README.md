@@ -21,10 +21,13 @@ This directory contains performance benchmarks for pengdows.crud.
    - Reserved keywords ("select", "from", "where")
    - Automatic correct quoting via dialect system
 
-3. **Raw Performance** - Very close to Dapper (within 5-15%)
-   - Compiled property setters (no reflection)
-   - Plan caching, StringBuilderLite optimizations
-   - Much faster than Entity Framework
+3. **Raw Performance** — Depends on database
+   - **SQLite in-memory**: ~50% slower than Dapper on single-row reads (connection overhead dominates; no network I/O to amortize); equal on writes
+   - **PostgreSQL (equal auto-prepare, equal footing)**: at parity with Dapper — within ±3% on reads, ±5% on writes; 1.5x faster than EF Core on reads, 1.2x faster on writes
+   - **The real win is query design**: `ReadList` (1 query, N=100 rows) = 204 μs; `ReadSingle×100` = 15,666 μs — 77x difference, same for all three frameworks
+   - **Allocation cost**: ~2x more heap than Dapper per operation; ~8x less than EF Core
+   - Compiled property setters (no reflection); plan caching, StringBuilderLite optimizations
+   - See [results/postgres-run-2026-03-15-after-fix.md](CrudBenchmarks/results/postgres-run-2026-03-15-after-fix.md) for the full equal-footing PostgreSQL run
 
 **Requirements:** None! Uses SQLite in-memory
 **Runtime:** ~10-15 minutes

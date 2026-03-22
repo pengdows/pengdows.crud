@@ -6,9 +6,11 @@
 // - BuildBatchCreate() - Generates multi-row INSERT INTO t (cols) VALUES (...), (...)
 // - BatchCreateAsync() - Executes batch insert, returns total affected rows
 // - BuildBatchUpsert() - Generates dialect-specific batch upsert:
-//   * PostgreSQL/CockroachDB: multi-row INSERT ... ON CONFLICT DO UPDATE
+//   * PostgreSQL/CockroachDB: multi-row INSERT ... ON CONFLICT DO UPDATE [WHERE ver = EXCLUDED.ver]
 //   * MySQL/MariaDB: multi-row INSERT ... ON DUPLICATE KEY UPDATE
 //   * SQL Server/Oracle/Firebird: falls back to individual BuildUpsert per entity
+// - Optimistic concurrency: ON CONFLICT batch path appends CachedSqlTemplates.UpsertOnConflictVersionWhere
+//   when entity has [Version] column and dialect.SupportsOnConflictWhere — prevents stale-version writes
 // - Auto-chunks based on dialect's MaxParameterLimit (with 10% headroom)
 // - Sequential parameter naming via ClauseCounters.NextBatch() (b0, b1, b2, ...)
 // - NULL values are inlined as NULL literal (no parameter consumed)
@@ -86,7 +88,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchCreateAsync(
+    public async ValueTask<int> BatchCreateAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
@@ -115,8 +117,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -124,22 +127,22 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public Task<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchCreateAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public Task<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpdateAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public Task<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
+    public ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
         => BatchUpsertAsync(entities, context, cancellationToken);
 
     /// <inheritdoc/>
-    public async Task<int> BatchUpdateAsync(
+    public async ValueTask<int> BatchUpdateAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
@@ -166,8 +169,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -198,7 +202,7 @@ public partial class TableGateway<TEntity, TRowID>
             foreach (var entity in entities)
             {
                 // We assume sequential strategy here for fallback, skip original load (no change tracking)
-                fallback.Add(BuildUpdateAsync(entity, false, ctx).Result);
+                fallback.Add(BuildUpdate(entity, ctx));
             }
 
             return fallback;
@@ -263,14 +267,20 @@ public partial class TableGateway<TEntity, TRowID>
                 foreach (var col in keyColumns)
                 {
                     var val = col.MakeParameterValueFromField(entity);
-                    if (val == null || val == DBNull.Value) continue;
+                    if (val == null || val == DBNull.Value)
+                    {
+                        continue;
+                    }
                     sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
                 }
 
                 foreach (var col in updateableColumns)
                 {
                     var val = col.MakeParameterValueFromField(entity);
-                    if (val == null || val == DBNull.Value) continue;
+                    if (val == null || val == DBNull.Value)
+                    {
+                        continue;
+                    }
                     sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
                 }
             }
@@ -316,12 +326,8 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
 
-        // Validate upsert key exists — same logic as ResolveUpsertKey
-        var hasWritableId = _idColumn != null && _idColumn.IsIdIsWritable;
-        if (!hasWritableId && _tableInfo.PrimaryKeys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
+        // Validate upsert key exists and is usable (PK preferred, writable Id fallback).
+        _ = ResolveUpsertKey();
 
         // For databases that support multi-row upsert via ON CONFLICT or ON DUPLICATE KEY
         if (ctx.DataSourceInfo.SupportsInsertOnConflict)
@@ -346,7 +352,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     /// <inheritdoc/>
-    public async Task<int> BatchUpsertAsync(
+    public async ValueTask<int> BatchUpsertAsync(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
@@ -373,8 +379,9 @@ public partial class TableGateway<TEntity, TRowID>
 
         foreach (var sc in containers)
         {
+            await using var owned = sc;
             cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -474,14 +481,8 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareForInsertOrUpsert(entity, auditValues);
         }
 
-        // Resolve conflict key
-        var keys = _tableInfo.PrimaryKeys;
-        if (_idColumn == null && keys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
-
-        var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+        // Resolve conflict key once for all chunks.
+        var conflictCols = ResolveUpsertKey();
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
@@ -503,6 +504,12 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+
+            if (template.UpsertOnConflictVersionWhere != null)
+            {
+                sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
+            }
+
             result.Add(sc);
         }
 
@@ -535,11 +542,11 @@ public partial class TableGateway<TEntity, TRowID>
         {
             var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
 
-            // MySQL 8.0.20+: declare the row alias (AS incoming) between VALUES and ON DUPLICATE KEY UPDATE
+            // MySQL 8.0.20+: declare the row alias (AS `incoming`) between VALUES and ON DUPLICATE KEY UPDATE
             var incomingAlias = dialect.UpsertIncomingAlias;
             if (!string.IsNullOrEmpty(incomingAlias))
             {
-                sc.Query.Append(" AS ").Append(incomingAlias);
+                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
             }
 
             // Append ON DUPLICATE KEY UPDATE clause

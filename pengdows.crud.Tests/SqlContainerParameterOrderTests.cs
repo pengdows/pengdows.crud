@@ -106,8 +106,6 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         ctx.SetupGet(c => c.SupportsNamedParameters).Returns(false);
         ctx.SetupGet(c => c.MaxParameterLimit).Returns(100);
         ctx.SetupGet(c => c.DatabaseProductName).Returns(dsi.DatabaseProductName);
-        ctx.SetupGet(c => c.DisablePrepare).Returns(true);
-        ctx.SetupGet(c => c.ForceManualPrepare).Returns((bool?)null);
         ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
         using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");
@@ -124,14 +122,13 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
-        var task = (Task<DbCommand>)method!.Invoke(container, new object[]
+        var cmd = await (dynamic)method!.Invoke(container, new object[]
         {
             tracked,
             CommandType.Text,
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task;
         try
         {
             Assert.Equal(2, container.ParamSequence.Count);
@@ -148,7 +145,7 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
     public async Task NamedDialect_IgnoresParamSequence()
     {
         using var container = Context.CreateSqlContainer("SELECT {P}b, {P}a") as SqlContainer;
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var rendered = container!.RenderParams(container.Query.ToString());
         container.Query.Clear().Append(rendered);
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);
@@ -160,14 +157,13 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
         var method = typeof(SqlContainer).GetMethod(
             "PrepareAndCreateCommandAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
-        var task = (Task<DbCommand>)method!.Invoke(container, new object[]
+        var cmd = await (dynamic)method!.Invoke(container, new object[]
         {
             tracked,
             CommandType.Text,
             ExecutionType.Read,
             CancellationToken.None
         })!;
-        var cmd = await task;
         try
         {
             Assert.Equal("a", cmd.Parameters[0].ParameterName);

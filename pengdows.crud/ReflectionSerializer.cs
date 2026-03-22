@@ -45,7 +45,7 @@ namespace pengdows.crud;
 /// <item><description>Uses Activator.CreateInstance, requiring parameterless constructors</description></item>
 /// </list>
 /// </remarks>
-public static class ReflectionSerializer
+internal static class ReflectionSerializer
 {
     /// <summary>
     /// Determines if a type is a simple/primitive type that should be passed through unchanged.

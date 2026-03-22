@@ -1,5 +1,8 @@
 using System;
+using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -54,6 +57,15 @@ public class GenericDbDataSourceCoverageTests
     }
 
     [Fact]
+    public void GenericDbDataSource_DoesNotDeclareRedundantCreateDbCommandOverride()
+    {
+        var declared = typeof(GenericDbDataSource).GetMethod(
+            "CreateDbCommand",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+        Assert.Null(declared);
+    }
+
+    [Fact]
     public void OpenConnection_OpensAndReturnsConnection()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -87,11 +99,84 @@ public class GenericDbDataSourceCoverageTests
         await source.DisposeAsync();
     }
 
+    [Fact]
+    public void OpenConnection_WhenOpenThrows_DisposesConnection()
+    {
+        var factory = new ThrowingOpenFactory();
+        var source = new GenericDbDataSource(factory, "Data Source=coverage.db");
+
+        Assert.Throws<InvalidOperationException>(() => source.OpenConnection());
+        Assert.True(factory.LastConnection!.WasDisposed);
+    }
+
+    [Fact]
+    public async Task OpenConnectionAsync_WhenOpenThrows_DisposesConnection()
+    {
+        var factory = new ThrowingOpenFactory();
+        var source = new GenericDbDataSource(factory, "Data Source=coverage.db");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await source.OpenConnectionAsync());
+        Assert.True(factory.LastConnection!.WasDisposed);
+    }
+
     private sealed class NullConnectionFactory : DbProviderFactory
     {
         public override DbConnection? CreateConnection()
         {
             return null;
+        }
+    }
+
+    private sealed class ThrowingOpenFactory : DbProviderFactory
+    {
+        public ThrowingConnection? LastConnection { get; private set; }
+
+        public override DbConnection CreateConnection()
+        {
+            LastConnection = new ThrowingConnection();
+            return LastConnection;
+        }
+    }
+
+    private sealed class ThrowingConnection : DbConnection
+    {
+        public bool WasDisposed { get; private set; }
+
+        [AllowNull]
+        public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => string.Empty;
+        public override string DataSource => string.Empty;
+        public override string ServerVersion => "1.0";
+        public override ConnectionState State => ConnectionState.Closed;
+
+        public override void ChangeDatabase(string databaseName) { }
+
+        public override void Open()
+        {
+            throw new InvalidOperationException("open failed");
+        }
+
+        public override Task OpenAsync(System.Threading.CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("open failed");
+        }
+
+        public override void Close() { }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            throw new NotSupportedException();
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            throw new NotSupportedException();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true;
+            base.Dispose(disposing);
         }
     }
 }

@@ -29,6 +29,7 @@
 
 #region
 
+using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -121,6 +122,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private ProcWrappingStyle _procWrappingStyle;
     private ITrackedConnection? _connection = null;
     private SemaphoreSlim? _connectionOpenGate;
+    private ReusableAsyncLocker? _connectionOpenLocker;
 
     private long _connectionCount;
     private string _connectionString = string.Empty;
@@ -128,6 +130,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private string _redactedConnectionString = string.Empty;
     private string _redactedReaderConnectionString = string.Empty;
     private readonly Action<DbConnection> _disposeHandler;
+    private StateChangeEventHandler _stateChangeHandler = null!;
+    private Action<ITrackedConnection> _firstOpenHandlerRw = null!;
+    private Action<ITrackedConnection> _firstOpenHandlerRo = null!;
+    private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRw = null!;
+    private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRo = null!;
     private DataSourceInformation _dataSourceInfo = null!;
     private readonly SqlDialect _dialect = null!;
     private IIsolationResolver _isolationResolver = null!;
@@ -140,23 +147,17 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
-    private readonly bool? _forceManualPrepare;
-    private readonly bool? _disablePrepare;
+    private readonly CommandPrepareMode _prepareMode;
     private readonly int? _readerPlanCacheSize;
     private bool? _rcsiPrefetch;
     private bool? _snapshotIsolationPrefetch;
     private bool _sessionSettingsDetectionCompleted;
     private string? _cachedReadOnlySessionSettings;
     private string? _cachedReadWriteSessionSettings;
-    private int _cachedReadOnlySessionSettingsComputed;
-    private int _cachedReadWriteSessionSettingsComputed;
-    // Cached session SQL keys — computed once per context after dialect detection so that
-    // ExecuteSessionSettings never calls GetBaseSessionSettings() or GetReadOnlySessionSettings()
-    // more than once per context regardless of how many connections are opened.
-    private string? _cachedBaselineKey;
-    private int _cachedBaselineKeyComputed;
-    private string? _cachedReadOnlyIntentKey;
-    private int _cachedReadOnlyIntentKeyComputed;
+    // Set to true when the corresponding DataSource has session settings baked into its
+    // startup Options parameter; allows skipping the per-checkout SET round-trip.
+    private bool _rwSettingsBakedIntoDataSource;
+    private bool _roSettingsBakedIntoDataSource;
     private string? _connectionNamePrefixWrite;
     private string? _connectionNamePrefixRead;
     private readonly MetricsCollector? _metricsCollector;
@@ -168,7 +169,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private PoolGovernor? _writerGovernor;
     private readonly ModeContentionStats _modeContentionStats = new();
     private readonly AttributionStats _attributionStats = new();
-    private readonly ConditionalWeakTable<DbConnection, string> _initializedConnections = new();
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
     private bool _effectivePoolGovernorEnabled = true;
@@ -179,6 +179,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";
+    internal const int AbsoluteMaxPoolSize = 512;
 
     /// <inheritdoc/>
     public Guid RootId { get; } = Guid.NewGuid();
@@ -205,11 +206,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     /// <inheritdoc/>
-    public string Name { get; set; }
+    public string Name { get; private set; }
 
     // Expose original requested mode for internal strategy decisions
     /// <inheritdoc/>
-    public string ConnectionString => _connectionString;
+    public string ConnectionString => _redactedConnectionString;
+
+    internal string RawConnectionString => _connectionString;
 
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
@@ -256,11 +259,15 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// Context-level locking is intentionally a no-op. Serialization happens at the connection level:
     /// connections returned by <c>GetConnection(...)</c> provide the real lock when a mode uses shared/pinned connections.
     /// </remarks>
-    /// <inheritdoc/>
-    public ILockerAsync GetLock()
+    internal ILockerAsync GetLockInternal()
     {
         ThrowIfDisposed();
         return NoOpAsyncLocker.Instance;
+    }
+
+    ILockerAsync IInternalConnectionProvider.GetLock()
+    {
+        return GetLockInternal();
     }
 
 
@@ -277,8 +284,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
 
     /// <inheritdoc/>
-    public string SessionSettingsPreamble => _dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-
     /// <inheritdoc/>
     public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings();
 
@@ -310,13 +315,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public override string CompositeIdentifierSeparator => _dataSourceInfo.CompositeIdentifierSeparator;
 
     /// <inheritdoc/>
-    public bool? ForceManualPrepare => _forceManualPrepare;
+    public CommandPrepareMode PrepareMode => _prepareMode;
 
-    /// <inheritdoc/>
-    public bool? DisablePrepare => _disablePrepare;
-
-    /// <inheritdoc/>
-    public void AssertIsReadConnection()
+    internal void AssertIsReadConnection()
     {
         if (!_isReadConnection)
         {
@@ -324,8 +325,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
     }
 
-    /// <inheritdoc/>
-    public void AssertIsWriteConnection()
+    internal void AssertIsWriteConnection()
     {
         if (!_isWriteConnection)
         {
@@ -345,6 +345,98 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
+
+    private void DisposeOwnedDataSources()
+    {
+        var primaryOwned = _dataSourceProvided ? null : _dataSource;
+        var readerOwned = _readerDataSource;
+
+        if (ReferenceEquals(readerOwned, primaryOwned))
+        {
+            readerOwned = null;
+        }
+
+        if (_dataSourceProvided && ReferenceEquals(readerOwned, _dataSource))
+        {
+            readerOwned = null;
+        }
+
+        try
+        {
+            primaryOwned?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            readerOwned?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _dataSource = null;
+            _readerDataSource = null;
+        }
+    }
+
+    private async ValueTask DisposeOwnedDataSourcesAsync()
+    {
+        var primaryOwned = _dataSourceProvided ? null : _dataSource;
+        var readerOwned = _readerDataSource;
+
+        if (ReferenceEquals(readerOwned, primaryOwned))
+        {
+            readerOwned = null;
+        }
+
+        if (_dataSourceProvided && ReferenceEquals(readerOwned, _dataSource))
+        {
+            readerOwned = null;
+        }
+
+        try
+        {
+            if (primaryOwned is IAsyncDisposable ad)
+            {
+                await ad.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                primaryOwned?.Dispose();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            if (readerOwned is IAsyncDisposable rd)
+            {
+                await rd.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                readerOwned?.Dispose();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _dataSource = null;
+            _readerDataSource = null;
+        }
+    }
 
     protected override void DisposeManaged()
     {
@@ -368,6 +460,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
+            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -376,8 +469,12 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
+            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
+
+        DisposePoolGovernors();
+        DisposeOwnedDataSources();
 
         base.DisposeManaged();
     }
@@ -407,6 +504,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
+            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -415,11 +513,86 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
+            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
+
+        await DisposePoolGovernorsAsync().ConfigureAwait(false);
+        await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
 
+    private void DisposePoolGovernors()
+    {
+        var readerGovernor = _readerGovernor;
+        var writerGovernor = _writerGovernor;
+        _readerGovernor = null;
+        _writerGovernor = null;
+
+        DisposeGovernorAfterDrain(writerGovernor);
+        DisposeGovernorAfterDrain(readerGovernor);
+    }
+
+    private async ValueTask DisposePoolGovernorsAsync()
+    {
+        var readerGovernor = _readerGovernor;
+        var writerGovernor = _writerGovernor;
+        _readerGovernor = null;
+        _writerGovernor = null;
+
+        await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
+        await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);
+    }
+
+    private void DisposeGovernorAfterDrain(PoolGovernor? governor)
+    {
+        if (governor == null)
+        {
+            return;
+        }
+
+        try
+        {
+            governor.WaitForDrainAsync(_poolAcquireTimeout).GetAwaiter().GetResult();
+            governor.Dispose();
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+        }
+    }
+
+    private async ValueTask DisposeGovernorAfterDrainAsync(PoolGovernor? governor)
+    {
+        if (governor == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await governor.WaitForDrainAsync(_poolAcquireTimeout).ConfigureAwait(false);
+            governor.Dispose();
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+        }
+    }
+
     protected override ISqlDialect DialectCore => _dialect;
+
+    /// <inheritdoc/>
+    public new ISqlDialect Dialect => _dialect;
+
+    ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 }

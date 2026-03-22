@@ -119,13 +119,13 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
     [Fact]
     public void BuildDelete_NoIdColumn_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
+        Assert.Throws<SqlGenerationException>(() => TypeMap.Register<EntityWithoutId>());
     }
 
     [Fact]
     public void BuildCreate_NoIdColumn_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => TypeMap.Register<EntityWithoutId>());
+        Assert.Throws<SqlGenerationException>(() => TypeMap.Register<EntityWithoutId>());
     }
 
     [Table("NoIdTable")]

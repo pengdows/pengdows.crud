@@ -40,6 +40,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.collections;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
 using pengdows.crud.threading;
@@ -102,8 +104,11 @@ namespace pengdows.crud;
 /// <seealso cref="TableGateway{TEntity,TRowID}"/>
 public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectProvider, IReaderLifetimeListener
 {
+    private static readonly ActivitySource ActivitySource = new("pengdows.crud", "2.0.1");
+
     private static readonly ConcurrentDictionary<Type, Action<DbParameter, DbParameter>>
         ProviderSpecificCopiers = new();
+    private static readonly IDbExceptionTranslatorRegistry ExceptionTranslatorRegistry = new DbExceptionTranslatorRegistry();
 
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
@@ -222,9 +227,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     internal static SqlContainer Create(IDatabaseContext context, string? query = "",
         ILogger<ISqlContainer>? logger = null)
     {
-        var dialect = context.Dialect
-                      ?? throw new InvalidOperationException(
-                          "IDatabaseContext must expose a non-null Dialect.");
+        var dialect = context.GetDialect();
         return new SqlContainer(context, dialect, query, logger);
     }
 
@@ -239,7 +242,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public int ParameterCount => _parameters.Count;
 
-    public bool HasWhereAppended { get; set; }
+    public bool HasWhereAppended { get; internal set; }
 
     public string QuotePrefix => _dialect.QuotePrefix;
 
@@ -300,7 +303,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             while (cursor < sql.Length)
             {
                 var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-                if (relIdx < 0) break;
+                if (relIdx < 0)
+                {
+                    break;
+                }
 
                 var matchStart = cursor + relIdx;
                 var nameStart = matchStart + 3; // skip past "{P}"
@@ -365,7 +371,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         while (cursor < sql.Length)
         {
             var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-            if (relIdx < 0) break;
+            if (relIdx < 0)
+            {
+                break;
+            }
 
             var matchStart = cursor + relIdx;
             var nameStart = matchStart + 3;
@@ -654,7 +663,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
 
-    public DbCommand CreateCommand(ITrackedConnection conn)
+    internal DbCommand CreateCommand(ITrackedConnection conn)
     {
         var dbCommand = CreateRawCommand(conn);
 
@@ -1083,6 +1092,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     public async ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType,
         CancellationToken cancellationToken)
     {
+        var operationKind = DetermineOperationKind(commandType, executionType);
         if (executionType == ExecutionType.Write)
         {
             // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
@@ -1100,15 +1110,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
+        ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        using var activity = StartActivity("ExecuteNonQuery");
         try
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            contextLocker = _context.GetLock();
+            if (contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
+
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
             await using var connectionLocker = conn.GetLock();
@@ -1118,30 +1135,87 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, result);
             metrics?.RecordRowsAffected(result);
+
+            if (activity != null)
+            {
+                activity.SetTag("db.rows_affected", result);
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+
             return result;
         }
         catch (OperationCanceledException)
         {
             metrics?.CommandCancelled(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
-        catch (Exception ex) when (IsTimeout(ex))
+        catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            metrics?.CommandFailed(startTimestamp);
-            if (metrics != null)
+            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            var translated = TranslateDatabaseException(ex, operationKind);
+            if (activity != null)
             {
-                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
+                }));
+            }
+            throw translated;
+        }
+        catch (Exception ex) when (ex is not DatabaseException)
+        {
+            if (ex is not DbException)
+            {
+                metrics?.CommandFailed(startTimestamp);
+                if (metrics != null)
+                {
+                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                }
+
+                if (activity != null)
+                {
+                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.ToString() }
+                    }));
+                }
+
+                throw;
             }
 
-            throw;
+            metrics?.CommandFailed(startTimestamp);
+            var translated = TranslateDatabaseException(ex, operationKind);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(ClassifyTranslatedException(translated));
+            }
+
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
+                }));
+            }
+
+            throw translated;
         }
         finally
         {
+            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.DisposeAsync().ConfigureAwait(false);
+            }
             Cleanup(cmd, conn);
         }
     }
@@ -1334,6 +1408,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         CancellationToken cancellationToken,
         bool singleRow)
     {
+        var operationKind = commandType == CommandType.StoredProcedure ? DbOperationKind.Unknown : DbOperationKind.Query;
         if (executionType == ExecutionType.Write)
         {
             _context.AssertIsWriteConnection();
@@ -1346,13 +1421,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
+        ILockerAsync? contextLocker = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        using var activity = StartActivity("ExecuteReader");
         var lockTransferred = false;
         try
         {
-            await using var contextLocker = _context.GetLock();
-            await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            contextLocker = _context.GetLock();
+            if (contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+            
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
@@ -1389,27 +1470,79 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 this);
             cmd = null;
             lockTransferred = true; // TrackedReader now owns the lock
+            
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok);
+            }
+            
             return trackedReader;
         }
         catch (OperationCanceledException)
         {
             metrics?.CommandCancelled(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
-        catch (Exception ex) when (IsTimeout(ex))
+        catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             metrics?.CommandTimedOut(startTimestamp);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            metrics?.CommandFailed(startTimestamp);
-            if (metrics != null)
+            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+            var translated = TranslateDatabaseException(ex, operationKind);
+            if (activity != null)
             {
-                metrics.RecordDbError(_context.Dialect.ClassifyException(ex));
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
+                }));
+            }
+            throw translated;
+        }
+        catch (Exception ex) when (ex is not DatabaseException)
+        {
+            if (ex is not DbException)
+            {
+                metrics?.CommandFailed(startTimestamp);
+                if (metrics != null)
+                {
+                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
+                }
+                
+                if (activity != null)
+                {
+                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.ToString() }
+                    }));
+                }
+
+                throw;
             }
 
-            throw;
+            metrics?.CommandFailed(startTimestamp);
+            var translated = TranslateDatabaseException(ex, operationKind);
+            if (metrics != null)
+            {
+                metrics.RecordDbError(ClassifyTranslatedException(translated));
+            }
+            
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
+                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                {
+                    { "exception.type", translated.GetType().FullName },
+                    { "exception.message", translated.Message },
+                    { "exception.stacktrace", translated.ToString() }
+                }));
+            }
+
+            throw translated;
         }
         finally
         {
@@ -1423,6 +1556,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 catch
                 {
                     // Ignore disposal errors in finally block
+                }
+            }
+
+            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            {
+                try
+                {
+                    await contextLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // ignore
                 }
             }
 
@@ -1445,8 +1590,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     public void AddParameters(IList<DbParameter> list)
     {
-        if (list == null) return;
-        
+        if (list == null)
+        {
+            return;
+        }
+
         // Optimize for the common case of monolithic binders
         for (var i = 0; i < list.Count; i++)
         {
@@ -1454,7 +1602,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
     }
 
-    private async Task<DbCommand> PrepareAndCreateCommandAsync(
+    private async ValueTask<DbCommand> PrepareAndCreateCommandAsync(
         ITrackedConnection conn,
         CommandType commandType,
         ExecutionType executionType,
@@ -1662,26 +1810,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private bool ComputeEffectivePrepareSettings()
     {
         // Hard veto from dialect (e.g. MySQL max_prepared_stmt_count exhaustion).
-        // Overrides ForceManualPrepare — retrying after server exhaustion only makes things worse.
+        // Overrides configuration — retrying after server exhaustion only makes things worse.
         if (_dialect.IsPrepareExhausted)
         {
             return false;
         }
 
-        // Check if prepare is hard-disabled via configuration
-        if (_context.DisablePrepare == true)
+        return _context.PrepareMode switch
         {
-            return false;
-        }
-
-        // Check if prepare is explicitly forced on or off via configuration
-        if (_context.ForceManualPrepare.HasValue)
-        {
-            return _context.ForceManualPrepare.Value;
-        }
-
-        // Fall back to dialect default
-        return _dialect.PrepareStatements;
+            CommandPrepareMode.Always => true,
+            CommandPrepareMode.Never => false,
+            _ => _dialect.PrepareStatements // Auto: use dialect recommendation
+        };
     }
 
     // Backward-compatible helper for tests using reflection to invoke a simplified prepare
@@ -1695,7 +1835,54 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     {
         return exception is TimeoutException ||
                exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+               (exception is DbException &&
+                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
+    {
+        return ExceptionTranslatorRegistry.Get(_dialect.DatabaseType)
+            .Translate(_dialect.DatabaseType, exception, operationKind);
+    }
+
+    private static DbErrorCategory ClassifyTranslatedException(DatabaseException exception)
+    {
+        return exception switch
+        {
+            DeadlockException => DbErrorCategory.Deadlock,
+            SerializationConflictException => DbErrorCategory.SerializationFailure,
+            ConstraintViolationException => DbErrorCategory.ConstraintViolation,
+            CommandTimeoutException => DbErrorCategory.Timeout,
+            _ => DbErrorCategory.Unknown
+        };
+    }
+
+    private DbOperationKind DetermineOperationKind(CommandType commandType, ExecutionType executionType)
+    {
+        if (commandType == CommandType.StoredProcedure)
+        {
+            return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
+        }
+
+        var sql = Query.ToString().TrimStart();
+        if (sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+            sql.StartsWith("MERGE", StringComparison.OrdinalIgnoreCase) ||
+            sql.StartsWith("UPSERT", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Insert;
+        }
+
+        if (sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Update;
+        }
+
+        if (sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbOperationKind.Delete;
+        }
+
+        return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
     }
 
     private static bool ShouldUseSharedConnection(IDatabaseContext context, ExecutionType executionType,
@@ -1711,6 +1898,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             DbMode.SingleConnection => true,
             _ => false
         };
+    }
+
+    private Activity? StartActivity(string operationName)
+    {
+        var activity = ActivitySource.StartActivity(operationName, ActivityKind.Client);
+        if (activity != null)
+        {
+            activity.SetTag("db.system", _context.Product.ToString().ToLowerInvariant());
+            activity.SetTag("db.name", _context.Name);
+            activity.SetTag("db.statement", Query.ToString());
+            activity.SetTag("db.operation", operationName);
+        }
+        return activity;
     }
 
     private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
@@ -1733,7 +1933,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return ticks * 1_000_000d / Stopwatch.Frequency;
     }
 
-    private async Task OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
+    private async ValueTask OpenConnectionAsync(ITrackedConnection conn, CancellationToken cancellationToken)
     {
         if (conn.State == ConnectionState.Open)
         {
@@ -1800,7 +2000,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var targetContext = context ?? _context;
 
         // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = targetContext.Dialect ?? _dialect;
+        var targetDialect = context != null ? targetContext.GetDialect() : _dialect;
         var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
 
         // OPTIMIZATION: Share cached command text instead of re-rendering

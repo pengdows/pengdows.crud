@@ -10,10 +10,10 @@ projects=(
   "pengdows.crud.abstractions/pengdows.crud.abstractions.csproj"
   "pengdows.crud/pengdows.crud.csproj"
   "pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj"
+  "pengdows.stormgate/pengdows.stormgate.csproj"
 )
 
 for project in "${projects[@]}"; do
   echo "Packing ${project}"
   dotnet pack "${root}/${project}" -c Release -o "${output}"
 done
-

@@ -59,6 +59,35 @@ public class TableGatewayRetrieveAsyncSetValuedTests
         Assert.Equal("b", result[1].Name);
     }
 
+    // -------------------------------------------------------------------------
+    // RetrieveAsync with single-element list on PostgreSQL (SupportsSetValuedParameters=true)
+    // → hits the list.Count==1 fast path → SetParameterValue("p0", list.ToArray())
+    // → covers TableGateway.Core.cs line 724
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task RetrieveAsync_Postgres_SingleElement_UsesSetValuedFastPath()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql });
+        var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
+        execConn.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { ["Id"] = 7, ["Name"] = "single" }
+        });
+        factory.Connections.Add(execConn);
+
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<RetEntity>();
+        using var ctx = new DatabaseContext("Data Source=pg;EmulatedProduct=PostgreSql", factory, typeMap);
+        var helper = new TableGateway<RetEntity, int>(ctx);
+
+        // Single element → list.Count==1 → SupportsSetValuedParameters=true → array binding path
+        var result = await helper.RetrieveAsync(new[] { 7 });
+        Assert.Single(result);
+        Assert.Equal("single", result[0].Name);
+    }
+
     [Fact]
     public async Task RetrieveAsync_Sqlite_UsesExpandedParameters_PathAndReturnsRows()
     {

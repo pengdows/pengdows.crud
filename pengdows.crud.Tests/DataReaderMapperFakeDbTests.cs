@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -86,15 +87,15 @@ public class DataReaderMapperFakeDbTests : IAsyncLifetime
 
         var options = new MapperOptions { Strict = true };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            DataReaderMapper.LoadAsync<CountDto>(reader, options));
+        await Assert.ThrowsAsync<DataMappingException>(() =>
+            DataReaderMapper.LoadAsync<CountDto>(reader, options).AsTask());
     }
 
     [Fact]
     public async Task LoadObjectsFromDataReaderAsync_WithNonDbReader_ThrowsArgumentException()
     {
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()));
+            DataReaderMapper.LoadObjectsFromDataReaderAsync<EntityDto>(new NonDbReader()).AsTask());
     }
 
     private sealed class EntityDto

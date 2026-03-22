@@ -70,7 +70,12 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
             }
             catch (OracleException ex)
             {
-                Console.WriteLine(ex);
+                var currentError = ex.Message;
+                if (currentError != lastError)
+                {
+                    Console.WriteLine($"  [waiting] Oracle not ready yet: {currentError}");
+                }
+                lastError = currentError;
                 await Task.Delay(1000);
             }
             catch (FbException ex) when (ex.Message.Contains("I/O error"))
@@ -119,12 +124,22 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                 }
                 catch (Exception ex1)
                 {
-                    Console.WriteLine(ex1);
+                    var currentError = ex1.Message;
+                    if (currentError != lastError)
+                    {
+                        Console.WriteLine($"  [waiting] Firebird create database failed: {currentError}");
+                    }
+                    lastError = currentError;
                 }
             }
             catch (AseException aseException)
             {
-                Console.WriteLine(aseException);
+                var currentError = aseException.Message;
+                if (currentError != lastError)
+                {
+                    Console.WriteLine($"  [waiting] Sybase ASE not ready yet: {currentError}");
+                }
+                lastError = currentError;
                 await Task.Delay(1000);
             }
             catch (Exception ex)
@@ -132,7 +147,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                 var currentError = ex.Message;
                 if (currentError != lastError)
                 {
-                    Console.WriteLine(currentError);
+                    Console.WriteLine($"  [waiting] {currentError}");
                 }
 
                 lastError = currentError;

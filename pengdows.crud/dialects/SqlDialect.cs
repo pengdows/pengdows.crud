@@ -41,6 +41,35 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
+/// Determines how <see cref="Guid"/> values are serialized to database parameters.
+/// Each dialect declares its preferred storage format via <see cref="SqlDialect.GuidFormat"/>.
+/// </summary>
+internal enum GuidStorageFormat
+{
+    /// <summary>
+    /// Leave <see cref="DbType.Guid"/> as-is and let the ADO.NET provider handle the
+    /// conversion.  Correct for SQL Server (<c>uniqueidentifier</c>), MySQL/MariaDB
+    /// (MySqlConnector maps <c>DbType.Guid</c> to <c>CHAR(36)</c> internally), and any
+    /// provider whose driver natively understands <c>DbType.Guid</c>.
+    /// </summary>
+    PassThrough,
+
+    /// <summary>
+    /// Convert to <see cref="DbType.String"/> with a 36-character hyphenated UUID string
+    /// (<c>"D"</c> format, e.g. <c>550e8400-e29b-41d4-a716-446655440000</c>).
+    /// Used by SQLite, DuckDB, Oracle, and Snowflake.
+    /// </summary>
+    String,
+
+    /// <summary>
+    /// Convert to <see cref="DbType.Binary"/> with the 16-byte <c>ToByteArray()</c>
+    /// representation.  Used by Firebird when the schema stores GUIDs as
+    /// <c>CHAR(16) OCTETS</c>.
+    /// </summary>
+    Binary,
+}
+
+/// <summary>
 /// Abstract base class implementing common SQL dialect functionality.
 /// </summary>
 /// <remarks>
@@ -65,7 +94,7 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 /// <seealso cref="ISqlDialect"/>
 /// <seealso cref="SqlDialectFactory"/>
-internal abstract class SqlDialect : ISqlDialect
+internal abstract class SqlDialect : IInternalSqlDialect
 {
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
@@ -317,6 +346,35 @@ internal abstract class SqlDialect : ISqlDialect
     // Overridden by MySqlDialect to veto prepare after error 1461 fires, even when ForceManualPrepare is set.
     public virtual bool IsPrepareExhausted => false;
 
+    /// <summary>
+    /// Declares how this dialect serializes <see cref="Guid"/> values to database parameters.
+    /// The base implementation returns <see cref="GuidStorageFormat.PassThrough"/>, which leaves
+    /// <see cref="DbType.Guid"/> untouched and delegates to the ADO.NET provider (correct for
+    /// SQL Server, MySQL, and MariaDB).  Dialects that need a specific wire format override this.
+    /// </summary>
+    protected virtual GuidStorageFormat GuidFormat => GuidStorageFormat.PassThrough;
+
+    /// <summary>
+    /// Serializes a <see cref="Guid"/> to the 16-byte representation used when
+    /// <see cref="GuidFormat"/> is <see cref="GuidStorageFormat.Binary"/>.
+    /// <para>
+    /// The base implementation returns <see cref="Guid.ToByteArray()"/>, which uses .NET's
+    /// mixed-endian layout (Data1/Data2/Data3 are little-endian, Data4 is big-endian).
+    /// Dialects whose driver reads binary Guid columns using RFC 4122 big-endian byte order
+    /// (e.g. Firebird's <c>CHAR(16) CHARACTER SET OCTETS</c>) must override this and return
+    /// bytes in the big-endian layout so the round-trip is correct.
+    /// </para>
+    /// <para>
+    /// <strong>Read-side note:</strong> If a driver returns binary Guid columns as
+    /// <see cref="byte[]"/> (rather than a native <see cref="Guid"/>), the deserializer
+    /// reconstructs the Guid via <c>new Guid(bytes)</c> which also expects mixed-endian.
+    /// A dialect that overrides this method to write big-endian bytes must therefore also
+    /// ensure its driver returns a native <see cref="Guid"/> on reads (as Firebird does for
+    /// <c>CHAR(16) CHARACTER SET OCTETS</c>), or add a matching read-side coercion.
+    /// </para>
+    /// </summary>
+    protected virtual byte[] SerializeGuidAsBinary(Guid guid) => guid.ToByteArray();
+
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 
@@ -370,10 +428,11 @@ internal abstract class SqlDialect : ISqlDialect
     // Modern SQL/JSON feature gates (safe defaults)
     public virtual bool SupportsSqlJsonConstructors => false;
     public virtual bool SupportsJsonTable => false;
-    public virtual bool SupportsMergeReturning => false;
 
     // Database-specific extensions (override as needed)
+    public virtual bool SupportsMergeReturning => false;
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
+    public virtual bool SupportsOnConflictWhere => false; // PostgreSQL/CockroachDB only
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
     public virtual bool SupportsDropTableIfExists => true;
@@ -556,34 +615,68 @@ internal abstract class SqlDialect : ISqlDialect
         return result;
     }
 
+    /// <summary>
+    /// Gets the final, optimized session initialization string for the given read-only intent.
+    /// Dialects should override this to combine baseline and intent settings into a single
+    /// SQL statement (where supported) to ensure 1 RTT and 1 execution on the server.
+    /// </summary>
+    public virtual string GetFinalSessionSettings(bool readOnly)
+    {
+        var baseline = GetBaseSessionSettings();
+        var intent = readOnly ? GetReadOnlySessionSettings() : GetReadOnlyTransactionResetSql();
+
+        if (string.IsNullOrWhiteSpace(baseline))
+        {
+            return intent ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(intent))
+        {
+            return baseline;
+        }
+
+        // Default: Multiple statements in a single command batch (1 RTT)
+        return baseline.TrimEnd(';') + ";\n" + intent;
+    }
+
+    /// <summary>
+    /// Builds a session settings script from the expected and current values.
+    /// Since pengdows.crud 2.0 enforces an "Always SET" policy for session integrity in pooled
+    /// environments, this method always returns the full set of expected settings to ensure
+    /// that any session pollution from prior pool users is overwritten.
+    /// </summary>
     protected static string BuildSessionSettingsScript(
         IReadOnlyDictionary<string, string> expected,
         IReadOnlyDictionary<string, string> current,
-        Func<string, string, string> formatter)
+        Func<string, string, string> formatter,
+        string separator = "\n")
     {
         if (expected.Count == 0)
         {
             return string.Empty;
         }
 
-        var builder = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        foreach (var kvp in expected)
+        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
         {
-            current.TryGetValue(kvp.Key, out var currentValue);
-            if (string.Equals(currentValue, kvp.Value, StringComparison.OrdinalIgnoreCase))
+            var first = true;
+            foreach (var kvp in expected)
             {
-                continue;
+                if (!first)
+                {
+                    sb.Append(separator);
+                }
+
+                sb.Append(formatter(kvp.Key, kvp.Value));
+                first = false;
             }
 
-            if (builder.Length > 0)
-            {
-                builder.AppendLine();
-            }
-
-            builder.Append(formatter(kvp.Key, kvp.Value));
+            return sb.ToString();
         }
-
-        return builder.ToString();
+        finally
+        {
+            sb.Dispose();
+        }
     }
 
     protected SessionSettingsResult EvaluateSessionSettings(
@@ -999,9 +1092,18 @@ internal abstract class SqlDialect : ISqlDialect
 
         if (!handled)
         {
-            parameter.DbType = type;
+            parameter.DbType = RemapDbType(type);
             var preparedValue = PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
+        }
+
+        // Apply the dialect's declared Guid storage format when the caller passed DbType.Guid
+        // and the AdvancedTypeRegistry did not already handle the parameter (e.g. PostgreSQL
+        // sets NpgsqlDbType.Uuid via reflection — we must not overwrite that).
+        if (!handled && !valueIsNull && type == DbType.Guid
+                && runtimeType == typeof(Guid) && GuidFormat != GuidStorageFormat.PassThrough)
+        {
+            ApplyGuidFormat(parameter, (Guid)(object)value!);
         }
 
         // Positional providers use "?" placeholders — parameter names must be blank.
@@ -1188,7 +1290,7 @@ internal abstract class SqlDialect : ISqlDialect
         string? connectionStringOverride)
     {
         var connectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         if (readOnly && !ConnectionStringHasReadOnlyParameter(connectionString))
@@ -1303,7 +1405,255 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual bool IsUniqueViolation(DbException ex)
     {
-        return false;
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode is 2601 or 2627;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode == 1062;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 1;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 1555 ||
+                       errorCode == 2067 ||
+                       (errorCode == 19 &&
+                        (ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                         ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase))) ||
+                       ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return MessageIndicatesUniqueViolation(ex.Message);
+        }
+    }
+
+    public virtual bool IsForeignKeyViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 547 &&
+                       message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode is 1451 or 1452;
+
+            case SupportedDatabase.Oracle:
+                return errorCode is 2291 or 2292;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 787 ||
+                       message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual bool IsNotNullViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 515;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode == 1048;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 1400;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 1299 ||
+                       message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("not null", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual bool IsCheckConstraintViolation(DbException ex)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+        var message = ex.Message;
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                return errorCode == 547 &&
+                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                return errorCode is 3819 or 4025;
+
+            case SupportedDatabase.Oracle:
+                return errorCode == 2290;
+
+            case SupportedDatabase.Sqlite:
+                return errorCode == 275 ||
+                       message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            default:
+                return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public virtual DbErrorCategory ClassifyException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return DbErrorCategory.None;
+        }
+
+        if (exception is DbException dbEx &&
+            TryClassifyProviderException(dbEx, out var providerCategory))
+        {
+            return providerCategory;
+        }
+
+        var message = exception.Message;
+
+        if (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Deadlock;
+        }
+
+        if (message.Contains("serializ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("serialize", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.SerializationFailure;
+        }
+
+        if (message.Contains("constraint", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("unique ", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("violates", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.ConstraintViolation;
+        }
+
+        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbErrorCategory.Timeout;
+        }
+
+        return DbErrorCategory.Unknown;
+    }
+
+    public virtual DbExceptionInfo AnalyzeException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return new DbExceptionInfo(
+                DbErrorCategory.None,
+                DbConstraintKind.None,
+                false,
+                false,
+                null,
+                null);
+        }
+
+        var category = ClassifyException(exception);
+        var constraintKind = DbConstraintKind.None;
+        int? providerErrorCode = null;
+        string? sqlState = null;
+
+        if (exception is DbException dbEx)
+        {
+            providerErrorCode = TryGetProviderErrorCode(dbEx);
+            sqlState = TryGetProviderSqlState(dbEx);
+
+            if (category == DbErrorCategory.ConstraintViolation)
+            {
+                if (IsUniqueViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Unique;
+                }
+                else if (IsForeignKeyViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.ForeignKey;
+                }
+                else if (IsNotNullViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.NotNull;
+                }
+                else if (IsCheckConstraintViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Check;
+                }
+                else
+                {
+                    constraintKind = DbConstraintKind.Unknown;
+                }
+            }
+        }
+
+        var isTransient = category is DbErrorCategory.Deadlock or
+            DbErrorCategory.SerializationFailure or
+            DbErrorCategory.Timeout;
+        var isRetryable = isTransient;
+
+        return new DbExceptionInfo(
+            category,
+            constraintKind,
+            isTransient,
+            isRetryable,
+            providerErrorCode,
+            sqlState);
     }
 
     /// <summary>
@@ -1524,13 +1874,29 @@ internal abstract class SqlDialect : ISqlDialect
 
     /// <summary>
     /// Prepares a connection string with provider-specific settings that must be present
-    /// before the DataSource is created (e.g. auto-prepare, multiplexing).
+    /// before the DataSource is created (e.g. auto-prepare, multiplexing, startup options).
     /// Override in dialect subclasses; base is a no-op.
     /// </summary>
-    internal virtual string PrepareConnectionStringForDataSource(string connectionString)
+    /// <param name="connectionString">The connection string to prepare.</param>
+    /// <param name="readOnly">
+    /// When <see langword="true"/>, the DataSource will be used exclusively for read-only
+    /// operations; dialects that support startup-parameter baking should embed the
+    /// read-only variant of their session settings.
+    /// </param>
+    internal virtual string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
         return connectionString;
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the dialect has successfully baked session
+    /// settings into the connection string as startup parameters (e.g. PostgreSQL
+    /// <c>Options=-c param=value</c>).  When <see langword="true"/>, the per-checkout
+    /// <c>ExecuteSessionSettings</c> round-trip can be skipped for the corresponding
+    /// DataSource because the pool-return reset restores the parameters to those
+    /// startup values.
+    /// </summary>
+    internal virtual bool SessionSettingsBakedIntoDataSource => false;
 
     // Async convenience for tests; default is no-op
     public virtual Task ConfigureProviderSpecificSettingsAsync(IDbConnection connection)
@@ -1688,6 +2054,11 @@ internal abstract class SqlDialect : ISqlDialect
             return SupportedDatabase.MariaDb;
         }
 
+        if (combined.Contains("tidb"))
+        {
+            return SupportedDatabase.TiDb;
+        }
+
         if (combined.Contains("aurora") && combined.Contains("mysql"))
         {
             return SupportedDatabase.AuroraMySql;
@@ -1834,7 +2205,48 @@ internal abstract class SqlDialect : ISqlDialect
 
     public virtual object? PrepareParameterValue(object? value, DbType dbType)
     {
+        if (value is Guid guid)
+        {
+            return dbType switch
+            {
+                DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
+                    => string.Create(36, guid, static (span, g) => g.TryFormat(span, out _, "D")),
+                DbType.Binary => SerializeGuidAsBinary(guid),
+                _ => value
+            };
+        }
+
         return value;
+    }
+
+    /// <summary>
+    /// Maps a <see cref="DbType"/> to the effective type this dialect's provider accepts.
+    /// Override in dialects whose drivers reject certain <see cref="DbType"/> values natively
+    /// (e.g., Oracle ODP.NET throws on <see cref="DbType.Boolean"/>).
+    /// </summary>
+    protected virtual DbType RemapDbType(DbType type) => type;
+
+    /// <summary>
+    /// Applies the dialect's <see cref="GuidFormat"/> to an already-created <see cref="DbParameter"/>.
+    /// Called from <see cref="CreateDbParameter{T}"/> for non-handled Guid parameters whose
+    /// <see cref="GuidFormat"/> is not <see cref="GuidStorageFormat.PassThrough"/>.
+    /// </summary>
+    private void ApplyGuidFormat(DbParameter param, Guid guid)
+    {
+        switch (GuidFormat)
+        {
+            case GuidStorageFormat.String:
+                param.DbType = DbType.String;
+                param.Size = 36;
+                // Use string.Create to avoid heap allocation for the formatted string.
+                param.Value = string.Create(36, guid, static (span, g) => g.TryFormat(span, out _, "D"));
+                break;
+            case GuidStorageFormat.Binary:
+                param.DbType = DbType.Binary;
+                param.Value = SerializeGuidAsBinary(guid);
+                break;
+            // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
+        }
     }
 
     /// <summary>
@@ -1945,6 +2357,40 @@ internal abstract class SqlDialect : ISqlDialect
     {
         return $"SELECT {WrapObjectName(idColumnName)} FROM {WrapObjectName(tableName)} " +
                $"WHERE {WrapObjectName(correlationTokenColumn)} = {tokenParameterName}";
+    }
+
+    /// <inheritdoc/>
+    public virtual bool SupportsOffsetFetch => true;
+
+    /// <inheritdoc/>
+    public virtual bool SupportsLimitOffset => true;
+
+    /// <inheritdoc/>
+    public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    {
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
+        }
+
+        if (SupportsOffsetFetch)
+        {
+            query.Append(" OFFSET ").Append(offset)
+                 .Append(" ROWS FETCH NEXT ").Append(limit).Append(" ROWS ONLY");
+        }
+        else
+        {
+            query.Append(" LIMIT ").Append(limit);
+            if (offset > 0)
+            {
+                query.Append(" OFFSET ").Append(offset);
+            }
+        }
     }
 
     /// <summary>
@@ -2067,6 +2513,18 @@ internal abstract class SqlDialect : ISqlDialect
     /// </summary>
     public virtual string? ApplicationNameSettingName => null;
 
+    /// <summary>
+    /// Connection string attribute name used to discriminate reader vs writer pool keys
+    /// when <see cref="ApplicationNameSettingName"/> is not supported by the provider.
+    /// Default: null (no discriminator needed — ApplicationName suffix is sufficient).
+    /// </summary>
+    internal virtual string? ReadOnlyPoolDiscriminatorSettingName => null;
+
+    /// <summary>
+    /// Value to set for <see cref="ReadOnlyPoolDiscriminatorSettingName"/> on reader connection strings.
+    /// </summary>
+    internal virtual string? ReadOnlyPoolDiscriminatorSettingValue => null;
+
     // Dialect defaults used when pool settings are not discoverable from the connection string.
     // These are intentionally internal (not part of the public API surface).
     internal const int FallbackMaxPoolSize = 100;
@@ -2085,6 +2543,172 @@ internal abstract class SqlDialect : ISqlDialect
         }
 
         return false;
+    }
+
+    private bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+
+        switch (DatabaseType)
+        {
+            case SupportedDatabase.SqlServer:
+                if (errorCode == 1205)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 3960)
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode == -2)
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (errorCode is 515 or 547 or 2601 or 2627)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.CockroachDb:
+            case SupportedDatabase.YugabyteDb:
+            case SupportedDatabase.AuroraPostgreSql:
+                if (string.Equals(sqlState, "40P01", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "55P03", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(sqlState, "57014", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.MySql:
+            case SupportedDatabase.MariaDb:
+            case SupportedDatabase.TiDb:
+            case SupportedDatabase.AuroraMySql:
+                if (errorCode == 1213)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 1205)
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode is 1048 or 1062 or 1451 or 1452 or 3819 or 4025)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Oracle:
+                if (errorCode == 60)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (errorCode == 8177)
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (errorCode is 1 or 1400 or 2290 or 2291 or 2292)
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Sqlite:
+                if (errorCode == 19 ||
+                    errorCode == 1555 ||
+                    errorCode == 2067 ||
+                    (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
+    private static bool MessageIndicatesUniqueViolation(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("duplicate entry", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("PRIMARY KEY constraint", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int? TryGetProviderErrorCode(Exception ex)
+    {
+        var numberProperty = ex.GetType().GetProperty("Number");
+        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
+        {
+            return number;
+        }
+
+        return ex is DbException dbEx ? dbEx.ErrorCode : null;
+    }
+
+    private static string? TryGetProviderSqlState(Exception ex)
+    {
+        var sqlStateProperty = ex.GetType().GetProperty("SqlState");
+        if (sqlStateProperty?.PropertyType == typeof(string) &&
+            sqlStateProperty.GetValue(ex) is string sqlState &&
+            !string.IsNullOrWhiteSpace(sqlState))
+        {
+            return sqlState;
+        }
+
+        return ex is DbException dbEx ? dbEx.SqlState : null;
     }
 
     // These helpers are intentionally private to match historical usage in tests via reflection.

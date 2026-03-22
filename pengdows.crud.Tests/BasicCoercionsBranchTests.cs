@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using pengdows.crud.types.coercion;
 using Xunit;
@@ -140,5 +141,52 @@ public class BasicCoercionsBranchTests
 
         Assert.True(elementCoercion.TryRead(new DbValue(doc), out var fromDoc));
         Assert.Equal("1", fromDoc.GetProperty("a").ToString());
+    }
+
+    [Fact]
+    public void AdditionalBasicCoercions_UnsupportedInputs_ReturnFalse()
+    {
+        Assert.False(new IntArrayCoercion().TryRead(new DbValue(123), out _));
+        Assert.False(new HStoreCoercion().TryRead(new DbValue(123), out _));
+        Assert.False(new IntRangeCoercion().TryRead(new DbValue(123), out _));
+        Assert.False(new DateTimeRangeCoercion().TryRead(new DbValue(123), out _));
+        Assert.False(new BooleanCoercion().TryRead(new DbValue(new object()), out _));
+    }
+
+    [Fact]
+    public void DateTimeCoercion_FallbackStringParse_UsesDateTimeParserPath()
+    {
+        var coercion = new DateTimeCoercion();
+
+        Assert.True(coercion.TryRead(new DbValue("2024-01-03 04:05:06"), out var parsed));
+        Assert.Equal(DateTimeKind.Utc, parsed.Kind);
+    }
+
+    [Fact]
+    public void ByteArrayCoercion_StreamPath_HandlesSeekAndCopyFailure()
+    {
+        var coercion = new ByteArrayCoercion();
+        using var stream = new MemoryStream(new byte[] { 5, 6, 7, 8 });
+        stream.Position = 2;
+
+        Assert.True(coercion.TryRead(new DbValue(stream), out var bytes));
+        Assert.Equal(new byte[] { 5, 6, 7, 8 }, bytes);
+
+        var throwing = new ThrowingReadStream();
+        Assert.False(coercion.TryRead(new DbValue(throwing), out _));
+    }
+
+    private sealed class ThrowingReadStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => 1;
+        public override long Position { get; set; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("read-fail");
+        public override long Seek(long offset, SeekOrigin origin) => Position = 0;
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

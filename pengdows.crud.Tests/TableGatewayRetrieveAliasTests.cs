@@ -19,7 +19,7 @@ public class TableGatewayRetrieveAliasTests : SqlLiteContextTestBase
         var sc = helper.BuildRetrieve(new[] { 1 }, "alias");
         var sql = sc.Query.ToString();
 
-        var dialect = Context.Dialect;
+        var dialect = Context.GetDialect();
         var expected =
             " WHERE " +
             dialect.WrapSimpleName("alias") +

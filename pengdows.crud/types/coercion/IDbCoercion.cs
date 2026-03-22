@@ -44,7 +44,7 @@ public readonly struct DbValue
 /// Interface for type coercion between database values and .NET types.
 /// Designed for high-performance, AOT-compatible implementations.
 /// </summary>
-public interface IDbCoercion
+internal interface IDbCoercion
 {
     /// <summary>
     /// Attempt to read a database value into a .NET type.
@@ -72,7 +72,7 @@ public interface IDbCoercion
 /// <summary>
 /// Generic interface for strongly-typed coercions.
 /// </summary>
-public interface IDbCoercion<T> : IDbCoercion
+internal interface IDbCoercion<T> : IDbCoercion
 {
     /// <summary>
     /// Attempt to read a database value into the target type.

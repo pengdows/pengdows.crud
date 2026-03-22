@@ -37,7 +37,7 @@ namespace pengdows.crud.types.coercion;
 /// Advanced type coercions for database-specific types.
 /// Handles spatial, network, temporal, and large object types.
 /// </summary>
-public static class AdvancedCoercions
+internal static class AdvancedCoercions
 {
     public static void RegisterAll(CoercionRegistry registry)
     {
@@ -72,7 +72,7 @@ public static class AdvancedCoercions
 /// <summary>
 /// Coercion for PostgreSQL INTERVAL type.
 /// </summary>
-public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
+internal class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
 {
     public override bool TryRead(in DbValue src, out PostgreSqlInterval value)
     {
@@ -114,7 +114,7 @@ public class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
 /// <summary>
 /// Coercion for Oracle/PostgreSQL INTERVAL YEAR TO MONTH type.
 /// </summary>
-public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
+internal class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
 {
     public override bool TryRead(in DbValue src, out IntervalYearMonth value)
     {
@@ -166,7 +166,7 @@ public class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
 /// <summary>
 /// Coercion for Oracle/PostgreSQL INTERVAL DAY TO SECOND type.
 /// </summary>
-public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
+internal class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
 {
     public override bool TryRead(in DbValue src, out IntervalDaySecond value)
     {
@@ -220,7 +220,7 @@ public class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
 /// <summary>
 /// Coercion for PostgreSQL INET type (IP address with optional netmask).
 /// </summary>
-public class InetCoercion : DbCoercion<Inet>
+internal class InetCoercion : DbCoercion<Inet>
 {
     public override bool TryRead(in DbValue src, out Inet value)
     {
@@ -292,7 +292,7 @@ public class InetCoercion : DbCoercion<Inet>
 /// <summary>
 /// Coercion for PostgreSQL CIDR type (network address).
 /// </summary>
-public class CidrCoercion : DbCoercion<Cidr>
+internal class CidrCoercion : DbCoercion<Cidr>
 {
     public override bool TryRead(in DbValue src, out Cidr value)
     {
@@ -356,7 +356,7 @@ public class CidrCoercion : DbCoercion<Cidr>
 /// <summary>
 /// Coercion for PostgreSQL MACADDR type.
 /// </summary>
-public class MacAddressCoercion : DbCoercion<MacAddress>
+internal class MacAddressCoercion : DbCoercion<MacAddress>
 {
     public override bool TryRead(in DbValue src, out MacAddress value)
     {
@@ -421,7 +421,7 @@ public class MacAddressCoercion : DbCoercion<MacAddress>
 /// <summary>
 /// Coercion for spatial GEOMETRY type.
 /// </summary>
-public class GeometryCoercion : DbCoercion<Geometry>
+internal class GeometryCoercion : DbCoercion<Geometry>
 {
     public override bool TryRead(in DbValue src, out Geometry value)
     {
@@ -486,7 +486,7 @@ public class GeometryCoercion : DbCoercion<Geometry>
 /// <summary>
 /// Coercion for spatial GEOGRAPHY type.
 /// </summary>
-public class GeographyCoercion : DbCoercion<Geography>
+internal class GeographyCoercion : DbCoercion<Geography>
 {
     public override bool TryRead(in DbValue src, out Geography value)
     {
@@ -551,7 +551,7 @@ public class GeographyCoercion : DbCoercion<Geography>
 /// <summary>
 /// Coercion for PostgreSQL Range&lt;int&gt; type.
 /// </summary>
-public class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
+internal class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
 {
     public override bool TryRead(in DbValue src, out Range<int> value)
     {
@@ -594,7 +594,7 @@ public class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
 /// <summary>
 /// Coercion for PostgreSQL Range&lt;DateTime&gt; type.
 /// </summary>
-public class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
+internal class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
 {
     public override bool TryRead(in DbValue src, out Range<DateTime> value)
     {
@@ -637,7 +637,7 @@ public class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
 /// <summary>
 /// Coercion for PostgreSQL Range&lt;long&gt; type.
 /// </summary>
-public class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
+internal class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
 {
     public override bool TryRead(in DbValue src, out Range<long> value)
     {
@@ -680,7 +680,7 @@ public class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
 /// <summary>
 /// Coercion for RowVersion value object (wraps byte[8] for SQL Server rowversion).
 /// </summary>
-public class RowVersionValueCoercion : DbCoercion<RowVersion>
+internal class RowVersionValueCoercion : DbCoercion<RowVersion>
 {
     public override bool TryRead(in DbValue src, out RowVersion value)
     {
@@ -725,7 +725,7 @@ public class RowVersionValueCoercion : DbCoercion<RowVersion>
 /// <summary>
 /// Coercion for BLOB/binary large object as Stream.
 /// </summary>
-public class BlobStreamCoercion : DbCoercion<Stream>
+internal class BlobStreamCoercion : DbCoercion<Stream>
 {
     public override bool TryRead(in DbValue src, out Stream value)
     {
@@ -780,7 +780,7 @@ public class BlobStreamCoercion : DbCoercion<Stream>
 /// <summary>
 /// Coercion for CLOB/character large object as TextReader.
 /// </summary>
-public class ClobStreamCoercion : DbCoercion<TextReader>
+internal class ClobStreamCoercion : DbCoercion<TextReader>
 {
     public override bool TryRead(in DbValue src, out TextReader value)
     {

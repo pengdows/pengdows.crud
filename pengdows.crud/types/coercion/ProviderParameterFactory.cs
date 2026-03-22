@@ -31,7 +31,7 @@ namespace pengdows.crud.types.coercion;
 /// Factory for creating provider-optimized database parameters.
 /// Handles provider-specific parameter configuration for optimal performance.
 /// </summary>
-public static class ProviderParameterFactory
+internal static class ProviderParameterFactory
 {
     /// <summary>
     /// Configure a parameter with provider-specific optimizations for a given value and type.
@@ -47,13 +47,6 @@ public static class ProviderParameterFactory
 
         // First try provider-specific coercion
         if (coercionRegistry.TryWrite(value, parameter, provider))
-        {
-            ApplyProviderSpecificOptimizations(parameter, valueType, provider);
-            return true;
-        }
-
-        // Fall back to general coercion
-        if (coercionRegistry.TryWrite(value, parameter))
         {
             ApplyProviderSpecificOptimizations(parameter, valueType, provider);
             return true;
@@ -300,7 +293,7 @@ public static class ProviderParameterFactory
 /// <summary>
 /// Enhanced parameter binding rules that incorporate the coercion system.
 /// </summary>
-public static class ParameterBindingRules
+internal static class ParameterBindingRules
 {
     /// <summary>
     /// Apply cross-database parameter binding rules with coercion support.

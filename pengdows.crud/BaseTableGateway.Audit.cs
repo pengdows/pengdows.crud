@@ -1,20 +1,10 @@
 // =============================================================================
-// FILE: TableGateway.Audit.cs
+// FILE: BaseTableGateway.Audit.cs
 // PURPOSE: Audit field handling for CreatedBy/On and LastUpdatedBy/On columns.
 //
 // AI SUMMARY:
-// - SetAuditFields() populates audit columns during Create and Update:
-//   * On Create: Sets CreatedBy, CreatedOn, LastUpdatedBy, LastUpdatedOn
-//   * On Update: Sets only LastUpdatedBy, LastUpdatedOn
-// - Requires AuditValueResolver if entity has user audit columns (CreatedBy/LastUpdatedBy).
-// - Time-only audit (CreatedOn/LastUpdatedOn) works without resolver (uses UTC now).
-// - Supports both DateTime and DateTimeOffset timestamp properties.
-// - Uses compiled delegates (GetOrCreateSetter / FastGetter) instead of raw reflection.
-// - Coerce() helper handles type conversion for audit values:
-//   * String to Guid parsing
-//   * Culture-invariant numeric conversion
-// - Throws InvalidOperationException if user audit columns exist but no resolver provided.
-// - Skips audit processing if entity has no audit columns (performance optimization).
+// - SetAuditFields() populates audit columns during Create and Update.
+// - Shared by all gateway variants (TableGateway and PrimaryKeyTableGateway).
 // =============================================================================
 
 using System.Globalization;
@@ -22,9 +12,9 @@ using System.Globalization;
 namespace pengdows.crud;
 
 /// <summary>
-/// TableGateway partial: Audit field population logic.
+/// BaseTableGateway partial: Audit field population logic.
 /// </summary>
-public partial class TableGateway<TEntity, TRowID>
+public abstract partial class BaseTableGateway<TEntity>
 {
     /// <summary>
     /// Type-safe coercion for audit field values (handles string to Guid, etc.)
@@ -101,24 +91,20 @@ public partial class TableGateway<TEntity, TRowID>
         return new DateTimeOffset(utcNow, TimeSpan.Zero);
     }
 
-    private void SetAuditFields(TEntity obj, bool updateOnly)
+    protected void SetAuditFields(TEntity obj, bool updateOnly)
     {
         if (obj == null)
         {
             return;
         }
 
-        // Skip resolving audit values when no audit columns are present
         if (!_hasAuditColumns)
         {
             return;
         }
 
-        // Check if we have user-based audit fields (non-time fields)
         var hasUserAuditFields = _tableInfo.CreatedBy != null || _tableInfo.LastUpdatedBy != null;
 
-        // If user-based audit fields exist but no resolver is configured, this is a usage error.
-        // Tests expect an InvalidOperationException rather than letting the database fail later.
         if (hasUserAuditFields && _auditValueResolver is null)
         {
             throw new InvalidOperationException("AuditValues resolver is required for user-based audit fields.");
@@ -132,7 +118,7 @@ public partial class TableGateway<TEntity, TRowID>
     /// Applies pre-resolved audit values to a single entity. Used by batch operations to
     /// avoid calling <see cref="IAuditValueResolver.Resolve"/> once per entity.
     /// </summary>
-    private void SetAuditFields(TEntity obj, bool updateOnly, IAuditValues? auditValues)
+    protected void SetAuditFields(TEntity obj, bool updateOnly, IAuditValues? auditValues)
     {
         if (obj == null)
         {
@@ -146,7 +132,6 @@ public partial class TableGateway<TEntity, TRowID>
 
         var timestamp = ResolveAuditTimestamp(auditValues);
 
-        // Handle LastUpdated fields — use instance-cached setters to avoid per-call dictionary lookup
         if (_auditLastUpdatedOnSetter != null)
         {
             var coercedTime = CoerceTimestamp(timestamp, _tableInfo.LastUpdatedOn!.PropertyInfo.PropertyType);
@@ -164,7 +149,6 @@ public partial class TableGateway<TEntity, TRowID>
             return;
         }
 
-        // Handle Created fields (only for new entities) — use MakeParameterValueFromField (uses FastGetter internally)
         if (_auditCreatedOnSetter != null)
         {
             var currentValue = _tableInfo.CreatedOn!.MakeParameterValueFromField(obj);
@@ -191,9 +175,9 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <summary>
     /// Validates audit resolver requirements and resolves audit values once for use
-    /// across an entire batch. Returns null when no resolver is configured.
+    /// across an entire batch.
     /// </summary>
-    private IAuditValues? ResolveAuditValuesForBatch()
+    protected IAuditValues? ResolveAuditValuesForBatch()
     {
         if (!_hasAuditColumns)
         {

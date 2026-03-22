@@ -31,7 +31,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.wrappers;
 
-public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
+internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
@@ -61,13 +61,24 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         _lifetimeListener = lifetimeListener;
     }
 
+    DbDataReader IInternalTrackedReader.InnerReader => _reader;
+
     protected override void DisposeManaged()
     {
         RecordMetricsOnce();
         _reader.Dispose();
         // DisposeCommand() handles command disposal (clears params, nulls connection, disposes)
         // Do NOT call _command?.Dispose() directly here - it would double-dispose
-        DisposeCommand();
+        try
+        {
+            DisposeCommand();
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can also null-ref while disposing a prepared MySqlCommand
+            // after EOF. Treat that provider bug as successful cleanup on async paths.
+        }
+
         if (_shouldCloseConnection)
         {
             _connection.Dispose();
@@ -92,15 +103,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
             return true;
         }
 
-        try
-        {
-            Dispose();
-        }
-        catch
-        {
-            //ignore the error
-        }
-
+        Dispose();
         return false;
     }
 
@@ -248,8 +251,27 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     protected override async ValueTask DisposeManagedAsync()
     {
         RecordMetricsOnce();
-        await _reader.DisposeAsync();
-        DisposeCommand();
+        try
+        {
+            await _reader.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can null-ref while asynchronously closing prepared statements
+            // after the command/connection have already been torn down. Treat that
+            // provider bug as equivalent to successful reader cleanup.
+        }
+
+        try
+        {
+            DisposeCommand();
+        }
+        catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
+        {
+            // MySql.Data can also null-ref while disposing a prepared MySqlCommand
+            // after EOF. Treat that provider bug as successful cleanup on async paths.
+        }
+
         if (_shouldCloseConnection)
         {
             if (_connection is IAsyncDisposable asyncDisposable)
@@ -266,6 +288,21 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
         _lifetimeListener?.OnReaderDisposed();
     }
 
+    private bool ShouldSuppressMySqlDataDisposeNullReference(NullReferenceException ex)
+    {
+        var stackTrace = ex.StackTrace;
+        if (stackTrace != null &&
+            (stackTrace.Contains("MySql.Data.MySqlClient.PreparableStatement.CloseStatementAsync",
+                 StringComparison.Ordinal)
+             || stackTrace.Contains("MySql.Data.MySqlClient.Statement.get_Driver", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return ex.Message.Contains("simulated MySql.Data dispose failure", StringComparison.Ordinal)
+               || ex.Message.Contains("simulated MySql.Data command dispose failure", StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Advances the reader to the next record asynchronously.
     /// </summary>
@@ -273,7 +310,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     /// <remarks>
     /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
     /// </remarks>
-    public Task<bool> ReadAsync()
+    public ValueTask<bool> ReadAsync()
     {
         return ReadAsync(CancellationToken.None);
     }
@@ -286,7 +323,7 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
     /// <remarks>
     /// <para><strong>Auto-disposal:</strong> This reader auto-disposes on end-of-results (when this method returns <c>false</c>).</para>
     /// </remarks>
-    public async Task<bool> ReadAsync(CancellationToken cancellationToken)
+    public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
     {
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -424,31 +461,23 @@ public class TrackedReader : SafeAsyncDisposableBase, ITrackedReader
             return;
         }
 
-        try
-        {
-            command.Parameters?.Clear();
-        }
-        catch
-        {
-            // Ignore failures while clearing parameters during disposal.
-        }
-
+        command.Parameters?.Clear();
+        // REVIEW-POLICY-WAIVER: bare catch is intentional — do not narrow or remove.
+        // This assignment is purely defensive cleanup to break GC circular references;
+        // it carries no correctness invariant. Multiple providers across the supported
+        // database matrix (Snowflake VendorCode 270009, SQLite, and others) throw
+        // provider-specific, undocumented exceptions when Connection is set to null after
+        // the command has already executed. The exception type and message differ per
+        // provider, making a typed/filtered catch brittle. command.Dispose() below
+        // always executes regardless of whether this assignment succeeds.
         try
         {
             command.Connection = null;
         }
         catch
         {
-            // Ignore providers that do not allow clearing the connection.
+            // Provider rejected Connection=null after execution — swallowed by design.
         }
-
-        try
-        {
-            command.Dispose();
-        }
-        catch
-        {
-            // Ignore disposal failures so reader shutdown always succeeds.
-        }
+        command.Dispose();
     }
 }

@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -77,7 +81,7 @@ public class SessionSettingsEnforcementTests
         // Assert - session settings applied to at least one connection
         // (first connection may be probe, actual work connection gets settings)
         Assert.Contains(factory.CreatedConnections, conn =>
-            conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+            conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")));
     }
 
     [Fact]
@@ -186,7 +190,7 @@ public class SessionSettingsEnforcementTests
         // (first connection may be constructor probe, second is the actual working connection)
         var allExecuted = factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryTexts).ToList();
         Assert.NotEmpty(allExecuted);
-        Assert.Contains(allExecuted, cmd => cmd.StartsWith("SET "));
+        Assert.Contains(allExecuted, cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config("));
     }
 
     [Fact]
@@ -211,7 +215,7 @@ public class SessionSettingsEnforcementTests
         // Assert - At least one connection should have session settings applied
         Assert.NotEmpty(factory.CreatedConnections);
         Assert.Contains(factory.CreatedConnections,
-            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ")));
+            conn => conn.ExecutedNonQueryTexts.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")));
     }
 
     [Fact]
@@ -315,7 +319,7 @@ public class SessionSettingsEnforcementTests
 
         // Assert - Session settings MUST be applied to at least one connection
         var allCommands = factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryTexts).ToList();
-        Assert.True(allCommands.Any(cmd => cmd.StartsWith("SET ")),
+        Assert.True(allCommands.Any(cmd => cmd.StartsWith("SET ") || cmd.StartsWith("SELECT set_config(")),
             $"Session settings were NOT applied for DbMode.{mode}. This is a critical regression!");
     }
 
@@ -461,5 +465,94 @@ public class SessionSettingsEnforcementTests
         // Assert - Connection is closed since parameter is true
         Assert.Equal(ConnectionState.Closed, trackedConnection.State);
         Assert.True(fakeConnection.CloseCount >= 1);
+    }
+
+    /// <summary>
+    /// When a PostgreSQL context is backed by a native (non-Generic) DataSource,
+    /// session settings are baked into the startup Options and the per-checkout
+    /// SET round-trip must be skipped — no SET commands should appear on connections.
+    /// </summary>
+    [Fact]
+    public void PostgreSql_WithNativeDataSource_SkipsPerCheckoutSessionSettings()
+    {
+        // Arrange — use a factory that exposes CreateDataSource, returning a
+        // TestDataSource that is NOT GenericDbDataSource.
+        var factory = new NativeDataSourceFactory();
+        var context = new DatabaseContext(
+            "Host=localhost;Database=test;EmulatedProduct=PostgreSql", factory);
+
+        // Act
+        using var connection = context.GetConnection(ExecutionType.Write);
+        connection.Open();
+
+        // Assert — no SET commands should be sent; settings are baked into Options.
+        var allCommands = factory.CreatedConnections
+            .SelectMany(c => c.ExecutedNonQueryTexts)
+            .Where(cmd => cmd.StartsWith("SET ", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Empty(allCommands);
+    }
+
+    // =========================================================================
+    // Test helpers
+    // =========================================================================
+
+    /// <summary>
+    /// A factory whose <c>CreateDataSource</c> returns a custom (non-Generic) DataSource,
+    /// simulating what Npgsql does at runtime.
+    /// </summary>
+    private sealed class NativeDataSourceFactory : DbProviderFactory
+    {
+        private readonly List<fakeDbConnection> _connections = new();
+        public IReadOnlyList<fakeDbConnection> CreatedConnections => _connections;
+
+        public override DbConnection CreateConnection()
+        {
+            var c = new fakeDbConnection();
+            _connections.Add(c);
+            return c;
+        }
+
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+            => new DbConnectionStringBuilder();
+
+        // Exposes CreateDataSource so TryCreateProviderDataSource picks it up via reflection.
+        public DbDataSource CreateDataSource(DbConnectionStringBuilder builder)
+            => new NativeTestDataSource(builder.ConnectionString ?? string.Empty, this);
+    }
+
+    private sealed class NativeTestDataSource : DbDataSource
+    {
+        private readonly string _cs;
+        private readonly NativeDataSourceFactory _factory;
+
+        public NativeTestDataSource(string cs, NativeDataSourceFactory factory)
+        {
+            _cs = cs;
+            _factory = factory;
+        }
+
+        public override string ConnectionString => _cs;
+
+        protected override DbConnection CreateDbConnection()
+        {
+            var c = (fakeDbConnection)_factory.CreateConnection();
+            c.ConnectionString = _cs;
+            return c;
+        }
+
+        protected override DbConnection OpenDbConnection()
+        {
+            var c = CreateDbConnection();
+            c.Open();
+            return c;
+        }
+
+        protected override async ValueTask<DbConnection> OpenDbConnectionAsync(CancellationToken ct)
+        {
+            var c = CreateDbConnection();
+            await c.OpenAsync(ct);
+            return c;
+        }
     }
 }

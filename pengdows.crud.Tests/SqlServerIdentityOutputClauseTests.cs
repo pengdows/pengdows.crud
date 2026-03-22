@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -175,7 +176,7 @@ public class SqlServerIdentityOutputClauseTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
 
         // Assert
         Assert.True(dialect.SupportsInsertReturning);
@@ -270,7 +271,7 @@ public class SqlServerIdentityOutputClauseTests
         var context = new DatabaseContext("test", factory, _typeMap);
 
         // Assert: constructing helper should fail due to missing [Id]/[PrimaryKey]
-        Assert.Throws<InvalidOperationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
+        Assert.Throws<SqlGenerationException>(() => new TableGateway<TestEntityWithoutId, int>(context));
     }
 
     [Fact]
@@ -330,7 +331,7 @@ public class SqlServerIdentityOutputClauseTests
         var entity = new TestEntityWithAutoId { Name = "Test Entity" };
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity).AsTask());
     }
 
     [Fact]
@@ -572,7 +573,7 @@ public class SqlServerIdentityOutputClauseTests
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
 
-        Assert.False(context.Dialect.SupportsInsertReturning);
+        Assert.False(context.GetDialect().SupportsInsertReturning);
     }
 
     [Theory]
@@ -584,7 +585,7 @@ public class SqlServerIdentityOutputClauseTests
         var factory = new fakeDbFactory(provider);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory, _typeMap);
 
-        Assert.True(context.Dialect.SupportsInsertReturning);
+        Assert.True(context.GetDialect().SupportsInsertReturning);
     }
 
     // ============================================================================

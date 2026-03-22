@@ -22,7 +22,7 @@ public class SessionSettingsApplicationTests
         };
         using var ctx = new DatabaseContext(config, factory);
 
-        var preamble = ctx.SessionSettingsPreamble;
+        var preamble = ctx.GetSessionSettingsPreamble();
 
         Assert.False(string.IsNullOrWhiteSpace(preamble));
         Assert.Contains("sql_mode", preamble, StringComparison.OrdinalIgnoreCase);

@@ -85,17 +85,19 @@ public class MagicStringRegressionTests
     // ── Oracle dialect SQL pins ──────────────────────────────────────────
 
     [Fact]
-    public void OracleDialect_ReadWriteSettings_IsNlsOnly()
+    public void OracleDialect_ReadWriteSettings_ContainsBothNlsFormats()
     {
         var d = CreateOracleDialect();
-        Assert.Equal("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';", d.GetBaseSessionSettings());
+        var settings = d.GetBaseSessionSettings();
+        Assert.Contains("NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
     }
 
     [Fact]
-    public void OracleDialect_ReadOnlySettings_AppendsReadOnly()
+    public void OracleDialect_ReadOnlySettings_IsEmpty()
     {
         var d = CreateOracleDialect();
-        Assert.Equal("ALTER SESSION SET READ ONLY;", d.GetReadOnlySessionSettings());
+        Assert.Equal(string.Empty, d.GetReadOnlySessionSettings());
     }
 
     [Fact]
@@ -139,7 +141,7 @@ public class MagicStringRegressionTests
     public void PostgreSqlDialect_ReadOnlySessionSettings_Value()
     {
         var d = CreatePostgreSqlDialect();
-        Assert.Equal("SET default_transaction_read_only = on", d.GetReadOnlySessionSettings());
+        Assert.Equal("SET default_transaction_read_only = on;", d.GetReadOnlySessionSettings());
     }
 
     [Fact]
@@ -158,19 +160,31 @@ public class MagicStringRegressionTests
     }
 
     // ── DuckDB read-only pins ─────────────────────────────────────────────
+    // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string.
+    // No session SQL is used; both GetReadOnlySessionSettings and GetReadOnlyTransactionResetSql
+    // fall back to the base (empty string / null).
 
     [Fact]
-    public void DuckDbDialect_ReadOnlySessionSettings_IsSetAccessMode()
+    public void DuckDbDialect_ReadOnlySessionSettings_IsEmpty()
     {
         var d = CreateDuckDbDialect();
-        Assert.Equal("SET access_mode = 'read_only';", d.GetReadOnlySessionSettings());
+        Assert.Equal(string.Empty, d.GetReadOnlySessionSettings());
     }
 
     [Fact]
-    public void DuckDbDialect_ReadWriteSessionSettings_IsAccessModeReadWrite()
+    public void DuckDbDialect_ReadOnlyTransactionResetSql_IsNull()
     {
         var d = CreateDuckDbDialect();
-        Assert.Equal("SET access_mode = 'read_write';", d.GetReadOnlyTransactionResetSql());
+        Assert.Null(d.GetReadOnlyTransactionResetSql());
+    }
+
+    [Fact]
+    public void DuckDbDialect_FinalSessionSettings_IsEmpty()
+    {
+        var d = CreateDuckDbDialect();
+        // Redundant DuckDB session settings removed for performance: handled by connection string
+        Assert.Equal(string.Empty, d.GetFinalSessionSettings(true));
+        Assert.Equal(string.Empty, d.GetFinalSessionSettings(false));
     }
 
     [Fact]
@@ -195,7 +209,7 @@ public class MagicStringRegressionTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         var helper = new TableGateway<PinEntity, int>(ctx);
         var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            helper.RetrieveAsync(Array.Empty<int>()));
+            helper.RetrieveAsync(Array.Empty<int>()).AsTask());
         Assert.StartsWith("List of IDs cannot be empty.", ex.Message);
         Assert.Equal("ids", ex.ParamName);
     }
@@ -206,7 +220,7 @@ public class MagicStringRegressionTests
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         var helper = new TableGateway<PinEntity, int>(ctx);
         var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            helper.DeleteAsync(Array.Empty<int>()));
+            helper.DeleteAsync(Array.Empty<int>()).AsTask());
         Assert.StartsWith("List of IDs cannot be empty.", ex.Message);
         Assert.Equal("ids", ex.ParamName);
     }
@@ -218,7 +232,7 @@ public class MagicStringRegressionTests
     {
         var d = CreateMySqlDialect();
         using var ctx = CreateContext(SupportedDatabase.MySql);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY;",
+        Assert.Contains("SET SESSION transaction_read_only = 1;",
             d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 
@@ -227,7 +241,7 @@ public class MagicStringRegressionTests
     {
         var d = CreateMariaDbDialect();
         using var ctx = CreateContext(SupportedDatabase.MariaDb);
-        Assert.Contains("SET SESSION TRANSACTION READ ONLY;",
+        Assert.Contains("SET SESSION transaction_read_only = 1;",
             d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 

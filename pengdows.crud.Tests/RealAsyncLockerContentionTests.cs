@@ -39,12 +39,20 @@ public sealed class RealAsyncLockerContentionTests
             new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection, TimeSpan.FromMilliseconds(250));
         await holder.LockAsync();
 
-        var waiter = Task.Run(async () =>
+        // Use a local async function rather than Task.Run: LockAsyncSlow calls RecordWaitStart()
+        // synchronously before its first await, so CurrentWaiters is already 1 by the time
+        // WaiterTask() returns to the caller.  Task.Run defers execution to the thread pool and
+        // can delay past the spin deadline when the process is under heavy test-runner load,
+        // causing the holder to release before the waiter even starts (fast-path acquisition,
+        // no contention recorded).
+        async Task WaiterTask()
         {
             await using var locker = new RealAsyncLocker(semaphore, stats, DbMode.SingleConnection,
                 TimeSpan.FromMilliseconds(250));
             await locker.LockAsync();
-        });
+        }
+
+        var waiter = WaiterTask();
 
         var spinDeadline = DateTime.UtcNow.AddMilliseconds(500);
         while (stats.GetSnapshot().CurrentWaiters == 0 && DateTime.UtcNow < spinDeadline)

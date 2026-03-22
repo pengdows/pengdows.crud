@@ -70,6 +70,13 @@ internal class OracleDialect : SqlDialect
     // Oracle prefers statement cache and array binding over manual prepare
     public override bool PrepareStatements => false;
 
+    // Oracle uses OFFSET/FETCH NEXT syntax (12c+) — no LIMIT keyword.
+    public override bool SupportsLimitOffset => false;
+
+    // Oracle stores GUIDs as VARCHAR2(36) — handled here via GuidFormat rather than
+    // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 
@@ -249,22 +256,29 @@ internal class OracleDialect : SqlDialect
     }
 
     private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-    private const string ReadOnlySessionSetting = "ALTER SESSION SET READ ONLY;";
-    private const string ReadWriteSessionSetting = "ALTER SESSION SET READ WRITE;";
+
+    // TIMESTAMP columns (and TIMESTAMP WITH TIME ZONE) use a separate NLS parameter.
+    // Without this pin the format is locale-dependent, making TIMESTAMP round-trips non-portable.
+    private const string NlsTimestampFormatSetting =
+        "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';";
+
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
 
     public override string GetBaseSessionSettings()
     {
-        return NlsDateFormatSetting;
+        return NlsDateFormatSetting + "\n" + NlsTimestampFormatSetting;
     }
 
     public override string GetReadOnlySessionSettings()
     {
-        return ReadOnlySessionSetting;
+        // Oracle has no true persistent session-level read-only mode.
+        // Enforcement must happen at transaction start.
+        return string.Empty;
     }
 
     internal override string? GetReadOnlyTransactionResetSql()
     {
-        return ReadWriteSessionSetting;
+        return string.Empty;
     }
 
     internal override void ApplyConnectionSettingsCore(
@@ -280,7 +294,8 @@ internal class OracleDialect : SqlDialect
         {
             try
             {
-                // Set StatementCacheSize for better performance with repeated queries
+                // Set StatementCacheSize for better performance with repeated queries.
+                // NOTE: "StatementCacheSize" is an intentional provider contract for Oracle.ManagedDataAccess.
                 var connectionType = connection.GetType();
                 var statementCacheSizeProperty = connectionType.GetProperty("StatementCacheSize");
                 if (statementCacheSizeProperty != null)
@@ -321,17 +336,41 @@ internal class OracleDialect : SqlDialect
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "Oracle");
+        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "Oracle");
     }
 
     public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
-        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "Oracle", cancellationToken);
+        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "Oracle", cancellationToken);
     }
 
     // Connection pooling properties for Oracle
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+
+    // Oracle ODP.NET has no "Application Name" connection string key — use "Metadata Pooling"
+    // as the pool-key discriminator to guarantee separate pools for reader vs writer connections.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "Metadata Pooling";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "false";
+
+    // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
+    // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
+    protected override DbType RemapDbType(DbType type) => type switch
+    {
+        DbType.Boolean => DbType.Int16,
+        DbType.Guid => DbType.String,
+        _ => type
+    };
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.Boolean && value is bool b)
+        {
+            return b ? (short)1 : (short)0;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
 }

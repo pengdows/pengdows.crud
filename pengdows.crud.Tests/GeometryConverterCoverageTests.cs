@@ -2,6 +2,7 @@
 
 using System;
 using System.Buffers.Binary;
+using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.converters;
@@ -34,6 +35,31 @@ public class GeometryConverterCoverageTests
         var bytes = BuildEwkbWithSrid(999);
         Assert.True(converter.TryConvertFromProvider(bytes, SupportedDatabase.PostgreSql, out var geometry));
         Assert.Equal(999, geometry.Srid);
+    }
+
+    [Fact]
+    public void ExtractSrid_PrivateHelpers_HandleEdgeCases()
+    {
+        var extractText = typeof(GeometryConverter).GetMethod("ExtractSridFromText",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var extractGeoJson = typeof(GeometryConverter).GetMethod("ExtractSridFromGeoJson",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(extractText);
+        Assert.NotNull(extractGeoJson);
+
+        var emptyResult = ((int srid, string text))extractText!.Invoke(null, new object[] { string.Empty })!;
+        Assert.Equal(0, emptyResult.srid);
+        Assert.Equal(string.Empty, emptyResult.text);
+
+        var malformedPrefix = ((int srid, string text))extractText.Invoke(null, new object[] { "SRID=;POINT(1 2)" })!;
+        Assert.Equal(0, malformedPrefix.srid);
+        Assert.Equal("SRID=;POINT(1 2)", malformedPrefix.text);
+
+        var whiteSpaceGeoJson = (int)extractGeoJson!.Invoke(null, new object[] { "   " })!;
+        Assert.Equal(0, whiteSpaceGeoJson);
+
+        var missingColonGeoJson = (int)extractGeoJson.Invoke(null, new object[] { "{\"srid\" \"4326\"}" })!;
+        Assert.Equal(0, missingColonGeoJson);
     }
 
     private static byte[] BuildEwkbWithSrid(int srid)

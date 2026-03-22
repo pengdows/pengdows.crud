@@ -2,6 +2,7 @@ using System.Data;
 using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
@@ -54,8 +55,8 @@ public class MergeConflictTests : DatabaseTestBase
             Assert.Equal(1, firstUpdate);
 
             secondCopy!.Name = "second";
-            var secondUpdate = await concurrentHelper.UpdateAsync(secondCopy, concurrentContext);
-            Assert.Equal(0, secondUpdate);
+            await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+                await concurrentHelper.UpdateAsync(secondCopy, concurrentContext));
 
             var final = await helper.RetrieveOneAsync(initial.Id, context);
             Assert.NotNull(final);

@@ -148,6 +148,26 @@ public class UtilsTests
     }
 
     [Fact]
+    public void IsNullOrEmpty_UsesGenericCollectionBranch()
+    {
+        var collection = new GenericOnlyCollection<int>(new[] { 1, 2 });
+        Assert.False(Utils.IsNullOrEmpty(collection));
+
+        var empty = new GenericOnlyCollection<int>(Array.Empty<int>());
+        Assert.True(Utils.IsNullOrEmpty(empty));
+    }
+
+    [Fact]
+    public void IsNullOrEmpty_UsesReadOnlyCollectionBranch()
+    {
+        var ro = new ReadOnlyOnlyCollection<int>(new[] { 7 });
+        Assert.False(Utils.IsNullOrEmpty(ro));
+
+        var empty = new ReadOnlyOnlyCollection<int>(Array.Empty<int>());
+        Assert.True(Utils.IsNullOrEmpty(empty));
+    }
+
+    [Fact]
     public void IsNullOrDbNull_Generic_ReturnsTrue_ForNull()
     {
         string? value = null;
@@ -164,5 +184,39 @@ public class UtilsTests
     public void IsNullOrDbNull_Generic_ReturnsFalse_ForValue()
     {
         Assert.False(Utils.IsNullOrDbNull("value"));
+    }
+
+    private sealed class GenericOnlyCollection<T> : ICollection<T>
+    {
+        private readonly List<T> _items;
+
+        public GenericOnlyCollection(IEnumerable<T> items)
+        {
+            _items = new List<T>(items);
+        }
+
+        public int Count => _items.Count;
+        public bool IsReadOnly => true;
+        public void Add(T item) => throw new NotSupportedException();
+        public void Clear() => throw new NotSupportedException();
+        public bool Contains(T item) => _items.Contains(item);
+        public void CopyTo(T[] array, int arrayIndex) => _items.CopyTo(array, arrayIndex);
+        public bool Remove(T item) => throw new NotSupportedException();
+        public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
+    }
+
+    private sealed class ReadOnlyOnlyCollection<T> : IReadOnlyCollection<T>
+    {
+        private readonly List<T> _items;
+
+        public ReadOnlyOnlyCollection(IEnumerable<T> items)
+        {
+            _items = new List<T>(items);
+        }
+
+        public int Count => _items.Count;
+        public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
     }
 }

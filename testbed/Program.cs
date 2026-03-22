@@ -24,14 +24,15 @@ builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
 
 var host = builder.Build();
 
+// Run StormGate integration tests first
+await StormGateIntegrationTests.RunAsync();
+
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (optional providers can be enabled via INCLUDE_* env vars)
-var includeOracle = Environment.GetEnvironmentVariable("INCLUDE_ORACLE")?.ToLower() == "true";
+// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var includeYugabyte = Environment.GetEnvironmentVariable("INCLUDE_YUGABYTE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeOracle, includeSnowflake, includeYugabyte);
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)
@@ -82,14 +83,16 @@ var results = await orchestrator.RunAllTestsAsync(only, exclude);
 // Optional: Export results for CI/CD
 var successCount = results.Count(r => r.Success);
 var totalCount = results.Count;
+var totalChecks = results.Sum(r => r.ChecksPassed);
+var totalSkipped = results.Sum(r => r.ChecksSkipped);
 
 if (successCount == totalCount)
 {
-    Console.WriteLine("🎉 All tests passed!");
+    Console.WriteLine($"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!");
     Environment.Exit(0);
 }
 else
 {
-    Console.WriteLine($"❌ {totalCount - successCount} out of {totalCount} tests failed");
+    Console.WriteLine($"❌ {totalCount - successCount}/{totalCount} databases failed ({totalChecks} checks passed, {totalSkipped} skipped)");
     Environment.Exit(1);
 }

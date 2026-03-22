@@ -25,7 +25,7 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 ///     TIMESTAMPTZ for DateTimeOffset; UUID for guid; BLOB for binary.</item>
 ///   <item>Firebird: FLOAT (32-bit) for float; DOUBLE PRECISION for double;
 ///     SMALLINT for bool; TIMESTAMP for both date types (no tz-aware in Firebird 3.x);
-///     CHAR(36) for guid; VARBINARY(256) for binary.</item>
+///     CHAR(16) CHARACTER SET OCTETS for guid (binary, 16 bytes); BLOB SUB_TYPE 0 for binary.</item>
 ///   <item>Snowflake: FLOAT4 declared (stored as 64-bit internally); DOUBLE for double;
 ///     TIMESTAMP_NTZ for both date types; VARCHAR(36) for guid; VARBINARY for binary.</item>
 /// </list>
@@ -279,7 +279,7 @@ END;", qp, qs, table);
         //   - DOUBLE PRECISION = 64-bit IEEE 754
         //   - SMALLINT for bool (0/1) and for short
         //   - No TIMESTAMP WITH TIME ZONE → plain TIMESTAMP (UTC stored)
-        //   - CHAR(36) for guid
+        //   - CHAR(16) CHARACTER SET OCTETS for guid (binary, 16 bytes)
         //   - No IF NOT EXISTS → caller catches "already exists"
         var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
         var w = (string name) => _context.WrapObjectName(name);
@@ -298,7 +298,7 @@ END;", qp, qs, table);
     {w("col_bool_null")}      SMALLINT,
     {w("col_datetime")}       TIMESTAMP       NOT NULL,
     {w("col_datetimeoffset")} TIMESTAMP       NOT NULL,
-    {w("col_guid")}           CHAR(36)        NOT NULL,
+    {w("col_guid")}           CHAR(16) CHARACTER SET OCTETS NOT NULL,
     {w("col_binary")}         BLOB SUB_TYPE 0,
     {w("col_enum_int")}       INTEGER         NOT NULL,
     {w("col_enum_str")}       VARCHAR(50)     NOT NULL

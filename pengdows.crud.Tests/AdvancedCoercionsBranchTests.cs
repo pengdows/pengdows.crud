@@ -221,4 +221,36 @@ public class AdvancedCoercionsBranchTests
         Assert.True(coercion.TryRead(new DbValue(reader), out var fromReader));
         Assert.Equal("value", fromReader.ReadToEnd());
     }
+
+    [Fact]
+    public void AdditionalAdvancedCoercions_InvalidAndUnsupportedInputs_ReturnFalse()
+    {
+        Assert.False(new PostgreSqlIntervalCoercion().TryRead(new DbValue(new object()), out _));
+        Assert.False(new IntervalYearMonthCoercion().TryRead(new DbValue(new object()), out _));
+        Assert.False(new IntervalDaySecondCoercion().TryRead(new DbValue(new object()), out _));
+        Assert.False(new PostgreSqlRangeDateTimeCoercion().TryRead(new DbValue(123), out _));
+    }
+
+    [Fact]
+    public void ClobStreamCoercion_NonReadableStream_ReturnsFalse()
+    {
+        var coercion = new ClobStreamCoercion();
+        using var nonReadable = new NonReadableStream();
+
+        Assert.False(coercion.TryRead(new DbValue(nonReadable), out _));
+    }
+
+    private sealed class NonReadableStream : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => 0;
+        public override long Position { get; set; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 }

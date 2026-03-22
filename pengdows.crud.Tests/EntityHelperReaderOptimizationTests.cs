@@ -184,14 +184,14 @@ public class TableGatewayReaderOptimizationTests : SqlLiteContextTestBase
             return base.GetName(ordinal);
         }
 
-        public new Task<bool> ReadAsync()
+        public new ValueTask<bool> ReadAsync()
         {
-            return base.ReadAsync(CancellationToken.None);
+            return new ValueTask<bool>(base.ReadAsync(CancellationToken.None));
         }
 
-        public override Task<bool> ReadAsync(CancellationToken cancellationToken)
+        public new ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
         {
-            return base.ReadAsync(cancellationToken);
+            return new ValueTask<bool>(base.ReadAsync(cancellationToken));
         }
 
         public override ValueTask DisposeAsync()

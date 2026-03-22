@@ -1,7 +1,7 @@
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
-using System.Data.Common;
 using testbed;
 using Xunit.Abstractions;
 
@@ -9,7 +9,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 
 /// <summary>
 /// Verifies that the framework correctly surfaces database-specific errors
-/// as expected exceptions (DbException or derived).
+/// as framework exceptions with provider details preserved as inner exceptions.
 /// </summary>
 [Collection("IntegrationTests")]
 public class DiagnosticsTests : DatabaseTestBase
@@ -25,7 +25,7 @@ public class DiagnosticsTests : DatabaseTestBase
     }
 
     [SkippableFact]
-    public async Task SyntaxError_SurfacesAsDbException()
+    public async Task SyntaxError_SurfacesAsDatabaseException()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
@@ -39,12 +39,12 @@ public class DiagnosticsTests : DatabaseTestBase
 
             await using var container = context.CreateSqlContainer(sql);
 
-            await Assert.ThrowsAnyAsync<DbException>(async () => await container.ExecuteNonQueryAsync());
+            await Assert.ThrowsAnyAsync<DatabaseException>(async () => await container.ExecuteNonQueryAsync());
         });
     }
 
     [SkippableFact]
-    public async Task UniqueConstraintViolation_SurfacesAsDbException()
+    public async Task UniqueConstraintViolation_SurfacesAsDatabaseException()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
@@ -64,7 +64,7 @@ public class DiagnosticsTests : DatabaseTestBase
             // Act & Assert: Insert duplicate ID
             var duplicate = new TestTable { Id = id, Name = NameEnum.Test2, Value = 2 };
 
-            await Assert.ThrowsAnyAsync<DbException>(async () => await helper.CreateAsync(duplicate, context));
+            await Assert.ThrowsAnyAsync<DatabaseException>(async () => await helper.CreateAsync(duplicate, context));
         });
     }
 }

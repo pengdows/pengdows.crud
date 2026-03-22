@@ -2,13 +2,16 @@
 
 using System;
 using System.Data;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.configuration;
 using pengdows.crud.attributes;
 using pengdows.crud.metrics;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -37,7 +40,7 @@ public class CoverageImprovementTests
 
         // Act & Assert - Verify mode and dialect
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]
@@ -54,7 +57,7 @@ public class CoverageImprovementTests
 
         // Act & Assert
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]
@@ -273,9 +276,7 @@ public class CoverageImprovementTests
 
     [Theory]
     [InlineData(IsolationLevel.ReadCommitted)]
-    [InlineData(IsolationLevel.ReadUncommitted)]
     [InlineData(IsolationLevel.Serializable)]
-    [InlineData(IsolationLevel.Snapshot)]
     public void TransactionContext_WithDifferentIsolationLevels_Works(IsolationLevel level)
     {
         // Arrange
@@ -288,6 +289,17 @@ public class CoverageImprovementTests
         // Assert
         Assert.NotNull(transaction);
         Assert.Equal(level, transaction.IsolationLevel);
+    }
+
+    [Theory]
+    [InlineData(IsolationLevel.ReadUncommitted)]
+    [InlineData(IsolationLevel.Snapshot)]
+    public void TransactionContext_UnsupportedIsolationLevel_Throws(IsolationLevel level)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext("Data Source=:memory:", factory);
+
+        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(level));
     }
 
     #endregion
@@ -307,7 +319,7 @@ public class CoverageImprovementTests
         var context = new DatabaseContext($"{connectionString};EmulatedProduct={database}", factory);
 
         // Assert
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
         Assert.Equal(database, context.Product);
     }
 
@@ -341,7 +353,7 @@ public class CoverageImprovementTests
 
         // Assert - Context created successfully (mode may be coerced based on connection string)
         Assert.NotNull(context);
-        Assert.NotNull(context.Dialect);
+        Assert.NotNull(context.GetDialect());
     }
 
     [Fact]
@@ -454,6 +466,23 @@ public class CoverageImprovementTests
 
         // Assert - Should not throw
         Assert.NotNull(context);
+    }
+
+    [Fact]
+    public void DatabaseContext_Dispose_WhenTrackedConnectionDisposeThrows_DoesNotThrow()
+    {
+        // Arrange
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var context = new DatabaseContext("Data Source=:memory:", factory);
+        var throwingConnection = new Mock<ITrackedConnection>();
+        throwingConnection.Setup(c => c.Dispose()).Throws(new InvalidOperationException("dispose-fail"));
+        SetPrivateField(context, "_connection", throwingConnection.Object);
+
+        // Act
+        var ex = Record.Exception(() => context.Dispose());
+
+        // Assert
+        Assert.Null(ex);
     }
 
     #endregion
@@ -717,5 +746,12 @@ public class CoverageImprovementTests
         [Id] public int Id { get; set; }
 
         [Column("name", DbType.String, 255)] public string Name { get; set; } = string.Empty;
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object? value)
+    {
+        var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(target, value);
     }
 }

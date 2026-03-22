@@ -10,9 +10,14 @@
 //   2. [Id] column if writable ([Id(true)] or [Id])
 //   3. Error if neither available
 // - Database-specific syntax:
-//   * SQL Server/Oracle: MERGE statement
-//   * PostgreSQL: INSERT ... ON CONFLICT (key) DO UPDATE
-//   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
+//   * SQL Server/Oracle/Snowflake: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//   * PostgreSQL/CockroachDB: INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver]
+//   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard possible in this syntax)
+//   * Firebird: UPDATE OR INSERT ... MATCHING (...)
+// - Optimistic concurrency:
+//   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard; 0 rows = version mismatch → ConcurrencyConflictException
+//   * ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB): DO UPDATE WHERE predicate; 0 rows = DO NOTHING → exception
+//   * ON DUPLICATE KEY (MySQL/MariaDB) and Firebird: cannot detect conflicts — no exception thrown
 // - Handles audit columns and version columns appropriately.
 // - Throws NotSupportedException for fallback/unknown dialects.
 // - Returns affected row count (typically 1 for single-entity upsert).
@@ -21,7 +26,9 @@
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
@@ -32,7 +39,7 @@ namespace pengdows.crud;
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
-    public async Task<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
+    public async ValueTask<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         if (entity == null)
@@ -41,10 +48,31 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+
         // BuildUpsert creates a dynamic container - proper disposal required to avoid resource leaks
         // Use async disposal for async operations
         await using var sc = BuildUpsert(entity, ctx);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+        // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
+        // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
+        // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
+        // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
+        // cannot detect version conflicts — do NOT throw for those dialects.
+        if (rowsAffected == 0 && _versionColumn != null)
+        {
+            var canDetect = dialect.SupportsOnConflictWhere
+                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+            if (canDetect)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                    ctx.Product);
+            }
+        }
+
+        return rowsAffected;
     }
 
     /// <inheritdoc/>
@@ -56,10 +84,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
-        if (_idColumn == null && _tableInfo.PrimaryKeys.Count == 0)
-        {
-            throw new NotSupportedException(UpsertNoKeyMessage);
-        }
+        _ = ResolveUpsertKey();
 
         if (ctx.DataSourceInfo.IsUsingFallbackDialect)
         {
@@ -86,15 +111,15 @@ public partial class TableGateway<TEntity, TRowID>
 
     private IReadOnlyList<IColumnInfo> ResolveUpsertKey()
     {
-        if (_idColumn != null && _idColumn.IsIdIsWritable)
-        {
-            return new List<IColumnInfo> { _idColumn! };
-        }
-
         var keys = _tableInfo.PrimaryKeys;
         if (keys.Count > 0)
         {
             return keys;
+        }
+
+        if (_idColumn != null && _idColumn.IsIdWritable)
+        {
+            return new List<IColumnInfo> { _idColumn };
         }
 
         throw new NotSupportedException(UpsertNoWritableKeyMessage);
@@ -182,13 +207,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var conflictCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var conflictCols = ResolveUpsertKey();
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
@@ -201,12 +220,27 @@ public partial class TableGateway<TEntity, TRowID>
 
             for (var i = 0; i < conflictCols.Count; i++)
             {
-                if (i > 0) sc.Query.Append(", ");
+                if (i > 0)
+                {
+                    sc.Query.Append(", ");
+                }
                 sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
             }
 
             sc.Query.Append(") DO UPDATE SET ")
                 .Append(template.UpsertUpdateFragment);
+
+            if (_versionColumn != null && dialect.SupportsOnConflictWhere)
+            {
+                var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
+                sc.Query.Append(" WHERE ")
+                    .Append(BuildWrappedTableName(dialect))
+                    .Append(".")
+                    .Append(wrappedVersion)
+                    .Append(" = ")
+                    .Append("EXCLUDED.")
+                    .Append(wrappedVersion);
+            }
 
             sc.AddParameters(parameters);
             return sc;
@@ -216,45 +250,6 @@ public partial class TableGateway<TEntity, TRowID>
             colSb.Dispose();
             valSb.Dispose();
         }
-    }
-
-    private static string FormatFirebirdValueExpression(string placeholder, IColumnInfo column)
-    {
-        var typeName = GetFirebirdDataType(column);
-        if (string.Equals(placeholder, "NULL", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"CAST(NULL AS {typeName})";
-        }
-
-        return $"CAST({placeholder} AS {typeName})";
-    }
-
-    private static string GetFirebirdDataType(IColumnInfo column)
-    {
-        return column.DbType switch
-        {
-            DbType.Boolean => "SMALLINT",
-            DbType.Byte => "SMALLINT",
-            DbType.SByte => "SMALLINT",
-            DbType.Int16 => "SMALLINT",
-            DbType.UInt16 => "SMALLINT",
-            DbType.Int32 => "INTEGER",
-            DbType.UInt32 => "BIGINT",
-            DbType.Int64 => "BIGINT",
-            DbType.UInt64 => "BIGINT",
-            DbType.Decimal => "DECIMAL(18,2)",
-            DbType.Double => "DOUBLE PRECISION",
-            DbType.Single => "DOUBLE PRECISION",
-            DbType.Date => "DATE",
-            DbType.DateTime => "TIMESTAMP",
-            DbType.AnsiStringFixedLength => "VARCHAR(255)",
-            DbType.AnsiString => "VARCHAR(255)",
-            DbType.String => "VARCHAR(255)",
-            DbType.StringFixedLength => "VARCHAR(255)",
-            DbType.Guid => "CHAR(36)",
-            DbType.Binary => "BLOB",
-            _ => "VARCHAR(255)"
-        };
     }
 
     private ISqlContainer BuildUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
@@ -294,12 +289,6 @@ public partial class TableGateway<TEntity, TRowID>
 
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
-
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
@@ -349,31 +338,43 @@ public partial class TableGateway<TEntity, TRowID>
         var parameters = new List<DbParameter>(template.UpsertColumns.Count);
         binder(entity, parameters);
 
-        var insertableColumns = GetCachedInsertableColumns();
+        // WHEN MATCHED arm must include version check — NOT the ON clause.
+        // Putting version in ON: stale version makes source row "unmatched" → WHEN NOT MATCHED fires
+        // → INSERT fails with PK violation (row already exists). Correct: WHEN MATCHED AND t.ver=s.ver
+        // leaves the row untouched → 0 rows → detectable conflict via ConcurrencyConflictException.
+        var whenMatchedClause = " WHEN MATCHED THEN UPDATE SET ";
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            var v = dialect.WrapSimpleName(_versionColumn.Name);
+            whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";
+        }
 
-        // Use SbLites for insert columns and their s.col aliases — eliminates two List<string> allocations.
+        // WHEN NOT MATCHED INSERT must use only columns projected into the USING source alias s.
+        // template.UpsertColumns is the same filtered set used to build the USING source (respects the
+        // audit-resolver filter). GetCachedInsertableColumns() does not apply this filter and may include
+        // columns (e.g. created_by) that were excluded from s, producing invalid SQL: "s.created_by".
         var insertColSb = SbLite.Create(stackalloc char[512]);
         var insertValSb = SbLite.Create(stackalloc char[512]);
         var join = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         try
         {
-            foreach (var column in insertableColumns)
+            foreach (var column in template.UpsertColumns)
             {
-                if (insertColSb.Length > 0) insertColSb.Append(", ");
-                if (insertValSb.Length > 0) insertValSb.Append(", ");
+                if (insertColSb.Length > 0)
+                {
+                    insertColSb.Append(", ");
+                }
+                if (insertValSb.Length > 0)
+                {
+                    insertValSb.Append(", ");
+                }
                 var wrapped = dialect.WrapSimpleName(column.Name);
                 insertColSb.Append(wrapped);
                 insertValSb.Append("s.");
                 insertValSb.Append(wrapped);
             }
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var joinCols = ResolveUpsertKey();
             for (var i = 0; i < joinCols.Count; i++)
             {
                 if (i > 0)
@@ -397,7 +398,7 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(mergeSource)
                 .Append(" ON ")
                 .Append(onClause)
-                .Append(" WHEN MATCHED THEN UPDATE SET ")
+                .Append(whenMatchedClause)
                 .Append(template.UpsertUpdateFragment)
                 .Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
@@ -454,13 +455,7 @@ public partial class TableGateway<TEntity, TRowID>
             var parameters = new List<DbParameter>(template.UpsertColumns.Count);
             binder(entity, parameters);
 
-            var keys = _tableInfo.PrimaryKeys;
-            if (_idColumn == null && keys.Count == 0)
-            {
-                throw new NotSupportedException(UpsertNoKeyMessage);
-            }
-
-            var joinCols = keys.Count > 0 ? keys : new List<IColumnInfo> { _idColumn! };
+            var joinCols = ResolveUpsertKey();
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("UPDATE OR INSERT INTO ")

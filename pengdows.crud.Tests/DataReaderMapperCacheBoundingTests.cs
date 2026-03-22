@@ -192,7 +192,10 @@ public class DataReaderMapperCacheBoundingTests
         var tryGetValue = map.GetType().GetMethod("TryGetValue")!;
         var args = new object?[] { planCacheKey, null };
         var found = (bool)tryGetValue.Invoke(map, args)!;
-        if (!found) return null;
+        if (!found)
+        {
+            return null;
+        }
 
         // args[1] is a CacheEntry — unwrap via its public Value property
         var entry = args[1]!;

@@ -169,10 +169,10 @@ public class SqlContainerBranchTests
     public async Task ExecuteScalarRequiredAsync_CoercesValue()
     {
         var connection = new fakeDbConnection();
-        connection.EnqueueReaderResult(new[]
-        {
-            new Dictionary<string, object?> { { "version", "3.42.0" } }
-        });
+        // One result for version detection during initialization (consumed by SELECT aurora_version())
+        connection.EnqueueScalarResult("15.0.0");
+        
+        // One result for the actual scalar execution (consumed by SELECT scalar_test)
         connection.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "value", "42" } }

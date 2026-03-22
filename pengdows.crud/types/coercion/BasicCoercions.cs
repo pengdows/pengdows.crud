@@ -29,7 +29,7 @@ namespace pengdows.crud.types.coercion;
 /// <summary>
 /// Basic type coercions for common database types.
 /// </summary>
-public static class BasicCoercions
+internal static class BasicCoercions
 {
     public static void RegisterAll(CoercionRegistry registry)
     {
@@ -63,7 +63,7 @@ public static class BasicCoercions
 /// <summary>
 /// Coercion for GUID values - handles Guid, byte[], ReadOnlyMemory, ArraySegment, char[], and string formats.
 /// </summary>
-public class GuidCoercion : DbCoercion<Guid>
+internal class GuidCoercion : DbCoercion<Guid>
 {
     public override bool TryRead(in DbValue src, out Guid value)
     {
@@ -110,7 +110,7 @@ public class GuidCoercion : DbCoercion<Guid>
 /// <summary>
 /// Coercion for DateTimeOffset - handles DateTimeOffset and DateTime.
 /// </summary>
-public class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
+internal class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
 {
     public override bool TryRead(in DbValue src, out DateTimeOffset value)
     {
@@ -148,7 +148,7 @@ public class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
 /// <summary>
 /// Coercion for TimeSpan - handles TimeSpan, double (seconds), and time strings.
 /// </summary>
-public class TimeSpanCoercion : DbCoercion<TimeSpan>
+internal class TimeSpanCoercion : DbCoercion<TimeSpan>
 {
     public override bool TryRead(in DbValue src, out TimeSpan value)
     {
@@ -186,7 +186,7 @@ public class TimeSpanCoercion : DbCoercion<TimeSpan>
 /// <summary>
 /// Coercion for int arrays - handles int[] and comma-separated strings.
 /// </summary>
-public class IntArrayCoercion : DbCoercion<int[]>
+internal class IntArrayCoercion : DbCoercion<int[]>
 {
     public override bool TryRead(in DbValue src, out int[]? value)
     {
@@ -236,7 +236,7 @@ public class IntArrayCoercion : DbCoercion<int[]>
 /// <summary>
 /// Coercion for string arrays - handles string[].
 /// </summary>
-public class StringArrayCoercion : DbCoercion<string[]>
+internal class StringArrayCoercion : DbCoercion<string[]>
 {
     public override bool TryRead(in DbValue src, out string[]? value)
     {
@@ -272,7 +272,7 @@ public class StringArrayCoercion : DbCoercion<string[]>
 /// <summary>
 /// Coercion for JSON values - handles JSON strings and JsonDocument.
 /// </summary>
-public class JsonValueCoercion : DbCoercion<JsonValue>
+internal class JsonValueCoercion : DbCoercion<JsonValue>
 {
     public override bool TryRead(in DbValue src, out JsonValue value)
     {
@@ -318,7 +318,7 @@ public class JsonValueCoercion : DbCoercion<JsonValue>
 /// <summary>
 /// Coercion for PostgreSQL HSTORE - handles key-value pairs.
 /// </summary>
-public class HStoreCoercion : DbCoercion<HStore>
+internal class HStoreCoercion : DbCoercion<HStore>
 {
     public override bool TryRead(in DbValue src, out HStore value)
     {
@@ -357,7 +357,7 @@ public class HStoreCoercion : DbCoercion<HStore>
 /// <summary>
 /// Coercion for integer ranges - handles PostgreSQL int4range, int8range.
 /// </summary>
-public class IntRangeCoercion : DbCoercion<Range<int>>
+internal class IntRangeCoercion : DbCoercion<Range<int>>
 {
     public override bool TryRead(in DbValue src, out Range<int> value)
     {
@@ -396,7 +396,7 @@ public class IntRangeCoercion : DbCoercion<Range<int>>
 /// <summary>
 /// Coercion for DateTime ranges - handles PostgreSQL tsrange, tstzrange.
 /// </summary>
-public class DateTimeRangeCoercion : DbCoercion<Range<DateTime>>
+internal class DateTimeRangeCoercion : DbCoercion<Range<DateTime>>
 {
     public override bool TryRead(in DbValue src, out Range<DateTime> value)
     {
@@ -435,7 +435,7 @@ public class DateTimeRangeCoercion : DbCoercion<Range<DateTime>>
 /// <summary>
 /// Coercion for Boolean - handles bool, string, char, and numeric representations.
 /// </summary>
-public class BooleanCoercion : DbCoercion<bool>
+internal class BooleanCoercion : DbCoercion<bool>
 {
     public override bool TryRead(in DbValue src, out bool value)
     {
@@ -513,7 +513,7 @@ public class BooleanCoercion : DbCoercion<bool>
 /// Coercion for DateTime - handles DateTime, DateTimeOffset, and strings.
 /// Always normalizes to UTC.
 /// </summary>
-public class DateTimeCoercion : DbCoercion<DateTime>
+internal class DateTimeCoercion : DbCoercion<DateTime>
 {
     public override bool TryRead(in DbValue src, out DateTime value)
     {
@@ -566,7 +566,7 @@ public class DateTimeCoercion : DbCoercion<DateTime>
 /// <summary>
 /// Coercion for Decimal - handles all numeric conversions with culture invariance.
 /// </summary>
-public class DecimalCoercion : DbCoercion<decimal>
+internal class DecimalCoercion : DbCoercion<decimal>
 {
     public override bool TryRead(in DbValue src, out decimal value)
     {
@@ -606,7 +606,7 @@ public class DecimalCoercion : DbCoercion<decimal>
 /// <summary>
 /// Coercion for byte arrays - handles byte[], ReadOnlyMemory, ArraySegment.
 /// </summary>
-public class ByteArrayCoercion : DbCoercion<byte[]>
+internal class ByteArrayCoercion : DbCoercion<byte[]>
 {
     public override bool TryRead(in DbValue src, out byte[]? value)
     {
@@ -662,7 +662,7 @@ public class ByteArrayCoercion : DbCoercion<byte[]>
 /// <summary>
 /// Coercion for JsonDocument - handles JsonDocument, JsonElement, and JSON strings.
 /// </summary>
-public class JsonDocumentCoercion : DbCoercion<JsonDocument>
+internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
 {
     public override bool TryRead(in DbValue src, out JsonDocument? value)
     {
@@ -718,7 +718,7 @@ public class JsonDocumentCoercion : DbCoercion<JsonDocument>
 /// <summary>
 /// Coercion for JsonElement - handles JsonElement, JsonDocument, and JSON strings.
 /// </summary>
-public class JsonElementCoercion : DbCoercion<JsonElement>
+internal class JsonElementCoercion : DbCoercion<JsonElement>
 {
     public override bool TryRead(in DbValue src, out JsonElement value)
     {

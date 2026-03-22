@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Mandatory Workflow And Reviews
+
+- TDD is mandatory for every behavior change, bug fix, regression fix, and public-contract change.
+- Start by writing or updating an automated test that fails for the intended reason before changing implementation.
+- Do not start implementation until the test is red; after implementation, rerun the relevant automated tests and do not consider the work complete until they pass with no skipped tests introduced.
+- If automated coverage is genuinely not possible, say so explicitly and document the verification gap.
+- All reviews are done against [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- Review output, merge guidance, blocker/major/minor classification, required evidence, and minimal patch guidance must follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- If instructions overlap, follow the more stringent requirement. If this file conflicts with [REVIEW_POLICY.md](./REVIEW_POLICY.md) on review behavior, follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+
 ## Core Philosophy
 
 `pengdows.crud` is an opinionated, high-performance, SQL-first data access framework built on a **database-first** philosophy. It provides **"Prego features"** — expert-level, built-in solutions to difficult real-world data access problems that developers often assume are handled by their tools but usually are not. It is designed to be more robust and feature-rich than a micro-ORM like Dapper, while retaining high performance and developer control, without the pitfalls of heavier ORMs like EF Core.
@@ -73,6 +83,73 @@ List<TEntity> list = await RetrieveAsync(ids);
 IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 ```
 
+### Three-Tier API (PrimaryKeyTableGateway)
+
+`PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) is for entities identified **solely by `[PrimaryKey]` columns** with **no surrogate `[Id]` column**. Use it for junction tables, legacy schemas, and DBA-owned tables with natural keys.
+
+**Throws `SqlGenerationException` at construction** if the entity has no `[PrimaryKey]` columns.
+
+**Tier 1 — Build methods:**
+```csharp
+ISqlContainer BuildCreate(entity);
+ISqlContainer BuildBaseRetrieve("alias");           // SELECT with no WHERE
+ISqlContainer BuildRetrieve(entityList, "alias");   // SELECT ... WHERE pk columns match
+ISqlContainer BuildUpsert(entity);
+ISqlContainer sc = await BuildUpdateAsync(entity);  // Only async Build method
+IReadOnlyList<ISqlContainer> BuildBatchCreate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(entities);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(entities);
+```
+
+**Tier 2 — Load methods** (same as TableGateway):
+```csharp
+TEntity? result                  = await LoadSingleAsync(container);
+List<TEntity> list               = await LoadListAsync(container);
+IAsyncEnumerable<TEntity> stream = LoadStreamAsync(container);
+```
+
+**Tier 3 — Convenience methods:**
+```csharp
+bool created  = await CreateAsync(entity);
+TEntity? e    = await RetrieveOneAsync(entityLookup); // By [PrimaryKey] only
+int affected  = await UpdateAsync(entity);
+int affected  = await DeleteAsync(entityCollection);  // No DeleteAsync(id) — batch only
+int affected  = await UpsertAsync(entity);
+// Batch shortcuts (also accept IReadOnlyList<TEntity>):
+int affected  = await BatchCreateAsync(entities);
+int affected  = await BatchUpdateAsync(entities);
+int affected  = await BatchUpsertAsync(entities);
+int affected  = await BatchDeleteAsync(entityCollection);
+```
+
+**Key differences from `TableGateway<TEntity, TRowID>`:**
+- No `TRowID` type parameter — all WHERE clauses use `[PrimaryKey]` columns
+- No `DeleteAsync(id)` / `BuildDelete(id)` — only entity-collection delete
+- No `RetrieveAsync(ids)` / `RetrieveStreamAsync(ids)` — retrieve by entity list
+- `loadOriginal` overload exists for API symmetry but is always ignored
+
+**Example — junction table with composite natural key:**
+```csharp
+[Table("order_items")]
+public class OrderItem
+{
+    [PrimaryKey(1)]
+    [Column("order_id")] public int OrderId { get; set; }
+
+    [PrimaryKey(2)]
+    [Column("product_id")] public int ProductId { get; set; }
+
+    [Column("quantity")] public int Quantity { get; set; }
+    [Column("unit_price")] public decimal UnitPrice { get; set; }
+}
+
+var gateway = new PrimaryKeyTableGateway<OrderItem>(context);
+await gateway.CreateAsync(new OrderItem { OrderId = 1, ProductId = 42, Quantity = 3, UnitPrice = 9.99m });
+var item = await gateway.RetrieveOneAsync(new OrderItem { OrderId = 1, ProductId = 42 });
+await gateway.BatchDeleteAsync(new[] { item });
+```
+
 ### Key Patterns
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
@@ -138,7 +215,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - Consumers should depend on abstractions in `pengdows.crud.abstractions`.
 - `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect` etc. are the official surface area.
 - Hide implementation details as `internal` by default.
-- **Nothing outside of `DatabaseContext` should expose a public constructor** — objects should be resolved through factory helpers, DI, or internal constructors (exceptions require documented rationale).
+- Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
 
 ## CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)
 
@@ -151,11 +228,12 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 
 **Key Rules:**
 1. `[Id]` and `[PrimaryKey]` are MUTUALLY EXCLUSIVE on a column — never both on the same property
-2. TableGateway REQUIRES `[Id]` for `CreateAsync`, `UpdateAsync`, `DeleteAsync(TRowID)`
+2. `TableGateway<T,TId>` requires `[Id]` for row-id operations (`UpdateAsync`, `DeleteAsync(TRowID)`, `RetrieveOneAsync(TRowID)`). `CreateAsync` supports `[PrimaryKey]`-only entities.
 3. `[Id(false)]` = DB-generated (autoincrement); `[Id]` or `[Id(true)]` = client-provided
 4. `[PrimaryKey]` defines business uniqueness, enforced via UNIQUE constraint in DDL
 5. Both can coexist on different columns: pseudo key for operations, business key for domain integrity
 6. `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns; `DeleteAsync(TRowID)` uses `[Id]`
+7. **Choosing the gateway:** entity has `[Id]` → use `TableGateway<TEntity, TRowID>`; entity has only `[PrimaryKey]` (no `[Id]`) → use `PrimaryKeyTableGateway<TEntity>`
 
 ```csharp
 [Table("order_items")]
@@ -194,15 +272,16 @@ public int Version { get; set; }
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
 
-**Conflict detection:** If `UpdateAsync` returns 0 rows affected, another process modified the row (version mismatch).
+**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
 
 ## Upsert Behavior
 
-`UpsertAsync` / `BuildUpsert` determines insert vs update based on conflict key:
-
+**`TableGateway<T,TId>`** — determines conflict key as:
 1. **Primary choice:** `[PrimaryKey]` columns (if any defined)
 2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
+
+**`PrimaryKeyTableGateway<T>`** — always uses `[PrimaryKey]` columns as the conflict key. Throws `NotSupportedException` if the entity has no updateable non-key columns (pure junction table with only PK columns), unless the dialect supports pure-key upsert (Firebird).
 
 **SQL generated depends on database:**
 - SQL Server/Oracle: `MERGE`
@@ -234,6 +313,7 @@ pengdows.crud uses **context-per-tenant** (not query filtering):
 - **No "WHERE tenant_id = X" injection** — tenants are physically separated
 - Each tenant can use a different database type (SQL Server, PostgreSQL, MySQL, etc.)
 - Use `ITenantContextRegistry` as a singleton to manage per-tenant `DatabaseContext` instances
+- `TenantContextRegistry` exposes `ContextCreated` and `ContextRemoved` events (`Action<IDatabaseContext>`) — fired when a context is created or disposed/invalidated
 
 ```csharp
 // Pass tenant context to CRUD methods to route to tenant's database
@@ -291,7 +371,9 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
 **Query Execution (all return ValueTask):**
 - `ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)` - Execute INSERT/UPDATE/DELETE, returns row count
-- `ExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return single value
+- `ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return required single value
+- `ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return nullable single value
+- `TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text)` - Execute and return scalar result metadata
 - `ExecuteReaderAsync(CommandType commandType = CommandType.Text)` - Execute and return ITrackedReader
 
 **Parameter Management:**
@@ -309,14 +391,23 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
 **Parameter Naming Convention:**
 
-| Operation | Pattern | Example |
-|-----------|---------|---------|
-| INSERT | `i{n}` | `i0`, `i1`, `i2` |
-| UPDATE SET | `s{n}` | `s0`, `s1`, `s2` |
-| WHERE | `w{n}` | `w0`, `w1`, `w2` |
-| JOIN | `j{n}` | `j0`, `j1` |
-| KEY | `k{n}` | `k0`, `k1` |
-| VERSION | `v{n}` | `v0`, `v1` |
+| Prefix | Used in | Build method(s) |
+|--------|---------|-----------------|
+| `i{n}` | INSERT values | `BuildCreate`, `BuildUpsert`, batch |
+| `s{n}` | UPDATE SET clause | `BuildUpdateAsync`, batch |
+| `w{n}` | WHERE (retrieve IN/ANY) | `BuildRetrieve` |
+| `k{n}` | WHERE id/key | `BuildDelete`, `BuildUpdateAsync` WHERE id, entity lookup |
+| `v{n}` | Optimistic lock version | `BuildUpdateAsync` (only if `[Version]` column exists) |
+| `j{n}` | JOIN conditions | Custom SQL |
+| `b{n}` | Batch row values | `BuildBatchCreate/Update/Upsert` |
+
+Critical distinctions for `SetParameterValue()` reuse:
+- `BuildRetrieve` id slot → `"w0"` with **scalar** value (not array); PostgreSQL ANY takes array
+- `BuildDelete` id slot → `"k0"`
+- `BuildUpdateAsync`: SET params are `s0`…`sN`; WHERE id is `k0` (key counter, independent of set counter)
+- Always pass base name without database prefix: `"w0"` not `"@w0"`
+
+See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 ### DatabaseContext Key Methods
 
@@ -339,8 +430,9 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
 - `WasCommitted` / `WasRolledBack` / `IsCompleted` - Transaction state
 - `IsolationLevel` - Current isolation level
-- `Commit()` / `Rollback()` - Transaction control
+- `Commit()` / `Rollback()` - Transaction control; throw `TransactionException` on failure
 - `SavepointAsync(string name)` / `RollbackToSavepointAsync(string name)` - Savepoints
+- **After a commit or rollback failure**: `IsCompleted` is `true` (the connection has been released). `Dispose` will not attempt a second rollback.
 
 ## Connection Management and DbMode
 
@@ -393,6 +485,64 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
+## Exception Hierarchy
+
+All database and framework errors surface as typed `DatabaseException` subclasses:
+
+```
+DatabaseException (abstract)                — namespace pengdows.crud.exceptions
+    Properties: Database, SqlState, ErrorCode, ConstraintName, IsTransient
+    InnerException: raw provider exception, always preserved
+├── DatabaseOperationException              — runtime database failures
+│   ├── ConstraintViolationException (abstract)
+│   │   ├── UniqueConstraintViolationException
+│   │   ├── ForeignKeyViolationException
+│   │   ├── NotNullViolationException
+│   │   └── CheckConstraintViolationException
+│   ├── TransientWriteConflictException (abstract, IsTransient = true)
+│   │   ├── DeadlockException
+│   │   └── SerializationConflictException
+│   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
+│   ├── CommandTimeoutException             — command timed out (IsTransient = true)
+│   ├── ConnectionException                 — connection-level failure
+│   └── TransactionException               — begin/commit/rollback failure
+├── SqlGenerationException                  — entity metadata programmer error
+└── DataMappingException                    — strict-mode coercion failure
+```
+
+**Throw sites:**
+- `SqlGenerationException` — thrown by `TypeMapRegistry` for entity metadata errors: missing `[Table]`, empty column name, enum `DbType` not string/numeric, duplicate column names, no `[Id]`/`[PrimaryKey]`, `[PrimaryKey]` order errors, invalid `[Version]` or audit field types. Uses `SupportedDatabase.Unknown`. Fires at registration/gateway construction, never during query execution.
+- `DataMappingException` — thrown by `DataReaderMapper` in strict mode when column→property coercion fails. Uses `SupportedDatabase.Unknown`. Fires during `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`.
+- `ConnectionException` — thrown by provider translators for connection-level failures (SQL Server error codes 10053/10054/10060/233/10061, Postgres SQLSTATE 08xx, MySQL codes 1040–1044, SQLite codes 14/26).
+- `TransactionException` — thrown by `TransactionContext` when begin/commit/rollback fails. After failure, `IsCompleted = true` (connection already released); `Dispose` will not attempt a second rollback.
+
+`OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
+
+**Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
+
+### ISqlDialect.AnalyzeException — provider-agnostic exception analysis
+
+`ISqlDialect.AnalyzeException(Exception)` returns a `DbExceptionInfo` record with provider-neutral fields for control flow:
+
+```csharp
+var info = context.Dialect.AnalyzeException(ex);
+if (info.IsRetryable) { /* retry */ }
+if (info.ConstraintKind == DbConstraintKind.ForeignKey) { /* 409 response */ }
+```
+
+`DbExceptionInfo` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Category` | `DbErrorCategory` | High-level category (ConstraintViolation, Deadlock, Timeout, …) |
+| `ConstraintKind` | `DbConstraintKind` | Specific constraint: None, Unique, ForeignKey, NotNull, Check, Unknown |
+| `IsTransient` | `bool` | True for deadlock, serialization failure, timeout |
+| `IsRetryable` | `bool` | True when the caller should generally retry |
+| `ProviderErrorCode` | `int?` | Provider-specific numeric error code when available |
+| `SqlState` | `string?` | SQLSTATE code when available |
+
+`ISqlDialect` also exposes targeted boolean helpers: `IsUniqueViolation`, `IsForeignKeyViolation`, `IsNotNullViolation`, `IsCheckConstraintViolation` — all accept `DbException` and default to `false` in the interface (overridden per dialect).
+
 ## DI Lifetime Rules
 
 | Component | Lifetime | Why |
@@ -429,6 +579,33 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 }
 ```
 
+## Extending PrimaryKeyTableGateway — The Correct Pattern
+
+Same inheritance pattern as `TableGateway` — inherit to add custom query methods.
+
+```csharp
+public interface IOrderItemGateway : IPrimaryKeyTableGateway<OrderItem>
+{
+    Task<List<OrderItem>> GetByOrderAsync(int orderId);
+}
+
+public class OrderItemGateway : PrimaryKeyTableGateway<OrderItem>, IOrderItemGateway
+{
+    public OrderItemGateway(IDatabaseContext context) : base(context) { }
+
+    public async Task<List<OrderItem>> GetByOrderAsync(int orderId)
+    {
+        var sc = BuildBaseRetrieve("oi");
+        sc.Query.Append(" WHERE ");
+        sc.Query.Append(sc.WrapObjectName("oi.order_id"));
+        sc.Query.Append(" = ");
+        var p = sc.AddParameterWithValue("oid", DbType.Int32, orderId);
+        sc.Query.Append(sc.MakeParameterName(p));
+        return await LoadListAsync(sc);
+    }
+}
+```
+
 ## Common Test Patterns
 
 **Creating Test Context with FakeDb:**
@@ -441,7 +618,7 @@ var helper = new TableGateway<TestEntity, long>(context);
 **Testing SQL Execution:**
 ```csharp
 using var container = context.CreateSqlContainer("SELECT 1");
-var result = await container.ExecuteScalarAsync<int>();
+var result = await container.ExecuteScalarRequiredAsync<int>();
 ```
 
 **Testing CRUD Operations:**
@@ -488,6 +665,33 @@ var results = await helper.LoadListAsync(sc);
 - The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues.
 - CI enforces minimum **83% coverage**; target **95%** for new work.
 - Expand `fakeDb` when tests need behaviors it lacks — don't bypass its limitations.
+
+## Adding a New Database
+
+**Every new database added to `SupportedDatabase` requires a complete integration test suite.** No exceptions.
+
+### Checklist
+
+1. **Enum value** — add to `pengdows.crud.abstractions/enums/SupportedDatabase.cs`
+2. **Dialect** — create `pengdows.crud/dialects/<Name>Dialect.cs`, register in `SqlDialectFactory.cs`
+3. **Test container** — create `testbed/<Name>/<Name>TestContainer.cs` (start, get context, dispose)
+4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` (override `CreateTable()`; override `TestUpsertCapability()` etc. only when the database has a documented limitation)
+5. **Always-on registration** — add to the `configurations` list in `ParallelTestOrchestrator.GetTestConfigurations()` (not in an opt-in block)
+6. **Unit tests** — add dialect-level unit tests in `pengdows.crud.Tests/dialects/`
+
+### Opt-in exceptions (require env var)
+
+Only databases that **cannot run in a standard Docker container** may remain opt-in:
+- `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
+
+All other databases must run automatically with no env var gating.
+
+### Aurora variants
+
+`AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image.
+They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL
+dialect respectively. No separate integration suite is required; they are covered by the
+MySQL/PostgreSQL suites.
 
 ## Core Invariants
 
@@ -552,7 +756,7 @@ var results = await helper.LoadListAsync(sc);
 - Program to interfaces (`IDatabaseContext`, `ITableGateway`, `ISqlContainer`)
 
 **Common Mistakes to Avoid:**
-- Don't expose public constructors on implementation types (except DatabaseContext)
+- Don't add new public constructors unless there is a clear SDK-use reason; prefer interface-first APIs and DI/factories
 - Use `RetrieveAsync` for multiple entities, `RetrieveOneAsync` for single by ID/key, `LoadSingleAsync` for custom SQL
 - Use correct `ExecutionType` (Read vs Write) for connections
 - Don't confuse `[Id]` (pseudo key/row ID) with `[PrimaryKey]` (business key)

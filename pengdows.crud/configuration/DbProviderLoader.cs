@@ -62,20 +62,8 @@ public class DbProviderLoader : IDbProviderLoader
             services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory);
 
             // Register with DbProviderFactories for legacy compatibility
-            try
-            {
-                DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);
-                _logger.LogInformation("Registered provider '{ProviderKey}' with DbProviderFactories", providerKey);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to register provider '{ProviderKey}' with DbProviderFactories",
-                    providerKey);
-                throw new InvalidOperationException(
-                    $"Failed to register DbProviderFactory for provider '{kvp.Key}' with provider name  '{kvp.Value.ProviderName}'.",
-                    ex
-                );
-            }
+            DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);
+            _logger.LogInformation("Registered provider '{ProviderKey}' with DbProviderFactories", providerKey);
         }
     }
 
@@ -85,7 +73,7 @@ public class DbProviderLoader : IDbProviderLoader
         Assembly? providerAssembly = null;
         if (!string.IsNullOrEmpty(config.AssemblyPath))
         {
-            var fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.AssemblyPath);
+            var fullPath = ResolveAssemblyPath(config.AssemblyPath, providerKey);
             if (!File.Exists(fullPath))
             {
                 _logger.LogError("Assembly file '{FullPath}' for provider '{ProviderKey}' does not exist", fullPath,
@@ -208,5 +196,23 @@ public class DbProviderLoader : IDbProviderLoader
                 ex
             );
         }
+    }
+
+    private static string ResolveAssemblyPath(string assemblyPath, string providerKey)
+    {
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var normalizedBaseDirectory = Path.GetFullPath(baseDirectory);
+        var candidatePath = Path.GetFullPath(Path.Combine(normalizedBaseDirectory, assemblyPath));
+
+        var baseWithSeparator = normalizedBaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                                + Path.DirectorySeparatorChar;
+
+        if (!candidatePath.StartsWith(baseWithSeparator, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Assembly path for provider '{providerKey}' must stay within '{normalizedBaseDirectory}'.");
+        }
+
+        return candidatePath;
     }
 }

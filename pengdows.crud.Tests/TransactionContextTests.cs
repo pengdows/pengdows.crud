@@ -21,6 +21,7 @@ using pengdows.crud.strategies.connection;
 using pengdows.crud.Tests.Mocks;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.metrics;
 using Xunit;
@@ -108,17 +109,12 @@ public class TransactionContextTests
     }
 
     [Theory]
-    [InlineData(SupportedDatabase.CockroachDb)]
-    [InlineData(SupportedDatabase.Sqlite)]
-    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase)
+    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Sqlite,      IsolationLevel.ReadCommitted)]
+    public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase, IsolationLevel level)
     {
-        var tx = CreateContext(supportedDatabase).BeginTransaction(IsolationLevel.ReadUncommitted);
-        if (tx.IsolationLevel < IsolationLevel.Chaos)
-        {
-            Console.WriteLine($"{supportedDatabase}: {nameof(tx.IsolationLevel)}: {tx.IsolationLevel}");
-        }
-
-        Assert.True(IsolationLevel.Chaos < tx.IsolationLevel); // upgraded due to ReadWrite
+        using var tx = CreateContext(supportedDatabase).BeginTransaction(level);
+        Assert.Equal(level, tx.IsolationLevel);
     }
 
     [Fact]
@@ -147,8 +143,8 @@ public class TransactionContextTests
         var context = CreateTestContext(throwOnCommit: true);
         var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
 
-        Assert.Throws<InvalidOperationException>(() => tx.Commit());
-        Assert.False(tx.IsCompleted);
+        Assert.Throws<TransactionException>(() => tx.Commit());
+        Assert.True(tx.IsCompleted);
         Assert.False(tx.WasCommitted);
         Assert.False(tx.WasRolledBack);
         Assert.True(context.ConnectionReleased);
@@ -162,8 +158,8 @@ public class TransactionContextTests
         var context = CreateTestContext(throwOnRollback: true);
         var tx = TransactionContext.Create(context, IsolationLevel.ReadCommitted);
 
-        Assert.Throws<InvalidOperationException>(() => tx.Rollback());
-        Assert.False(tx.IsCompleted);
+        Assert.Throws<TransactionException>(() => tx.Rollback());
+        Assert.True(tx.IsCompleted);
         Assert.False(tx.WasRolledBack);
         Assert.True(context.ConnectionReleased);
 
@@ -183,7 +179,7 @@ public class TransactionContextTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read);
         });
 
         Assert.True(context.ConnectionReleased);
@@ -206,7 +202,7 @@ public class TransactionContextTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read, true);
+            await TransactionContext.CreateAsync(context, IsolationLevel.Serializable, ExecutionType.Read);
         });
 
         Assert.True(context.ConnectionReleased); // connection released ✓
@@ -329,7 +325,7 @@ public class TransactionContextTests
 
         public string ConnectionString => "Data Source=test";
 
-        public string Name { get; set; } = "TestContext";
+        public string Name { get; } = "TestContext";
 
         public DbDataSource? DataSource => null;
 
@@ -407,28 +403,26 @@ public class TransactionContextTests
             return CreateDbParameter(null, type, value);
         }
 
-        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
-            bool? readOnly)
+        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
         {
             throw new NotSupportedException();
         }
 
-        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType,
-            bool? readOnly)
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
         {
             throw new NotSupportedException();
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel,
             ExecutionType executionType,
-            bool? readOnly, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType,
-            bool? readOnly, CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -441,22 +435,6 @@ public class TransactionContextTests
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
         {
             return _dialect.GenerateRandomName(length, parameterNameMaxLength);
-        }
-
-        public void AssertIsWriteConnection()
-        {
-            if (_isReadOnlyContext)
-            {
-                throw new InvalidOperationException("Context is read-only.");
-            }
-        }
-
-        public void AssertIsReadConnection()
-        {
-            if (!_isReadOnlyContext)
-            {
-                throw new InvalidOperationException("Context is not readable.");
-            }
         }
 
         public void CloseAndDisposeConnection(ITrackedConnection? conn)
@@ -477,11 +455,10 @@ public class TransactionContextTests
 
         public Regex ParameterNamePattern => _dialect.ParameterNamePattern;
 
-        public bool PrepareStatements => _dataSourceInfo.PrepareStatements;
+        public bool DefaultPrepareStatements => _dataSourceInfo.DefaultPrepareStatements;
 
-        public bool? ForceManualPrepare => null;
 
-        public bool? DisablePrepare => null;
+        public CommandPrepareMode PrepareMode => CommandPrepareMode.Auto;
 
         public bool SupportsNamedParameters => _dataSourceInfo.SupportsNamedParameters;
 
@@ -981,7 +958,7 @@ public class TransactionContextTests
         var method =
             typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        await (Task)method!.Invoke(tx, null)!;
+        await (ValueTask)method!.Invoke(tx, null)!;
 
         Assert.True(tx.WasRolledBack);
         Assert.True(tx.IsCompleted);
@@ -995,10 +972,10 @@ public class TransactionContextTests
         var method =
             typeof(TransactionContext).GetMethod("RollbackAsync", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        await (Task)method!.Invoke(tx, null)!;
+        await (ValueTask)method!.Invoke(tx, null)!;
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await (Task)method.Invoke(tx, null)!);
+            await (ValueTask)method.Invoke(tx, null)!);
     }
 
     [Fact]
@@ -1025,7 +1002,7 @@ public class TransactionContextTests
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
         Assert.NotNull(tx.DataSourceInfo);
 #pragma warning disable CS0618
-        Assert.Equal(context.SessionSettingsPreamble, tx.SessionSettingsPreamble);
+        Assert.Equal(context.GetSessionSettingsPreamble(), tx.GetSessionSettingsPreamble());
 #pragma warning restore CS0618
         Assert.Equal(context.GetBaseSessionSettings(), tx.GetBaseSessionSettings());
         Assert.Equal(context.GetReadOnlySessionSettings(), tx.GetReadOnlySessionSettings());

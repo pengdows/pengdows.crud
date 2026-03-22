@@ -23,9 +23,6 @@ public sealed class CoveragePush_DatabaseContextLifecycleInitializationTests
     private static readonly MethodInfo GetConnectionOpenLockMethod =
         typeof(DatabaseContext).GetMethod("GetConnectionOpenLock", AnyInstance)!;
 
-    private static readonly MethodInfo GetCachedSessionSettingsMethod =
-        typeof(DatabaseContext).GetMethod("GetCachedSessionSettings", AnyInstance)!;
-
     private static readonly MethodInfo ResolveDataSourceMethod =
         typeof(DatabaseContext).GetMethod("ResolveDataSource", AnyInstance)!;
 
@@ -85,17 +82,15 @@ public sealed class CoveragePush_DatabaseContextLifecycleInitializationTests
     }
 
     [Fact]
-    public void Lifecycle_GetCachedSessionSettings_CoversReadOnlyAndReadWritePaths()
+    public void Lifecycle_SessionSettingsFields_ArePopulatedDuringInitialization()
     {
         using var context = CreateSqliteContext();
 
-        var readOnlyFirst = Assert.IsType<string>(GetCachedSessionSettingsMethod.Invoke(context, new object[] { true }));
-        var readOnlySecond = Assert.IsType<string>(GetCachedSessionSettingsMethod.Invoke(context, new object[] { true }));
-        Assert.Equal(readOnlyFirst, readOnlySecond);
+        var readOnlySettings = typeof(DatabaseContext).GetField("_cachedReadOnlySessionSettings", AnyInstance)!.GetValue(context);
+        var readWriteSettings = typeof(DatabaseContext).GetField("_cachedReadWriteSessionSettings", AnyInstance)!.GetValue(context);
 
-        var readWriteFirst = Assert.IsType<string>(GetCachedSessionSettingsMethod.Invoke(context, new object[] { false }));
-        var readWriteSecond = Assert.IsType<string>(GetCachedSessionSettingsMethod.Invoke(context, new object[] { false }));
-        Assert.Equal(readWriteFirst, readWriteSecond);
+        Assert.NotNull(readOnlySettings);
+        Assert.NotNull(readWriteSettings);
     }
 
     [Fact]
@@ -320,5 +315,46 @@ public sealed class CoveragePush_DatabaseContextLifecycleInitializationTests
         {
             throw new InvalidOperationException("builder failure");
         }
+    }
+
+    // =========================================================================
+    // String-based provider name constructor (lines 69-83)
+    // =========================================================================
+
+    [Fact]
+    public void Constructor_StringProviderName_InitializesContext()
+    {
+        // Register fakeDb factory under a provider name so DbProviderFactories.GetFactory can find it
+        const string providerName = "pengdows.crud.fakeDb.test.init";
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        try
+        {
+            System.Data.Common.DbProviderFactories.RegisterFactory(providerName, factory);
+        }
+        catch (InvalidOperationException)
+        {
+            // Already registered from a previous test run — that's fine
+        }
+
+        using var ctx = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=Sqlite",
+            providerName);
+
+        Assert.NotNull(ctx);
+        Assert.NotNull(ctx.GetDialect());
+    }
+
+    [Fact]
+    public void Constructor_StringProviderName_NullConnectionString_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new DatabaseContext(null!, "some-provider"));
+    }
+
+    [Fact]
+    public void Constructor_StringProviderName_NullProviderName_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new DatabaseContext("Data Source=:memory:", (string)null!));
     }
 }

@@ -24,12 +24,15 @@ public class DatabaseContextInitializationAdditionalTests
     }
 
     [Fact]
-    public void Constructor_IgnoresDataSourceCreationFailures()
+    public void Constructor_FallsBackToGenericDataSourceWhenProviderCreateDataSourceThrows()
     {
+        // ThrowingDataSourceFactory overrides CreateDataSource(string) but throws an unexpected
+        // exception. The native probe fails, but GenericDbDataSource fallback still succeeds,
+        // so context construction must not crash and DataSource must be non-null.
         var factory = new ThrowingDataSourceFactory();
         using var ctx = new DatabaseContext("Data Source=:memory:", factory);
 
-        Assert.Null(ctx.DataSource);
+        Assert.NotNull(ctx.DataSource);
     }
 
     [Fact]

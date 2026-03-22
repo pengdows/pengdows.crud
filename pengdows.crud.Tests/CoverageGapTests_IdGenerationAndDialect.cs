@@ -254,8 +254,8 @@ public class CoverageGapTests_IdGenerationAndDialect
         };
         await using var ctx = new DatabaseContext(config, factory);
 
-        // BeginTransaction with readOnly=true triggers TryExecuteReadOnlySqlAsync
-        await using var tx = ctx.BeginTransaction(readOnly: true);
+        // BeginTransaction with executionType: ExecutionType.Read triggers TryExecuteReadOnlySqlAsync
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         Assert.NotNull(tx);
         tx.Commit();
     }
@@ -271,7 +271,7 @@ public class CoverageGapTests_IdGenerationAndDialect
         await using var ctx = new DatabaseContext(config, factory);
 
         // PostgreSQL read-only transaction triggers TryExecuteReadOnlySqlAsync
-        await using var tx = ctx.BeginTransaction(readOnly: true);
+        await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         Assert.NotNull(tx);
         tx.Commit();
     }
@@ -286,7 +286,7 @@ public class CoverageGapTests_IdGenerationAndDialect
         };
         await using var ctx = new DatabaseContext(config, factory);
 
-        await using var tx = await ctx.BeginTransactionAsync(readOnly: true);
+        await using var tx = await ctx.BeginTransactionAsync(executionType: ExecutionType.Read);
         Assert.NotNull(tx);
         tx.Commit();
     }

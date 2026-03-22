@@ -67,6 +67,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
             // Define the assignment logic first so we can wrap it in a try-catch
             Expression valueReadExpr;
+            // Set to true in the else branch for non-nullable value types to skip the
+            // IsDBNull guard — see comment near the end of the else block below.
+            var skipNullGuard = false;
 
             if (column.IsJsonType)
             {
@@ -149,7 +152,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 var getMethod = GetReaderMethod(fieldType);
                 var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
-                
+
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
@@ -179,14 +182,22 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // BuildConversionExpression handles the unboxing + any type conversion.
                     valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType);
                 }
+
+                // Non-nullable value types: skip the IsDBNull guard. The caller's schema
+                // should guarantee no NULLs for these columns; if the DB does return NULL,
+                // the typed getter will throw — which is the correct, loud failure mode
+                // rather than silently leaving the property at default(T).
+                skipNullGuard = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
             }
 
             // Directly assign without per-column try-catch for maximum performance.
             // Exceptions will bubble up naturally.
             var propertyAccess = Expression.Property(entityVar, property);
             var assignment = Expression.Assign(propertyAccess, valueReadExpr);
-            
-            expressions.Add(Expression.IfThen(notDbNull, assignment));
+
+            expressions.Add(skipNullGuard
+                ? assignment
+                : Expression.IfThen(notDbNull, assignment));
         }
 
         expressions.Add(entityVar);
@@ -274,6 +285,15 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         {
             var notEqualZero = Expression.NotEqual(value, Expression.Constant(0L));
             return targetType != underlyingTargetType ? Expression.Convert(notEqualZero, targetType) : notEqualZero;
+        }
+
+        // Fast path: string column → Guid property (common for SQLite, Oracle, DuckDB, Snowflake).
+        // Avoids boxing the string to object and the TypeCoercionHelper.Coerce dispatch.
+        if (sourceType == typeof(string) && underlyingTargetType == typeof(Guid))
+        {
+            var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
+            var parsed = Expression.Call(parseMethod, value);
+            return targetType != underlyingTargetType ? Expression.Convert(parsed, targetType) : parsed;
         }
 
         // Fallback: TypeCoercionHelper.Coerce(object, fieldType, targetType)

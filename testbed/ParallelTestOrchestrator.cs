@@ -20,17 +20,12 @@ public class ParallelTestOrchestrator
 {
     private readonly IServiceProvider _services;
     private readonly ConcurrentBag<TestResult> _results = new();
-    private readonly bool _includeOracle;
     private readonly bool _includeSnowflake;
-    private readonly bool _includeYugabyte;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeOracle = false,
-        bool includeSnowflake = false, bool includeYugabyte = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false)
     {
         _services = services;
-        _includeOracle = includeOracle;
         _includeSnowflake = includeSnowflake;
-        _includeYugabyte = includeYugabyte;
     }
 
     /// <summary>
@@ -46,11 +41,11 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SqlServer => new SqlServerTestContainer(),
             SupportedDatabase.MySql => new MySqlTestContainer(),
             SupportedDatabase.MariaDb => new MariaDbContainer(),
-            SupportedDatabase.Oracle when _includeOracle => new OracleTestContainer(),
+            SupportedDatabase.Oracle => new OracleTestContainer(),
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
-            SupportedDatabase.YugabyteDb when _includeYugabyte => new YugabyteTestContainer(),
+            SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             _ => null
@@ -145,6 +140,8 @@ public class ParallelTestOrchestrator
             result.Success = true;
             result.TestTime = testSw.Elapsed;
             result.TotalTime = DateTime.UtcNow - startTime;
+            result.ChecksPassed = testProvider.ChecksPassed;
+            result.ChecksSkipped = testProvider.ChecksSkipped;
 
             Console.WriteLine(
                 $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s");
@@ -183,6 +180,9 @@ public class ParallelTestOrchestrator
         _results.Add(result);
     }
 
+    // POLICY: Every new SupportedDatabase value requires an entry in this list.
+    // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
+    // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
     private List<TestConfiguration> GetTestConfigurations()
     {
         var configurations = new List<TestConfiguration>
@@ -249,11 +249,25 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "TiDB",
                 Container = new TiDBTestContainer(),
                 TestProviderFactory = (db, sp) => new TiDBTestProvider(db, sp)
-            }
+            },
+            new()
+            {
+                ContainerName = "YugabyteDB",
+                DatabaseProvider = "YugabyteDB",
+                Container = new YugabyteTestContainer(),
+                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "Oracle",
+                DatabaseProvider = "Oracle",
+                Container = new OracleTestContainer(),
+                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
+            },
             // Add Sybase as needed
         };
 
-        // Snowflake — requires external credentials; opt-in via INCLUDE_SNOWFLAKE=true
+        // Snowflake — requires cloud credentials; no Docker image; opt-in via INCLUDE_SNOWFLAKE=true
         if (_includeSnowflake)
         {
             configurations.Add(new TestConfiguration
@@ -262,29 +276,6 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Snowflake",
                 Container = new SnowflakeTestContainer(),
                 TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
-            });
-        }
-
-        if (_includeYugabyte)
-        {
-            configurations.Add(new TestConfiguration
-            {
-                ContainerName = "YugabyteDB",
-                DatabaseProvider = "YugabyteDB",
-                Container = new YugabyteTestContainer(),
-                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
-            });
-        }
-
-        // Oracle - check if external Oracle is available
-        if (_includeOracle)
-        {
-            configurations.Add(new TestConfiguration
-            {
-                ContainerName = "Oracle",
-                DatabaseProvider = "Oracle",
-                Container = new OracleTestContainer(), // Use managed Testcontainer
-                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             });
         }
 
@@ -298,50 +289,46 @@ public class ParallelTestOrchestrator
 
     private void DisplayResults()
     {
-        Console.WriteLine("\n" + "=".PadRight(80, '='));
+        const int W = 84;
+        Console.WriteLine("\n" + new string('=', W));
         Console.WriteLine("TEST RESULTS SUMMARY");
-        Console.WriteLine("=".PadRight(80, '='));
+        Console.WriteLine(new string('=', W));
 
         var results = _results.OrderBy(r => r.ContainerName).ToArray();
-        var successful = results.Count(r => r.Success);
-        var failed = results.Length - successful;
+        var totalPassed = results.Count(r => r.Success);
+        var totalFailed = results.Length - totalPassed;
+        var totalChecks = results.Sum(r => r.ChecksPassed);
+        var totalSkipped = results.Sum(r => r.ChecksSkipped);
 
-        Console.WriteLine($"Total: {results.Length} | Successful: {successful} | Failed: {failed}");
-        Console.WriteLine();
+        // Header
+        Console.WriteLine($"{"Database",-18} {"Pass",5} {"Fail",5} {"Skip",5}  {"Time",8}  Status");
+        Console.WriteLine(new string('-', W));
 
-        // Results table — Startup = container ready time, Exec = RunTest() only
-        Console.WriteLine(
-            $"{"Container",-15} {"Provider",-12} {"Status",-8} {"Startup",-10} {"Exec",-10} {"Error",-30}");
-        Console.WriteLine(new string('-', 80));
-
-        foreach (var result in results)
+        foreach (var r in results)
         {
-            var status = result.Success ? "✅ PASS" : "❌ FAIL";
-            var startupTime = result.ContainerStartTime.TotalSeconds.ToString("F2") + "s";
-            var execTime = result.TestTime.HasValue ? result.TestTime.Value.TotalSeconds.ToString("F2") + "s" : "N/A";
-            var error = result.Error?.Substring(0, Math.Min(result.Error.Length, 30)) ?? "";
+            var passCol = r.Success ? r.ChecksPassed.ToString() : r.ChecksPassed.ToString();
+            var failCol = r.Success ? "-" : "❌";
+            var skipCol = r.ChecksSkipped > 0 ? r.ChecksSkipped.ToString() : "-";
+            var timeCol = r.TestTime.HasValue ? r.TestTime.Value.TotalSeconds.ToString("F2") + "s" : "-";
+            var status = r.Success ? "✅" : $"❌  {r.Error?[..Math.Min(r.Error.Length, 38)] ?? ""}";
 
-            Console.WriteLine(
-                $"{result.ContainerName,-15} {result.DatabaseProvider,-12} {status,-8} {startupTime,-10} {execTime,-10} {error,-30}");
+            Console.WriteLine($"{r.ContainerName,-18} {passCol,5} {failCol,5} {skipCol,5}  {timeCol,8}  {status}");
         }
 
-        Console.WriteLine();
-
-        if (failed > 0)
-        {
-            Console.WriteLine("FAILURES:");
-            foreach (var failure in results.Where(r => !r.Success))
-            {
-                Console.WriteLine($"  {failure.ContainerName}: {failure.Error}");
-            }
-        }
-
+        // Totals row
+        Console.WriteLine(new string('-', W));
         var execTimes = results.Where(r => r.TestTime.HasValue).Select(r => r.TestTime!.Value.TotalSeconds).ToArray();
-        if (execTimes.Length > 0)
+        var totalTime = execTimes.Length > 0 ? execTimes.Sum().ToString("F2") + "s" : "-";
+        Console.WriteLine($"{"TOTAL",-18} {totalChecks,5} {totalFailed,5} {totalSkipped,5}  {totalTime,8}  {totalPassed}/{results.Length} databases");
+        Console.WriteLine(new string('=', W));
+
+        if (totalFailed > 0)
         {
-            Console.WriteLine($"Test execution — max: {execTimes.Max():F2}s  avg: {execTimes.Average():F2}s  total: {execTimes.Sum():F2}s");
+            Console.WriteLine("\nFAILURES:");
+            foreach (var f in results.Where(r => !r.Success))
+                Console.WriteLine($"  {f.ContainerName}: {f.Error}");
+            Console.WriteLine();
         }
-        Console.WriteLine("=".PadRight(80, '='));
     }
 }
 
@@ -363,4 +350,6 @@ public class TestResult
     public TimeSpan TotalTime { get; set; }
     public bool Success { get; set; }
     public string? Error { get; set; }
+    public int ChecksPassed { get; set; }
+    public int ChecksSkipped { get; set; }
 }

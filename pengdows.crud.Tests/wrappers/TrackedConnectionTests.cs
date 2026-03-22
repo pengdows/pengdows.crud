@@ -1,6 +1,8 @@
 #region
 
 using System.Data;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -82,6 +84,39 @@ public class TrackedConnectionTests
 
         Assert.Equal(1, count);
         Assert.True(tracked.WasOpened);
+    }
+
+    [Fact]
+    public async Task OpenAsync_InvokesAsyncOnFirstOpen_OnlyOnce()
+    {
+        await using var conn = new fakeDbConnection();
+        var count = 0;
+        await using var tracked = new TrackedConnection(
+            conn,
+            onFirstOpenAsync: async (_, _) =>
+            {
+                await Task.Delay(1);
+                count++;
+            });
+
+        await tracked.OpenAsync();
+        await tracked.OpenAsync();
+
+        Assert.Equal(1, count);
+        Assert.True(tracked.WasOpened);
+    }
+
+    [Fact]
+    public async Task OpenAsync_WithCancelledToken_PropagatesCancellationToAsyncFirstOpen()
+    {
+        await using var conn = new fakeDbConnection();
+        await using var tracked = new TrackedConnection(
+            conn,
+            onFirstOpenAsync: (_, ct) => Task.Delay(Timeout.InfiniteTimeSpan, ct));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await tracked.OpenAsync(cts.Token));
     }
 
     [Fact]

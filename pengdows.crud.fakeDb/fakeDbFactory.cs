@@ -24,6 +24,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private readonly List<fakeDbConnection> _connections = new();
     private readonly List<fakeDbConnection> _createdConnections = new();
     private Exception? _globalPersistentScalarException;
+    private Exception? _globalTransactionCommitException;
+    private Exception? _globalTransactionRollbackException;
     public bool EnableDataPersistence { get; set; } = false;
 
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
@@ -132,6 +134,16 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             c.SetPersistentScalarException(_globalPersistentScalarException);
         }
 
+        if (_globalTransactionCommitException != null)
+        {
+            c.SetTransactionCommitException(_globalTransactionCommitException);
+        }
+
+        if (_globalTransactionRollbackException != null)
+        {
+            c.SetTransactionRollbackException(_globalTransactionRollbackException);
+        }
+
         // Apply data persistence setting from factory
         c.EnableDataPersistence = EnableDataPersistence;
 
@@ -148,6 +160,18 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public void SetGlobalPersistentScalarException(Exception? exception)
     {
         _globalPersistentScalarException = exception;
+    }
+
+    /// <summary>Sets an exception to throw when any connection's transaction Commit() is called.</summary>
+    public void SetGlobalTransactionCommitException(Exception exception)
+    {
+        _globalTransactionCommitException = exception;
+    }
+
+    /// <summary>Sets an exception to throw when any connection's transaction Rollback() is called.</summary>
+    public void SetGlobalTransactionRollbackException(Exception exception)
+    {
+        _globalTransactionRollbackException = exception;
     }
 
     public void SetCommandFailure(string commandText, Exception exception)

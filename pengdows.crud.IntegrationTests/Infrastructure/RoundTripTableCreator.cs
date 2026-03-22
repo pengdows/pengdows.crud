@@ -21,7 +21,7 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 ///   <item>Oracle: datetimeoffset → TIMESTAMP WITH TIME ZONE;
 ///     guid → VARCHAR2(36); binary → RAW(256).</item>
 ///   <item>Firebird: datetimeoffset → TIMESTAMP (UTC normalised, offset dropped);
-///     guid → CHAR(36); binary → VARBINARY(256).</item>
+///     guid → CHAR(16) CHARACTER SET OCTETS (binary, 16 bytes); binary → VARBINARY(256).</item>
 /// </list>
 /// </summary>
 public class RoundTripTableCreator
@@ -226,7 +226,7 @@ END;", qp, qs, table);
     private string CreateFirebirdSql()
     {
         // Firebird 3.x has no TIMESTAMP WITH TIME ZONE — plain TIMESTAMP (UTC stored).
-        // guid_value: CHAR(36) — string representation.
+        // guid_value: CHAR(16) CHARACTER SET OCTETS — 16-byte binary UUID (Binary GuidStorageFormat).
         // Firebird does not support IF NOT EXISTS; the caller swallows "already exists".
         var t = IntegrationObjectNameHelper.Table(_context, "round_trip_entity");
         return $@"
@@ -240,7 +240,7 @@ CREATE TABLE {t} (
     {_context.WrapObjectName("decimal_value")}        DECIMAL(18,8)  NOT NULL,
     {_context.WrapObjectName("bool_value")}           SMALLINT       NOT NULL,
     {_context.WrapObjectName("datetimeoffset_value")} TIMESTAMP      NOT NULL,
-    {_context.WrapObjectName("guid_value")}           CHAR(36)       NOT NULL,
+    {_context.WrapObjectName("guid_value")}           CHAR(16) CHARACTER SET OCTETS NOT NULL,
     {_context.WrapObjectName("binary_value")}         VARBINARY(256) NOT NULL
 )";
     }

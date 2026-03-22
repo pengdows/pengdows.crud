@@ -23,6 +23,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -64,6 +65,9 @@ internal class DuckDbDialect : SqlDialect
 
     // DuckDB supports prepare for modest performance gains
     public override bool PrepareStatements => true;
+
+    // DuckDB stores GUIDs as VARCHAR UUID strings (no native UUID column type in older versions).
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
     // DuckDB has excellent SQL standard compliance and modern features
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
@@ -117,7 +121,7 @@ internal class DuckDbDialect : SqlDialect
         string? connectionStringOverride)
     {
         var cs = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         if (readOnly && !IsMemoryDatabase(cs) &&
@@ -146,33 +150,30 @@ internal class DuckDbDialect : SqlDialect
     }
 
     private const string ReadOnlyConnectionParam = "access_mode=READ_ONLY";
-    private const string ReadOnlySessionSetting = "SET access_mode = 'read_only';";
-    private const string ReadWriteSessionSetting = "SET access_mode = 'read_write';";
 
+    // Read-only enforcement for DuckDB uses the connection string parameter access_mode=READ_ONLY,
+    // applied at database-open time via ApplyConnectionSettingsCore and GetReadOnlyConnectionString.
+    // This is the only reliable enforcement path: access_mode is a file-open attribute set when
+    // DuckDB opens the database file and cannot be changed on an already-open connection.
+    // No session SQL or transaction SQL is used for read-only enforcement.
     public override string? GetReadOnlyConnectionParameter()
     {
         return ReadOnlyConnectionParam;
     }
 
-    public override string GetReadOnlySessionSettings()
+    /// <summary>
+    /// DuckDB read-only mode is enforced via <c>access_mode=READ_ONLY</c> in the connection string
+    /// (see <see cref="ApplyConnectionSettingsCore"/> and <see cref="GetReadOnlyConnectionString"/>),
+    /// not via session SQL. Returns empty string to avoid an extra RTT on every connection open.
+    /// </summary>
+    public override string GetFinalSessionSettings(bool readOnly)
     {
-        return ReadOnlySessionSetting;
+        return string.Empty;
     }
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        TryExecuteReadOnlySql(transaction, ReadOnlySessionSetting, "DuckDB");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, ReadOnlySessionSetting, "DuckDB", cancellationToken);
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return ReadWriteSessionSetting;
+        return string.Empty;
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
@@ -328,15 +329,7 @@ internal class DuckDbDialect : SqlDialect
         var parameter = base.CreateDbParameter(name, type, value);
 
         // DuckDB specific parameter handling
-        if (type == DbType.Guid && value is Guid guidValue)
-        {
-            // DuckDB handles GUIDs as strings in UUID format
-            parameter.DbType = DbType.String;
-            // Use string.Create with Guid.TryFormat to avoid allocations
-            parameter.Value =
-                string.Create(36, guidValue, static (span, guid) => { guid.TryFormat(span, out _, "D"); });
-        }
-        else if (type == DbType.Boolean && value is bool boolValue)
+        if (type == DbType.Boolean && value is bool boolValue)
         {
             // DuckDB has native boolean support
             parameter.DbType = DbType.Boolean;

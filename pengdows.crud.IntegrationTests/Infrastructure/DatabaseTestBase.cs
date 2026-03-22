@@ -252,6 +252,14 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         return Fixture.CreateAdditionalContextAsync(provider);
     }
 
+    /// <summary>
+    /// Returns true for providers that enforce read-only at the transaction level.
+    /// Oracle is excluded: its read-only transactions pin a consistent snapshot, and the per-test
+    /// DDL reset path can cause ORA-01466 when Oracle later re-reads the recreated tables.
+    /// </summary>
+    protected static bool SupportsReadOnlyTransactions(SupportedDatabase provider) =>
+        provider is SupportedDatabase.PostgreSql or SupportedDatabase.SqlServer or SupportedDatabase.MySql;
+
     private static bool IsTableMissingException(Exception ex)
     {
         var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
@@ -273,11 +281,6 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         if (!string.IsNullOrWhiteSpace(integrationOnly))
         {
             return $"INTEGRATION_ONLY={integrationOnly} is set; this provider is not included in the filter";
-        }
-
-        if (provider == SupportedDatabase.Oracle && !IntegrationTestConfiguration.ShouldIncludeOracle)
-        {
-            return "requires INCLUDE_ORACLE=true to enable Oracle tests";
         }
 
         if (provider == SupportedDatabase.Snowflake && !IntegrationTestConfiguration.ShouldIncludeSnowflake)

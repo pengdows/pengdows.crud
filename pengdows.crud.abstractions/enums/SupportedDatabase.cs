@@ -6,7 +6,7 @@ namespace pengdows.crud.enums;
 /// <remarks>
 /// <para>
 /// The <c>[Flags]</c> attribute is intentional. Values can be combined with bitwise OR for
-/// multi-product matching or filtering — for example:
+/// multi-product matching or filtering — for example,
 /// <code>
 /// var mysqlFamily = SupportedDatabase.MySql | SupportedDatabase.AuroraMySql | SupportedDatabase.MariaDb;
 /// bool isMysqlCompatible = (mysqlFamily &amp; context.Product) != 0;

@@ -2,6 +2,7 @@
 
 using System.Data.Common;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -47,7 +48,7 @@ public class DatabaseContextUncoveredMethodsTests
         var method = typeof(DatabaseContext).GetMethod("GetStandardConnection",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        var connection = method!.Invoke(context, new object[] { false, false });
+        var connection = method!.Invoke(context, new object[] { ExecutionType.Read, false });
 
         Assert.NotNull(connection);
     }
@@ -67,7 +68,7 @@ public class DatabaseContextUncoveredMethodsTests
         var method = typeof(DatabaseContext).GetMethod("GetStandardConnection",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        var connection = method!.Invoke(context, new object[] { true, false });
+        var connection = method!.Invoke(context, new object[] { ExecutionType.Read, true });
 
         Assert.NotNull(connection);
     }
@@ -108,7 +109,7 @@ public class DatabaseContextUncoveredMethodsTests
         };
         var context = new DatabaseContext(config, factory);
 
-        var preamble = context.SessionSettingsPreamble;
+        var preamble = context.GetSessionSettingsPreamble();
 
         Assert.NotNull(preamble);
     }
@@ -127,6 +128,21 @@ public class DatabaseContextUncoveredMethodsTests
         Assert.Equal(SupportedDatabase.Sqlite, context.Product);
 
         context.Dispose();
+    }
+
+    // -------------------------------------------------------------------------
+    // ISqlDialectProvider.Dialect — explicit interface (DatabaseContext.cs line 597)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ISqlDialectProvider_Dialect_ReturnsDialect()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite.ToString());
+        using var context = new DatabaseContext(
+            $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}", factory);
+
+        var dialectProvider = (ISqlDialectProvider)context;
+        Assert.NotNull(dialectProvider.Dialect);
     }
 
     [Fact]

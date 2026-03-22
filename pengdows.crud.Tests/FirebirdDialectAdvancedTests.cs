@@ -248,11 +248,38 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void CreateDbParameter_Should_Convert_Guid_To_String()
+    public void CreateDbParameter_Guid_DefaultsToBinary()
     {
         var guidValue = Guid.NewGuid();
 
+        // Default GuidStorageMode is Binary; bytes are stored in RFC 4122 big-endian layout.
         var parameter = _dialect.CreateDbParameter("test", DbType.Guid, guidValue);
+
+        Assert.Equal(DbType.Binary, parameter.DbType);
+        var stored = (byte[])parameter.Value!;
+        Assert.Equal(16, stored.Length);
+        // Reverse the byte swap to recover the original Guid (Data1/2/3 little-endian ← big-endian).
+        var roundTripped = new Guid(new byte[]
+        {
+            stored[3], stored[2], stored[1], stored[0],
+            stored[5], stored[4],
+            stored[7], stored[6],
+            stored[8], stored[9], stored[10], stored[11],
+            stored[12], stored[13], stored[14], stored[15]
+        });
+        Assert.Equal(guidValue, roundTripped);
+    }
+
+    [Fact]
+    public void CreateDbParameter_Guid_StringMode_ConvertsToString()
+    {
+        var dialectWithStringMode = new FirebirdDialect(_factory, _logger)
+        {
+            GuidStorageMode = FirebirdGuidStorageMode.String
+        };
+        var guidValue = Guid.NewGuid();
+
+        var parameter = dialectWithStringMode.CreateDbParameter("test", DbType.Guid, guidValue);
 
         Assert.Equal(DbType.String, parameter.DbType);
         Assert.Equal(guidValue.ToString("D"), parameter.Value);

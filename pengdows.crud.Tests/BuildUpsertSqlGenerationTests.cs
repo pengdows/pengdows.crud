@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using pengdows.crud.attributes;
 using pengdows.crud.dialects;
@@ -92,7 +93,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)Context).Dialect;
+        var dialect = Context.GetDialect();
         var columns = BuildInsertColumns(Context);
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(Context, dialect);
@@ -112,7 +113,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var columns = BuildInsertColumns(context);
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(context, dialect);
@@ -132,7 +133,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var table = context.WrapObjectName("UpsertLite");
         var wrappedId = context.WrapObjectName("Id");
         var wrappedName = context.WrapObjectName("Name");
@@ -141,8 +142,9 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var srcColumns = string.Join(", ", new[] { wrappedId, wrappedName, wrappedVersion });
         var insertValues = string.Join(", ", new[] { $"s.{wrappedId}", $"s.{wrappedName}", $"s.{wrappedVersion}" });
         var updateSet = BuildMergeUpdateSet(context, dialect);
+        // UpsertLiteEntity has a [Version] column → WHEN MATCHED arm includes version guard.
         var expected = $"MERGE INTO {table} t USING (VALUES ({values})) AS s ({srcColumns}) ON " +
-                       $"t.{wrappedId} = s.{wrappedId} WHEN MATCHED THEN UPDATE SET {updateSet} " +
+                       $"t.{wrappedId} = s.{wrappedId} WHEN MATCHED AND t.{wrappedVersion} = s.{wrappedVersion} THEN UPDATE SET {updateSet} " +
                        $"WHEN NOT MATCHED THEN INSERT ({srcColumns}) VALUES ({insertValues});";
         Assert.Equal(expected, sql);
     }
@@ -160,7 +162,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
 
-        var dialect = ((ISqlDialectProvider)context).Dialect;
+        var dialect = context.GetDialect();
         var targetPrefix = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
         var wrappedKey = context.WrapObjectName("NaturalKey");
         var wrappedValue = context.WrapObjectName("Value");

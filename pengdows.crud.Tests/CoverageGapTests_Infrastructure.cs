@@ -107,7 +107,7 @@ public class CoverageGapTests_Infrastructure
         public Guid RootId => Guid.Empty;
         public ReadWriteMode ReadWriteMode => ReadWriteMode.ReadWrite;
         public string ConnectionString => string.Empty;
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; } = string.Empty;
         public DbDataSource? DataSource => null;
         public IDataSourceInformation DataSourceInfo => throw new NotImplementedException();
         public ISqlDialect Dialect => throw new NotImplementedException();
@@ -129,8 +129,7 @@ public class CoverageGapTests_Infrastructure
 
         public SupportedDatabase Product => SupportedDatabase.Sqlite;
         public long PeakOpenConnections => 0;
-        public bool? ForceManualPrepare => null;
-        public bool? DisablePrepare => null;
+        public CommandPrepareMode PrepareMode => CommandPrepareMode.Auto;
         public bool IsReadOnlyConnection => false;
         public bool RCSIEnabled => false;
         public bool SnapshotIsolationEnabled => false;
@@ -155,28 +154,25 @@ public class CoverageGapTests_Infrastructure
         public string MakeParameterName(string parameterName) => throw new NotImplementedException();
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            ExecutionType executionType = ExecutionType.Write) =>
             throw new NotImplementedException();
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null) =>
+            ExecutionType executionType = ExecutionType.Write) =>
             throw new NotImplementedException();
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-        public Task<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write, bool? readOnly = null,
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write,
             CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         public string GenerateParameterName() => throw new NotImplementedException();
 
         public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30) =>
             throw new NotImplementedException();
-
-        public void AssertIsWriteConnection() => throw new NotImplementedException();
-        public void AssertIsReadConnection() => throw new NotImplementedException();
 
         public void CloseAndDisposeConnection(ITrackedConnection? conn)
         {
@@ -303,8 +299,6 @@ public class CoverageGapTests_Infrastructure
         Assert.Equal(string.Empty, config.ProviderName);
         Assert.Equal(DbMode.Best, config.DbMode);
         Assert.Equal(ReadWriteMode.ReadWrite, config.ReadWriteMode);
-        Assert.Null(config.ForceManualPrepare);
-        Assert.Null(config.DisablePrepare);
         Assert.False(config.EnableMetrics);
         Assert.NotNull(config.MetricsOptions);
         Assert.Null(config.MaxConcurrentWrites);
@@ -407,27 +401,15 @@ public class CoverageGapTests_Infrastructure
     }
 
     [Fact]
-    public void Configuration_ForceManualPrepare_GetSet()
+    public void Configuration_PrepareMode_GetSet()
     {
         var config = new DatabaseContextConfiguration();
 
-        Assert.Null(config.ForceManualPrepare);
-        config.ForceManualPrepare = true;
-        Assert.True(config.ForceManualPrepare);
-        config.ForceManualPrepare = false;
-        Assert.False(config.ForceManualPrepare);
-    }
-
-    [Fact]
-    public void Configuration_DisablePrepare_GetSet()
-    {
-        var config = new DatabaseContextConfiguration();
-
-        Assert.Null(config.DisablePrepare);
-        config.DisablePrepare = true;
-        Assert.True(config.DisablePrepare);
-        config.DisablePrepare = false;
-        Assert.False(config.DisablePrepare);
+        Assert.Equal(CommandPrepareMode.Auto, config.PrepareMode);
+        config.PrepareMode = CommandPrepareMode.Always;
+        Assert.Equal(CommandPrepareMode.Always, config.PrepareMode);
+        config.PrepareMode = CommandPrepareMode.Never;
+        Assert.Equal(CommandPrepareMode.Never, config.PrepareMode);
     }
 
     [Fact]
@@ -613,7 +595,7 @@ public class CoverageGapTests_Infrastructure
         public long Id { get; set; }
 
         [pengdows.crud.attributes.Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; } = string.Empty;
     }
 
     #endregion

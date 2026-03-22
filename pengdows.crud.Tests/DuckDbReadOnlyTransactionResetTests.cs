@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -16,10 +17,23 @@ public class DuckDbReadOnlyTransactionResetTests
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> Commands { get; } = new();
+        public List<string> ConnectionStrings { get; } = new();
 
         protected override DbCommand CreateDbCommand()
         {
             return new RecordingCommand(this, Commands);
+        }
+
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string ConnectionString
+        {
+            get => base.ConnectionString;
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
+            }
         }
     }
 
@@ -54,58 +68,15 @@ public class DuckDbReadOnlyTransactionResetTests
         public override DbParameter CreateParameter() => new fakeDbParameter();
     }
 
-    private sealed class FailingResetConnection : fakeDbConnection
-    {
-        public List<string> Commands { get; } = new();
 
-        protected override DbCommand CreateDbCommand()
-        {
-            return new FailingResetCommand(this, Commands);
-        }
-    }
-
-    private sealed class FailingResetCommand : fakeDbCommand
-    {
-        private readonly List<string> _commands;
-
-        public FailingResetCommand(fakeDbConnection connection, List<string> commands) : base(connection)
-        {
-            _commands = commands;
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            if (!string.IsNullOrWhiteSpace(CommandText))
-            {
-                _commands.Add(CommandText);
-                if (CommandText.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                    CommandText.Contains("read_write", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidOperationException("reset failed");
-                }
-            }
-
-            return base.ExecuteNonQuery();
-        }
-    }
-
-    private sealed class FailingResetFactory : DbProviderFactory
-    {
-        public List<FailingResetConnection> Connections { get; } = new();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new FailingResetConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
-    }
+    // DuckDB read-only is enforced via access_mode=READ_ONLY in the connection string when
+    // using DbMode.SingleWriter or DbMode.SingleConnection (where a dedicated read connection
+    // is created). In DbMode.Standard, BeginTransaction(executionType: ExecutionType.Read) uses the standard
+    // connection pool and relies on the DuckDB file/connection-level access control.
+    // These tests verify that no SET access_mode session SQL is emitted (regression guard).
 
     [Fact]
-    public async Task DuckDb_ReadOnlyTransaction_Commit_ResetsAccessMode()
+    public async Task DuckDb_ReadOnlyTransaction_Commit_NoAccessModeSql()
     {
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
@@ -117,26 +88,17 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
-        var allCommands = new List<string>();
-        foreach (var conn in factory.Connections)
-        {
-            allCommands.AddRange(conn.Commands);
-        }
-
-        Assert.Contains(allCommands,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_only", StringComparison.OrdinalIgnoreCase));
-
-        Assert.Contains(allCommands,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_write", StringComparison.OrdinalIgnoreCase));
+        // No SET access_mode SQL should be emitted — enforcement is via connection string only
+        var allCommands = factory.Connections.SelectMany(c => c.Commands).ToList();
+        Assert.DoesNotContain(allCommands,
+            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task DuckDb_ReadOnlyTransaction_Rollback_ResetsAccessMode()
+    public async Task DuckDb_ReadOnlyTransaction_Rollback_NoAccessModeSql()
     {
         var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
@@ -148,24 +110,22 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Rollback();
 
-        var allCommands = new List<string>();
-        foreach (var conn in factory.Connections)
-        {
-            allCommands.AddRange(conn.Commands);
-        }
-
-        Assert.Contains(allCommands,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_write", StringComparison.OrdinalIgnoreCase));
+        // No SET access_mode SQL should be emitted — enforcement is via connection string only
+        var allCommands = factory.Connections.SelectMany(c => c.Commands).ToList();
+        Assert.DoesNotContain(allCommands,
+            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task DuckDb_ReadOnlyTransaction_ResetFailure_DoesNotPreventCleanup()
+    public async Task DuckDb_ReadOnlyTransaction_CompletesCleanly_NoAccessModeSql()
     {
-        var factory = new FailingResetFactory();
+        // Previously, DuckDB emitted SET access_mode = 'read_only' / 'read_write' SQL.
+        // Now enforcement is via connection string only. This test verifies no SQL
+        // access_mode commands are emitted and the transaction completes without error.
+        var factory = new RecordingFactory();
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test.db;EmulatedProduct=DuckDB",
@@ -175,34 +135,13 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
-
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         var exception = Record.Exception(() => tx.Commit());
-
         Assert.Null(exception);
 
-        FailingResetConnection? transactionConnection = null;
-        foreach (var conn in factory.Connections)
-        {
-            foreach (var command in conn.Commands)
-            {
-                if (command.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                    command.Contains("read_only", StringComparison.OrdinalIgnoreCase))
-                {
-                    transactionConnection = conn;
-                    break;
-                }
-            }
-
-            if (transactionConnection != null)
-            {
-                break;
-            }
-        }
-
-        Assert.NotNull(transactionConnection);
-        Assert.True(transactionConnection!.DisposeCount > 0,
-            "Connection should be disposed even when access-mode reset fails.");
+        var allCommands = factory.Connections.SelectMany(c => c.Commands).ToList();
+        Assert.DoesNotContain(allCommands,
+            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -218,7 +157,7 @@ public class DuckDbReadOnlyTransactionResetTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
         var allCommands = new List<string>();

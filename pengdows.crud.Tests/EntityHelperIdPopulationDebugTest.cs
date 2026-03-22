@@ -36,10 +36,10 @@ public class TableGatewayIdPopulationDebugTest
         Assert.NotNull(tableInfo.Id);
 
         // This is the key check - if this fails, ID population won't happen
-        Assert.False(tableInfo.Id.IsIdIsWritable); // Should be false for auto-generated IDs
+        Assert.False(tableInfo.Id.IsIdWritable); // Should be false for auto-generated IDs
 
         // Check the SQL dialect configuration
-        var dialect = context.Dialect;
+        var dialect = context.GetDialect();
         Assert.NotNull(dialect);
 
         // For SQL Server, SupportsInsertReturning should be true (uses OUTPUT INSERTED)
@@ -55,7 +55,7 @@ public class TableGatewayIdPopulationDebugTest
         if (entity.Id == 0)
         {
             throw new Exception(
-                $"ID population failed. tableInfo.Id.IsIdIsWritable={tableInfo.Id.IsIdIsWritable}, dialect.SupportsInsertReturning={dialect.SupportsInsertReturning}");
+                $"ID population failed. tableInfo.Id.IsIdWritable={tableInfo.Id.IsIdWritable}, dialect.SupportsInsertReturning={dialect.SupportsInsertReturning}");
         }
 
         Assert.True(result);

@@ -5,7 +5,7 @@
 # 2. SQL generation safety (handles spaces, schemas, keywords)
 # 3. Raw performance (very close to Dapper)
 
-cd "$(dirname "$0")/CrudBenchmarks"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "========================================================================="
 echo "PENGDOWS.CRUD THESIS PROOF BENCHMARK SUITE"
@@ -35,7 +35,7 @@ echo "Running benchmarks... (this will take ~10-15 minutes)"
 echo ""
 
 # Run all thesis-proof benchmarks
-dotnet run -c Release --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
+dotnet run -c Release --project "${root}/CrudBenchmarks" --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
 
 echo ""
 echo "========================================================================="

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +14,8 @@ namespace CrudBenchmarks;
 
 internal sealed class IndexedViewEnvironment : IAsyncDisposable
 {
-    private const string Password = "YourStrong@Passw0rd";
+    private static readonly string Password = Environment.GetEnvironmentVariable("INDEXED_VIEW_BENCHMARK_DB_PASSWORD")
+        ?? Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     private const string Database = "IndexedViewBenchmark";
     private const string Schema = "dbo";
     private const string ViewName = "vw_CustomerOrderSummary";

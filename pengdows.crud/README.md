@@ -1,144 +1,198 @@
 # pengdows.crud
 
-**pengdows.crud** is a SQL-first, strongly-typed, testable data access layer for .NET. It’s built for developers who
-want **full control** over SQL, **predictable behavior** across databases, and **no ORM magic**.
+[![NuGet](https://img.shields.io/nuget/v/pengdows.crud.svg)](https://www.nuget.org/packages/pengdows.crud)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/build.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/build.yml)
 
-> No LINQ. No tracking. No surprises.
+`pengdows.crud` is a SQL-first data access library for .NET 8+. It favors explicit SQL, inspectable command builders, and provider-aware execution over ORM-style query generation.
 
----
+No LINQ. No tracking. No hidden unit of work.
 
-## 🔍 Why pengdows.crud?
+## What The Code Exposes
 
-- Built by a dev who actually **writes SQL**, understands **ACID**, and doesn’t want ORMs rewriting queries behind their
-  back.
-- Works **across databases** using consistent, standards-compliant behavior.
-- Handles **parameterization**, **enums**, **JSON**, **audit fields**, and **transactions**—out of the box.
-- Offers full **dependency injection**, fine-grained **connection control**, and true **multi-tenancy**.
+- `DatabaseContext` / `IDatabaseContext` for connection lifecycle, dialect behavior, quoting, parameter creation, metrics, and transactions
+- `TableGateway<TEntity, TRowID>` / `ITableGateway<TEntity, TRowID>` for row-id CRUD, business-key retrieval, batch operations, and async streaming
+- `PrimaryKeyTableGateway<TEntity>` / `IPrimaryKeyTableGateway<TEntity>` for tables keyed only by `[PrimaryKey]` columns
+- `ISqlContainer` for build-first SQL composition plus direct execution helpers
+- `ITransactionContext` for explicit commit, rollback, and savepoint control
 
----
+## Main Capabilities
 
-## ✅ Key Features
+- Build-first CRUD: `BuildCreate`, `BuildRetrieve`, `BuildUpdateAsync`, `BuildDelete`, `BuildUpsert`
+- Load prebuilt containers with `LoadSingleAsync`, `LoadListAsync`, and `LoadStreamAsync`
+- Convenience methods such as `CreateAsync`, `RetrieveOneAsync`, `RetrieveAsync`, `UpdateAsync`, `DeleteAsync`, and `UpsertAsync`
+- **Native `DbDataSource` support** for shared prepared-statement caching (e.g., `NpgsqlDataSource`)
+- Batch create, update, upsert, and delete operations with parameter-limit-aware chunking
+- Optimistic concurrency via `[Version]`
+- Audit field population via `IAuditValueResolver`
+- JSON, enum, GUID, binary, UTC date/time, and advanced provider-specific type mappings
+- Metrics snapshots via `IDatabaseContext.Metrics` and live updates via `MetricsUpdated`
+- `DbMode` strategies: `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, and `Best`
+- Typed exception hierarchy: provider `DbException` is translated to structured subtypes (`ConcurrencyConflictException`, `UniqueConstraintViolationException`, `DeadlockException`, etc.)
 
-> Starting with v2.0, `TableGateway<TEntity, TRowID>` is the canonical CRUD gateway. The legacy `EntityHelper` alias has
-> been removed.
+## Supported Products
 
-- `TableGateway<TEntity, TRowID>`: automatic CRUD with custom SQL injection points.
-- Full support for:
-    - Enums
-    - JSON
-    - GUIDs
-    - UTC timestamps
-- Built-in **audit tracking** per entity and per field.
-- **Safe SQL generation** with strict parameterization (`@`, `:`, or `?` depending on provider).
-- Connection lifecycle modes: `New`, `Shared`, `KeepAlive`.
-- **Scoped transactions** via `TransactionContext`.
-- Works cleanly with DI and ADO.NET—**no leaky abstractions**.
+The repository contains concrete support for:
 
----
-
-## 🧩 Supported Databases
-
-Tested and tuned for:
-
-- SQL Server / Express / LocalDB
-- PostgreSQL / TimescaleDB
+- SQL Server
+- PostgreSQL
+- Aurora PostgreSQL
+- MySQL
+- Aurora MySQL
+- MariaDB
 - Oracle
-- MySQL / MariaDB
 - SQLite
 - Firebird
+- DuckDB
 - CockroachDB
+- YugabyteDB
+- TiDB
+- Snowflake
 
-> All tested against .NET 8 with native ADO.NET providers. Must support `DbProviderFactory` and
-`GetSchema("DataSourceInformation")`.
+When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
 
----
-
-## ❌ Not Supported
-
-Due to missing or outdated .NET providers:
-
-- TimesTen
-- DB2
-- Informix
-- Sybase ASE
-- SQL Anywhere
-
-Note: DB2 and Sybase ASE are not planned and will not be implemented.
-
-Want support? Ask the vendor to ship a **real** ADO.NET provider.
-
----
-
-## 🚫 Not an ORM — On Purpose
-
-`pengdows.crud` doesn't:
-
-- Track entities
-- Auto-generate complex queries
-- Obfuscate SQL
-
-Instead, it helps you write **real SQL** that's:
-
-- **Predictable**
-- **Testable**
-- **Secure**
-
----
-
-## 🧠 Philosophy
-
-- **Primary keys ≠ pseudokeys**
-- **Open late, close early** — manage connections responsibly
-- **Parameterize everything** — always
-- **Audit everything** — store in UTC
-- **Don't assume** — use provider metadata (`DbProviderFactory`, `GetSchema`)
-- **Test in production-like environments** — not theory
-
----
-
-## 🔬 Tool Comparison
-
-| Feature               | pengdows.crud | Raw ADO.NET | Dapper | EF Core | NHibernate |
-|-----------------------|---------------|-------------|--------|---------|------------|
-| Provider-Agnostic SQL | ✅             | ⚠️ Manual   | ⚠️     | ⚠️      | ⚠️         |
-| Safe Parameterization | ✅             | ❌ Risky     | ⚠️     | ✅       | ✅          |
-| Audit Field Support   | ✅ Built-in    | ❌           | ❌      | ⚠️      | ⚠️         |
-| Change Tracking       | ❌ Explicit    | ❌           | ❌      | ✅       | ✅          |
-| LINQ                  | ❌             | ❌           | ❌      | ✅       | ⚠️         |
-| Strong Typing         | ✅             | ⚠️ Manual   | ⚠️     | ✅       | ✅          |
-| Multi-tenancy         | ✅ Opt-in      | ❌           | ❌      | ⚠️      | ⚠️         |
-| Async/Await Support   | ✅ Fully       | ⚠️ Provider | ✅      | ✅       | ⚠️         |
-| Transaction Scoping   | ✅ Layered     | ❌           | ❌      | ✅       | ✅          |
-| Testability           | ✅ Interfaces  | ❌           | ⚠️     | ⚠️      | ⚠️         |
-| Migration Tooling     | ❌ By Design   | ❌           | ❌      | ✅       | ✅          |
-
----
-
--## 📚 Documentation
-
-Topics include:
-
-- `TableGateway<TEntity, TRowID>`: CRUD entry point (EntityHelper alias removed in v2.0)
-- `SqlContainer`
-- `DbMode` and connection management
-- Audit and UTC logging
-- Transaction scopes
-- Type coercion and mapping
-- Primary vs. pseudokeys
-- Extending core helpers
-
----
-
-## 🛠️ Getting Started
+## Quick Start
 
 ```bash
 dotnet add package pengdows.crud
 ```
 
 ```csharp
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using pengdows.crud;
 
-var db = new DatabaseContext("your-connection-string", SqlClientFactory.Instance);
-var helper = new TableGateway<MyEntity, long>(db);
+var context = new DatabaseContext(
+    "Server=.;Database=app;Trusted_Connection=True;",
+    SqlClientFactory.Instance);
+
+var gateway = new TableGateway<Order, long>(context);
+
+bool created = await gateway.CreateAsync(new Order
+{
+    Id = 42,
+    OrderNumber = "ORD-42"
+});
+
+var one = await gateway.RetrieveOneAsync(42L);
+var many = await gateway.RetrieveAsync(new long[] { 42, 43 });
 ```
+
+```csharp
+await using var tx = await context.BeginTransactionAsync();
+await gateway.UpsertAsync(order, tx);
+await tx.CommitAsync();
+```
+
+### Constructor Variants
+
+```csharp
+// Minimal: connection string + factory
+var ctx = new DatabaseContext(connectionString, SqlClientFactory.Instance);
+
+// With read-only replica
+var ctx = new DatabaseContext(connectionString, SqlClientFactory.Instance,
+    readOnlyConnectionString: replicaConnectionString);
+
+// Full configuration object (logger, pool sizes, prepare mode, etc.)
+var ctx = new DatabaseContext(
+    new DatabaseContextConfiguration
+    {
+        ConnectionString = connectionString,
+        DbMode = DbMode.Standard,
+        ReadWriteMode = ReadWriteMode.ReadWrite,
+        ReadOnlyConnectionString = replicaConnectionString,
+        MaxConcurrentReads = 20,
+        MaxConcurrentWrites = 5
+    },
+    SqlClientFactory.Instance,
+    loggerFactory);
+
+// Provider DbDataSource (PostgreSQL prepared-statement sharing)
+var dataSource = NpgsqlDataSource.Create(connectionString);
+var ctx = new DatabaseContext(configuration, dataSource, NpgsqlFactory.Instance);
+```
+
+## Key Mapping Rules
+
+- `[Id]` is the row identifier used by row-id operations
+- `[PrimaryKey]` is the business key and may be composite
+- `[Id]` and `[PrimaryKey]` must not be placed on the same property
+- Use `PrimaryKeyTableGateway<TEntity>` when the entity has no `[Id]` column at all
+
+## Exception Handling
+
+Raw `DbException` from providers is automatically translated to a typed hierarchy:
+
+```
+DatabaseException (abstract — carries Database, SqlState, ErrorCode, ConstraintName, IsTransient)
+  ├─ DatabaseOperationException
+  │    ├─ ConcurrencyConflictException    ← [Version] column mismatch on UpdateAsync
+  │    ├─ CommandTimeoutException         ← IsTransient = true
+  │    ├─ ConnectionException
+  │    ├─ TransactionException
+  │    ├─ TransientWriteConflictException ← IsTransient = true
+  │    │    ├─ DeadlockException
+  │    │    └─ SerializationConflictException
+  │    └─ ConstraintViolationException (abstract)
+  │         ├─ UniqueConstraintViolationException
+  │         ├─ ForeignKeyViolationException
+  │         ├─ NotNullViolationException
+  │         └─ CheckConstraintViolationException
+  ├─ DataMappingException
+  └─ SqlGenerationException
+```
+
+Non-`DatabaseException` subtypes thrown by the infrastructure:
+- `ModeContentionException : TimeoutException` — SingleWriter/SingleConnection lock timed out
+- `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
+- `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
+- `TransactionModeNotSupportedException : NotSupportedException` — savepoint or read-only tx on unsupported dialect
+- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+
+```csharp
+try
+{
+    await gateway.UpdateAsync(entity);
+}
+catch (ConcurrencyConflictException)
+{
+    // [Version] mismatch — reload and retry
+}
+catch (UniqueConstraintViolationException ex)
+{
+    // ex.ConstraintName identifies which constraint fired
+}
+catch (DatabaseException ex) when (ex.IsTransient == true)
+{
+    // Deadlock, serialization failure, or timeout — safe to retry
+}
+```
+
+## ISqlContainer Scalar Execution
+
+Three distinct methods replace the ambiguous `ExecuteScalarAsync` from v1:
+
+```csharp
+// Throws if no rows or value is null/DBNull and T is non-nullable
+int count = await sc.ExecuteScalarRequiredAsync<int>();
+
+// Returns null for both "no rows" and "DBNull value"
+string? name = await sc.ExecuteScalarOrNullAsync<string>();
+
+// Unambiguously distinguishes no-row, null, and value
+ScalarResult<string> result = await sc.TryExecuteScalarAsync<string>();
+if (result.Status == ScalarStatus.Value)   { /* result.Value */ }
+if (result.Status == ScalarStatus.Null)    { /* row returned but value was NULL */ }
+if (result.Status == ScalarStatus.None)    { /* no rows returned */ }
+```
+
+## Documentation
+
+- Repo docs: [docs/](./docs)
+- Wiki: https://github.com/pengdows/pengdows.crud/wiki
+
+## Support
+
+If this library saves you time, consider buying me a coffee.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/pengdows)

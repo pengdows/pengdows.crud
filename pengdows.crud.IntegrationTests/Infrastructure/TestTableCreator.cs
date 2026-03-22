@@ -74,7 +74,7 @@ public class TestTableCreator
                         {decimalCol} DECIMAL(18,8) NOT NULL,
                         {boolCol} SMALLINT NOT NULL,
                         {dtoCol} TIMESTAMP NOT NULL,
-                        {guidCol} CHAR(36) CHARACTER SET ASCII NOT NULL,
+                        {guidCol} CHAR(16) CHARACTER SET OCTETS NOT NULL,
                         {binCol} BLOB SUB_TYPE 0 NOT NULL
                     )";
                 await using var fbContainer = tx.CreateSqlContainer(sqlFb);

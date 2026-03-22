@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -40,7 +41,7 @@ public class TableGatewayCreateAsyncStateMachineTests
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // Cancel immediately
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context, cts.Token)
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context, cts.Token).AsTask()
         );
     }
 
@@ -52,7 +53,7 @@ public class TableGatewayCreateAsyncStateMachineTests
             logger: new LoggerFactory().CreateLogger<TableGateway<TestEntitySimple, int>>());
         _typeMap.Register<TestEntitySimple>();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, context)
+        await Assert.ThrowsAsync<ArgumentNullException>(() => helper.CreateAsync(null!, context).AsTask()
         );
     }
 
@@ -81,7 +82,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         factory.SetScalarException(new InvalidOperationException("Database connection failed"));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -163,7 +164,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         await context.DisposeAsync(); // Dispose the context
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -180,7 +181,7 @@ public class TableGatewayCreateAsyncStateMachineTests
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -199,7 +200,7 @@ public class TableGatewayCreateAsyncStateMachineTests
         factory.Connections.Clear();
         factory.Connections.Add(connection);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -218,7 +219,7 @@ public class TableGatewayCreateAsyncStateMachineTests
         factory.SetScalarException(new InvalidOperationException("RETURNING failed"));
 
         // Act & Assert - should propagate the exception
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -234,7 +235,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         factory.SetScalarException(new TimeoutException("Command timeout"));
 
-        await Assert.ThrowsAsync<TimeoutException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<CommandTimeoutException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -249,7 +250,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         factory.SetScalarException(new InvalidCastException("Parameter type mismatch"));
 
-        await Assert.ThrowsAsync<InvalidCastException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<InvalidCastException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 
@@ -270,7 +271,7 @@ public class TableGatewayCreateAsyncStateMachineTests
         var oentity = new TestEntitySimple { Name = "Test" };
         of.SetScalarException(new OutOfMemoryException("Out of memory"));
 
-        await Assert.ThrowsAsync<OutOfMemoryException>(() => ohelper.CreateAsync(oentity, octx)
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => ohelper.CreateAsync(oentity, octx).AsTask()
         );
     }
 
@@ -289,8 +290,34 @@ public class TableGatewayCreateAsyncStateMachineTests
         factory.SetScalarException(new OperationCanceledException("Simulated thread abort"));
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<OperationCanceledException>(() => helper.CreateAsync(entity, context).AsTask()
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // CT CreateAsync default path + CT PopulateGeneratedIdAsync (TableGateway.Core.cs)
+    // MySQL: SupportsInsertReturning=false, HasSessionScopedLastIdFunction=true
+    // → GetGeneratedKeyPlan() = SessionScopedFunction → falls to default path (line 296)
+    // → rowsAffected==1 && _idColumn!=null && !IsIdWritable → PopulateGeneratedIdAsync called (line 301)
+    // PopulateGeneratedIdAsync: GetLastInsertedIdQuery()="SELECT LAST_INSERT_ID()" → non-empty
+    // → fakeDb returns 42 → generatedId non-null → TypeCoercionHelper.ConvertWithCache (lines 361-362)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CreateAsync_CT_MySql_DefaultPath_PopulatesGeneratedIntId()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<TestEntityWithAutoId>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        factory.SetNonQueryResult(1);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
+        var entity = new TestEntityWithAutoId { Name = "Test" };
+
+        // CT overload → CT CreateAsync → default path → CT PopulateGeneratedIdAsync
+        var result = await helper.CreateAsync(entity, context, CancellationToken.None);
+
+        Assert.True(result);
     }
 
     [Fact]
@@ -309,7 +336,7 @@ public class TableGatewayCreateAsyncStateMachineTests
 
         var entity = new TestEntitySimple { Name = "Test" };
 
-        await Assert.ThrowsAsync<OutOfMemoryException>(() => helper.CreateAsync(entity, context)
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => helper.CreateAsync(entity, context).AsTask()
         );
     }
 

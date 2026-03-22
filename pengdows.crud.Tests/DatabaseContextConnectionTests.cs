@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -90,7 +92,7 @@ public class DatabaseContextConnectionTests
     }
 
     [Fact]
-    public void SessionSettings_SkippedWhenAlreadyApplied()
+    public void SessionSettings_AppliedOnEveryCall()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
@@ -107,13 +109,13 @@ public class DatabaseContextConnectionTests
         context.ExecuteSessionSettings(connection, false);
         Assert.Single(connection.ExecutedStatements);
 
-        // Second call should be skipped because the context remembers this PHYSICAL connection object.
-        // Even if we clear the list, it won't re-execute.
+        // Second call on the same connection must also apply — zero-trust policy: we cannot
+        // guarantee without a round-trip that a pooled connection's session hasn't been reset.
         connection.ExecutedStatements.Clear();
         context.ExecuteSessionSettings(connection, false);
-        Assert.Empty(connection.ExecutedStatements);
-        
-        // A DIFFERENT physical connection should still get initialized
+        Assert.Single(connection.ExecutedStatements);
+
+        // A different physical connection also gets settings applied
         var connection2 = new CapturingConnection();
         context.ExecuteSessionSettings(connection2, false);
         Assert.Single(connection2.ExecutedStatements);
@@ -161,6 +163,80 @@ public class DatabaseContextConnectionTests
         context.ExecuteSessionSettings(tracked, false);
 
         Assert.False(tracked.LocalState.SessionSettingsApplied);
+    }
+
+    /// <summary>
+    /// Async path counterpart to <see cref="ExecuteSessionSettings_Failure_DoesNotMarkApplied"/>.
+    /// Verifies that when the session-settings command fails during an async connection open
+    /// (the onFirstOpen handler is triggered by <see cref="TrackedConnection.OpenAsync"/>),
+    /// the connection's <see cref="IConnectionLocalState.SessionSettingsApplied"/> remains false.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteSessionSettings_Failure_Async_DoesNotMarkApplied()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new fakeDbConnection();
+        ConnectionFailureHelper.ConfigureConnectionFailure(connection, ConnectionFailureMode.FailOnCommand);
+
+        // Wire up the onFirstOpen callback to call ExecuteSessionSettings — mirrors the production
+        // path in FactoryCreateConnection where the firstOpenHandler delegates to ExecuteSessionSettings.
+        using var tracked = new TrackedConnection(
+            connection,
+            onFirstOpen: tc => context.ExecuteSessionSettings(tc, false));
+
+        // OpenAsync triggers TriggerFirstOpen → onFirstOpen → ExecuteSessionSettings (sync, but
+        // reached via the async open path). The command failure is swallowed; applied = false.
+        await tracked.OpenAsync();
+
+        Assert.False(tracked.LocalState.SessionSettingsApplied);
+    }
+
+    [Fact]
+    public async Task ExecuteSessionSettingsAsync_UsesExecuteNonQueryAsync()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleWriter,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new AsyncCapturingConnection();
+
+        await context.ExecuteSessionSettingsAsync(connection, readOnly: false, CancellationToken.None);
+
+        Assert.Equal(1, connection.AsyncExecuteCount);
+        Assert.Equal(0, connection.SyncExecuteCount);
+    }
+
+    [Fact]
+    public async Task ExecuteSessionSettingsAsync_PropagatesCancellation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleWriter,
+            ProviderName = "fake"
+        };
+
+        await using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        var connection = new AsyncCapturingConnection();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => context.ExecuteSessionSettingsAsync(connection, readOnly: false, cts.Token).AsTask());
     }
 
     private sealed class CapturingConnection : DbConnection
@@ -258,5 +334,111 @@ public class DatabaseContextConnectionTests
 
         public override void Prepare()
         {
-            }
-        }}
+        }
+        }
+
+    private sealed class AsyncCapturingConnection : DbConnection
+    {
+        private string _connectionString = string.Empty;
+
+        public int SyncExecuteCount { get; set; }
+        public int AsyncExecuteCount { get; set; }
+
+        [AllowNull]
+        public override string ConnectionString
+        {
+            get => _connectionString;
+            set => _connectionString = value ?? string.Empty;
+        }
+
+        public override int ConnectionTimeout => 30;
+        public override string Database => "capturing";
+        public override ConnectionState State => ConnectionState.Open;
+        public override string DataSource => "capturing";
+        public override string ServerVersion => "1.0";
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel il)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void ChangeDatabase(string databaseName)
+        {
+        }
+
+        public override void Close()
+        {
+        }
+
+        public override void Open()
+        {
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new AsyncCapturingCommand(this);
+        }
+    }
+
+    private sealed class AsyncCapturingCommand : DbCommand
+    {
+        private readonly AsyncCapturingConnection _owner;
+        private string _commandText = string.Empty;
+
+        public AsyncCapturingCommand(AsyncCapturingConnection owner)
+        {
+            _owner = owner;
+        }
+
+        [AllowNull]
+        public override string CommandText
+        {
+            get => _commandText;
+            set => _commandText = value ?? string.Empty;
+        }
+
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; } = CommandType.Text;
+        public override bool DesignTimeVisible { get; set; }
+        protected override DbConnection? DbConnection { get; set; }
+        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
+        protected override DbTransaction? DbTransaction { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        public override void Cancel()
+        {
+        }
+
+        protected override DbParameter CreateDbParameter()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override int ExecuteNonQuery()
+        {
+            _owner.SyncExecuteCount++;
+            return 0;
+        }
+
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _owner.AsyncExecuteCount++;
+            return Task.FromResult(0);
+        }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override object? ExecuteScalar()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Prepare()
+        {
+        }
+    }
+}

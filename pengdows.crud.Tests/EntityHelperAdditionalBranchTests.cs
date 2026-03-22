@@ -5,6 +5,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.exceptions;
 using pengdows.crud.Tests.fakeDb;
 using Xunit;
 
@@ -12,7 +13,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
+public class TableGatewayAdditionalBranchTests : RealSqliteContextTestBase
 {
     [Table("BranchTest")]
     private sealed class BranchEntity
@@ -90,7 +91,7 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
         Assert.NotNull(loaded);
 
         // No changes to Name/Version
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.BuildUpdateAsync(loaded!, true).AsTask());
     }
 
     [Fact]
@@ -111,9 +112,10 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
         await using var failing = ConnectionFailureHelper.CreateFailOnCommandContext(customException: dbException);
         var helper = new TableGateway<BranchEntity, int>((IDatabaseContext)failing, AuditValueResolver);
         var e = new BranchEntity { Id = 1, Name = "x" };
-        var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true));
+        var ex = await Record.ExceptionAsync(() => helper.BuildUpdateAsync(e, true).AsTask());
         Assert.NotNull(ex);
-        Assert.IsAssignableFrom<DbException>(ex);
+        Assert.IsType<DatabaseOperationException>(ex);
+        Assert.IsAssignableFrom<DbException>(ex.InnerException);
         Assert.Contains("Simulated database error", ex!.Message);
     }
 
@@ -122,12 +124,7 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     {
         var helper = new TableGateway<GuidBranchEntity, Guid>(Context, AuditValueResolver);
         var id = Guid.NewGuid();
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}GuidBranchTest{qs}({qp}Id{qs}, {qp}Name{qs}) VALUES(@id, 'n')");
-        insert.AddParameterWithValue("@id", DbType.String, id.ToString());
-        await insert.ExecuteNonQueryAsync();
+        await helper.CreateAsync(new GuidBranchEntity { Id = id, Name = "n" });
 
         var entity = new GuidBranchEntity { Id = id, Name = "updated" };
         var container = await helper.BuildUpdateAsync(entity, true);
@@ -139,14 +136,10 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_AuditOnlyChange_IncludesAuditColumns()
     {
         var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n', @last)");
-        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
-        await insert.ExecuteNonQueryAsync();
+        var entity = new AuditBranchEntity { Name = "n" };
+        await helper.CreateAsync(entity);
 
-        var loaded = await helper.RetrieveOneAsync(1);
+        var loaded = await helper.RetrieveOneAsync(entity.Id);
         Assert.NotNull(loaded);
 
         var sc = await helper.BuildUpdateAsync(loaded!, true);
@@ -158,14 +151,10 @@ public class TableGatewayAdditionalBranchTests : SqlLiteContextTestBase
     public async Task BuildUpdateAsync_AuditWithBusinessChange_Succeeds()
     {
         var helper = new TableGateway<AuditBranchEntity, int>(Context, AuditValueResolver);
-        var qp = Context.QuotePrefix;
-        var qs = Context.QuoteSuffix;
-        var insert = Context.CreateSqlContainer(
-            $"INSERT INTO {qp}AuditBranchTest{qs}({qp}Name{qs}, {qp}LastUpdatedOn{qs}) VALUES('n2', @last)");
-        insert.AddParameterWithValue("@last", DbType.DateTime, DateTime.UtcNow);
-        await insert.ExecuteNonQueryAsync();
+        var entity = new AuditBranchEntity { Name = "n2" };
+        await helper.CreateAsync(entity);
 
-        var loaded = await helper.RetrieveOneAsync(2);
+        var loaded = await helper.RetrieveOneAsync(entity.Id);
         Assert.NotNull(loaded);
         loaded!.Name = "updated";
 

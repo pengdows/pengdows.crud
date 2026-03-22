@@ -70,6 +70,14 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
     }
 
+    [Table("test_delete_no_id")]
+    public class TestDeleteNoIdEntity
+    {
+        [PrimaryKey(1)]
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     [Fact]
     public async Task BatchDeleteAsync_NullIdList_Throws()
     {
@@ -167,7 +175,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var gateway = new TableGateway<TestDeleteIdOnlyEntity, int>(_sqliteContext);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => gateway.BatchDeleteAsync(new[] { 1, 2, 3 }));
+        var exception = await Record.ExceptionAsync(() => gateway.BatchDeleteAsync(new[] { 1, 2, 3 }).AsTask());
 
         // Assert
         Assert.Null(exception);
@@ -266,6 +274,22 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
         var gateway = new TableGateway<TestDeleteBatchEntity, int>(_sqliteContext);
         var result = await gateway.DeleteAsync(Array.Empty<TestDeleteBatchEntity>());
         Assert.Equal(0, result);
+    }
+
+    // -------------------------------------------------------------------------
+    // BuildBatchDelete(IEnumerable<TRowID>) — _idColumn == null guard (Core.cs lines 854-855)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void BuildBatchDelete_IdList_EntityWithoutIdColumn_Throws()
+    {
+        ResetFactory();
+        var gateway = new TableGateway<TestDeleteNoIdEntity, string>(_sqliteContext);
+
+        // _idColumn is null because the entity has no [Id] attribute
+        // The id-list overload of BuildBatchDelete checks this and throws
+        Assert.Throws<InvalidOperationException>(
+            () => gateway.BuildBatchDelete(new[] { "key1" }));
     }
 
     [Fact]

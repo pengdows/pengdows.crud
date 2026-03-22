@@ -19,8 +19,8 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 1, iterationCount: 3, invocationCount: 1)]
 public class SqliteConcurrencyBenchmark
 {
-    private const string DbFileName = "concurrency_test.db";
-    private string _connectionString = $"Data Source={DbFileName};";
+    private string _dbFilePath = string.Empty;
+    private string _connectionString = string.Empty;
 
     // pengdows.crud context
     private IDatabaseContext _pengdowsContext = null!;
@@ -40,18 +40,16 @@ public class SqliteConcurrencyBenchmark
     private long _efCoreSuccessCount;
     private long _efCoreErrorCount;
 
-    [Params(100)] public int Operations;
-
-    [Params(16)] public int Parallelism;
+    private const int Operations = 100;
+    private const int Parallelism = 16;
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        // Ensure clean state
-        if (File.Exists(DbFileName))
-        {
-            File.Delete(DbFileName);
-        }
+        DisposeExistingContext();
+        _dbFilePath = Path.Combine(Path.GetTempPath(), $"concurrency_test_{Guid.NewGuid():N}.db");
+        _connectionString = $"Data Source={_dbFilePath};";
+        DeleteDatabaseFileIfPresent();
 
         // Create and schema the database
         using (var connection = new SqliteConnection(_connectionString))
@@ -59,7 +57,7 @@ public class SqliteConcurrencyBenchmark
             connection.Open();
             var command = connection.CreateCommand();
             command.CommandText =
-                "CREATE TABLE TestEntities (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, Counter INTEGER)";
+                "CREATE TABLE IF NOT EXISTS TestEntities (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT, Counter INTEGER)";
             command.ExecuteNonQuery();
         }
 
@@ -92,16 +90,13 @@ public class SqliteConcurrencyBenchmark
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        (_pengdowsContext as IDisposable)?.Dispose();
+        DisposeExistingContext();
         // Give time for the file to be released
         for (int i = 0; i < 5; i++)
         {
             try
             {
-                if (File.Exists(DbFileName))
-                {
-                    File.Delete(DbFileName);
-                }
+                DeleteDatabaseFileIfPresent();
 
                 return;
             }
@@ -109,6 +104,21 @@ public class SqliteConcurrencyBenchmark
             {
                 Task.Delay(100).Wait();
             }
+        }
+    }
+
+    private void DisposeExistingContext()
+    {
+        (_pengdowsContext as IDisposable)?.Dispose();
+        _pengdowsContext = null!;
+        _pengdowsGateway = null!;
+    }
+
+    private void DeleteDatabaseFileIfPresent()
+    {
+        if (!string.IsNullOrWhiteSpace(_dbFilePath) && File.Exists(_dbFilePath))
+        {
+            File.Delete(_dbFilePath);
         }
     }
 
@@ -149,7 +159,7 @@ public class SqliteConcurrencyBenchmark
         await BenchmarkConcurrency.RunConcurrentWithErrors(Operations, Parallelism,
             async () =>
             {
-                using (var connection = new SqliteConnection(_dapperConnectionString))
+                await using (var connection = new SqliteConnection(_dapperConnectionString))
                 {
                     await connection.OpenAsync();
                     await connection.ExecuteAsync("INSERT INTO TestEntities (Name, Counter) VALUES (@Name, @Counter);",
@@ -194,7 +204,7 @@ public class SqliteConcurrencyBenchmark
 [Table("TestEntities")]
 public class TestEntity
 {
-    [Id(writable: true)] // Explicitly mark as writable
+    [Id(writable: false)]
     [Column("Id", DbType.Int32)]
     public int Id { get; set; }
 

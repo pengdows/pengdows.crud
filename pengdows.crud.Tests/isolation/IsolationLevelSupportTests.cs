@@ -102,14 +102,63 @@ public class IsolationLevelSupportTests
 
         yield return new object[]
         {
-            SupportedDatabase.Snowflake,
+            SupportedDatabase.TiDb,
             false,
             false,
             new[]
             {
                 IsolationLevel.ReadCommitted,
-                IsolationLevel.Serializable
+                IsolationLevel.RepeatableRead
             }
         };
+
+        yield return new object[]
+        {
+            SupportedDatabase.Snowflake,
+            false,
+            false,
+            new[]
+            {
+                IsolationLevel.ReadCommitted
+            }
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(GetProfileMappingExpectations))]
+    public void Resolve_ProfileMapping_ReturnsExpectedLevel(
+        SupportedDatabase database,
+        IsolationProfile profile,
+        IsolationLevel expectedLevel)
+    {
+        var resolver = new IsolationResolver(database, false, false);
+        Assert.Equal(expectedLevel, resolver.Resolve(profile));
+    }
+
+    public static IEnumerable<object[]> GetProfileMappingExpectations()
+    {
+        // TiDB: no true Serializable — StrictConsistency degrades to RepeatableRead
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.SafeNonBlockingReads,  IsolationLevel.RepeatableRead };
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.StrictConsistency,     IsolationLevel.RepeatableRead };
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.FastWithRisks,         IsolationLevel.ReadCommitted  };
+
+        // Snowflake: only ReadCommitted is supported
+        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.SafeNonBlockingReads, IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.StrictConsistency,    IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.FastWithRisks,        IsolationLevel.ReadCommitted };
+    }
+
+    [Fact]
+    public void Validate_Snowflake_RejectsSerializable()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.Snowflake, false, false);
+        Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Serializable));
+    }
+
+    [Fact]
+    public void Validate_TiDb_RejectsSerializable()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.TiDb, false, false);
+        Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Serializable));
     }
 }

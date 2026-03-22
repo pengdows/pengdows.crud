@@ -17,14 +17,13 @@ namespace pengdows.crud.Tests.wrappers;
 public class TrackedReaderBranchTests
 {
     [Fact]
-    public void Read_WhenDisposeThrows_StillReturnsFalse()
+    public void Read_WhenDisposeThrows_PropagatesDisposeFailure()
     {
         var reader = new ReadFalseDisposeThrowReader();
         var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
-        var result = tracked.Read();
-
-        Assert.False(result);
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Read());
+        Assert.Equal("dispose failed", ex.Message);
     }
 
     [Fact]
@@ -135,14 +134,29 @@ public class TrackedReaderBranchTests
     }
 
     [Fact]
-    public void Dispose_WithThrowingCommand_SwallowsCommandCleanupFailures()
+    public void Dispose_WithThrowingCommand_PropagatesCleanupFailure()
+    {
+        using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
+        var command = new ThrowingDbCommand();
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false,
+            command: command);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+        Assert.Equal("clear failed", ex.Message);
+    }
+
+    [Fact]
+    public void Read_WhenEndOfResultsAndCommandCleanupThrows_PropagatesCleanupFailure()
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
         var command = new ThrowingDbCommand();
         using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false,
             command: command);
 
-        tracked.Dispose();
+        Assert.True(tracked.Read());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Read());
+        Assert.Equal("clear failed", ex.Message);
     }
 
     [Fact]

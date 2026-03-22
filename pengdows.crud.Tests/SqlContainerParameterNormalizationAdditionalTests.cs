@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
@@ -121,6 +123,32 @@ public class SqlContainerParameterNormalizationAdditionalTests
         Assert.StartsWith("p", param2.ParameterName);
         // Names should be different
         Assert.NotEqual(param1.ParameterName, param2.ParameterName);
+    }
+
+    [Fact]
+    public void GenerateUniqueParameterName_RetriesWhenFirstCandidateAlreadyUsed()
+    {
+        var dialect = new ShortNameDialect(new fakeDbFactory(SupportedDatabase.Sqlite));
+        using var ctx = CreateContextWithDialect(dialect);
+        var container = SqlContainer.CreateForDialect(ctx, dialect);
+
+        var generateName = typeof(SqlContainer).GetMethod("GenerateParameterName",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var generateUnique = typeof(SqlContainer).GetMethod("GenerateUniqueParameterName",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var nextIdField = typeof(SqlContainer).GetField("_nextParameterId",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(generateName);
+        Assert.NotNull(generateUnique);
+        Assert.NotNull(nextIdField);
+
+        var firstCandidate = Assert.IsType<string>(generateName!.Invoke(container, null));
+        nextIdField!.SetValue(container, 0);
+
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { firstCandidate };
+        var unique = Assert.IsType<string>(generateUnique!.Invoke(container, new object[] { used }));
+
+        Assert.NotEqual(firstCandidate, unique);
     }
 
     private static DatabaseContext CreateContext(SupportedDatabase database)

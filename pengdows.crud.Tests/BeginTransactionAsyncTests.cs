@@ -17,10 +17,23 @@ public class BeginTransactionAsyncTests
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> Commands { get; } = new();
+        public List<string> ConnectionStrings { get; } = new();
 
         protected override DbCommand CreateDbCommand()
         {
             return new RecordingCommand(this, Commands);
+        }
+
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string ConnectionString
+        {
+            get => base.ConnectionString;
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
+            }
         }
     }
 
@@ -89,24 +102,16 @@ public class BeginTransactionAsyncTests
 
         await using var context = new DatabaseContext(config, factory);
 
-        await using var tx = await context.BeginTransactionAsync(readOnly: true);
+        await using var tx = await context.BeginTransactionAsync(executionType: ExecutionType.Read);
         await tx.CommitAsync();
 
-        var allCommands = new List<string>();
-        foreach (var conn in factory.Connections)
-        {
-            allCommands.AddRange(conn.Commands);
-        }
-
-        // TryEnterReadOnlyTransactionAsync should have executed read-only SQL
-        Assert.Contains(allCommands,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_only", StringComparison.OrdinalIgnoreCase));
-
-        // TryResetReadOnlySessionAsync should have executed read-write SQL
-        Assert.Contains(allCommands,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_write", StringComparison.OrdinalIgnoreCase));
+        // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string
+        // (when using SingleWriter/SingleConnection mode). For DbMode.Standard, the
+        // connection is obtained from the shared pool without a read-only modifier.
+        // Verify no SET access_mode session SQL is emitted (regression guard).
+        var allCommands = factory.Connections.SelectMany(c => c.Commands).ToList();
+        Assert.DoesNotContain(allCommands,
+            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -145,7 +150,7 @@ public class BeginTransactionAsyncTests
         await using var tx = await context.BeginTransactionAsync();
 
         // Nested BeginTransactionAsync should throw
-        await Assert.ThrowsAsync<InvalidOperationException>(() => ((IDatabaseContext)tx).BeginTransactionAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await ((IDatabaseContext)tx).BeginTransactionAsync());
 
         await tx.CommitAsync();
     }
@@ -172,13 +177,11 @@ public class BeginTransactionAsyncTests
     }
 
     /// <summary>
-    /// Sync BeginTransaction(readOnly: true) on DuckDB must execute the read-only session SQL
-    /// via TryEnterReadOnlyTransaction → TryExecuteReadOnlySql (sync path).
-    /// This verifies the sync-over-async path in TryExecuteReadOnlySql correctly sets
-    /// session state without unnecessary Task.Run overhead.
+    /// Sync BeginTransaction(executionType: ExecutionType.Read) on DuckDB must use access_mode=READ_ONLY in the
+    /// connection string (set by ApplyConnectionSettingsCore). No session SQL is emitted.
     /// </summary>
     [Fact]
-    public void BeginTransaction_Sync_ReadOnly_DuckDb_ExecutesReadOnlySessionSql()
+    public void BeginTransaction_Sync_ReadOnly_DuckDb_UsesReadOnlyConnectionString()
     {
         var factory = new fakeDbFactory(SupportedDatabase.DuckDB);
         var config = new DatabaseContextConfiguration
@@ -190,17 +193,18 @@ public class BeginTransactionAsyncTests
 
         using var context = new DatabaseContext(config, factory);
 
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         tx.Commit();
 
-        // The read-only session SQL must have been sent via ExecuteSessionNonQuery.
+        // DuckDB enforces read-only via access_mode=READ_ONLY in the connection string
+        // (when using SingleWriter/SingleConnection mode). For DbMode.Standard, the
+        // connection is obtained from the shared pool without a read-only modifier.
+        // Verify no SET access_mode session SQL is emitted (regression guard).
         var allExecuted = factory.CreatedConnections
             .SelectMany(c => c.ExecutedNonQueryTexts)
             .ToList();
-
-        Assert.Contains(allExecuted,
-            c => c.Contains("access_mode", StringComparison.OrdinalIgnoreCase) &&
-                 c.Contains("read_only", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(allExecuted,
+            c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -227,7 +231,7 @@ public class BeginTransactionAsyncTests
         Task<ITransactionContext>? task = null;
         var syncEx = Record.Exception(() =>
         {
-            task = ((IDatabaseContext)tx).BeginTransactionAsync();
+            task = ((IDatabaseContext)tx).BeginTransactionAsync().AsTask();
         });
 
         // The exception must NOT have been thrown synchronously.
@@ -239,6 +243,34 @@ public class BeginTransactionAsyncTests
         Assert.IsType<InvalidOperationException>(task.Exception!.InnerException);
 
         await tx.CommitAsync();
+    }
+
+    /// <summary>
+    /// BeginTransaction with an unsupported IsolationLevel on the write path must throw,
+    /// not silently pass the unsupported level to the driver.
+    /// </summary>
+    [Theory]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.Snowflake,   "EmulatedProduct=Snowflake",   IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.Snowflake,   "EmulatedProduct=Snowflake",   IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.TiDb,        "EmulatedProduct=TiDB",        IsolationLevel.Serializable)]
+    public void BeginTransaction_UnsupportedIsolationLevel_Throws(
+        SupportedDatabase product,
+        string connectionStringFragment,
+        IsolationLevel unsupportedLevel)
+    {
+        var factory = new fakeDbFactory(product);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;{connectionStringFragment}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory);
+        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupportedLevel));
     }
 
     /// <summary>
@@ -261,7 +293,7 @@ public class BeginTransactionAsyncTests
         Task<ITransactionContext>? task = null;
         var syncEx = Record.Exception(() =>
         {
-            task = ((IDatabaseContext)tx).BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+            task = ((IDatabaseContext)tx).BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads).AsTask();
         });
 
         Assert.Null(syncEx);

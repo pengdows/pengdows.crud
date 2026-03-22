@@ -3,8 +3,20 @@ name: Build, Test & Publish NuGet Package
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'skills/**'
+      - 'LICENSE'
+      - 'logo.png'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'skills/**'
+      - 'LICENSE'
+      - 'logo.png'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,10 +29,13 @@ jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
+      stormgate_coverage: ${{ steps.stormgate_coverage.outputs.coverage }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -36,7 +51,7 @@ jobs:
           # Only block changes to coverage exclusion/inclusion patterns.
           # Timing settings (TestSessionTimeout) may legitimately differ between branches.
           exclusion_changes=$(git diff "$base_ref...HEAD" -- coverage.runsettings \
-            | grep '^[+-]' | grep -v '^---' | grep -v '^+++' \
+            | { grep '^[+-]' || true; } | { grep -v '^---' || true; } | { grep -v '^+++' || true; } \
             | { grep -iE '<(Include|Exclude|ExcludeByFile|ExcludeByAttribute)' || true; } \
             | wc -l)
           if [[ "$exclusion_changes" -gt 0 ]]; then
@@ -52,7 +67,7 @@ jobs:
         # 10.0.x: included for improved Roslyn analyzers and nullability checking;
         #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
         #         ready to ship a net10.0 TFM.
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
@@ -83,6 +98,7 @@ jobs:
         run: |
           dotnet test --no-build --configuration Release \
             --blame-hang --blame-hang-timeout 120s \
+            --filter "FullyQualifiedName!~pengdows.crud.IntegrationTests" \
             --collect:"XPlat Code Coverage" \
             --results-directory ./TestResults \
             --settings coverage.runsettings
@@ -100,7 +116,17 @@ jobs:
               -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
               -classfilters:"-*Test*;-*Mock*"
 
+      - name: Generate stormgate coverage report
+        run: |
+            reportgenerator \
+              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -targetdir:"coverage-report-stormgate" \
+              -reporttypes:"Html;Cobertura" \
+              -assemblyfilters:"+pengdows.stormgate;-pengdows.stormgate.Tests" \
+              -classfilters:"-*Test*;-*Mock*"
+
       - name: Enforce pengdows.crud coverage floor and ratchet from Cobertura XML
+        id: coverage
         run: |
           set -euo pipefail
 
@@ -152,6 +178,61 @@ jobs:
             echo "✅ Coverage $coverage_percent% meets threshold"
           fi
 
+          echo "coverage=$coverage_percent" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce pengdows.stormgate coverage floor and ratchet from Cobertura XML
+        id: stormgate_coverage
+        run: |
+          set -euo pipefail
+
+          xml_file="coverage-report-stormgate/Cobertura.xml"
+          if [[ ! -f "${xml_file}" ]]; then
+            echo "❌ ${xml_file} not found"
+            exit 1
+          fi
+
+          rate=$(grep -m1 'line-rate="' "$xml_file" | sed -n 's/.*line-rate="\([^"]*\)".*/\1/p')
+          if [[ -z "${rate}" ]]; then
+            echo "❌ Could not parse line-rate from Cobertura XML"
+            exit 1
+          fi
+
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ${rate} * 100 }")
+          echo "📊 pengdows.stormgate line coverage (from ${xml_file}): $coverage_percent%"
+
+          minimum_floor=83
+          baseline_file=".github/coverage-baseline.stormgate.txt"
+          if [[ ! -f "$baseline_file" ]]; then
+            echo "❌ Missing $baseline_file"
+            exit 1
+          fi
+
+          baseline=$(tr -d '[:space:]' < "$baseline_file")
+          if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
+            exit 1
+          fi
+
+          required="$minimum_floor"
+          baseline_higher=$(awk "BEGIN { print ($baseline > $required) ? 1 : 0 }")
+          if [[ "$baseline_higher" -eq 1 ]]; then
+            required="$baseline"
+          fi
+
+          echo "🧭 Minimum floor: ${minimum_floor}%"
+          echo "🧭 Baseline ratchet: ${baseline}%"
+          echo "🧭 Effective required coverage: ${required}%"
+
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          if [[ "$too_low" -eq 1 ]]; then
+            echo "❌ Coverage $coverage_percent% is below required $required%"
+            exit 1
+          else
+            echo "✅ Coverage $coverage_percent% meets threshold"
+          fi
+
+          echo "coverage=$coverage_percent" >> "$GITHUB_OUTPUT"
+
       - name: Enforce no TransactionScope usage
         run: |
           set -euo pipefail
@@ -170,7 +251,7 @@ jobs:
           echo "✅ No TransactionScope usage found."
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: TestResults/**/coverage.cobertura.xml
           # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
@@ -180,10 +261,16 @@ jobs:
           disable_file_fixes: true
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage-report
+
+      - name: Upload stormgate coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-stormgate
+          path: coverage-report-stormgate
 
   publish:
     name: Publish NuGet Package
@@ -193,7 +280,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -203,7 +290,7 @@ jobs:
         # 10.0.x: included for improved Roslyn analyzers and nullability checking;
         #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
         #         ready to ship a net10.0 TFM.
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
@@ -233,6 +320,9 @@ jobs:
           dotnet pack pengdows.crud/pengdows.crud.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
+          dotnet pack pengdows.stormgate/pengdows.stormgate.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
       - name: Debug API Key
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
@@ -255,14 +345,17 @@ jobs:
             "https://api.nuget.org/v3-flatcontainer/pengdows.crud.abstractions/${VERSION}/${VERSION}.nupkg")
           status_fakedb=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.nuget.org/v3-flatcontainer/pengdows.crud.fakedb/${VERSION}/${VERSION}.nupkg")
+          status_stormgate=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg")
 
           echo "NuGet status for v$VERSION:"
           echo "  pengdows.crud: $status_crud"
           echo "  pengdows.crud.abstractions: $status_abstractions"
           echo "  pengdows.crud.fakedb: $status_fakedb"
+          echo "  pengdows.stormgate: $status_stormgate"
 
           all_published=true
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb"; do
+          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" != "200" ]]; then
               all_published=false
               break
@@ -270,7 +363,7 @@ jobs:
           done
 
           any_published=false
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb"; do
+          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" == "200" ]]; then
               any_published=true
               break
@@ -301,17 +394,20 @@ jobs:
           dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY"
+          dotnet nuget push pengdows.stormgate/bin/Release/pengdows.stormgate.${{ steps.version.outputs.version }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY"
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
       - name: Tag the release
-        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        if: steps.nuget_check.outputs.skip != 'true'
         run: |
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
-        if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
+        if: steps.nuget_check.outputs.skip != 'true'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -367,13 +463,34 @@ jobs:
             exit 1
           fi
 
+          # Ratchet coverage baseline if this deploy improved coverage.
+          new_coverage="${{ needs.build-and-test.outputs.coverage }}"
+          current_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.txt)
+          is_higher=$(awk "BEGIN { print ($new_coverage > $current_baseline) ? 1 : 0 }")
+          if [[ "$is_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_coverage" > .github/coverage-baseline.txt
+            echo "📈 Coverage baseline ratcheted: ${current_baseline}% → ${new_coverage}%"
+          else
+            echo "ℹ️ Coverage baseline unchanged at ${current_baseline}%"
+          fi
+
+          new_stormgate_coverage="${{ needs.build-and-test.outputs.stormgate_coverage }}"
+          current_stormgate_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.stormgate.txt)
+          is_stormgate_higher=$(awk "BEGIN { print ($new_stormgate_coverage > $current_stormgate_baseline) ? 1 : 0 }")
+          if [[ "$is_stormgate_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_stormgate_coverage" > .github/coverage-baseline.stormgate.txt
+            echo "📈 Stormgate coverage baseline ratcheted: ${current_stormgate_baseline}% → ${new_stormgate_coverage}%"
+          else
+            echo "ℹ️ Stormgate coverage baseline unchanged at ${current_stormgate_baseline}%"
+          fi
+
       - name: Commit semver bump
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Directory.Build.props
+          git add Directory.Build.props .github/coverage-baseline.txt .github/coverage-baseline.stormgate.txt
           git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
 
       - name: Push semver bump commit

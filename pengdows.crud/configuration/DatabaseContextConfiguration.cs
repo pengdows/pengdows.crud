@@ -96,8 +96,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
         set => _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
     }
 
-    public bool? ForceManualPrepare { get; set; }
-    public bool? DisablePrepare { get; set; }
+    public CommandPrepareMode PrepareMode { get; set; } = CommandPrepareMode.Auto;
     public int? ReaderPlanCacheSize { get; set; }
     public bool EnableMetrics { get; set; } = false;
     public IMetricsOptions MetricsOptions { get; set; } = metrics.MetricsOptions.Default;

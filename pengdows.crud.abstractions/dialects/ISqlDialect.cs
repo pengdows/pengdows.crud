@@ -54,21 +54,6 @@ public interface ISqlDialect
     bool SupportsRepeatedNamedParameters { get; }
 
     /// <summary>
-    /// Allows the dialect to render provider-specific JSON casts for parameter placeholders.
-    /// </summary>
-    /// <param name="parameterMarker">Base parameter marker (e.g., @p0).</param>
-    /// <param name="column">Column metadata describing the JSON column.</param>
-    /// <returns>Dialect-specific SQL fragment.</returns>
-    string RenderJsonArgument(string parameterMarker, IColumnInfo column);
-
-    /// <summary>
-    /// Gives the dialect a chance to stamp provider-specific metadata on JSON parameters.
-    /// </summary>
-    /// <param name="parameter">Parameter instance to update.</param>
-    /// <param name="column">Column metadata describing the JSON column.</param>
-    void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
-
-    /// <summary>
     /// True when the dialect supports set-valued parameters for IN-lists.
     /// </summary>
     bool SupportsSetValuedParameters { get; }
@@ -279,14 +264,16 @@ public interface ISqlDialect
     bool SupportsJsonTable { get; }
 
     /// <summary>
-    /// Indicates MERGE supports RETURNING (or equivalent) to fetch affected rows.
-    /// </summary>
-    bool SupportsMergeReturning { get; }
-
-    /// <summary>
     /// True when INSERT ... ON CONFLICT syntax is available.
     /// </summary>
     bool SupportsInsertOnConflict { get; }
+
+    /// <summary>
+    /// True when the ON CONFLICT DO UPDATE clause supports a WHERE predicate for optimistic
+    /// concurrency checks (PostgreSQL 9.5+, CockroachDB). False for SQLite, DuckDB, and all
+    /// dialects that use MERGE or ON DUPLICATE KEY UPDATE instead.
+    /// </summary>
+    bool SupportsOnConflictWhere => false;
 
     /// <summary>
     /// Indicates support for ON DUPLICATE KEY syntax.
@@ -435,47 +422,6 @@ public interface ISqlDialect
     string? UpsertIncomingAlias { get; }
 
     /// <summary>
-    /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
-    /// </summary>
-    /// <param name="columns">Columns included in the source row.</param>
-    /// <param name="parameterNames">Parameter names (without markers) corresponding to columns.</param>
-    /// <returns>Dialect-specific USING clause with source alias 's'.</returns>
-    string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
-    {
-        if (columns == null)
-        {
-            throw new ArgumentNullException(nameof(columns));
-        }
-
-        if (parameterNames == null)
-        {
-            throw new ArgumentNullException(nameof(parameterNames));
-        }
-
-        if (columns.Count != parameterNames.Count)
-        {
-            throw new ArgumentException("Column and parameter counts must match.");
-        }
-
-        var values = new string[columns.Count];
-        var names = new string[columns.Count];
-
-        for (var i = 0; i < columns.Count; i++)
-        {
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (columns[i].IsJsonType)
-            {
-                placeholder = RenderJsonArgument(placeholder, columns[i]);
-            }
-
-            values[i] = placeholder;
-            names[i] = WrapSimpleName(columns[i].Name);
-        }
-
-        return $"USING (VALUES ({string.Join(", ", values)})) AS s ({string.Join(", ", names)})";
-    }
-
-    /// <summary>
     /// Formats the MERGE ON clause predicate for the dialect.
     /// </summary>
     /// <param name="predicate">Join predicate (e.g., "t.id = s.id").</param>
@@ -523,20 +469,6 @@ public interface ISqlDialect
     string GetSequenceNextValQuery(string sequenceName);
 
     /// <summary>
-    /// Reads the database version from the connection.
-    /// </summary>
-    /// <param name="connection">Connection to inspect.</param>
-    /// <returns>Version string reported by the database.</returns>
-    string GetDatabaseVersion(ITrackedConnection connection);
-
-    /// <summary>
-    /// Retrieves the data source information schema as a <see cref="DataTable"/>.
-    /// </summary>
-    /// <param name="connection">Connection to query.</param>
-    /// <returns>Schema information.</returns>
-    DataTable GetDataSourceInformationSchema(ITrackedConnection connection);
-
-    /// <summary>
     /// Returns dialect-specific session settings to apply to a connection.
     /// </summary>
     /// <param name="context">The database context requesting settings.</param>
@@ -546,51 +478,6 @@ public interface ISqlDialect
 
 
     /// <summary>
-    /// Applies connection-string or provider-specific settings to the provided connection.
-    /// </summary>
-    /// <param name="connection">Connection to configure.</param>
-    /// <param name="context">Database context requesting the settings.</param>
-    /// <param name="readOnly">True when the connection should be read-only.</param>
-    void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
-
-    /// <summary>
-    /// Determines whether prepare should be disabled for a connection based on an exception.
-    /// Used for per-connection runtime opt-out on first failure.
-    /// </summary>
-    /// <param name="ex">Exception thrown during prepare attempt.</param>
-    /// <returns>True if prepare should be disabled for this connection.</returns>
-    bool ShouldDisablePrepareOn(Exception ex);
-
-
-    /// <summary>
-    /// Attempts to enter a read-only transaction. Implementations may be a no-op.
-    /// </summary>
-    /// <param name="transaction">Transaction context.</param>
-    void TryEnterReadOnlyTransaction(ITransactionContext transaction);
-
-    /// <summary>
-    /// Asynchronously attempts to enter a read-only transaction. Implementations may be a no-op.
-    /// </summary>
-    /// <param name="transaction">Transaction context.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Determines whether READ_COMMITTED_SNAPSHOT is enabled.
-    /// </summary>
-    /// <param name="connection">Connection to check.</param>
-    /// <returns>True if the snapshot isolation is on.</returns>
-    bool IsReadCommittedSnapshotOn(ITrackedConnection connection);
-
-    /// <summary>
-    /// Determines whether SNAPSHOT isolation level is enabled.
-    /// </summary>
-    /// <param name="connection">Connection to check.</param>
-    /// <returns>True if snapshot isolation is enabled.</returns>
-    bool IsSnapshotIsolationOn(ITrackedConnection connection);
-
-    /// <summary>
     /// Determines whether the given exception represents a unique constraint violation.
     /// </summary>
     /// <param name="ex">Exception to inspect.</param>
@@ -598,37 +485,25 @@ public interface ISqlDialect
     bool IsUniqueViolation(DbException ex);
 
     /// <summary>
-    /// Detects database product information from the connection.
+    /// Determines whether the given exception represents a foreign-key constraint violation.
     /// </summary>
-    /// <param name="connection">Connection to interrogate.</param>
-    /// <returns>Discovered product information.</returns>
-    Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection);
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a foreign-key violation.</returns>
+    bool IsForeignKeyViolation(DbException ex) => false;
 
     /// <summary>
-    /// Synchronously detects database product information from the connection.
+    /// Determines whether the given exception represents a not-null constraint violation.
     /// </summary>
-    /// <param name="connection">Connection to interrogate.</param>
-    /// <returns>Discovered product information.</returns>
-    IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection);
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a not-null violation.</returns>
+    bool IsNotNullViolation(DbException ex) => false;
 
     /// <summary>
-    /// Initializes fallback metadata when detection cannot run (e.g., offline scenarios).
+    /// Determines whether the given exception represents a check-constraint violation.
     /// </summary>
-    void InitializeUnknownProductInfo();
-
-    /// <summary>
-    /// Parses a raw version string into a <see cref="Version"/> instance.
-    /// </summary>
-    /// <param name="versionString">Version string reported by the database.</param>
-    /// <returns>Parsed version or null when parsing fails.</returns>
-    Version? ParseVersion(string versionString);
-
-    /// <summary>
-    /// Retrieves the major version number from the version string.
-    /// </summary>
-    /// <param name="versionString">Version string reported by the database.</param>
-    /// <returns>Major version or null if unavailable.</returns>
-    int? GetMajorVersion(string versionString);
+    /// <param name="ex">Exception to inspect.</param>
+    /// <returns>True if the exception indicates a check-constraint violation.</returns>
+    bool IsCheckConstraintViolation(DbException ex) => false;
 
     /// <summary>
     /// Generates a unique parameter name for the current operation.
@@ -737,6 +612,40 @@ public interface ISqlDialect
     string? MaxPoolSizeSettingName { get; }
 
     /// <summary>
+    /// True when the dialect supports SQL:2008 offset/fetch paging syntax:
+    /// <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c>.
+    /// Supported by SQL Server, Oracle 12c+, PostgreSQL, Firebird 3+, DuckDB, and others.
+    /// SQLite does not support this syntax.
+    /// </summary>
+    bool SupportsOffsetFetch { get; }
+
+    /// <summary>
+    /// True when the dialect supports <c>LIMIT m OFFSET n</c> paging syntax.
+    /// Supported by PostgreSQL, MySQL, MariaDB, SQLite, and most open-source databases.
+    /// SQL Server and Oracle do not support this syntax.
+    /// </summary>
+    bool SupportsLimitOffset { get; }
+
+    /// <summary>
+    /// Appends dialect-appropriate paging SQL to the supplied query builder.
+    /// Uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
+    /// is true, otherwise falls back to <c>LIMIT m OFFSET n</c>.
+    /// </summary>
+    /// <param name="query">The <see cref="ISqlQueryBuilder"/> to append to.</param>
+    /// <param name="offset">Number of rows to skip (0 = no skip, limit-only).</param>
+    /// <param name="limit">Maximum number of rows to return.</param>
+    /// <remarks>
+    /// SQL Server requires an ORDER BY clause before OFFSET/FETCH — callers are responsible
+    /// for appending ORDER BY before calling this method.
+    /// When <paramref name="offset"/> is 0 and the dialect uses LIMIT/OFFSET, the OFFSET
+    /// clause is omitted from the generated SQL.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="offset"/> is negative or <paramref name="limit"/> is zero or negative.
+    /// </exception>
+    void AppendPaging(ISqlQueryBuilder query, int offset, int limit);
+
+    /// <summary>
     /// Classifies an exception into a well-known error category for metrics and observability.
     /// </summary>
     /// <param name="exception">The exception thrown by the database operation.</param>
@@ -783,5 +692,72 @@ public interface ISqlDialect
         }
 
         return DbErrorCategory.Unknown;
+    }
+
+    /// <summary>
+    /// Analyzes an exception into a provider-agnostic structure suitable for control flow.
+    /// </summary>
+    /// <param name="exception">The exception thrown by the database operation.</param>
+    /// <returns>A structured analysis containing category, constraint kind, and retry hints.</returns>
+    DbExceptionInfo AnalyzeException(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+        {
+            return new DbExceptionInfo(
+                DbErrorCategory.None,
+                DbConstraintKind.None,
+                false,
+                false,
+                null,
+                null);
+        }
+
+        var category = ClassifyException(exception);
+        var constraintKind = DbConstraintKind.None;
+        int? providerErrorCode = null;
+        string? sqlState = null;
+
+        if (exception is DbException dbEx)
+        {
+            providerErrorCode = dbEx.ErrorCode;
+            sqlState = dbEx.SqlState;
+
+            if (category == DbErrorCategory.ConstraintViolation)
+            {
+                if (IsUniqueViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Unique;
+                }
+                else if (IsForeignKeyViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.ForeignKey;
+                }
+                else if (IsNotNullViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.NotNull;
+                }
+                else if (IsCheckConstraintViolation(dbEx))
+                {
+                    constraintKind = DbConstraintKind.Check;
+                }
+                else
+                {
+                    constraintKind = DbConstraintKind.Unknown;
+                }
+            }
+        }
+
+        var isTransient = category is DbErrorCategory.Deadlock or
+            DbErrorCategory.SerializationFailure or
+            DbErrorCategory.Timeout;
+        var isRetryable = isTransient;
+
+        return new DbExceptionInfo(
+            category,
+            constraintKind,
+            isTransient,
+            isRetryable,
+            providerErrorCode,
+            sqlState);
     }
 }

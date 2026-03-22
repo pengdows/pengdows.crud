@@ -19,6 +19,11 @@ namespace pengdows.crud.Tests.dialects;
 /// </summary>
 public class SessionSettingsBaselineEnforcementTests
 {
+    // Reflection is required here because there is no public API to drive the dialect cache
+    // into a stale/empty state. The test simulates a scenario that occurs only at runtime
+    // (detection found the first pooled connection already compliant → cached diff = "").
+    // Directly mutating the private field is the minimal way to reproduce this boundary
+    // condition without adding test-only hooks to production code.
     private static readonly BindingFlags NonPublicInstance =
         BindingFlags.NonPublic | BindingFlags.Instance;
 
@@ -41,8 +46,8 @@ public class SessionSettingsBaselineEnforcementTests
         // Must still contain the full baseline, not ""
         Assert.False(string.IsNullOrWhiteSpace(settings),
             "GetBaseSessionSettings must return a non-empty baseline even when cached diff is empty");
-        Assert.Contains("SET standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SET client_min_messages", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages", settings, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -141,5 +146,35 @@ public class SessionSettingsBaselineEnforcementTests
 
         Assert.False(string.IsNullOrWhiteSpace(settings));
         Assert.Contains("QUOTED_IDENTIFIER", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Firebird — base-class GetFinalSessionSettings path
+    // ──────────────────────────────────────────────
+
+    [Fact]
+    public void Firebird_GetFinalSessionSettings_ReadOnly_IncludesBaselineAndReadOnlyIntent()
+    {
+        // Firebird does not override GetFinalSessionSettings; the base-class combines
+        // GetBaseSessionSettings() and GetReadOnlySessionSettings() into one batch.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: true);
+
+        Assert.Contains("SET NAMES UTF8", settings, StringComparison.Ordinal);
+        Assert.Contains("SET SQL DIALECT 3", settings, StringComparison.Ordinal);
+        Assert.Contains("SET TRANSACTION READ ONLY", settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Firebird_GetFinalSessionSettings_ReadWrite_IncludesBaselineAndReadWriteReset()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger<FirebirdDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Contains("SET NAMES UTF8", settings, StringComparison.Ordinal);
+        Assert.Contains("SET SQL DIALECT 3", settings, StringComparison.Ordinal);
+        Assert.Contains("SET TRANSACTION READ WRITE", settings, StringComparison.Ordinal);
     }
 }

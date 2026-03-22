@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -102,8 +103,8 @@ public class DataReaderMapperNegativeTests
             var reader = new fakeDbDataReader(rows);
             var options = new MapperOptions(true);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                DataReaderMapper.LoadAsync<SampleEntity>(reader, options));
+            await Assert.ThrowsAsync<DataMappingException>(() =>
+                DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
         }
         finally
         {
@@ -128,10 +129,8 @@ public class DataReaderMapperNegativeTests
 
         var reader = new fakeDbDataReader(rows);
         var options = new MapperOptions(true);
-        IDataReaderMapper mapper = new DataReaderMapper();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            mapper.LoadAsync<SampleEntity>(reader, options));
+        await Assert.ThrowsAsync<DataMappingException>(() =>
+            DataReaderMapper.LoadAsync<SampleEntity>(reader, options).AsTask());
     }
 
     [Fact]
@@ -151,7 +150,7 @@ public class DataReaderMapperNegativeTests
         var options = new MapperOptions(true);
         var stream = DataReaderMapper.StreamAsync<SampleEntity>(reader, options);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<DataMappingException>(async () =>
         {
             await foreach (var _ in stream)
             {
@@ -164,10 +163,8 @@ public class DataReaderMapperNegativeTests
     {
         IDataReader reader = new NonDbDataReader();
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-        {
-            await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
-        });
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader).AsTask());
     }
 
     [Fact]

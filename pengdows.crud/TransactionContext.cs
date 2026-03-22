@@ -29,6 +29,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
@@ -110,16 +111,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ResolveCreationParameters(
             IDatabaseContext context,
             IsolationLevel isolationLevel,
-            ExecutionType? executionType,
-            bool isReadOnly)
+            ExecutionType? executionType)
     {
-        executionType ??= context.IsReadOnlyConnection || isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+        executionType ??= context.IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
 
-        if ((context.IsReadOnlyConnection || isReadOnly) && executionType != ExecutionType.Read)
+        if (context.IsReadOnlyConnection && executionType != ExecutionType.Read)
         {
             throw new NotSupportedException("DatabaseContext is read-only");
         }
-
         if (context.Product == SupportedDatabase.CockroachDb)
         {
             isolationLevel = IsolationLevel.Serializable;
@@ -141,15 +140,15 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ITrackedConnection connection,
         IDbTransaction transaction,
         IsolationLevel isolationLevel,
-        bool isReadOnly,
+        ExecutionType executionType,
         ILogger<TransactionContext>? logger)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _isReadOnly = isReadOnly;
-        _dialect = context.Dialect ??
-                   throw new InvalidOperationException("IDatabaseContext must expose a non-null Dialect.");
+        _isReadOnly = executionType == ExecutionType.Read;
+        _dialect = context.GetDialect();
         RootId = ((IContextIdentity)_context).RootId;
+        Name = _context.Name;
         var metricsAccessor = context as IMetricsCollectorAccessor;
         _metricsCollector = metricsAccessor?.MetricsCollector;
         _readMetricsCollector = metricsAccessor?.ReadMetricsCollector;
@@ -171,14 +170,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
         : this(context,
-            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType, isReadOnly,
+            CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType,
                 out var transaction),
             transaction,
             isolationLevel,
-            isReadOnly,
+            executionType!.Value,
             logger)
     {
         if (_isReadOnly)
@@ -204,11 +202,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         ref IsolationLevel isolationLevel,
         ref ExecutionType? executionType,
-        bool isReadOnly,
         out IDbTransaction transaction)
     {
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
-            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+            ResolveCreationParameters(context, isolationLevel, executionType);
         executionType = resolvedExecType;
         isolationLevel = resolvedIsolation;
 
@@ -220,9 +217,19 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
         // but preserve the resolved isolation level for reporting and logic.
-        transaction = context.Product == SupportedDatabase.DuckDB
-            ? connection.BeginTransaction()
-            : connection.BeginTransaction(resolvedIsolation);
+        try
+        {
+            transaction = context.Product == SupportedDatabase.DuckDB
+                ? connection.BeginTransaction()
+                : connection.BeginTransaction(resolvedIsolation);
+        }
+        catch (Exception ex)
+        {
+            context.CloseAndDisposeConnection(connection);
+            throw new TransactionException(
+                $"Failed to begin transaction on {context.Product}: {ex.Message}",
+                context.Product, ex);
+        }
 
         return connection;
     }
@@ -275,6 +282,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public SupportedDatabase Product => _context.Product;
 
     /// <inheritdoc/>
+    public CommandPrepareMode PrepareMode => _context.PrepareMode;
+
+    /// <inheritdoc/>
     public long PeakOpenConnections => _context.PeakOpenConnections;
 
     /// <inheritdoc/>
@@ -289,12 +299,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public string ConnectionString => _context.ConnectionString;
 
+    internal string RawConnectionString => InternalConnectionStringAccess.GetRawConnectionString(_context);
+
     /// <inheritdoc/>
-    public string Name
-    {
-        get => _context.Name;
-        set => _context.Name = value;
-    }
+    public string Name { get; init; }
 
     /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
@@ -316,9 +324,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
 
     /// <inheritdoc/>
-    public string SessionSettingsPreamble => _context.Dialect.GetConnectionSessionSettings(this, IsReadOnlyConnection);
-
-    /// <inheritdoc/>
     public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
 
     /// <inheritdoc/>
@@ -334,8 +339,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         remove => _context.MetricsUpdated -= value;
     }
 
-    /// <inheritdoc/>
-    public ILockerAsync GetLock()
+    internal ILockerAsync GetLockInternal()
     {
         ThrowIfDisposed();
         if (IsCompleted)
@@ -344,6 +348,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         return _reusableLocker;
+    }
+
+    ILockerAsync IInternalConnectionProvider.GetLock()
+    {
+        return GetLockInternal();
     }
 
     protected override void ValidateCanCreateContainer()
@@ -371,7 +380,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         cmd.ExecuteNonQuery();
     }
 
-    internal async Task ExecuteSessionNonQueryAsync(string sql)
+    internal async ValueTask ExecuteSessionNonQueryAsync(string sql)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -409,7 +418,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task TryResetReadOnlySessionAsync()
+    private async ValueTask TryResetReadOnlySessionAsync()
     {
         if (_isReadOnly && _dialect is SqlDialect sd)
         {
@@ -439,30 +448,22 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return GetConnection(executionType, isShared);
     }
 
-    /// <inheritdoc/>
-    public void AssertIsReadConnection()
+    internal void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
     }
-
-    /// <inheritdoc/>
-    public void AssertIsWriteConnection()
+/// <inheritdoc/>
+public void AssertIsWriteConnection()
+{
+    if (_isReadOnly)
     {
-        if (_isReadOnly)
-        {
-            throw new InvalidOperationException("Transaction is read-only.");
-        }
-
-        _context.AssertIsWriteConnection();
+        throw new InvalidOperationException("Transaction is read-only.");
     }
 
-    /// <inheritdoc/>
-    public bool? ForceManualPrepare => _context.ForceManualPrepare;
+    _context.AssertIsWriteConnection();
+}
 
-    /// <inheritdoc/>
-    public bool? DisablePrepare => _context.DisablePrepare;
-
-    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
 
@@ -477,33 +478,31 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile,
-        ExecutionType executionType, bool? readOnly)
+        ExecutionType executionType)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType,
-        bool? readOnly)
+    ITransactionContext IDatabaseContext.BeginTransaction(IsolationLevel? isolationLevel, ExecutionType executionType)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
 
-    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
-        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+    ValueTask<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationLevel? isolationLevel,
+        ExecutionType executionType, CancellationToken cancellationToken)
     {
-        return Task.FromException<ITransactionContext>(
+        return ValueTask.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
-    Task<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
-        ExecutionType executionType, bool? readOnly, CancellationToken cancellationToken)
+    ValueTask<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
+        ExecutionType executionType, CancellationToken cancellationToken)
     {
-        return Task.FromException<ITransactionContext>(
+        return ValueTask.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));
     }
 
-    /// <inheritdoc/>
-    public void CloseAndDisposeConnection(ITrackedConnection? conn)
+    private void CloseAndDisposeConnectionInternal(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -519,8 +518,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _context.CloseAndDisposeConnection(conn);
     }
 
-    /// <inheritdoc/>
-    public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+    private ValueTask CloseAndDisposeConnectionAsyncInternal(ITrackedConnection? conn)
     {
         ThrowIfDisposed();
         if (conn is null)
@@ -536,6 +534,16 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return _context.CloseAndDisposeConnectionAsync(conn);
     }
 
+    void IInternalConnectionProvider.CloseAndDisposeConnection(ITrackedConnection? conn)
+    {
+        CloseAndDisposeConnectionInternal(conn);
+    }
+
+    ValueTask IInternalConnectionProvider.CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+    {
+        return CloseAndDisposeConnectionAsyncInternal(conn);
+    }
+
     /// <inheritdoc/>
     public void Commit()
     {
@@ -544,13 +552,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         CommitAsync().GetAwaiter().GetResult();
     }
 
-    public Task CommitAsync(CancellationToken cancellationToken = default)
+    public ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return CompleteTransactionWithWaitAsync(() =>
         {
             _transaction.Commit();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }, true, cancellationToken);
     }
 
@@ -561,23 +569,23 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         RollbackAsync().GetAwaiter().GetResult();
     }
 
-    public Task RollbackAsync(CancellationToken cancellationToken = default)
+    public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         return CompleteTransactionWithWaitAsync(() =>
         {
             _transaction.Rollback();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }, false, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public Task SavepointAsync(string name)
+    public ValueTask SavepointAsync(string name)
     {
         return SavepointAsync(name, default);
     }
 
-    public async Task SavepointAsync(string name, CancellationToken cancellationToken = default)
+    public async ValueTask SavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -598,12 +606,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     /// <inheritdoc/>
-    public Task RollbackToSavepointAsync(string name)
+    public ValueTask RollbackToSavepointAsync(string name)
     {
         return RollbackToSavepointAsync(name, default);
     }
 
-    public async Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
+    public async ValueTask RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
     {
         if (!_dialect.SupportsSavepoints)
         {
@@ -645,7 +653,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task CompleteTransactionWithWaitAsync(Func<Task> action, bool markCommitted,
+    private async ValueTask CompleteTransactionWithWaitAsync(Func<ValueTask> action, bool markCommitted,
         CancellationToken cancellationToken = default)
     {
         if (!await _completionLock.WaitAsync(_context.ModeLockTimeout ?? Timeout.InfiniteTimeSpan, cancellationToken)
@@ -686,10 +694,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 Interlocked.Exchange(ref _rolledBack, 1);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            Interlocked.Exchange(ref _completedState, 0);
-            throw;
+            // Do NOT reset _completedState — connection is already closed in finally.
+            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+            throw new TransactionException(
+                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                _context.Product, ex);
         }
         finally
         {
@@ -699,7 +710,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
-    private async Task CompleteTransactionAsync(Func<Task> action, bool markCommitted)
+    private async ValueTask CompleteTransactionAsync(Func<ValueTask> action, bool markCommitted)
     {
         if (Interlocked.Exchange(ref _completedState, 1) != 0)
         {
@@ -719,10 +730,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 Interlocked.Exchange(ref _rolledBack, 1);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            Interlocked.Exchange(ref _completedState, 0);
-            throw;
+            // Do NOT reset _completedState — connection is already closed in finally.
+            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+            throw new TransactionException(
+                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                _context.Product, ex);
         }
         finally
         {
@@ -755,7 +769,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     // Kept for backward compatibility with existing internal calls
-    private Task RollbackAsync()
+    private ValueTask RollbackAsync()
     {
         return RollbackAsync(default);
     }
@@ -821,7 +835,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                         await CompleteTransactionAsync(() =>
                         {
                             _transaction.Rollback();
-                            return Task.CompletedTask;
+                            return ValueTask.CompletedTask;
                         }, false).ConfigureAwait(false);
                     }
                     finally
@@ -866,6 +880,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override ISqlDialect DialectCore => _dialect;
 
+    /// <inheritdoc/>
+    public new ISqlDialect Dialect => _dialect;
+
+    ISqlDialect ISqlDialectProvider.Dialect => _dialect;
+
     /// <inheritdoc />
     public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
 
@@ -874,34 +893,43 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null)
     {
-        return new TransactionContext(context, isolationLevel, executionType, isReadOnly, logger);
+        return new TransactionContext(context, isolationLevel, executionType, logger);
     }
 
     // Internal async factory used by DatabaseContext
-    internal static async Task<TransactionContext> CreateAsync(
+    internal static async ValueTask<TransactionContext> CreateAsync(
         IDatabaseContext context,
         IsolationLevel isolationLevel = IsolationLevel.Unspecified,
         ExecutionType? executionType = null,
-        bool isReadOnly = false,
         ILogger<TransactionContext>? logger = null,
         CancellationToken cancellationToken = default)
     {
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
-            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+            ResolveCreationParameters(context, isolationLevel, executionType);
 
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
         await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
 
-        var transaction = context.Product == SupportedDatabase.DuckDB
-            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
-            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+        IDbTransaction transaction;
+        try
+        {
+            transaction = context.Product == SupportedDatabase.DuckDB
+                ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+                : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            throw new TransactionException(
+                $"Failed to begin transaction on {context.Product}: {ex.Message}",
+                context.Product, ex);
+        }
 
-        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger);
 
-        if (isReadOnly)
+        if (tx.IsReadOnlyConnection)
         {
             try
             {
@@ -920,7 +948,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return tx;
     }
 
-    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+    private static async ValueTask OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
         ITrackedConnection connection,
         CancellationToken cancellationToken)
     {
@@ -943,4 +971,5 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
+
 }

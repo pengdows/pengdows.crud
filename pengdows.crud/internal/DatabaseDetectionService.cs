@@ -114,6 +114,13 @@ internal static class DatabaseDetectionService
                     {
                         return SupportedDatabase.MariaDb;
                     }
+
+                    // TiDB reports DataSourceProductName = "MySQL" but its version contains "TiDB"
+                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                        productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.TiDb;
+                    }
                 }
             }
             catch
@@ -145,7 +152,10 @@ internal static class DatabaseDetectionService
 
     private static SupportedDatabase DetectFlavor(IDbConnection? connection, SupportedDatabase detected)
     {
-        if (connection == null) return SupportedDatabase.Unknown;
+        if (connection == null)
+        {
+            return SupportedDatabase.Unknown;
+        }
 
         try
         {
@@ -158,12 +168,19 @@ internal static class DatabaseDetectionService
 
             if (!string.IsNullOrEmpty(serverVersion))
             {
-                if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
+                if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
+                {
+                    return SupportedDatabase.TiDb;
+                }
                 if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
                     serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                {
                     return SupportedDatabase.YugabyteDb;
+                }
                 if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                {
                     return SupportedDatabase.CockroachDb;
+                }
             }
 
             // Query-based flavor probes — gated on base product to avoid unnecessary round-trips
@@ -186,8 +203,53 @@ internal static class DatabaseDetectionService
                 catch { /* not aurora mysql */ }
             }
 
+            // SELECT version() — safe probe that never throws; used first for PG-family because
+            // function-call probes (aurora_version, aurora_version()) can leave a YugabyteDB YSQL
+            // connection in an aborted state, silently swallowing subsequent queries.
+            // Run this early so the -YB- / Cockroach / TiDB markers are checked before any
+            // probe that could corrupt connection state.
+            if (isMySqlFamily || isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT version()";
+                    var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+
+                    if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.TiDb;
+                    }
+                    if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                        version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.YugabyteDb;
+                    }
+                    if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return SupportedDatabase.CockroachDb;
+                    }
+                }
+                catch { /* version() not available */ }
+            }
+
+            // YugabyteDB fallback: Query pg_settings for a YugabyteDB-only GUC. Runs after
+            // SELECT version() as a belt-and-suspenders guard for cases where the version string
+            // does not contain the expected markers (e.g. stripped by some proxy/pooler).
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText =
+                        "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                        return SupportedDatabase.YugabyteDb;
+                }
+                catch { /* pg_settings unavailable — very unusual, continue */ }
+            }
+
             // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
-            // throws "function does not exist" on standard PostgreSQL.
+            // throws "function does not exist" on standard PostgreSQL. Runs last because it
+            // can leave a YSQL connection in an aborted state (already handled above).
             if (isPgFamily)
             {
                 try
@@ -197,24 +259,6 @@ internal static class DatabaseDetectionService
                         return SupportedDatabase.AuroraPostgreSql;
                 }
                 catch { /* not aurora pg */ }
-            }
-
-            // SELECT version() — works on MySQL, PostgreSQL, CockroachDB, YugabyteDB, TiDB
-            if (isMySqlFamily || isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT version()";
-                    var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
-
-                    if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase)) return SupportedDatabase.TiDb;
-                    if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
-                        version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
-                        return SupportedDatabase.YugabyteDb;
-                    if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
-                        return SupportedDatabase.CockroachDb;
-                }
-                catch { /* version() not available */ }
             }
         }
         catch

@@ -19,7 +19,7 @@ public class RealSqliteContextTestBase : IAsyncLifetime
         AuditValueResolver = new StubAuditValueResolver("test-user");
     }
 
-    public TypeMapRegistry TypeMap { get; }
+    internal ITypeMapRegistry TypeMap { get; }
     public IDatabaseContext Context { get; }
     public IAuditValueResolver AuditValueResolver { get; }
 

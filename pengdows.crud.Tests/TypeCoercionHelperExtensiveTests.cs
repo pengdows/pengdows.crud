@@ -662,7 +662,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     }
 
     [Fact]
-    public void CoerceJson_InvalidJsonString_ReturnsNullForNonStream()
+    public void CoerceJson_InvalidJsonString_ThrowsWithoutLoggingPayload()
     {
         var columnInfo = CreateJsonColumnInfo(typeof(TestJsonObject));
 
@@ -671,10 +671,12 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
         _logger.Messages.Clear(); // Clear any previous messages
         _logger.LogLevel = LogLevel.Debug; // Enable debug logging
 
-        var result = TypeCoercionHelper.Coerce("invalid-json", typeof(string), columnInfo);
+        var ex = Assert.Throws<JsonException>(() =>
+            TypeCoercionHelper.Coerce("invalid-json", typeof(string), columnInfo));
 
-        Assert.Null(result);
-        Assert.Contains(_logger.Messages, msg => msg.Contains("Failed to deserialize JSON value"));
+        Assert.DoesNotContain("invalid-json", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(_logger.Messages, msg => msg.Contains("Failed to deserialize JSON payload"));
+        Assert.DoesNotContain(_logger.Messages, msg => msg.Contains("invalid-json", StringComparison.Ordinal));
     }
 
     #endregion
@@ -764,7 +766,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
         public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
-        public bool IsIdIsWritable { get; set; }
+        public bool IsIdWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }

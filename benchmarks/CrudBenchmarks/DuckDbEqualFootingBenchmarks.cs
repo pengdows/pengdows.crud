@@ -26,6 +26,11 @@ namespace CrudBenchmarks;
 ///
 /// All operations open and close connections per call on both frameworks,
 /// matching the equal-footing methodology of EqualFootingCrudBenchmarks.
+///
+/// pengdows.crud side uses the full TableGateway API:
+///   - BuildCreate / BuildUpdateAsync / BuildDelete for write operations
+///   - BuildRetrieve for keyed reads (reused container + SetParameterValue)
+///   - BuildBaseRetrieve + WrapObjectName for custom queries (reused + SetParameterValue)
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 10)]
@@ -44,25 +49,34 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private int _createIdSeed = 10_000;
     private int _deleteIdSeed = 100_000;
 
-    // Precomputed SQL strings — built once in GlobalSetup using dialect-aware MakeParameterName,
-    // matching the Dapper pattern of defining SQL outside the benchmark loop.
-    private string _readSingleSql = null!;
-    private string _readListSql = null!;
-    private string _filteredQuerySql = null!;
-    private string _createSql = null!;
-    private string _updateSql = null!;
-    private string _deleteSql = null!;
+    // Reusable containers — built once in GlobalSetup using TableGateway Build* methods.
+    // Sequential benchmark loops reuse the same container via SetParameterValue; no SQL
+    // re-generation and no allocation per iteration.
+    private ISqlContainer _readSingleSc = null!;
+    private ISqlContainer _readListSc = null!;
+    private ISqlContainer _filteredQuerySc = null!;
+    private ISqlContainer _updateSc = null!;
+    private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _aggregateSc = null!;
 
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    // pengdows.crud — SingleConnection mode (shared persistent connection).
+    // Eliminates open/close overhead per operation — isolates the coercion cost
+    // by putting pengdows on equal footing with a dedicated DuckDB connection.
+    private DatabaseContext _pengdowsSingleCtx = null!;
+    private TableGateway<DuckBenchEntity, int> _singleGateway = null!;
+    private ISqlContainer _readSingleScSingle = null!;
+    private ISqlContainer _readListScSingle = null!;
+
+    [Params(1, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN
     // ========================================================================
 
     [GlobalSetup]
-    public void GlobalSetup()
+    public async Task GlobalSetup()
     {
         _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
         DefaultTypeMap.MatchNamesWithUnderscores = true;
@@ -71,7 +85,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             Path.GetTempPath(),
             $"pengdows_duckdb_eqft_{Guid.NewGuid():N}.duckdb");
 
-        using (var seedConn = new DuckDBConnection($"Data Source={_dbFile}"))
+        await using (var seedConn = new DuckDBConnection($"Data Source={_dbFile}"))
         {
             seedConn.Open();
 
@@ -108,33 +122,61 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         _pengdowsCtx = new DatabaseContext(cfg, DuckDBClientFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<DuckBenchEntity, int>(_pengdowsCtx);
 
-        // Precompute SQL strings once — avoids repeated string building in hot-path loops,
-        // matching the Dapper pattern of const string sql outside the loop.
+        // SingleConnection: shared persistent connection — eliminates open/close + session overhead.
+        var cfgSingle = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={_dbFile}",
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleConnection
+        };
+        _pengdowsSingleCtx = new DatabaseContext(cfgSingle, DuckDBClientFactory.Instance, null, _typeMap);
+        _singleGateway = new TableGateway<DuckBenchEntity, int>(_pengdowsSingleCtx);
+
+        // Build reusable containers once using TableGateway's SQL generation.
+        // SQL is dialect-aware and cached; SetParameterValue updates values in-place
+        // each iteration with zero SQL re-generation.
         // RecordCount is set by BDN before GlobalSetup runs (one setup per Params combination).
-        _readSingleSql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = " +
-            _pengdowsCtx.MakeParameterName("Id");
-        _readListSql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > " +
-            _pengdowsCtx.MakeParameterName("Age") + $" LIMIT {RecordCount}";
-        _filteredQuerySql =
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = " +
-            _pengdowsCtx.MakeParameterName("IsActive") +
-            " AND age >= " + _pengdowsCtx.MakeParameterName("MinAge") +
-            " AND age <= " + _pengdowsCtx.MakeParameterName("MaxAge") +
-            $" LIMIT {RecordCount}";
-        _createSql =
-            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (" +
-            _pengdowsCtx.MakeParameterName("Id") + ", " +
-            _pengdowsCtx.MakeParameterName("Name") + ", " +
-            _pengdowsCtx.MakeParameterName("Age") + ", " +
-            _pengdowsCtx.MakeParameterName("Salary") + ", " +
-            _pengdowsCtx.MakeParameterName("IsActive") + ", " +
-            _pengdowsCtx.MakeParameterName("CreatedAt") + ")";
-        _updateSql =
-            "UPDATE benchmark SET salary = " + _pengdowsCtx.MakeParameterName("Salary") +
-            " WHERE id = " + _pengdowsCtx.MakeParameterName("Id");
-        _deleteSql = "DELETE FROM benchmark WHERE id = " + _pengdowsCtx.MakeParameterName("Id");
+
+        _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
+        _readSingleScSingle = _singleGateway.BuildRetrieve(new[] { 1 });
+
+        _readListSc = _gateway.BuildBaseRetrieve("b");
+        _readListSc.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.age")} > ");
+        _readListSc.Query.Append(_readListSc.MakeParameterName("Age"));
+        _readListSc.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListSc.Query.Append($" LIMIT {RecordCount}");
+
+        _readListScSingle = _singleGateway.BuildBaseRetrieve("b");
+        _readListScSingle.Query.Append($" WHERE {_pengdowsSingleCtx.WrapObjectName("b.age")} > ");
+        _readListScSingle.Query.Append(_readListScSingle.MakeParameterName("Age"));
+        _readListScSingle.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListScSingle.Query.Append($" LIMIT {RecordCount}");
+
+        _filteredQuerySc = _gateway.BuildBaseRetrieve("b");
+        _filteredQuerySc.Query.Append($" WHERE {_pengdowsCtx.WrapObjectName("b.is_active")} = ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("IsActive"));
+        _filteredQuerySc.AddParameterWithValue("IsActive", DbType.Boolean, true);
+        _filteredQuerySc.Query.Append($" AND {_pengdowsCtx.WrapObjectName("b.age")} >= ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("MinAge"));
+        _filteredQuerySc.AddParameterWithValue("MinAge", DbType.Int32, 25);
+        _filteredQuerySc.Query.Append($" AND {_pengdowsCtx.WrapObjectName("b.age")} <= ");
+        _filteredQuerySc.Query.Append(_filteredQuerySc.MakeParameterName("MaxAge"));
+        _filteredQuerySc.AddParameterWithValue("MaxAge", DbType.Int32, 45);
+        _filteredQuerySc.Query.Append($" LIMIT {RecordCount}");
+
+        // Update: pre-build the full UPDATE statement once; vary salary + id per iteration
+        // via SetParameterValue. Column param order: s0=name, s1=age, s2=salary,
+        // s3=is_active, s4=created_at, k0=id (WHERE).
+        _updateSc = await _gateway.BuildUpdateAsync(new DuckBenchEntity
+        {
+            Id = 1, Name = "Updated", Age = 25,
+            Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow
+        });
+
+        _deleteSc = _gateway.BuildDelete(0);
+
+        _aggregateSc = _pengdowsCtx.CreateSqlContainer(
+            "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
     }
 
     [GlobalCleanup]
@@ -150,7 +192,17 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 $"RecordCount={RecordCount}");
         }
 
+        _readSingleSc?.Dispose();
+        _readListSc?.Dispose();
+        _readSingleScSingle?.Dispose();
+        _readListScSingle?.Dispose();
+        _filteredQuerySc?.Dispose();
+        _updateSc?.Dispose();
+        _deleteSc?.Dispose();
+        _aggregateSc?.Dispose();
+
         _pengdowsCtx?.Dispose();
+        _pengdowsSingleCtx?.Dispose();
 
         foreach (var f in new[] { _dbFile, _dbFile + ".wal" })
         {
@@ -175,14 +227,13 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _createIdSeed);
-            await using var container = _pengdowsCtx.CreateSqlContainer(_createSql);
-            container.AddParameterWithValue("Id", DbType.Int32, id);
-            container.AddParameterWithValue("Name", DbType.String, $"Created {id}");
-            container.AddParameterWithValue("Age", DbType.Int32, 25);
-            container.AddParameterWithValue("Salary", DbType.Double, 50000.0);
-            container.AddParameterWithValue("IsActive", DbType.Boolean, true);
-            container.AddParameterWithValue("CreatedAt", DbType.DateTime, DateTime.UtcNow);
-            count += await container.ExecuteNonQueryAsync();
+            var entity = new DuckBenchEntity
+            {
+                Id = id, Name = $"Created {id}", Age = 25,
+                Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow
+            };
+            await using var sc = _gateway.BuildCreate(entity);
+            count += await sc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -223,9 +274,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         DuckBenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer(_readSingleSql);
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            result = await _gateway.LoadSingleAsync(container);
+            _readSingleSc.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _gateway.LoadSingleAsync(_readSingleSc);
         }
 
         return result;
@@ -248,6 +298,24 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// pengdows.crud SingleConnection — shared persistent connection, no open/close per op.
+    /// Isolates the type-coercion cost by eliminating connection overhead from the measurement.
+    /// Compare ratio (SingleConnection/Dapper) vs (Standard/Dapper) to quantify coercion impact.
+    /// </summary>
+    [Benchmark]
+    public async Task<DuckBenchEntity?> ReadSingle_Pengdows_SingleConnection()
+    {
+        DuckBenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            _readSingleScSingle.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _singleGateway.LoadSingleAsync(_readSingleScSingle);
+        }
+
+        return result;
+    }
+
     // ========================================================================
     // READ LIST BENCHMARKS
     // ========================================================================
@@ -255,9 +323,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<DuckBenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer(_readListSql);
-        container.AddParameterWithValue("Age", DbType.Int32, 30);
-        return await _gateway.LoadListAsync(container);
+        _readListSc.SetParameterValue("Age", 30);
+        return await _gateway.LoadListAsync(_readListSc);
     }
 
     [Benchmark]
@@ -271,6 +338,16 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         return rows.AsList();
     }
 
+    /// <summary>
+    /// pengdows.crud SingleConnection list read — shared persistent connection.
+    /// </summary>
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> ReadList_Pengdows_SingleConnection()
+    {
+        _readListScSingle.SetParameterValue("Age", 30);
+        return await _singleGateway.LoadListAsync(_readListScSingle);
+    }
+
     // ========================================================================
     // UPDATE BENCHMARKS
     // ========================================================================
@@ -281,10 +358,9 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer(_updateSql);
-            container.AddParameterWithValue("Salary", DbType.Double, 60000.0 + i);
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            count += await container.ExecuteNonQueryAsync();
+            _updateSc.SetParameterValue("s2", 60000.0 + i);
+            _updateSc.SetParameterValue("k0", (i % SeedRows) + 1);
+            count += await _updateSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -320,20 +396,16 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            await using (var ins = _pengdowsCtx.CreateSqlContainer(_createSql))
+            var entity = new DuckBenchEntity
             {
-                ins.AddParameterWithValue("Id", DbType.Int32, id);
-                ins.AddParameterWithValue("Name", DbType.String, "ToDelete");
-                ins.AddParameterWithValue("Age", DbType.Int32, 99);
-                ins.AddParameterWithValue("Salary", DbType.Double, 1.0);
-                ins.AddParameterWithValue("IsActive", DbType.Boolean, false);
-                ins.AddParameterWithValue("CreatedAt", DbType.DateTime, DateTime.UtcNow);
-                await ins.ExecuteNonQueryAsync();
-            }
+                Id = id, Name = "ToDelete", Age = 99,
+                Salary = 1.0, IsActive = false, CreatedAt = DateTime.UtcNow
+            };
+            await using var ins = _gateway.BuildCreate(entity);
+            await ins.ExecuteNonQueryAsync();
 
-            await using var del = _pengdowsCtx.CreateSqlContainer(_deleteSql);
-            del.AddParameterWithValue("Id", DbType.Int32, id);
-            count += await del.ExecuteNonQueryAsync();
+            _deleteSc.SetParameterValue("k0", id);
+            count += await _deleteSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -376,11 +448,10 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<DuckBenchEntity>> FilteredQuery_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer(_filteredQuerySql);
-        container.AddParameterWithValue("IsActive", DbType.Boolean, true);
-        container.AddParameterWithValue("MinAge", DbType.Int32, 25);
-        container.AddParameterWithValue("MaxAge", DbType.Int32, 45);
-        return await _gateway.LoadListAsync(container);
+        _filteredQuerySc.SetParameterValue("IsActive", true);
+        _filteredQuerySc.SetParameterValue("MinAge", 25);
+        _filteredQuerySc.SetParameterValue("MaxAge", 45);
+        return await _gateway.LoadListAsync(_filteredQuerySc);
     }
 
     [Benchmark]
@@ -405,9 +476,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer(
-                "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
-            result = await container.ExecuteScalarOrNullAsync<double>();
+            result = await _aggregateSc.ExecuteScalarOrNullAsync<double>();
         }
 
         return result;
@@ -430,6 +499,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
     // ========================================================================
     // BREAKDOWN: BUILD vs EXECUTE timing
+    // Measures BuildRetrieve (SQL generation + parameter setup) vs LoadSingleAsync
+    // (connection open + execute + map + close) separately.
     // ========================================================================
 
     [Benchmark]
@@ -442,20 +513,16 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             sw.Restart();
-            var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
+            var sc = _gateway.BuildRetrieve(new[] { (i % SeedRows) + 1 });
             sw.Stop();
             buildTicks += sw.ElapsedTicks;
 
             sw.Restart();
-            await _gateway.LoadSingleAsync(container);
+            await _gateway.LoadSingleAsync(sc);
             sw.Stop();
             executeTicks += sw.ElapsedTicks;
 
-            await container.DisposeAsync();
+            await sc.DisposeAsync();
         }
 
         return (buildTicks, executeTicks);
@@ -498,9 +565,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     public async Task<long> ConnectionHoldTime_Pengdows()
     {
         var sw = Stopwatch.StartNew();
-        await using var container = _pengdowsCtx.CreateSqlContainer(_readSingleSql);
-        container.AddParameterWithValue("Id", DbType.Int32, 1);
-        await _gateway.LoadSingleAsync(container);
+        _readSingleSc.SetParameterValue("w0", 1);
+        await _gateway.LoadSingleAsync(_readSingleSc);
         sw.Stop();
         return sw.ElapsedTicks;
     }

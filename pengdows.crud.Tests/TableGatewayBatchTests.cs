@@ -1,14 +1,38 @@
+// =============================================================================
+// FILE: TableGatewayBatchTests.cs
+// PURPOSE: Unit tests for TableGateway batch INSERT and UPSERT operations.
+//
+// AI SUMMARY:
+// - Tests BuildBatchCreate(), BatchCreateAsync(), BuildBatchUpsert(), BatchUpsertAsync().
+// - Covers all three batch upsert paths:
+//   * ON CONFLICT (PostgreSQL/CockroachDB) — including WHERE ver = EXCLUDED.ver version predicate
+//   * ON DUPLICATE KEY UPDATE (MySQL/MariaDB) — including alias quoting
+//   * MERGE/per-entity fallback (SQL Server/Oracle/Firebird)
+// - Key version concurrency tests:
+//   * BuildBatchUpsert_PostgreSql_VersionColumn_AppendsOnConflictWhere — asserts WHERE predicate present
+// - Chunking behavior: verifies split into multiple containers when parameter limit exceeded
+// - NULL inlining: verifies NULL literal used (no parameter) for nullable null values
+// - Audit field propagation in batch mode
+// =============================================================================
+
 #region
 
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
+using pengdows.crud.threading;
+using pengdows.crud.wrappers;
 using Xunit;
 
 #endregion
@@ -107,6 +131,22 @@ public class TableGatewayBatchTests : IAsyncLifetime
             new[] { new TestEntitySimple { Name = "test" } },
             null,
             cts.Token));
+    }
+
+    [Fact]
+    public async Task BatchCreateAsync_MultipleEntities_DisposesBuiltContainers()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntitySimple, int>(recordingContext);
+
+        await helper.BatchCreateAsync(new[]
+        {
+            new TestEntitySimple { Name = "a" },
+            new TestEntitySimple { Name = "b" }
+        });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
     }
 
     // =========================================================================
@@ -441,6 +481,30 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("+ 1", sql);
     }
 
+    [Fact]
+    public void BuildBatchUpsert_PostgreSql_VersionColumn_AppendsOnConflictWhere()
+    {
+        // ON CONFLICT WHERE version predicate must appear in batch upsert SQL so stale-version
+        // rows are skipped (DO NOTHING) rather than silently overwriting newer data.
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var entities = new List<TestEntity>
+        {
+            new() { Name = "a", version = 1 },
+            new() { Name = "b", version = 2 }
+        };
+
+        var containers = helper.BuildBatchUpsert(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("WHERE", sql);
+        Assert.Contains("EXCLUDED", sql);
+        // The version column name must appear after WHERE (not just in DO UPDATE SET)
+        var whereIdx = sql.IndexOf("WHERE", StringComparison.Ordinal);
+        var versionInWhere = sql.IndexOf("Version", whereIdx, StringComparison.OrdinalIgnoreCase);
+        Assert.True(versionInWhere >= 0, "Version predicate expected after WHERE in ON CONFLICT clause");
+    }
+
+
     // =========================================================================
     // BatchUpsertAsync
     // =========================================================================
@@ -472,6 +536,22 @@ public class TableGatewayBatchTests : IAsyncLifetime
             cts.Token));
     }
 
+    [Fact]
+    public async Task BatchUpsertAsync_MultipleEntities_DisposesBuiltContainers()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_pgContext);
+        var helper = new TableGateway<TestEntity, int>(recordingContext, _audit);
+
+        await helper.BatchUpsertAsync(new[]
+        {
+            new TestEntity { Name = "p" },
+            new TestEntity { Name = "q" }
+        });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
+    }
+
     // =========================================================================
     // BatchUpdateAsync — Empty, Null, Cancellation
     // =========================================================================
@@ -501,6 +581,22 @@ public class TableGatewayBatchTests : IAsyncLifetime
             new[] { new TestEntitySimple { Id = 1, Name = "test" } },
             null,
             cts.Token));
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_MultipleEntities_DisposesBuiltContainers()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntitySimple, int>(recordingContext);
+
+        await helper.BatchUpdateAsync(new[]
+        {
+            new TestEntitySimple { Id = 1, Name = "x" },
+            new TestEntitySimple { Id = 2, Name = "y" }
+        });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
     }
 
     // =========================================================================
@@ -614,6 +710,34 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.All(containers, c => Assert.Contains("UPDATE", c.Query.ToString()));
     }
 
+    [Fact]
+    public async Task BatchDeleteAsync_IdList_DisposesBuiltContainers()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntitySimple, int>(recordingContext);
+
+        await helper.BatchDeleteAsync(new[] { 1, 2, 3 });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
+    }
+
+    [Fact]
+    public async Task BatchDeleteAsync_EntityList_DisposesBuiltContainers()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntity, int>(recordingContext, _audit);
+
+        await helper.BatchDeleteAsync(new[]
+        {
+            new TestEntity { Name = "x" },
+            new TestEntity { Name = "y" }
+        });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
+    }
+
     // =========================================================================
     // UpsertAsync(IReadOnlyList) — list overload delegates to BatchUpsertAsync
     // =========================================================================
@@ -673,5 +797,240 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public int Id { get; set; }
 
         [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
+    }
+
+    private sealed class RecordingBatchContext : IDatabaseContext, IInternalConnectionProvider, ITypeMapAccessor
+    {
+        private readonly DatabaseContext _context;
+
+        public RecordingBatchContext(DatabaseContext context)
+        {
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+        }
+
+        public List<TrackingSqlContainer> CreatedContainers { get; } = new();
+
+        public DbMode ConnectionMode => _context.ConnectionMode;
+        public Guid RootId => _context.RootId;
+        public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
+        public string ConnectionString => _context.ConnectionString;
+
+        public string Name => _context.Name;
+
+        public DbDataSource? DataSource => _context.DataSource;
+        public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
+        public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
+        public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;
+        public int MaxParameterLimit => _context.MaxParameterLimit;
+        public int MaxOutputParameters => _context.MaxOutputParameters;
+        public long NumberOfOpenConnections => _context.NumberOfOpenConnections;
+        public DatabaseMetrics Metrics => _context.Metrics;
+        public ISqlDialect Dialect => _context.GetDialect();
+        public SupportedDatabase Product => _context.Product;
+        public long PeakOpenConnections => _context.PeakOpenConnections;
+        public CommandPrepareMode PrepareMode => _context.PrepareMode;
+        public bool SupportsInsertReturning => _context.SupportsInsertReturning;
+        public string QuotePrefix => _context.QuotePrefix;
+        public string QuoteSuffix => _context.QuoteSuffix;
+        public string CompositeIdentifierSeparator => _context.CompositeIdentifierSeparator;
+        public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
+        public bool RCSIEnabled => _context.RCSIEnabled;
+        public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+        public bool IsDisposed => _context.IsDisposed;
+
+        ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>
+            (_context as ITypeMapAccessor)?.TypeMapRegistry
+            ?? throw new InvalidOperationException("DatabaseContext must expose TypeMapRegistry.");
+
+        public event EventHandler<DatabaseMetrics> MetricsUpdated
+        {
+            add => _context.MetricsUpdated += value;
+            remove => _context.MetricsUpdated -= value;
+        }
+
+        public ILockerAsync GetLock()
+        {
+            return _context.GetLock();
+        }
+
+        public string GetBaseSessionSettings()
+        {
+            return _context.GetBaseSessionSettings();
+        }
+
+        public string GetReadOnlySessionSettings()
+        {
+            return _context.GetReadOnlySessionSettings();
+        }
+
+        public ISqlContainer CreateSqlContainer(string? query = null)
+        {
+            var container = new TrackingSqlContainer(_context.CreateSqlContainer(query));
+            CreatedContainers.Add(container);
+            return container;
+        }
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+        {
+            return _context.CreateDbParameter(name, type, value);
+        }
+
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value, ParameterDirection direction)
+        {
+            return _context.CreateDbParameter(name, type, value, direction);
+        }
+
+        public DbParameter CreateDbParameter<T>(DbType type, T value)
+        {
+            return _context.CreateDbParameter(type, value);
+        }
+
+        public string WrapObjectName(string name)
+        {
+            return _context.WrapObjectName(name);
+        }
+
+        public string MakeParameterName(DbParameter dbParameter)
+        {
+            return _context.MakeParameterName(dbParameter);
+        }
+
+        public string MakeParameterName(string parameterName)
+        {
+            return _context.MakeParameterName(parameterName);
+        }
+
+        public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write)
+        {
+            return _context.BeginTransaction(isolationLevel, executionType);
+        }
+
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write)
+        {
+            return _context.BeginTransaction(isolationProfile, executionType);
+        }
+
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
+            ExecutionType executionType = ExecutionType.Write,
+            CancellationToken cancellationToken = default)
+        {
+            return _context.BeginTransactionAsync(isolationLevel, executionType, cancellationToken);
+        }
+
+        public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
+            ExecutionType executionType = ExecutionType.Write,
+            CancellationToken cancellationToken = default)
+        {
+            return _context.BeginTransactionAsync(isolationProfile, executionType, cancellationToken);
+        }
+
+        public string GenerateParameterName()
+        {
+            return _context.GenerateParameterName();
+        }
+
+        public string GenerateRandomName(int length = 5, int parameterNameMaxLength = 30)
+        {
+            return _context.GenerateRandomName(length, parameterNameMaxLength);
+        }
+
+        public void CloseAndDisposeConnection(ITrackedConnection? conn)
+        {
+            _context.CloseAndDisposeConnection(conn);
+        }
+
+        public ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? conn)
+        {
+            return _context.CloseAndDisposeConnectionAsync(conn);
+        }
+
+        public void Dispose()
+        {
+            _context.Dispose();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _context.DisposeAsync();
+        }
+
+        ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
+        {
+            return _context.GetConnection(executionType, isShared);
+        }
+    }
+
+    private sealed class TrackingSqlContainer : ISqlContainer, ISqlDialectProvider
+    {
+        private readonly ISqlContainer _inner;
+
+        public TrackingSqlContainer(ISqlContainer inner)
+        {
+            _inner = inner;
+        }
+
+        public bool IsDisposed { get; private set; }
+        public ISqlQueryBuilder Query => _inner.Query;
+        public int ParameterCount => _inner.ParameterCount;
+        public bool HasWhereAppended => _inner.HasWhereAppended;
+
+        public string QuotePrefix => _inner.QuotePrefix;
+        public string QuoteSuffix => _inner.QuoteSuffix;
+        public string CompositeIdentifierSeparator => _inner.CompositeIdentifierSeparator;
+        public ISqlDialect Dialect => ((ISqlDialectProvider)_inner).Dialect;
+
+        public string WrapObjectName(string name) => _inner.WrapObjectName(name);
+        public string MakeParameterName(DbParameter dbParameter) => _inner.MakeParameterName(dbParameter);
+        public string MakeParameterName(string parameterName) => _inner.MakeParameterName(parameterName);
+        public DbParameter CreateDbParameter<T>(string? name, DbType type, T value) => _inner.CreateDbParameter(name, type, value);
+        public DbParameter CreateDbParameter<T>(DbType type, T value) => _inner.CreateDbParameter(type, value);
+        public void AddParameter(DbParameter parameter) => _inner.AddParameter(parameter);
+        public DbParameter AddParameterWithValue<T>(DbType type, T value) => _inner.AddParameterWithValue(type, value);
+        public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value) => _inner.AddParameterWithValue(name, type, value);
+        public DbParameter AddParameterWithValue<T>(DbType type, T value, ParameterDirection direction) => _inner.AddParameterWithValue(type, value, direction);
+        public DbParameter AddParameterWithValue<T>(string? name, DbType type, T value, ParameterDirection direction) => _inner.AddParameterWithValue(name, type, value, direction);
+        public void SetParameterValue(string parameterName, object? newValue) => _inner.SetParameterValue(parameterName, newValue);
+        public object? GetParameterValue(string parameterName) => _inner.GetParameterValue(parameterName);
+        public T GetParameterValue<T>(string parameterName) => _inner.GetParameterValue<T>(parameterName);
+        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text) => _inner.ExecuteNonQueryAsync(commandType);
+        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteNonQueryAsync(commandType, cancellationToken);
+        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteNonQueryAsync(executionType, commandType);
+        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteNonQueryAsync(executionType, commandType, cancellationToken);
+        public ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text) => _inner.ExecuteScalarRequiredAsync<T>(commandType);
+        public ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteScalarRequiredAsync<T>(commandType, cancellationToken);
+        public ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteScalarRequiredAsync<T>(executionType, commandType);
+        public ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteScalarRequiredAsync<T>(executionType, commandType, cancellationToken);
+        public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType = CommandType.Text) => _inner.ExecuteScalarOrNullAsync<T>(commandType);
+        public ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteScalarOrNullAsync<T>(commandType, cancellationToken);
+        public ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteScalarOrNullAsync<T>(executionType, commandType);
+        public ValueTask<T?> ExecuteScalarOrNullAsync<T>(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteScalarOrNullAsync<T>(executionType, commandType, cancellationToken);
+        public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType = CommandType.Text) => _inner.TryExecuteScalarAsync<T>(commandType);
+        public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType commandType, CancellationToken cancellationToken) => _inner.TryExecuteScalarAsync<T>(commandType, cancellationToken);
+        public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.TryExecuteScalarAsync<T>(executionType, commandType);
+        public ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.TryExecuteScalarAsync<T>(executionType, commandType, cancellationToken);
+        public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType = CommandType.Text) => _inner.ExecuteReaderAsync(commandType);
+        public ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteReaderAsync(commandType, cancellationToken);
+        public ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteReaderAsync(executionType, commandType);
+        public ValueTask<ITrackedReader> ExecuteReaderAsync(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteReaderAsync(executionType, commandType, cancellationToken);
+        public void AddParameters(IEnumerable<DbParameter> list) => _inner.AddParameters(list);
+        public void AddParameters(IList<DbParameter> list) => _inner.AddParameters(list);
+        public void Clear() => _inner.Clear();
+        public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false) => _inner.WrapForStoredProc(executionType, includeParameters, captureReturn);
+        public ISqlContainer Clone() => new TrackingSqlContainer(_inner.Clone());
+        public ISqlContainer Clone(IDatabaseContext? context) => new TrackingSqlContainer(_inner.Clone(context));
+
+        public void Dispose()
+        {
+            _inner.Dispose();
+            IsDisposed = true;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _inner.DisposeAsync();
+            IsDisposed = true;
+        }
     }
 }

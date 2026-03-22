@@ -249,7 +249,7 @@ public class PrepareDisableTests
             ConnectionString = "Data Source=prepare;",
             DbMode = DbMode.SingleConnection,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            ForceManualPrepare = true
+            PrepareMode = CommandPrepareMode.Always
         };
         using var ctx = new DatabaseContext(cfg, new ThrowOnPrepareFactory(), lf);
 
@@ -282,7 +282,7 @@ public class PrepareDisableTests
             ConnectionString = "Data Source=prepare;",
             DbMode = DbMode.SingleConnection,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            DisablePrepare = true
+            PrepareMode = CommandPrepareMode.Never
         };
         using var ctx = new DatabaseContext(cfg, new ThrowOnPrepareFactory(), lf);
         using var sc = ctx.CreateSqlContainer("SELECT 1");
@@ -301,7 +301,7 @@ public class PrepareDisableTests
             ConnectionString = "Data Source=prepare;",
             DbMode = DbMode.Standard,
             ReadWriteMode = ReadWriteMode.ReadWrite,
-            ForceManualPrepare = true
+            PrepareMode = CommandPrepareMode.Always
         };
         using var ctx = new DatabaseContext(cfg, new ThrowOnPrepareFactory(), lf);
 

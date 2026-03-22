@@ -5,13 +5,15 @@ It resolves ambiguities so future contributors cannot bikeshed these rules.
 
 ## 1. Modes & Lifecycle
 
+The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`.
+
 ### Standard
 
 - Semantics: Ephemeral pooled connections. New connection for each statement unless inside a transaction.
 - Production default for all full server databases (PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, CockroachDB).
 - Constructor behavior: Attempts to open a connection at initialization to detect dialect.
   - If Open() fails → throw immediately.
-  - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect.
+  - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect (SQL-92 is a fallback behavior, not a distinct DbMode or supported database product).
 - Transactions: All reads/writes inside a transaction share the same connection.
 
 ### KeepAlive

@@ -18,7 +18,7 @@ namespace pengdows.crud.Tests.dialects;
 public class SqlDialectHelperTests
 {
     [Fact]
-    public void BuildSessionSettingsScript_IncludesOnlyDifferingEntries()
+    public void BuildSessionSettingsScript_IncludesAllEntries()
     {
         var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -37,63 +37,37 @@ public class SqlDialectHelperTests
             current,
             (name, value) => $"SET {name} {value};");
 
-        Assert.Equal("SET QUOTED_IDENTIFIER ON;", result.Trim());
+        // Under Always SET, both entries should be present
+        Assert.Contains("SET ANSI_NULLS ON;", result);
+        Assert.Contains("SET QUOTED_IDENTIFIER ON;", result);
     }
 
     [Fact]
-    public void GetSqlServerSessionSettings_UsesFallbackWhenReaderThrows()
+    public void GetSqlServerSessionSettings_ReturnsBaselineImmediately()
     {
         var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
             NullLoggerFactory.Instance.CreateLogger(nameof(SqlServerDialect)));
-        var connection = new ThrowingSessionConnection();
+        var connection = new SessionSettingsConnection(Enumerable.Empty<SessionSettingRow>());
         var (settings, usedFallback, _) = CallSessionSettingsResult(dialect, "GetSqlServerSessionSettings", connection);
 
-        Assert.True(usedFallback);
-        Assert.Contains("SET ANSI_NULLS ON", settings, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void GetSqlServerSessionSettings_GeneratesExpectedScript()
-    {
-        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer),
-            NullLoggerFactory.Instance.CreateLogger(nameof(SqlServerDialect)));
-        var rows = new[]
-        {
-            new SessionSettingRow(new[] { "variable_name", "value" }, new[] { "NUMERIC_ROUNDABORT", "SET" }),
-            new SessionSettingRow(new[] { "variable_name", "value" }, new[] { "QUOTED_IDENTIFIER", "OFF" })
-        };
-
-        var connection = new SessionSettingsConnection(rows);
-        var (settings, usedFallback, snapshot) =
-            CallSessionSettingsResult(dialect, "GetSqlServerSessionSettings", connection);
-
         Assert.False(usedFallback);
-        Assert.Contains("SET NUMERIC_ROUNDABORT OFF", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SET ANSI_NULLS ON", settings, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SET QUOTED_IDENTIFIER ON", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("ON", snapshot["NUMERIC_ROUNDABORT"]);
-        Assert.Equal("OFF", snapshot["QUOTED_IDENTIFIER"]);
     }
 
     [Fact]
-    public void GetPostgreSqlSessionSettings_BuildsScriptFromReader()
+    public void GetPostgreSqlSessionSettings_ReturnsBaselineImmediately()
     {
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
             NullLoggerFactory.Instance.CreateLogger(nameof(PostgreSqlDialect)));
-        var rows = new[]
-        {
-            new SessionSettingRow(new[] { "name", "setting" }, new[] { "standard_conforming_strings", "off" }),
-            new SessionSettingRow(new[] { "name", "setting" }, new[] { "client_min_messages", "panic" })
-        };
-
-        var connection = new SessionSettingsConnection(rows);
+        
+        var connection = new SessionSettingsConnection(Enumerable.Empty<SessionSettingRow>());
         var (settings, usedFallback, snapshot) =
             CallSessionSettingsResult(dialect, "GetPostgreSqlSessionSettings", connection);
 
         Assert.False(usedFallback);
-        Assert.Contains("SET standard_conforming_strings = on", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SET client_min_messages = warning", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("off", snapshot["standard_conforming_strings"]);
-        Assert.Equal("panic", snapshot["client_min_messages"]);
+        Assert.Contains("standard_conforming_strings", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages", settings, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -181,7 +155,8 @@ public class SqlDialectHelperTests
         var method =
             typeof(SqlDialect).GetMethod("BuildSessionSettingsScript", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException("Missing BuildSessionSettingsScript");
-        return (string)method.Invoke(null, new object[] { expected, current, formatter })!;
+        // Pass the default separator "\n" as the 4th parameter
+        return (string)method.Invoke(null, new object[] { expected, current, formatter, "\n" })!;
     }
 
     private static (string Settings, bool UsedFallback, IReadOnlyDictionary<string, string> Snapshot)
@@ -682,7 +657,7 @@ public class SqlDialectHelperTests
         public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
-        public bool IsIdIsWritable { get; set; }
+        public bool IsIdWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }

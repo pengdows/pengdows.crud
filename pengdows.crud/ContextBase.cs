@@ -124,5 +124,5 @@ public abstract class ContextBase : SafeAsyncDisposableBase
     /// <summary>
     /// Exposes the active dialect for internal consumers.
     /// </summary>
-    public ISqlDialect Dialect => DialectCore;
+    internal ISqlDialect Dialect => DialectCore;
 }

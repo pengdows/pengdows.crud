@@ -16,7 +16,7 @@ namespace pengdows.crud.Tests;
 
 public class SqlContainerExtensionsTests : IAsyncLifetime
 {
-    public TypeMapRegistry TypeMap { get; private set; } = null!;
+    internal ITypeMapRegistry TypeMap { get; private set; } = null!;
     public IDatabaseContext Context { get; private set; } = null!;
     public IAuditValueResolver AuditValueResolver { get; private set; } = null!;
 
@@ -497,5 +497,156 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         mockContainer.Verify(x => x.TryExecuteScalarAsync<int>(
                 ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    // ── AppendName / AppendEquals / AppendAnd / AppendWhere / AppendParam ──
+
+    [Fact]
+    public void AppendName_SingleName_AppendsDialectQuotedName()
+    {
+        using var container = Context.CreateSqlContainer();
+        var expected = container.WrapObjectName("post_date");
+
+        var result = container.AppendName("post_date");
+
+        Assert.Same(container, result);
+        Assert.Equal(expected, container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendName_AliasAndName_AppendsCorrectlyQuotedQualifiedIdentifier()
+    {
+        using var container = Context.CreateSqlContainer();
+        var expected = container.WrapObjectName("p")
+            + container.CompositeIdentifierSeparator
+            + container.WrapObjectName("post_status");
+
+        var result = container.AppendName("p", "post_status");
+
+        Assert.Same(container, result);
+        Assert.Equal(expected, container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendName_AliasAndName_DelegatesToWrapObjectNameWithDot()
+    {
+        // AppendName("p", "post_status") is exactly WrapObjectName("p.post_status") —
+        // the dialect handles dot-splitting internally.
+        using var container = Context.CreateSqlContainer();
+        var expected = container.WrapObjectName("p.post_status");
+        container.AppendName("p", "post_status");
+        Assert.Equal(expected, container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendEquals_AppendsEqualsOperator()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendEquals();
+
+        Assert.Same(container, result);
+        Assert.Equal(" = ", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendAnd_AppendsAndKeyword()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendAnd();
+
+        Assert.Same(container, result);
+        Assert.Equal(" AND ", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendWhere_AppendsWhereKeyword()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendWhere();
+
+        Assert.Same(container, result);
+        Assert.Equal(" WHERE ", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendParam_AppendsDialectFormattedParameterName()
+    {
+        using var container = Context.CreateSqlContainer();
+        var p = container.AddParameterWithValue("status", DbType.String, "publish");
+        var expected = container.MakeParameterName(p);
+
+        var result = container.AppendParam(p);
+
+        Assert.Same(container, result);
+        Assert.Equal(expected, container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendParam_StringOverload_AppendsDialectFormattedName()
+    {
+        using var container = Context.CreateSqlContainer();
+        var expected = container.MakeParameterName("status");
+
+        var result = container.AppendParam("status");
+
+        Assert.Same(container, result);
+        Assert.Equal(expected, container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendIn_AppendsInKeyword()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendIn();
+
+        Assert.Same(container, result);
+        Assert.Equal(" IN (", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendCloseParen_AppendsCloseParen()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendCloseParen();
+
+        Assert.Same(container, result);
+        Assert.Equal(")", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendComma_AppendsComma()
+    {
+        using var container = Context.CreateSqlContainer();
+
+        var result = container.AppendComma();
+
+        Assert.Same(container, result);
+        Assert.Equal(", ", container.Query.ToString());
+    }
+
+    [Fact]
+    public void AppendName_FluentChain_ProducesCorrectSqlFragment()
+    {
+        using var container = Context.CreateSqlContainer();
+        var pStatus = container.AddParameterWithValue("status", DbType.String, "publish");
+        var pType   = container.AddParameterWithValue("type",   DbType.String, "post");
+
+        container
+            .AppendWhere().AppendName("p", "post_status").AppendEquals().AppendParam(pStatus)
+            .AppendAnd()  .AppendName("p", "post_type")  .AppendEquals().AppendParam(pType);
+
+        var sql = container.Query.ToString();
+        Assert.StartsWith(" WHERE ", sql);
+        Assert.Contains(container.WrapObjectName("post_status"), sql);
+        Assert.Contains(container.WrapObjectName("post_type"), sql);
+        Assert.Contains(" AND ", sql);
+        Assert.Contains(" = ", sql);
+        Assert.Contains(container.MakeParameterName(pStatus), sql);
+        Assert.Contains(container.MakeParameterName(pType), sql);
     }
 }

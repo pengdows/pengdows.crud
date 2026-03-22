@@ -151,12 +151,20 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
-            // Reject Pooling=false — pengdows.crud requires connection pooling
+            // Reject Pooling=false — pengdows.crud requires connection pooling for the
+            // "open late, close early" model. Each operation checks out a connection from
+            // the pool; without a pool every checkout opens a new physical connection,
+            // which defeats governor slot budgets and breaks connection-count metrics.
+            //
+            // Migration: remove Pooling=false from your connection string. If you need
+            // a single persistent connection, use DbMode.SingleConnection instead.
             if (IsPoolingDisabled(builder))
             {
                 throw new InvalidOperationException(
                     $"Connection pooling must not be disabled ({poolingSettingName}=false detected). " +
-                    "pengdows.crud requires connection pooling for correct operation.");
+                    "pengdows.crud requires connection pooling for correct operation. " +
+                    "Remove the Pooling=false setting from your connection string, " +
+                    "or switch to DbMode.SingleConnection if you need a single persistent connection.");
             }
 
             var modified = false;
@@ -329,6 +337,56 @@ internal static class ConnectionPoolingConfiguration
             }
 
             return connectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    /// <summary>
+    /// Injects a pool-key discriminator key/value into the connection string.
+    /// Used when <c>ApplicationNameSettingName</c> is unsupported and the dialect needs
+    /// an alternative attribute to differentiate reader vs writer connection pools.
+    /// No-op if: either parameter is null/empty, key already present, or raw connection string.
+    /// </summary>
+    public static string ApplyPoolDiscriminator(
+        string connectionString,
+        string? discriminatorSettingName,
+        string? discriminatorSettingValue,
+        DbConnectionStringBuilder? builder = null)
+    {
+        if (string.IsNullOrWhiteSpace(discriminatorSettingName) ||
+            string.IsNullOrWhiteSpace(discriminatorSettingValue) ||
+            string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            builder ??= new DbConnectionStringBuilder { ConnectionString = connectionString };
+
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            // Don't override if user already set the discriminator key
+            if (builder.ContainsKey(discriminatorSettingName))
+            {
+                return connectionString;
+            }
+
+            builder[discriminatorSettingName] = discriminatorSettingValue;
+            var result = builder.ConnectionString;
+
+            if (SensitiveValuesStripped(connectionString, result))
+            {
+                return ReapplyModifications(connectionString, builder);
+            }
+
+            return result;
         }
         catch
         {

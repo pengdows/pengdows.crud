@@ -108,3 +108,23 @@ The existing `MetricsCollector` tracks per-command parameter counts and executio
 Batch operations currently show up as N individual command records. A batch-aware metrics
 event (total rows, chunk count, total duration) would make the dashboards more useful for
 diagnosing batch throughput.
+
+---
+
+## OpenTelemetry metrics adapter
+
+`pengdows.crud` currently exposes metrics through `IDatabaseContext.Metrics`,
+`IDatabaseContext.MetricsUpdated`, and related diagnostic snapshots. A future adapter package
+could bridge those metrics into OpenTelemetry without adding an OpenTelemetry dependency to
+the core library.
+
+Recommended direction:
+
+- package name: `pengdows.crud.opentelemetry`
+- keep the core package free of direct OpenTelemetry dependencies
+- start with counters and gauges
+- defer true histograms until raw duration samples are available through a stable hook
+- keep tags low-cardinality by default
+
+See [`opentelemetry-metrics-plan.md`](opentelemetry-metrics-plan.md) for the full design and
+implementation plan.

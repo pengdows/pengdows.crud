@@ -253,6 +253,55 @@ public class DialectBatchSqlTests
         Assert.Contains("(@b0, NULL, @b1)", sql);
     }
 
+    [Fact]
+    public void PostgreSqlDialect_BuildBatchUpdateSql_MultiRow_CorrectParamIndexing()
+    {
+        // Two rows: VALUES (@b0,@b1,@b2), (@b3,@b4,@b5) — paramIdx is sequential across all rows.
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 2, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("(@b0, @b1, @b2)", sql);
+        Assert.Contains("(@b3, @b4, @b5)", sql);
+    }
+
+    [Fact]
+    public void SqlServerDialect_BuildBatchUpdateSql_MultiRow_CorrectParamIndexing()
+    {
+        // Two rows: VALUES (@b0,@b1,@b2), (@b3,@b4,@b5)
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 2, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("(@b0, @b1, @b2), (@b3, @b4, @b5)", sql);
+    }
+
+    [Fact]
+    public void Dialect_BuildBatchUpdateSql_ZeroRows_EmitsNothing()
+    {
+        // rowCount <= 0 should produce an empty query (early return guard).
+        var pgDialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
+        var pgQuery = new SqlQueryBuilder();
+        pgDialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 0, pgQuery, GetStandardValues());
+        Assert.Equal(string.Empty, pgQuery.ToString());
+
+        var ssDialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger.Instance);
+        var ssQuery = new SqlQueryBuilder();
+        ssDialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 0, ssQuery, GetStandardValues());
+        Assert.Equal(string.Empty, ssQuery.ToString());
+
+        var sfDialect = new SnowflakeDialect(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
+        var sfQuery = new SqlQueryBuilder();
+        sfDialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 0, sfQuery, GetStandardValues());
+        Assert.Equal(string.Empty, sfQuery.ToString());
+    }
+
     private static string NormalizeSql(string sql)
     {
         return Regex.Replace(sql, @"\s+", " ").Trim();

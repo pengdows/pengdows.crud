@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
-using pengdows.crud.connection;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -28,13 +27,16 @@ public sealed class ConnectionPerformanceOptimizationTestsCollection
 public sealed class ConnectionPerformanceOptimizationTests
 {
     [Fact]
-    public void ConnectionLocalState_LazyPrepareCache_AllocatesOnMark()
+    public void TrackedConnection_LocalState_LazyPrepareCache_AllocatesOnMark()
     {
-        var state = new ConnectionLocalState();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var inner = factory.CreateConnection();
+        using var tracked = new TrackedConnection(inner);
+        var state = tracked.LocalState;
 
-        var preparedField = typeof(ConnectionLocalState).GetField("_prepared",
+        var preparedField = typeof(TrackedConnection).GetField("_prepared",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var orderField = typeof(ConnectionLocalState).GetField("_order",
+        var orderField = typeof(TrackedConnection).GetField("_order",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
         Assert.NotNull(preparedField);
@@ -184,8 +186,6 @@ public sealed class ConnectionPerformanceOptimizationTests
     [Fact]
     public void ConnectionString_Redaction_NeverInvokedDuringAcquisition_WhenWarningDisabled()
     {
-        // Redaction happens once at initialization, never per-connection-acquisition.
-        // This test verifies the per-acquisition path is clean regardless of log level.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
@@ -215,9 +215,6 @@ public sealed class ConnectionPerformanceOptimizationTests
     [Fact]
     public void ConnectionString_Redaction_NeverInvokedDuringAcquisition_WhenWarningEnabled()
     {
-        // Redaction happens once at initialization, never per-connection-acquisition.
-        // Connection strings (even redacted) are no longer logged to prevent CodeQL
-        // taint-flow alerts; the warning still fires but without the string argument.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
@@ -245,7 +242,7 @@ public sealed class ConnectionPerformanceOptimizationTests
     }
 
     [Fact]
-    public void ExecuteSessionSettings_Caches_Settings_PerReadOnlyFlag()
+    public void ExecuteSessionSettings_UsesPreComputedStrings_NoRedundantDialectCalls()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -255,30 +252,30 @@ public sealed class ConnectionPerformanceOptimizationTests
         };
 
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
         var dialect = new CountingDialect(factory);
-
-        var dialectField = typeof(DatabaseContext).GetField("_dialect",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(dialectField);
+        
+        using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+        
+        // Inject our counting dialect
+        var dialectField = typeof(DatabaseContext).GetField("_dialect", BindingFlags.NonPublic | BindingFlags.Instance);
         dialectField!.SetValue(ctx, dialect);
 
         using var conn = factory.CreateConnection();
         conn.ConnectionString = config.ConnectionString;
 
-        // Reset counters after any initialization logic (like DetectDatabaseInfoAsync)
-        // so we measure pure application/caching.
+        // Reset counters after initialization
         dialect.ResetCounters();
 
         ctx.ExecuteSessionSettings(conn, readOnly: false);
         ctx.ExecuteSessionSettings(conn, readOnly: false);
 
-        Assert.Equal(1, dialect.BaseCalls);
+        // Should be 0 because ExecuteSessionSettings uses pre-computed strings, not the dialect methods.
+        Assert.Equal(0, dialect.FinalCalls);
 
         ctx.ExecuteSessionSettings(conn, readOnly: true);
         ctx.ExecuteSessionSettings(conn, readOnly: true);
 
-        Assert.Equal(1, dialect.ReadOnlyCalls);
+        Assert.Equal(0, dialect.FinalCalls);
     }
 
     private sealed class TestLogger<T> : ILogger<T>
@@ -341,38 +338,24 @@ public sealed class ConnectionPerformanceOptimizationTests
 
     private sealed class CountingDialect : Sql92Dialect
     {
-        private int _readOnlyCalls;
-        private int _baseCalls;
+        private int _finalCalls;
 
         public CountingDialect(DbProviderFactory factory)
             : base(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>())
         {
         }
 
-        public int ReadOnlyCalls => _readOnlyCalls;
-        public int BaseCalls => _baseCalls;
+        public int FinalCalls => _finalCalls;
 
         public void ResetCounters()
         {
-            _readOnlyCalls = 0;
-            _baseCalls = 0;
+            _finalCalls = 0;
         }
 
-        public override string GetBaseSessionSettings()
+        public override string GetFinalSessionSettings(bool readOnly)
         {
-            Interlocked.Increment(ref _baseCalls);
-            return "SET BASE=1";
-        }
-
-        public override string GetReadOnlySessionSettings()
-        {
-            Interlocked.Increment(ref _readOnlyCalls);
-            return "SET READONLY=1";
-        }
-
-        internal override string? GetReadOnlyTransactionResetSql()
-        {
-            return "SET READONLY=0";
+            Interlocked.Increment(ref _finalCalls);
+            return readOnly ? "SET READONLY=1" : "SET READONLY=0";
         }
     }
 }

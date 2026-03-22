@@ -1,6 +1,7 @@
 #region
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using pengdows.crud.attributes;
@@ -58,7 +59,7 @@ public class TypeMapRegistryTests
     public void GetTableInfo_ThrowsIfMissingTableAttribute()
     {
         var registry = new TypeMapRegistry();
-        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NoTable>());
+        var ex = Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<NoTable>());
         Assert.Contains("does not have a TableAttribute", ex.Message);
     }
 
@@ -128,10 +129,28 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
+    public void ITableInfo_Columns_ReturnsReadOnlyDictionary_PreventingAccidentalMutation()
+    {
+        // P0-1 regression: ITableInfo.Columns must be typed as IReadOnlyDictionary so that
+        // code holding ITableInfo cannot call .Clear(), .Add(), or the set indexer without
+        // an explicit downcast. The compile-time type must not be Dictionary<,>.
+        var registry = new TypeMapRegistry();
+        ITableInfo info = registry.GetTableInfo<MixedOrdinalEntity>()!;
+
+        // The interface property must expose IReadOnlyDictionary (not the mutable Dictionary).
+        IReadOnlyDictionary<string, IColumnInfo> columns = info.Columns;
+        Assert.NotNull(columns);
+        Assert.True(columns.ContainsKey("First"));
+
+        // Verify the read path works: ordinal lookup via IReadOnlyDictionary indexer.
+        Assert.Equal(1, columns["First"].Ordinal);
+    }
+
+    [Fact]
     public void GetTableInfo_ThrowsIfNoKeyDefined()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NoKeyEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<NoKeyEntity>());
     }
 
     [Fact]
@@ -210,42 +229,42 @@ public class TypeMapRegistryTests
     public void GetTableInfo_ThrowsOnDuplicateColumnName()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateColumns>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateColumns>());
     }
 
     [Fact]
     public void GetTableInfo_ValidatesPrimaryKeyOrderingRules()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<BadPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<BadPkOrder>());
 
         var info = registry.GetTableInfo<ZeroPkOrder>();
         Assert.Single(info.PrimaryKeys);
         Assert.Equal(1, info.PrimaryKeys[0].PkOrder);
 
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<MixedPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateExplicitPkOrder>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<MixedPkOrder>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsForInvalidVersionType()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidVersionEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidVersionEntity>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsForInvalidLastUpdatedOnType()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidLastUpdatedEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidLastUpdatedEntity>());
     }
 
     [Fact]
     public void GetTableInfo_ThrowsOnDuplicateOrdinal()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
     }
 
     [Fact]
@@ -255,7 +274,7 @@ public class TypeMapRegistryTests
         var registry2 = new TypeMapRegistry();
 
         var info1 = registry1.GetTableInfo<MyEntity>();
-        info1.Name = "Changed";
+        ((TableInfo)info1).Name = "Changed";
 
         var info2 = registry2.GetTableInfo<MyEntity>();
 

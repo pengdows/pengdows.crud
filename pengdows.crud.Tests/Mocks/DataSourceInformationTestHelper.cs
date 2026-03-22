@@ -5,7 +5,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.Tests.Mocks;
 
-public static class DataSourceInformationTestHelper
+internal static class DataSourceInformationTestHelper
 {
     public static DataSourceInformation CreatePostgreSqlInfo(string version = "15.2")
     {

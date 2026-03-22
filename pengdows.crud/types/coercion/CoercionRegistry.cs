@@ -25,7 +25,7 @@ namespace pengdows.crud.types.coercion;
 /// High-performance registry for database type coercions.
 /// Thread-safe and optimized for frequent lookups.
 /// </summary>
-public class CoercionRegistry
+internal class CoercionRegistry
 {
     public static CoercionRegistry Shared { get; } = new();
 
@@ -123,7 +123,7 @@ public class CoercionRegistry
 /// <summary>
 /// Base class for strongly-typed coercions to reduce boilerplate.
 /// </summary>
-public abstract class DbCoercion<T> : IDbCoercion<T>
+internal abstract class DbCoercion<T> : IDbCoercion<T>
 {
     public Type TargetType => typeof(T);
 

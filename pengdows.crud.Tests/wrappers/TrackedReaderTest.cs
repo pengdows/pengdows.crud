@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
 using pengdows.crud.threading;
+using pengdows.crud.Tests;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -37,7 +38,7 @@ public class TrackedReaderTests
         public string DataSource => "localhost";
         public string ServerVersion => "1.0.0";
         public ConnectionState State => ConnectionState.Open;
-        public IConnectionLocalState LocalState { get; } = new ConnectionLocalState();
+        public IConnectionLocalState LocalState { get; } = new TestConnectionLocalState();
 
         public void Close()
         {
@@ -59,14 +60,14 @@ public class TrackedReaderTests
         {
         }
 
-        public Task OpenAsync()
+        public ValueTask OpenAsync()
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
-        public Task OpenAsync(CancellationToken cancellationToken)
+        public ValueTask OpenAsync(CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
         public IDbTransaction BeginTransaction()
@@ -79,12 +80,12 @@ public class TrackedReaderTests
             throw new NotImplementedException();
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
+        public ValueTask<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel,
             CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();

@@ -7,8 +7,11 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 
+using CrudBenchmarks;
+
 namespace CrudBenchmarks.Internal;
 
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class CloningPerformanceTest
@@ -53,7 +56,7 @@ public class CloningPerformanceTest
     {
         // New approach: Clone cached container and update parameter
         var clone = _cachedContainer.Clone();
-        clone.SetParameterValue("w0", new[] { _filmId });
+        clone.SetParameterValue("w0", _filmId);
         return clone;
     }
 

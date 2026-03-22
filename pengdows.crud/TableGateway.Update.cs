@@ -32,15 +32,21 @@ namespace pengdows.crud;
 public partial class TableGateway<TEntity, TRowID>
 {
     /// <inheritdoc/>
-    public Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
+    public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
-        return BuildUpdateAsync(objectToUpdate, _versionColumn != null, ctx, cancellationToken);
+        // Optimization: for version-less entities without original load, building is fully synchronous
+        if (_versionColumn == null)
+        {
+            return ValueTask.FromResult(BuildUpdate(objectToUpdate, ctx));
+        }
+        
+        return BuildUpdateAsync(objectToUpdate, true, ctx, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public async Task<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+    public async ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
         if (objectToUpdate == null)
@@ -55,17 +61,32 @@ public partial class TableGateway<TEntity, TRowID>
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
         }
 
-        var sc = ctx.CreateSqlContainer();
-        var dialect = GetDialect(ctx);
-
-        var original = loadOriginal
-            ? await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false)
-            : null;
-        if (loadOriginal && original == null)
+        TEntity? original = null;
+        if (loadOriginal)
         {
-            throw new InvalidOperationException("Original record not found for update.");
+            original = await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
+            if (original == null)
+            {
+                throw new InvalidOperationException("Original record not found for update.");
+            }
         }
 
+        return BuildUpdateInternal(objectToUpdate, original, ctx);
+    }
+
+    /// <summary>
+    /// Synchronous version of BuildUpdate for internal framework use where original record 
+    /// loading is not required or already handled.
+    /// </summary>
+    internal ISqlContainer BuildUpdate(TEntity entity, IDatabaseContext? context = null)
+    {
+        return BuildUpdateInternal(entity, null, context ?? _context);
+    }
+
+    private ISqlContainer BuildUpdateInternal(TEntity objectToUpdate, TEntity? original, IDatabaseContext ctx)
+    {
+        var sc = ctx.CreateSqlContainer();
+        var dialect = GetDialect(ctx);
         var template = GetTemplatesForDialect(dialect);
 
         if (_hasAuditColumns)
@@ -88,13 +109,20 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var idName = counters.NextKey();
-        var pId = dialect.CreateDbParameter(idName, _idColumn.DbType,
+        var pId = dialect.CreateDbParameter(idName, _idColumn!.DbType,
             _idColumn.MakeParameterValueFromField(objectToUpdate));
         parameters.Add(pId);
 
         sc.Query.Append(template.UpdateSqlSuffix);
-        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(idName); }
-        else { sc.Query.Append('?'); }
+        if (dialect.SupportsNamedParameters)
+        {
+            sc.Query.Append(dialect.ParameterMarker);
+            sc.Query.Append(idName);
+        }
+        else
+        {
+            sc.Query.Append('?');
+        }
 
         if (_versionColumn != null)
         {
@@ -110,12 +138,12 @@ public partial class TableGateway<TEntity, TRowID>
         return sc;
     }
 
-    private Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
+    private ValueTask<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context = null)
     {
         return LoadOriginalAsync(objectToUpdate, context, CancellationToken.None);
     }
 
-    private async Task<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context,
+    private async ValueTask<TEntity?> LoadOriginalAsync(TEntity objectToUpdate, IDatabaseContext? context,
         CancellationToken cancellationToken)
     {
         var ctx = context ?? _context;
@@ -465,8 +493,16 @@ public partial class TableGateway<TEntity, TRowID>
         var name = counters.NextVer();
         var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
         sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn.Name)).Append(" = ");
-        if (dialect.SupportsNamedParameters) { sc.Query.Append(dialect.ParameterMarker); sc.Query.Append(name); }
-        else { sc.Query.Append('?'); }
+        if (dialect.SupportsNamedParameters)
+        {
+            sc.Query.Append(dialect.ParameterMarker);
+            sc.Query.Append(name);
+        }
+        else
+        {
+            sc.Query.Append('?');
+        }
+
         return pVersion;
     }
 }

@@ -1,0 +1,49 @@
+Test run for /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/bin/Release/net8.0/pengdows.crud.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 18.0.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.39]     pengdows.crud.Tests.threading.RealAsyncLockerTests.TryLockAsync_Cancelled_Throws [FAIL]
+  Failed pengdows.crud.Tests.threading.RealAsyncLockerTests.TryLockAsync_Cancelled_Throws [52 ms]
+  Error Message:
+   Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(System.Threading.Tasks.TaskCanceledException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : The operation was canceled.
+  Stack Trace:
+     at pengdows.crud.Tests.threading.RealAsyncLockerTests.TryLockAsync_Cancelled_Throws() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 129
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at pengdows.crud.threading.RealAsyncLocker.TryLockAsyncSlow(TimeSpan timeout, CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud/threading/RealAsyncLocker.cs:line 227
+   at pengdows.crud.Tests.threading.RealAsyncLockerTests.<>c__DisplayClass8_0.<<TryLockAsync_Cancelled_Throws>b__0>d.MoveNext() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 129
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:02.45]     pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_Cancelled_Throws [FAIL]
+  Failed pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_Cancelled_Throws [52 ms]
+  Error Message:
+   Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(System.Threading.Tasks.TaskCanceledException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : The operation was canceled.
+  Stack Trace:
+     at pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_Cancelled_Throws() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 65
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at pengdows.crud.threading.RealAsyncLocker.LockAsyncSlow(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud/threading/RealAsyncLocker.cs:line 176
+   at pengdows.crud.Tests.threading.RealAsyncLockerTests.<>c__DisplayClass3_0.<<LockAsync_Cancelled_Throws>b__0>d.MoveNext() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 65
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:02.65]     pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_CalledTwiceWithCount1_DeadlocksInProduction [FAIL]
+  Failed pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_CalledTwiceWithCount1_DeadlocksInProduction [202 ms]
+  Error Message:
+   Assert.Throws() Failure: Exception type was not an exact match
+Expected: typeof(System.Threading.Tasks.TaskCanceledException)
+Actual:   typeof(System.OperationCanceledException)
+---- System.OperationCanceledException : The operation was canceled.
+  Stack Trace:
+     at pengdows.crud.Tests.threading.RealAsyncLockerTests.LockAsync_CalledTwiceWithCount1_DeadlocksInProduction() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 214
+--- End of stack trace from previous location ---
+----- Inner Stack Trace -----
+   at pengdows.crud.threading.RealAsyncLocker.LockAsyncSlow(CancellationToken cancellationToken) in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud/threading/RealAsyncLocker.cs:line 176
+   at pengdows.crud.Tests.threading.RealAsyncLockerTests.<>c__DisplayClass13_0.<<LockAsync_CalledTwiceWithCount1_DeadlocksInProduction>b__0>d.MoveNext() in /home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud.Tests/threading/RealAsyncLockerTests.cs:line 214
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     3, Passed:  5351, Skipped:     0, Total:  5354, Duration: 38 s - pengdows.crud.Tests.dll (net8.0)

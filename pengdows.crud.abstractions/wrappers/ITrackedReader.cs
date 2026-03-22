@@ -32,7 +32,7 @@ public interface ITrackedReader : IDataReader, IAsyncDisposable
     /// When this returns <c>false</c>, implementations may auto-dispose.
     /// Always use <c>await using</c> for early termination, exceptions, and cancellation.
     /// </remarks>
-    Task<bool> ReadAsync();
+    ValueTask<bool> ReadAsync();
 
     /// <summary>
     /// Advances the reader to the next record asynchronously with cancellation support.
@@ -42,5 +42,5 @@ public interface ITrackedReader : IDataReader, IAsyncDisposable
     /// <remarks>
     /// Cancellation does not dispose the reader. Always dispose on cancellation paths to release the lock.
     /// </remarks>
-    Task<bool> ReadAsync(CancellationToken cancellationToken);
+    ValueTask<bool> ReadAsync(CancellationToken cancellationToken);
 }

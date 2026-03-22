@@ -77,7 +77,10 @@ internal class SqlServerDialect : SqlDialect
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         for (var i = 0; i < SessionSettingsDef.Length; i++)
         {
-            if (i > 0) sb.Append(";\n");
+            if (i > 0)
+            {
+                sb.Append(";\n");
+            }
             sb.Append("SET ");
             sb.Append(SessionSettingsDef[i].Name);
             sb.Append(' ');
@@ -107,6 +110,9 @@ internal class SqlServerDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
+
+    // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
+    public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";
 
     // DO NOT override QuotePrefix / QuoteSuffix here.
@@ -145,7 +151,10 @@ internal class SqlServerDialect : SqlDialect
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
-        if (rowCount <= 0) return;
+        if (rowCount <= 0)
+        {
+            return;
+        }
 
         // SQL Server MERGE pattern:
         // MERGE INTO target AS t
@@ -163,11 +172,19 @@ internal class SqlServerDialect : SqlDialect
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
         {
-            if (row > 0) query.Append(", ");
+            if (row > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append('(');
             for (var col = 0; col < allCols.Count; col++)
             {
-                if (col > 0) query.Append(", ");
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
                 var val = getValue?.Invoke(row, col);
                 if (val == null || val == DBNull.Value)
                 {
@@ -187,14 +204,22 @@ internal class SqlServerDialect : SqlDialect
         query.Append(") AS s(");
         for (var i = 0; i < allCols.Count; i++)
         {
-            if (i > 0) query.Append(", ");
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append(allCols[i]);
         }
 
         query.Append(") ON (");
         for (var i = 0; i < keyColumns.Count; i++)
         {
-            if (i > 0) query.Append(" AND ");
+            if (i > 0)
+            {
+                query.Append(" AND ");
+            }
+
             query.Append("t.");
             query.Append(keyColumns[i]);
             query.Append(" = s.");
@@ -204,7 +229,11 @@ internal class SqlServerDialect : SqlDialect
         query.Append(") WHEN MATCHED THEN UPDATE SET ");
         for (var i = 0; i < columnNames.Count; i++)
         {
-            if (i > 0) query.Append(", ");
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
             query.Append(columnNames[i]);
             query.Append(" = s.");
             query.Append(columnNames[i]);
@@ -273,6 +302,9 @@ internal class SqlServerDialect : SqlDialect
 
     public override string? GetReadOnlyConnectionParameter()
     {
+        // NOTE: ApplicationIntent=ReadOnly is a routing hint for Availability Groups (AG)
+        // and does NOT enforce server-side read-only state. Hard enforcement requires 
+        // read-only credentials or database permissions.
         return "ApplicationIntent=ReadOnly";
     }
 
@@ -329,57 +361,14 @@ internal class SqlServerDialect : SqlDialect
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "DBCC USEROPTIONS"; // no trailing ';'
-
-                using var reader = cmd.ExecuteReader();
-                var currentSettings =
-                    new Dictionary<string, string>(ExpectedSessionSettings.Count, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var kvp in ExpectedSessionSettings)
-                {
-                    currentSettings[kvp.Key] = "OFF";
-                }
-
-                while (reader.Read())
-                {
-                    string settingName;
-                    string settingValue;
-
-                    if (reader.FieldCount == 1)
-                    {
-                        settingName = reader.GetName(0).ToUpperInvariant();
-                        settingValue = reader.GetString(0);
-                    }
-                    else
-                    {
-                        settingName = reader.GetString(0).ToUpperInvariant();
-                        settingValue = reader.GetString(1);
-                    }
-
-                    if (!currentSettings.ContainsKey(settingName))
-                    {
-                        continue;
-                    }
-
-                    currentSettings[settingName] =
-                        string.Equals(settingValue, "SET", StringComparison.OrdinalIgnoreCase)
-                            ? "ON"
-                            : "OFF";
-                }
-
-                var script = BuildSessionSettingsScript(
-                    ExpectedSessionSettings,
-                    currentSettings,
-                    static (name, value) => $"SET {name} {value};");
-
-                return new SessionSettingsResult(script, currentSettings, false);
+                // Always set the full baseline to ensure deterministic state in pooled connections.
+                return new SessionSettingsResult(DefaultSessionSettings, ExpectedSessionSettings, false);
             },
             () => new SessionSettingsResult(
                 DefaultSessionSettings,
                 new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
                 true),
-            "Failed to check SQL Server session settings, applying default settings");
+            "Failed to configure SQL Server session settings");
     }
 
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()

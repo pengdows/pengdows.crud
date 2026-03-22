@@ -1,5 +1,6 @@
 #region
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data.Common;
@@ -19,10 +20,23 @@ public class SingleWriterReadOnlyConnectionTests
     private sealed class RecordingConnection : fakeDbConnection
     {
         public List<string> Commands { get; } = new();
+        public List<string> ConnectionStrings { get; } = new();
 
         protected override DbCommand CreateDbCommand()
         {
             return new RecordingCommand(this, Commands);
+        }
+
+        [System.Diagnostics.CodeAnalysis.AllowNull]
+        public override string ConnectionString
+        {
+            get => base.ConnectionString;
+            set
+            {
+                var normalized = value ?? string.Empty;
+                ConnectionStrings.Add(normalized);
+                base.ConnectionString = normalized;
+            }
         }
     }
 
@@ -88,8 +102,9 @@ public class SingleWriterReadOnlyConnectionTests
         await read.OpenAsync();
         ctx.CloseAndDisposeConnection(read); // Must dispose to release slot
 
-        // Find the read connection (last one with query_only)
-        var readConn = factory.Connections.Find(c => c.Commands.Exists(cmd => cmd.Contains("query_only")));
+        // SQLite read-only is enforced via Mode=ReadOnly in the connection string, not PRAGMA query_only
+        var readConn = factory.Connections.Find(c => c.ConnectionStrings.Exists(cs =>
+            cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase)));
         Assert.NotNull(readConn);
     }
 
@@ -110,8 +125,9 @@ public class SingleWriterReadOnlyConnectionTests
         await read.OpenAsync();
         ctx.CloseAndDisposeConnection(read);
 
-        // Find a connection with query_only (should be the read connection)
-        var readConn = factory.Connections.Find(c => c.Commands.Exists(cmd => cmd.Contains("query_only")));
+        // SQLite read-only is enforced via Mode=ReadOnly in the connection string
+        var readConn = factory.Connections.Find(c => c.ConnectionStrings.Exists(cs =>
+            cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase)));
         Assert.NotNull(readConn);
     }
 }

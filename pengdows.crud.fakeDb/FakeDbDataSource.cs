@@ -50,21 +50,20 @@ public sealed class FakeDbDataSource : DbDataSource
 
     private void RegisterFactory()
     {
-        // Register the factory so it can be found by DbProviderFactories.GetFactory()
-        // Use a unique provider name based on the connection type
+        // Register the factory so it can be found by DbProviderFactories.GetFactory().
+        // RegisterFactory throws when already present, so we treat that as success.
         var providerName = "pengdows.crud.fakeDb";
         try
         {
-            // Try to register - it may already be registered
-            if (DbProviderFactories.GetFactory(providerName) == null)
-            {
-                DbProviderFactories.RegisterFactory(providerName, _factory);
-            }
+            DbProviderFactories.RegisterFactory(providerName, _factory);
         }
         catch (ArgumentException)
         {
-            // Already registered or registration failed - that's okay for testing
-            // The factory will still work for creating connections
+            // Already registered.
+        }
+        catch (InvalidOperationException)
+        {
+            // Already registered by another test run path.
         }
     }
 

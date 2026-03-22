@@ -94,7 +94,7 @@ internal static class SqlServerBenchmarkValidation
         await using var command = connection.CreateCommand();
         command.CommandText = $"SET STATISTICS XML ON;\n{sql};\nSET STATISTICS XML OFF;";
 
-        using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
         string? planXml = null;
         do
         {
@@ -119,7 +119,7 @@ internal static class SqlServerBenchmarkValidation
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "DBCC USEROPTIONS";
-        using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         while (await reader.ReadAsync())
         {

@@ -28,6 +28,32 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
+/// Controls how <see cref="Guid"/> values are stored in Firebird parameters.
+/// </summary>
+/// <remarks>
+/// Firebird has no native UUID column type prior to Firebird 5.0.
+/// Existing schemas typically store GUIDs as CHAR(16) OCTETS (binary) or CHAR(36)/VARCHAR(36) (string).
+/// Choose the mode that matches your schema's column type to avoid silent data-format mismatches.
+/// </remarks>
+internal enum FirebirdGuidStorageMode
+{
+    /// <summary>
+    /// Store GUID as <see cref="DbType.Binary"/> (16-byte CHAR OCTETS).
+    /// <para>Default and backward-compatible with existing Firebird schemas.</para>
+    /// </summary>
+    Binary,
+
+    /// <summary>
+    /// Store GUID as <see cref="DbType.String"/> (36-character hyphenated UUID string).
+    /// <para>Opt-in for new schemas that use VARCHAR(36) or CHAR(36) UUID columns.</para>
+    /// <para><strong>WARNING:</strong> Switching an existing database from Binary to String
+    /// is a data-migration event. Round-trip correctness depends on the column type matching
+    /// this setting.</para>
+    /// </summary>
+    String
+}
+
+/// <summary>
 /// Firebird Database dialect with SQL standard compliance.
 /// </summary>
 /// <remarks>
@@ -68,6 +94,44 @@ internal class FirebirdDialect : SqlDialect
     // Firebird provider can be overly strict during explicit prepare; defer to execution-time preparation
     public override bool PrepareStatements => false;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
+
+    /// <summary>
+    /// Controls how <see cref="Guid"/> values are stored in Firebird parameters.
+    /// Defaults to <see cref="FirebirdGuidStorageMode.Binary"/> for backward compatibility.
+    /// </summary>
+    /// <remarks>
+    /// Set to <see cref="FirebirdGuidStorageMode.String"/> only for new schemas that store UUIDs
+    /// as CHAR(36)/VARCHAR(36). Changing this setting on an existing database requires a data migration.
+    /// </remarks>
+    public FirebirdGuidStorageMode GuidStorageMode { get; init; } = FirebirdGuidStorageMode.Binary;
+
+    /// <summary>
+    /// Routes Guid serialization through the centralized <see cref="SqlDialect.GuidFormat"/> path,
+    /// computed from <see cref="GuidStorageMode"/> so a single property controls both the
+    /// dialect-level wire format and the legacy public API.
+    /// </summary>
+    protected override GuidStorageFormat GuidFormat =>
+        GuidStorageMode == FirebirdGuidStorageMode.Binary
+            ? GuidStorageFormat.Binary
+            : GuidStorageFormat.String;
+
+    /// <summary>
+    /// Serializes a <see cref="Guid"/> to 16 bytes in RFC 4122 big-endian byte order.
+    /// The Firebird .NET driver reads <c>CHAR(16) CHARACTER SET OCTETS</c> back as a
+    /// <see cref="Guid"/> by treating the stored bytes as a big-endian UUID, so we must
+    /// write in that same layout for a correct round-trip.
+    /// .NET's <see cref="Guid.ToByteArray()"/> uses mixed-endian (Data1/2/3 little-endian),
+    /// so we swap the first three components after calling it.
+    /// </summary>
+    protected override byte[] SerializeGuidAsBinary(Guid guid)
+    {
+        var bytes = guid.ToByteArray();
+        (bytes[0], bytes[3]) = (bytes[3], bytes[0]);
+        (bytes[1], bytes[2]) = (bytes[2], bytes[1]);
+        (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
+        (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
+        return bytes;
+    }
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
@@ -177,8 +241,7 @@ internal class FirebirdDialect : SqlDialect
     private const string DatabaseInfoQuery = "SELECT * FROM rdb$database";
     private const string MonitorVersionQuery = "SELECT mon$server_version FROM mon$database";
 
-    private const string DefaultSessionSettings =
-        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+    private const string DefaultNamesAndDialectSettings = "SET NAMES UTF8;\nSET SQL DIALECT 3;";
 
     public override string GetVersionQuery()
     {
@@ -219,46 +282,19 @@ internal class FirebirdDialect : SqlDialect
             connection,
             conn =>
             {
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT mon$sql_dialect FROM mon$database";
-
-                var dialectValue = cmd.ExecuteScalar();
-                var currentDialect = dialectValue != null ? Convert.ToInt32(dialectValue) : 3;
-
-                var snapshot = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["mon$sql_dialect"] = currentDialect.ToString()
-                };
-
-                var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-                try
-                {
-                    // SET NAMES UTF8 is mandatory as we can't easily interrogate the session charset
-                    sb.Append("SET NAMES UTF8;");
-
-                    if (currentDialect != 3)
-                    {
-                        sb.AppendLine();
-                        sb.Append("SET SQL DIALECT 3;");
-                    }
-
-                    return new SessionSettingsResult(sb.ToString(), snapshot, false);
-                }
-                finally
-                {
-                    sb.Dispose();
-                }
+                // Always set names to UTF8 and dialect to 3 to ensure deterministic state.
+                return new SessionSettingsResult(DefaultNamesAndDialectSettings, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), false);
             },
             () => new SessionSettingsResult(
-                "SET NAMES UTF8;\nSET SQL DIALECT 3;",
+                DefaultNamesAndDialectSettings,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 true),
-            "Failed to check Firebird session settings");
+            "Failed to configure Firebird session settings");
     }
 
     public override string GetBaseSessionSettings()
     {
-        return _sessionSettings ?? "SET NAMES UTF8;\nSET SQL DIALECT 3;";
+        return _sessionSettings ?? DefaultNamesAndDialectSettings;
     }
 
     public override string GetReadOnlySessionSettings()
@@ -419,14 +455,6 @@ internal class FirebirdDialect : SqlDialect
             if (value is bool boolValue)
             {
                 targetValue = boolValue ? (short)1 : (short)0;
-            }
-        }
-        else if (type == DbType.Guid)
-        {
-            targetType = DbType.String;
-            if (value is Guid guidValue)
-            {
-                targetValue = guidValue.ToString("D");
             }
         }
         else if (type == DbType.DateTimeOffset)

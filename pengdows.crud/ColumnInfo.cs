@@ -21,31 +21,56 @@
 
 #region
 
+using System;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
+using pengdows.crud.attributes;
 
 #endregion
 
 namespace pengdows.crud;
 
 /// <summary>
-/// Generic enum-to-string cache that avoids boxing value-type enums.
+/// Generic cache that maps enum values to literal strings and back.
 /// </summary>
-/// <remarks>
-/// This generic cache eliminates boxing allocations for value-type enums.
-/// Each enum type gets its own specialized cache instance.
-/// Expected 10-20% performance improvement vs object-based cache.
-/// </remarks>
-file static class EnumStringCache<TEnum> where TEnum : struct, Enum
+file static class EnumLiteralCache<TEnum> where TEnum : struct, Enum
 {
-    private static readonly ConcurrentDictionary<TEnum, string> Cache = new();
+    private static readonly ConcurrentDictionary<TEnum, string> LiteralByValue = new();
+    private static readonly ConcurrentDictionary<string, TEnum> ValueByLiteral =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    static EnumLiteralCache()
+    {
+        var enumType = typeof(TEnum);
+        var fields = enumType.GetFields(BindingFlags.Public | BindingFlags.Static);
+        foreach (var field in fields)
+        {
+            var value = (TEnum)field.GetValue(null)!;
+            var literal = field.GetCustomAttribute<EnumLiteralAttribute>()?.Literal ?? field.Name;
+            LiteralByValue[value] = literal;
+            ValueByLiteral.TryAdd(literal, value);
+            ValueByLiteral.TryAdd(field.Name, value);
+        }
+    }
 
     public static string GetOrAdd(TEnum value)
     {
-        return Cache.GetOrAdd(value, static v => v.ToString());
+        if (LiteralByValue.TryGetValue(value, out var literal))
+        {
+            return literal;
+        }
+
+        literal = value.ToString();
+        LiteralByValue.TryAdd(value, literal);
+        return literal;
+    }
+
+    public static bool TryGetValue(string literal, out TEnum value)
+    {
+        return ValueByLiteral.TryGetValue(literal, out value);
     }
 }
 
@@ -70,7 +95,7 @@ file static class EnumStringCache<TEnum> where TEnum : struct, Enum
 /// <seealso cref="IColumnInfo"/>
 /// <seealso cref="TableInfo"/>
 /// <seealso cref="TypeMapRegistry"/>
-public class ColumnInfo : IColumnInfo
+internal class ColumnInfo : IColumnInfo
 {
     /// <summary>
     /// Non-generic helper to invoke the generic enum cache via reflection.
@@ -78,12 +103,8 @@ public class ColumnInfo : IColumnInfo
     /// </summary>
     private static string GetEnumString(Type enumType, object enumValue)
     {
-        // Use reflection to call the generic method for this enum type
-        // This is still faster than boxing + dictionary lookup because:
-        // 1. We only box once for the reflection call, not for the cache key
-        // 2. The generic cache uses the actual enum type internally (no boxing)
-        var cacheType = typeof(EnumStringCache<>).MakeGenericType(enumType);
-        var method = cacheType.GetMethod(nameof(EnumStringCache<DayOfWeek>.GetOrAdd))!;
+        var cacheType = typeof(EnumLiteralCache<>).MakeGenericType(enumType);
+        var method = cacheType.GetMethod(nameof(EnumLiteralCache<DayOfWeek>.GetOrAdd))!;
         return (string)method.Invoke(null, new[] { enumValue })!;
     }
 
@@ -95,13 +116,22 @@ public class ColumnInfo : IColumnInfo
     /// </summary>
     internal static Func<object, string> BuildEnumStringConverter(Type enumType)
     {
-        var cacheType = typeof(EnumStringCache<>).MakeGenericType(enumType);
-        var method = cacheType.GetMethod(nameof(EnumStringCache<DayOfWeek>.GetOrAdd))!;
-        // Compile: (object v) => EnumStringCache<TEnum>.GetOrAdd((TEnum)v)
+        var cacheType = typeof(EnumLiteralCache<>).MakeGenericType(enumType);
+        var method = cacheType.GetMethod(nameof(EnumLiteralCache<DayOfWeek>.GetOrAdd))!;
         var param = Expression.Parameter(typeof(object), "v");
-        var cast = Expression.Convert(param, enumType); // unbox object → TEnum
-        var call = Expression.Call(method, cast); // static direct call
+        var cast = Expression.Convert(param, enumType);
+        var call = Expression.Call(method, cast);
         return Expression.Lambda<Func<object, string>>(call, param).Compile();
+    }
+
+    internal static bool TryParseEnumLiteral(Type enumType, string literal, out object? value)
+    {
+        var cacheType = typeof(EnumLiteralCache<>).MakeGenericType(enumType);
+        var method = cacheType.GetMethod(nameof(EnumLiteralCache<DayOfWeek>.TryGetValue))!;
+        var args = new object?[] { literal, null };
+        var success = (bool)method.Invoke(null, args)!;
+        value = args[1];
+        return success;
     }
 
     /// <summary>
@@ -130,12 +160,12 @@ public class ColumnInfo : IColumnInfo
     /// <summary>
     /// Gets the database column name as specified in the <see cref="Attributes.ColumnAttribute"/>.
     /// </summary>
-    public string Name { get; init; } = null!;
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Gets the <see cref="PropertyInfo"/> for the mapped entity property.
     /// </summary>
-    public PropertyInfo PropertyInfo { get; init; } = null!;
+    public PropertyInfo PropertyInfo { get; set; } = null!;
 
     /// <summary>
     /// Gets a value indicating whether this column is the entity's row identifier (pseudo key).
@@ -144,7 +174,7 @@ public class ColumnInfo : IColumnInfo
     /// Marked with <see cref="Attributes.IdAttribute"/>. Used by TableGateway for
     /// single-entity operations like RetrieveOneAsync(TRowID) and DeleteAsync(TRowID).
     /// </remarks>
-    public bool IsId { get; init; } = false;
+    public bool IsId { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the ADO.NET <see cref="System.Data.DbType"/> for parameter creation.
@@ -201,7 +231,7 @@ public class ColumnInfo : IColumnInfo
     /// True for <c>[Id]</c> or <c>[Id(true)]</c>. False for <c>[Id(false)]</c>
     /// (database-generated like IDENTITY/SERIAL).
     /// </remarks>
-    public bool IsIdIsWritable { get; set; }
+    public bool IsIdWritable { get; set; }
 
     /// <summary>
     /// Gets or sets whether this column is part of the entity's business/primary key.

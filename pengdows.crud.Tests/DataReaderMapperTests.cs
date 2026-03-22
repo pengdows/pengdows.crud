@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -16,6 +17,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("TypeRegistry")]
 public class DataReaderMapperTests
 {
     [Fact]
@@ -70,8 +72,7 @@ public class DataReaderMapperTests
             }
         });
 
-        IDataReaderMapper mapper = new DataReaderMapper();
-        var result = await mapper.LoadAsync<SampleEntity>(reader);
+        var result = await DataReaderMapper.LoadAsync<SampleEntity>(reader, MapperOptions.Default);
 
         Assert.Single(result);
         Assert.Equal("John", result[0].Name);
@@ -296,8 +297,8 @@ public class DataReaderMapperTests
             }
         });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)));
+        await Assert.ThrowsAsync<DataMappingException>(() =>
+            DataReaderMapper.LoadAsync<EnumEntity>(reader, new MapperOptions(true)).AsTask());
     }
 
     [Fact]
@@ -332,7 +333,9 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(37, result[0].Age);
-        Assert.Equal(2, reader.GetValueCallCount);
+        // IsDBNull is no longer called for non-nullable value types (int), so GetValueCallCount
+        // is 1 (BuildSchemaHash → GetFieldType → GetValue), not 2.
+        Assert.Equal(1, reader.GetValueCallCount);
         Assert.Equal(1, reader.GetFieldValueCallCount);
     }
 
@@ -351,7 +354,9 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(58, result[0].Age);
-        Assert.True(reader.GetValueCallCount >= 3);
+        // IsDBNull is no longer called for non-nullable value types (int), so the minimum
+        // is 2 (BuildSchemaHash → GetFieldType → GetValue, coercion setter → GetValue).
+        Assert.True(reader.GetValueCallCount >= 2);
         Assert.Equal(0, reader.GetFieldValueCallCount);
     }
 
@@ -417,7 +422,9 @@ public class DataReaderMapperTests
         Assert.Single(secondResult);
         Assert.Equal(71, secondResult[0].Age);
         Assert.Equal(0, secondReader.GetFieldValueCallCount);
-        Assert.True(secondReader.GetValueCallCount >= 2);
+        // GetFieldType is suppressed in StrictTrackingFieldAccessReader, and IsDBNull is
+        // no longer called for non-nullable int. Only the coercion setter calls GetValue.
+        Assert.True(secondReader.GetValueCallCount >= 1);
         Assert.Equal(0, secondReader.GetFieldValueFailures);
     }
 
@@ -491,7 +498,7 @@ public class DataReaderMapperTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => DataReaderMapper.LoadAsync<DuplicateColumnNamesEntity>(
             reader,
-            new MapperOptions(ColumnsOnly: true)));
+            new MapperOptions(ColumnsOnly: true)).AsTask());
     }
 
     [Fact]
@@ -646,7 +653,10 @@ public class DataReaderMapperTests
         var tryGetValue = map.GetType().GetMethod("TryGetValue")!;
         var args = new object?[] { planCacheKey, null };
         var found = (bool)tryGetValue.Invoke(map, args)!;
-        if (!found) return null;
+        if (!found)
+        {
+            return null;
+        }
 
         var entry = args[1]!;
         var valueProp = entry.GetType().GetProperty("Value")

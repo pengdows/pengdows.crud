@@ -48,7 +48,6 @@ internal static class ConnectionStringHelper
                 return fallback;
             }
 
-            TryApply(fallback, input);
             return fallback;
         }
 

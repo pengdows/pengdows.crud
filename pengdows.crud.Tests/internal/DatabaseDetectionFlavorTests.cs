@@ -47,13 +47,33 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var connection = (fakeDbConnection)factory.CreateConnection();
-        
+
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand("SELECT aurora_version()", "1.2.3");
-        
+
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
-        
+
         Assert.Equal(SupportedDatabase.AuroraPostgreSql, detected);
+    }
+
+    [Fact]
+    public void DetectProduct_IdentifiesYugabyteDb_ViaPgSettingsProbe()
+    {
+        // Detection queries pg_settings for a YugabyteDB-only GUC. Using a plain SELECT (not
+        // SHOW or a function call) means the probe never throws on standard PostgreSQL — it
+        // simply returns null when the row doesn't exist. This probe also runs BEFORE
+        // aurora_version() so a failed aurora probe cannot corrupt the YSQL connection state.
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+
+        connection.EmulatedProduct = SupportedDatabase.Unknown;
+        connection.SetScalarResultForCommand(
+            "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1",
+            "yb_enable_optimizer_statistics");
+
+        var detected = DatabaseDetectionService.DetectProduct(connection, factory);
+
+        Assert.Equal(SupportedDatabase.YugabyteDb, detected);
     }
 
     [Fact]

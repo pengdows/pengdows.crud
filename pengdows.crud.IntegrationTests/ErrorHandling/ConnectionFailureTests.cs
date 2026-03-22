@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using System.Data;
@@ -107,7 +108,7 @@ public class ConnectionFailureTests
         using var context = new DatabaseContext("Data Source=:memory:", factory);
 
         // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var exception = Assert.Throws<TransactionException>(() =>
         {
             context.BeginTransaction(IsolationLevel.ReadCommitted);
         });
@@ -241,7 +242,7 @@ public class ConnectionFailureTests
         await using var context = new DatabaseContext("Data Source=:memory:", factory);
 
         // Act & Assert - Transaction begin should fail
-        Assert.Throws<InvalidOperationException>(() => { context.BeginTransaction(IsolationLevel.ReadCommitted); });
+        Assert.Throws<TransactionException>(() => { context.BeginTransaction(IsolationLevel.ReadCommitted); });
 
         // Verify context is still usable (not in broken state)
         // We can't test further operations since connection will fail,

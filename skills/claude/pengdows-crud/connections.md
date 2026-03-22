@@ -40,8 +40,9 @@ public enum DbMode
 
 ### KeepAlive
 
-- Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs
+- Keeps a single sentinel connection open (never used for work) to prevent idle disconnection
 - Otherwise behaves like `Standard`
+- Modern use cases: long-running Lambda, Aurora Serverless cold-start prevention, RDS Proxy idle disconnection, LocalDB unload prevention
 
 ### SingleWriter
 
@@ -53,6 +54,30 @@ public enum DbMode
 - All work — reads and writes — is funneled through a single pinned connection
 - Used automatically for in-memory SQLite (see Connection Pooling)
 
+## Constructor Overloads
+
+```csharp
+// (1) String-based provider — supports DbMode and ReadWriteMode directly
+new DatabaseContext(connectionString, "Microsoft.Data.SqlClient",
+    mode: DbMode.Best, readWriteMode: ReadWriteMode.ReadWrite,
+    loggerFactory: null, readOnlyConnectionString: null);
+
+// (2) Factory object — always DbMode.Best; use IDatabaseContextConfiguration for full control
+new DatabaseContext(connectionString, SqlClientFactory.Instance);
+new DatabaseContext(connectionString, SqlClientFactory.Instance, readOnlyConnectionString: "...");
+
+// (3) Full configuration object
+new DatabaseContext(new DatabaseContextConfiguration
+{
+    ConnectionString = connectionString,
+    DbMode = DbMode.SingleWriter,
+    ReadWriteMode = ReadWriteMode.ReadWrite
+}, SqlClientFactory.Instance, loggerFactory);
+
+// (4) Native DbDataSource (e.g. NpgsqlDataSource) — best performance for PostgreSQL
+new DatabaseContext(configuration, npgsqlDataSource, NpgsqlFactory.Instance, loggerFactory);
+```
+
 ## DI Registration
 
 ```csharp
@@ -60,13 +85,15 @@ public enum DbMode
 services.AddSingleton<IDatabaseContext>(sp =>
     new DatabaseContext(connectionString, SqlClientFactory.Instance));
 
-// Specific mode
+// Specific mode — use IDatabaseContextConfiguration
 services.AddSingleton<IDatabaseContext>(sp =>
-    new DatabaseContext(connectionString, factory, null, DbMode.SingleWriter));
+    new DatabaseContext(
+        new DatabaseContextConfiguration { ConnectionString = connectionString, DbMode = DbMode.SingleWriter },
+        SqlClientFactory.Instance));
 
-// Auto-select best mode
+// Auto-select best mode (factory overload always uses DbMode.Best)
 services.AddSingleton<IDatabaseContext>(sp =>
-    new DatabaseContext(connectionString, factory, null, DbMode.Best));
+    new DatabaseContext(connectionString, SqlClientFactory.Instance));
 ```
 
 ## Best Practices
@@ -80,6 +107,34 @@ services.AddSingleton<IDatabaseContext>(sp =>
 - Avoids connection starvation and excessive licensing costs (per active connection)
 - Plays well with provider-managed pooling (see Connection Pooling)
 - Handles embedded/local DB quirks without manual intervention
+
+## IsolationProfile
+
+Portable transaction isolation profiles that map to the optimal native level for the connected database:
+
+```csharp
+public enum IsolationProfile
+{
+    SafeNonBlockingReads,  // MVCC snapshot (where supported) — avoids blocking reads
+    StrictConsistency,     // Serializable / full isolation
+    FastWithRisks          // Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads
+}
+```
+
+Usage:
+```csharp
+await using var txn = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads, ExecutionType.Write, ct);
+try
+{
+    // perform operations using txn
+    await txn.CommitAsync(ct);
+}
+catch
+{
+    await txn.RollbackAsync(ct);
+    throw;
+}
+```
 
 ## Integration with Transactions
 
@@ -111,6 +166,21 @@ var mode = context.ConnectionMode;                 // Current DbMode
 "Server=localhost;Database=MyDb;Connection Timeout=300;..."
 ```
 
+## ReadWriteMode
+
+`ReadWriteMode` controls whether the context enforces read-only or read-write access:
+
+```csharp
+public enum ReadWriteMode
+{
+    ReadOnly  = 1,   // Blocks write operations; read-only session settings applied
+    WriteOnly = 2,   // Reserved for write-only pools
+    ReadWrite = 3,   // Default — full read/write access
+}
+```
+
+Combined with a `readOnlyConnectionString`, pengdows.crud creates separate read and write data sources, routing `ExecutionType.Read` operations to the read-only pool automatically.
+
 ## Default Pool Sizes by Database
 
 | Database | Provider Default | Recommended |
@@ -121,6 +191,11 @@ var mode = context.ConnectionMode;                 // Current DbMode
 | Oracle | 100 | 50-200 |
 | SQLite | Unlimited | 1-20 |
 | DuckDB | Unlimited | 1-8 |
+| CockroachDB | 100 (Npgsql) | 20-100 |
+| YugabyteDB | 100 (Npgsql) | 20-100 |
+| TiDB | 100 (MySQL) | 50-200 |
+| Firebird | 50 | 10-50 |
+| Snowflake | provider-managed | provider default |
 
 ## Related Pages
 

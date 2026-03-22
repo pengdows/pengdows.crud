@@ -87,7 +87,7 @@ internal readonly struct CachedParameterConfig
 /// Handles spatial, JSON, arrays, ranges, network types, etc.
 /// Thread-safe: all mutable state uses ConcurrentDictionary.
 /// </summary>
-public class AdvancedTypeRegistry
+internal class AdvancedTypeRegistry
 {
     // Provider-specific reflection property names.  Typos here fail silently at
     // runtime; centralising makes them grep-able and keeps them in sync.
@@ -436,20 +436,8 @@ public class AdvancedTypeRegistry
             }
         });
 
-        // Oracle: store GUIDs as VARCHAR2(36)
-        RegisterMapping<Guid>(SupportedDatabase.Oracle, new ProviderTypeMapping
-        {
-            DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.String;
-                param.Size = 36;
-                if (value is Guid guid)
-                {
-                    param.Value = guid.ToString("D");
-                }
-            }
-        });
+        // Oracle Guid: handled by OracleDialect.GuidFormat (GuidStorageFormat.String).
+        // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
     }
 
     private void RegisterDefaultConverters()
@@ -838,20 +826,8 @@ public class AdvancedTypeRegistry
             }
         });
 
-        // Snowflake stores GUIDs as VARCHAR(36) — use plain string with fixed size
-        RegisterMapping<Guid>(SupportedDatabase.Snowflake, new ProviderTypeMapping
-        {
-            DbType = DbType.String,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.String;
-                param.Size = 36;
-                if (value is Guid guid)
-                {
-                    param.Value = guid.ToString("D");
-                }
-            }
-        });
+        // Snowflake Guid: handled by SnowflakeDialect.GuidFormat (GuidStorageFormat.String).
+        // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
     }
 
     private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)
@@ -917,7 +893,7 @@ public class AdvancedTypeRegistry
 /// <summary>
 /// Provider-specific type mapping configuration.
 /// </summary>
-public class ProviderTypeMapping
+internal class ProviderTypeMapping
 {
     public DbType DbType { get; init; }
     public Action<DbParameter, object?>? ConfigureParameter { get; init; }

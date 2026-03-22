@@ -25,6 +25,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -76,6 +77,12 @@ internal class SqliteDialect : SqlDialect
     // SQLite benefits from prepared statements with inherent prepare support
     public override bool PrepareStatements => true;
 
+    // SQLite supports LIMIT/OFFSET only — no OFFSET/FETCH NEXT syntax.
+    public override bool SupportsOffsetFetch => false;
+
+    // SQLite has no native UUID type — store GUIDs as 36-char hyphenated strings.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
@@ -100,16 +107,25 @@ internal class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
     }
 
-    public override string GetReadOnlySessionSettings()
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return "PRAGMA query_only = ON;";
+        if (readOnly)
+        {
+            // PRAGMA journal_mode = WAL requires write access to the database file header.
+            // Connections opened with Mode=ReadOnly cannot execute it — WAL was already
+            // established by the first write connection and persists at the file level.
+            // PRAGMA foreign_keys is a session memory flag that works fine on read-only connections.
+            return "PRAGMA foreign_keys = ON;";
+        }
+
+        return base.GetConnectionSessionSettings(context, readOnly);
     }
 
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return "PRAGMA query_only = OFF;";
-    }
-
+    // Read-only enforcement for SQLite uses Mode=ReadOnly in the connection string (see
+    // GetReadOnlyConnectionString and ApplyConnectionSettingsCore), which opens the database
+    // file read-only at the OS level. This is stronger and more reliable than PRAGMA query_only,
+    // which is session-scoped and can be reset by any caller on the same connection.
+    // No session SQL or transaction SQL is used for read-only enforcement.
     public override string? GetReadOnlyConnectionParameter()
     {
         return "Mode=ReadOnly";
@@ -122,7 +138,7 @@ internal class SqliteDialect : SqlDialect
         string? connectionStringOverride)
     {
         var baseConnectionString = string.IsNullOrWhiteSpace(connectionStringOverride)
-            ? context.ConnectionString
+            ? InternalConnectionStringAccess.GetRawConnectionString(context)
             : connectionStringOverride;
 
         // SQLite: Only apply read-only connection parameter if not a memory database
@@ -215,7 +231,29 @@ internal class SqliteDialect : SqlDialect
 
     public override bool IsUniqueViolation(DbException ex)
     {
-        return ex is DbException dbEx && dbEx.ErrorCode == 19;
+        if (ex is not DbException dbEx)
+        {
+            return false;
+        }
+
+        return dbEx.ErrorCode == 1555 ||
+               dbEx.ErrorCode == 2067 ||
+               (dbEx.ErrorCode == 19 &&
+                (dbEx.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+                 dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase))) ||
+               dbEx.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
+               dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNumericDbType(DbType type)
+    {
+        return type is DbType.Byte or DbType.SByte
+            or DbType.Int16 or DbType.UInt16
+            or DbType.Int32 or DbType.UInt32
+            or DbType.Int64 or DbType.UInt64
+            or DbType.Single or DbType.Double
+            or DbType.Decimal or DbType.Currency
+            or DbType.VarNumeric;
     }
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
@@ -258,22 +296,6 @@ internal class SqliteDialect : SqlDialect
         }
 
         return p;
-    }
-
-    public override object? PrepareParameterValue(object? value, DbType dbType)
-    {
-        return base.PrepareParameterValue(value, dbType);
-    }
-
-    private static bool IsNumericDbType(DbType type)
-    {
-        return type is DbType.Byte or DbType.SByte
-            or DbType.Int16 or DbType.UInt16
-            or DbType.Int32 or DbType.UInt32
-            or DbType.Int64 or DbType.UInt64
-            or DbType.Single or DbType.Double
-            or DbType.Decimal or DbType.Currency
-            or DbType.VarNumeric;
     }
 
     // Connection pooling properties for SQLite (provider-aware)

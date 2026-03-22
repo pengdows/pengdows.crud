@@ -133,6 +133,22 @@ public class TenantConnectionResolverTests
     }
 
     [Fact]
+    public void Register_MissingProviderName_ShouldThrow()
+    {
+        var resolver = new TenantConnectionResolver();
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "   "
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => resolver.Register("tenant-x", config));
+
+        Assert.Equal("configuration", ex.ParamName);
+        Assert.Contains("ProviderName", ex.Message);
+    }
+
+    [Fact]
     public void GetConfiguration_NullTenant_ShouldThrow()
     {
         var resolver = new TenantConnectionResolver();
@@ -331,6 +347,36 @@ public class TenantConnectionResolverTests
         var resolver = new TenantConnectionResolver();
         var ex = Assert.Throws<ArgumentNullException>(() => resolver.Register((MultiTenantOptions)null!));
         Assert.Equal("options", ex.ParamName);
+    }
+
+    [Fact]
+    public void Register_NullTenantEnumerable_ShouldThrow()
+    {
+        var resolver = new TenantConnectionResolver();
+        var ex = Assert.Throws<ArgumentNullException>(() => resolver.Register((IEnumerable<TenantConfiguration>)null!));
+
+        Assert.Equal("tenants", ex.ParamName);
+    }
+
+    [Fact]
+    public void Register_Enumerable_WithMissingProviderName_ShouldThrow()
+    {
+        var resolver = new TenantConnectionResolver();
+        var tenants = new[]
+        {
+            new TenantConfiguration
+            {
+                Name = "bad-provider",
+                DatabaseContextConfiguration = new DatabaseContextConfiguration
+                {
+                    ConnectionString = "Server=A;",
+                    ProviderName = ""
+                }
+            }
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => resolver.Register(tenants));
+        Assert.Contains("ProviderName", ex.Message);
     }
 
     [Fact]

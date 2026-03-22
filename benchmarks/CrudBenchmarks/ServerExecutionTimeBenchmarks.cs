@@ -22,6 +22,7 @@ namespace CrudBenchmarks;
 /// via Application Name separation. True connection hold time is reported via
 /// the pengdows Metrics API (conn_hold_avg) and pg_stat_statements output.
 /// </summary>
+[OptInBenchmark]
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 5, iterationCount: 10, invocationCount: 100)]
 public class ServerExecutionTimeBenchmarks : IAsyncDisposable
@@ -92,8 +93,8 @@ public class ServerExecutionTimeBenchmarks : IAsyncDisposable
 
     [ThreadStatic] private static string? _currentBenchmarkLabel;
 
-    [Params(16)] public int Parallelism;
-    [Params(64)] public int OperationsPerRun;
+    private const int Parallelism = 16;
+    private const int OperationsPerRun = 64;
 
     [GlobalSetup]
     public async Task GlobalSetup()

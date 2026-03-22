@@ -18,7 +18,7 @@ riderModule.iml
 *.snk
 
 # Coverage
-TestResults/
+TestResults*/
 coverage-report/
 coverage-report-full/
 coveragereport*/
@@ -51,6 +51,17 @@ artifacts/
 # Debug/scratch files
 debug_*.cs
 *.log
+*.bak
+ORACLE_TALK.md
+check_constructors.csx
+valuetask-validation/
+
+# Build artifacts
+*.binlog
+
+# Benchmark database files
+*.duckdb
+*.duckdb.wal
 
 # .NET SDK runtime artifacts
 .dotnet/
@@ -58,3 +69,4 @@ debug_*.cs
 
 # Local MSBuild overrides (never commit)
 Directory.Build.user.props
+ORACLE_TALK.md

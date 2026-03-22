@@ -36,14 +36,22 @@ pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
 var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.Throw);
 ```
 
-### EnumParseFailureMode.ReturnDefault
+### EnumParseFailureMode.SetNullAndLog
+
+- Sets the property to null (for nullable types) and logs a warning on parse failure
+- Useful when you want to tolerate stale/unknown enum values without crashing
+
+```csharp
+var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+```
+
+### EnumParseFailureMode.SetDefaultValue
 
 - Returns the enum's default value (typically 0) on parse failure
 - Useful for data migration scenarios
-- Logs warnings for failed conversions
 
 ```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.ReturnDefault);
+var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
 ```
 
 ## Cross-Database Type Mapping
@@ -94,11 +102,13 @@ public UserSettings Settings { get; set; }
 pengdows.crud allows custom type conversion logic:
 
 ```csharp
-// Register custom converter in TypeMapRegistry
-typeMap.RegisterConverter<CustomType>(
-    toDb: value => value.ToString(),
-    fromDb: dbValue => CustomType.Parse((string)dbValue)
-);
+var registry = new AdvancedTypeRegistry();
+registry.RegisterConverter(new CustomTypeConverter());
+
+// Register provider-specific mapping when needed
+registry.RegisterMapping<CustomType>(
+    SupportedDatabase.PostgreSql,
+    new ProviderTypeMapping(DbType.String));
 ```
 
 ## Best Practices

@@ -28,6 +28,6 @@ namespace pengdows.crud.attributes;
 /// <seealso cref="CreatedByAttribute"/>
 /// <seealso cref="CreatedOnAttribute"/>
 [AttributeUsage(AttributeTargets.Property)]
-public class NonUpdateableAttribute : Attribute
+public sealed class NonUpdateableAttribute : Attribute
 {
 }

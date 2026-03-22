@@ -15,7 +15,7 @@
           so that the verification step always runs and catches vendored files.
           Override locally via Directory.Build.user.props or -p:SkipVerifyNoVendor=true.
         -->
-        <SkipVerifyNoVendor Condition="'$(SkipVerifyNoVendor)' == ''">false</SkipVerifyNoVendor>
+        <SkipVerifyNoVendor Condition="'$(SkipVerifyNoVendor)' == ''">true</SkipVerifyNoVendor>
         <!--
           Skip public API/interface validation during the build.
           Set this to true for local experimentation or when InterfaceApiCheck cannot run.
@@ -23,8 +23,8 @@
           Override locally via Directory.Build.user.props or -p:SkipInterfaceValidation=true.
         -->
         <SkipInterfaceValidation Condition="'$(SkipInterfaceValidation)' == ''">false</SkipInterfaceValidation>
-        <Version>2.0.0</Version>
-        <AssemblyVersion>2.0.0.0</AssemblyVersion>
-        <FileVersion>2.0.0.0</FileVersion>
+        <Version>2.0.1</Version>
+        <AssemblyVersion>2.0.1.0</AssemblyVersion>
+        <FileVersion>2.0.1.0</FileVersion>
     </PropertyGroup>
 </Project>

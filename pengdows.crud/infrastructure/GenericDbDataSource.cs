@@ -1,7 +1,4 @@
-using System.Data;
 using System.Data.Common;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace pengdows.crud.infrastructure;
 
@@ -28,27 +25,6 @@ internal sealed class GenericDbDataSource : DbDataSource
         var conn = _factory.CreateConnection()
                    ?? throw new InvalidOperationException("Provider factory returned null connection.");
         conn.ConnectionString = _connectionString;
-        return conn;
-    }
-
-    protected override DbCommand CreateDbCommand(string? commandText = null)
-    {
-        // Base implementation wires this to the data source semantics.
-        var cmd = base.CreateDbCommand(commandText);
-        return cmd;
-    }
-
-    public new DbConnection OpenConnection()
-    {
-        var conn = CreateConnection();
-        conn.Open();
-        return conn;
-    }
-
-    public new async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
-    {
-        var conn = CreateConnection();
-        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
         return conn;
     }
 

@@ -17,14 +17,26 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     protected override DbConnection? DbConnection { get; }
 
+    /// <summary>When set, Commit() throws this exception.</summary>
+    public Exception? CommitException { get; set; }
+
+    /// <summary>When set, Rollback() throws this exception.</summary>
+    public Exception? RollbackException { get; set; }
+
     public override void Commit()
     {
-        //do nothing
+        if (CommitException != null)
+        {
+            throw CommitException;
+        }
     }
 
     public override void Rollback()
     {
-        //do nothing
+        if (RollbackException != null)
+        {
+            throw RollbackException;
+        }
     }
 
     public override IsolationLevel IsolationLevel { get; }

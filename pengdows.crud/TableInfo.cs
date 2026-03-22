@@ -37,7 +37,7 @@ namespace pengdows.crud;
 /// <seealso cref="ITableInfo"/>
 /// <seealso cref="ColumnInfo"/>
 /// <seealso cref="TypeMapRegistry"/>
-public class TableInfo : ITableInfo
+internal class TableInfo : ITableInfo
 {
     private IReadOnlyList<IColumnInfo>? _orderedColumns;
     private IReadOnlyList<IColumnInfo>? _primaryKeys;
@@ -48,7 +48,11 @@ public class TableInfo : ITableInfo
     /// <remarks>
     /// Keys are case-insensitive to handle databases with different identifier casing.
     /// </remarks>
-    public Dictionary<string, IColumnInfo> Columns { get; } = new(StringComparer.OrdinalIgnoreCase);
+    // Mutable backing store used only by TypeMapRegistry during construction.
+    internal Dictionary<string, IColumnInfo> Columns { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // ITableInfo exposes a read-only view so callers holding ITableInfo cannot mutate metadata.
+    IReadOnlyDictionary<string, IColumnInfo> ITableInfo.Columns => Columns;
 
     /// <summary>
     /// Gets or sets the database schema name (e.g., "dbo", "public").

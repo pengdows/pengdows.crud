@@ -23,6 +23,7 @@
 // =============================================================================
 
 using System;
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Reflection;
@@ -163,7 +164,7 @@ public partial class DatabaseContext
         ILockerAsync? initLocker = null;
         try
         {
-            initLocker = GetLock();
+            initLocker = GetLockInternal();
             initLocker.Lock();
             if (configuration is null)
             {
@@ -185,7 +186,16 @@ public partial class DatabaseContext
                     _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
             }
 
-            ReadWriteMode = configuration.ReadWriteMode;
+            var normalizedReadWriteMode = configuration.ReadWriteMode;
+            var normalizedReadPoolSize = configuration.MaxConcurrentReads;
+            var normalizedWritePoolSize = configuration.MaxConcurrentWrites;
+            NormalizePoolLimitConfiguration(
+                configuration.DbMode,
+                ref normalizedReadWriteMode,
+                ref normalizedReadPoolSize,
+                ref normalizedWritePoolSize);
+
+            ReadWriteMode = normalizedReadWriteMode;
             TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -193,14 +203,44 @@ public partial class DatabaseContext
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;
             _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
-            _forceManualPrepare = configuration.ForceManualPrepare;
-            _disablePrepare = configuration.DisablePrepare;
+            _stateChangeHandler = (sender, args) =>
+            {
+                switch (args.CurrentState)
+                {
+                    case ConnectionState.Open:
+                        _logger.LogDebug("Opening connection: " + Name);
+                        UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
+                        break;
+                    case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
+                    case ConnectionState.Broken:
+                        _logger.LogDebug("Closed or broken connection: " + Name);
+                        Interlocked.Decrement(ref _connectionCount);
+                        break;
+                }
+            };
+            // ExecuteSessionSettings handles its own exceptions internally (logs + returns).
+            // No outer try-catch needed here.
+            _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
+            _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
+            _firstOpenHandlerAsyncRw = async (tc, ct) =>
+            {
+                try { await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
+            _firstOpenHandlerAsyncRo = async (tc, ct) =>
+            {
+                try { await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+            };
+            _prepareMode = configuration.PrepareMode;
             _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
-            _configuredReadPoolSize = configuration.MaxConcurrentReads;
-            _configuredWritePoolSize = configuration.MaxConcurrentWrites;
+            _configuredReadPoolSize = normalizedReadPoolSize;
+            _configuredWritePoolSize = normalizedWritePoolSize;
             if (configuration.EnableMetrics)
             {
                 var options = configuration.MetricsOptions ?? MetricsOptions.Default;
@@ -238,12 +278,20 @@ public partial class DatabaseContext
 
             _sessionSettingsDetectionCompleted = true;
 
+            // PRE-COMPUTE SESSION SETTINGS: Compute the "ready-to-go" session strings once
+            // per context. GetFinalSessionSettings(bool) ensures that each dialect
+            // returns exactly ONE optimized string (combining baseline + intent)
+            // to ensure 1 RTT and 1 execution on the server on the hot path.
+            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false);
+            _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true);
+
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
             if (Product == SupportedDatabase.DuckDB)
             {
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
+                _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
             }
 
             // Apply pooling defaults now that we have the final mode and dialect
@@ -389,14 +437,13 @@ public partial class DatabaseContext
         var rawConnectionString =
             config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
         _connectionString = NormalizeConnectionString(rawConnectionString);
-        ReadWriteMode = config.ReadWriteMode;
 
         ITrackedConnection? initConn = null;
         try
         {
             // 2) Create + open
             var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
-            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true, IsReadOnlyConnection, null);
+            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true);
             try
             {
                 initConn.Open();
@@ -584,8 +631,8 @@ public partial class DatabaseContext
         var writerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, writerConnectionString);
         var readerConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, readerConnectionString);
 
-        var rawWriterMax = ResolveGovernorMax(_configuredWritePoolSize, writerConfig);
-        var rawReaderMax = ResolveGovernorMax(_configuredReadPoolSize, readerConfig);
+        var rawWriterMax = ApplyAbsolutePoolLimit(ResolveGovernorMax(_configuredWritePoolSize, writerConfig));
+        var rawReaderMax = ApplyAbsolutePoolLimit(ResolveGovernorMax(_configuredReadPoolSize, readerConfig));
 
         // Validate explicit pool sizes — negative values are always invalid.
         if (rawWriterMax.HasValue && rawWriterMax.Value < 0)
@@ -630,6 +677,12 @@ public partial class DatabaseContext
         // ReadOnly context or an explicitly disabled write pool.
         if (ConnectionMode == DbMode.SingleWriter && rawWriterMax != 0)
         {
+            if (_isWriteConnection && rawWriterMax.HasValue && rawWriterMax.Value != 1)
+            {
+                _logger.LogWarning(
+                    "SingleWriter coerced the write pool size from {Requested} to 1 so the provider pool and governor stay aligned.",
+                    rawWriterMax.Value);
+            }
             writerLabelMax = 1;
         }
 
@@ -683,7 +736,7 @@ public partial class DatabaseContext
         var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
         try
         {
-            using var conn = FactoryCreateConnection(executionType, connectionString, true, isReadOnly, null);
+            using var conn = FactoryCreateConnection(executionType, connectionString, true);
             conn.Open();
         }
         catch (Exception ex)
@@ -705,7 +758,13 @@ public partial class DatabaseContext
         //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration, effectiveApplicationName);
 
-        if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
+        // Strip pooling from the reader connection string only when writes are active.
+        // SingleWriter + ReadOnly is functionally identical to Standard + ReadOnly (no writers
+        // at all), so the reader should use normal pooled connections in that case.
+        // SingleConnection + ReadOnly is rejected earlier in the constructor, so that path
+        // is never reached here.
+        if (ConnectionMode == DbMode.SingleConnection ||
+            (ConnectionMode == DbMode.SingleWriter && _isWriteConnection))
         {
             _readerConnectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
                 _readerConnectionString,
@@ -723,9 +782,9 @@ public partial class DatabaseContext
                 _readerConnectionString,
                 readMaxPoolSize,
                 _dialect.MaxPoolSizeSettingName,
-                false,
+                overrideExisting: true,
                 readerBuilder);
-            _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString);
+            _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString, readOnly: true);
         }
 
         // 3. Finalize writer connection string: -rw suffix → MaxPoolSize → provider
@@ -737,23 +796,44 @@ public partial class DatabaseContext
             WriteApplicationNameSuffix,
             effectiveApplicationName);
 
-        var writeMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
-        if (ConnectionMode == DbMode.SingleWriter)
-        {
-            writeMaxPoolSize = 1;
-        }
-
         var writerBuilder = GetFactoryConnectionStringBuilder(_connectionString);
-        _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
-            _connectionString,
-            writeMaxPoolSize,
-            _dialect?.MaxPoolSizeSettingName,
-            overrideExisting: ConnectionMode == DbMode.SingleWriter,
-            writerBuilder);
+        if (!_isWriteConnection)
+        {
+            // ReadOnly context: writes are forbidden by the governor. When no separate
+            // ReadOnlyConnectionString is configured the reader shares _connectionString,
+            // so stamp the resolved read pool size here — step 2 above was skipped for
+            // equal strings. When a separate read connection string exists this stamps
+            // the read size onto the write string too, which is harmless and keeps it
+            // validated and normalized.
+            var readPoolSizeForWriter = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _connectionString);
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, readPoolSizeForWriter, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
+        else if (ConnectionMode == DbMode.SingleWriter)
+        {
+            // SingleWriter: force the writer pool to exactly 1 to prevent concurrent writes.
+            // Readers use a separate pool (pooling is stripped from the reader connection string),
+            // so only the write slot needs to be sized here.
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, 1, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
+        else
+        {
+            // Standard/KeepAlive: reader and writer always use separate ADO.NET pools
+            // (differentiated via ApplicationName suffix or Connection Timeout delta).
+            // Stamp the resolved write size so the governor and the provider pool agree.
+            // Configuration wins over connection-string, which wins over the dialect default.
+            var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
+            _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
+                _connectionString, writeMax, _dialect?.MaxPoolSizeSettingName,
+                overrideExisting: true, writerBuilder);
+        }
 
         if (_dialect != null)
         {
-            _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString);
+            _connectionString = _dialect.PrepareConnectionStringForDataSource(_connectionString, readOnly: !_isWriteConnection);
         }
 
         // If suffix application was a no-op, keep reader/writer aligned so pool-key
@@ -776,7 +856,24 @@ public partial class DatabaseContext
             _dataSource = TryCreateDataSource(_factory, _connectionString);
         }
 
+        // Set baked flags only for native provider DataSources.
+        // GenericDbDataSource wraps a factory and does not send startup parameters, so
+        // the baked Options have no effect and the per-checkout SET must still run.
+        if (_dataSource is { } writerDs && writerDs is not GenericDbDataSource
+            && (_dialect?.SessionSettingsBakedIntoDataSource ?? false))
+        {
+            if (_isWriteConnection)
+            {
+                _rwSettingsBakedIntoDataSource = true;
+            }
+            else
+            {
+                _roSettingsBakedIntoDataSource = true;
+            }
+        }
+
         _readerDataSource = _dataSource;
+        RefreshRedactedConnectionStrings();
 
         if (string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
@@ -789,6 +886,12 @@ public partial class DatabaseContext
             if (readDataSource != null)
             {
                 _readerDataSource = readDataSource;
+                // Reader DataSource is always used exclusively for read-only operations.
+                if (readDataSource is not GenericDbDataSource
+                    && (_dialect?.SessionSettingsBakedIntoDataSource ?? false))
+                {
+                    _roSettingsBakedIntoDataSource = true;
+                }
                 return;
             }
 
@@ -809,8 +912,7 @@ public partial class DatabaseContext
                 "Read-only connection string differs, but no provider factory is available. Read-only operations will reuse the provided DbDataSource.");
         }
 
-        _redactedConnectionString = RedactConnectionString(_connectionString);
-        _redactedReaderConnectionString = RedactConnectionString(_readerConnectionString);
+        RefreshRedactedConnectionStrings();
     }
 
     /// <summary>
@@ -859,40 +961,117 @@ public partial class DatabaseContext
     /// </summary>
     private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString)
     {
-        // 1. Already present in the connection string?
-        if (_dialect?.MaxPoolSizeSettingName != null)
-        {
-            try
-            {
-                var builder = GetFactoryConnectionStringBuilder(connectionString);
-                if (builder.ContainsKey(_dialect.MaxPoolSizeSettingName))
-                {
-                    var raw = builder[_dialect.MaxPoolSizeSettingName];
-                    if (raw is int existing && existing > 0)
-                    {
-                        return existing;
-                    }
-
-                    if (raw != null && int.TryParse(raw.ToString(), out var parsed) && parsed > 0)
-                    {
-                        return parsed;
-                    }
-                }
-            }
-            catch
-            {
-                /* fall through */
-            }
-        }
-
-        // 2. Caller-supplied context configuration
+        // 1. Caller-supplied configuration — highest priority; wins over anything in the connection string.
         if (configuredMax.HasValue && configuredMax.Value > 0)
         {
             return configuredMax.Value;
         }
 
-        // 3. Dialect default
-        return _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize;
+        // 2. Already present in the connection string.
+        if (_dialect != null)
+        {
+            var effectiveConfig = PoolingConfigReader.GetEffectivePoolConfig(_dialect, connectionString);
+            if (effectiveConfig.Source == PoolConfigSource.ConnectionString &&
+                effectiveConfig.MaxPoolSize is int csMaxPoolSize)
+            {
+                if (csMaxPoolSize < 0)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        _dialect.MaxPoolSizeSettingName ?? "MaxPoolSize",
+                        csMaxPoolSize,
+                        "MaxPoolSize in the connection string must be >= 0. Use 0 to forbid connections.");
+                }
+
+                if (csMaxPoolSize == 0)
+                {
+                    return _dialect.DefaultMaxPoolSize;
+                }
+
+                return ApplyAbsolutePoolLimit(
+                    csMaxPoolSize,
+                    "connection string");
+            }
+        }
+
+        // 3. Dialect default.
+        return ApplyAbsolutePoolLimit(
+            _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize,
+            "dialect default");
+    }
+
+    private void NormalizePoolLimitConfiguration(
+        DbMode mode,
+        ref ReadWriteMode readWriteMode,
+        ref int? configuredReadPoolSize,
+        ref int? configuredWritePoolSize)
+    {
+        configuredReadPoolSize = ApplyAbsolutePoolLimit(
+            configuredReadPoolSize,
+            nameof(DatabaseContextConfiguration.MaxConcurrentReads));
+        configuredWritePoolSize = ApplyAbsolutePoolLimit(
+            configuredWritePoolSize,
+            nameof(DatabaseContextConfiguration.MaxConcurrentWrites));
+
+        if (readWriteMode == ReadWriteMode.ReadOnly)
+        {
+            if (configuredWritePoolSize.HasValue && configuredWritePoolSize.Value != 0)
+            {
+                _logger.LogWarning(
+                    "ReadOnly mode ignores {Setting}={Configured}; writes remain forbidden.",
+                    nameof(DatabaseContextConfiguration.MaxConcurrentWrites),
+                    configuredWritePoolSize.Value);
+            }
+
+            configuredWritePoolSize = 0;
+            return;
+        }
+
+        if (mode == DbMode.SingleWriter &&
+            configuredWritePoolSize.HasValue &&
+            configuredWritePoolSize.Value == 0)
+        {
+            _logger.LogWarning(
+                "SingleWriter with {Setting}=0 promotes the context to ReadOnly mode.",
+                nameof(DatabaseContextConfiguration.MaxConcurrentWrites));
+            readWriteMode = ReadWriteMode.ReadOnly;
+            configuredWritePoolSize = 0;
+        }
+    }
+
+    private int ApplyAbsolutePoolLimit(int value, string sourceDescription)
+    {
+        if (value <= AbsoluteMaxPoolSize)
+        {
+            return value;
+        }
+
+        _logger.LogWarning(
+            "{Source} requested pool size {Requested}, which exceeds the absolute limit of {Maximum}. Coercing to {CoercedMaximum}.",
+            sourceDescription,
+            value,
+            AbsoluteMaxPoolSize,
+            AbsoluteMaxPoolSize);
+        return AbsoluteMaxPoolSize;
+    }
+
+    private int? ApplyAbsolutePoolLimit(int? value)
+    {
+        if (!value.HasValue || value.Value <= AbsoluteMaxPoolSize)
+        {
+            return value;
+        }
+
+        return AbsoluteMaxPoolSize;
+    }
+
+    private int? ApplyAbsolutePoolLimit(int? value, string sourceDescription)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return ApplyAbsolutePoolLimit(value.Value, sourceDescription);
     }
 
     private string BuildReaderConnectionString(IDatabaseContextConfiguration configuration,
@@ -919,11 +1098,28 @@ public partial class DatabaseContext
                 : readOnly;
         }
 
-        return ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
+        var readerResult = ConnectionPoolingConfiguration.ApplyApplicationNameSuffix(
             baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
             effectiveApplicationName);
+
+        // For dialects without ApplicationNameSettingName (e.g., Oracle ODP.NET), the
+        // suffix is a no-op and reader/writer end up with identical connection strings,
+        // sharing a single connection pool. Apply a discriminator key/value so the strings
+        // differ and the provider creates separate pools for reader and writer connections.
+        // Skip when the caller supplied an explicit ReadOnlyConnectionString — they already
+        // manage pool isolation themselves.
+        if (string.IsNullOrWhiteSpace(_dialect.ApplicationNameSettingName) &&
+            string.IsNullOrWhiteSpace(rawReadOnlyConnectionString))
+        {
+            readerResult = ConnectionPoolingConfiguration.ApplyPoolDiscriminator(
+                readerResult,
+                _dialect.ReadOnlyPoolDiscriminatorSettingName,
+                _dialect.ReadOnlyPoolDiscriminatorSettingValue);
+        }
+
+        return readerResult;
     }
 
     private string ResolveApplicationName(string? configuredApplicationName)
@@ -1396,6 +1592,12 @@ public partial class DatabaseContext
 
     internal static Action? RedactionHook;
 
+    private void RefreshRedactedConnectionStrings()
+    {
+        _redactedConnectionString = RedactConnectionString(_connectionString);
+        _redactedReaderConnectionString = RedactConnectionString(_readerConnectionString);
+    }
+
     private static string RedactConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -1719,70 +1921,124 @@ public partial class DatabaseContext
         return ConnectionStringHelper.Create(_factory, input);
     }
 
-    private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
+    /// <summary>
+    /// Returns the <c>CreateDataSource</c> method for <paramref name="parameterType"/> only if
+    /// the provider actually overrides it. Methods inherited directly from
+    /// <see cref="DbProviderFactory"/> (e.g. the base <c>NotSupportedException</c> stub) are
+    /// excluded so we never invoke a no-op and mistake it for provider capability.
+    /// </summary>
+    private static MethodInfo? FindProviderCreateDataSourceMethod(Type factoryType, Type parameterType)
     {
-        DbDataSource? nativeDataSource = null;
+        var method = factoryType.GetMethod("CreateDataSource", new[] { parameterType });
+        if (method == null || method.DeclaringType == typeof(DbProviderFactory))
+            return null;
+
+        return method;
+    }
+
+    /// <summary>
+    /// Attempts to obtain a provider-native <see cref="DbDataSource"/> by reflecting on the
+    /// factory. Returns <c>null</c> on all failure paths — callers should fall back to
+    /// <see cref="CreateGenericFallbackDataSource"/>.
+    /// <para>
+    /// Probe order: <c>string</c> overload first (avoids builder round-trip canonicalization),
+    /// then <c>DbConnectionStringBuilder</c> overload.
+    /// </para>
+    /// </summary>
+    private DbDataSource? TryCreateProviderDataSource(DbProviderFactory factory, string connectionString)
+    {
+        var factoryType = factory.GetType();
         try
         {
-            var factoryType = factory.GetType();
-            
-            // Priority 1: Check for DbConnectionStringBuilder overload
-            var dataSourceMethod =
-                factoryType.GetMethod("CreateDataSource", new[] { typeof(DbConnectionStringBuilder) });
-            if (dataSourceMethod != null)
+            // Priority 1: string overload — preferred because it avoids builder round-trip
+            // canonicalization that can drop or reorder provider-specific keys.
+            var stringMethod = FindProviderCreateDataSourceMethod(factoryType, typeof(string));
+            if (stringMethod != null)
             {
-                var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
-                builder.ConnectionString = connectionString;
-                nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { builder }) as DbDataSource;
-            }
-
-            // Priority 2: Check for string overload
-            if (nativeDataSource == null)
-            {
-                dataSourceMethod = factoryType.GetMethod("CreateDataSource", new[] { typeof(string) });
-                if (dataSourceMethod != null && dataSourceMethod.DeclaringType != typeof(DbProviderFactory))
+                if (stringMethod.Invoke(factory, new object?[] { connectionString }) is DbDataSource ds)
                 {
-                    nativeDataSource = dataSourceMethod.Invoke(factory, new object?[] { connectionString }) as DbDataSource;
+                    return ds;
                 }
             }
 
-            if (nativeDataSource != null)
+            // Priority 2: DbConnectionStringBuilder overload — some providers only expose this.
+            var builderMethod = FindProviderCreateDataSourceMethod(factoryType, typeof(DbConnectionStringBuilder));
+            if (builderMethod != null)
             {
-                var isProviderSpecific = nativeDataSource.GetType().Assembly != typeof(DbDataSource).Assembly;
-                _logger.LogInformation("Using {SourceType} DbDataSource from provider factory: {FactoryType}",
-                    isProviderSpecific ? "provider-specific" : "generic",
-                    factoryType.FullName);
-                
-                return nativeDataSource;
+                var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
+                builder.ConnectionString = connectionString;
+                if (builderMethod.Invoke(factory, new object?[] { builder }) is DbDataSource ds)
+                {
+                    return ds;
+                }
             }
+
+            return null;
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is NotSupportedException)
+        {
+            // Provider explicitly opts out of the DataSource pattern.
+            _logger.LogDebug(
+                "Provider {FactoryType} explicitly does not support DbDataSource.",
+                factoryType.FullName);
+            return null;
         }
         catch (Exception ex)
         {
-            // TargetInvocationException wrapping NotSupportedException = provider explicitly
-            // opts out of the DataSource pattern — fall through to GenericDbDataSource silently.
-            if (ex is System.Reflection.TargetInvocationException tie && tie.InnerException is NotSupportedException)
-            {
-                _logger.LogDebug("Provider {FactoryType} does not support DbDataSource; using generic wrapper.",
-                    factory.GetType().FullName);
-                return null;
-            }
-
-            // Any other exception is unexpected — warn so it can be investigated, but still
-            // fall through to GenericDbDataSource rather than failing context construction.
-            _logger.LogWarning(ex, "Unexpected exception probing for DbDataSource on {FactoryType}; falling back to generic wrapper.",
-                factory.GetType().FullName);
-        }
-
-        // Fallback: Use our own wrapper so the rest of the framework can always use the DataSource path.
-        // We only skip this if the factory is a ThrowingDataSourceFactory (used in tests to explicitly test null).
-        var typeName = factory.GetType().FullName ?? string.Empty;
-        if (typeName.Contains("ThrowingDataSourceFactory") || typeName.Contains("ThrowingFactory"))
-        {
+            // Unexpected failure during probe — log at debug because fallback is always attempted.
+            // A warning would be misleading since the context may still function correctly.
+            _logger.LogDebug(
+                ex,
+                "Failed probing provider-native DbDataSource support for {FactoryType}.",
+                factoryType.FullName);
             return null;
         }
+    }
 
-        _logger.LogDebug("Creating GenericDbDataSource wrapper for {FactoryType}", factory.GetType().FullName);
-        return new GenericDbDataSource(factory, connectionString);
+    /// <summary>
+    /// Creates the <see cref="GenericDbDataSource"/> fallback wrapper.
+    /// Overridable in tests to return <c>null</c> or a substitute without type-name sniffing.
+    /// </summary>
+    internal virtual DbDataSource? CreateGenericFallbackDataSource(DbProviderFactory factory, string connectionString)
+        => new GenericDbDataSource(factory, connectionString);
+
+    /// <summary>
+    /// Resolves the best available <see cref="DbDataSource"/> for <paramref name="factory"/>:
+    /// <list type="number">
+    ///   <item>Provider-native data source (via reflected <c>CreateDataSource</c> override).</item>
+    ///   <item><see cref="GenericDbDataSource"/> wrapper so the rest of the framework can always
+    ///         use the DataSource path uniformly.</item>
+    /// </list>
+    /// Returns <c>null</c> only if both paths fail.
+    /// </summary>
+    private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
+    {
+        var nativeDataSource = TryCreateProviderDataSource(factory, connectionString);
+        if (nativeDataSource != null)
+        {
+            var isProviderSpecific = nativeDataSource.GetType().Assembly != typeof(DbDataSource).Assembly;
+            _logger.LogInformation(
+                "Using {SourceType} DbDataSource from provider factory: {FactoryType}",
+                isProviderSpecific ? "provider-specific" : "generic",
+                factory.GetType().FullName);
+            return nativeDataSource;
+        }
+
+        try
+        {
+            _logger.LogDebug(
+                "Creating GenericDbDataSource wrapper for {FactoryType}",
+                factory.GetType().FullName);
+            return CreateGenericFallbackDataSource(factory, connectionString);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed creating GenericDbDataSource wrapper for {FactoryType}; DataSource path unavailable.",
+                factory.GetType().FullName);
+            return null;
+        }
     }
 
     /// <inheritdoc />

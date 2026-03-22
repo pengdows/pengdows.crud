@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using pengdows.crud.attributes;
+using pengdows.crud.exceptions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -149,7 +150,7 @@ public class TypeMapRegistryBranchTests
         public bool EnumAsString { get; set; }
         public bool IsJsonType { get; set; }
         public JsonSerializerOptions JsonSerializerOptions { get; set; } = new();
-        public bool IsIdIsWritable { get; set; }
+        public bool IsIdWritable { get; set; }
         public bool IsPrimaryKey { get; set; }
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
@@ -178,21 +179,21 @@ public class TypeMapRegistryBranchTests
     public void EmptyTableName_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EmptyTableNameEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<EmptyTableNameEntity>());
     }
 
     [Fact]
     public void EmptyColumnName_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EmptyColumnNameEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<EmptyColumnNameEntity>());
     }
 
     [Fact]
     public void EnumColumn_InvalidDbType_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<EnumInvalidDbTypeEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<EnumInvalidDbTypeEntity>());
     }
 
     [Fact]
@@ -210,42 +211,42 @@ public class TypeMapRegistryBranchTests
     public void PrimaryKeyGap_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<PrimaryKeyGapEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<PrimaryKeyGapEntity>());
     }
 
     [Fact]
     public void PrimaryKeyDuplicate_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<PrimaryKeyDuplicateEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<PrimaryKeyDuplicateEntity>());
     }
 
     [Fact]
     public void NegativeOrdinal_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<NegativeOrdinalEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<NegativeOrdinalEntity>());
     }
 
     [Fact]
     public void DuplicateOrdinal_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<DuplicateOrdinalEntity>());
     }
 
     [Fact]
     public void InvalidLastUpdatedOn_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidLastUpdatedOnEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidLastUpdatedOnEntity>());
     }
 
     [Fact]
     public void InvalidCreatedBy_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidCreatedByEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidCreatedByEntity>());
     }
 
     [Fact]
@@ -265,7 +266,7 @@ public class TypeMapRegistryBranchTests
     public void InvalidVersionType_Throws()
     {
         var registry = new TypeMapRegistry();
-        Assert.Throws<InvalidOperationException>(() => registry.GetTableInfo<InvalidVersionTypeEntity>());
+        Assert.Throws<SqlGenerationException>(() => registry.GetTableInfo<InvalidVersionTypeEntity>());
     }
 
     [Fact]
@@ -288,6 +289,6 @@ public class TypeMapRegistryBranchTests
 
         var ex = Assert.Throws<TargetInvocationException>(() =>
             InvokeValidateVersionType(typeof(InvalidVersionTypeEntity), column));
-        Assert.IsType<InvalidOperationException>(ex.InnerException);
+        Assert.IsType<SqlGenerationException>(ex.InnerException);
     }
 }

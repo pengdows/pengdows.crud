@@ -226,7 +226,7 @@ public class DatabaseContextTests
     {
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        var preamble = context.SessionSettingsPreamble;
+        var preamble = context.GetSessionSettingsPreamble();
         if (expectSettings)
         {
             Assert.False(string.IsNullOrWhiteSpace(preamble));
@@ -301,7 +301,7 @@ public class DatabaseContextTests
         var product = SupportedDatabase.Sqlite;
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        using var tx = context.BeginTransaction(readOnly: true);
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         var expected = new IsolationResolver(product, context.RCSIEnabled, context.SnapshotIsolationEnabled)
             .Resolve(IsolationProfile.SafeNonBlockingReads);
         Assert.Equal(expected, tx.IsolationLevel);
@@ -533,7 +533,7 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void StandardConnection_DoesNotApplySessionSettings()
+    public void StandardConnection_AppliesSessionSettingsOnFirstLease()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
@@ -543,11 +543,16 @@ public class DatabaseContextTests
             DbMode = DbMode.Standard
         };
 
-        _ = new DatabaseContext(config, factory);
+        using var context = new DatabaseContext(config, factory);
+        
+        // Clear commands from initialization detection (VERSION, etc.)
+        factory.Connection.ExecutedCommands.Clear();
 
-        // Should execute DBCC USEROPTIONS to check settings, but no SET commands since settings are already correct
-        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
-        Assert.DoesNotContain(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET"));
+        using var connection = context.GetConnection(ExecutionType.Read);
+        connection.Open();
+
+        // The first lease should have applied settings
+        Assert.Contains(factory.Connection.ExecutedCommands, cmd => cmd.Contains("SET QUOTED_IDENTIFIER ON"));
     }
 
     [Fact]
@@ -569,7 +574,7 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void PinnedConnection_AlwaysEnforcesBaseline_EvenWhenCompliant()
+    public void PinnedConnection_AlwaysEnforcesBaseline()
     {
         var factory = new RecordingFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
@@ -581,9 +586,9 @@ public class DatabaseContextTests
 
         _ = new DatabaseContext(config, factory);
 
-        // Should execute DBCC USEROPTIONS to detect settings, then enforce full baseline
-        // even when the initial connection is already compliant (pooled connections can drift)
-        Assert.Contains("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
+        // Under Always SET policy, we no longer call DBCC USEROPTIONS to detect.
+        // We just enforce full baseline immediately.
+        Assert.DoesNotContain("DBCC USEROPTIONS", factory.Connection.ExecutedCommands);
         Assert.Contains(factory.Connection.ExecutedCommands,
             cmd => cmd.Contains("SET QUOTED_IDENTIFIER ON", StringComparison.OrdinalIgnoreCase));
     }

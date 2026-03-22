@@ -24,7 +24,7 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 /// <seealso cref="IDatabaseProductInfo"/>
 /// <seealso cref="ISqlDialect.ProductInfo"/>
-public class DatabaseProductInfo : IDatabaseProductInfo
+internal class DatabaseProductInfo : IDatabaseProductInfo
 {
     /// <summary>
     /// Gets or sets the database product name (e.g., "Microsoft SQL Server", "PostgreSQL").

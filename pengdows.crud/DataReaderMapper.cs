@@ -34,13 +34,15 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
+using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
 
 /// <summary>
-/// High-performance mapper for converting <see cref="IDataReader"/> rows to strongly-typed entities.
+/// High-performance mapper for converting <see cref="ITrackedReader"/> rows to strongly-typed entities.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -73,7 +75,7 @@ namespace pengdows.crud;
 /// <seealso cref="IDataReaderMapper"/>
 /// <seealso cref="MapperOptions"/>
 /// <seealso cref="TypeCoercionHelper"/>
-public sealed class DataReaderMapper : IDataReaderMapper
+internal sealed class DataReaderMapper : IDataReaderMapper
 {
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
@@ -140,49 +142,83 @@ public sealed class DataReaderMapper : IDataReaderMapper
         bool ColumnsOnly,
         EnumParseFailureMode EnumMode);
 
-    public static Task<List<T>> LoadObjectsFromDataReaderAsync<T>(
+    public static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
+        ITrackedReader reader,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    public static ValueTask<List<T>> LoadAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return LoadInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        ITrackedReader reader,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return StreamInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
+    }
+
+    public static IAsyncEnumerable<T> StreamAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken = default)
+        where T : class, new()
+    {
+        return StreamInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    internal static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadAsync<T>(reader, cancellationToken);
+        return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    public static Task<List<T>> LoadAsync<T>(
+    internal static ValueTask<List<T>> LoadAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.LoadAsync<T>(reader, options, cancellationToken);
+        return LoadInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    public static IAsyncEnumerable<T> StreamAsync<T>(
+    internal static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.StreamAsync<T>(reader, MapperOptions.Default, cancellationToken);
+        return StreamInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    public static IAsyncEnumerable<T> StreamAsync<T>(
+    internal static IAsyncEnumerable<T> StreamAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken = default)
         where T : class, new()
     {
-        return Instance.StreamAsync<T>(reader, options, cancellationToken);
+        return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
-        IDataReader reader,
+    ValueTask<List<T>> IDataReaderMapper.LoadAsync<T>(
+        ITrackedReader reader,
         CancellationToken cancellationToken)
     {
         return LoadInternalAsync<T>(reader, MapperOptions.Default, cancellationToken);
     }
 
-    Task<List<T>> IDataReaderMapper.LoadAsync<T>(
-        IDataReader reader,
+    ValueTask<List<T>> IDataReaderMapper.LoadAsync<T>(
+        ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
     {
@@ -190,20 +226,47 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     IAsyncEnumerable<T> IDataReaderMapper.StreamAsync<T>(
-        IDataReader reader,
+        ITrackedReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
     {
         return StreamInternalAsync<T>(reader, options, cancellationToken);
     }
 
-    private async Task<List<T>> LoadInternalAsync<T>(
+    private static async ValueTask<List<T>> LoadInternalAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        CancellationToken cancellationToken)
+        where T : class, new()
+    {
+        var recordReader = GetRecordReader(reader);
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+
+        var result = new List<T>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(MapSingleRow(recordReader, plan, options));
+        }
+
+        return result;
+    }
+
+    private static async ValueTask<List<T>> LoadInternalAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         CancellationToken cancellationToken)
         where T : class, new()
     {
         ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is ITrackedReader trackedReader)
+        {
+            return await LoadInternalAsync<T>(trackedReader, options, cancellationToken).ConfigureAwait(false);
+        }
 
         if (reader is not DbDataReader rdr)
         {
@@ -226,13 +289,41 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return result;
     }
 
-    private async IAsyncEnumerable<T> StreamInternalAsync<T>(
+    private static async IAsyncEnumerable<T> StreamInternalAsync<T>(
+        ITrackedReader reader,
+        IMapperOptions options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+        where T : class, new()
+    {
+        var recordReader = GetRecordReader(reader);
+        options ??= MapperOptions.Default;
+
+        var schemaHash = BuildSchemaHash(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return MapSingleRow(recordReader, plan, options);
+        }
+    }
+
+    private static async IAsyncEnumerable<T> StreamInternalAsync<T>(
         IDataReader reader,
         IMapperOptions options,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
         ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is ITrackedReader trackedReader)
+        {
+            await foreach (var item in StreamInternalAsync<T>(trackedReader, options, cancellationToken))
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         if (reader is not DbDataReader rdr)
         {
@@ -252,6 +343,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
     }
 
+    private static DbDataReader GetRecordReader(ITrackedReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader is IInternalTrackedReader internalReader)
+        {
+            return internalReader.InnerReader;
+        }
+
+        if (reader is DbDataReader dbReader)
+        {
+            return dbReader;
+        }
+
+        throw new ArgumentException("reader must expose an underlying DbDataReader", nameof(reader));
+    }
+
     /// <summary>
     /// Maps the current reader row to a single entity using a pre-built plan.
     /// Called by both LoadInternalAsync (direct loop) and StreamInternalAsync
@@ -264,7 +372,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         for (var i = 0; i < plan.Ordinals.Length; i++)
         {
             var ordinal = plan.Ordinals[i];
-            if (rdr.IsDBNull(ordinal))
+            if (!plan.SkipNullCheck[i] && rdr.IsDBNull(ordinal))
             {
                 continue;
             }
@@ -277,8 +385,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
             {
                 if (options.Strict)
                 {
-                    throw new InvalidOperationException(
+                    throw new DataMappingException(
                         $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
+                        SupportedDatabase.Unknown,
                         ex);
                 }
 
@@ -301,6 +410,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var ordinals = new List<int>();
         var setters = new List<Action<T, DbDataReader>>();
         var properties = new List<PropertyInfo>();
+        var skipNullChecks = new List<bool>();
 
         for (var i = 0; i < reader.FieldCount; i++)
         {
@@ -318,13 +428,19 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 setters.Add(GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
+                // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
+                // guard for these columns — if the DB returns NULL for a non-nullable property,
+                // the typed getter will throw, which is the correct loud failure.
+                var propType = prop.PropertyType;
+                skipNullChecks.Add(propType.IsValueType && Nullable.GetUnderlyingType(propType) == null);
             }
         }
 
         return new MapperPlan<T>(
             ordinals.ToArray(),
             properties.ToArray(),
-            setters.ToArray());
+            setters.ToArray(),
+            skipNullChecks.ToArray());
     }
 
     /// <summary>
@@ -627,8 +743,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             case EnumParseFailureMode.SetNullAndLog:
                 TypeCoercionHelper.Logger.LogWarning(
                     exception,
-                    "Failed to coerce value '{Value}' to enum property {Property} of type {EnumType}.",
-                    value,
+                    "Failed to coerce value to enum property {Property} of type {EnumType}.",
                     property.Name,
                     enumType);
                 if (Nullable.GetUnderlyingType(property.PropertyType) != null)
@@ -669,7 +784,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private sealed record MapperPlan<T>(
         int[] Ordinals,
         PropertyInfo[] Properties,
-        Action<T, DbDataReader>[] Setters);
+        Action<T, DbDataReader>[] Setters,
+        bool[] SkipNullCheck);
 
     private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, IMapperOptions options)
     {
@@ -787,6 +903,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         // byte[] → Guid / Guid?
+        // NOTE: new Guid(byte[]) uses .NET's mixed-endian layout (Data1/2/3 little-endian).
+        // This is correct when the driver returns raw bytes from a column that was written
+        // with the base SqlDialect.SerializeGuidAsBinary (also mixed-endian).
+        // If a dialect overrides SerializeGuidAsBinary to write big-endian bytes (e.g. Firebird),
+        // its driver MUST return a native Guid for the column — not byte[] — so this path is
+        // never reached and the byte-order mismatch never occurs.
         if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
         {
             var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));

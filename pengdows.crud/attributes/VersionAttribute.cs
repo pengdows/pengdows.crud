@@ -41,6 +41,6 @@ namespace pengdows.crud.attributes;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Property)]
-public class VersionAttribute : Attribute
+public sealed class VersionAttribute : Attribute
 {
 }

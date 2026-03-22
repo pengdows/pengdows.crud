@@ -8,6 +8,14 @@ allowed-tools: Read, Grep, Glob, Bash
 
 pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NET 8+. No LINQ, no tracking, no surprises - explicit SQL control with database-agnostic features.
 
+## What pengdows.crud is NOT
+
+- **Not an ORM** — no LINQ, no change tracking, no migrations, no lazy loading
+- **Not a Dapper replacement** — pengdows.crud is infrastructure; Dapper is a mapper
+- **Not like EF Core** — DatabaseContext is a connection governance engine, not a unit of work
+- **Not a repository pattern** — TableGateway is a database concept, not a domain concept
+- **Not a query builder** — SQL is yours; the framework makes it safe, correct, and portable
+
 ## Quick Start
 
 ```csharp
@@ -33,8 +41,8 @@ public class Order
 // 2. Extend TableGateway with custom methods
 public interface IOrderGateway : ITableGateway<Order, long>
 {
-    Task<Order?> GetByOrderNumberAsync(string orderNumber);
-    Task<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null);
+    ValueTask<Order?> GetByOrderNumberAsync(string orderNumber);
+    ValueTask<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null);
 }
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
@@ -43,13 +51,13 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
     {
     }
 
-    public async Task<Order?> GetByOrderNumberAsync(string orderNumber)
+    public async ValueTask<Order?> GetByOrderNumberAsync(string orderNumber)
     {
         var lookup = new Order { OrderNumber = orderNumber };
         return await RetrieveOneAsync(lookup);
     }
 
-    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null)
+    public async ValueTask<List<Order>> GetCustomerOrdersAsync(long customerId, DateTime? since = null)
     {
         var sc = BuildBaseRetrieve("o");
 
@@ -121,6 +129,13 @@ ISqlContainer BuildRetrieve(entities);        // SELECT ... WHERE pk columns mat
 ISqlContainer BuildDelete(id);                // DELETE ... WHERE id = @id
 ISqlContainer BuildUpsert(entity);            // Dialect-specific INSERT-or-UPDATE
 
+// Batch Build methods (new in 2.0)
+IReadOnlyList<ISqlContainer> BuildBatchCreate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpdate(entities);
+IReadOnlyList<ISqlContainer> BuildBatchUpsert(entities);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(ids);
+IReadOnlyList<ISqlContainer> BuildBatchDelete(entities);
+
 // ONLY async Build method (needs DB I/O when loadOriginal: true)
 ISqlContainer sc = await BuildUpdateAsync(entity);                     // UPDATE statement
 ISqlContainer sc = await BuildUpdateAsync(entity, loadOriginal: true); // Loads current row first
@@ -155,9 +170,23 @@ IAsyncEnumerable<TEntity> orders = RetrieveStreamAsync(ids);       // Returns st
 bool created  = await CreateAsync(entity, context);    // INSERT, returns true if 1 row
 int affected  = await UpdateAsync(entity);             // UPDATE, returns row count
 int affected  = await DeleteAsync(id);                 // DELETE single, returns row count
-int affected  = await DeleteAsync(ids);                // DELETE batch, returns row count
+int affected  = await DeleteAsync(ids);                 // DELETE batch, returns row count
 int affected  = await UpsertAsync(entity);             // INSERT or UPDATE
+
+// Collection operations (Delegates to Batch methods)
+int affected = await CreateAsync(entities);            // Batch INSERT
+int affected = await UpdateAsync(entities);            // Batch UPDATE
+int affected = await UpsertAsync(entities);            // Batch UPSERT
+int affected = await DeleteAsync(entities);            // Batch DELETE by primary key
+
+// Explicit Batch Operations
+int affected = await BatchCreateAsync(entities);
+int affected = await BatchUpdateAsync(entities);
+int affected = await BatchUpsertAsync(entities);
+int affected = await BatchDeleteAsync(ids);
+int affected = await BatchDeleteAsync(entities);
 ```
+
 
 ### WHERE Clause Helpers (modify an existing container)
 
@@ -201,9 +230,11 @@ await foreach (var order in LoadStreamAsync(sc))
 All execution methods return `ValueTask` (not `Task`) for reduced allocations:
 
 ```csharp
-ValueTask<int>            ExecuteNonQueryAsync(commandType);  // Row count
-ValueTask<T?>             ExecuteScalarAsync<T>(commandType); // Single value
-ValueTask<ITrackedReader> ExecuteReaderAsync(commandType);    // Data reader
+ValueTask<int>             ExecuteNonQueryAsync(commandType);          // Row count
+ValueTask<T>               ExecuteScalarRequiredAsync<T>(commandType); // Single value — throws if no rows or null
+ValueTask<T?>              ExecuteScalarOrNullAsync<T>(commandType);   // Single value — null if no rows or DBNull
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(commandType);      // Unambiguous: None/Null/Value
+ValueTask<ITrackedReader>  ExecuteReaderAsync(commandType);            // Data reader
 ```
 
 All have `CancellationToken` overloads.
@@ -225,6 +256,7 @@ var clone = template.Clone(transactionContext);  // Different context (e.g., tra
 | `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
 | `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
 | `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor`) |
+| `ITenantContextRegistry` | **Singleton** | Manages per-tenant DatabaseContext instances |
 
 ```csharp
 // Correct DI registration
@@ -237,6 +269,9 @@ services.AddSingleton<IOrderGateway>(sp =>
 
 // AuditResolver is SINGLETON - must be thread-safe (e.g. uses IHttpContextAccessor)
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
+
+// TenantContextRegistry is SINGLETON
+services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 ```
 
 ## Extending TableGateway - THE CORRECT PATTERN
@@ -246,9 +281,9 @@ services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 ```csharp
 public interface ICustomerGateway : ITableGateway<Customer, long>
 {
-    Task<Customer?> GetByEmailAsync(string email);
-    Task<List<Customer>> GetActiveCustomersAsync();
-    Task<List<Customer>> SearchByNameAsync(string namePattern);
+    ValueTask<Customer?> GetByEmailAsync(string email);
+    ValueTask<List<Customer>> GetActiveCustomersAsync();
+    ValueTask<List<Customer>> SearchByNameAsync(string namePattern);
 }
 
 public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
@@ -258,14 +293,14 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
     }
 
     // Lookup by business key
-    public async Task<Customer?> GetByEmailAsync(string email)
+    public async ValueTask<Customer?> GetByEmailAsync(string email)
     {
         var lookup = new Customer { Email = email };
         return await RetrieveOneAsync(lookup);
     }
 
     // Custom filtered query
-    public async Task<List<Customer>> GetActiveCustomersAsync()
+    public async ValueTask<List<Customer>> GetActiveCustomersAsync()
     {
         var sc = BuildBaseRetrieve("c");
 
@@ -282,7 +317,7 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
     }
 
     // Search with LIKE
-    public async Task<List<Customer>> SearchByNameAsync(string namePattern)
+    public async ValueTask<List<Customer>> SearchByNameAsync(string namePattern)
     {
         var sc = BuildBaseRetrieve("c");
 
@@ -298,6 +333,20 @@ public class CustomerGateway : TableGateway<Customer, long>, ICustomerGateway
 ```
 
 ## Audit Handling
+
+**CRITICAL: Audit handling is structural, not optional.**
+
+You declare intent with attributes. The framework enforces it.
+You cannot accidentally skip setting audit fields.
+
+- `[CreatedBy]`, `[CreatedOn]` — set on CREATE only, never modified on UPDATE
+- `[LastUpdatedBy]`, `[LastUpdatedOn]` — set on both CREATE and UPDATE
+- Both created AND updated fields are populated on CREATE — "last modified"
+  queries work correctly on rows that were never updated
+- Resolver called **once per batch**, not once per entity
+- Throws `InvalidOperationException` at execution time if `IAuditValueResolver`
+  is missing and the entity has user audit fields (`[CreatedBy]`, `[LastUpdatedBy]`)
+- Timestamp-only fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without a resolver
 
 ### IAuditValueResolver
 
@@ -344,116 +393,61 @@ public class Order
 
 **Important:** Both CreatedBy/On AND LastUpdatedBy/On are SET on CREATE.
 
-## Multi-Tenancy
+---
 
-### Pattern 1: TenantContextRegistry
+## CRITICAL: Multi-Tenancy — tenant = database
 
-Use `TenantContextRegistry` as singleton to manage per-tenant DatabaseContext instances:
+Each tenant gets a completely isolated `DatabaseContext` with its own pool governor,
+connection pool, dialect, and session settings.
+
+**Different tenants can use completely different database engines.**
+One tenant on Oracle, another on PostgreSQL, another on SQLite — all from the
+same running application, all governed correctly.
+
+**One API serves hundreds of tenants. Zero code changes to add a tenant.**
+Adding a tenant is a configuration change, not a deployment.
 
 ```csharp
-// Register TenantContextRegistry as singleton
-services.AddSingleton<TenantContextRegistry>();
-
-// Pull tenant-specific DatabaseContext from registry
-public class TenantService
+// appsettings.json
 {
-    private readonly TenantContextRegistry _registry;
-
-    public TenantService(TenantContextRegistry registry)
-    {
-        _registry = registry;
-    }
-
-    public IDatabaseContext GetContextForTenant(string tenantId)
-    {
-        return _registry.GetContext(tenantId);
-    }
+  "MultiTenant": {
+    "ApplicationName": "MyApp",
+    "Tenants": [
+      {
+        "Name": "tenant-a",
+        "DatabaseContextConfiguration": {
+          "ConnectionString": "Host=pg-a;Database=wp_a",
+          "ProviderName": "Npgsql"
+        }
+      },
+      {
+        "Name": "tenant-b",
+        "DatabaseContextConfiguration": {
+          "ConnectionString": "Data Source=oracle-b",
+          "ProviderName": "Oracle.ManagedDataAccess.Client"
+        }
+      }
+    ]
+  }
 }
+
+// Registration — one line
+services.AddMultiTenancy(configuration);
+
+// Usage — resolve tenant context, pass to any CRUD method
+var tenantCtx = _tenantRegistry.GetContext(tenantId);
+var order = await _gateway.RetrieveOneAsync(orderId, tenantCtx);
+await _gateway.CreateAsync(newOrder, tenantCtx);
+await _gateway.BatchUpdateAsync(entities, tenantCtx);
 ```
 
-### Pattern 2: Per-Tenant Database Contexts (Different Database Types)
-
-**How the optional context parameter works:**
-- **Without context parameter:** Uses the default context from constructor (simple single-database apps)
-- **With context parameter:** Uses the passed context instead (multi-tenant scenarios)
-
-**CRITICAL:** Each tenant can use a **different database type** (SQL Server, PostgreSQL, SQLite, etc.). Pass the tenant's context to **CRUD methods** to route operations to the tenant's database:
-
-```csharp
-// 1. Register TableGateway as singleton in DI
-services.AddSingleton<ITableGateway<Order, long>>(sp =>
-    new OrderGateway(defaultContext));  // Used when context param is omitted
-
-// 2. Non-multi-tenant: Use default context (no parameter needed)
-var order = await gateway.RetrieveOneAsync(orderId);  // Uses defaultContext
-
-// 3. Multi-tenant: Resolve tenant context and pass to methods
-var registry = services.GetRequiredService<ITenantContextRegistry>();
-var tenantCtx = registry.GetContext("enterprise-client");  // Could be PostgreSQL, SQL Server, etc.
-
-// 4. Get gateway from DI and pass tenant context to CRUD methods
-var gateway = services.GetRequiredService<ITableGateway<Order, long>>();
-var order = await gateway.RetrieveOneAsync(orderId, tenantCtx);  // Uses tenant's database
-await gateway.CreateAsync(newOrder, tenantCtx);                  // Inserts to tenant's database
-await gateway.UpdateAsync(order, tenantCtx);                     // Updates tenant's database
-await gateway.DeleteAsync(orderId, tenantCtx);                   // Deletes from tenant's database
-```
-
-**All CRUD methods accept optional context parameter:**
-- `CreateAsync(entity, tenantContext)` - Insert to tenant's database
-- `RetrieveOneAsync(id, tenantContext)` - Select from tenant's database
-- `RetrieveAsync(ids, tenantContext)` - Select multiple from tenant's database
-- `UpdateAsync(entity, tenantContext)` - Update in tenant's database
-- `DeleteAsync(id, tenantContext)` - Delete from tenant's database
-- `UpsertAsync(entity, tenantContext)` - Upsert to tenant's database
-
-**This pattern enables:**
-- Single TableGateway instance (singleton) for all tenants
-- Each tenant uses different database type (PostgreSQL, SQL Server, MySQL, etc.)
-- SQL automatically generated with tenant's dialect (parameter markers, quoting)
-- Connection pooling per tenant context
-- **No tenant_id filtering needed** - physical database separation
-
-**Example: Multi-Tenant Controller**
-
-```csharp
-public class OrdersController : ControllerBase
-{
-    private readonly ITableGateway<Order, long> _orderGateway;
-    private readonly ITenantContextRegistry _tenantRegistry;
-
-    public OrdersController(
-        ITableGateway<Order, long> orderGateway,
-        ITenantContextRegistry tenantRegistry)
-    {
-        _orderGateway = orderGateway;
-        _tenantRegistry = tenantRegistry;
-    }
-
-    [HttpGet("{id}")]
-    public async Task<IActionResult> Get(long id)
-    {
-        // Resolve tenant from request (header, claim, etc.)
-        var tenantId = User.FindFirst("tenant_id")?.Value;
-        var tenantCtx = _tenantRegistry.GetContext(tenantId);
-
-        // Pass tenant context - retrieves from tenant's database
-        var order = await _orderGateway.RetrieveOneAsync(id, tenantCtx);
-        return order is null ? NotFound() : Ok(order);
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Order order)
-    {
-        var tenantId = User.FindFirst("tenant_id")?.Value;
-        var tenantCtx = _tenantRegistry.GetContext(tenantId);
-
-        // Pass tenant context - inserts to tenant's database
-        await _orderGateway.CreateAsync(order, tenantCtx);
-        return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
-    }
-}
-```
+**How it works:**
+- `TenantContextRegistry` is a singleton — lazy-creates one `DatabaseContext` per tenant
+- `DatabaseContext` per tenant is created on first access, cached forever
+- SQL dialect, parameter markers, session settings, pool governor — all automatically
+  correct for that tenant's database engine
+- Pass tenant context to any CRUD method — the gateway handles everything else
+- `Invalidate(tenantId)` evicts a stale context when tenant config changes
 
 ## Core Concepts
 
@@ -495,7 +489,7 @@ public class OrderItem
 
 ```csharp
 // Inside your extended gateway class
-public async Task<List<Order>> GetRecentLargeOrdersAsync(decimal minTotal)
+public async ValueTask<List<Order>> GetRecentLargeOrdersAsync(decimal minTotal)
 {
     var sc = BuildBaseRetrieve("o");
 
@@ -532,14 +526,21 @@ Use lowest number possible:
 | Mode | Use Case |
 |------|----------|
 | `Standard` (0) | **Production default** - pool per operation |
-| `KeepAlive` (1) | Embedded DBs needing sentinel connection |
+| `KeepAlive` (1) | Sentinel connection that is NEVER used for operations — prevents engine/proxy idle timeout. Use cases: LocalDB, Aurora Serverless scaling-to-zero, RDS Proxy idle disconnection, long-running Lambda. NOT for connection reuse or efficiency. |
 | `SingleWriter` (2) | File-based SQLite/DuckDB |
 | `SingleConnection` (4) | In-memory `:memory:` databases |
 | `Best` (15) | Auto-select optimal mode for the database |
 
 ```csharp
+// Using IDatabaseContextConfiguration to specify DbMode with a factory
 services.AddSingleton<IDatabaseContext>(sp =>
-    new DatabaseContext(connStr, factory, null, DbMode.SingleWriter));
+    new DatabaseContext(
+        new DatabaseContextConfiguration { ConnectionString = connStr, DbMode = DbMode.SingleWriter },
+        SqlClientFactory.Instance));
+
+// Or using the string-based constructor (also supports DbMode directly)
+services.AddSingleton<IDatabaseContext>(sp =>
+    new DatabaseContext(connStr, "Microsoft.Data.SqlClient", DbMode.SingleWriter));
 ```
 
 ## Transactions
@@ -548,15 +549,15 @@ Transactions are **operation-scoped** - create inside methods, never store as fi
 
 ```csharp
 // Inside your extended gateway
-public async Task<bool> CancelOrderAsync(long orderId)
+public async ValueTask<bool> CancelOrderAsync(long orderId)
 {
-    using var txn = Context.BeginTransaction();
+    await using var txn = await Context.BeginTransactionAsync();
     try
     {
         var order = await RetrieveOneAsync(orderId);
         if (order == null || order.Status == OrderStatus.Shipped)
         {
-            txn.Rollback();
+            await txn.RollbackAsync();
             return false;
         }
 
@@ -565,16 +566,16 @@ public async Task<bool> CancelOrderAsync(long orderId)
 
         if (affected > 0)
         {
-            txn.Commit();
+            await txn.CommitAsync();
             return true;
         }
 
-        txn.Rollback();
+        await txn.RollbackAsync();
         return false;
     }
     catch
     {
-        txn.Rollback();
+        await txn.RollbackAsync();
         throw;
     }
 }
@@ -582,13 +583,12 @@ public async Task<bool> CancelOrderAsync(long orderId)
 // With isolation level
 using var txn = Context.BeginTransaction(IsolationLevel.Serializable);
 
-// With read-only flag
-using var txn = Context.BeginTransaction(readOnly: true);
-
-// With savepoints
-await txn.SavepointAsync("checkpoint1");
-await txn.RollbackToSavepointAsync("checkpoint1");
+// Async version with profile
+await using var txn = await Context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
 ```
+
+**Resource Safety:**
+Always use `await using` for `ITransactionContext` and `ITrackedReader` to ensure connections are released correctly.
 
 **CRITICAL: Do NOT use `TransactionScope`**
 
@@ -600,6 +600,93 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
+---
+
+## CRITICAL: Exception Handling — Catch Framework Exceptions, Not Provider Exceptions
+
+pengdows.crud translates provider-specific database failures into a uniform
+exception hierarchy. Do NOT catch provider-specific exceptions. They are
+different for every database and will break when you change providers.
+
+```csharp
+// WRONG — provider-specific, breaks when you change databases
+catch (SqlException ex) when (ex.Number == 2627) { }         // SQL Server only
+catch (NpgsqlException ex) when (ex.SqlState == "23505") { } // PostgreSQL only
+catch (MySqlException ex) when (ex.Number == 1062) { }       // MySQL only
+
+// CORRECT — uniform across all 13 databases
+catch (UniqueConstraintViolationException ex) { }
+catch (ForeignKeyViolationException ex) { }
+catch (DeadlockException ex) { /* retry logic */ }
+catch (ConcurrencyConflictException ex) { /* reload and retry */ }
+catch (CommandTimeoutException ex) { /* timeout handling */ }
+```
+
+### Exception Hierarchy
+
+```
+DatabaseException (root — all translated DB failures)
+    carries: Database, SqlState, ErrorCode, ConstraintName, IsTransient
+    InnerException preserves raw provider exception for diagnostics
+├── ConstraintViolationException
+│   ├── UniqueConstraintViolationException  — duplicate key / PK / unique value
+│   ├── ForeignKeyViolationException        — missing reference or blocked delete
+│   ├── NotNullViolationException           — required field missing
+│   └── CheckConstraintViolationException   — database rule rejected values
+├── DeadlockException                       — DB chose this transaction as victim
+├── SerializationConflictException          — serializable/distributed write conflict
+├── CommandTimeoutException                 — command timed out
+└── ConcurrencyConflictException            — version-guarded UPDATE returned 0 rows
+                                              (framework-generated, not provider-translated)
+```
+
+### Key Design Points
+
+- `InnerException` preserves the raw provider exception — diagnostic detail is not lost
+- `ConcurrencyConflictException` is auto-thrown by `UpdateAsync` when a `[Version]` column
+  is present and UPDATE affects 0 rows — it is NOT a translated provider exception
+- Non-database and internal exceptions propagate unchanged — this normalizes
+  database failures, it does not wrap everything
+- Translation is per provider family: SQL Server, PostgreSQL/CockroachDB/YugabyteDB,
+  MySQL/MariaDB/TiDB, SQLite each have dedicated translators
+
+### Common Patterns
+
+```csharp
+// Optimistic concurrency retry
+try
+{
+    await gateway.UpdateAsync(entity);
+}
+catch (ConcurrencyConflictException)
+{
+    entity = await gateway.RetrieveOneAsync(entity.Id);
+    // reapply changes and retry
+}
+
+// Duplicate insert handling
+try
+{
+    await gateway.CreateAsync(entity);
+}
+catch (UniqueConstraintViolationException ex)
+{
+    // ex.ConstraintName tells you which constraint fired
+    logger.LogWarning("Duplicate: {Constraint}", ex.ConstraintName);
+}
+
+// Deadlock retry
+try
+{
+    await gateway.UpdateAsync(entity);
+}
+catch (DeadlockException)
+{
+    await Task.Delay(jitter);
+    await gateway.UpdateAsync(entity); // retry once
+}
+```
+
 ## Version Column (Optimistic Concurrency)
 
 ```csharp
@@ -610,7 +697,7 @@ public int Version { get; set; }
 
 - **Create:** Auto-set to 1
 - **Update:** Increments and adds `WHERE version = @current`
-- **Conflict:** Returns 0 rows affected
+- **Conflict:** `UpdateAsync` automatically throws `ConcurrencyConflictException`
 
 ## Parameter Naming Convention
 
@@ -661,7 +748,7 @@ public class OrderGatewayTests
         Assert.Throws<InvalidOperationException>(() =>
         {
             using var container = context.CreateSqlContainer("SELECT 1");
-            container.ExecuteScalarAsync<int>().GetAwaiter().GetResult();
+            container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
         });
     }
 }
@@ -669,22 +756,21 @@ public class OrderGatewayTests
 
 ## Supported Databases
 
-SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, Firebird, CockroachDB, DuckDB
+SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake
+(+ AuroraMySql and AuroraPostgreSql — auto-detected at runtime, no extra setup)
 
 Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 
-## TDD Requirements
+## Testing Requirements
 
-**ALL code changes MUST follow TDD:**
-1. Write test FIRST
-2. Run test - verify it fails
-3. Write minimal implementation
-4. Refactor while green
-5. Repeat
+Tests are required. Coverage minimums are enforced in CI.
 
-- Minimum 83% coverage (CI enforced)
-- Target 95%+ for new features
+- Minimum **83% branch coverage** (CI blocks merge if below)
+- Target **95%+** for new features and public API changes
+- Write tests once the design stabilizes
 - NO skipped tests
+- `pengdows.crud.fakeDb` enables unit testing without a real database
+- Integration tests run against all 13 real databases
 
 ## Core Invariants
 
@@ -695,8 +781,10 @@ Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** - SQLite :memory: = SingleConnection
+8. **DbMode.Best auto-selects** - SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB = SingleWriter; LocalDB = KeepAlive; all others = Standard
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations
 12. **All async methods have CancellationToken overloads** - pass tokens through for proper cancellation
+13. **Multi-tenancy: tenant = database** — `TenantContextRegistry` is singleton; pass tenant context to CRUD methods; one gateway serves all tenants; dialect, pool, and session settings are all per-tenant automatically
+14. **Audit handling is structural** — declare with attributes, framework enforces; `IAuditValueResolver` missing + user audit fields = `InvalidOperationException`; cannot be accidentally skipped

@@ -16,7 +16,7 @@ namespace pengdows.crud.Tests;
 /// Test wrapper that allows pre-configuring schema and scalar results for
 /// <see cref="DataSourceInformation"/> tests.
 /// </summary>
-public class FakeTrackedConnection : TrackedConnection, ITrackedConnection
+internal class FakeTrackedConnection : TrackedConnection, ITrackedConnection
 {
     private readonly DataTable _schema;
 

@@ -18,7 +18,7 @@ public class BuildWhereTests : SqlLiteContextTestBase
     public void BuildWhere_WithExistingClause_AppendsAnd()
     {
         var sc = Context.CreateSqlContainer("SELECT 1 WHERE 1=1");
-        sc.HasWhereAppended = true;
+        ((SqlContainer)sc).HasWhereAppended = true;
         var wrapped = Context.WrapObjectName("Id");
         _helper.BuildWhere(wrapped, new int?[] { 1, 2 }, sc);
         var sql = sc.Query.ToString();

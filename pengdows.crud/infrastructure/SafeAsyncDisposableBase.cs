@@ -16,7 +16,7 @@
 // - TrackDisposeState: Virtual property to opt-out (for singletons).
 // - GC.SuppressFinalize called after cleanup completes.
 // - Exception handling: Both sync and async paths call OnDisposeException for observability.
-// - Preserves first exception, continues cleanup, then rethrows (async) or swallows (sync).
+// - Preserves the first exception, continues cleanup, then rethrows it after cleanup completes.
 // =============================================================================
 
 using System.Runtime.CompilerServices;
@@ -37,13 +37,15 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
             return;
         }
 
+        Exception? first = null;
+
         try
         {
             DisposeManaged();
         }
         catch (Exception ex)
         {
-            OnDisposeException(ex, nameof(DisposeManaged));
+            first = ex;
         }
 
         try
@@ -52,11 +54,23 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
         }
         catch (Exception ex)
         {
-            OnDisposeException(ex, nameof(DisposeUnmanaged));
+            if (first is null)
+            {
+                first = ex;
+            }
+            else
+            {
+                OnDisposeException(ex, nameof(DisposeUnmanaged));
+            }
         }
         finally
         {
             GC.SuppressFinalize(this);
+        }
+
+        if (first is not null)
+        {
+            ExceptionDispatchInfo.Capture(first).Throw();
         }
     }
 
@@ -129,7 +143,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>Optional visibility hook for swallowed exceptions. Default no-op.</summary>
+    /// <summary>Optional visibility hook for secondary cleanup exceptions that are suppressed. Default no-op.</summary>
     protected virtual void OnDisposeException(Exception ex, string phase)
     {
     }

@@ -28,7 +28,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.isolation;
 
-public sealed class IsolationResolver : IIsolationResolver
+internal sealed class IsolationResolver : IIsolationResolver
 {
     private readonly SupportedDatabase _product;
     private readonly Dictionary<IsolationProfile, IsolationLevel> _profileMap;
@@ -169,8 +169,9 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.TiDb => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
+                IsolationLevel.RepeatableRead
+                // Note: TiDB accepts SERIALIZABLE syntax but silently treats it as REPEATABLE READ.
+                // Omitting it prevents callers from relying on semantics that are never enforced.
             },
             SupportedDatabase.Oracle => new HashSet<IsolationLevel>
             {
@@ -183,8 +184,8 @@ public sealed class IsolationResolver : IIsolationResolver
             },
             SupportedDatabase.Snowflake => new HashSet<IsolationLevel>
             {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.Serializable
+                IsolationLevel.ReadCommitted
+                // Note: Snowflake only supports READ COMMITTED. Other levels are not available.
             },
             _ => new HashSet<IsolationLevel>
             {
@@ -254,8 +255,8 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.TiDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+                [IsolationProfile.StrictConsistency]    = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable
+                [IsolationProfile.FastWithRisks]        = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
             {
@@ -272,8 +273,8 @@ public sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.Snowflake => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+                [IsolationProfile.StrictConsistency]    = IsolationLevel.ReadCommitted, // Only level Snowflake supports
+                [IsolationProfile.FastWithRisks]        = IsolationLevel.ReadCommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

@@ -42,7 +42,7 @@ public class ConnectionFailureHelperTests
     {
         using var context = ConnectionFailureHelper.CreateFailOnTransactionContext();
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<TransactionException>(() =>
             context.BeginTransaction());
     }
 

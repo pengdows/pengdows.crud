@@ -79,6 +79,30 @@ public class KeepAliveConnectionStrategyBranchTests
         Assert.Null(result.dataSourceInfo);
     }
 
+    [Fact]
+    public void HandleDialectDetection_WhenOwnedConnectionDisposeFails_ReturnsNullWithoutThrowing()
+    {
+        var factory = new ToggleFailureDbFactory
+        {
+            ThrowOnDispose = true
+        };
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive-dispose-fail.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory);
+        var strategy = new KeepAliveConnectionStrategy(context);
+
+        var result = strategy.HandleDialectDetection(null, null, NullLoggerFactory.Instance);
+
+        Assert.Null(result.dialect);
+        Assert.Null(result.dataSourceInfo);
+        Assert.True(factory.DisposeCount > 0);
+    }
+
     private sealed class ToggleFailureDbFactory : DbProviderFactory
     {
         public bool FailOpen { get; set; }
