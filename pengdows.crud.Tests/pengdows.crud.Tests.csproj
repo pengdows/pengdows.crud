@@ -56,7 +56,23 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="6.0.4" />
+        <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
+        <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj"/>
+        <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="xunit.runner.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="Mocks\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="coverlet.collector" Version="6.0.4"/>
     </ItemGroup>
 
 

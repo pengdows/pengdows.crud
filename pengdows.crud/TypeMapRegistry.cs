@@ -310,6 +310,13 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             // directly (JIT-level call, no reflection overhead per row).
             ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
         }
+
+        if (ci.EnumAsString)
+        {
+            // Pre-compile a delegate that unboxes object → TEnum and calls EnumStringCache<TEnum>.GetOrAdd()
+            // directly (JIT-level call, no reflection overhead per row).
+            ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
+        }
     }
 
     private static void AttachAuditReferences(TableInfo tableInfo, ColumnInfo ci)

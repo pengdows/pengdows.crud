@@ -48,6 +48,11 @@ internal interface ITableInfo
     IColumnInfo CorrelationColumn { get; }
 
     /// <summary>
+    /// Column used as a correlation token for identity retrieval.
+    /// </summary>
+    IColumnInfo CorrelationColumn { get; set; }
+
+    /// <summary>
     /// Column capturing the last updater identifier.
     /// </summary>
     IColumnInfo LastUpdatedBy { get; }

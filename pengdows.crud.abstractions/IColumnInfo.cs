@@ -62,6 +62,11 @@ internal interface IColumnInfo
     bool EnumAsString { get; }
 
     /// <summary>
+    /// True when the enum should be stored as its string name rather than numeric value.
+    /// </summary>
+    bool EnumAsString { get; set; }
+
+    /// <summary>
     /// True when the column stores JSON data.
     /// </summary>
     bool IsJsonType { get; }
@@ -85,6 +90,11 @@ internal interface IColumnInfo
     /// True when the column is used as a correlation token for identity retrieval.
     /// </summary>
     bool IsCorrelationToken { get; }
+
+    /// <summary>
+    /// True when the column is used as a correlation token for identity retrieval.
+    /// </summary>
+    bool IsCorrelationToken { get; set; }
 
     /// <summary>
     /// Order of the column within a composite primary key.

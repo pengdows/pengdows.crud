@@ -478,6 +478,13 @@ public interface ISqlDialect
 
 
     /// <summary>
+    /// Determines whether SNAPSHOT isolation level is enabled.
+    /// </summary>
+    /// <param name="connection">Connection to check.</param>
+    /// <returns>True if snapshot isolation is enabled.</returns>
+    bool IsSnapshotIsolationOn(ITrackedConnection connection);
+
+    /// <summary>
     /// Determines whether the given exception represents a unique constraint violation.
     /// </summary>
     /// <param name="ex">Exception to inspect.</param>
@@ -504,6 +511,12 @@ public interface ISqlDialect
     /// <param name="ex">Exception to inspect.</param>
     /// <returns>True if the exception indicates a check-constraint violation.</returns>
     bool IsCheckConstraintViolation(DbException ex) => false;
+
+    /// <summary>
+    /// Generates a unique parameter name for the current operation.
+    /// </summary>
+    /// <returns>A unique parameter name (e.g., p1, p2, p42).</returns>
+    string GenerateParameterName();
 
     /// <summary>
     /// Generates a unique parameter name for the current operation.

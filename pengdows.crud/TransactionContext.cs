@@ -971,4 +971,68 @@ MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollecto
 
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    // Internal async factory used by DatabaseContext
+    internal static async Task<TransactionContext> CreateAsync(
+        IDatabaseContext context,
+        IsolationLevel isolationLevel = IsolationLevel.Unspecified,
+        ExecutionType? executionType = null,
+        bool isReadOnly = false,
+        ILogger<TransactionContext>? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (resolvedExecType, resolvedIsolation, connectionProvider) =
+            ResolveCreationParameters(context, isolationLevel, executionType, isReadOnly);
+
+        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+
+        var transaction = context.Product == SupportedDatabase.DuckDB
+            ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
+            : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
+
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, isReadOnly, logger);
+
+        if (isReadOnly)
+        {
+            try
+            {
+                await tx._dialect.TryEnterReadOnlyTransactionAsync(tx, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Release the pinned connection and roll back — do NOT dispose the parent context,
+                // which is a singleton that must remain usable after a failed BeginTransactionAsync.
+                // (The sync constructor path only closes the connection; this matches that behaviour.)
+                await tx.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        return tx;
+    }
+
+    private static async Task OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+        ITrackedConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

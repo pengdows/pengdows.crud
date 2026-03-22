@@ -212,7 +212,10 @@ internal class PostgreSqlDialect : SqlDialect
     // Error:   UPDATE SET t.col = value  -- "column 't' of relation 'table' does not exist"
     public override bool MergeUpdateRequiresTargetAlias => false;
 
-    public override bool SupportsInsertReturning => true;
+    // PostgreSQL MERGE does NOT allow table alias on left side of UPDATE SET
+    // Correct: UPDATE SET col = value
+    // Error:   UPDATE SET t.col = value  -- "column 't' of relation 'table' does not exist"
+    public override bool MergeUpdateRequiresTargetAlias => false;
 
     public override string GetLastInsertedIdQuery()
     {
