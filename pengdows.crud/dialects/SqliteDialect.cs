@@ -245,48 +245,6 @@ internal class SqliteDialect : SqlDialect
                dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
     }
 
-    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
-    {
-        if (value is bool b && IsNumericDbType(type))
-        {
-            return base.CreateDbParameter(name, type, b ? 1 : 0);
-        }
-
-        if (value is DateTime dt)
-        {
-            var utc = NormalizeUtc(dt);
-            return base.CreateDbParameter(name, DbType.String, utc.ToString("o", CultureInfo.InvariantCulture));
-        }
-
-        if (value is DateTimeOffset dto)
-        {
-            return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
-        }
-
-        // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind
-        // DbType.Decimal correctly — the driver stores 0 instead of the actual value.
-        // Only convert when the caller declared DbType.Decimal; other mismatches (e.g.
-        // DbType.String + decimal) fall through to the base validator so they still throw.
-        if (value is decimal decValue && type == DbType.Decimal)
-        {
-            return base.CreateDbParameter(name, DbType.Double, (double)decValue);
-        }
-
-        var p = base.CreateDbParameter(name, type, value);
-
-        if (value is byte[] bytes && (type == DbType.Binary || type == DbType.Object))
-        {
-            p.Size = bytes.Length;
-        }
-
-        return p;
-    }
-
-    public override object? PrepareParameterValue(object? value, DbType dbType)
-    {
-        return base.PrepareParameterValue(value, dbType);
-    }
-
     private static bool IsNumericDbType(DbType type)
     {
         return type is DbType.Byte or DbType.SByte
@@ -338,22 +296,6 @@ internal class SqliteDialect : SqlDialect
         }
 
         return p;
-    }
-
-    public override object? PrepareParameterValue(object? value, DbType dbType)
-    {
-        return base.PrepareParameterValue(value, dbType);
-    }
-
-    private static bool IsNumericDbType(DbType type)
-    {
-        return type is DbType.Byte or DbType.SByte
-            or DbType.Int16 or DbType.UInt16
-            or DbType.Int32 or DbType.UInt32
-            or DbType.Int64 or DbType.UInt64
-            or DbType.Single or DbType.Double
-            or DbType.Decimal or DbType.Currency
-            or DbType.VarNumeric;
     }
 
     // Connection pooling properties for SQLite (provider-aware)

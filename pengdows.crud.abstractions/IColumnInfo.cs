@@ -59,11 +59,6 @@ internal interface IColumnInfo
     /// <summary>
     /// True when the enum should be stored as its string name rather than numeric value.
     /// </summary>
-    bool EnumAsString { get; }
-
-    /// <summary>
-    /// True when the enum should be stored as its string name rather than numeric value.
-    /// </summary>
     bool EnumAsString { get; set; }
 
     /// <summary>
@@ -85,11 +80,6 @@ internal interface IColumnInfo
     /// True when the column participates in the primary key.
     /// </summary>
     bool IsPrimaryKey { get; }
-
-    /// <summary>
-    /// True when the column is used as a correlation token for identity retrieval.
-    /// </summary>
-    bool IsCorrelationToken { get; }
 
     /// <summary>
     /// True when the column is used as a correlation token for identity retrieval.

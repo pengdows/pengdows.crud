@@ -702,43 +702,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private DbCommand CreateRawCommand(ITrackedConnection conn)
     {
-        var dbCommand = CreateRawCommand(conn);
-
-        if (_query.Length == 0)
-        {
-            return dbCommand;
-        }
-
-        // Mirror the normal execution path so manually-created commands are usable.
-        var cmdText = _query.ToString();
-        if (cmdText.Contains("{P}"))
-        {
-            cmdText = RenderParams(cmdText);
-        }
-        else if (ParamSequence.Count > 0)
-        {
-            // No {P} placeholders — clear any stale sequence from a previous render
-            // so AddParametersToCommand doesn't bind using an outdated mapping.
-            ParamSequence.Clear();
-            _renderedParameterMap?.Clear();
-        }
-
-        dbCommand.CommandType = CommandType.Text;
-        dbCommand.CommandText = cmdText;
-
-        if (_parameters.Count > _context.MaxParameterLimit)
-        {
-            throw new InvalidOperationException(
-                $"Query exceeds the maximum parameter limit of {_context.MaxParameterLimit} for {_context.DatabaseProductName}.");
-        }
-
-        AddParametersToCommand(dbCommand);
-
-        return dbCommand;
-    }
-
-    private DbCommand CreateRawCommand(ITrackedConnection conn)
-    {
         var cmd = conn.CreateCommand();
         if (_context is TransactionContext transactionContext)
         {
@@ -2166,15 +2129,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _parameters.Clear();
         _parameterOwners.Clear();
         Volatile.Write(ref _deferParameterPooling, 0);
-    }
-
-    void IReaderLifetimeListener.OnReaderDisposed()
-    {
-        var remaining = Interlocked.Decrement(ref _activeReaders);
-        if (remaining == 0 && Volatile.Read(ref _deferParameterPooling) == 1)
-        {
-            ReturnParametersToPool();
-        }
     }
 
     void IReaderLifetimeListener.OnReaderDisposed()

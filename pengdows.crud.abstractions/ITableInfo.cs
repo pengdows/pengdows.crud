@@ -45,11 +45,6 @@ internal interface ITableInfo
     /// <summary>
     /// Column used as a correlation token for identity retrieval.
     /// </summary>
-    IColumnInfo CorrelationColumn { get; }
-
-    /// <summary>
-    /// Column used as a correlation token for identity retrieval.
-    /// </summary>
     IColumnInfo CorrelationColumn { get; set; }
 
     /// <summary>

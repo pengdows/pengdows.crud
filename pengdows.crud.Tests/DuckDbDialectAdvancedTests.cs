@@ -294,14 +294,6 @@ public class DuckDbDialectAdvancedTests
     }
 
     [Fact]
-    public void GetReadOnlySessionSettings_Should_Return_SetAccessMode()
-    {
-        var settings = _dialect.GetReadOnlySessionSettings();
-
-        Assert.Equal("SET access_mode = 'read_only';", settings);
-    }
-
-    [Fact]
     public void ApplyConnectionSettings_Should_Add_ReadOnly_Access_Mode_For_File_Connections()
     {
         var context = new DatabaseContext("Data Source=/path/to/file.duckdb", _factory);
