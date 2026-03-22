@@ -7,7 +7,7 @@
     <IsPackable>false</IsPackable>
     <CollectCoverage>true</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
-    <CoverletOutput>../TestResults/</CoverletOutput>
+    <CoverletOutput>../TestResults/stormgate-coverage/</CoverletOutput>
     <Threshold>85</Threshold>
     <ThresholdType>line</ThresholdType>
     <Include>[pengdows.stormgate]*</Include>
