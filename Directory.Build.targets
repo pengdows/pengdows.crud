@@ -6,7 +6,7 @@
 
     <Target Name="BuildInterfaceApiCheckTool"
             BeforeTargets="ValidateInterfaceBaseline"
-            Condition="'$(SkipInterfaceValidation)' != 'true' And !Exists('$(InterfaceApiCheckTool)')">
+            Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And !Exists('$(InterfaceApiCheckTool)')">
         <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)tools/interface-api-check/InterfaceApiCheck.csproj&quot; -c Release"
               ContinueOnError="false"
               IgnoreExitCode="false"/>
