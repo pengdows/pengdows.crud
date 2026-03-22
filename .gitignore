@@ -69,3 +69,4 @@ valuetask-validation/
 
 # Local MSBuild overrides (never commit)
 Directory.Build.user.props
+ORACLE_TALK.md
