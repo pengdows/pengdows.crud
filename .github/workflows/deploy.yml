@@ -362,22 +362,11 @@ jobs:
             fi
           done
 
-          any_published=false
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
-            if [[ "$status" == "200" ]]; then
-              any_published=true
-              break
-            fi
-          done
-
           if [[ "$all_published" == "true" ]]; then
             echo "Version $VERSION already exists for all packages — skipping publish."
             echo "skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$any_published" == "true" ]]; then
-            echo "❌ Version $VERSION is partially published. Resolve NuGet state before retrying."
-            exit 1
           else
-            echo "Version $VERSION is new for all packages — proceeding with publish."
+            echo "Version $VERSION is not fully published — proceeding (--skip-duplicate handles already-pushed packages)."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -387,16 +376,20 @@ jobs:
           set -euo pipefail
           dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key "$NUGET_API_KEY"
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
           dotnet nuget push pengdows.crud.fakeDb/bin/Release/pengdows.crud.fakeDb.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key "$NUGET_API_KEY"
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
           dotnet nuget push pengdows.crud/bin/Release/pengdows.crud.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key "$NUGET_API_KEY"
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
           dotnet nuget push pengdows.stormgate/bin/Release/pengdows.stormgate.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key "$NUGET_API_KEY"
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
@@ -409,8 +402,20 @@ jobs:
       - name: Tag the release
         if: steps.nuget_check.outputs.skip != 'true'
         run: |
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          TAG="v${{ steps.version.outputs.version }}"
+          existing=$(git tag -l "$TAG")
+          if [[ -n "$existing" ]]; then
+            tagged_sha=$(git rev-list -n1 "$TAG")
+            if [[ "$tagged_sha" == "${{ github.sha }}" ]]; then
+              echo "Tag $TAG already points at this commit — skipping tag creation."
+            else
+              echo "❌ Tag $TAG exists but points at $tagged_sha, not ${{ github.sha }}."
+              exit 1
+            fi
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
 
       - name: Create GitHub Release
         if: steps.nuget_check.outputs.skip != 'true'
