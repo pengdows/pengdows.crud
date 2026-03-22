@@ -177,6 +177,52 @@ public class DataSourceResolverTests
         Assert.IsType<GenericDbDataSource>(dataSource);
     }
 
+    // P1: SanitizeConnectionString must log a Warning (not just Debug) and include the names of
+    // dropped keys when the provider's builder silently removes unknown keywords.
+    // A stripped Encrypt=True or SslMode=Required would be a silent security regression.
+    [Fact]
+    public void SanitizeConnectionString_LogsWarningWithRemovedKeyNames_WhenBuilderDropsKeys()
+    {
+        var factory = new FactoryWithKeyFilteringBuilder();
+
+        // "Unknown=secret" is stripped by the filtering builder; "Server=localhost" is kept.
+        var ds = _resolver.CreateDataSource(factory, "Server=localhost;Unknown=secret");
+
+        // Must warn and include the removed key name
+        _mockLogger.Verify(l => l.Log(
+            LogLevel.Warning,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((v, _) =>
+                v.ToString()!.Contains("Unknown") &&
+                v.ToString()!.Contains("removed")),
+            null,
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+    }
+
+    private class FactoryWithKeyFilteringBuilder : MockFactory
+    {
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+            => new KeyFilteringBuilder();
+
+        // Accepts only "server"; any other keyword is silently dropped on assignment.
+        private sealed class KeyFilteringBuilder : DbConnectionStringBuilder
+        {
+            private static readonly HashSet<string> AllowedKeys =
+                new(StringComparer.OrdinalIgnoreCase) { "server" };
+
+            public override object this[string keyword]
+            {
+                get => base[keyword];
+                set
+                {
+                    if (AllowedKeys.Contains(keyword))
+                        base[keyword] = value;
+                    // else: silently dropped — this simulates MySQL builder ignoring unknown keys
+                }
+            }
+        }
+    }
+
     private class MockFactory : DbProviderFactory
     {
         public override DbConnection CreateConnection() => new Mock<DbConnection>().Object;

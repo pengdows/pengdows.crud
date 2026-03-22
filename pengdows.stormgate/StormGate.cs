@@ -189,11 +189,24 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         public override void ChangeDatabase(string databaseName) =>
             _inner.ChangeDatabase(databaseName);
 
-        public override void Open() =>
-            throw new InvalidOperationException("Connection already opened by StormGate.");
+        // P2: Return silently if already open — Dapper and EF Core call Open() defensively
+        // on connections they didn't open. NotSupportedException signals that direct open
+        // is not valid for this wrapper type (the BCL convention for "invalid on this type").
+        public override void Open()
+        {
+            if (_inner.State == ConnectionState.Open)
+                return;
 
-        public override Task OpenAsync(CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("Connection already opened by StormGate.");
+            throw new NotSupportedException("PermitConnection cannot be opened directly; obtain connections via StormGate.OpenAsync().");
+        }
+
+        public override Task OpenAsync(CancellationToken cancellationToken)
+        {
+            if (_inner.State == ConnectionState.Open)
+                return Task.CompletedTask;
+
+            throw new NotSupportedException("PermitConnection cannot be opened directly; obtain connections via StormGate.OpenAsync().");
+        }
 
         public override void Close()
         {
@@ -229,31 +242,58 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             return _inner.BeginTransaction(isolationLevel);
         }
 
+        // Minor: override the async path to use the inner connection's native async transaction
+        // start rather than falling back to the sync BeginDbTransaction default in DbConnection.
+        // Providers such as Npgsql and MySqlConnector support truly async transaction begin.
+        protected override async ValueTask<DbTransaction> BeginDbTransactionAsync(
+            IsolationLevel isolationLevel,
+            CancellationToken cancellationToken)
+        {
+            ThrowIfInnerClosed();
+            return await _inner.BeginTransactionAsync(isolationLevel, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         protected override DbCommand CreateDbCommand()
         {
             ThrowIfInnerClosed();
             return _inner.CreateCommand();
         }
 
+        // P1: Check _released first. If Close() threw, the finally block still released the
+        // permit (_released = 1) but inner.State may remain Open. Without this check,
+        // CreateCommand/BeginTransaction would succeed on a connection whose permit was returned.
+        // _disposed is checked last: a disposed connection is also unusable, but _released
+        // is the more reliable signal that this wrapper's lifetime has ended.
         private void ThrowIfInnerClosed()
         {
+            if (Volatile.Read(ref _released) != 0)
+                throw new InvalidOperationException("Connection is closed.");
+
             if (_inner.State == ConnectionState.Closed)
                 throw new InvalidOperationException("Connection is closed.");
-            
+
             if (Volatile.Read(ref _disposed) != 0)
                 throw new ObjectDisposedException(nameof(PermitConnection));
         }
 
+        // P0: Call base.Dispose(disposing) BEFORE _inner.Dispose() so that the
+        // DbConnection.Dispose(bool) → Close() → _inner.Close() sequence completes
+        // while the inner connection is still in a valid state. Some providers are not
+        // idempotent if Close() is called after Dispose(). After base.Dispose runs,
+        // _inner.Dispose() is safe because the connection has already been cleanly closed.
+        // Note: _released is volatile and Read outside _lifecycleLock by design — the lock
+        // provides the memory barrier for mutations; the volatile read provides a fast-path
+        // check. A future contributor should NOT move this into the lock (deadlock risk).
         protected override void Dispose(bool disposing)
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
 
-            if (disposing)
-                _inner.Dispose();
+            base.Dispose(disposing);   // → Close() → _inner.Close() + ReleasePermitOnce()
 
-            ReleasePermitOnce();
-            base.Dispose(disposing);
+            if (disposing)
+                _inner.Dispose();      // safe: inner has already been closed above
         }
 
         public override async ValueTask DisposeAsync()

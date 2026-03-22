@@ -35,8 +35,10 @@ internal sealed class GenericDbDataSource : DbDataSource
 
     protected override void Dispose(bool disposing)
     {
-        // No owned resources.
-        // Note: _factory is not disposed here as it is owned by the caller (typically a static singleton).
+        // _factory is not disposed here. DbProviderFactory instances are expected to be singletons
+        // (e.g. SqlClientFactory.Instance, NpgsqlFactory.Instance) and must outlive this data source.
+        // If a caller passes a factory with a shorter lifetime, the caller is responsible for disposing
+        // it after this data source has been disposed.
     }
 
     protected override ValueTask DisposeAsyncCore() => ValueTask.CompletedTask;
