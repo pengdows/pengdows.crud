@@ -400,6 +400,12 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
 
+      - name: Configure git identity
+        if: steps.nuget_check.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Tag the release
         if: steps.nuget_check.outputs.skip != 'true'
         run: |
@@ -488,8 +494,6 @@ jobs:
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Directory.Build.props .github/coverage-baseline.txt .github/coverage-baseline.stormgate.txt
           git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
 
