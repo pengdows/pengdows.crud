@@ -190,6 +190,26 @@ public class PermitConnectionTests
     }
 
     [Fact]
+    public async Task DisposeAsync_ClosesInnerBeforeDisposingIt_WhenConnectionIsOpen()
+    {
+        var callOrder = new List<string>();
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.CloseAsync()).Callback(() => callOrder.Add("CloseAsync"));
+        _mockInner.Setup(c => c.DisposeAsync()).Callback(() => callOrder.Add("DisposeAsync"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        await conn.DisposeAsync();
+
+        Assert.Contains("CloseAsync", callOrder);
+        Assert.Contains("DisposeAsync", callOrder);
+        Assert.True(
+            callOrder.IndexOf("CloseAsync") < callOrder.IndexOf("DisposeAsync"),
+            $"Expected CloseAsync before DisposeAsync but got: [{string.Join(", ", callOrder)}]");
+    }
+
+    [Fact]
     public async Task ReleasePermitOnce_IsIdempotent()
     {
         // Arrange

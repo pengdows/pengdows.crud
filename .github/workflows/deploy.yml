@@ -364,11 +364,22 @@ jobs:
             fi
           done
 
+          any_published=false
+          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+            if [[ "$status" == "200" ]]; then
+              any_published=true
+              break
+            fi
+          done
+
           if [[ "$all_published" == "true" ]]; then
             echo "Version $VERSION already exists for all packages — skipping publish."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$any_published" == "true" ]]; then
+            echo "❌ Version $VERSION is partially published. Resolve NuGet state before retrying."
+            exit 1
           else
-            echo "Version $VERSION is not fully published — proceeding (--skip-duplicate handles already-pushed packages)."
+            echo "Version $VERSION is new for all packages — proceeding with publish."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 

@@ -340,6 +340,11 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
             try
             {
+                if (_inner.State != ConnectionState.Closed)
+                {
+                    await _inner.CloseAsync().ConfigureAwait(false);
+                }
+
                 await _inner.DisposeAsync().ConfigureAwait(false);
             }
             finally

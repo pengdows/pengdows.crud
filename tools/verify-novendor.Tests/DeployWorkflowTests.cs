@@ -55,4 +55,20 @@ public class DeployWorkflowTests
         Assert.DoesNotContain("<AssemblyVersion>", csproj, StringComparison.Ordinal);
         Assert.DoesNotContain("<FileVersion>", csproj, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void PublishWorkflow_BlocksPartialNuGetPublishesBeforeTaggingRelease()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var workflowPath = Path.Combine(repoRoot, ".github", "workflows", "deploy.yml");
+
+        Assert.True(File.Exists(workflowPath), $"Workflow file not found: {workflowPath}");
+
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("any_published=false", workflow, StringComparison.Ordinal);
+        Assert.Contains("elif [[ \"$any_published\" == \"true\" ]]; then", workflow, StringComparison.Ordinal);
+        Assert.Contains("Version $VERSION is partially published. Resolve NuGet state before retrying.", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("Version $VERSION is not fully published — proceeding (--skip-duplicate handles already-pushed packages).", workflow, StringComparison.Ordinal);
+    }
 }
