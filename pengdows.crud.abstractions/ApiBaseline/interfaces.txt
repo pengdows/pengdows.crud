@@ -203,6 +203,7 @@ method pengdows.crud.connection.IConnectionLocalState::IsAlreadyPreparedForShape
 method pengdows.crud.connection.IConnectionLocalState::MarkSessionSettingsApplied() -> void
 method pengdows.crud.connection.IConnectionLocalState::MarkShapePrepared(string) -> System.ValueTuple`2<bool, int>
 method pengdows.crud.connection.IConnectionLocalState::Reset() -> void
+method pengdows.crud.dialects.ISqlDialect::AnalyzeException(System.Exception) -> pengdows.crud.DbExceptionInfo
 method pengdows.crud.dialects.ISqlDialect::AppendPaging(pengdows.crud.ISqlQueryBuilder, int, int) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
@@ -223,6 +224,9 @@ method pengdows.crud.dialects.ISqlDialect::GetSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetSequenceNextValQuery(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetVersionQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::HasSessionScopedLastIdFunction() -> bool
+method pengdows.crud.dialects.ISqlDialect::IsCheckConstraintViolation(System.Data.Common.DbException) -> bool
+method pengdows.crud.dialects.ISqlDialect::IsForeignKeyViolation(System.Data.Common.DbException) -> bool
+method pengdows.crud.dialects.ISqlDialect::IsNotNullViolation(System.Data.Common.DbException) -> bool
 method pengdows.crud.dialects.ISqlDialect::IsUniqueViolation(System.Data.Common.DbException) -> bool
 method pengdows.crud.dialects.ISqlDialect::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.dialects.ISqlDialect::MakeParameterName(string) -> string
@@ -387,11 +391,11 @@ property pengdows.crud.dialects.ISqlDialect::SupportsJsonTable : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsJsonTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsLimitOffset : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsMerge : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::SupportsMergeReturning : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsMultidimensionalArrays : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsNamedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsNamespaces : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOffsetFetch : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsOnConflictWhere : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOnDuplicateKey : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOuterJoins : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPropertyGraphQueries : bool { get; }

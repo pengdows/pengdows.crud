@@ -200,13 +200,13 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsInsertOnConflict => true;
+    public override bool SupportsOnConflictWhere => true; // Supports WHERE predicate on DO UPDATE (9.5+)
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
     public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
     public override bool SupportsJsonTable => IsVersionAtLeast(18);
     public override bool SupportsMergeReturning => IsVersionAtLeast(18);
-
     // PostgreSQL MERGE does NOT allow table alias on left side of UPDATE SET
     // Correct: UPDATE SET col = value
     // Error:   UPDATE SET t.col = value  -- "column 't' of relation 'table' does not exist"

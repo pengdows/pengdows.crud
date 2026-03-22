@@ -1,13 +1,29 @@
 // =============================================================================
 // FILE: PrimaryKeyTableGateway.Upsert.cs
 // PURPOSE: UPSERT operations keyed on [PrimaryKey] columns.
-//          Provider-specific: MERGE (SQL Server/Oracle/Firebird), ON CONFLICT (PostgreSQL),
-//          ON DUPLICATE KEY UPDATE (MySQL/MariaDB).
+//
+// AI SUMMARY:
+// - BuildUpsert() - Dispatches to dialect-specific builder; throws if no [PrimaryKey] or no
+//   updateable columns (pure junction table), unless Firebird which supports pure-key upsert.
+// - UpsertAsync() - Executes BuildUpsert, then post-execute concurrency check:
+//   * 0 rows + [Version] + MERGE/ON CONFLICT dialect → ConcurrencyConflictException
+//   * MySQL/MariaDB ON DUPLICATE KEY and Firebird: conflict not detectable, no exception
+// - Database-specific syntax:
+//   * SQL Server/Oracle/Snowflake: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//   * PostgreSQL/CockroachDB: INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver]
+//   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard)
+//   * Firebird: UPDATE OR INSERT ... MATCHING (...)
+// - Batch variants (BuildBatchUpsert, BatchUpsertAsync):
+//   * ON CONFLICT path: multi-row insert with version WHERE predicate from PkTemplates.UpsertOnConflictVersionWhere
+//   * ON DUPLICATE KEY: multi-row insert with alias quoting
+//   * MERGE/Firebird: falls back to per-entity BuildUpsert loop
+// - Throws NotSupportedException for fallback/unknown dialects.
 // =============================================================================
 
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -76,8 +92,23 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         await using var sc = BuildUpsert(entity, ctx);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+        if (rowsAffected == 0 && _versionColumn != null)
+        {
+            var canDetect = dialect.SupportsOnConflictWhere
+                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+            if (canDetect)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                    ctx.Product);
+            }
+        }
+
+        return rowsAffected;
     }
 
     // =========================================================================
@@ -238,6 +269,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
 
+        if (template.UpsertOnConflictVersionWhere != null)
+        {
+            sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
+        }
+
         sc.AddParameters(parameters);
         return sc;
     }
@@ -344,8 +380,14 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 .Append(mergeSource)
                 .Append(" ON ")
                 .Append(onClause)
-                .Append(" WHEN MATCHED THEN UPDATE SET ")
-                .Append(template.UpsertUpdateFragment)
+                // Version check in WHEN MATCHED arm (not in ON clause) ensures a stale-version row
+                // stays unmatched → 0 rows → ConcurrencyConflictException, without triggering the
+                // WHEN NOT MATCHED INSERT arm (which would produce a unique constraint violation).
+                .Append(template.UpsertMergeVersionCondition != null
+                    ? $" WHEN MATCHED {template.UpsertMergeVersionCondition} THEN UPDATE SET "
+                    : " WHEN MATCHED THEN UPDATE SET ");
+
+            sc.Query.Append(template.UpsertUpdateFragment)
                 .Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
                 .Append(") VALUES (")
@@ -476,6 +518,12 @@ public partial class PrimaryKeyTableGateway<TEntity>
             }
 
             sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+
+            if (template.UpsertOnConflictVersionWhere != null)
+            {
+                sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
+            }
+
             result.Add(sc);
         }
 
@@ -509,7 +557,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             var incomingAlias = dialect.UpsertIncomingAlias;
             if (!string.IsNullOrEmpty(incomingAlias))
             {
-                sc.Query.Append(" AS ").Append(incomingAlias);
+                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
             }
 
             sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);

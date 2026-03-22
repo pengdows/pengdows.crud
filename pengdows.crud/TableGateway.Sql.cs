@@ -4,7 +4,11 @@
 //
 // AI SUMMARY:
 // - Contains cached SQL template classes:
-//   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings
+//   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings + upsert fragments
+//     Fields include: InsertSql, UpsertColumns, UpsertParameterNames, UpsertUpdateFragment,
+//     UpsertOnConflictVersionWhere (PostgreSQL/CockroachDB ON CONFLICT WHERE predicate),
+//     UpsertMergeVersionCondition (MERGE WHEN MATCHED AND condition), VersionIncrementClause,
+//     UpdateSqlPrefix/Suffix, IdEqualityWhereBody/Nullable, UpdateColumns/WrappedNames.
 //   * CachedContainerTemplates - Pre-configured SqlContainer instances
 // - SQL templates are cached per dialect (SQL Server, PostgreSQL, etc.).
 // - Template building methods:
@@ -63,6 +67,10 @@ public partial class TableGateway<TEntity, TRowID>
         // e.g., "(\"Id\" = @p0 OR \"Id\" IS NULL)"
         // Null when entity has no [Id] column.
         public string? IdEqualityNullableWhereBody;
+
+        // "WHERE \"table\".\"Version\" = EXCLUDED.\"Version\"" for ON CONFLICT WHERE dialects.
+        // Null when entity has no [Version] column or dialect does not support SupportsOnConflictWhere.
+        public string? UpsertOnConflictVersionWhere;
     }
 
     private class CachedContainerTemplates
@@ -198,6 +206,16 @@ public partial class TableGateway<TEntity, TRowID>
                 $"({wrappedIdName} = {pName}{SqlFragments.Or}{wrappedIdName} IS NULL)";
         }
 
+        // Pre-build ON CONFLICT WHERE version predicate for PostgreSQL/CockroachDB batch upsert.
+        string? upsertOnConflictVersionWhere = null;
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[])
+            && dialect.SupportsOnConflictWhere)
+        {
+            var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
+            var wrappedTable = BuildWrappedTableName(dialect);
+            upsertOnConflictVersionWhere = $"WHERE {wrappedTable}.{wrappedVer} = EXCLUDED.{wrappedVer}";
+        }
+
         // Cache version increment clause; null for byte[] (rowversion/timestamp — DB handles increment)
         string? versionIncrementClause = null;
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
@@ -249,12 +267,13 @@ public partial class TableGateway<TEntity, TRowID>
 
                     if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                     {
+                        var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                         frag.Append(", ");
                         frag.Append(tp);
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                        frag.Append(wrappedVersion);
                         frag.Append(" = ");
                         frag.Append(tp);
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                        frag.Append(wrappedVersion);
                         frag.Append(" + 1");
                     }
                 }
@@ -339,7 +358,8 @@ public partial class TableGateway<TEntity, TRowID>
             UpdateColumns = updateColumns!,
             UpdateColumnWrappedNames = updateColumnWrappedNames,
             IdEqualityWhereBody = idEqualityWhereBody,
-            IdEqualityNullableWhereBody = idEqualityNullableWhereBody
+            IdEqualityNullableWhereBody = idEqualityNullableWhereBody,
+            UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
 

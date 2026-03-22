@@ -47,6 +47,12 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
         /// <summary>ON CONFLICT / MERGE / ON DUPLICATE KEY UPDATE fragment, or null when upsert not applicable.</summary>
         public string? UpsertUpdateFragment;
+
+        /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when no [Version] column.</summary>
+        public string? UpsertMergeVersionCondition;
+
+        /// <summary>"WHERE \"table\".\"ver\" = EXCLUDED.\"ver\"" for ON CONFLICT WHERE; null when not applicable.</summary>
+        public string? UpsertOnConflictVersionWhere;
     }
 
     // =========================================================================
@@ -106,13 +112,28 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
         string? upsertUpdateFragment = BuildUpsertUpdateFragment(dialect, updateColumns);
 
+        string? upsertMergeVersionCondition = null;
+        string? upsertOnConflictVersionWhere = null;
+        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        {
+            var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
+            upsertMergeVersionCondition = $"AND t.{wrappedVer} = s.{wrappedVer}";
+            if (dialect.SupportsOnConflictWhere)
+            {
+                upsertOnConflictVersionWhere =
+                    $"WHERE {BuildWrappedTableName(dialect)}.{wrappedVer} = EXCLUDED.{wrappedVer}";
+            }
+        }
+
         return new PkTemplates
         {
             UpdateColumns = updateColumns,
             UpdateColumnWrappedNames = updateColumnWrappedNames,
             UpdateSqlPrefix = updateSqlPrefix,
             VersionIncrementClause = versionIncrementClause,
-            UpsertUpdateFragment = upsertUpdateFragment
+            UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertMergeVersionCondition = upsertMergeVersionCondition,
+            UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
 

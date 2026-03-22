@@ -76,3 +76,7 @@ context.TrackPengdowsMetrics(serviceProvider);
 ## Resource Protection
 
 This library is designed for zero overhead on hot paths. Metrics are collected from existing background events already firing within the core library.
+
+## Support
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/pengdows)

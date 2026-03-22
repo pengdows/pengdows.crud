@@ -1,3 +1,20 @@
+// =============================================================================
+// FILE: TableGatewayBatchTests.cs
+// PURPOSE: Unit tests for TableGateway batch INSERT and UPSERT operations.
+//
+// AI SUMMARY:
+// - Tests BuildBatchCreate(), BatchCreateAsync(), BuildBatchUpsert(), BatchUpsertAsync().
+// - Covers all three batch upsert paths:
+//   * ON CONFLICT (PostgreSQL/CockroachDB) — including WHERE ver = EXCLUDED.ver version predicate
+//   * ON DUPLICATE KEY UPDATE (MySQL/MariaDB) — including alias quoting
+//   * MERGE/per-entity fallback (SQL Server/Oracle/Firebird)
+// - Key version concurrency tests:
+//   * BuildBatchUpsert_PostgreSql_VersionColumn_AppendsOnConflictWhere — asserts WHERE predicate present
+// - Chunking behavior: verifies split into multiple containers when parameter limit exceeded
+// - NULL inlining: verifies NULL literal used (no parameter) for nullable null values
+// - Audit field propagation in batch mode
+// =============================================================================
+
 #region
 
 using System;
@@ -463,6 +480,30 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("Version", sql);
         Assert.Contains("+ 1", sql);
     }
+
+    [Fact]
+    public void BuildBatchUpsert_PostgreSql_VersionColumn_AppendsOnConflictWhere()
+    {
+        // ON CONFLICT WHERE version predicate must appear in batch upsert SQL so stale-version
+        // rows are skipped (DO NOTHING) rather than silently overwriting newer data.
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var entities = new List<TestEntity>
+        {
+            new() { Name = "a", version = 1 },
+            new() { Name = "b", version = 2 }
+        };
+
+        var containers = helper.BuildBatchUpsert(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("WHERE", sql);
+        Assert.Contains("EXCLUDED", sql);
+        // The version column name must appear after WHERE (not just in DO UPDATE SET)
+        var whereIdx = sql.IndexOf("WHERE", StringComparison.Ordinal);
+        var versionInWhere = sql.IndexOf("Version", whereIdx, StringComparison.OrdinalIgnoreCase);
+        Assert.True(versionInWhere >= 0, "Version predicate expected after WHERE in ON CONFLICT clause");
+    }
+
 
     // =========================================================================
     // BatchUpsertAsync

@@ -2,6 +2,17 @@
 // FILE: CoveragePush_PrimaryKeyGatewayGapsTests.cs
 // PURPOSE: Coverage boost for uncovered paths in PrimaryKeyTableGateway and
 //          internal extension files.
+//
+// AI SUMMARY:
+// - Targets gaps in PrimaryKeyTableGateway not exercised by primary test suites.
+// - Key areas covered:
+//   * Batch upsert paths: ON CONFLICT (PostgreSQL), ON DUPLICATE KEY (MySQL), MERGE fallback
+//   * BuildBatchUpsert_PostgreSql_VersionedEntity_AppendsOnConflictWhere — asserts
+//     WHERE ver = EXCLUDED.ver predicate is appended in batch ON CONFLICT path
+//   * RetrieveOneAsync / LoadSingleAsync with [PrimaryKey]-only entity
+//   * Error paths: no updateable columns, no primary keys, fallback dialect
+//   * BatchCreateAsync, BatchUpdateAsync, BatchDeleteAsync happy paths
+//   * Audit field propagation in batch mode
 // =============================================================================
 
 using System;
@@ -819,6 +830,29 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
         var containers = gw.BuildBatchUpsert(entities);
         Assert.NotEmpty(containers);
     }
+
+    [Fact]
+    public void BuildBatchUpsert_PostgreSql_VersionedEntity_AppendsOnConflictWhere()
+    {
+        // ON CONFLICT WHERE version predicate must appear so stale-version rows are skipped.
+        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
+        var gw = new PrimaryKeyTableGateway<GapVersionedPkEntity>(ctx);
+        var entities = new[]
+        {
+            new GapVersionedPkEntity { TenantId = 1, Code = "A", Label = "x", RowVersion = 1 },
+            new GapVersionedPkEntity { TenantId = 1, Code = "B", Label = "y", RowVersion = 2 }
+        };
+
+        var containers = gw.BuildBatchUpsert(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("WHERE", sql);
+        Assert.Contains("EXCLUDED", sql);
+        var whereIdx = sql.IndexOf("WHERE", StringComparison.Ordinal);
+        var versionInWhere = sql.IndexOf("row_version", whereIdx, StringComparison.OrdinalIgnoreCase);
+        Assert.True(versionInWhere >= 0, "Version predicate expected after WHERE in ON CONFLICT clause");
+    }
+
 
     // =========================================================================
     // Update: columnsAdded == 0 path (entity with only PK columns + version)

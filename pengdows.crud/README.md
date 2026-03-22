@@ -190,3 +190,9 @@ if (result.Status == ScalarStatus.None)    { /* no rows returned */ }
 
 - Repo docs: [docs/](./docs)
 - Wiki: https://github.com/pengdows/pengdows.crud/wiki
+
+## Support
+
+If this library saves you time, consider buying me a coffee.
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/pengdows)

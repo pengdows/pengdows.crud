@@ -428,10 +428,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Modern SQL/JSON feature gates (safe defaults)
     public virtual bool SupportsSqlJsonConstructors => false;
     public virtual bool SupportsJsonTable => false;
-    public virtual bool SupportsMergeReturning => false;
 
     // Database-specific extensions (override as needed)
+    public virtual bool SupportsMergeReturning => false;
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
+    public virtual bool SupportsOnConflictWhere => false; // PostgreSQL/CockroachDB only
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
     public virtual bool SupportsDropTableIfExists => true;

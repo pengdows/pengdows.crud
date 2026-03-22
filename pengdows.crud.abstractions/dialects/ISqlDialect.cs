@@ -264,14 +264,16 @@ public interface ISqlDialect
     bool SupportsJsonTable { get; }
 
     /// <summary>
-    /// Indicates MERGE supports RETURNING (or equivalent) to fetch affected rows.
-    /// </summary>
-    bool SupportsMergeReturning { get; }
-
-    /// <summary>
     /// True when INSERT ... ON CONFLICT syntax is available.
     /// </summary>
     bool SupportsInsertOnConflict { get; }
+
+    /// <summary>
+    /// True when the ON CONFLICT DO UPDATE clause supports a WHERE predicate for optimistic
+    /// concurrency checks (PostgreSQL 9.5+, CockroachDB). False for SQLite, DuckDB, and all
+    /// dialects that use MERGE or ON DUPLICATE KEY UPDATE instead.
+    /// </summary>
+    bool SupportsOnConflictWhere => false;
 
     /// <summary>
     /// Indicates support for ON DUPLICATE KEY syntax.

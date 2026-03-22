@@ -14,7 +14,10 @@
 //   * ModeContentionStats integration for wait metrics
 //   * Records wait start/end, timeouts
 // - Lock state tracking:
-//   * _lockState ensures lock acquired only once per instance
+//   * _lockState pre-check (Volatile.Read) before entering semaphore wait — prevents
+//     deadlock when called twice on same instance with SemaphoreSlim(1,1): the second
+//     WaitAsync() would block indefinitely instead of reaching AcquireLockState().
+//   * AcquireLockState(): CAS post-semaphore guard as final backstop for concurrent races
 //   * ReleaseIfHeld(): Safe release on dispose
 // - Logging: Trace-level lock acquisition/release events.
 // - Extends SafeAsyncDisposableBase: auto-releases lock on dispose.
@@ -62,6 +65,11 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
     public void Lock()
     {
         ThrowIfDisposed();
+        if (Volatile.Read(ref _lockState) != 0)
+        {
+            throw new InvalidOperationException("Lock already acquired.");
+        }
+
         _logger.LogTrace("Waiting for lock (sync)");
 
         // Try immediate acquisition first
@@ -116,6 +124,13 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         if (cancellationToken.IsCancellationRequested)
         {
             return ValueTask.FromCanceled(cancellationToken);
+        }
+
+        // Pre-check: throw immediately if already locked on this instance.
+        // Without this, a count=1 semaphore would deadlock rather than reaching AcquireLockState.
+        if (Volatile.Read(ref _lockState) != 0)
+        {
+            throw new InvalidOperationException("Lock already acquired.");
         }
 
         _logger.LogTrace("Waiting for lock");
@@ -173,7 +188,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
 
             if (cancellationToken.IsCancellationRequested)
             {
-                throw new TaskCanceledException(null, null, cancellationToken);
+                throw new OperationCanceledException(cancellationToken);
             }
 
             throw;
@@ -200,6 +215,12 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
             return ValueTask.FromCanceled<bool>(cancellationToken);
         }
 
+        // Pre-check: throw immediately if already locked on this instance.
+        if (Volatile.Read(ref _lockState) != 0)
+        {
+            throw new InvalidOperationException("Lock already acquired.");
+        }
+
         _logger.LogTrace("Attempting lock with timeout {Timeout}", timeout);
         if (_semaphore.Wait(0))
         {
@@ -224,7 +245,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         {
             var waited = Stopwatch.GetTimestamp() - start;
             _stats?.RecordWaitEnd(waited);
-            throw new TaskCanceledException(null, null, cancellationToken);
+            throw new OperationCanceledException(cancellationToken);
         }
 
         var waitTicks = Stopwatch.GetTimestamp() - start;
@@ -239,7 +260,7 @@ internal sealed class RealAsyncLocker : SafeAsyncDisposableBase, ILockerAsync
         if (cancellationToken.IsCancellationRequested)
         {
             _stats?.RecordWaitEnd(waitTicks);
-            throw new TaskCanceledException(null, null, cancellationToken);
+            throw new OperationCanceledException(cancellationToken);
         }
 
         _stats?.RecordTimeout(waitTicks);

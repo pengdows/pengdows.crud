@@ -6,9 +6,11 @@
 // - BuildBatchCreate() - Generates multi-row INSERT INTO t (cols) VALUES (...), (...)
 // - BatchCreateAsync() - Executes batch insert, returns total affected rows
 // - BuildBatchUpsert() - Generates dialect-specific batch upsert:
-//   * PostgreSQL/CockroachDB: multi-row INSERT ... ON CONFLICT DO UPDATE
+//   * PostgreSQL/CockroachDB: multi-row INSERT ... ON CONFLICT DO UPDATE [WHERE ver = EXCLUDED.ver]
 //   * MySQL/MariaDB: multi-row INSERT ... ON DUPLICATE KEY UPDATE
 //   * SQL Server/Oracle/Firebird: falls back to individual BuildUpsert per entity
+// - Optimistic concurrency: ON CONFLICT batch path appends CachedSqlTemplates.UpsertOnConflictVersionWhere
+//   when entity has [Version] column and dialect.SupportsOnConflictWhere — prevents stale-version writes
 // - Auto-chunks based on dialect's MaxParameterLimit (with 10% headroom)
 // - Sequential parameter naming via ClauseCounters.NextBatch() (b0, b1, b2, ...)
 // - NULL values are inlined as NULL literal (no parameter consumed)
@@ -502,6 +504,12 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+
+            if (template.UpsertOnConflictVersionWhere != null)
+            {
+                sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
+            }
+
             result.Add(sc);
         }
 
@@ -534,11 +542,11 @@ public partial class TableGateway<TEntity, TRowID>
         {
             var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
 
-            // MySQL 8.0.20+: declare the row alias (AS incoming) between VALUES and ON DUPLICATE KEY UPDATE
+            // MySQL 8.0.20+: declare the row alias (AS `incoming`) between VALUES and ON DUPLICATE KEY UPDATE
             var incomingAlias = dialect.UpsertIncomingAlias;
             if (!string.IsNullOrEmpty(incomingAlias))
             {
-                sc.Query.Append(" AS ").Append(incomingAlias);
+                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
             }
 
             // Append ON DUPLICATE KEY UPDATE clause
