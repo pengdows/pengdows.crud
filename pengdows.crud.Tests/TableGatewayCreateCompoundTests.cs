@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -124,6 +126,37 @@ public class TableGatewayCreateCompoundTests
         Assert.True(result);
     }
 
+    // -- Happy path via multi-result-set reader (covers generatedId != null branch) --
+
+    [Fact]
+    public async Task CreateAsync_MySql_CompoundPlan_PopulatesIdFromSecondResultSet()
+    {
+        // Use EnqueueMultiResultReader so NextResultAsync() returns true for the second result set,
+        // exercising the generatedId = inner[0] and ConvertWithCache paths (non-CT overload).
+        // The operation connection is added AFTER DatabaseContext init so it is used for the operation.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<AutoIdEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var gateway = new TableGateway<AutoIdEntity, int>(context);
+        var entity = new AutoIdEntity { Name = "multi" };
+
+        // Add operation connection with two result sets:
+        // RS1: empty (INSERT rows-affected), RS2: one row containing the generated ID.
+        var opConn = new fakeDbConnection();
+        opConn.EnqueueMultiResultReader(new[]
+        {
+            Array.Empty<Dictionary<string, object?>>(),
+            new[] { new Dictionary<string, object?> { { "id", 55L } } }
+        });
+        factory.Connections.Insert(0, opConn);
+
+        var result = await gateway.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(55, entity.Id);
+    }
+
     // -- Cancellation token overloads --
 
     [Fact]
@@ -140,6 +173,31 @@ public class TableGatewayCreateCompoundTests
         var result = await gateway.CreateAsync(entity, context, cancellationToken: default);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public async Task CreateAsync_CT_MySql_CompoundPlan_PopulatesIdFromSecondResultSet()
+    {
+        // Covers the CancellationToken overload's generatedId != null branch.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<AutoIdEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var gateway = new TableGateway<AutoIdEntity, int>(context);
+        var entity = new AutoIdEntity { Name = "ct-multi" };
+
+        var opConn = new fakeDbConnection();
+        opConn.EnqueueMultiResultReader(new[]
+        {
+            Array.Empty<Dictionary<string, object?>>(),
+            new[] { new Dictionary<string, object?> { { "id", 88L } } }
+        });
+        factory.Connections.Insert(0, opConn);
+
+        var result = await gateway.CreateAsync(entity, context, cancellationToken: default);
+
+        Assert.True(result);
+        Assert.Equal(88, entity.Id);
     }
 
     // -- Entity type definitions --

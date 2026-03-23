@@ -80,7 +80,7 @@ public class fakeDbTests
     [Fact]
     public void fakeDbDataReader_NullRows_InitializesEmpty()
     {
-        var reader = new fakeDbDataReader(null);
+        var reader = new fakeDbDataReader((IEnumerable<Dictionary<string, object>>?)null);
 
         Assert.False(reader.HasRows);
         Assert.Equal(0, reader.FieldCount);

@@ -38,7 +38,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public override string DataSource => "FakeSource";
     public override string ServerVersion => GetEmulatedServerVersion();
 
-    internal readonly Queue<IEnumerable<Dictionary<string, object?>>> ReaderResults = new();
+    internal readonly Queue<fakeDbDataReader> ReaderResults = new();
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
@@ -78,7 +78,32 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {
-        ReaderResults.Enqueue(rows);
+        ReaderResults.Enqueue(new fakeDbDataReader(ConvertRows(rows)));
+    }
+
+    /// <summary>
+    /// Enqueues a reader with multiple result sets, allowing <see cref="fakeDbDataReader.NextResult"/>
+    /// to advance to subsequent sets. Used to test compound batch queries such as
+    /// INSERT followed by SELECT LAST_INSERT_ID().
+    /// </summary>
+    public void EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object?>>> resultSets)
+    {
+        var converted = resultSets
+            .Select(rs => ConvertRows(rs).ToList())
+            .ToList<IEnumerable<Dictionary<string, object>>>();
+        ReaderResults.Enqueue(new fakeDbDataReader(converted));
+    }
+
+    private static IEnumerable<Dictionary<string, object>> ConvertRows(
+        IEnumerable<Dictionary<string, object?>> rows)
+    {
+        foreach (var row in rows)
+        {
+            var map = new Dictionary<string, object>(row.Count);
+            foreach (var kvp in row)
+                map[kvp.Key] = kvp.Value!;
+            yield return map;
+        }
     }
 
     public void EnqueueScalarResult(object? value)
@@ -343,12 +368,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             }
 
             var copies = new List<IEnumerable<Dictionary<string, object>>>(ReaderResults.Count);
-            foreach (var rows in ReaderResults)
+            foreach (var reader in ReaderResults)
             {
                 var clonedRows = new List<Dictionary<string, object>>();
-                foreach (var row in rows)
+                foreach (var row in reader.FirstResultSet)
                 {
-                    clonedRows.Add(CloneRow(row));
+                    var clone = new Dictionary<string, object>(row.Count);
+                    foreach (var kvp in row)
+                        clone[kvp.Key] = kvp.Value;
+                    clonedRows.Add(clone);
                 }
 
                 copies.Add(clonedRows);
@@ -374,6 +402,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
 
         return clone;
+    }
+
+    void IFakeDbConnection.EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object>>> resultSets)
+    {
+        var converted = resultSets.Select(rs => rs.Select(row =>
+        {
+            var newRow = new Dictionary<string, object?>(row.Count);
+            foreach (var kvp in row)
+                newRow[kvp.Key] = kvp.Value;
+            return newRow;
+        }));
+        EnqueueMultiResultReader(converted);
     }
 
     void IFakeDbConnection.EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)

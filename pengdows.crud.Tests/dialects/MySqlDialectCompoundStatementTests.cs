@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using Xunit;
+using pengdows.crud.fakeDb;
 
 namespace pengdows.crud.Tests.dialects;
 
@@ -91,6 +92,24 @@ public class MySqlDialectCompoundStatementTests
         var first = lower.IndexOf("allowmultiplestatements", StringComparison.Ordinal);
         var second = lower.IndexOf("allowmultiplestatements", first + 1, StringComparison.Ordinal);
         Assert.Equal(-1, second);
+    }
+}
+
+/// <summary>
+/// Covers the base-class <c>GetCompoundInsertIdSuffix()</c> throw path.
+/// Dialects that do not override this method (e.g. SQL Server, which uses
+/// SessionScopedFunction instead of CompoundStatement) should throw
+/// <see cref="NotSupportedException"/>.
+/// </summary>
+public class SqlDialectBaseCompoundInsertIdSuffixTests
+{
+    [Fact]
+    public void SqlServer_GetCompoundInsertIdSuffix_ThrowsNotSupportedException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+
+        Assert.Throws<NotSupportedException>(() => dialect.GetCompoundInsertIdSuffix());
     }
 }
 
