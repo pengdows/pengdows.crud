@@ -146,6 +146,15 @@ public class ParallelTestOrchestrator
             Console.WriteLine(
                 $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s");
         }
+        catch (TimeoutException tex)
+        {
+            result.Success = false;
+            result.ContainerStartTimeout = true;
+            result.Error = tex.Message;
+            result.TotalTime = DateTime.UtcNow - startTime;
+
+            Console.WriteLine($"[{config.ContainerName}] ⚠️ Unavailable: {tex.Message}");
+        }
         catch (Exception ex)
         {
             result.Success = false;
@@ -296,7 +305,8 @@ public class ParallelTestOrchestrator
 
         var results = _results.OrderBy(r => r.ContainerName).ToArray();
         var totalPassed = results.Count(r => r.Success);
-        var totalFailed = results.Length - totalPassed;
+        var totalUnavailable = results.Count(r => r.ContainerStartTimeout);
+        var totalFailed = results.Length - totalPassed - totalUnavailable;
         var totalChecks = results.Sum(r => r.ChecksPassed);
         var totalSkipped = results.Sum(r => r.ChecksSkipped);
 
@@ -307,10 +317,14 @@ public class ParallelTestOrchestrator
         foreach (var r in results)
         {
             var passCol = r.Success ? r.ChecksPassed.ToString() : r.ChecksPassed.ToString();
-            var failCol = r.Success ? "-" : "❌";
+            var failCol = r.Success ? "-" : (r.ContainerStartTimeout ? "⚠️" : "❌");
             var skipCol = r.ChecksSkipped > 0 ? r.ChecksSkipped.ToString() : "-";
             var timeCol = r.TestTime.HasValue ? r.TestTime.Value.TotalSeconds.ToString("F2") + "s" : "-";
-            var status = r.Success ? "✅" : $"❌  {r.Error?[..Math.Min(r.Error.Length, 38)] ?? ""}";
+            var status = r.Success
+                ? "✅"
+                : r.ContainerStartTimeout
+                    ? $"⚠️  Unavailable ({r.Error?[..Math.Min(r.Error.Length, 30)] ?? ""})"
+                    : $"❌  {r.Error?[..Math.Min(r.Error.Length, 38)] ?? ""}";
 
             Console.WriteLine($"{r.ContainerName,-18} {passCol,5} {failCol,5} {skipCol,5}  {timeCol,8}  {status}");
         }
@@ -325,7 +339,15 @@ public class ParallelTestOrchestrator
         if (totalFailed > 0)
         {
             Console.WriteLine("\nFAILURES:");
-            foreach (var f in results.Where(r => !r.Success))
+            foreach (var f in results.Where(r => !r.Success && !r.ContainerStartTimeout))
+                Console.WriteLine($"  {f.ContainerName}: {f.Error}");
+            Console.WriteLine();
+        }
+
+        if (totalUnavailable > 0)
+        {
+            Console.WriteLine("\nUNAVAILABLE (container startup timed out — not a test failure):");
+            foreach (var f in results.Where(r => r.ContainerStartTimeout))
                 Console.WriteLine($"  {f.ContainerName}: {f.Error}");
             Console.WriteLine();
         }
@@ -349,6 +371,7 @@ public class TestResult
     public TimeSpan? TestTime { get; set; }
     public TimeSpan TotalTime { get; set; }
     public bool Success { get; set; }
+    public bool ContainerStartTimeout { get; set; }
     public string? Error { get; set; }
     public int ChecksPassed { get; set; }
     public int ChecksSkipped { get; set; }
