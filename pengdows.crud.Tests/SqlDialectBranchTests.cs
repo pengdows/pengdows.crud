@@ -33,8 +33,8 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.Oracle, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted)]
     [InlineData(SupportedDatabase.PostgreSql, GeneratedKeyPlan.Returning)]
-    [InlineData(SupportedDatabase.MySql, GeneratedKeyPlan.SessionScopedFunction)]
-    [InlineData(SupportedDatabase.Sqlite, GeneratedKeyPlan.SessionScopedFunction)]
+    [InlineData(SupportedDatabase.MySql, GeneratedKeyPlan.CompoundStatement)]
+    [InlineData(SupportedDatabase.Sqlite, GeneratedKeyPlan.CompoundStatement)]
     [InlineData(SupportedDatabase.DuckDB, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.Unknown, GeneratedKeyPlan.CorrelationToken)]
     public void GetGeneratedKeyPlan_ReturnsExpected(SupportedDatabase db, GeneratedKeyPlan expected)
@@ -50,7 +50,7 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.Sqlite, " RETURNING \"id\"")]
     [InlineData(SupportedDatabase.Oracle, " RETURNING \"id\" INTO :1")]
     [InlineData(SupportedDatabase.Firebird, " RETURNING \"id\"")]
-    [InlineData(SupportedDatabase.DuckDB, "")]
+    [InlineData(SupportedDatabase.DuckDB, " RETURNING \"id\"")]
     public void RenderInsertReturningClause_UsesProviderSyntax(SupportedDatabase db, string expected)
     {
         var dialect = CreateDialect(db);

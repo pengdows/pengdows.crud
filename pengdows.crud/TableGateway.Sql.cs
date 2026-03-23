@@ -34,7 +34,7 @@ public partial class TableGateway<TEntity, TRowID>
         public string InsertSql = null!;
         public List<IColumnInfo> InsertColumns = null!;
         public List<string> InsertParameterNames = null!;
-        
+
         public List<IColumnInfo> UpsertColumns = null!;
         public List<string> UpsertParameterNames = null!;
 

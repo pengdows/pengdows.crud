@@ -130,14 +130,14 @@ public partial class TableGateway<TEntity, TRowID> :
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
-            
+
             // Proceed with standard insert since ID is now populated
             await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
@@ -171,7 +171,7 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
             {
@@ -181,19 +181,63 @@ public partial class TableGateway<TEntity, TRowID> :
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
                 _idColumn.Name,
-                _tableInfo.CorrelationColumn.Name, 
+                _tableInfo.CorrelationColumn.Name,
                 dialect.MakeParameterName("p1"));
-                
+
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
             lookupSc.AddParameterWithValue("p1", DbType.String, token);
-            
+
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
             return true;
         }
 
-        // 4. Default path: standard insert followed by optional session-scoped retrieval
+        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        // Appends the dialect's session-scoped ID query (e.g. "; SELECT LAST_INSERT_ID()")
+        // to the INSERT and executes both as a single batch on one connection.
+        // This fixes the two-lease hazard: LAST_INSERT_ID() / last_insert_rowid() are
+        // session-scoped; a separate pool lease could return a stale or zero value.
+        if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
+        {
+            await using var sc = BuildCreate(entity, ctx);
+            sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
+
+            // Scope the reader to this block so the connection is released before
+            // PopulateGeneratedIdAsync (which opens its own connection on pool/SingleConnection).
+            object? generatedId = null;
+            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
+            {
+                // First result set = INSERT (rows-affected, no data rows).
+                // Advance to the SELECT result set to read the generated ID.
+                // Use IInternalTrackedReader.InnerReader to bypass TrackedReader.NextResult() policy;
+                // the policy blocks multi-result for general use, but the compound path reads all
+                // result sets before disposing so the connection lifecycle is correctly managed.
+                if (reader is IInternalTrackedReader internalReader)
+                {
+                    var inner = internalReader.InnerReader;
+                    if (await inner.NextResultAsync().ConfigureAwait(false) &&
+                        await inner.ReadAsync().ConfigureAwait(false))
+                    {
+                        generatedId = inner[0];
+                    }
+                }
+            } // reader disposed here — connection released before any fallback query
+
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+
+            // Fallback for providers/fakeDb that return false from NextResult()
+            // (e.g. fakeDbDataReader.NextResult always returns false).
+            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            return true;
+        }
+
+        // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -228,13 +272,13 @@ public partial class TableGateway<TEntity, TRowID> :
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
@@ -270,7 +314,7 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
             {
@@ -279,20 +323,52 @@ public partial class TableGateway<TEntity, TRowID> :
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
-                _idColumn.Name, 
-                _tableInfo.CorrelationColumn.Name, 
+                _idColumn.Name,
+                _tableInfo.CorrelationColumn.Name,
                 dialect.MakeParameterName("p1"));
-                
+
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
             lookupSc.AddParameterWithValue("p1", DbType.String, token);
-            
+
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
             return true;
         }
 
-        // 4. Default path: standard insert followed by optional session-scoped retrieval
+        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
+        {
+            await using var sc = BuildCreate(entity, ctx);
+            sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
+
+            // Scope the reader to release the connection before PopulateGeneratedIdAsync.
+            object? generatedId = null;
+            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
+            {
+                if (reader is IInternalTrackedReader internalReader)
+                {
+                    var inner = internalReader.InnerReader;
+                    if (await inner.NextResultAsync(cancellationToken).ConfigureAwait(false) &&
+                        await inner.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        generatedId = inner[0];
+                    }
+                }
+            } // reader disposed here — connection released before any fallback query
+
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
@@ -414,12 +490,12 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
             var sc = containerTemplates.InsertTemplate.Clone(ctx);
-            
+
             // Optimized monolithic binding: bypass sc.SetParameterValue dictionary lookups.
             // We clear the cloned parameters and re-add them using the fast binder.
-            sc.Clear(); 
+            sc.Clear();
             ((SqlQueryBuilder)sc.Query).CopyFrom((SqlQueryBuilder)containerTemplates.InsertTemplate.Query); // Restore query after Clear()
-            
+
             var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
             var parameters = new List<DbParameter>(sqlTemplate.InsertColumns.Count);
             binder(entity, parameters);
@@ -1076,19 +1152,19 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, dialect));
     }
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, dialect));
     }
 
     private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
     }
 

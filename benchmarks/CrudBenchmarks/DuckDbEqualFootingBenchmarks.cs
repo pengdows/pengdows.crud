@@ -169,8 +169,12 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         // s3=is_active, s4=created_at, k0=id (WHERE).
         _updateSc = await _gateway.BuildUpdateAsync(new DuckBenchEntity
         {
-            Id = 1, Name = "Updated", Age = 25,
-            Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow
+            Id = 1,
+            Name = "Updated",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
         });
 
         _deleteSc = _gateway.BuildDelete(0);
@@ -229,8 +233,12 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             var id = Interlocked.Increment(ref _createIdSeed);
             var entity = new DuckBenchEntity
             {
-                Id = id, Name = $"Created {id}", Age = 25,
-                Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow
+                Id = id,
+                Name = $"Created {id}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             };
             await using var sc = _gateway.BuildCreate(entity);
             count += await sc.ExecuteNonQueryAsync();
@@ -398,8 +406,12 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             var id = Interlocked.Increment(ref _deleteIdSeed);
             var entity = new DuckBenchEntity
             {
-                Id = id, Name = "ToDelete", Age = 99,
-                Salary = 1.0, IsActive = false, CreatedAt = DateTime.UtcNow
+                Id = id,
+                Name = "ToDelete",
+                Age = 99,
+                Salary = 1.0,
+                IsActive = false,
+                CreatedAt = DateTime.UtcNow
             };
             await using var ins = _gateway.BuildCreate(entity);
             await ins.ExecuteNonQueryAsync();
@@ -426,8 +438,12 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 await conn.OpenAsync();
                 await conn.ExecuteAsync(insertSql, new
                 {
-                    Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
-                    IsActive = false, CreatedAt = DateTime.UtcNow
+                    Id = id,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow
                 });
             }
 

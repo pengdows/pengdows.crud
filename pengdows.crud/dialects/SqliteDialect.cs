@@ -92,6 +92,20 @@ internal class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
 
+    /// <summary>
+    /// SQLite 3.35+ uses the inline RETURNING plan (best option, atomic).
+    /// Older SQLite falls to CompoundStatement: INSERT ...; SELECT last_insert_rowid()
+    /// to ensure both statements run on the same connection, preventing the two-lease
+    /// correctness hazard of the SessionScopedFunction plan.
+    /// Microsoft.Data.Sqlite supports multiple statements in a single ExecuteReader call
+    /// without any connection string changes.
+    /// </summary>
+    public override GeneratedKeyPlan GetGeneratedKeyPlan()
+        => SupportsInsertReturning ? GeneratedKeyPlan.Returning : GeneratedKeyPlan.CompoundStatement;
+
+    /// <inheritdoc/>
+    public override string GetCompoundInsertIdSuffix() => "; SELECT last_insert_rowid()";
+
     public override string GetLastInsertedIdQuery()
     {
         return "SELECT last_insert_rowid()";

@@ -36,7 +36,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 [Table("round_trip_entity")]
 public class RoundTripEntity
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     /// <summary>
     /// Latin / ASCII text. Used to assert both basic ASCII survival and

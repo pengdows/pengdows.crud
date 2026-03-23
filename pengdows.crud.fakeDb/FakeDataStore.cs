@@ -171,16 +171,16 @@ public class FakeDataStore
         try
         {
             // Simple INSERT parsing - matches "INSERT INTO table_name (col1, col2) VALUES (val1, val2)"
-                var insertMatch = Regex.Match(commandText,
-                    @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
-                RegexOptions.IgnoreCase);
+            var insertMatch = Regex.Match(commandText,
+                @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+            RegexOptions.IgnoreCase);
 
             if (!insertMatch.Success)
             {
                 // Try simple INSERT INTO table VALUES format
-                    var simpleMatch = Regex.Match(commandText,
-                        @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
-                    RegexOptions.IgnoreCase);
+                var simpleMatch = Regex.Match(commandText,
+                    @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
+                RegexOptions.IgnoreCase);
                 if (simpleMatch.Success)
                 {
                     var tableName = CleanIdentifier(simpleMatch.Groups[1].Value);
@@ -624,7 +624,7 @@ public class FakeDataStore
             {
                 case '%': sb.Append(".*"); break;
                 case '_': sb.Append('.'); break;
-                default:  sb.Append(Regex.Escape(c.ToString())); break;
+                default: sb.Append(Regex.Escape(c.ToString())); break;
             }
         }
         sb.Append('$');

@@ -232,7 +232,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Table("ByteVersion")]
     private class ByteVersionEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -244,7 +244,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Table("UpsertLite")]
     private class UpsertLiteEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -256,7 +256,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Table("UpsertNaturalKey")]
     private class UpsertNaturalKeyEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [PrimaryKey(1)]
         [Column("NaturalKey", DbType.String)]

@@ -180,8 +180,12 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         // Column SET order: name=s0, age=s1, salary=s2, is_active=s3, created_at=s4; WHERE id=k0
         _updateSc = await _gateway.BuildUpdateAsync(new BenchEntity
         {
-            Id = 1, Name = "Updated", Age = 25,
-            Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+            Id = 1,
+            Name = "Updated",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.ToString("O")
         });
 
         // Delete insert side — explicit id required since SERIAL would otherwise auto-assign.
@@ -293,8 +297,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             // per-connection usage counts and prepares it after threshold is reached)
             var warmupEntity = new BenchEntity
             {
-                Name = $"Warmup {pw}", Age = 25, Salary = 50000.0,
-                IsActive = true, CreatedAt = createdAt
+                Name = $"Warmup {pw}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = createdAt
             };
             await using var warmupCreateSc = _gateway.BuildCreate(warmupEntity);
             await warmupCreateSc.ExecuteNonQueryAsync();
@@ -439,8 +446,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         {
             var entity = new BenchEntity
             {
-                Name = $"Created {i}", Age = 25, Salary = 50000.0,
-                IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+                Name = $"Created {i}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow.ToString("O")
             };
             await using var sc = _gateway.BuildCreate(entity);
             count += await sc.ExecuteNonQueryAsync();
@@ -460,8 +470,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             await using var conn = await GetDapperEqualConnection();
             count += await conn.ExecuteAsync(sql, new
             {
-                Name = $"Created {i}", Age = 25, Salary = 50000.0,
-                IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+                Name = $"Created {i}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow.ToString("O")
             });
         }
 
@@ -722,8 +735,12 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
                 await using var conn = await GetDapperEqualConnection();
                 await conn.ExecuteAsync(insertSql, new
                 {
-                    Id = id, Name = "ToDelete", Age = 99, Salary = 1.0,
-                    IsActive = false, CreatedAt = DateTime.UtcNow.ToString("O")
+                    Id = id,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow.ToString("O")
                 });
             }
             {

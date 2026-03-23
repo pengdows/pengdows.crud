@@ -325,9 +325,9 @@ public class TypeMapRegistryTests
     [Table("MultipleVersions")]
     private class MultipleVersions
     {
-        [Column("V1", DbType.Int32)] [Version] public int V1 { get; set; }
+        [Column("V1", DbType.Int32)][Version] public int V1 { get; set; }
 
-        [Column("V2", DbType.Int32)] [Version] public int V2 { get; set; }
+        [Column("V2", DbType.Int32)][Version] public int V2 { get; set; }
     }
 
     [Table("Invalid")]
@@ -342,8 +342,8 @@ public class TypeMapRegistryTests
     [Table("MultipleIds")]
     private class MultipleIds
     {
-        [Id] [Column("Id1", DbType.Int32)] public int Id1 { get; set; }
-        [Id] [Column("Id2", DbType.Int32)] public int Id2 { get; set; }
+        [Id][Column("Id1", DbType.Int32)] public int Id1 { get; set; }
+        [Id][Column("Id2", DbType.Int32)] public int Id2 { get; set; }
     }
 
     [Table("NoColumns")]
@@ -360,7 +360,7 @@ public class TypeMapRegistryTests
     [Table("MyEntity")]
     private class MyEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
     }
 
     [Table("Ordered")]
@@ -398,7 +398,7 @@ public class TypeMapRegistryTests
     [Table("EnumValid")]
     private class EnumValidEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("State", DbType.Int32)]
         [EnumColumn(typeof(SampleEnum))]
@@ -408,7 +408,7 @@ public class TypeMapRegistryTests
     [Table("EnumAttrOnNonEnum")]
     private class EnumAttrOnNonEnum
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)]
         [EnumColumn(typeof(SampleEnum))]
@@ -418,7 +418,7 @@ public class TypeMapRegistryTests
     [Table("EnumMissingAttr")]
     private class EnumMissingAttr
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("State", DbType.Int32)] public SampleEnum State { get; set; }
     }
@@ -426,7 +426,7 @@ public class TypeMapRegistryTests
     [Table("MixedOrdinals")]
     private class MixedOrdinalEntity
     {
-        [Id] [Column("First", DbType.String)] public string First { get; set; } = string.Empty;
+        [Id][Column("First", DbType.String)] public string First { get; set; } = string.Empty;
 
         [Column("Second", DbType.String, 3)] public string Second { get; set; } = string.Empty;
 
@@ -436,23 +436,23 @@ public class TypeMapRegistryTests
     [Table("JsonValid")]
     private class JsonValidEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Data", DbType.String)] [Json] public object Data { get; set; } = new();
+        [Column("Data", DbType.String)][Json] public object Data { get; set; } = new();
     }
 
     [Table("JsonInvalid")]
     private class JsonInvalidEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
-        [Column("Data", DbType.Int32)] [Json] public int Data { get; set; }
+        [Column("Data", DbType.Int32)][Json] public int Data { get; set; }
     }
 
     [Table("JsonStringWithoutAttribute")]
     private class StringPayloadEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Payload", DbType.String)] public JsonValue Payload { get; set; }
     }
@@ -460,7 +460,7 @@ public class TypeMapRegistryTests
     [Table("WhitespaceColumns")]
     private class WhitespaceColumnEntity
     {
-        [Id] [Column("  Id  ", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("  Id  ", DbType.Int32)] public int Id { get; set; }
 
         [Column("  Clean  ", DbType.String)] public string Clean { get; set; } = string.Empty;
     }
@@ -468,7 +468,7 @@ public class TypeMapRegistryTests
     [Table("BinaryJson")]
     private class BinaryJsonEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Payload", DbType.Binary)] public JsonValue Payload { get; set; }
     }
@@ -476,7 +476,7 @@ public class TypeMapRegistryTests
     [Table("DuplicateColumns")]
     private class DuplicateColumns
     {
-        [Id] [Column("Name", DbType.String)] public string Name1 { get; set; } = string.Empty;
+        [Id][Column("Name", DbType.String)] public string Name1 { get; set; } = string.Empty;
 
         [Column("name", DbType.String)] public string Name2 { get; set; } = string.Empty;
     }
@@ -528,7 +528,7 @@ public class TypeMapRegistryTests
     [Table("InvalidVersion")]
     private class InvalidVersionEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("RowVersion", DbType.String)]
         [Version]
@@ -538,7 +538,7 @@ public class TypeMapRegistryTests
     [Table("InvalidLastUpdated")]
     private class InvalidLastUpdatedEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Timestamp", DbType.String)]
         [LastUpdatedOn]
@@ -548,7 +548,7 @@ public class TypeMapRegistryTests
     [Table("DuplicateOrdinal")]
     private class DuplicateOrdinalEntity
     {
-        [Id] [Column("A", DbType.Int32, 1)] public int A { get; set; }
+        [Id][Column("A", DbType.Int32, 1)] public int A { get; set; }
 
         [Column("B", DbType.Int32, 1)] public int B { get; set; }
     }

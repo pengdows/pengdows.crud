@@ -368,64 +368,64 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         try
         {
-        while (cursor < sql.Length)
-        {
-            var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
-            if (relIdx < 0)
+            while (cursor < sql.Length)
             {
-                break;
-            }
+                var relIdx = span[cursor..].IndexOf("{P}", StringComparison.Ordinal);
+                if (relIdx < 0)
+                {
+                    break;
+                }
 
-            var matchStart = cursor + relIdx;
-            var nameStart = matchStart + 3;
+                var matchStart = cursor + relIdx;
+                var nameStart = matchStart + 3;
 
-            if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
-            {
+                if (nameStart >= sql.Length || !IsIdentStart(sql[nameStart]))
+                {
+                    sb ??= new SqlQueryBuilder(sql.Length + 32);
+                    sb.Append(span[cursor..nameStart]);
+                    cursor = nameStart;
+                    continue;
+                }
+
+                var nameEnd = nameStart + 1;
+                while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                    nameEnd++;
+
                 sb ??= new SqlQueryBuilder(sql.Length + 32);
-                sb.Append(span[cursor..nameStart]);
-                cursor = nameStart;
-                continue;
+                sb.Append(span[cursor..matchStart]);
+
+                var name = sql[nameStart..nameEnd];
+                counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
+                counts.TryGetValue(name, out var count);
+                count++;
+                counts[name] = count;
+
+                var rendered = count == 1
+                    ? name
+                    : MakeDuplicateParameterName(name, count,
+                        usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
+
+                usedNames?.Add(rendered);
+                ParamSequence.Add(rendered);
+
+                if (!string.Equals(rendered, name, StringComparison.Ordinal))
+                {
+                    _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
+                    _renderedParameterMap[rendered] = name;
+                }
+
+                sb.Append(_dialect.MakeParameterName(rendered));
+
+                cursor = nameEnd;
             }
 
-            var nameEnd = nameStart + 1;
-            while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
-                nameEnd++;
+            if (sb == null)
+                return sql;
 
-            sb ??= new SqlQueryBuilder(sql.Length + 32);
-            sb.Append(span[cursor..matchStart]);
+            if (cursor < sql.Length)
+                sb.Append(span[cursor..]);
 
-            var name = sql[nameStart..nameEnd];
-            counts ??= new Dictionary<string, int>(ParameterNameComparer.Instance);
-            counts.TryGetValue(name, out var count);
-            count++;
-            counts[name] = count;
-
-            var rendered = count == 1
-                ? name
-                : MakeDuplicateParameterName(name, count,
-                    usedNames ??= new HashSet<string>(ParamSequence, ParameterNameComparer.Instance));
-
-            usedNames?.Add(rendered);
-            ParamSequence.Add(rendered);
-
-            if (!string.Equals(rendered, name, StringComparison.Ordinal))
-            {
-                _renderedParameterMap ??= new Dictionary<string, string>(ParameterNameComparer.Instance);
-                _renderedParameterMap[rendered] = name;
-            }
-
-            sb.Append(_dialect.MakeParameterName(rendered));
-
-            cursor = nameEnd;
-        }
-
-        if (sb == null)
-            return sql;
-
-        if (cursor < sql.Length)
-            sb.Append(span[cursor..]);
-
-        return sb.ToString();
+            return sb.ToString();
         }
         finally
         {
@@ -1255,16 +1255,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 throw new InvalidOperationException("Query returned no rows.");
 
             case ScalarStatus.Null:
-            {
-                var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
-                if (!isNullable)
                 {
-                    throw new InvalidOperationException(
-                        $"Query returned a null value but the target type {typeof(T).Name} is non-nullable.");
-                }
+                    var isNullable = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
+                    if (!isNullable)
+                    {
+                        throw new InvalidOperationException(
+                            $"Query returned a null value but the target type {typeof(T).Name} is non-nullable.");
+                    }
 
-                return default!;
-            }
+                    return default!;
+                }
 
             case ScalarStatus.Value:
                 return result.Value!;
@@ -1433,7 +1433,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
-            
+
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
@@ -1470,12 +1470,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 this);
             cmd = null;
             lockTransferred = true; // TrackedReader now owns the lock
-            
+
             if (activity != null)
             {
                 activity.SetStatus(ActivityStatusCode.Ok);
             }
-            
+
             return trackedReader;
         }
         catch (OperationCanceledException)
@@ -1509,7 +1509,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 {
                     metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
                 }
-                
+
                 if (activity != null)
                 {
                     activity.SetStatus(ActivityStatusCode.Error, ex.Message);
@@ -1530,7 +1530,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 metrics.RecordDbError(ClassifyTranslatedException(translated));
             }
-            
+
             if (activity != null)
             {
                 activity.SetStatus(ActivityStatusCode.Error, translated.Message);

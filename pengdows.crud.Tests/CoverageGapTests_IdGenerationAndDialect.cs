@@ -208,13 +208,14 @@ public class CoverageGapTests_IdGenerationAndDialect
     /// <summary>
     /// PopulateGeneratedIdAsync throws InvalidOperationException when the returned
     /// value cannot be converted to Guid.
-    /// Uses MySQL (no RETURNING support) so CreateAsync always calls PopulateGeneratedIdAsync
-    /// directly without the RETURNING clause path.
+    /// Uses MySQL CompoundStatement path: compound reader result is consumed first,
+    /// then PopulateGeneratedIdAsync runs the fallback query and gets the bad value.
     /// </summary>
     [Fact]
     public async Task CreateAsync_GuidEntity_ThrowsWhenLastInsertValueIsNotGuid()
     {
-        // MySQL has no INSERT RETURNING support → always falls through to PopulateGeneratedIdAsync
+        // MySQL uses CompoundStatement plan. fakeDb.NextResult() always returns false,
+        // so the compound path falls back to PopulateGeneratedIdAsync after disposing the reader.
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var conn = new fakeDbConnection();
         factory.Connections.Add(conn);
@@ -226,8 +227,12 @@ public class CoverageGapTests_IdGenerationAndDialect
         };
         await using var ctx = new DatabaseContext(config, factory);
 
-        // Enqueue AFTER init: ExecuteNonQueryAsync (the INSERT) doesn't consume readers,
-        // so PopulateGeneratedIdAsync will consume this value → Guid.TryParse fails → throws.
+        // First result: consumed by the compound path's ExecuteReaderAsync (INSERT + SELECT batch).
+        // fakeDb.NextResult() always returns false, so generatedId stays null → falls to fallback.
+        conn.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
+
+        // Second result: consumed by PopulateGeneratedIdAsync's ExecuteScalarOrNullAsync.
+        // "not-a-guid" → Guid.TryParse fails → InvalidCastException → wrapped as InvalidOperationException.
         conn.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "id", "not-a-guid" } }

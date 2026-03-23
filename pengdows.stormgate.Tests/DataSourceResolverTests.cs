@@ -177,6 +177,58 @@ public class DataSourceResolverTests
         Assert.IsType<GenericDbDataSource>(dataSource);
     }
 
+    // P1: SanitizeConnectionString must log a Warning (not just Debug) and include the names of
+    // dropped keys when the provider's builder silently removes unknown keywords.
+    // A stripped Encrypt=True or SslMode=Required would be a silent security regression.
+    [Fact]
+    public void SanitizeConnectionString_LogsWarningWithRemovedKeyNames_WhenBuilderDropsKeys()
+    {
+        var factory = new FactoryWithKeyFilteringBuilder();
+
+        // "Unknown=secret" is stripped by the filtering builder; "Server=localhost" is kept.
+        var ds = _resolver.CreateDataSource(factory, "Server=localhost;Unknown=secret");
+
+        // Must warn and include the removed key name.
+        // DbConnectionStringBuilder normalizes keys to lowercase, so the warning message
+        // will contain "unknown" (not "Unknown") regardless of the original casing.
+        _mockLogger.Verify(l => l.Log(
+            LogLevel.Warning,
+            It.IsAny<EventId>(),
+            It.Is<It.IsAnyType>((v, _) =>
+                v.ToString()!.Contains("unknown", StringComparison.OrdinalIgnoreCase) &&
+                v.ToString()!.Contains("removed")),
+            null,
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+    }
+
+    private class FactoryWithKeyFilteringBuilder : MockFactory
+    {
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+            => new KeyFilteringBuilder();
+
+        // Accepts only "server"; any other keyword is silently dropped on assignment.
+        // The virtual indexer IS called by DbConnectionStringBuilder.ConnectionString's setter,
+        // so overriding this[keyword] is sufficient to filter keys at parse time.
+        private sealed class KeyFilteringBuilder : DbConnectionStringBuilder
+        {
+            private static readonly HashSet<string> AllowedKeys =
+                new(StringComparer.OrdinalIgnoreCase) { "server" };
+
+            [System.Diagnostics.CodeAnalysis.AllowNull]
+            public override object this[string keyword]
+            {
+                get => base[keyword];
+                set
+                {
+                    if (AllowedKeys.Contains(keyword))
+                    {
+                        base[keyword] = value;
+                    }
+                }
+            }
+        }
+    }
+
     private class MockFactory : DbProviderFactory
     {
         public override DbConnection CreateConnection() => new Mock<DbConnection>().Object;

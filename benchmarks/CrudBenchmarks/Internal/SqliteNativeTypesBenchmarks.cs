@@ -45,33 +45,33 @@ public class SqliteNativeTypesBenchmarks : IDisposable
 
     // Well-known seed values that are exactly representable in IEEE 754
     // so round-trip assertions in correctness tests are exact.
-    private static readonly Guid   SeedGuid = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    private static readonly Guid SeedGuid = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     private static readonly string SeedGuidStr = SeedGuid.ToString("D");
-    private static readonly string SeedDateStr  = "2024-06-15T12:00:00.0000000Z";
+    private static readonly string SeedDateStr = "2024-06-15T12:00:00.0000000Z";
 
     // Keeps the shared-cache in-memory database alive for the benchmark run
     private SqliteConnection _sentinel = null!;
-    private DatabaseContext  _ctx      = null!;
+    private DatabaseContext _ctx = null!;
 
     // One gateway per entity variant — each entity has a unique CLR type so
     // TypeMapRegistry and the plan cache treat them independently.
-    private TableGateway<IntegerNativeEntity, long>  _intNativeGw    = null!;
-    private TableGateway<IntegerInt32Entity,  long>  _intInt32Gw     = null!;
-    private TableGateway<IntegerInt16Entity,  long>  _intInt16Gw     = null!;
-    private TableGateway<BoolNativeEntity,    long>  _boolNativeGw   = null!;
-    private TableGateway<BoolCoercedEntity,   long>  _boolCoercedGw  = null!;
-    private TableGateway<RealNativeEntity,    long>  _realNativeGw   = null!;
-    private TableGateway<RealFloatEntity,     long>  _realFloatGw    = null!;
-    private TableGateway<RealDecimalEntity,   long>  _realDecimalGw  = null!;
-    private TableGateway<TextNativeEntity,    long>  _textNativeGw   = null!;
-    private TableGateway<TextDateTimeEntity,  long>  _textDateTimeGw = null!;
-    private TableGateway<TextGuidNativeEntity,long>  _textGuidNativeGw = null!;
-    private TableGateway<TextGuidEntity,      long>  _textGuidGw     = null!;
+    private TableGateway<IntegerNativeEntity, long> _intNativeGw = null!;
+    private TableGateway<IntegerInt32Entity, long> _intInt32Gw = null!;
+    private TableGateway<IntegerInt16Entity, long> _intInt16Gw = null!;
+    private TableGateway<BoolNativeEntity, long> _boolNativeGw = null!;
+    private TableGateway<BoolCoercedEntity, long> _boolCoercedGw = null!;
+    private TableGateway<RealNativeEntity, long> _realNativeGw = null!;
+    private TableGateway<RealFloatEntity, long> _realFloatGw = null!;
+    private TableGateway<RealDecimalEntity, long> _realDecimalGw = null!;
+    private TableGateway<TextNativeEntity, long> _textNativeGw = null!;
+    private TableGateway<TextDateTimeEntity, long> _textDateTimeGw = null!;
+    private TableGateway<TextGuidNativeEntity, long> _textGuidNativeGw = null!;
+    private TableGateway<TextGuidEntity, long> _textGuidGw = null!;
 
     // Pre-built SQL strings (column selection varies; LIMIT parameter is constant @n)
-    private string _sqlInt    = null!;
-    private string _sqlBool   = null!;
-    private string _sqlReal   = null!;
+    private string _sqlInt = null!;
+    private string _sqlBool = null!;
+    private string _sqlReal = null!;
     private string _sqlTextDt = null!;
     private string _sqlTextGu = null!;
 
@@ -132,31 +132,31 @@ public class SqliteNativeTypesBenchmarks : IDisposable
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = ConnStr,
-            ReadWriteMode    = ReadWriteMode.ReadWrite,
-            DbMode           = DbMode.SingleConnection
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleConnection
         };
         _ctx = new DatabaseContext(cfg, SqliteFactory.Instance, null, typeMap);
 
         // Pre-build SQL (parameter marker is '@n' for SQLite; use dialect for correctness)
         var limitParam = _ctx.MakeParameterName("n");
-        _sqlInt    = $"SELECT id, val_int     FROM coercion_bench LIMIT {limitParam}";
-        _sqlBool   = $"SELECT id, val_bool    FROM coercion_bench LIMIT {limitParam}";
-        _sqlReal   = $"SELECT id, val_real    FROM coercion_bench LIMIT {limitParam}";
+        _sqlInt = $"SELECT id, val_int     FROM coercion_bench LIMIT {limitParam}";
+        _sqlBool = $"SELECT id, val_bool    FROM coercion_bench LIMIT {limitParam}";
+        _sqlReal = $"SELECT id, val_real    FROM coercion_bench LIMIT {limitParam}";
         _sqlTextDt = $"SELECT id, val_text_dt FROM coercion_bench LIMIT {limitParam}";
         _sqlTextGu = $"SELECT id, val_text_gu FROM coercion_bench LIMIT {limitParam}";
 
-        _intNativeGw    = new TableGateway<IntegerNativeEntity, long>(_ctx);
-        _intInt32Gw     = new TableGateway<IntegerInt32Entity,  long>(_ctx);
-        _intInt16Gw     = new TableGateway<IntegerInt16Entity,  long>(_ctx);
-        _boolNativeGw   = new TableGateway<BoolNativeEntity,    long>(_ctx);
-        _boolCoercedGw  = new TableGateway<BoolCoercedEntity,   long>(_ctx);
-        _realNativeGw   = new TableGateway<RealNativeEntity,    long>(_ctx);
-        _realFloatGw    = new TableGateway<RealFloatEntity,     long>(_ctx);
-        _realDecimalGw  = new TableGateway<RealDecimalEntity,   long>(_ctx);
-        _textNativeGw   = new TableGateway<TextNativeEntity,    long>(_ctx);
-        _textDateTimeGw = new TableGateway<TextDateTimeEntity,  long>(_ctx);
+        _intNativeGw = new TableGateway<IntegerNativeEntity, long>(_ctx);
+        _intInt32Gw = new TableGateway<IntegerInt32Entity, long>(_ctx);
+        _intInt16Gw = new TableGateway<IntegerInt16Entity, long>(_ctx);
+        _boolNativeGw = new TableGateway<BoolNativeEntity, long>(_ctx);
+        _boolCoercedGw = new TableGateway<BoolCoercedEntity, long>(_ctx);
+        _realNativeGw = new TableGateway<RealNativeEntity, long>(_ctx);
+        _realFloatGw = new TableGateway<RealFloatEntity, long>(_ctx);
+        _realDecimalGw = new TableGateway<RealDecimalEntity, long>(_ctx);
+        _textNativeGw = new TableGateway<TextNativeEntity, long>(_ctx);
+        _textDateTimeGw = new TableGateway<TextDateTimeEntity, long>(_ctx);
         _textGuidNativeGw = new TableGateway<TextGuidNativeEntity, long>(_ctx);
-        _textGuidGw     = new TableGateway<TextGuidEntity,      long>(_ctx);
+        _textGuidGw = new TableGateway<TextGuidEntity, long>(_ctx);
     }
 
     [GlobalCleanup]
@@ -339,21 +339,21 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [Table("coercion_bench")]
     public class IntegerNativeEntity
     {
-        [Id] [Column("id",      DbType.Int64)] public long  Id  { get; set; }
-        [Column("val_int", DbType.Int64)] public long  Val { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
+        [Column("val_int", DbType.Int64)] public long Val { get; set; }
     }
 
     [Table("coercion_bench")]
     public class IntegerInt32Entity
     {
-        [Id] [Column("id",      DbType.Int64)] public long Id  { get; set; }
-        [Column("val_int", DbType.Int32)] public int  Val { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
+        [Column("val_int", DbType.Int32)] public int Val { get; set; }
     }
 
     [Table("coercion_bench")]
     public class IntegerInt16Entity
     {
-        [Id] [Column("id",      DbType.Int64)] public long  Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_int", DbType.Int16)] public short Val { get; set; }
     }
 
@@ -362,14 +362,14 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [Table("coercion_bench")]
     public class BoolNativeEntity
     {
-        [Id] [Column("id",       DbType.Int64)] public long Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_bool", DbType.Int64)] public long Val { get; set; }
     }
 
     [Table("coercion_bench")]
     public class BoolCoercedEntity
     {
-        [Id] [Column("id",       DbType.Int64)] public long Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_bool", DbType.Boolean)] public bool Val { get; set; }
     }
 
@@ -378,21 +378,21 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [Table("coercion_bench")]
     public class RealNativeEntity
     {
-        [Id] [Column("id",       DbType.Int64)] public long   Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_real", DbType.Double)] public double Val { get; set; }
     }
 
     [Table("coercion_bench")]
     public class RealFloatEntity
     {
-        [Id] [Column("id",       DbType.Int64)] public long  Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_real", DbType.Single)] public float Val { get; set; }
     }
 
     [Table("coercion_bench")]
     public class RealDecimalEntity
     {
-        [Id] [Column("id",       DbType.Int64)] public long    Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_real", DbType.Decimal)] public decimal Val { get; set; }
     }
 
@@ -401,14 +401,14 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [Table("coercion_bench")]
     public class TextNativeEntity
     {
-        [Id] [Column("id",          DbType.Int64)]  public long   Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_text_dt", DbType.String)] public string Val { get; set; } = string.Empty;
     }
 
     [Table("coercion_bench")]
     public class TextDateTimeEntity
     {
-        [Id] [Column("id",          DbType.Int64)]    public long     Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_text_dt", DbType.DateTime)] public DateTime Val { get; set; }
     }
 
@@ -417,14 +417,14 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [Table("coercion_bench")]
     public class TextGuidNativeEntity
     {
-        [Id] [Column("id",          DbType.Int64)]  public long   Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_text_gu", DbType.String)] public string Val { get; set; } = string.Empty;
     }
 
     [Table("coercion_bench")]
     public class TextGuidEntity
     {
-        [Id] [Column("id",          DbType.Int64)] public long Id  { get; set; }
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
         [Column("val_text_gu", DbType.Guid)] public Guid Val { get; set; }
     }
 }

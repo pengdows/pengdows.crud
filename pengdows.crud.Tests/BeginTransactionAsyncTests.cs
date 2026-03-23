@@ -253,9 +253,9 @@ public class BeginTransactionAsyncTests
     [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadUncommitted)]
     [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadCommitted)]
     [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.Snowflake,   "EmulatedProduct=Snowflake",   IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.Snowflake,   "EmulatedProduct=Snowflake",   IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.TiDb,        "EmulatedProduct=TiDB",        IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Snowflake, "EmulatedProduct=Snowflake", IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.Snowflake, "EmulatedProduct=Snowflake", IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.TiDb, "EmulatedProduct=TiDB", IsolationLevel.Serializable)]
     public void BeginTransaction_UnsupportedIsolationLevel_Throws(
         SupportedDatabase product,
         string connectionStringFragment,

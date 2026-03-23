@@ -31,11 +31,11 @@ public static class StormGateIntegrationTests
     private static async Task RunConcurrencyTest(string connectionString, int maxConcurrent, int totalTasks)
     {
         Console.WriteLine($"  Testing concurrency (max={maxConcurrent}, tasks={totalTasks})");
-        
+
         using var gate = StormGate.Create(
-            SqliteFactory.Instance, 
-            connectionString, 
-            maxConcurrentOpens: maxConcurrent, 
+            SqliteFactory.Instance,
+            connectionString,
+            maxConcurrentOpens: maxConcurrent,
             acquireTimeout: TimeSpan.FromSeconds(5));
 
         var currentConcurrent = 0;
@@ -46,7 +46,7 @@ public static class StormGateIntegrationTests
         var tasks = Enumerable.Range(0, totalTasks).Select(async i =>
         {
             await using var conn = await gate.OpenAsync();
-            
+
             int observed;
             lock (lockObj)
             {
@@ -68,10 +68,10 @@ public static class StormGateIntegrationTests
         await Task.WhenAll(tasks);
 
         Console.WriteLine($"    Max observed concurrency: {maxObserved}");
-        
+
         if (maxObserved > maxConcurrent)
             throw new Exception($"Observed concurrency {maxObserved} exceeded limit {maxConcurrent}");
-        
+
         if (completedTasks != totalTasks)
             throw new Exception($"Only {completedTasks}/{totalTasks} tasks completed");
     }
@@ -81,9 +81,9 @@ public static class StormGateIntegrationTests
         Console.WriteLine("  Testing timeout/saturation");
 
         using var gate = StormGate.Create(
-            SqliteFactory.Instance, 
-            connectionString, 
-            maxConcurrentOpens: 1, 
+            SqliteFactory.Instance,
+            connectionString,
+            maxConcurrentOpens: 1,
             acquireTimeout: TimeSpan.FromMilliseconds(100));
 
         // Take the only permit

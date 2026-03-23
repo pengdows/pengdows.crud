@@ -561,6 +561,16 @@ public interface ISqlDialect
     GeneratedKeyPlan GetGeneratedKeyPlan();
 
     /// <summary>
+    /// Gets the SQL statement suffix to append to an INSERT for compound execution.
+    /// Used by the <see cref="GeneratedKeyPlan.CompoundStatement"/> path to retrieve
+    /// the generated key in the same round-trip as the INSERT, on the same connection.
+    /// Example (MySQL/MariaDB): "; SELECT LAST_INSERT_ID()"
+    /// Example (SQLite pre-3.35): "; SELECT last_insert_rowid()"
+    /// Throws <see cref="NotSupportedException"/> if the dialect does not support compound statements.
+    /// </summary>
+    string GetCompoundInsertIdSuffix();
+
+    /// <summary>
     /// Indicates whether the dialect has a safe session-scoped last-id function.
     /// </summary>
     bool HasSessionScopedLastIdFunction();

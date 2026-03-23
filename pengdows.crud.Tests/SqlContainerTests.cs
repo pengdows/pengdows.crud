@@ -580,7 +580,7 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         var container = Context.CreateSqlContainer();
         var param = new fakeDbParameter
-            { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         container.AddParameter(param);
 
@@ -600,11 +600,11 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
 
         var container = Context.CreateSqlContainer();
         var p1 = new fakeDbParameter
-            { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        { ParameterName = "p0", DbType = DbType.Int32, Direction = ParameterDirection.Output };
         container.AddParameter(p1);
 
         var p2 = new fakeDbParameter
-            { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
+        { ParameterName = "p1", DbType = DbType.Int32, Direction = ParameterDirection.Output };
 
         Assert.Throws<InvalidOperationException>(() => container.AddParameter(p2));
 

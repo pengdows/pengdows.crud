@@ -20,13 +20,13 @@ public class TypeMapRegistryBranchTests
     [Table(" ")]
     private sealed class EmptyTableNameEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
     }
 
     [Table("test_table")]
     private sealed class EmptyColumnNameEntity
     {
-        [Column(" ", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column(" ", DbType.Int32)][Id] public int Id { get; set; }
     }
 
     [Table("test_table")]
@@ -38,7 +38,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class JsonVersionEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
 
         [Column("version", DbType.Int32)]
         [Version]
@@ -73,13 +73,13 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class NegativeOrdinalEntity
     {
-        [Column("a", DbType.Int32, -1)] [Id] public int A { get; set; }
+        [Column("a", DbType.Int32, -1)][Id] public int A { get; set; }
     }
 
     [Table("test_table")]
     private sealed class DuplicateOrdinalEntity
     {
-        [Column("a", DbType.Int32, 1)] [Id] public int A { get; set; }
+        [Column("a", DbType.Int32, 1)][Id] public int A { get; set; }
 
         [Column("b", DbType.Int32, 1)] public int B { get; set; }
     }
@@ -87,7 +87,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class InvalidLastUpdatedOnEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
 
         [Column("updated_on", DbType.String)]
         [LastUpdatedOn]
@@ -97,7 +97,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class InvalidCreatedByEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
 
         [Column("created_by", DbType.Boolean)]
         [CreatedBy]
@@ -107,7 +107,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class JsonInferenceEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
 
         [Column("payload", DbType.String)] public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
 
@@ -117,7 +117,7 @@ public class TypeMapRegistryBranchTests
     [Table("test_table")]
     private sealed class InvalidVersionTypeEntity
     {
-        [Column("id", DbType.Int32)] [Id] public int Id { get; set; }
+        [Column("id", DbType.Int32)][Id] public int Id { get; set; }
 
         [Column("version", DbType.String)]
         [Version]

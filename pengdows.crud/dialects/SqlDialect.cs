@@ -514,7 +514,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         var prefix = QuotePrefix;
         var suffix = QuoteSuffix;
-        
+
         // Fast path for clean identifiers: if it doesn't contain the quote char, simple concat.
         // We only care about the suffix char (the closer), as that's the one that breaks the string.
         var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
@@ -596,7 +596,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             // IDEMPOTENCY: If segment is already wrapped in prefix/suffix, leave it alone.
             if (segment.Length >= (prefixSpan.Length + suffixSpan.Length) &&
-                segment.StartsWith(prefixSpan) && 
+                segment.StartsWith(prefixSpan) &&
                 segment.EndsWith(suffixSpan))
             {
                 builder.Append(segment);
@@ -779,7 +779,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             var c = value[i];
             builder.Append(c);
-            
+
             if (quoteChar != 0 && c == quoteChar)
             {
                 builder.Append(c); // Double it
@@ -2245,7 +2245,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 param.DbType = DbType.Binary;
                 param.Value = SerializeGuidAsBinary(guid);
                 break;
-            // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
+                // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
         }
     }
 
@@ -2258,6 +2258,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
     {
         throw new NotSupportedException($"GetLastInsertedIdQuery not implemented for {DatabaseType}. " +
                                         $"Prefer using RETURNING/OUTPUT clauses, or implement parameter-based row lookup.");
+    }
+
+    /// <summary>
+    /// Gets the SQL statement suffix to append to an INSERT for compound execution.
+    /// Used by the <see cref="GeneratedKeyPlan.CompoundStatement"/> path to retrieve
+    /// the generated key in the same round-trip as the INSERT, on the same connection.
+    /// Example (MySQL): "; SELECT LAST_INSERT_ID()"
+    /// Example (SQLite): "; SELECT last_insert_rowid()"
+    /// Note: enabling compound statements requires AllowMultipleStatements=true (MySQL/MariaDB)
+    /// in the connection string; SQLite supports it without any extra option.
+    /// </summary>
+    public virtual string GetCompoundInsertIdSuffix()
+    {
+        throw new NotSupportedException(
+            $"{DatabaseType} does not support compound INSERT+SELECT statements. " +
+            $"Override GetCompoundInsertIdSuffix() or use a different GeneratedKeyPlan.");
     }
 
     /// <summary>
@@ -2470,6 +2486,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
             SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
             SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.DuckDB => $" RETURNING {idColumnWrapped}",
             _ => string.Empty
             // Oracle is handled by OracleDialect.RenderInsertReturningClause override.
             // Oracle RETURNING INTO requires an output parameter, not an inline placeholder.

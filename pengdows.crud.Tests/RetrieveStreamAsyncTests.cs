@@ -20,7 +20,7 @@ public class RetrieveStreamAsyncTests
     [Table("test")]
     private class TestEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string? Name { get; set; }
 

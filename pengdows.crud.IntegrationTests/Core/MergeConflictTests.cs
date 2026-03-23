@@ -219,7 +219,7 @@ CREATE TABLE {table} (
 [Table("versioned_entities")]
 public class VersionedEntity
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -231,7 +231,7 @@ public class VersionedEntity
 [Table("merge_records")]
 public class MergeRecord
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("record_key", DbType.String)]

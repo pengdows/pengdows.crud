@@ -9,9 +9,9 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// </summary>
 public enum TypeHydrationEnum
 {
-    Zero  = 0,
+    Zero = 0,
     Alpha = 1,
-    Beta  = 2,
+    Beta = 2,
 }
 
 /// <summary>
@@ -44,27 +44,27 @@ public enum TypeHydrationEnum
 [Table("type_hydration")]
 public class TypeHydrationEntity
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     // ── String ───────────────────────────────────────────────────────────────
     /// <summary>Non-nullable text. Covers ASCII, whitespace, and empty-string edge cases.</summary>
-    [Column("col_string",      DbType.String)] public string  ColString     { get; set; } = string.Empty;
+    [Column("col_string", DbType.String)] public string ColString { get; set; } = string.Empty;
 
     /// <summary>Nullable text. Distinguishes NULL from empty string.</summary>
     [Column("col_string_null", DbType.String)] public string? ColStringNull { get; set; }
 
     // ── Integer types ────────────────────────────────────────────────────────
     /// <summary>16-bit signed integer (DbType.Int16 → SMALLINT/NUMBER(5)).</summary>
-    [Column("col_short",    DbType.Int16)] public short ColShort   { get; set; }
+    [Column("col_short", DbType.Int16)] public short ColShort { get; set; }
 
     /// <summary>32-bit signed integer.</summary>
-    [Column("col_int",      DbType.Int32)] public int   ColInt     { get; set; }
+    [Column("col_int", DbType.Int32)] public int ColInt { get; set; }
 
     /// <summary>Nullable 32-bit integer. Exercises null handling for value types.</summary>
-    [Column("col_int_null", DbType.Int32)] public int?  ColIntNull { get; set; }
+    [Column("col_int_null", DbType.Int32)] public int? ColIntNull { get; set; }
 
     /// <summary>64-bit signed integer.</summary>
-    [Column("col_long",     DbType.Int64)] public long  ColLong    { get; set; }
+    [Column("col_long", DbType.Int64)] public long ColLong { get; set; }
 
     // ── Floating-point types ─────────────────────────────────────────────────
     /// <summary>
@@ -72,20 +72,20 @@ public class TypeHydrationEntity
     /// Tests use exactly-representable IEEE 754 values (1.5, -3.5, 0) to allow
     /// exact equality assertions even after store-as-double / coerce-back paths.
     /// </summary>
-    [Column("col_float",   DbType.Single)]  public float   ColFloat   { get; set; }
+    [Column("col_float", DbType.Single)] public float ColFloat { get; set; }
 
     /// <summary>
     /// 64-bit double-precision float (DbType.Double → DOUBLE PRECISION/FLOAT/BINARY_DOUBLE).
     /// Same value selection rationale as ColFloat.
     /// </summary>
-    [Column("col_double",  DbType.Double)]  public double  ColDouble  { get; set; }
+    [Column("col_double", DbType.Double)] public double ColDouble { get; set; }
 
     /// <summary>Fixed-point decimal (DbType.Decimal → DECIMAL(18,8)/NUMBER(18,8)/REAL).</summary>
     [Column("col_decimal", DbType.Decimal)] public decimal ColDecimal { get; set; }
 
     // ── Boolean ──────────────────────────────────────────────────────────────
     /// <summary>Boolean — stored as BOOLEAN/BIT/NUMBER(1)/SMALLINT depending on dialect.</summary>
-    [Column("col_bool",      DbType.Boolean)] public bool  ColBool     { get; set; }
+    [Column("col_bool", DbType.Boolean)] public bool ColBool { get; set; }
 
     /// <summary>Nullable boolean. Exercises null handling for bool value types.</summary>
     [Column("col_bool_null", DbType.Boolean)] public bool? ColBoolNull { get; set; }
@@ -96,14 +96,14 @@ public class TypeHydrationEntity
     /// Always stored and retrieved as UTC; TypeCoercionHelper normalises
     /// Unspecified kind to UTC on read-back.
     /// </summary>
-    [Column("col_datetime",        DbType.DateTime)]       public DateTime       ColDateTime       { get; set; }
+    [Column("col_datetime", DbType.DateTime)] public DateTime ColDateTime { get; set; }
 
     /// <summary>
     /// DateTimeOffset with UTC offset (DbType.DateTimeOffset → TIMESTAMPTZ/DATETIMEOFFSET/TIMESTAMP).
     /// All test values use TimeSpan.Zero offset to avoid provider-specific normalisation
     /// differences; assertions check only the UTC instant within 1 ms.
     /// </summary>
-    [Column("col_datetimeoffset",  DbType.DateTimeOffset)] public DateTimeOffset ColDateTimeOffset { get; set; }
+    [Column("col_datetimeoffset", DbType.DateTimeOffset)] public DateTimeOffset ColDateTimeOffset { get; set; }
 
     // ── Guid ─────────────────────────────────────────────────────────────────
     /// <summary>Guid — stored as UUID/UNIQUEIDENTIFIER/VARCHAR2(36)/CHAR(36)/TEXT.</summary>
@@ -121,7 +121,7 @@ public class TypeHydrationEntity
     /// Enum stored as its underlying integer value (DbType.Int32).
     /// On write: enum → Convert(underlying int). On read: int → Enum.ToObject.
     /// </summary>
-    [Column("col_enum_int", DbType.Int32)]  public TypeHydrationEnum ColEnumInt { get; set; }
+    [Column("col_enum_int", DbType.Int32)] public TypeHydrationEnum ColEnumInt { get; set; }
 
     // ── Enum (string storage) ─────────────────────────────────────────────────
     /// <summary>

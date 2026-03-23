@@ -11,21 +11,40 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbDataReader : DbDataReader
 {
-    private readonly List<Dictionary<string, object>> _rows;
+    private readonly List<List<Dictionary<string, object>>> _resultSets;
+    private int _currentSetIndex = 0;
     private int _index = -1;
 
     public fakeDbDataReader(
         IEnumerable<Dictionary<string, object>>? rows = null)
     {
-        _rows = rows?.ToList() ?? new List<Dictionary<string, object>>();
+        var single = rows?.ToList() ?? new List<Dictionary<string, object>>();
+        _resultSets = new List<List<Dictionary<string, object>>> { single };
     }
 
-    public fakeDbDataReader() : this(new List<Dictionary<string, object>>())
+    public fakeDbDataReader() : this((IEnumerable<Dictionary<string, object>>?)null)
     {
     }
 
+    /// <summary>
+    /// Creates a reader with multiple result sets, allowing <see cref="NextResult"/> to
+    /// advance to subsequent sets. Used to simulate compound batch queries
+    /// (e.g. INSERT followed by SELECT LAST_INSERT_ID()).
+    /// </summary>
+    internal fakeDbDataReader(IEnumerable<IEnumerable<Dictionary<string, object>>> resultSets)
+    {
+        _resultSets = resultSets.Select(rs => rs.ToList()).ToList();
+        if (_resultSets.Count == 0)
+            _resultSets.Add(new List<Dictionary<string, object>>());
+    }
+
+    private List<Dictionary<string, object>> CurrentRows => _resultSets[_currentSetIndex];
+
     private Dictionary<string, object>? CurrentRow =>
-        _index >= 0 && _index < _rows.Count ? _rows[_index] : null;
+        _index >= 0 && _index < CurrentRows.Count ? CurrentRows[_index] : null;
+
+    /// <summary>Returns the rows in the first result set. Used by RemainingReaderResults.</summary>
+    internal List<Dictionary<string, object>> FirstResultSet => _resultSets[0];
 
     private static string[] GetKeys(Dictionary<string, object> row)
     {
@@ -34,10 +53,10 @@ public class fakeDbDataReader : DbDataReader
 
     public override int FieldCount
         => CurrentRow?.Count
-           ?? (_rows.Count > 0 ? _rows[0].Count : 0);
+           ?? (CurrentRows.Count > 0 ? CurrentRows[0].Count : 0);
 
     public override bool HasRows
-        => _rows.Count > 0;
+        => CurrentRows.Count > 0;
 
     private bool _isClosed;
 
@@ -51,7 +70,7 @@ public class fakeDbDataReader : DbDataReader
     {
         get
         {
-            var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null);
+            var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null);
             if (row is null)
             {
                 throw new IndexOutOfRangeException("No current row.");
@@ -71,7 +90,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override bool Read()
     {
-        return ++_index < _rows.Count;
+        return ++_index < CurrentRows.Count;
     }
 
     public override Task<bool> ReadAsync(CancellationToken _)
@@ -81,7 +100,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override object GetValue(int i)
     {
-        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+        var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return row[keys[i]];
@@ -100,7 +119,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetName(int i)
     {
-        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+        var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return keys[i];
@@ -108,7 +127,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override int GetOrdinal(string name)
     {
-        var row = CurrentRow ?? (_rows.Count > 0 ? _rows[0] : null)
+        var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
         return Array.IndexOf(keys, name);
@@ -122,8 +141,18 @@ public class fakeDbDataReader : DbDataReader
 
     public override bool NextResult()
     {
+        if (_currentSetIndex + 1 < _resultSets.Count)
+        {
+            _currentSetIndex++;
+            _index = -1;
+            return true;
+        }
+
         return false;
     }
+
+    public override Task<bool> NextResultAsync(CancellationToken cancellationToken)
+        => Task.FromResult(NextResult());
 
     public override bool GetBoolean(int i)
     {
@@ -253,7 +282,7 @@ public class fakeDbDataReader : DbDataReader
     // Remaining members can throw or return defaults
     public override IEnumerator GetEnumerator()
     {
-        return _rows.GetEnumerator();
+        return CurrentRows.GetEnumerator();
     }
 
     public override void Close()
@@ -267,7 +296,7 @@ public class fakeDbDataReader : DbDataReader
         // Most databases don't support hierarchical data in GetData()
 
         // Check if we have a valid row position before trying to access data
-        if (_index >= 0 && _index < _rows.Count)
+        if (_index >= 0 && _index < CurrentRows.Count)
         {
             var nestedValue = GetValue(ordinal);
             if (nestedValue is IEnumerable<Dictionary<string, object>> nestedRows)

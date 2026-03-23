@@ -20,11 +20,11 @@ public class DatabaseDetectionFlavorTests
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
         connection.SetScalarResultForCommand("SELECT @@aurora_version", "5.7.12");
-        
+
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT @@aurora_version";
         var res = cmd.ExecuteScalar();
-        
+
         Assert.Equal("5.7.12", res);
     }
 
@@ -33,12 +33,12 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
-        
+
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand("SELECT @@aurora_version", "5.7.12");
-        
+
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
-        
+
         Assert.Equal(SupportedDatabase.AuroraMySql, detected);
     }
 
@@ -80,22 +80,22 @@ public class DatabaseDetectionFlavorTests
     public void PostgreSqlDialect_CockroachDb_DoesNotSupportMerge()
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        
+
         // Simulate detection as CockroachDb
         var connection = (fakeDbConnection)factory.CreateConnection();
         connection.EmulatedProduct = SupportedDatabase.PostgreSql;
         connection.SetScalarResultForCommand("SELECT version()", "CockroachDB CCL v20.2.0");
-        
+
         // Directly test dialect detection
         var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance, SupportedDatabase.CockroachDb);
-        
+
         using var tracked = new FakeTrackedConnection(connection, new DataTable(), new Dictionary<string, object>
         {
             ["SELECT version()"] = "CockroachDB CCL v20.2.0"
         });
-        
+
         dialect.DetectDatabaseInfo(tracked);
-        
+
         Assert.Equal(SupportedDatabase.CockroachDb, dialect.DatabaseType);
         Assert.False(dialect.SupportsMerge);
     }
@@ -105,18 +105,18 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance, SupportedDatabase.AuroraPostgreSql);
-        
+
         var connection = (fakeDbConnection)factory.CreateConnection();
         connection.EmulatedProduct = SupportedDatabase.PostgreSql;
         connection.SetScalarResultForCommand("SELECT version()", "PostgreSQL 15.0");
-        
+
         using var tracked = new FakeTrackedConnection(connection, new DataTable(), new Dictionary<string, object>
         {
             ["SELECT version()"] = "PostgreSQL 15.0"
         });
-        
+
         dialect.DetectDatabaseInfo(tracked);
-        
+
         Assert.Equal(SupportedDatabase.AuroraPostgreSql, dialect.DatabaseType);
         Assert.True(dialect.SupportsMerge);
     }

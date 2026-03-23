@@ -429,7 +429,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
-        dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query, 
+        dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
             (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
 
         // Value binding for each entity

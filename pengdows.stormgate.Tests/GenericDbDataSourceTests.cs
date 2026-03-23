@@ -22,7 +22,7 @@ public class GenericDbDataSourceTests
 
         // Act
         // Use reflection to call protected method
-        var method = typeof(GenericDbDataSource).GetMethod("CreateDbConnection", 
+        var method = typeof(GenericDbDataSource).GetMethod("CreateDbConnection",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var connection = (DbConnection)method!.Invoke(dataSource, null)!;
 
@@ -39,7 +39,7 @@ public class GenericDbDataSourceTests
         var dataSource = new GenericDbDataSource(factory, "cs");
 
         // Act & Assert
-        var method = typeof(GenericDbDataSource).GetMethod("CreateDbConnection", 
+        var method = typeof(GenericDbDataSource).GetMethod("CreateDbConnection",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var ex = Assert.Throws<System.Reflection.TargetInvocationException>(() => method!.Invoke(dataSource, null));
         Assert.IsType<InvalidOperationException>(ex.InnerException);

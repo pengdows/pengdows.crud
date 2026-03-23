@@ -67,19 +67,19 @@ internal static class ConnectionPoolingConfiguration
             case bool boolValue:
                 return !boolValue;
             case string stringValue:
-            {
-                if (bool.TryParse(stringValue, out var parsedBool))
                 {
-                    return !parsedBool;
-                }
+                    if (bool.TryParse(stringValue, out var parsedBool))
+                    {
+                        return !parsedBool;
+                    }
 
-                if (int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
-                {
-                    return parsedInt == 0;
-                }
+                    if (int.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
+                    {
+                        return parsedInt == 0;
+                    }
 
-                break;
-            }
+                    break;
+                }
         }
 
         return false;

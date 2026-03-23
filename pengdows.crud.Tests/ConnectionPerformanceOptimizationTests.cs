@@ -253,9 +253,9 @@ public sealed class ConnectionPerformanceOptimizationTests
 
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new CountingDialect(factory);
-        
+
         using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         // Inject our counting dialect
         var dialectField = typeof(DatabaseContext).GetField("_dialect", BindingFlags.NonPublic | BindingFlags.Instance);
         dialectField!.SetValue(ctx, dialect);

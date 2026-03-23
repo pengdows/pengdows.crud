@@ -60,7 +60,7 @@ public class SqlDialectHelperTests
     {
         var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
             NullLoggerFactory.Instance.CreateLogger(nameof(PostgreSqlDialect)));
-        
+
         var connection = new SessionSettingsConnection(Enumerable.Empty<SessionSettingRow>());
         var (settings, usedFallback, snapshot) =
             CallSessionSettingsResult(dialect, "GetPostgreSqlSessionSettings", connection);

@@ -70,6 +70,14 @@ public interface IFakeDbConnection : IDbConnection, IAsyncDisposable
     void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows);
 
     /// <summary>
+    /// Enqueues a reader with multiple result sets. The reader's <c>NextResult()</c>
+    /// advances through each set in order. Use this to simulate compound batch queries
+    /// (e.g. INSERT followed by SELECT LAST_INSERT_ID()).
+    /// </summary>
+    /// <param name="resultSets">Result sets to return in order.</param>
+    void EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object>>> resultSets);
+
+    /// <summary>
     /// Enqueues a scalar value to be returned by the next scalar execution.
     /// </summary>
     /// <param name="value">Scalar value.</param>

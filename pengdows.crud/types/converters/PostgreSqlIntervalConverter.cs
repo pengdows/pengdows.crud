@@ -109,30 +109,30 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                     result = Parse(text);
                     return true;
                 default:
-                {
-                    var type = value.GetType();
-                    if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
                     {
-                        var monthsProp = type.GetProperty("Months");
-                        var daysProp = type.GetProperty("Days");
-                        var ticksProp = type.GetProperty("Ticks");
-                        var months = monthsProp != null
-                            ? Convert.ToInt32(monthsProp.GetValue(value), CultureInfo.InvariantCulture)
-                            : 0;
-                        var days = daysProp != null
-                            ? Convert.ToInt32(daysProp.GetValue(value), CultureInfo.InvariantCulture)
-                            : 0;
-                        var ticks = ticksProp != null
-                            ? Convert.ToInt64(ticksProp.GetValue(value), CultureInfo.InvariantCulture)
-                            : 0L;
-                        var microseconds = ticks / 10;
-                        result = new PostgreSqlInterval(months, days, microseconds);
-                        return true;
-                    }
+                        var type = value.GetType();
+                        if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            var monthsProp = type.GetProperty("Months");
+                            var daysProp = type.GetProperty("Days");
+                            var ticksProp = type.GetProperty("Ticks");
+                            var months = monthsProp != null
+                                ? Convert.ToInt32(monthsProp.GetValue(value), CultureInfo.InvariantCulture)
+                                : 0;
+                            var days = daysProp != null
+                                ? Convert.ToInt32(daysProp.GetValue(value), CultureInfo.InvariantCulture)
+                                : 0;
+                            var ticks = ticksProp != null
+                                ? Convert.ToInt64(ticksProp.GetValue(value), CultureInfo.InvariantCulture)
+                                : 0L;
+                            var microseconds = ticks / 10;
+                            result = new PostgreSqlInterval(months, days, microseconds);
+                            return true;
+                        }
 
-                    result = default!;
-                    return false;
-                }
+                        result = default!;
+                        return false;
+                    }
             }
         }
         catch

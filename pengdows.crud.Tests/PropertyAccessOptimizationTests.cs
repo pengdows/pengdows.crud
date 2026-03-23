@@ -105,7 +105,7 @@ public class PropertyAccessOptimizationTests : SqlLiteContextTestBase
     [Table("opt_writable_id")]
     private class WritableGuidIdEntity
     {
-        [Id] [Column("id", DbType.Guid)] public Guid Id { get; set; }
+        [Id][Column("id", DbType.Guid)] public Guid Id { get; set; }
 
         [PrimaryKey(1)]
         [Column("name", DbType.String)]

@@ -29,11 +29,11 @@ public class BenchmarkGuidParameters
 
     // Dialects under test — created once in GlobalSetup to eliminate ctor cost from measurements.
     private SqlServerDialect _sqlServer = null!;
-    private SqliteDialect    _sqlite    = null!;
-    private DuckDbDialect    _duckDb    = null!;
-    private OracleDialect    _oracle    = null!;
-    private FirebirdDialect  _fbBinary  = null!;
-    private FirebirdDialect  _fbString  = null!;
+    private SqliteDialect _sqlite = null!;
+    private DuckDbDialect _duckDb = null!;
+    private OracleDialect _oracle = null!;
+    private FirebirdDialect _fbBinary = null!;
+    private FirebirdDialect _fbString = null!;
 
     [GlobalSetup]
     public void Setup()

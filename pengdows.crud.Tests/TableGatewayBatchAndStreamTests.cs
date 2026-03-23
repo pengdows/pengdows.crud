@@ -25,7 +25,7 @@ public class TableGatewayBatchAndStreamTests
     [Table("batch_entity")]
     public class BatchEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [PrimaryKey]
         [Column("name", DbType.String)]

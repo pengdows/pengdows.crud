@@ -171,7 +171,7 @@ public class SqlContainerBranchTests
         var connection = new fakeDbConnection();
         // One result for version detection during initialization (consumed by SELECT aurora_version())
         connection.EnqueueScalarResult("15.0.0");
-        
+
         // One result for the actual scalar execution (consumed by SELECT scalar_test)
         connection.EnqueueReaderResult(new[]
         {

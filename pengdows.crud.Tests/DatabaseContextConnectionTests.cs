@@ -335,7 +335,7 @@ public class DatabaseContextConnectionTests
         public override void Prepare()
         {
         }
-        }
+    }
 
     private sealed class AsyncCapturingConnection : DbConnection
     {

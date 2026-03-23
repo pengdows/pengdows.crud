@@ -42,12 +42,12 @@ public sealed class PoolGovernorDeadlineTests
     [Fact]
     public async Task AcquireAsync_WithPartialTurnstileWait_TotalWaitBoundedByAcquireTimeout()
     {
-        const int timeoutMs       = 1000;
+        const int timeoutMs = 1000;
         const int turnstileHoldMs = 600;   // 60 % of budget; bug ≈ 1 600 ms > threshold
-        const int headroomMs      = 500;   // generous for parallel-scheduler noise
+        const int headroomMs = 500;   // generous for parallel-scheduler noise
 
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem       = new SemaphoreSlim(0, 1); // zero capacity — always fails
+        using var sem = new SemaphoreSlim(0, 1); // zero capacity — always fails
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "deadline-async", 1,
             TimeSpan.FromMilliseconds(timeoutMs),
@@ -75,12 +75,12 @@ public sealed class PoolGovernorDeadlineTests
     [Fact]
     public void Acquire_WithPartialTurnstileWait_TotalWaitBoundedByAcquireTimeout()
     {
-        const int timeoutMs       = 1000;
+        const int timeoutMs = 1000;
         const int turnstileHoldMs = 600;
-        const int headroomMs      = 500;
+        const int headroomMs = 500;
 
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem       = new SemaphoreSlim(0, 1);
+        using var sem = new SemaphoreSlim(0, 1);
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "deadline-sync", 1,
             TimeSpan.FromMilliseconds(timeoutMs),
@@ -116,7 +116,7 @@ public sealed class PoolGovernorDeadlineTests
     public async Task AcquireAsync_SemaphoreExhausted_TurnstileFree_CountedAsSlotTimeout()
     {
         using var turnstile = new SemaphoreSlim(1, 1); // free — governor passes instantly
-        using var sem       = new SemaphoreSlim(0, 1); // exhausted — always fails
+        using var sem = new SemaphoreSlim(0, 1); // exhausted — always fails
 
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "slot-to-a", 1,
@@ -136,7 +136,7 @@ public sealed class PoolGovernorDeadlineTests
     public void Acquire_SemaphoreExhausted_TurnstileFree_CountedAsSlotTimeout()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem       = new SemaphoreSlim(0, 1);
+        using var sem = new SemaphoreSlim(0, 1);
 
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "slot-to-s", 1,
@@ -191,7 +191,7 @@ public sealed class PoolGovernorDeadlineTests
     [Fact]
     public async Task AcquireAsync_TurnstileConsumesFullBudget_ThrowsWithoutSemaphoreWait()
     {
-        const int timeoutMs  = 400;
+        const int timeoutMs = 400;
         const int headroomMs = 300;
 
         using var turnstile = new SemaphoreSlim(1, 1);

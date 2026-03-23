@@ -86,12 +86,12 @@ public partial class DatabaseContext
     // Convenience overloads for reflection-based tests and ease of use
     public DatabaseContext(string connectionString, DbProviderFactory factory, string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
-            {
-                ConnectionString = connectionString,
-                ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
-                DbMode = DbMode.Best,
-                ReadWriteMode = ReadWriteMode.ReadWrite
-            },
+        {
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        },
             factory,
             NullLoggerFactory.Instance,
             new TypeMapRegistry(),
@@ -102,12 +102,12 @@ public partial class DatabaseContext
     internal DatabaseContext(string connectionString, DbProviderFactory factory, ITypeMapRegistry typeMapRegistry,
         string? readOnlyConnectionString = null)
         : this(new DatabaseContextConfiguration
-            {
-                ConnectionString = connectionString,
-                ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
-                DbMode = DbMode.Best,
-                ReadWriteMode = ReadWriteMode.ReadWrite
-            },
+        {
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        },
             factory,
             NullLoggerFactory.Instance,
             typeMapRegistry,
@@ -138,11 +138,11 @@ public partial class DatabaseContext
         ITypeMapRegistry typeMapRegistry,
         ISqlDialect dialect)
         : this(new DatabaseContextConfiguration
-            {
-                ConnectionString = connectionString,
-                DbMode = DbMode.Best,
-                ReadWriteMode = ReadWriteMode.ReadWrite
-            },
+        {
+            ConnectionString = connectionString,
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        },
             factory,
             NullLoggerFactory.Instance,
             typeMapRegistry,
@@ -476,7 +476,10 @@ public partial class DatabaseContext
                     var v = cmd.ExecuteScalar();
                     rcsi = v switch
                     {
-                        bool b => b, byte by => by != 0, short s => s != 0, int i => i != 0,
+                        bool b => b,
+                        byte by => by != 0,
+                        short s => s != 0,
+                        int i => i != 0,
                         _ => Convert.ToInt32(v ?? 0) != 0
                     };
                 }
@@ -492,7 +495,10 @@ public partial class DatabaseContext
                     var value = cmd.ExecuteScalar();
                     var state = value switch
                     {
-                        bool b => b ? 1 : 0, byte by => by, short s => s, int i => i,
+                        bool b => b ? 1 : 0,
+                        byte by => by,
+                        short s => s,
+                        int i => i,
                         _ => Convert.ToInt32(value ?? 0)
                     };
                     snapshotIsolation = state == 1;
@@ -1676,65 +1682,65 @@ public partial class DatabaseContext
         switch (product)
         {
             case SupportedDatabase.Sqlite or SupportedDatabase.DuckDB:
-            {
-                var kind = DetectInMemoryKind(product, _connectionString);
-
-                // Isolated in-memory REQUIRES SingleConnection (no other mode works)
-                if (kind == InMemoryKind.Isolated)
                 {
+                    var kind = DetectInMemoryKind(product, _connectionString);
+
+                    // Isolated in-memory REQUIRES SingleConnection (no other mode works)
+                    if (kind == InMemoryKind.Isolated)
+                    {
+                        if (requested != DbMode.SingleConnection)
+                        {
+                            LogModeOverride(requested, DbMode.SingleConnection,
+                                "Isolated in-memory requires SingleConnection");
+                        }
+
+                        return DbMode.SingleConnection;
+                    }
+
+                    // For shared in-memory and file-based SQLite/DuckDB:
+                    // Most functional: SingleWriter
+                    // UNSAFE: Standard/KeepAlive (lock contention)
+                    // Safe but less functional: SingleConnection
+
+                    if (requested == DbMode.Best)
+                    {
+                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
+                        return DbMode.SingleWriter;
+                    }
+
+                    // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter
+                    if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
+                    {
+                        LogModeOverride(requested, DbMode.SingleWriter,
+                            "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
+                        return DbMode.SingleWriter;
+                    }
+
+                    // Honor safe but less functional modes (SingleConnection, SingleWriter)
+                    return requested;
+                }
+
+            case SupportedDatabase.Firebird when isFirebirdEmbedded:
+                {
+                    // Embedded Firebird REQUIRES SingleConnection
                     if (requested != DbMode.SingleConnection)
                     {
-                        LogModeOverride(requested, DbMode.SingleConnection,
-                            "Isolated in-memory requires SingleConnection");
+                        LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
                     }
 
                     return DbMode.SingleConnection;
                 }
 
-                // For shared in-memory and file-based SQLite/DuckDB:
-                // Most functional: SingleWriter
-                // UNSAFE: Standard/KeepAlive (lock contention)
-                // Safe but less functional: SingleConnection
-
-                if (requested == DbMode.Best)
-                {
-                    LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
-                    return DbMode.SingleWriter;
-                }
-
-                // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter
-                if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
-                {
-                    LogModeOverride(requested, DbMode.SingleWriter,
-                        "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
-                    return DbMode.SingleWriter;
-                }
-
-                // Honor safe but less functional modes (SingleConnection, SingleWriter)
-                return requested;
-            }
-
-            case SupportedDatabase.Firebird when isFirebirdEmbedded:
-            {
-                // Embedded Firebird REQUIRES SingleConnection
-                if (requested != DbMode.SingleConnection)
-                {
-                    LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
-                }
-
-                return DbMode.SingleConnection;
-            }
-
             case SupportedDatabase.SqlServer when isLocalDb:
-            {
-                // LocalDB REQUIRES KeepAlive to prevent unload
-                if (requested != DbMode.KeepAlive)
                 {
-                    LogModeOverride(requested, DbMode.KeepAlive, "LocalDB requires KeepAlive");
-                }
+                    // LocalDB REQUIRES KeepAlive to prevent unload
+                    if (requested != DbMode.KeepAlive)
+                    {
+                        LogModeOverride(requested, DbMode.KeepAlive, "LocalDB requires KeepAlive");
+                    }
 
-                return DbMode.KeepAlive;
-            }
+                    return DbMode.KeepAlive;
+                }
 
             case SupportedDatabase.PostgreSql
                 or SupportedDatabase.CockroachDb
@@ -1743,33 +1749,33 @@ public partial class DatabaseContext
                 or SupportedDatabase.Oracle
                 or SupportedDatabase.Firebird
                 or SupportedDatabase.SqlServer:
-            {
-                // Full server databases: all modes are SAFE
-                // Most functional: Standard
-                // Safe but less functional: SingleWriter, SingleConnection, KeepAlive
-
-                if (requested == DbMode.Best)
                 {
-                    LogModeOverride(requested, DbMode.Standard, "Full server: Best selects Standard");
-                    return DbMode.Standard;
-                }
+                    // Full server databases: all modes are SAFE
+                    // Most functional: Standard
+                    // Safe but less functional: SingleWriter, SingleConnection, KeepAlive
 
-                // Honor ANY explicit choice - all modes are safe on full servers
-                // Users can force less functional modes for testing
-                return requested;
-            }
+                    if (requested == DbMode.Best)
+                    {
+                        LogModeOverride(requested, DbMode.Standard, "Full server: Best selects Standard");
+                        return DbMode.Standard;
+                    }
+
+                    // Honor ANY explicit choice - all modes are safe on full servers
+                    // Users can force less functional modes for testing
+                    return requested;
+                }
 
             default:
-            {
-                // Unknown provider
-                if (requested == DbMode.Best)
                 {
-                    LogModeOverride(requested, DbMode.Standard, "Unknown provider: Best defaults to Standard");
-                    return DbMode.Standard;
-                }
+                    // Unknown provider
+                    if (requested == DbMode.Best)
+                    {
+                        LogModeOverride(requested, DbMode.Standard, "Unknown provider: Best defaults to Standard");
+                        return DbMode.Standard;
+                    }
 
-                return requested;
-            }
+                    return requested;
+                }
         }
     }
 

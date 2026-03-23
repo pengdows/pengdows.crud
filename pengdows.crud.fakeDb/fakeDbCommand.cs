@@ -306,8 +306,7 @@ public class fakeDbCommand : DbCommand
 
         if (conn != null && conn.ReaderResults.Count > 0)
         {
-            var queued = conn.ReaderResults.Dequeue();
-            return new fakeDbDataReader(ConvertRows(queued));
+            return conn.ReaderResults.Dequeue();
         }
 
         // Support for ExecuteScalarRequiredAsync which uses ExecuteReader:

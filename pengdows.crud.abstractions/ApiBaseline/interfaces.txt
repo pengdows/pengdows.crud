@@ -214,6 +214,7 @@ method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.D
 method pengdows.crud.dialects.ISqlDialect::GenerateParameterName() -> string
 method pengdows.crud.dialects.ISqlDialect::GenerateRandomName(int, int) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCompatibilityWarning() -> string
+method pengdows.crud.dialects.ISqlDialect::GetCompoundInsertIdSuffix() -> string
 method pengdows.crud.dialects.ISqlDialect::GetConnectionSessionSettings(pengdows.crud.IDatabaseContext, bool) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCorrelationTokenLookupQuery(string, string, string, string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetGeneratedKeyPlan() -> pengdows.crud.enums.GeneratedKeyPlan

@@ -308,7 +308,7 @@ internal static class TypeCoercionHelper
             {
                 return (byte)0;
             }
-            
+
             return IsNumericClrType(underlyingTarget) ? Activator.CreateInstance(underlyingTarget) : null;
         }
 
@@ -991,62 +991,62 @@ internal static class TypeCoercionHelper
             ? null
             : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
     }
-        
-            /// <summary>
-            /// Optimized byte reader for compiled mappers. Uses a small stack buffer for small reads
-            /// and falls back to heap only for large binary data.
-            /// </summary>
-            public static byte[] ReadBytes(IDataRecord reader, int ordinal)
+
+    /// <summary>
+    /// Optimized byte reader for compiled mappers. Uses a small stack buffer for small reads
+    /// and falls back to heap only for large binary data.
+    /// </summary>
+    public static byte[] ReadBytes(IDataRecord reader, int ordinal)
+    {
+        var length = reader.GetBytes(ordinal, 0, null, 0, 0);
+        if (length <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        // For small binary data (like small hashes), use a rented buffer to read,
+        // then copy to a new array of the exact size.
+        if (length <= 256)
+        {
+            var temp = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
+            try
             {
-                var length = reader.GetBytes(ordinal, 0, null, 0, 0);
-                if (length <= 0)
-                {
-                    return Array.Empty<byte>();
-                }
-        
-                // For small binary data (like small hashes), use a rented buffer to read,
-                // then copy to a new array of the exact size.
-                if (length <= 256)
-                {
-                    var temp = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
-                    try
-                    {
-                        reader.GetBytes(ordinal, 0, temp, 0, (int)length);
-                        var result = new byte[length];
-                        Buffer.BlockCopy(temp, 0, result, 0, (int)length);
-                        return result;
-                    }
-                    finally
-                    {
-                        System.Buffers.ArrayPool<byte>.Shared.Return(temp);
-                    }
-                }
-        
-                var heapBuffer = new byte[length];
-                reader.GetBytes(ordinal, 0, heapBuffer, 0, (int)length);
-                return heapBuffer;
+                reader.GetBytes(ordinal, 0, temp, 0, (int)length);
+                var result = new byte[length];
+                Buffer.BlockCopy(temp, 0, result, 0, (int)length);
+                return result;
             }
-        
-            /// <summary>
-            /// Reads a GUID from a binary column without allocating a byte array.
-            /// Optimized for SQLite and other providers that store GUIDs as BLOBs.
-            /// </summary>
-            public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal)
+            finally
             {
-                var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
-                try
-                {
-                    var read = reader.GetBytes(ordinal, 0, temp, 0, 16);
-                    if (read < 16)
-                    {
-                        throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
-                    }
-                    return new Guid(temp.AsSpan(0, 16));
-                }
-                finally
-                {
-                    System.Buffers.ArrayPool<byte>.Shared.Return(temp);
-                }
+                System.Buffers.ArrayPool<byte>.Shared.Return(temp);
             }
         }
-        
+
+        var heapBuffer = new byte[length];
+        reader.GetBytes(ordinal, 0, heapBuffer, 0, (int)length);
+        return heapBuffer;
+    }
+
+    /// <summary>
+    /// Reads a GUID from a binary column without allocating a byte array.
+    /// Optimized for SQLite and other providers that store GUIDs as BLOBs.
+    /// </summary>
+    public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal)
+    {
+        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
+        try
+        {
+            var read = reader.GetBytes(ordinal, 0, temp, 0, 16);
+            if (read < 16)
+            {
+                throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
+            }
+            return new Guid(temp.AsSpan(0, 16));
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(temp);
+        }
+    }
+}
+

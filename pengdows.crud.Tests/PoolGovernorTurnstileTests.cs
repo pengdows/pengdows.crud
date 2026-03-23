@@ -170,7 +170,7 @@ public sealed class PoolGovernorTurnstileTests
     }
 
     // ── Second writer times out waiting ───────────────────────────────────
-// W1 holds the turnstile (slot held).  W2 times out on the turnstile.
+    // W1 holds the turnstile (slot held).  W2 times out on the turnstile.
 
     [Fact]
     public void Acquire_SecondWriterTimesOutWaiting()

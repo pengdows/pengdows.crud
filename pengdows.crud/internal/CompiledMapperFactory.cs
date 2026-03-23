@@ -52,7 +52,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         {
             var rawName = fieldNames[i];
             var fieldName = namePolicy != null ? namePolicy(rawName) : rawName;
-            
+
             if (!columnsByName.TryGetValue(fieldName, out var column))
             {
                 continue;
@@ -75,11 +75,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
                 var jsonStr = Expression.Call(readerParam, getString, ordinalExpr);
-                
+
                 // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
                 var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
                 valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
-                
+
                 // For JSON, we return default (null for objects) on error to match old behavior
                 var catchBlock = Expression.Catch(typeof(JsonException), Expression.Default(targetType));
                 valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
@@ -103,12 +103,12 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 }
 
                 var exParam = Expression.Parameter(typeof(Exception), "ex");
-                var catchBlock = Expression.Catch(exParam, 
+                var catchBlock = Expression.Catch(exParam,
                     Expression.Throw(
                         Expression.New(typeof(exceptions.InvalidValueException).GetConstructor(new[] { typeof(string) })!,
                         Expression.Constant($"Unable to set property from value that was stored in the database: {rawName}")),
                         targetType));
-                
+
                 valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
             }
             else if (column.IsEnum)
@@ -119,7 +119,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 {
                     var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
                     var enumStr = Expression.Call(readerParam, getString, ordinalExpr);
-                    
+
                     var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.GetEnumFromString))!.MakeGenericMethod(underlyingTarget);
                     enumReadExpr = Expression.Call(mapperMethod, enumStr);
                 }
@@ -128,13 +128,13 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     var getMethod = GetReaderMethod(fieldType);
                     var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
                     var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget);
-                    
+
                     var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.ValidateEnumValue))!.MakeGenericMethod(underlyingTarget);
                     enumReadExpr = Expression.Call(mapperMethod, convertedValue);
                 }
 
-                Expression finalEnumExpr = targetType != underlyingTarget 
-                    ? Expression.Convert(enumReadExpr, targetType) 
+                Expression finalEnumExpr = targetType != underlyingTarget
+                    ? Expression.Convert(enumReadExpr, targetType)
                     : enumReadExpr;
 
                 if (enumMode == EnumParseFailureMode.Throw)
@@ -245,8 +245,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         var method = typeof(IDataRecord).GetMethod(methodName, new[] { typeof(int) });
         if (method == null)
         {
-             // Fallback to GetValue
-             return typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!;
+            // Fallback to GetValue
+            return typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!;
         }
         return method;
     }
@@ -277,8 +277,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         // Simple numeric/bool conversions
         if (IsNumericType(sourceType) && IsNumericType(underlyingTargetType))
         {
-             var converted = Expression.Convert(value, underlyingTargetType);
-             return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
+            var converted = Expression.Convert(value, underlyingTargetType);
+            return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
         }
 
         if (sourceType == typeof(long) && underlyingTargetType == typeof(bool))
@@ -341,7 +341,7 @@ internal static class EnumMappingCache
     {
         var mapper = (System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>)_stringMappers.GetOrAdd(
             typeof(TEnum), _ => new System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase));
-        
+
         return mapper.GetOrAdd(value, v => (TEnum)Enum.Parse(typeof(TEnum), v, true));
     }
 

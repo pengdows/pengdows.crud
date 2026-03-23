@@ -66,7 +66,7 @@ public class TableGatewayJsonEgressTests
     [Table("JsonEntities")]
     private class JsonEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Json]
         [Column("Payload", DbType.String)]

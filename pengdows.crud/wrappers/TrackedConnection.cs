@@ -273,21 +273,21 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         switch (args.CurrentState)
         {
             case ConnectionState.Open:
-            {
-                _metricsCollector.ConnectionOpened();
-                Interlocked.Exchange(ref _openTimestamp, Stopwatch.GetTimestamp());
-                break;
-            }
+                {
+                    _metricsCollector.ConnectionOpened();
+                    Interlocked.Exchange(ref _openTimestamp, Stopwatch.GetTimestamp());
+                    break;
+                }
             case ConnectionState.Closed:
             case ConnectionState.Broken:
-            {
-                var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
-                var duration = openedAt == 0
-                    ? 0d
-                    : MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - openedAt);
-                _metricsCollector.ConnectionClosed(duration);
-                break;
-            }
+                {
+                    var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
+                    var duration = openedAt == 0
+                        ? 0d
+                        : MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - openedAt);
+                    _metricsCollector.ConnectionClosed(duration);
+                    break;
+                }
         }
     }
 

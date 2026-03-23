@@ -37,7 +37,7 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     {
         _meter = meter;
         _ownsMeter = ownsMeter;
-        
+
         _commandsExecuted = _meter.CreateCounter<long>("pengdows.db.client.commands.executed", "{command}", "Total commands executed successfully");
         _commandsFailed = _meter.CreateCounter<long>("pengdows.db.client.commands.failed", "{command}", "Total commands failed");
         _rowsRead = _meter.CreateCounter<long>("pengdows.db.client.rows.read", "{row}", "Total rows read");
@@ -120,7 +120,7 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
         {
             context.MetricsUpdated -= HandleMetricsUpdated;
         }
-        
+
         if (_ownsMeter)
         {
             _meter.Dispose();

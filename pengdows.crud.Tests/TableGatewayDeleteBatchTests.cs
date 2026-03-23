@@ -45,7 +45,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
     [Table("test_delete_batch")]
     public class TestDeleteBatchEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [PrimaryKey]
         [Column("name", DbType.String)]
@@ -67,7 +67,7 @@ public class TableGatewayDeleteBatchTests : IAsyncLifetime
     [Table("test_delete_id_only")]
     public class TestDeleteIdOnlyEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
     }
 
     [Table("test_delete_no_id")]

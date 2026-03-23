@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace pengdows.stormgate.Tests;
 
 public class PermitConnectionTests
@@ -63,7 +65,7 @@ public class PermitConnectionTests
 
         // Assert
         _mockInner.Verify(c => c.CloseAsync(), Times.Once);
-        
+
         // Should be able to open again
         var conn2 = await gate.OpenAsync();
         Assert.NotNull(conn2);
@@ -82,16 +84,31 @@ public class PermitConnectionTests
         Assert.Throws<InvalidOperationException>(() => conn.CreateCommand());
     }
 
+    // P2: Open/OpenAsync should be a no-op when already open (Dapper/EF Core call Open defensively)
     [Fact]
-    public async Task Open_Throws()
+    public async Task Open_WhenAlreadyOpen_IsNoOp()
     {
-        // Arrange
         using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
         using var conn = await gate.OpenAsync();
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
 
-        // Act & Assert
-        Assert.Throws<InvalidOperationException>(() => conn.Open());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => conn.OpenAsync());
+        var ex = Record.Exception(() => conn.Open());
+        Assert.Null(ex);
+
+        var exAsync = await Record.ExceptionAsync(() => conn.OpenAsync());
+        Assert.Null(exAsync);
+    }
+
+    // P2: Open/OpenAsync when connection is not open should throw NotSupportedException
+    [Fact]
+    public async Task Open_WhenNotOpen_ThrowsNotSupportedException()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var conn = await gate.OpenAsync();
+        // Default mock State is ConnectionState.Closed (0)
+
+        Assert.Throws<NotSupportedException>(() => conn.Open());
+        await Assert.ThrowsAsync<NotSupportedException>(() => conn.OpenAsync());
     }
 
     [Fact]
@@ -107,7 +124,7 @@ public class PermitConnectionTests
 
         // Assert
         _mockInner.Verify(c => c.Close(), Times.Once);
-        
+
         // Should be able to open again
         var conn2 = await gate.OpenAsync();
         Assert.NotNull(conn2);
@@ -131,6 +148,31 @@ public class PermitConnectionTests
         Assert.NotNull(conn2);
     }
 
+    // P0: Dispose must call Close (via base.Dispose) BEFORE Dispose on the inner connection,
+    // so the inner is closed cleanly before being torn down. Some providers are not idempotent
+    // if Close() is called after Dispose().
+    [Fact]
+    public async Task Dispose_ClosesInnerBeforeDisposingIt_WhenConnectionIsOpen()
+    {
+        var callOrder = new List<string>();
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Callback(() => callOrder.Add("Close"));
+        _mockInner.Protected()
+            .Setup("Dispose", ItExpr.IsAny<bool>())
+            .Callback<bool>(_ => callOrder.Add("Dispose"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        conn.Dispose();
+
+        Assert.Contains("Close", callOrder);
+        Assert.Contains("Dispose", callOrder);
+        Assert.True(
+            callOrder.IndexOf("Close") < callOrder.IndexOf("Dispose"),
+            $"Expected Close before Dispose but got: [{string.Join(", ", callOrder)}]");
+    }
+
     [Fact]
     public async Task DisposeAsync_CallsInnerAndReleasesPermit()
     {
@@ -150,6 +192,26 @@ public class PermitConnectionTests
     }
 
     [Fact]
+    public async Task DisposeAsync_ClosesInnerBeforeDisposingIt_WhenConnectionIsOpen()
+    {
+        var callOrder = new List<string>();
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.CloseAsync()).Callback(() => callOrder.Add("CloseAsync"));
+        _mockInner.Setup(c => c.DisposeAsync()).Callback(() => callOrder.Add("DisposeAsync"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        await conn.DisposeAsync();
+
+        Assert.Contains("CloseAsync", callOrder);
+        Assert.Contains("DisposeAsync", callOrder);
+        Assert.True(
+            callOrder.IndexOf("CloseAsync") < callOrder.IndexOf("DisposeAsync"),
+            $"Expected CloseAsync before DisposeAsync but got: [{string.Join(", ", callOrder)}]");
+    }
+
+    [Fact]
     public async Task ReleasePermitOnce_IsIdempotent()
     {
         // Arrange
@@ -164,5 +226,221 @@ public class PermitConnectionTests
         // Assert - should still only have released once (max capacity is 1)
         var conn2 = await gate.OpenAsync();
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());
+    }
+
+    // P1: ThrowIfInnerClosed must check _released, not just inner.State.
+    // If Close() throws, the permit is still released (finally block), but State may remain Open.
+    // CreateCommand/BeginTransaction must not succeed on a connection whose permit was returned.
+    [Fact]
+    public async Task CreateCommand_ThrowsAfterPermitReleased_EvenIfInnerStateIsStillOpen()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(new Mock<DbCommand>().Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Close throws, but the finally block in Close() still releases the permit (_released = 1)
+        Assert.Throws<InvalidOperationException>(() => conn.Close());
+
+        // _released is now 1, inner.State is still Open — guard must fire
+        Assert.Throws<InvalidOperationException>(() => conn.CreateCommand());
+    }
+
+    [Fact]
+    public async Task BeginTransaction_ThrowsAfterPermitReleased_EvenIfInnerStateIsStillOpen()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+        _mockInner.Protected()
+            .Setup<DbTransaction>("BeginDbTransaction", IsolationLevel.Unspecified)
+            .Returns(new Mock<DbTransaction>().Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        Assert.Throws<InvalidOperationException>(() => conn.Close());
+
+        // Permit returned; guard must fire regardless of inner.State
+        Assert.Throws<InvalidOperationException>(() => conn.BeginTransaction());
+    }
+
+    // P1-1: Dispose must call _inner.Dispose() even when Close() throws.
+    // ReleasePermitOnce() is still invoked via Close's finally block.
+    [Fact]
+    public async Task Dispose_StillDisposesInner_WhenCloseThrows()
+    {
+        var innerDisposed = false;
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+        _mockInner.Protected()
+            .Setup("Dispose", ItExpr.IsAny<bool>())
+            .Callback<bool>(_ => innerDisposed = true);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Exception from Close() may propagate, but inner.Dispose must still run.
+        _ = Record.Exception(() => conn.Dispose());
+
+        Assert.True(innerDisposed, "Inner connection must be disposed even when Close() throws.");
+    }
+
+    // P1-1: DisposeAsync must call _inner.DisposeAsync() even when CloseAsync() throws.
+    // The permit must also be released.
+    [Fact]
+    public async Task DisposeAsync_StillDisposesInner_WhenCloseAsyncThrows()
+    {
+        var innerDisposed = false;
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.CloseAsync())
+            .Returns(Task.FromException(new InvalidOperationException("provider close failed")));
+        _mockInner.Setup(c => c.DisposeAsync())
+            .Callback(() => innerDisposed = true)
+            .Returns(ValueTask.CompletedTask);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Exception from CloseAsync() may propagate, but inner.DisposeAsync must still run.
+        _ = await Record.ExceptionAsync(async () => await conn.DisposeAsync());
+
+        Assert.True(innerDisposed, "Inner connection must be disposed even when CloseAsync() throws.");
+    }
+
+    // P1-1: DisposeAsync permit must be released even when CloseAsync() throws.
+    [Fact]
+    public async Task DisposeAsync_ReleasesPermit_WhenCloseAsyncThrows()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.CloseAsync())
+            .Returns(Task.FromException(new InvalidOperationException("provider close failed")));
+        _mockInner.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        _ = await Record.ExceptionAsync(async () => await conn.DisposeAsync());
+
+        // Permit must be back in the gate — should be able to open a new connection.
+        var conn2 = await gate.OpenAsync();
+        Assert.NotNull(conn2);
+    }
+
+    // P2-1: ThrowIfInnerClosed first branch (_released) must produce a distinct message
+    // from the inner.State == Closed branch so callers can distinguish the two conditions.
+    [Fact]
+    public async Task CreateCommand_ThrowsPermitReleasedMessage_AfterPermitReleased_WhileInnerIsStillOpen()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(new Mock<DbCommand>().Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Force _released = 1 via Close()'s finally
+        _ = Record.Exception(() => conn.Close());
+
+        // _released == 1, inner.State == Open — the error must NOT say "Connection is closed."
+        // because that's misleading when the inner is still open. It should say the permit was released.
+        var ex = Assert.Throws<InvalidOperationException>(() => conn.CreateCommand());
+        Assert.Contains("permit", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // P2-3: Open()/OpenAsync() on a disposed connection must throw ObjectDisposedException,
+    // not the "cannot be opened directly" NotSupportedException.
+    [Fact]
+    public async Task Open_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+        conn.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => conn.Open());
+    }
+
+    [Fact]
+    public async Task OpenAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+        conn.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => conn.OpenAsync());
+    }
+
+    [Fact]
+    public async Task CreateCommand_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+        conn.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => conn.CreateCommand());
+    }
+
+    [Fact]
+    public async Task BeginTransaction_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+        conn.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => conn.BeginTransaction());
+    }
+
+    // Regression: Dispose(bool=false) is the finalizer path. If Close() throws and the
+    // PermitConnection is not explicitly disposed (e.g. after conn.Close() throws), the GC
+    // finalizer eventually calls Dispose(false). Exceptions from finalizers crash the process
+    // on .NET 10+. The finalizer path must never call Close().
+    [Fact]
+    public async Task FinalizerPath_Dispose_DoesNotCallClose()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Invoke Dispose(false) via reflection to simulate the GC finalizer path.
+        // Must not throw — an exception from a finalizer crashes the process.
+        var disposeMethod = conn.GetType().GetMethod(
+            "Dispose",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null, new[] { typeof(bool) }, null);
+        Assert.NotNull(disposeMethod);
+
+        var ex = Record.Exception(() => disposeMethod!.Invoke(conn, new object[] { false }));
+        Assert.Null(ex);
+
+        // Close must NOT have been called from the finalizer path.
+        _mockInner.Verify(c => c.Close(), Times.Never());
+    }
+
+    // Minor: BeginDbTransactionAsync must override to call the inner's async path, not fall
+    // back to the sync BeginDbTransaction default in DbConnection.
+    [Fact]
+    public async Task BeginTransactionAsync_DelegatesToInnerAsync()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var mockTx = new Mock<DbTransaction>();
+        _mockInner.Protected()
+            .Setup<ValueTask<DbTransaction>>("BeginDbTransactionAsync",
+                IsolationLevel.ReadCommitted,
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(mockTx.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var conn = await gate.OpenAsync();
+
+        var tx = await conn.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+
+        Assert.Same(mockTx.Object, tx);
+        _mockInner.Protected().Verify("BeginDbTransactionAsync",
+            Times.Once(),
+            IsolationLevel.ReadCommitted,
+            ItExpr.IsAny<CancellationToken>());
     }
 }
