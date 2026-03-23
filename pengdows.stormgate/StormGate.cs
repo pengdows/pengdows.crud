@@ -340,8 +340,14 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                 }
                 finally
                 {
-                    _inner.Dispose();
-                    base.Dispose(disposing);
+                    try
+                    {
+                        _inner.Dispose();
+                    }
+                    finally
+                    {
+                        base.Dispose(disposing);
+                    }
                 }
             }
             else

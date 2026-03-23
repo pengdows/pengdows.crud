@@ -216,8 +216,11 @@ public partial class TableGateway<TEntity, TRowID> :
                 if (reader is IInternalTrackedReader internalReader)
                 {
                     var inner = internalReader.InnerReader;
-                    if (await inner.NextResultAsync().ConfigureAwait(false) && await inner.ReadAsync().ConfigureAwait(false))
+                    if (await inner.NextResultAsync().ConfigureAwait(false) &&
+                        await inner.ReadAsync().ConfigureAwait(false))
+                    {
                         generatedId = inner[0];
+                    }
                 }
             } // reader disposed here — connection released before any fallback query
 
@@ -348,7 +351,9 @@ public partial class TableGateway<TEntity, TRowID> :
                     var inner = internalReader.InnerReader;
                     if (await inner.NextResultAsync(cancellationToken).ConfigureAwait(false) &&
                         await inner.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
                         generatedId = inner[0];
+                    }
                 }
             } // reader disposed here — connection released before any fallback query
 
