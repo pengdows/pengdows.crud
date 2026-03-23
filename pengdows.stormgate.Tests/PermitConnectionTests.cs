@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace pengdows.stormgate.Tests;
 
 public class PermitConnectionTests
@@ -387,6 +389,34 @@ public class PermitConnectionTests
         conn.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => conn.BeginTransaction());
+    }
+
+    // Regression: Dispose(bool=false) is the finalizer path. If Close() throws and the
+    // PermitConnection is not explicitly disposed (e.g. after conn.Close() throws), the GC
+    // finalizer eventually calls Dispose(false). Exceptions from finalizers crash the process
+    // on .NET 10+. The finalizer path must never call Close().
+    [Fact]
+    public async Task FinalizerPath_Dispose_DoesNotCallClose()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Setup(c => c.Close()).Throws(new InvalidOperationException("provider close failed"));
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        // Invoke Dispose(false) via reflection to simulate the GC finalizer path.
+        // Must not throw — an exception from a finalizer crashes the process.
+        var disposeMethod = conn.GetType().GetMethod(
+            "Dispose",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null, new[] { typeof(bool) }, null);
+        Assert.NotNull(disposeMethod);
+
+        var ex = Record.Exception(() => disposeMethod!.Invoke(conn, new object[] { false }));
+        Assert.Null(ex);
+
+        // Close must NOT have been called from the finalizer path.
+        _mockInner.Verify(c => c.Close(), Times.Never());
     }
 
     // Minor: BeginDbTransactionAsync must override to call the inner's async path, not fall

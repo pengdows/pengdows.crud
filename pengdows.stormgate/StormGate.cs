@@ -327,22 +327,27 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                 return;
             }
 
-            // DbConnection.Dispose(bool) does not call Close() in .NET 8+.
-            // Call Close() explicitly so the inner connection is closed before dispose.
-            // Some providers are not idempotent if Close() is called after Dispose(),
-            // so we close first. Use try/finally to guarantee _inner.Dispose() runs
-            // even if Close() throws (e.g. provider already in a bad state).
-            try
+            if (disposing)
             {
-                Close();
-            }
-            finally
-            {
-                if (disposing)
+                // Managed dispose path: close before disposing the inner connection.
+                // DbConnection.Dispose(bool) does not call Close() in .NET 8+, so we
+                // call it explicitly. Some providers are not idempotent if Close() is
+                // called after Dispose(), so we close first. Use try/finally to
+                // guarantee _inner.Dispose() runs even if Close() throws.
+                try
+                {
+                    Close();
+                }
+                finally
                 {
                     _inner.Dispose();
+                    base.Dispose(disposing);
                 }
-
+            }
+            else
+            {
+                // Finalizer path: do not touch managed objects — they may already be
+                // collected or invalid. An exception from a finalizer crashes the process.
                 base.Dispose(disposing);
             }
         }
