@@ -301,9 +301,9 @@ jobs:
       - name: Generate version number
         id: version
         run: |
-          version=$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' Directory.Build.props | head -n1)
+          version=$(sed -n 's/.*<VersionPrefix>\([^<]*\)<\/VersionPrefix>.*/\1/p' Directory.Build.props | head -n1)
           if [[ -z "$version" ]]; then
-            echo "Version not found in Directory.Build.props"
+            echo "VersionPrefix not found in Directory.Build.props"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -476,7 +476,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          sed -i -E "s|<Version>[^<]+</Version>|<Version>${{ steps.next_version.outputs.next_version }}</Version>|" Directory.Build.props
+          sed -i -E "s|<VersionPrefix>[^<]+</VersionPrefix>|<VersionPrefix>${{ steps.next_version.outputs.next_version }}</VersionPrefix>|" Directory.Build.props
           sed -i -E "s|<AssemblyVersion>[^<]+</AssemblyVersion>|<AssemblyVersion>${{ steps.next_version.outputs.next_assembly_version }}</AssemblyVersion>|" Directory.Build.props
           sed -i -E "s|<FileVersion>[^<]+</FileVersion>|<FileVersion>${{ steps.next_version.outputs.next_assembly_version }}</FileVersion>|" Directory.Build.props
 
