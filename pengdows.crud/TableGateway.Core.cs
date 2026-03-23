@@ -193,7 +193,48 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
-        // 4. Default path: standard insert followed by optional session-scoped retrieval
+        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        // Appends the dialect's session-scoped ID query (e.g. "; SELECT LAST_INSERT_ID()")
+        // to the INSERT and executes both as a single batch on one connection.
+        // This fixes the two-lease hazard: LAST_INSERT_ID() / last_insert_rowid() are
+        // session-scoped; a separate pool lease could return a stale or zero value.
+        if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
+        {
+            await using var sc = BuildCreate(entity, ctx);
+            sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
+
+            // Scope the reader to this block so the connection is released before
+            // PopulateGeneratedIdAsync (which opens its own connection on pool/SingleConnection).
+            object? generatedId = null;
+            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
+            {
+                // First result set = INSERT (rows-affected, no data rows).
+                // Advance to the SELECT result set to read the generated ID.
+                // Use IInternalTrackedReader.InnerReader to bypass TrackedReader.NextResult() policy;
+                // the policy blocks multi-result for general use, but the compound path reads all
+                // result sets before disposing so the connection lifecycle is correctly managed.
+                if (reader is IInternalTrackedReader internalReader)
+                {
+                    var inner = internalReader.InnerReader;
+                    if (await inner.NextResultAsync().ConfigureAwait(false) && await inner.ReadAsync().ConfigureAwait(false))
+                        generatedId = inner[0];
+                }
+            } // reader disposed here — connection released before any fallback query
+
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+
+            // Fallback for providers/fakeDb that return false from NextResult()
+            // (e.g. fakeDbDataReader.NextResult always returns false).
+            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            return true;
+        }
+
+        // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -292,7 +333,37 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
-        // 4. Default path: standard insert followed by optional session-scoped retrieval
+        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
+        {
+            await using var sc = BuildCreate(entity, ctx);
+            sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
+
+            // Scope the reader to release the connection before PopulateGeneratedIdAsync.
+            object? generatedId = null;
+            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
+            {
+                if (reader is IInternalTrackedReader internalReader)
+                {
+                    var inner = internalReader.InnerReader;
+                    if (await inner.NextResultAsync(cancellationToken).ConfigureAwait(false) &&
+                        await inner.ReadAsync(cancellationToken).ConfigureAwait(false))
+                        generatedId = inner[0];
+                }
+            } // reader disposed here — connection released before any fallback query
+
+            if (generatedId != null && generatedId != DBNull.Value)
+            {
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+                _idColumn.PropertyInfo.SetValue(entity, converted);
+                return true;
+            }
+
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);

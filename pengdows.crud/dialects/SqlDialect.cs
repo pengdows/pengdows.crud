@@ -2261,6 +2261,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
+    /// Gets the SQL statement suffix to append to an INSERT for compound execution.
+    /// Used by the <see cref="GeneratedKeyPlan.CompoundStatement"/> path to retrieve
+    /// the generated key in the same round-trip as the INSERT, on the same connection.
+    /// Example (MySQL): "; SELECT LAST_INSERT_ID()"
+    /// Example (SQLite): "; SELECT last_insert_rowid()"
+    /// Note: enabling compound statements requires AllowMultipleStatements=true (MySQL/MariaDB)
+    /// in the connection string; SQLite supports it without any extra option.
+    /// </summary>
+    public virtual string GetCompoundInsertIdSuffix()
+    {
+        throw new NotSupportedException(
+            $"{DatabaseType} does not support compound INSERT+SELECT statements. " +
+            $"Override GetCompoundInsertIdSuffix() or use a different GeneratedKeyPlan.");
+    }
+
+    /// <summary>
     /// Gets the SQL query to retrieve the next value from a sequence.
     /// Default implementation is for Oracle; override for other sequence-supporting databases.
     /// </summary>

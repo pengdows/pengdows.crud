@@ -156,6 +156,22 @@ internal class MySqlDialect : SqlDialect
         return "SELECT LAST_INSERT_ID()";
     }
 
+    /// <summary>
+    /// MySQL/MariaDB use the compound statement plan: INSERT ...; SELECT LAST_INSERT_ID()
+    /// executed as a single batch on one connection. This fixes the two-lease correctness
+    /// hazard where LAST_INSERT_ID() is session-scoped and a separate connection pool
+    /// lease could return a wrong or zero value.
+    /// </summary>
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.CompoundStatement;
+
+    /// <summary>
+    /// SQL suffix appended to INSERT for compound execution.
+    /// Requires AllowMultipleStatements=true in the MySqlConnector connection string
+    /// (or "Allow Multiple Statements=true" for Oracle's MySql.Data).
+    /// Both options are injected automatically by PrepareConnectionStringForDataSource.
+    /// </summary>
+    public override string GetCompoundInsertIdSuffix() => "; SELECT LAST_INSERT_ID()";
+
     public override string GetVersionQuery()
     {
         return "SELECT VERSION()";
@@ -251,12 +267,9 @@ internal class MySqlDialect : SqlDialect
             "Failed to configure MySQL session settings, applying default settings");
     }
 
-    /// <summary>
-    /// Pass through — Snowflake.Data handles warehouse/role/schema in the connection string.
-    /// </summary>
     internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
     {
-        if (!_isMySqlConnector || string.IsNullOrWhiteSpace(connectionString))
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
             return connectionString;
         }
@@ -266,14 +279,41 @@ internal class MySqlDialect : SqlDialect
             var builder = Factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
             builder.ConnectionString = connectionString;
 
-            // PERFORMANCE: Disable driver-level connection reset to avoid an extra RTT per lease.
-            // Since pengdows.crud enforces a session baseline on every lease, driver-level reset
-            // is redundant and expensive.
-            const string resetKey = "ConnectionReset";
-            if (!builder.ContainsKey(resetKey))
+            if (_isMySqlConnector)
             {
-                builder[resetKey] = false;
-                Logger.LogDebug("Injecting ConnectionReset=false for MySqlConnector to optimize lease performance (1 RTT strategy)");
+                // PERFORMANCE: Disable driver-level connection reset to avoid an extra RTT per lease.
+                // Since pengdows.crud enforces a session baseline on every lease, driver-level reset
+                // is redundant and expensive.
+                const string resetKey = "ConnectionReset";
+                if (!builder.ContainsKey(resetKey))
+                {
+                    builder[resetKey] = false;
+                    Logger.LogDebug("Injecting ConnectionReset=false for MySqlConnector to optimize lease performance (1 RTT strategy)");
+                }
+
+                // CORRECTNESS: Enable multi-statement execution for the CompoundStatement plan
+                // (INSERT ...; SELECT LAST_INSERT_ID()). This ensures both statements execute on
+                // the same connection in one round-trip, preventing the two-lease hazard where
+                // LAST_INSERT_ID() returns 0 or a stale value on a different pool connection.
+                // Safe: pengdows.crud always parameterizes values and never interpolates user
+                // data into SQL strings, so enabling multi-statement batching does not introduce
+                // SQL injection risk.
+                const string multiStmtKey = "AllowMultipleStatements";
+                if (!builder.ContainsKey(multiStmtKey))
+                {
+                    builder[multiStmtKey] = true;
+                    Logger.LogDebug("Injecting AllowMultipleStatements=true for MySqlConnector to support CompoundStatement generated-key plan");
+                }
+            }
+            else
+            {
+                // Oracle MySql.Data: enable multi-statement execution via its own key name.
+                const string multiStmtKey = "Allow Multiple Statements";
+                if (!builder.ContainsKey(multiStmtKey))
+                {
+                    builder[multiStmtKey] = true;
+                    Logger.LogDebug("Injecting 'Allow Multiple Statements=true' for Oracle MySql.Data to support CompoundStatement generated-key plan");
+                }
             }
 
             return builder.ConnectionString;

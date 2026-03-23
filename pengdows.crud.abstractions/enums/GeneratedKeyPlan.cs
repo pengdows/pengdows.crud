@@ -53,5 +53,15 @@ public enum GeneratedKeyPlan
     /// Only safe with unique constraints on the lookup columns.
     /// Requires explicit opt-in due to potential race conditions.
     /// </summary>
-    NaturalKeyLookup = 6
+    NaturalKeyLookup = 6,
+
+    /// <summary>
+    /// Execute INSERT and session-scoped ID function as a single compound statement.
+    /// Example: INSERT ... ; SELECT LAST_INSERT_ID()
+    /// Requires multi-statement support enabled in the provider connection string.
+    /// Fixes the two-lease correctness hazard of SessionScopedFunction for databases
+    /// (MySQL, MariaDB, SQLite pre-3.35) where connection pool may assign a different
+    /// physical connection for the follow-up scalar query.
+    /// </summary>
+    CompoundStatement = 7
 }

@@ -48,10 +48,12 @@ public class TableGatewayCreateAsyncErrorTests
     public async Task CreateAsync_Should_Return_False_When_Multiple_Rows_Affected()
     {
         // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        // Use Unknown (CorrelationToken plan → default path 5 with ExecuteNonQueryAsync).
+        // MariaDb now uses CompoundStatement path which doesn't check rows-affected.
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         factory.SetNonQueryResult(2); // Multiple rows affected (unexpected)
 
-        var context = new DatabaseContext("test", factory, _typeMap);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Unknown", factory, _typeMap);
         var helper = new TableGateway<TestEntitySimple, int>(context);
 
         var entity = new TestEntitySimple { Name = "Test" };

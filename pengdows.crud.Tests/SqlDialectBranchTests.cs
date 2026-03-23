@@ -33,8 +33,8 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.Oracle, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.SqlServer, GeneratedKeyPlan.OutputInserted)]
     [InlineData(SupportedDatabase.PostgreSql, GeneratedKeyPlan.Returning)]
-    [InlineData(SupportedDatabase.MySql, GeneratedKeyPlan.SessionScopedFunction)]
-    [InlineData(SupportedDatabase.Sqlite, GeneratedKeyPlan.SessionScopedFunction)]
+    [InlineData(SupportedDatabase.MySql, GeneratedKeyPlan.CompoundStatement)]
+    [InlineData(SupportedDatabase.Sqlite, GeneratedKeyPlan.CompoundStatement)]
     [InlineData(SupportedDatabase.DuckDB, GeneratedKeyPlan.Returning)]
     [InlineData(SupportedDatabase.Unknown, GeneratedKeyPlan.CorrelationToken)]
     public void GetGeneratedKeyPlan_ReturnsExpected(SupportedDatabase db, GeneratedKeyPlan expected)
