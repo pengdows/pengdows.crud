@@ -143,7 +143,7 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         [Column("Id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Json] [Column("Data", DbType.String)] public Payload? Data { get; set; }
+        [Json][Column("Data", DbType.String)] public Payload? Data { get; set; }
     }
 
     private class Payload

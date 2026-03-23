@@ -138,14 +138,14 @@ public class IsolationLevelSupportTests
     public static IEnumerable<object[]> GetProfileMappingExpectations()
     {
         // TiDB: no true Serializable — StrictConsistency degrades to RepeatableRead
-        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.SafeNonBlockingReads,  IsolationLevel.RepeatableRead };
-        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.StrictConsistency,     IsolationLevel.RepeatableRead };
-        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.FastWithRisks,         IsolationLevel.ReadCommitted  };
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead };
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.StrictConsistency, IsolationLevel.RepeatableRead };
+        yield return new object[] { SupportedDatabase.TiDb, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted };
 
         // Snowflake: only ReadCommitted is supported
         yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.SafeNonBlockingReads, IsolationLevel.ReadCommitted };
-        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.StrictConsistency,    IsolationLevel.ReadCommitted };
-        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.FastWithRisks,        IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.StrictConsistency, IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted };
     }
 
     [Fact]

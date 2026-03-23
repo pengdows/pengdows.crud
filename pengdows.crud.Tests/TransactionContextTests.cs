@@ -110,7 +110,7 @@ public class TransactionContextTests
 
     [Theory]
     [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.Sqlite,      IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.ReadCommitted)]
     public void Constructor_SetsIsolationLevel_Correctly(SupportedDatabase supportedDatabase, IsolationLevel level)
     {
         using var tx = CreateContext(supportedDatabase).BeginTransaction(level);

@@ -55,11 +55,11 @@ public class SqlContainerReuseLoopTests : SqlLiteContextTestBase
             DbMode = pengdows.crud.enums.DbMode.Standard,
             EnableMetrics = true
         };
-        
+
         // Use the same factory as the base class
         var factory = new fakeDbFactory(pengdows.crud.enums.SupportedDatabase.Sqlite);
         factory.EnableDataPersistence = true;
-        
+
         await using var standardContext = new DatabaseContext(config, factory, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance, TypeMap);
         var gateway = new TableGateway<TestEntity, int>(standardContext, AuditValueResolver);
 
@@ -83,7 +83,7 @@ public class SqlContainerReuseLoopTests : SqlLiteContextTestBase
         for (int i = 0; i < entities.Count; i++)
         {
             var targetId = entities[i].Id;
-            
+
             // Update the parameter value
             sc.SetParameterValue("p0", targetId);
 
@@ -99,7 +99,7 @@ public class SqlContainerReuseLoopTests : SqlLiteContextTestBase
         // 5. Verify that multiple connections were opened (one for each LoadSingleAsync call)
         var finalMetrics = standardContext.Metrics;
         var newOpens = finalMetrics.ConnectionsOpened - opensAfterSeed;
-        
+
         // We expect exactly entities.Count (5) new connections to have been opened
         Assert.Equal(entities.Count, (int)newOpens);
     }

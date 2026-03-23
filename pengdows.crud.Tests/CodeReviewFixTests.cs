@@ -169,7 +169,7 @@ public class CodeReviewFixTests
     [Table("no_pk_entity")]
     public class NoPrimaryKeyEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }

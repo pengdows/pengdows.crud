@@ -165,7 +165,7 @@ internal class AdvancedTypeRegistry
     {
         var type = typeof(T);
         type = Nullable.GetUnderlyingType(type) ?? type;
-        
+
         var key = new MappingKey(type, provider);
         _mappings[key] = mapping;
         _mappedTypes[type] = 0;
@@ -220,7 +220,7 @@ internal class AdvancedTypeRegistry
     {
         // Unwrap nullable to ensure DateTime? matches DateTime mapping, etc.
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
-        
+
         var key = new MappingKey(clrType, provider);
         var currentVersion = _converterVersion;
 
@@ -392,9 +392,9 @@ internal class AdvancedTypeRegistry
                     decimal dec;
                     if (value is decimal d) dec = d;
                     else dec = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                    
+
                     param.Value = (double)dec;
-                    
+
                     // Maintain Precision/Scale metadata even when storing as double
                     // to satisfy unit tests and provide consistent parameter shapes.
                     var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);

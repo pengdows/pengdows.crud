@@ -514,7 +514,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         var prefix = QuotePrefix;
         var suffix = QuoteSuffix;
-        
+
         // Fast path for clean identifiers: if it doesn't contain the quote char, simple concat.
         // We only care about the suffix char (the closer), as that's the one that breaks the string.
         var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
@@ -596,7 +596,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             // IDEMPOTENCY: If segment is already wrapped in prefix/suffix, leave it alone.
             if (segment.Length >= (prefixSpan.Length + suffixSpan.Length) &&
-                segment.StartsWith(prefixSpan) && 
+                segment.StartsWith(prefixSpan) &&
                 segment.EndsWith(suffixSpan))
             {
                 builder.Append(segment);
@@ -779,7 +779,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             var c = value[i];
             builder.Append(c);
-            
+
             if (quoteChar != 0 && c == quoteChar)
             {
                 builder.Append(c); // Double it
@@ -2245,7 +2245,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 param.DbType = DbType.Binary;
                 param.Value = SerializeGuidAsBinary(guid);
                 break;
-            // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
+                // PassThrough: DbType.Guid + raw Guid value are already set — nothing to do.
         }
     }
 

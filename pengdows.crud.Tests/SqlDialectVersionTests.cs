@@ -64,7 +64,7 @@ public class SqlDialectVersionTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var conn = new ThrowingConnection
-            { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
+        { ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.SqlServer}" };
         using var tracked = new TrackedConnection(conn);
         var dialect = SqlDialectFactory.CreateDialectForType(
             SupportedDatabase.SqlServer,

@@ -11,7 +11,7 @@ using pengdows.crud.attributes;
 [Table("test_table")]
 public class TestTable
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("name", DbType.String)]

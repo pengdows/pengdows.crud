@@ -10,7 +10,7 @@ namespace testbed;
 [Table("test_table")]
 public class TestTable
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [Column("name", DbType.String)]
     [EnumColumn(typeof(NameEnum))]

@@ -137,10 +137,10 @@ public class PrimaryKeyTableGatewayTests
         factory.EnableDataPersistence = true;
         var cs = db switch
         {
-            SupportedDatabase.PostgreSql  => "Host=localhost;EmulatedProduct=PostgreSql",
-            SupportedDatabase.MySql       => "Server=localhost;EmulatedProduct=MySql",
-            SupportedDatabase.SqlServer   => "Server=localhost;EmulatedProduct=SqlServer",
-            _                             => "Data Source=:memory:;EmulatedProduct=Sqlite"
+            SupportedDatabase.PostgreSql => "Host=localhost;EmulatedProduct=PostgreSql",
+            SupportedDatabase.MySql => "Server=localhost;EmulatedProduct=MySql",
+            SupportedDatabase.SqlServer => "Server=localhost;EmulatedProduct=SqlServer",
+            _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
         return new DatabaseContext(cs, factory);
     }

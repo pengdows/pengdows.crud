@@ -161,7 +161,7 @@ public class CachedContainerTemplateTests : SqlLiteContextTestBase
     [Table("Template")]
     private class TemplateEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -171,7 +171,7 @@ public class CachedContainerTemplateTests : SqlLiteContextTestBase
     [Table("AuditTemplate")]
     private class AuditTemplateEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -195,7 +195,7 @@ public class CachedContainerTemplateTests : SqlLiteContextTestBase
     [Table("VersionTemplate")]
     private class VersionTemplateEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 

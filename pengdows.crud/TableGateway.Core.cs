@@ -130,14 +130,14 @@ public partial class TableGateway<TEntity, TRowID> :
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
-            
+
             // Proceed with standard insert since ID is now populated
             await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
@@ -171,7 +171,7 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
             {
@@ -181,12 +181,12 @@ public partial class TableGateway<TEntity, TRowID> :
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
                 _idColumn.Name,
-                _tableInfo.CorrelationColumn.Name, 
+                _tableInfo.CorrelationColumn.Name,
                 dialect.MakeParameterName("p1"));
-                
+
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
             lookupSc.AddParameterWithValue("p1", DbType.String, token);
-            
+
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
@@ -269,13 +269,13 @@ public partial class TableGateway<TEntity, TRowID> :
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) && 
+        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
@@ -311,7 +311,7 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var token = Guid.NewGuid().ToString("N");
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
-            
+
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
             {
@@ -320,13 +320,13 @@ public partial class TableGateway<TEntity, TRowID> :
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
-                _idColumn.Name, 
-                _tableInfo.CorrelationColumn.Name, 
+                _idColumn.Name,
+                _tableInfo.CorrelationColumn.Name,
                 dialect.MakeParameterName("p1"));
-                
+
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
             lookupSc.AddParameterWithValue("p1", DbType.String, token);
-            
+
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
@@ -485,12 +485,12 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
             var sc = containerTemplates.InsertTemplate.Clone(ctx);
-            
+
             // Optimized monolithic binding: bypass sc.SetParameterValue dictionary lookups.
             // We clear the cloned parameters and re-add them using the fast binder.
-            sc.Clear(); 
+            sc.Clear();
             ((SqlQueryBuilder)sc.Query).CopyFrom((SqlQueryBuilder)containerTemplates.InsertTemplate.Query); // Restore query after Clear()
-            
+
             var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
             var parameters = new List<DbParameter>(sqlTemplate.InsertColumns.Count);
             binder(entity, parameters);
@@ -1147,19 +1147,19 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, dialect));
     }
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, dialect));
     }
 
     private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ => 
+        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ =>
             CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
     }
 

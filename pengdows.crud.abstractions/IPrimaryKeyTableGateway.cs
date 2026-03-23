@@ -31,10 +31,10 @@ public interface IPrimaryKeyTableGateway<TEntity>
 {
     /// <summary>Fully qualified, quoted table name used by this entity.</summary>
     string WrappedTableName { get; }
-/// <summary>
-/// Determines what happens when enum parsing fails.
-/// </summary>
-EnumParseFailureMode EnumParseBehavior { get; }
+    /// <summary>
+    /// Determines what happens when enum parsing fails.
+    /// </summary>
+    EnumParseFailureMode EnumParseBehavior { get; }
     // =========================================================================
     // CREATE
     // =========================================================================

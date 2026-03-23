@@ -637,133 +637,133 @@ CREATE TABLE {tableName} (
             case SupportedDatabase.MySql:
             case SupportedDatabase.AuroraMySql:
             case SupportedDatabase.MariaDb:
-            {
-                var mysqlProcName = _context.WrapObjectName("sp_pengdows_test");
-                // MySQL/MariaDB: CALL `proc_name`() — proc body uses BEGIN...END with SELECT.
-                // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
-                // no DELIMITER change needed over ADO.NET.
-                //
-                // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
-                // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
-                // error and skip gracefully so TiDB does not fail the run.
-                sc.Query.Append(
-                    $"CREATE PROCEDURE {mysqlProcName}()\n" +
-                    "BEGIN\n" +
-                    "  SELECT 42;\n" +
-                    "END");
-                await sc.ExecuteNonQueryAsync();
-
-                // CALL `sp_pengdows_test`() — result set contains one row with value 42.
-                sc.Clear();
-                sc.Query.Append("sp_pengdows_test");
-                var mysqlWrapped = sc.WrapForStoredProc(ExecutionType.Write);
-                sc.Clear();
-                sc.Query.Append(mysqlWrapped);
-                var mysqlResult = await sc.ExecuteScalarOrNullAsync<int>();
-                if (mysqlResult != 42)
                 {
-                    throw new Exception($"[MySQL/MariaDB proc] Expected 42 but got {mysqlResult}");
-                }
+                    var mysqlProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // MySQL/MariaDB: CALL `proc_name`() — proc body uses BEGIN...END with SELECT.
+                    // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
+                    // no DELIMITER change needed over ADO.NET.
+                    //
+                    // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
+                    // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
+                    // error and skip gracefully so TiDB does not fail the run.
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {mysqlProcName}()\n" +
+                        "BEGIN\n" +
+                        "  SELECT 42;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
 
-                sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {mysqlProcName}");
-                await sc.ExecuteNonQueryAsync();
-                break;
-            }
+                    // CALL `sp_pengdows_test`() — result set contains one row with value 42.
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var mysqlWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(mysqlWrapped);
+                    var mysqlResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (mysqlResult != 42)
+                    {
+                        throw new Exception($"[MySQL/MariaDB proc] Expected 42 but got {mysqlResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {mysqlProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
 
             case SupportedDatabase.PostgreSql:
             case SupportedDatabase.AuroraPostgreSql:
             case SupportedDatabase.CockroachDb:
             case SupportedDatabase.YugabyteDb:
-            {
-                var pgFunctionName = _context.WrapObjectName("fn_pengdows_test");
-                // PostgreSQL: Read path → SELECT * FROM "fn_name"(); Write path → CALL "proc_name"().
-                // Use a SQL function (CREATE OR REPLACE FUNCTION) which supports SELECT * FROM invocation
-                // and is compatible across PostgreSQL, CockroachDB (22.2+), and YugabyteDB.
-                sc.Query.Append(
-                    $"CREATE OR REPLACE FUNCTION {pgFunctionName}()\n" +
-                    "RETURNS INTEGER\n" +
-                    "LANGUAGE SQL\n" +
-                    "AS $$\n" +
-                    "  SELECT 42;\n" +
-                    "$$");
-                await sc.ExecuteNonQueryAsync();
-
-                // SELECT * FROM "fn_pengdows_test"() — returns one row, one column: 42.
-                sc.Clear();
-                sc.Query.Append("fn_pengdows_test");
-                var pgWrapped = sc.WrapForStoredProc(ExecutionType.Read);
-                sc.Clear();
-                sc.Query.Append(pgWrapped);
-                var pgResult = await sc.ExecuteScalarOrNullAsync<int>();
-                if (pgResult != 42)
                 {
-                    throw new Exception($"[PostgreSQL func] Expected 42 but got {pgResult}");
-                }
+                    var pgFunctionName = _context.WrapObjectName("fn_pengdows_test");
+                    // PostgreSQL: Read path → SELECT * FROM "fn_name"(); Write path → CALL "proc_name"().
+                    // Use a SQL function (CREATE OR REPLACE FUNCTION) which supports SELECT * FROM invocation
+                    // and is compatible across PostgreSQL, CockroachDB (22.2+), and YugabyteDB.
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE FUNCTION {pgFunctionName}()\n" +
+                        "RETURNS INTEGER\n" +
+                        "LANGUAGE SQL\n" +
+                        "AS $$\n" +
+                        "  SELECT 42;\n" +
+                        "$$");
+                    await sc.ExecuteNonQueryAsync();
 
-                sc.Clear();
-                sc.Query.Append($"DROP FUNCTION {pgFunctionName}()");
-                await sc.ExecuteNonQueryAsync();
-                break;
-            }
+                    // SELECT * FROM "fn_pengdows_test"() — returns one row, one column: 42.
+                    sc.Clear();
+                    sc.Query.Append("fn_pengdows_test");
+                    var pgWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(pgWrapped);
+                    var pgResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (pgResult != 42)
+                    {
+                        throw new Exception($"[PostgreSQL func] Expected 42 but got {pgResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP FUNCTION {pgFunctionName}()");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
 
             case SupportedDatabase.Oracle:
-            {
-                var oracleProcName = _context.WrapObjectName("sp_pengdows_test");
-                // Oracle: BEGIN "proc_name"; END; (anonymous PL/SQL block invocation).
-                // Oracle stored procs don't return result sets; verify the call executes without error.
-                // Quote the proc name in CREATE so Oracle stores it case-sensitively as lowercase,
-                // matching the quoted reference that WrapForStoredProc generates.
-                sc.Query.Append(
-                    $"CREATE OR REPLACE PROCEDURE {oracleProcName} AS BEGIN NULL; END;");
-                await sc.ExecuteNonQueryAsync();
-
-                sc.Clear();
-                sc.Query.Append("sp_pengdows_test");
-                var oracleWrapped = sc.WrapForStoredProc(ExecutionType.Write);
-                sc.Clear();
-                sc.Query.Append(oracleWrapped);
-                await sc.ExecuteNonQueryAsync(); // Just verify it runs without error.
-
-                sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {oracleProcName}");
-                await sc.ExecuteNonQueryAsync();
-                break;
-            }
-
-            case SupportedDatabase.Firebird:
-            {
-                var firebirdProcName = _context.WrapObjectName("sp_pengdows_test");
-                // Firebird: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read path.
-                // Identifiers must be quoted in DDL to preserve case so the quoted invocation
-                // generated by WrapForStoredProc (which calls WrapObjectName) matches at runtime.
-                sc.Query.Append(
-                    $"CREATE OR ALTER PROCEDURE {firebirdProcName}\n" +
-                    "RETURNS (result_val INTEGER)\n" +
-                    "AS\n" +
-                    "BEGIN\n" +
-                    "  result_val = 42;\n" +
-                    "  SUSPEND;\n" +
-                    "END");
-                await sc.ExecuteNonQueryAsync();
-
-                // SELECT * FROM "sp_pengdows_test" — returns one row, result_val = 42.
-                sc.Clear();
-                sc.Query.Append("sp_pengdows_test");
-                var fbWrapped = sc.WrapForStoredProc(ExecutionType.Read);
-                sc.Clear();
-                sc.Query.Append(fbWrapped);
-                var fbResult = await sc.ExecuteScalarOrNullAsync<int>();
-                if (fbResult != 42)
                 {
-                    throw new Exception($"[Firebird proc] Expected 42 but got {fbResult}");
+                    var oracleProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // Oracle: BEGIN "proc_name"; END; (anonymous PL/SQL block invocation).
+                    // Oracle stored procs don't return result sets; verify the call executes without error.
+                    // Quote the proc name in CREATE so Oracle stores it case-sensitively as lowercase,
+                    // matching the quoted reference that WrapForStoredProc generates.
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {oracleProcName} AS BEGIN NULL; END;");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var oracleWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(oracleWrapped);
+                    await sc.ExecuteNonQueryAsync(); // Just verify it runs without error.
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {oracleProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
                 }
 
-                sc.Clear();
-                sc.Query.Append($"DROP PROCEDURE {firebirdProcName}");
-                await sc.ExecuteNonQueryAsync();
-                break;
-            }
+            case SupportedDatabase.Firebird:
+                {
+                    var firebirdProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // Firebird: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read path.
+                    // Identifiers must be quoted in DDL to preserve case so the quoted invocation
+                    // generated by WrapForStoredProc (which calls WrapObjectName) matches at runtime.
+                    sc.Query.Append(
+                        $"CREATE OR ALTER PROCEDURE {firebirdProcName}\n" +
+                        "RETURNS (result_val INTEGER)\n" +
+                        "AS\n" +
+                        "BEGIN\n" +
+                        "  result_val = 42;\n" +
+                        "  SUSPEND;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    // SELECT * FROM "sp_pengdows_test" — returns one row, result_val = 42.
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var fbWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(fbWrapped);
+                    var fbResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (fbResult != 42)
+                    {
+                        throw new Exception($"[Firebird proc] Expected 42 but got {fbResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {firebirdProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
 
             default:
                 throw new Exception(
@@ -1547,12 +1547,12 @@ INSERT INTO {table} (
                 or SupportedDatabase.Firebird
                 or SupportedDatabase.Sqlite
                 or SupportedDatabase.YugabyteDb => IsolationLevel.ReadUncommitted,
-            SupportedDatabase.Oracle           => IsolationLevel.RepeatableRead,
+            SupportedDatabase.Oracle => IsolationLevel.RepeatableRead,
             SupportedDatabase.CockroachDb
-                or SupportedDatabase.DuckDB    => IsolationLevel.ReadCommitted,
-            SupportedDatabase.TiDb             => IsolationLevel.Serializable,
-            SupportedDatabase.Snowflake        => IsolationLevel.RepeatableRead,
-            _                                  => null
+                or SupportedDatabase.DuckDB => IsolationLevel.ReadCommitted,
+            SupportedDatabase.TiDb => IsolationLevel.Serializable,
+            SupportedDatabase.Snowflake => IsolationLevel.RepeatableRead,
+            _ => null
         };
 
         if (unsupported is null)

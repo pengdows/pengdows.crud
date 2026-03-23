@@ -240,18 +240,18 @@ internal class MySqlDialect : SqlDialect
             conn =>
             {
                 var version = ProductInfo.ParsedVersion;
-                var useLegacyModes = version == null || 
-                                     _flavor == SupportedDatabase.MariaDb || 
+                var useLegacyModes = version == null ||
+                                     _flavor == SupportedDatabase.MariaDb ||
                                      version < MySqlLegacyModeDeprecationThreshold;
-                
-                var flags = useLegacyModes 
-                    ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}" 
+
+                var flags = useLegacyModes
+                    ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}"
                     : RequiredSqlModeFlags;
 
                 // Overwrite-only policy: Always set the full sql_mode to our standard baseline.
                 // This is safer than delta interrogation across a pooled connection lifetime.
                 var script = $"SET SESSION {SqlModeSettingName} = '{flags}';";
-                
+
                 return new SessionSettingsResult(script, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     [SqlModeSettingName] = flags

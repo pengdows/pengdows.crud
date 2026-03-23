@@ -143,7 +143,7 @@ public class TableGatewayOrderingTests : SqlLiteContextTestBase
     [Table("Default")]
     private class DefaultEntity
     {
-        [Id] [Column("B", DbType.Int32)] public int B { get; set; }
+        [Id][Column("B", DbType.Int32)] public int B { get; set; }
 
         [Column("A", DbType.Int32)] public int A { get; set; }
     }

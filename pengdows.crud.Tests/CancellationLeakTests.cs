@@ -121,7 +121,7 @@ public class CancellationLeakTests
     {
         // Setup: Use a context with MaxConcurrentWrites = 1 to easily detect leaks
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        
+
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Host=localhost;Database=test;Username=user;Password=pass;EmulatedProduct=PostgreSql",
@@ -130,9 +130,9 @@ public class CancellationLeakTests
             DbMode = DbMode.Standard,
             EnableMetrics = true
         };
-        
+
         using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         var conn = new HangingFakeDbConnection();
         conn.EmulatedProduct = SupportedDatabase.PostgreSql;
         factory.Connections.Add(conn);
@@ -143,28 +143,28 @@ public class CancellationLeakTests
 
         using var sc = ctx.CreateSqlContainer("INSERT INTO test (id) VALUES (1)");
         using var cts = new CancellationTokenSource();
-        
+
         var task = sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cts.Token);
         await Task.Delay(200);
-        
+
         var snapshotDuring = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
         Assert.Equal(1, snapshotDuring.InUse);
-        
+
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
-        
+
         await Task.Delay(100);
         var snapshotAfter = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
         Assert.Equal(0, snapshotAfter.InUse);
-        
+
         var conn2 = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
         conn2.EnqueueScalarResult(42);
         factory.Connections.Add(conn2);
-        
+
         using var sc2 = ctx.CreateSqlContainer("SELECT 1");
         var result = await sc2.ExecuteScalarRequiredAsync<int>();
         Assert.Equal(42, result);
-        
+
         var snapshotFinal = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
         Assert.Equal(0, snapshotFinal.InUse);
     }
@@ -181,38 +181,38 @@ public class CancellationLeakTests
             DbMode = DbMode.Standard,
             EnableMetrics = true
         };
-        
+
         using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
+
         var rows = new[] { new Dictionary<string, object> { ["Id"] = 1 } };
         var hangingReader = new HangingFakeDbDataReader(rows);
-        
+
         var connProxy = new ReaderProxyConnection(hangingReader);
         connProxy.EmulatedProduct = SupportedDatabase.PostgreSql;
         factory.Connections.Add(connProxy);
 
         using var sc = ctx.CreateSqlContainer("SELECT * FROM test");
-        
+
         var reader = await sc.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text, CancellationToken.None);
-        
+
         var snapshotDuring = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
         Assert.Equal(1, snapshotDuring.InUse);
-        
+
         using var cts = new CancellationTokenSource();
         var readTask = reader.ReadAsync(cts.Token);
-        
+
         await Task.Delay(200);
         Assert.False(readTask.IsCompleted);
-        
+
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await readTask);
-        
+
         await reader.DisposeAsync();
-        
+
         await Task.Delay(100);
         var snapshotAfter = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
         Assert.Equal(0, snapshotAfter.InUse);
-        
+
         var conn2 = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
         conn2.EnqueueScalarResult(42);
         factory.Connections.Add(conn2);
@@ -233,57 +233,57 @@ public class CancellationLeakTests
             DbMode = DbMode.Standard,
             EnableMetrics = true
         };
-        
+
         using var ctx = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        
-        var rows = new[] 
-        { 
+
+        var rows = new[]
+        {
             new Dictionary<string, object> { ["id"] = 1 },
             new Dictionary<string, object> { ["id"] = 2 }
         };
         var hangingReader = new HangingFakeDbDataReader(rows);
-        
+
         var connProxy = new ReaderProxyConnection(hangingReader);
         connProxy.EmulatedProduct = SupportedDatabase.PostgreSql;
         factory.Connections.Add(connProxy);
 
         var gateway = new TableGateway<TestEntity, int>(ctx, null);
-        
+
         using var cts = new CancellationTokenSource();
         var stream = gateway.RetrieveStreamAsync(new[] { 1, 2 }, null, cts.Token);
         var enumerator = stream.GetAsyncEnumerator(cts.Token);
-        
+
         // 1. First row
         var moveNext1 = enumerator.MoveNextAsync();
         hangingReader.Release();
         Assert.True(await moveNext1);
         Assert.Equal(1, enumerator.Current.Id);
-        
+
         var snapshotDuring = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
         Assert.Equal(1, snapshotDuring.InUse);
-        
+
         // 2. Second row - this one will hang
         var moveNext2 = enumerator.MoveNextAsync();
         await Task.Delay(200);
         Assert.False(moveNext2.IsCompleted);
-        
+
         // 3. Cancel
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await moveNext2);
-        
+
         // 4. Dispose enumerator
         await enumerator.DisposeAsync();
-        
+
         // 5. Verify the slot is released
         await Task.Delay(100);
         var snapshotAfter = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
         Assert.Equal(0, snapshotAfter.InUse);
-        
+
         // 6. Final verification
         var connFinal = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
         connFinal.EnqueueScalarResult(42);
         factory.Connections.Add(connFinal);
-        
+
         using var sc2 = ctx.CreateSqlContainer("SELECT 1");
         var result = await sc2.ExecuteScalarRequiredAsync<int>();
         Assert.Equal(42, result);

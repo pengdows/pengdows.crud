@@ -29,14 +29,14 @@ public class TypeHydrationTests : DatabaseTestBase
     private static readonly Guid s_guid3 = new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
     private static readonly DateTime s_dt1 = new(2024, 3, 15, 10, 30, 45, DateTimeKind.Utc);
-    private static readonly DateTime s_dt2 = new(1970, 1, 1,  0,  0,  0,  DateTimeKind.Utc);
-    private static readonly DateTime s_dt3 = new(2000, 1, 1,  0,  0,  0,  DateTimeKind.Utc);
+    private static readonly DateTime s_dt2 = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime s_dt3 = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     // All DateTimeOffset values use UTC (TimeSpan.Zero) so providers that normalise
     // to UTC (MySQL, MariaDB, Firebird, Snowflake) produce the same UTC instant.
     private static readonly DateTimeOffset s_dto1 = new(2024, 3, 15, 10, 30, 45, TimeSpan.Zero);
     private static readonly DateTimeOffset s_dto2 = DateTimeOffset.UnixEpoch;
-    private static readonly DateTimeOffset s_dto3 = new(2000, 1, 1,  0,  0,  0,  TimeSpan.Zero);
+    private static readonly DateTimeOffset s_dto3 = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     public TypeHydrationTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)
@@ -115,68 +115,68 @@ public class TypeHydrationTests : DatabaseTestBase
 
     private static TypeHydrationEntity MakeTypicalRow(long id) => new()
     {
-        Id           = id,
-        ColString     = "Hello, World!",
+        Id = id,
+        ColString = "Hello, World!",
         ColStringNull = "not null value",
-        ColShort      = 1_234,
-        ColInt        = 1_234_567,
-        ColIntNull    = 42,
-        ColLong       = 1_234_567_890L,
-        ColFloat      = 1.5f,
-        ColDouble     = 3.5,
-        ColDecimal    = 9_876.54321m,
-        ColBool       = true,
-        ColBoolNull   = true,
-        ColDateTime   = s_dt1,
+        ColShort = 1_234,
+        ColInt = 1_234_567,
+        ColIntNull = 42,
+        ColLong = 1_234_567_890L,
+        ColFloat = 1.5f,
+        ColDouble = 3.5,
+        ColDecimal = 9_876.54321m,
+        ColBool = true,
+        ColBoolNull = true,
+        ColDateTime = s_dt1,
         ColDateTimeOffset = s_dto1,
-        ColGuid       = s_guid1,
-        ColBinary     = [0x01, 0x23, 0x45, 0x67],
-        ColEnumInt    = TypeHydrationEnum.Alpha,
-        ColEnumStr    = TypeHydrationEnum.Alpha,
+        ColGuid = s_guid1,
+        ColBinary = [0x01, 0x23, 0x45, 0x67],
+        ColEnumInt = TypeHydrationEnum.Alpha,
+        ColEnumStr = TypeHydrationEnum.Alpha,
     };
 
     private static TypeHydrationEntity MakeZeroRow(long id) => new()
     {
-        Id            = id,
-        ColString     = "",
+        Id = id,
+        ColString = "",
         ColStringNull = null,
-        ColShort      = 0,
-        ColInt        = 0,
-        ColIntNull    = null,
-        ColLong       = 0L,
-        ColFloat      = 0.0f,
-        ColDouble     = 0.0,
-        ColDecimal    = 0m,
-        ColBool       = false,
-        ColBoolNull   = null,
-        ColDateTime   = s_dt2,
+        ColShort = 0,
+        ColInt = 0,
+        ColIntNull = null,
+        ColLong = 0L,
+        ColFloat = 0.0f,
+        ColDouble = 0.0,
+        ColDecimal = 0m,
+        ColBool = false,
+        ColBoolNull = null,
+        ColDateTime = s_dt2,
         ColDateTimeOffset = s_dto2,
-        ColGuid       = Guid.Empty,
-        ColBinary     = null,
-        ColEnumInt    = TypeHydrationEnum.Zero,
-        ColEnumStr    = TypeHydrationEnum.Zero,
+        ColGuid = Guid.Empty,
+        ColBinary = null,
+        ColEnumInt = TypeHydrationEnum.Zero,
+        ColEnumStr = TypeHydrationEnum.Zero,
     };
 
     private static TypeHydrationEntity MakeBoundaryRow(long id) => new()
     {
-        Id            = id,
-        ColString     = "  whitespace preserved  ",
+        Id = id,
+        ColString = "  whitespace preserved  ",
         ColStringNull = "explicit value",
-        ColShort      = short.MaxValue,       // 32_767
-        ColInt        = int.MaxValue,         // 2_147_483_647
-        ColIntNull    = int.MinValue,         // -2_147_483_648
-        ColLong       = long.MaxValue - 1,    // 9_223_372_036_854_775_806
-        ColFloat      = -3.5f,
-        ColDouble     = -3.5,
-        ColDecimal    = -99_999_999.99999999m,
-        ColBool       = true,
-        ColBoolNull   = false,
-        ColDateTime   = s_dt3,
+        ColShort = short.MaxValue,       // 32_767
+        ColInt = int.MaxValue,         // 2_147_483_647
+        ColIntNull = int.MinValue,         // -2_147_483_648
+        ColLong = long.MaxValue - 1,    // 9_223_372_036_854_775_806
+        ColFloat = -3.5f,
+        ColDouble = -3.5,
+        ColDecimal = -99_999_999.99999999m,
+        ColBool = true,
+        ColBoolNull = false,
+        ColDateTime = s_dt3,
         ColDateTimeOffset = s_dto3,
-        ColGuid       = s_guid3,
-        ColBinary     = [0x00, 0xFF, 0x7F, 0x80],
-        ColEnumInt    = TypeHydrationEnum.Beta,
-        ColEnumStr    = TypeHydrationEnum.Beta,
+        ColGuid = s_guid3,
+        ColBinary = [0x00, 0xFF, 0x7F, 0x80],
+        ColEnumInt = TypeHydrationEnum.Beta,
+        ColEnumStr = TypeHydrationEnum.Beta,
     };
 
     // ─────────────────────────────────────────────────────────────────────────

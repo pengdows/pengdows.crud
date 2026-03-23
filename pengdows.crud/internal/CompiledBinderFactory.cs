@@ -111,7 +111,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             // Extract values
             var updatedVal = Expression.Property(updatedParam, property);
             var boxedUpdated = Expression.Convert(updatedVal, typeof(object));
-            
+
             Expression finalValueExpr = boxedUpdated;
             if (column.IsJsonType)
             {
@@ -135,7 +135,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             // Dirty check: if (original == null || !ValuesAreEqual(updatedVal, originalVal, dbType))
             var originalVal = Expression.Property(originalParam, property);
             var boxedOriginal = Expression.Convert(originalVal, typeof(object));
-            
+
             var checkCall = Expression.Call(valuesAreEqualMethod, boxedUpdated, boxedOriginal, Expression.Constant(column.DbType));
             var isDirty = Expression.OrElse(
                 Expression.Equal(originalParam, Expression.Constant(null, typeof(TEntity))),
@@ -167,8 +167,8 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
         var methods = typeof(ISqlDialect).GetMethods();
         foreach (var m in methods)
         {
-            if (m.Name == nameof(ISqlDialect.CreateDbParameter) && 
-                m.IsGenericMethod && 
+            if (m.Name == nameof(ISqlDialect.CreateDbParameter) &&
+                m.IsGenericMethod &&
                 m.GetParameters().Length == 3)
             {
                 return m;

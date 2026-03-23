@@ -112,7 +112,7 @@ public class PrepareBehaviorTests
             DbMode = DbMode.Standard,
             ReadWriteMode = mode,
             PrepareMode = prepareMode,
-            
+
         };
         return new DatabaseContext(cfg, factory);
     }
@@ -149,11 +149,11 @@ public class PrepareBehaviorTests
         var totalAttempts = 0;
         var totalSuccess = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands)
-        {
-            totalAttempts += c.PrepareAttempts;
-            totalSuccess += c.PrepareSuccesses;
-        }
+            foreach (var c in connection.Commands)
+            {
+                totalAttempts += c.PrepareAttempts;
+                totalSuccess += c.PrepareSuccesses;
+            }
 
         Assert.Equal(2, totalAttempts);
         Assert.Equal(2, totalSuccess);
@@ -172,10 +172,10 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands)
-        {
-            attempts += c.PrepareAttempts;
-        }
+            foreach (var c in connection.Commands)
+            {
+                attempts += c.PrepareAttempts;
+            }
 
         Assert.Equal(0, attempts);
     }
@@ -200,10 +200,10 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands)
-        {
-            attempts += c.PrepareAttempts;
-        }
+            foreach (var c in connection.Commands)
+            {
+                attempts += c.PrepareAttempts;
+            }
 
         Assert.True(attempts >= 1);
     }
@@ -234,10 +234,10 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var c in connection.Commands)
-        {
-            attempts += c.PrepareAttempts;
-        }
+            foreach (var c in connection.Commands)
+            {
+                attempts += c.PrepareAttempts;
+            }
 
         Assert.Equal(1, attempts); // Only the first command attempted to prepare
     }
@@ -275,10 +275,10 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var command in connection.Commands)
-        {
-            attempts += command.PrepareAttempts;
-        }
+            foreach (var command in connection.Commands)
+            {
+                attempts += command.PrepareAttempts;
+            }
 
         Assert.Equal(1, attempts);
     }
@@ -317,10 +317,10 @@ public class PrepareBehaviorTests
 
         var attempts = 0;
         foreach (var connection in factory.Connections)
-        foreach (var command in connection.Commands)
-        {
-            attempts += command.PrepareAttempts;
-        }
+            foreach (var command in connection.Commands)
+            {
+                attempts += command.PrepareAttempts;
+            }
 
         Assert.Equal(2, attempts);
     }

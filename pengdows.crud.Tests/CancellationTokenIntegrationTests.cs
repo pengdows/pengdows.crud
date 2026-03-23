@@ -342,7 +342,7 @@ public class CancellationTokenIntegrationTests : IAsyncLifetime
     [Table("TestEntity")]
     private class TestEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
         [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
 

@@ -255,8 +255,8 @@ internal sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.TiDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency]    = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable
-                [IsolationProfile.FastWithRisks]        = IsolationLevel.ReadCommitted
+                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
             {
@@ -273,8 +273,8 @@ internal sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.Snowflake => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency]    = IsolationLevel.ReadCommitted, // Only level Snowflake supports
-                [IsolationProfile.FastWithRisks]        = IsolationLevel.ReadCommitted
+                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

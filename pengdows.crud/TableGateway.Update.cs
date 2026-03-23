@@ -41,7 +41,7 @@ public partial class TableGateway<TEntity, TRowID>
         {
             return ValueTask.FromResult(BuildUpdate(objectToUpdate, ctx));
         }
-        
+
         return BuildUpdateAsync(objectToUpdate, true, ctx, cancellationToken);
     }
 

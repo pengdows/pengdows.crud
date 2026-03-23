@@ -56,12 +56,12 @@ public class TypeHydrationTableCreator
 
         var sql = _context.Product switch
         {
-            SupportedDatabase.Sqlite                                            => CreateSqliteSql(),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb      => CreatePostgreSqlSql(),
-            SupportedDatabase.SqlServer                                         => CreateSqlServerSql(),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb               => CreateMySqlSql(),
-            SupportedDatabase.DuckDB                                            => CreateDuckDbSql(),
-            SupportedDatabase.Snowflake                                         => CreateSnowflakeSql(),
+            SupportedDatabase.Sqlite => CreateSqliteSql(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgreSqlSql(),
+            SupportedDatabase.SqlServer => CreateSqlServerSql(),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSql(),
+            SupportedDatabase.DuckDB => CreateDuckDbSql(),
+            SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };

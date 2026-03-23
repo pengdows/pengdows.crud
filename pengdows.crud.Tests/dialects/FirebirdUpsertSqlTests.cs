@@ -41,7 +41,7 @@ public class FirebirdUpsertSqlTests
     [Table("firebird_merge")]
     private class FirebirdMergeEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 

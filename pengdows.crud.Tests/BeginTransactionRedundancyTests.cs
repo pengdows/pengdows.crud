@@ -16,7 +16,7 @@ public class BeginTransactionRedundancyTests
 
         // Now we only pass ExecutionType.Read
         using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
-        
+
         Assert.True(tx.IsReadOnlyConnection);
     }
 

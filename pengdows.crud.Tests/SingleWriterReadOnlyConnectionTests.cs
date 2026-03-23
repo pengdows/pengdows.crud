@@ -118,7 +118,7 @@ public class SingleWriterReadOnlyConnectionTests
         var write = ctx.GetConnection(ExecutionType.Write);
         await write.OpenAsync();
         // It's okay if query_only=OFF is applied as part of the baseline/reset logic
-        ctx.CloseAndDisposeConnection(write); 
+        ctx.CloseAndDisposeConnection(write);
 
         // Now get read connection
         var read = ctx.GetConnection(ExecutionType.Read);

@@ -93,7 +93,7 @@ public class DuckDbReadIntentConnectionTests
         // Verify it IS in the connection string
         Assert.Contains(allConnectionStrings,
             cs => cs.Contains("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase));
-        
+
         // Verify it is NOT sent as a SQL command (optimized)
         Assert.DoesNotContain(allCommands,
             cmd => cmd.Contains("access_mode", StringComparison.OrdinalIgnoreCase));
@@ -123,7 +123,7 @@ public class DuckDbReadIntentConnectionTests
 
         Assert.DoesNotContain(allConnectionStrings,
             cs => cs.Contains("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase));
-        
+
         // Final session settings are empty for DuckDB even on write
         Assert.DoesNotContain(allCommands,
             cmd => cmd.Contains("access_mode", StringComparison.OrdinalIgnoreCase));

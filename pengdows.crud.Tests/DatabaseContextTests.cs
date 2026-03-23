@@ -544,7 +544,7 @@ public class DatabaseContextTests
         };
 
         using var context = new DatabaseContext(config, factory);
-        
+
         // Clear commands from initialization detection (VERSION, etc.)
         factory.Connection.ExecutedCommands.Clear();
 

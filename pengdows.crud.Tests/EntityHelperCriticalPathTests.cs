@@ -18,7 +18,7 @@ public class TableGatewayCriticalPathTests
     [Table("TestEntity")]
     private class TestEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String, 255)] public string? Name { get; set; }
 

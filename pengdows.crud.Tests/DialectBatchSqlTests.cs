@@ -37,7 +37,7 @@ public class DialectBatchSqlTests
     {
         // Arrange
         var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
-        
+
         // Act
         dialect.BuildBatchInsertSql("\"my_table\"", _columns, 2, _query, GetStandardValues());
         var sql = NormalizeSql(_query.ToString());
@@ -55,7 +55,7 @@ public class DialectBatchSqlTests
     {
         // Arrange
         var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance);
-        
+
         // Act
         dialect.BuildBatchInsertSql("\"my_table\"", _columns, 2, _query, GetStandardValues());
         var sql = NormalizeSql(_query.ToString());
@@ -73,7 +73,7 @@ public class DialectBatchSqlTests
     {
         // Arrange
         var dialect = new SnowflakeDialect(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
-        
+
         // Act
         dialect.BuildBatchInsertSql("\"my_table\"", _columns, 2, _query, GetStandardValues());
         var sql = NormalizeSql(_query.ToString());
@@ -82,7 +82,7 @@ public class DialectBatchSqlTests
         // Assert
         Assert.Contains("INSERT INTO \"my_table\" (\"name\", \"age\") VALUES (:b0, :b1), (:b2, :b3)", sql);
     }
-    
+
     [Fact]
     public void Dialect_BuildBatchInsertSql_InlinesNulls()
     {

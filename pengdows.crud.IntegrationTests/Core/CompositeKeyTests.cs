@@ -499,7 +499,7 @@ CREATE TABLE {table} (
 [Table("order_items")]
 public class OrderItem
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("order_id", DbType.Int32)]
@@ -520,7 +520,7 @@ public class OrderItem
 [Table("user_roles")]
 public class UserRole
 {
-    [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+    [Id][Column("id", DbType.Int64)] public long Id { get; set; }
 
     [PrimaryKey(1)]
     [Column("tenant_id", DbType.Int32)]

@@ -634,11 +634,11 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
     {
         using var container = Context.CreateSqlContainer();
         var pStatus = container.AddParameterWithValue("status", DbType.String, "publish");
-        var pType   = container.AddParameterWithValue("type",   DbType.String, "post");
+        var pType = container.AddParameterWithValue("type", DbType.String, "post");
 
         container
             .AppendWhere().AppendName("p", "post_status").AppendEquals().AppendParam(pStatus)
-            .AppendAnd()  .AppendName("p", "post_type")  .AppendEquals().AppendParam(pType);
+            .AppendAnd().AppendName("p", "post_type").AppendEquals().AppendParam(pType);
 
         var sql = container.Query.ToString();
         Assert.StartsWith(" WHERE ", sql);

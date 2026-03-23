@@ -62,7 +62,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     [Table("test_entity")]
     private class EntityWithUnsupportedId
     {
-        [Id] [Column("id", DbType.Decimal)] public decimal Id { get; set; }
+        [Id][Column("id", DbType.Decimal)] public decimal Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = "";
     }

@@ -174,8 +174,12 @@ public class EqualFootingCrudBenchmarks : IDisposable
         // Column SET order: name=s0, age=s1, salary=s2, is_active=s3, created_at=s4; WHERE id=k0
         _updateSc = await _gateway.BuildUpdateAsync(new BenchEntity
         {
-            Id = 1, Name = "Updated", Age = 25,
-            Salary = 50000.0, IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+            Id = 1,
+            Name = "Updated",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.ToString("O")
         });
 
         // Delete insert side — explicit id required since [Id(false)] would omit it from BuildCreate.
@@ -304,13 +308,13 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
             await using (var tx = await _pengdowsContext.BeginTransactionAsync())
             await using (var createSc = _gateway.BuildCreate(new BenchEntity
-                         {
-                             Name = $"Warmup {pw}",
-                             Age = 25,
-                             Salary = 50000.0,
-                             IsActive = true,
-                             CreatedAt = createdAt
-                         }, tx))
+            {
+                Name = $"Warmup {pw}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = createdAt
+            }, tx))
             {
                 await createSc.ExecuteNonQueryAsync();
                 tx.Rollback();
@@ -431,8 +435,11 @@ public class EqualFootingCrudBenchmarks : IDisposable
         {
             var entity = new BenchEntity
             {
-                Name = $"Created {i}", Age = 25, Salary = 50000.0,
-                IsActive = true, CreatedAt = DateTime.UtcNow.ToString("O")
+                Name = $"Created {i}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow.ToString("O")
             };
             await using var sc = _gateway.BuildCreate(entity);
             count += await sc.ExecuteNonQueryAsync();

@@ -279,7 +279,7 @@ public class ParallelTestOrchestrator
             });
         }
 
-// Additional databases can be added here:
+        // Additional databases can be added here:
         // - DB2 (ibmcom/db2) - requires IBM.Data.DB2 package
         // - Sybase ASE - requires AdoNetCore.AseClient (already available)
         // - Others as needed

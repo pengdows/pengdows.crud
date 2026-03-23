@@ -305,10 +305,10 @@ public class ApplesToApplesDapperBenchmarks : IDisposable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
-        [Column("name", DbType.String)] 
+        [Column("name", DbType.String)]
         public string Name { get; set; } = string.Empty;
 
-        [Column("age", DbType.Int32)] 
+        [Column("age", DbType.Int32)]
         public int Age { get; set; }
     }
 

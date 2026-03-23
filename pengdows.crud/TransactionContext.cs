@@ -452,18 +452,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         _context.AssertIsReadConnection();
     }
-/// <inheritdoc/>
-public void AssertIsWriteConnection()
-{
-    if (_isReadOnly)
+    /// <inheritdoc/>
+    public void AssertIsWriteConnection()
     {
-        throw new InvalidOperationException("Transaction is read-only.");
+        if (_isReadOnly)
+        {
+            throw new InvalidOperationException("Transaction is read-only.");
+        }
+
+        _context.AssertIsWriteConnection();
     }
 
-    _context.AssertIsWriteConnection();
-}
-
-MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
+    MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _readMetricsCollector;
     MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _writeMetricsCollector;
 

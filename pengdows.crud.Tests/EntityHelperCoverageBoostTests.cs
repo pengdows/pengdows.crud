@@ -166,7 +166,7 @@ public class TableGatewayCoverageBoostTests : SqlLiteContextTestBase
     [Table("guid_test")]
     public class GuidTestEntity
     {
-        [Id] [Column("id", DbType.String)] public Guid Id { get; set; }
+        [Id][Column("id", DbType.String)] public Guid Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -176,7 +176,7 @@ public class TableGatewayCoverageBoostTests : SqlLiteContextTestBase
     [Table("byte_test")]
     public class ByteTestEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -186,7 +186,7 @@ public class TableGatewayCoverageBoostTests : SqlLiteContextTestBase
     [Table("decimal_test")]
     public class DecimalTestEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 
@@ -196,7 +196,7 @@ public class TableGatewayCoverageBoostTests : SqlLiteContextTestBase
     [Table("datetime_test")]
     public class DateTimeTestEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
 
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 

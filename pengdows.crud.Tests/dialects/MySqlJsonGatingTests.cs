@@ -21,18 +21,18 @@ public class MySqlJsonGatingTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
-        
+
         // Mock the product info since MySqlDialect uses IsInitialized && ProductInfo
         var connection = (fakeDbConnection)factory.CreateConnection();
         connection.ScalarResultsByCommand["SELECT VERSION()"] = version;
-        
+
         using var tracked = new FakeTrackedConnection(connection, new DataTable(), new System.Collections.Generic.Dictionary<string, object>
         {
             ["SELECT VERSION()"] = version
         });
-        
+
         dialect.DetectDatabaseInfo(tracked);
-        
+
         Assert.Equal(expectedSupport, dialect.SupportsJsonTypes);
     }
 }

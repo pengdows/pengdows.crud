@@ -116,7 +116,7 @@ public class CompiledBinderFactoryTests
         // Update columns are usually Name, Age, Data, Status (excluding Id)
         var updateColumns = _columns.Where(c => !c.IsId).ToList();
         var paramNames = new[] { "p0", "p1", "p2", "p3" };
-        
+
         var binder = CompiledBinderFactory<BinderEntity>.CreateUpdateBinder(updateColumns, paramNames, _dialect);
 
         var parameters = new List<DbParameter>();

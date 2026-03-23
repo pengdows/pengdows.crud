@@ -19,7 +19,7 @@ public class StormGateTests
         // Arrange
         var mockLogger = new Mock<ILogger>();
         using var gate = new StormGate(_mockDataSource.Object, 1, _timeout, mockLogger.Object);
-        
+
         // Take the only permit
         var mockConn = new Mock<DbConnection>();
         _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
@@ -28,7 +28,7 @@ public class StormGateTests
 
         // Act & Assert
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());
-        
+
         mockLogger.Verify(l => l.Log(
             LogLevel.Warning,
             It.IsAny<EventId>(),

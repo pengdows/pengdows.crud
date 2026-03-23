@@ -21,17 +21,17 @@ public class InvalidTransactionTypeTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(SupportedDatabase.PostgreSql,  IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.Oracle,      IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.Oracle,      IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.PostgreSql, IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.Oracle, IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.Oracle, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.ReadCommitted)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.DuckDB,      IsolationLevel.ReadCommitted)]
-    [InlineData(SupportedDatabase.DuckDB,      IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.TiDb,        IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.Snowflake,   IsolationLevel.Serializable)]
-    [InlineData(SupportedDatabase.Snowflake,   IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.Sqlite,      IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.TiDb, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.ReadUncommitted)]
     public void BeginTransaction_UnsupportedIsolationLevel_Throws(
         SupportedDatabase product, IsolationLevel level)
     {

@@ -15,7 +15,7 @@ public class TableGatewayTokenReplacementTests : SqlLiteContextTestBase
     [Table("Tokens")]
     private class TokenEntity
     {
-        [Id] [Column("Id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
     }
 
     [Fact]

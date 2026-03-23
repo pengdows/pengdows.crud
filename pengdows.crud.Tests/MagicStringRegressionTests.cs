@@ -199,7 +199,7 @@ public class MagicStringRegressionTests
     [Table("magic_string_test")]
     private class PinEntity
     {
-        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Id][Column("id", DbType.Int32)] public int Id { get; set; }
         [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
