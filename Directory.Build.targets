@@ -6,14 +6,14 @@
 
     <Target Name="BuildInterfaceApiCheckTool"
             BeforeTargets="ValidateInterfaceBaseline"
-            Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And !Exists('$(InterfaceApiCheckTool)')">
+            Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(TargetFramework)' == 'net8.0' And '$(SkipInterfaceValidation)' != 'true' And !Exists('$(InterfaceApiCheckTool)')">
         <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)tools/interface-api-check/InterfaceApiCheck.csproj&quot; -c Release"
               ContinueOnError="false"
               IgnoreExitCode="false"/>
     </Target>
 
     <!-- Vendor reference verification target - only runs for core assemblies -->
-    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
+    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(TargetFramework)' == 'net8.0' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
         <Exec Command="dotnet &quot;$(InterfaceApiCheckTool)&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;"/>
     </Target>
 </Project>
