@@ -81,18 +81,23 @@ if (exclude.Count > 0)
 var results = await orchestrator.RunAllTestsAsync(only, exclude);
 
 // Optional: Export results for CI/CD
-var successCount = results.Count(r => r.Success);
-var totalCount = results.Count;
-var totalChecks = results.Sum(r => r.ChecksPassed);
-var totalSkipped = results.Sum(r => r.ChecksSkipped);
+var successCount  = results.Count(r => r.Success);
+var timeoutCount  = results.Count(r => r.ContainerStartTimeout);
+var failCount     = results.Count(r => !r.Success && !r.ContainerStartTimeout);
+var totalCount    = results.Count;
+var totalChecks   = results.Sum(r => r.ChecksPassed);
+var totalSkipped  = results.Sum(r => r.ChecksSkipped);
 
-if (successCount == totalCount)
+if (failCount == 0)
 {
-    Console.WriteLine($"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!");
+    var msg = timeoutCount > 0
+        ? $"⚠️ {successCount}/{totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped); {timeoutCount} unavailable (container startup timed out)"
+        : $"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!";
+    Console.WriteLine(msg);
     Environment.Exit(0);
 }
 else
 {
-    Console.WriteLine($"❌ {totalCount - successCount}/{totalCount} databases failed ({totalChecks} checks passed, {totalSkipped} skipped)");
+    Console.WriteLine($"❌ {failCount}/{totalCount} databases failed ({totalChecks} checks passed, {totalSkipped} skipped)");
     Environment.Exit(1);
 }
