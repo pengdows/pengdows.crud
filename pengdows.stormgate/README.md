@@ -2,6 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/pengdows.stormgate.svg)](https://www.nuget.org/packages/pengdows.stormgate)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![codecov](https://codecov.io/gh/pengdows/pengdows.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdows/pengdows.crud)
 
 A lightweight ADO.NET connection admission controller for .NET 8+.
 
