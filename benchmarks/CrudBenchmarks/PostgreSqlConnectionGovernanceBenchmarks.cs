@@ -41,6 +41,14 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private const int Parallelism = 100;       // 4× the server limit — enough to saturate it
     private const int OperationsPerRun = 200;
 
+    private static readonly string PgPassword = GeneratePassword();
+
+    private static string GeneratePassword()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(18);
+        return Convert.ToBase64String(bytes);
+    }
+
     private IContainer? _container;
     private string _connStr = string.Empty;
 
@@ -55,7 +63,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     {
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
-            .WithEnvironment("POSTGRES_PASSWORD", "postgres")
+            .WithEnvironment("POSTGRES_PASSWORD", PgPassword)
             .WithEnvironment("POSTGRES_DB", "gov_test")
             .WithPortBinding(0, 5432)
             // Key to the demo: max_connections well below the default Npgsql pool size (100).
@@ -68,7 +76,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var port = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={port};Database=gov_test;Username=postgres;Password=postgres";
+        _connStr = $"Host=localhost;Port={port};Database=gov_test;Username=postgres;Password={PgPassword}";
 
         // Create the shared data source first so seeding uses the same pool as benchmarks.
         _dapperDataSource = NpgsqlDataSource.Create(_connStr);
