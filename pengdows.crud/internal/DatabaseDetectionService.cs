@@ -161,10 +161,18 @@ internal static class DatabaseDetectionService
         {
             // ServerVersion-based checks (no query needed)
             var serverVersion = string.Empty;
-            if (connection is DbConnection dbConn) serverVersion = dbConn.ServerVersion;
-            else if (connection is ITrackedConnection tracked) serverVersion = tracked.ServerVersion;
+            if (connection is DbConnection dbConn)
+            {
+                serverVersion = dbConn.ServerVersion;
+            }
+            else if (connection is ITrackedConnection tracked)
+            {
+                serverVersion = tracked.ServerVersion;
+            }
             else if (connection.GetType().GetProperty("ServerVersion") is { } prop)
+            {
                 serverVersion = prop.GetValue(connection)?.ToString() ?? string.Empty;
+            }
 
             if (!string.IsNullOrEmpty(serverVersion))
             {

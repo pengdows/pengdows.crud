@@ -258,7 +258,8 @@ public sealed class ConnectionPerformanceOptimizationTests
 
         // Inject our counting dialect
         var dialectField = typeof(DatabaseContext).GetField("_dialect", BindingFlags.NonPublic | BindingFlags.Instance);
-        dialectField!.SetValue(ctx, dialect);
+        Assert.NotNull(dialectField);
+        dialectField.SetValue(ctx, dialect);
 
         using var conn = factory.CreateConnection();
         conn.ConnectionString = config.ConnectionString;

@@ -74,8 +74,9 @@ public class ConcurrencyConflictTests : DatabaseTestBase
             Assert.NotNull(stale);
 
             await using (var bump = context.CreateSqlContainer(
-                             $"UPDATE {context.WrapObjectName("versioned_jobs")} SET {context.WrapObjectName("version")} = 2 WHERE {context.WrapObjectName("id")} = {entity.Id}"))
+                             $"UPDATE {context.WrapObjectName("versioned_jobs")} SET {context.WrapObjectName("version")} = 2 WHERE {context.WrapObjectName("id")} = @id"))
             {
+                bump.AddParameterWithValue("@id", System.Data.DbType.Int64, entity.Id);
                 Assert.Equal(1, await bump.ExecuteNonQueryAsync());
             }
 

@@ -686,14 +686,25 @@ internal sealed class OrderedDictionary<TKey, TValue> :
         };
 
         foreach (var p in primes)
+        {
             if (p >= min)
+            {
                 return p;
+            }
+        }
 
-        if ((min & 1) == 0) min++;
+        if ((min & 1) == 0)
+        {
+            min++;
+        }
 
         for (var c = min; c < int.MaxValue - 2; c += 2)
+        {
             if (IsPrime(c))
+            {
                 return c;
+            }
+        }
 
         return min;
     }
@@ -759,7 +770,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         public bool MoveNext()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
 
             var needed = _d.Count;
             if (_yielded >= needed)
@@ -787,7 +801,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         void IEnumerator.Reset()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
             _yielded = 0;
             _orderScan = 0;
             _current = default;
@@ -927,7 +944,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         public bool MoveNext()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
 
             var needed = _d.Count;
             if (_yielded >= needed)
@@ -954,7 +974,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         void IEnumerator.Reset()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
             _yielded = 0;
             _orderScan = 0;
             _current = default!;
@@ -988,7 +1011,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         public bool MoveNext()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
 
             var needed = _d.Count;
             if (_yielded >= needed)
@@ -1015,7 +1041,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         void IEnumerator.Reset()
         {
-            if (_version != _d._version) ThrowInvalidOperationException();
+            if (_version != _d._version)
+            {
+                ThrowInvalidOperationException();
+            }
             _yielded = 0;
             _orderScan = 0;
             _current = default!;

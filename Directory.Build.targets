@@ -12,8 +12,18 @@
               IgnoreExitCode="false"/>
     </Target>
 
-    <!-- Vendor reference verification target - only runs for core assemblies -->
-    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(TargetFramework)' == 'net8.0' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
+    <!--
+      NOTE: The VerifyNoVendor build target was intentionally removed in the 2.0.2 overhaul.
+      The verify-novendor tool build and its MSBuild hook are no longer wired here because:
+        1. The tool's output path in VerifyNoVendorTool is still defined above for reference.
+        2. Vendor checking is now handled in CI (deploy.yml) via an explicit step rather than
+           as a side-effect of every local build — this avoids build slowdowns on developer
+           machines and gives CI a clearer, auditable enforcement point.
+        3. SkipVerifyNoVendor defaults to true in Directory.Build.props for local builds;
+           CI should override with -p:SkipVerifyNoVendor=false if the CI step is ever restored.
+    -->
+    <!-- Interface baseline validation target - only runs for core assemblies -->
+    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
         <Exec Command="dotnet &quot;$(InterfaceApiCheckTool)&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;"/>
     </Target>
 </Project>

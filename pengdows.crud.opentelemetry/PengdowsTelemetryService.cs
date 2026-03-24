@@ -13,30 +13,50 @@ public sealed class PengdowsTelemetryService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Initial discovery
-        Discover(services);
+        // Subscribe to registry lifecycle events so tenant contexts are tracked and
+        // untracked immediately — without waiting for the next poll interval.
+        var registry = services.GetService<ITenantContextRegistry>();
+        Action<IDatabaseContext>? onCreated = null;
+        Action<IDatabaseContext>? onRemoved = null;
 
-        // Periodically check for new contexts (common in multi-tenant scenarios where contexts are lazy-created)
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        if (registry != null)
         {
+            onCreated = ctx => observer.Track(ctx);
+            onRemoved = ctx => observer.Untrack(ctx);
+            registry.ContextCreated += onCreated;
+            registry.ContextRemoved += onRemoved;
+        }
+
+        try
+        {
+            // Initial discovery of already-registered singleton contexts.
             Discover(services);
+
+            // Continue polling so that any DI-registered contexts added after startup
+            // (non-tenant, late-bound) are still picked up.
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                Discover(services);
+            }
+        }
+        finally
+        {
+            // Always unsubscribe from registry events on shutdown to prevent
+            // callbacks arriving after the observer may have been disposed.
+            if (registry != null)
+            {
+                if (onCreated != null) registry.ContextCreated -= onCreated;
+                if (onRemoved != null) registry.ContextRemoved -= onRemoved;
+            }
         }
     }
 
     private void Discover(IServiceProvider sp)
     {
-        // 1. Discover singleton contexts directly from DI
-        var contexts = sp.GetServices<IDatabaseContext>();
-        foreach (var context in contexts)
+        foreach (var context in sp.GetServices<IDatabaseContext>())
         {
             observer.Track(context);
         }
-
-        // 2. Discover contexts from TenantContextRegistry if available
-        // Note: We can't easily 'list' tenants from the current ITenantContextRegistry interface,
-        // but we can try to find the registry and see if it's an implementation we can probe,
-        // or just rely on the fact that once a context is created and used, it might be in DI.
-        // For now, the 30s poll covers standard singleton DI.
     }
 }
