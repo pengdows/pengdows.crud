@@ -184,4 +184,30 @@ public class OrderedDictionaryBranchTests
         dict.Add("c", 3);
         Assert.Throws<InvalidOperationException>(() => ((IEnumerator)valueEnum).Reset());
     }
+
+    [Fact]
+    public void Enumerator_MoveNext_ThrowsWhenModifiedDuringIteration()
+    {
+        var dict = new OrderedDictionary<string, int>();
+        dict.Add("a", 1);
+        dict.Add("b", 2);
+
+        var enumerator = dict.GetEnumerator();
+        enumerator.MoveNext(); // advance to first element
+        dict.Add("c", 3);     // bump version
+
+        Assert.Throws<InvalidOperationException>(() => enumerator.MoveNext());
+    }
+
+    [Fact]
+    public void Enumerator_Reset_ThrowsWhenModifiedDuringIteration()
+    {
+        var dict = new OrderedDictionary<string, int>();
+        dict.Add("a", 1);
+
+        IEnumerator enumerator = dict.GetEnumerator();
+        dict.Add("b", 2); // bump version after enumerator captured it
+
+        Assert.Throws<InvalidOperationException>(() => enumerator.Reset());
+    }
 }

@@ -241,6 +241,44 @@ public sealed class PoolGovernorDeadlineTests
         Assert.Equal(1, gov.GetSnapshot().InUse);
     }
 
+    /// <summary>
+    /// A successful slow-path acquisition followed by release must record non-zero
+    /// wait and hold ticks in RecordWaitAndHold when trackMetrics=true.
+    /// Covers the waitTicks>0 and holdTicks>0 branches that are unreachable from
+    /// timeout-only tests (which throw before ever calling Release).
+    /// </summary>
+    [Fact]
+    public async Task AcquireAsync_WithContention_RecordsNonZeroWaitAndHoldTicks()
+    {
+        using var gov = new PoolGovernor(
+            PoolLabel.Reader, "recordwait-waithold", 1,
+            TimeSpan.FromSeconds(5),
+            trackMetrics: true);
+
+        // Fill the single slot — second acquire will block in the slow path.
+        var firstSlot = await gov.AcquireAsync();
+
+        var waitingTask = gov.AcquireAsync().AsTask();
+
+        // Give the waiter enough time to enter the slow path and block.
+        await Task.Delay(20);
+
+        // Release first slot so the waiter can proceed.
+        await firstSlot.DisposeAsync();
+
+        var secondSlot = await waitingTask;
+
+        // Hold briefly so holdTicks > 0.
+        await Task.Delay(10);
+        await secondSlot.DisposeAsync();
+
+        var snapshot = gov.GetSnapshot();
+        Assert.True(snapshot.TotalWaitTicks > 0,
+            $"Expected TotalWaitTicks > 0 but got {snapshot.TotalWaitTicks}");
+        Assert.True(snapshot.TotalHoldTicks > 0,
+            $"Expected TotalHoldTicks > 0 but got {snapshot.TotalHoldTicks}");
+    }
+
     private static IDisposable StartDelayedReleaseThread(SemaphoreSlim turnstile, int delayMs)
     {
         var thread = new Thread(() =>
