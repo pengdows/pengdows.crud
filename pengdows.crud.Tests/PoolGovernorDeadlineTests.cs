@@ -279,6 +279,30 @@ public sealed class PoolGovernorDeadlineTests
             $"Expected TotalHoldTicks > 0 but got {snapshot.TotalHoldTicks}");
     }
 
+    /// <summary>
+    /// A writer governor (holdTurnstile=true) that successfully acquires and then
+    /// releases a slot must decrement WritersActiveOrWaiting in the shared
+    /// TurnstileState — this covers the releaseWriterTurnstileInterest branch in
+    /// ReleaseToken (line 770) that is unreachable from timeout-only tests.
+    /// </summary>
+    [Fact]
+    public void Acquire_WriterWithTurnstile_SuccessfulRelease_DecrementsWriterInterest()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var gov = new PoolGovernor(
+            PoolLabel.Writer, "writer-release-interest", 1,
+            TimeSpan.FromSeconds(5),
+            turnstile: turnstile,
+            holdTurnstile: true);
+
+        using (var slot = gov.Acquire())
+        {
+            Assert.Equal(1, gov.GetSnapshot().InUse);
+        } // ReleaseToken called here with releaseWriterTurnstileInterest=true
+
+        Assert.Equal(0, gov.GetSnapshot().InUse);
+    }
+
     private static IDisposable StartDelayedReleaseThread(SemaphoreSlim turnstile, int delayMs)
     {
         var thread = new Thread(() =>
