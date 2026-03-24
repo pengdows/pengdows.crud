@@ -222,7 +222,10 @@ internal sealed class PoolGovernor : IDisposable
             if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
             {
                 var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
-                if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+                if (_trackMetrics)
+                {
+                    UpdatePeak(ref _peakTurnstileQueued, tQueued);
+                }
 
                 try
                 {
@@ -236,7 +239,10 @@ internal sealed class PoolGovernor : IDisposable
                 }
                 finally
                 {
-                    if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
+                    if (_trackMetrics)
+                    {
+                        Interlocked.Decrement(ref _turnstileQueued);
+                    }
                 }
 
                 turnstileAcquired = true;
@@ -257,7 +263,10 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
-            if (_trackMetrics) UpdatePeak(ref _peakQueued, queued);
+            if (_trackMetrics)
+            {
+                UpdatePeak(ref _peakQueued, queued);
+            }
 
             try
             {
@@ -289,7 +298,10 @@ internal sealed class PoolGovernor : IDisposable
             }
             finally
             {
-                if (_trackMetrics) Interlocked.Decrement(ref _queued);
+                if (_trackMetrics)
+                {
+                    Interlocked.Decrement(ref _queued);
+                }
             }
         }
         catch
@@ -430,7 +442,10 @@ internal sealed class PoolGovernor : IDisposable
             if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
             {
                 var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
-                if (_trackMetrics) UpdatePeak(ref _peakTurnstileQueued, tQueued);
+                if (_trackMetrics)
+                {
+                    UpdatePeak(ref _peakTurnstileQueued, tQueued);
+                }
 
                 try
                 {
@@ -444,7 +459,10 @@ internal sealed class PoolGovernor : IDisposable
                 }
                 finally
                 {
-                    if (_trackMetrics) Interlocked.Decrement(ref _turnstileQueued);
+                    if (_trackMetrics)
+                    {
+                        Interlocked.Decrement(ref _turnstileQueued);
+                    }
                 }
 
                 turnstileAcquired = true;
@@ -467,7 +485,10 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
-            if (_trackMetrics) UpdatePeak(ref _peakQueued, queued);
+            if (_trackMetrics)
+            {
+                UpdatePeak(ref _peakQueued, queued);
+            }
 
             try
             {
@@ -499,7 +520,10 @@ internal sealed class PoolGovernor : IDisposable
             }
             finally
             {
-                if (_trackMetrics) Interlocked.Decrement(ref _queued);
+                if (_trackMetrics)
+                {
+                    Interlocked.Decrement(ref _queued);
+                }
             }
         }
         catch
@@ -640,8 +664,15 @@ internal sealed class PoolGovernor : IDisposable
         var waitTicks = acquiredAt - waitStart;
         var holdTicks = releasedAt - acquiredAt;
 
-        if (waitTicks > 0) Interlocked.Add(ref _totalWaitTicks, waitTicks);
-        if (holdTicks > 0) Interlocked.Add(ref _totalHoldTicks, holdTicks);
+        if (waitTicks > 0)
+        {
+            Interlocked.Add(ref _totalWaitTicks, waitTicks);
+        }
+
+        if (holdTicks > 0)
+        {
+            Interlocked.Add(ref _totalHoldTicks, holdTicks);
+        }
     }
 
     /// <summary>
@@ -723,6 +754,22 @@ internal sealed class PoolGovernor : IDisposable
         RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
         Interlocked.Decrement(ref _inUse);
 
+        // Release semaphore and turnstile BEFORE signaling drain-waiters.
+        // If the signal fires first, DisposeAsync can dispose these objects
+        // before Release() is called, causing ObjectDisposedException.
+        _semaphore?.Release();
+
+        // Writers release turnstile when slot is released
+        if (_holdTurnstile && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
+
+        if (releaseWriterTurnstileInterest && _turnstileState != null)
+        {
+            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+        }
+
         // Signal drain-waiters only if _inUse is still zero at the instant
         // the signal is set.  The read and the TrySetResult must happen under
         // the same lock that OnAcquired uses to reset the signal; otherwise a
@@ -735,19 +782,6 @@ internal sealed class PoolGovernor : IDisposable
             {
                 _drainSignal.TrySetResult(true);
             }
-        }
-
-        _semaphore?.Release();
-
-        // Writers release turnstile when slot is released
-        if (_holdTurnstile && _turnstile != null)
-        {
-            _turnstile.Release();
-        }
-
-        if (releaseWriterTurnstileInterest && _turnstileState != null)
-        {
-            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
         }
     }
 

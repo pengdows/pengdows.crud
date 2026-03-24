@@ -168,295 +168,256 @@ public class FakeDataStore
 
     private int HandleInsert(string commandText, DbParameterCollection? parameters)
     {
-        try
-        {
-            // Simple INSERT parsing - matches "INSERT INTO table_name (col1, col2) VALUES (val1, val2)"
-            var insertMatch = Regex.Match(commandText,
-                @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+        // Simple INSERT parsing - matches "INSERT INTO table_name (col1, col2) VALUES (val1, val2)"
+        var insertMatch = Regex.Match(commandText,
+            @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
             RegexOptions.IgnoreCase);
 
-            if (!insertMatch.Success)
-            {
-                // Try simple INSERT INTO table VALUES format
-                var simpleMatch = Regex.Match(commandText,
-                    @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
+        if (!insertMatch.Success)
+        {
+            // Try simple INSERT INTO table VALUES format
+            var simpleMatch = Regex.Match(commandText,
+                @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
                 RegexOptions.IgnoreCase);
-                if (simpleMatch.Success)
-                {
-                    var tableName = CleanIdentifier(simpleMatch.Groups[1].Value);
-                    EnsureTable(tableName);
-
-                    // For simple format, create a generic row with auto-assigned ID
-                    var nextId = _nextId++;
-                    _lastInsertId = nextId;
-                    var row = new Dictionary<string, object?>
-                    {
-                        ["Id"] = nextId,
-                        ["Data"] = simpleMatch.Groups[2].Value.Trim()
-                    };
-
-                    lock (_lockObject)
-                    {
-                        _tables[tableName].Add(row);
-                    }
-
-                    return 1;
-                }
-
-                return 1; // Return 1 for unrecognized INSERT formats
-            }
-
-            var table = CleanIdentifier(insertMatch.Groups[1].Value);
-            var columnsPart = insertMatch.Groups[2].Value;
-            var valuesPart = insertMatch.Groups[3].Value;
-
-            EnsureTable(table);
-
-            // Parse columns
-            var columns = columnsPart.Split(',')
-                .Select(c => CleanIdentifier(c.Trim()))
-                .ToList();
-
-            // Parse values (handle parameters and literals)
-            var values = ParseValues(valuesPart, parameters);
-
-            // Create row data
-            var rowData = new Dictionary<string, object?>();
-
-            // Auto-assign ID if not provided
-            if (!columns.Any(c => c.Equals("Id", StringComparison.OrdinalIgnoreCase)))
+            if (simpleMatch.Success)
             {
+                var tableName = CleanIdentifier(simpleMatch.Groups[1].Value);
+                EnsureTable(tableName);
+
+                // For simple format, create a generic row with auto-assigned ID
                 var nextId = _nextId++;
                 _lastInsertId = nextId;
-                rowData["Id"] = nextId;
-            }
-
-            for (var i = 0; i < Math.Min(columns.Count, values.Count); i++)
-            {
-                rowData[columns[i]] = values[i];
-
-                // Track the last insert ID if an ID column was explicitly provided
-                if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] is int explicitId)
+                var row = new Dictionary<string, object?>
                 {
-                    _lastInsertId = explicitId;
+                    ["Id"] = nextId,
+                    ["Data"] = simpleMatch.Groups[2].Value.Trim()
+                };
+
+                lock (_lockObject)
+                {
+                    _tables[tableName].Add(row);
                 }
+
+                return 1;
             }
 
-            lock (_lockObject)
-            {
-                _tables[table].Add(rowData);
-            }
-
-            return 1;
+            return 1; // Return 1 for unrecognized INSERT formats
         }
-        catch
+
+        var table = CleanIdentifier(insertMatch.Groups[1].Value);
+        var columnsPart = insertMatch.Groups[2].Value;
+        var valuesPart = insertMatch.Groups[3].Value;
+
+        EnsureTable(table);
+
+        // Parse columns
+        var columns = columnsPart.Split(',')
+            .Select(c => CleanIdentifier(c.Trim()))
+            .ToList();
+
+        // Parse values (handle parameters and literals)
+        var values = ParseValues(valuesPart, parameters);
+
+        // Create row data
+        var rowData = new Dictionary<string, object?>();
+
+        // Auto-assign ID if not provided
+        if (!columns.Any(c => c.Equals("Id", StringComparison.OrdinalIgnoreCase)))
         {
-            return 1; // Return 1 even if parsing fails
+            var nextId = _nextId++;
+            _lastInsertId = nextId;
+            rowData["Id"] = nextId;
         }
+
+        for (var i = 0; i < Math.Min(columns.Count, values.Count); i++)
+        {
+            rowData[columns[i]] = values[i];
+
+            // Track the last insert ID if an ID column was explicitly provided
+            if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] is int explicitId)
+            {
+                _lastInsertId = explicitId;
+            }
+        }
+
+        lock (_lockObject)
+        {
+            _tables[table].Add(rowData);
+        }
+
+        return 1;
     }
 
     private int HandleUpdate(string commandText, DbParameterCollection? parameters)
     {
-        try
-        {
-            // Simple UPDATE parsing
-            var updateMatch = Regex.Match(commandText,
-                @"UPDATE\s+([`\[\]""'.\w]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
-                RegexOptions.IgnoreCase);
+        // Simple UPDATE parsing
+        var updateMatch = Regex.Match(commandText,
+            @"UPDATE\s+([`\[\]""'.\w]+)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$",
+            RegexOptions.IgnoreCase);
 
-            if (!updateMatch.Success)
-            {
-                return 0;
-            }
-
-            var tableName = CleanIdentifier(updateMatch.Groups[1].Value);
-            var setPart = updateMatch.Groups[2].Value;
-            var wherePart = updateMatch.Groups.Count > 3 ? updateMatch.Groups[3].Value : null;
-
-            EnsureTable(tableName);
-
-            lock (_lockObject)
-            {
-                var rows = _tables[tableName];
-                var updatedCount = 0;
-
-                foreach (var row in rows)
-                {
-                    if (string.IsNullOrWhiteSpace(wherePart) || EvaluateWhereClause(row, wherePart, parameters))
-                    {
-                        ApplySetClause(row, setPart, parameters);
-                        updatedCount++;
-                    }
-                }
-
-                return updatedCount;
-            }
-        }
-        catch
+        if (!updateMatch.Success)
         {
             return 0;
+        }
+
+        var tableName = CleanIdentifier(updateMatch.Groups[1].Value);
+        var setPart = updateMatch.Groups[2].Value;
+        var wherePart = updateMatch.Groups.Count > 3 ? updateMatch.Groups[3].Value : null;
+
+        EnsureTable(tableName);
+
+        lock (_lockObject)
+        {
+            var rows = _tables[tableName];
+            var updatedCount = 0;
+
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(wherePart) || EvaluateWhereClause(row, wherePart, parameters))
+                {
+                    ApplySetClause(row, setPart, parameters);
+                    updatedCount++;
+                }
+            }
+
+            return updatedCount;
         }
     }
 
     private int HandleDelete(string commandText, DbParameterCollection? parameters)
     {
-        try
-        {
-            // Simple DELETE parsing
-            var deleteMatch = Regex.Match(commandText,
-                @"DELETE\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
-                RegexOptions.IgnoreCase);
+        // Simple DELETE parsing
+        var deleteMatch = Regex.Match(commandText,
+            @"DELETE\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
+            RegexOptions.IgnoreCase);
 
-            if (!deleteMatch.Success)
-            {
-                return 0;
-            }
-
-            var tableName = CleanIdentifier(deleteMatch.Groups[1].Value);
-            var wherePart = deleteMatch.Groups.Count > 2 ? deleteMatch.Groups[2].Value : null;
-
-            EnsureTable(tableName);
-
-            lock (_lockObject)
-            {
-                var rows = _tables[tableName];
-                var toRemove = new List<Dictionary<string, object?>>();
-
-                foreach (var row in rows)
-                {
-                    if (string.IsNullOrWhiteSpace(wherePart) || EvaluateWhereClause(row, wherePart, parameters))
-                    {
-                        toRemove.Add(row);
-                    }
-                }
-
-                foreach (var row in toRemove)
-                {
-                    rows.Remove(row);
-                }
-
-                return toRemove.Count;
-            }
-        }
-        catch
+        if (!deleteMatch.Success)
         {
             return 0;
+        }
+
+        var tableName = CleanIdentifier(deleteMatch.Groups[1].Value);
+        var wherePart = deleteMatch.Groups.Count > 2 ? deleteMatch.Groups[2].Value : null;
+
+        EnsureTable(tableName);
+
+        lock (_lockObject)
+        {
+            var rows = _tables[tableName];
+            var toRemove = new List<Dictionary<string, object?>>();
+
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(wherePart) || EvaluateWhereClause(row, wherePart, parameters))
+                {
+                    toRemove.Add(row);
+                }
+            }
+
+            foreach (var row in toRemove)
+            {
+                rows.Remove(row);
+            }
+
+            return toRemove.Count;
         }
     }
 
     private IEnumerable<Dictionary<string, object?>> HandleSelect(string commandText, DbParameterCollection? parameters)
     {
-        try
+        // Handle COUNT queries via reader path (ExecuteScalarCore uses ExecuteReader, not ExecuteScalar)
+        if (commandText.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))
         {
-            // Handle COUNT queries via reader path (ExecuteScalarCore uses ExecuteReader, not ExecuteScalar)
-            if (commandText.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))
-            {
-                var countValue = HandleCountQuery(commandText, parameters) ?? 0L;
-                return [new Dictionary<string, object?> { ["count"] = countValue }];
-            }
-
-            // Handle literal SELECT without FROM (e.g., SELECT 1 as id, 'test' as name)
-            var literalMatch = Regex.Match(commandText,
-                @"^SELECT\s+(.+?)(?:\s+FROM\s|$)", RegexOptions.IgnoreCase);
-
-            if (literalMatch.Success && !commandText.Contains("FROM", StringComparison.OrdinalIgnoreCase))
-            {
-                return HandleLiteralSelect(literalMatch.Groups[1].Value.Trim(), parameters);
-            }
-
-            // Handle SELECT * FROM table
-            var selectMatch = Regex.Match(commandText,
-                @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
-                RegexOptions.IgnoreCase);
-
-            if (!selectMatch.Success)
-            {
-                return Enumerable.Empty<Dictionary<string, object?>>();
-            }
-
-            var selectPart = selectMatch.Groups[1].Value.Trim();
-            var tableName = CleanIdentifier(selectMatch.Groups[2].Value);
-            var wherePart = selectMatch.Groups.Count > 3 ? selectMatch.Groups[3].Value : null;
-
-            EnsureTable(tableName);
-
-            lock (_lockObject)
-            {
-                var rows = _tables[tableName];
-                var filteredRows = rows.AsEnumerable();
-
-                if (!string.IsNullOrWhiteSpace(wherePart))
-                {
-                    filteredRows = filteredRows.Where(row => EvaluateWhereClause(row, wherePart, parameters));
-                }
-
-                // Handle column selection
-                if (selectPart == "*")
-                {
-                    return filteredRows.ToList();
-                }
-                else
-                {
-                    // Handle specific columns
-                    var columns = selectPart.Split(',').Select(c => CleanIdentifier(c.Trim())).ToList();
-                    return filteredRows.Select(row =>
-                    {
-                        var result = new Dictionary<string, object?>();
-                        foreach (var col in columns)
-                        {
-                            if (row.ContainsKey(col))
-                            {
-                                result[col] = row[col];
-                            }
-                        }
-
-                        return result;
-                    }).ToList();
-                }
-            }
+            var countValue = HandleCountQuery(commandText, parameters) ?? 0L;
+            return [new Dictionary<string, object?> { ["count"] = countValue }];
         }
-        catch
+
+        // Handle literal SELECT without FROM (e.g., SELECT 1 as id, 'test' as name)
+        var literalMatch = Regex.Match(commandText,
+            @"^SELECT\s+(.+?)(?:\s+FROM\s|$)", RegexOptions.IgnoreCase);
+
+        if (literalMatch.Success && !commandText.Contains("FROM", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleLiteralSelect(literalMatch.Groups[1].Value.Trim(), parameters);
+        }
+
+        // Handle SELECT * FROM table
+        var selectMatch = Regex.Match(commandText,
+            @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
+            RegexOptions.IgnoreCase);
+
+        if (!selectMatch.Success)
         {
             return Enumerable.Empty<Dictionary<string, object?>>();
+        }
+
+        var selectPart = selectMatch.Groups[1].Value.Trim();
+        var tableName = CleanIdentifier(selectMatch.Groups[2].Value);
+        var wherePart = selectMatch.Groups.Count > 3 ? selectMatch.Groups[3].Value : null;
+
+        EnsureTable(tableName);
+
+        lock (_lockObject)
+        {
+            var rows = _tables[tableName];
+            var filteredRows = rows.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(wherePart))
+            {
+                filteredRows = filteredRows.Where(row => EvaluateWhereClause(row, wherePart, parameters));
+            }
+
+            // Handle column selection
+            if (selectPart == "*")
+            {
+                return filteredRows.ToList();
+            }
+
+            // Handle specific columns
+            var columns = selectPart.Split(',').Select(c => CleanIdentifier(c.Trim())).ToList();
+            return filteredRows.Select(row =>
+            {
+                var result = new Dictionary<string, object?>();
+                foreach (var col in columns)
+                {
+                    if (row.ContainsKey(col))
+                    {
+                        result[col] = row[col];
+                    }
+                }
+
+                return result;
+            }).ToList();
         }
     }
 
     private object? HandleCountQuery(string commandText, DbParameterCollection? parameters)
     {
-        try
-        {
-            // Extract table name from COUNT query
-            var countMatch = Regex.Match(commandText,
-                @"SELECT\s+COUNT\([^)]*\)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
-                RegexOptions.IgnoreCase);
+        // Extract table name from COUNT query
+        var countMatch = Regex.Match(commandText,
+            @"SELECT\s+COUNT\([^)]*\)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+(.+))?$",
+            RegexOptions.IgnoreCase);
 
-            if (!countMatch.Success)
-            {
-                return 0;
-            }
-
-            var tableName = CleanIdentifier(countMatch.Groups[1].Value);
-            var wherePart = countMatch.Groups.Count > 2 ? countMatch.Groups[2].Value : null;
-
-            EnsureTable(tableName);
-
-            lock (_lockObject)
-            {
-                var rows = _tables[tableName];
-
-                if (string.IsNullOrWhiteSpace(wherePart))
-                {
-                    return (long)rows.Count;
-                }
-                else
-                {
-                    return (long)rows.Count(row => EvaluateWhereClause(row, wherePart, parameters));
-                }
-            }
-        }
-        catch
+        if (!countMatch.Success)
         {
             return 0;
+        }
+
+        var tableName = CleanIdentifier(countMatch.Groups[1].Value);
+        var wherePart = countMatch.Groups.Count > 2 ? countMatch.Groups[2].Value : null;
+
+        EnsureTable(tableName);
+
+        lock (_lockObject)
+        {
+            var rows = _tables[tableName];
+
+            if (string.IsNullOrWhiteSpace(wherePart))
+            {
+                return (long)rows.Count;
+            }
+
+            return (long)rows.Count(row => EvaluateWhereClause(row, wherePart, parameters));
         }
     }
 
@@ -548,14 +509,14 @@ public class FakeDataStore
     private bool EvaluateWhereClause(Dictionary<string, object?> row, string whereClause,
         DbParameterCollection? parameters)
     {
-        try
-        {
-            var trimmed = whereClause.Trim();
+        var trimmed = whereClause.Trim();
 
             // AND: split and evaluate each part
             var andParts = Regex.Split(trimmed, @"\s+AND\s+", RegexOptions.IgnoreCase);
             if (andParts.Length > 1)
+            {
                 return andParts.All(part => EvaluateWhereClause(row, part.Trim(), parameters));
+            }
 
             // IS NOT NULL
             var isNotNullMatch = Regex.Match(trimmed,
@@ -581,7 +542,11 @@ public class FakeDataStore
             if (likeMatch.Success)
             {
                 var col = ResolveRowKey(row, CleanIdentifier(likeMatch.Groups[1].Value));
-                if (col == null) return false;
+                if (col == null)
+                {
+                    return false;
+                }
+
                 var pattern = GetCompareValue(likeMatch.Groups[2].Value.Trim(), parameters)?.ToString() ?? "";
                 var rowVal = row[col]?.ToString() ?? "";
                 return MatchesSqlLike(rowVal, pattern);
@@ -593,23 +558,25 @@ public class FakeDataStore
             if (eqMatch.Success)
             {
                 var col = ResolveRowKey(row, CleanIdentifier(eqMatch.Groups[1].Value));
-                if (col == null) return false;
+                if (col == null)
+                {
+                    return false;
+                }
                 var compareValue = GetCompareValue(eqMatch.Groups[2].Value.Trim(), parameters);
                 return Equals(row[col], compareValue);
             }
 
-            // Default: can't parse → assume match
-            return true;
-        }
-        catch
-        {
-            return true;
-        }
+        // Default: can't parse → assume match
+        return true;
     }
 
     private string? ResolveRowKey(Dictionary<string, object?> row, string column)
     {
-        if (row.ContainsKey(column)) return column;
+        if (row.ContainsKey(column))
+        {
+            return column;
+        }
+
         return row.Keys.FirstOrDefault(k => k.Equals(column, StringComparison.OrdinalIgnoreCase));
     }
 

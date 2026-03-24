@@ -282,6 +282,43 @@ public class QueryCacheTests : SqlLiteContextTestBase
         return result;
     }
 
+    [Fact]
+    public void ClearCaches_ClearsWhereParameterNameCache()
+    {
+        TypeMap.Register<CacheEntity>();
+        var helper = new TableGateway<CacheEntity, int>(Context);
+        var wrapped = Context.WrapObjectName("Id");
+
+        // Populate _whereParameterNames via BuildWhere
+        var sc = Context.CreateSqlContainer();
+        helper.BuildWhere(wrapped, new[] { 1, 2 }, sc);
+        Assert.True(HasWhereParamsCacheEntries(helper), "Pre-condition: _whereParameterNames should have entries after BuildWhere");
+
+        helper.ClearCaches();
+
+        Assert.False(HasWhereParamsCacheEntries(helper), "_whereParameterNames entries should be cleared");
+    }
+
+    private static bool HasWhereParamsCacheEntries<TEntity, TId>(TableGateway<TEntity, TId> helper)
+        where TEntity : class, new()
+    {
+        var field = typeof(BaseTableGateway<TEntity>)
+            .GetField("_whereParameterNames", BindingFlags.NonPublic | BindingFlags.Instance);
+        var outerDict = (System.Collections.IEnumerable)field!.GetValue(helper)!;
+        foreach (var dialectKvp in outerDict)
+        {
+            var kvpType = dialectKvp.GetType();
+            var boundedCache = kvpType.GetProperty("Value")!.GetValue(dialectKvp)!;
+            var mapField = boundedCache.GetType().GetField("_map", BindingFlags.NonPublic | BindingFlags.Instance);
+            var rawMap = (System.Collections.ICollection)mapField!.GetValue(boundedCache)!;
+            if (rawMap.Count > 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     [Table("CacheEntity")]
     private class CacheEntity
     {

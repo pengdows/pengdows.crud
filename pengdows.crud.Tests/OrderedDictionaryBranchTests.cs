@@ -168,6 +168,11 @@ public class OrderedDictionaryBranchTests
         var fallback = InvokePrivateStatic<int>("GetPrime", 2_359_299);
         Assert.True(fallback >= 2_359_299);
         Assert.True(fallback % 2 == 1);
+
+        // Even input beyond the prime table triggers min++ (line 698) before the search loop.
+        var fallbackEven = InvokePrivateStatic<int>("GetPrime", 2_359_300);
+        Assert.True(fallbackEven >= 2_359_300);
+        Assert.True(fallbackEven % 2 == 1);
     }
 
     [Fact]
@@ -183,5 +188,31 @@ public class OrderedDictionaryBranchTests
         var valueEnum = dict.Values.GetEnumerator();
         dict.Add("c", 3);
         Assert.Throws<InvalidOperationException>(() => ((IEnumerator)valueEnum).Reset());
+    }
+
+    [Fact]
+    public void Enumerator_MoveNext_ThrowsWhenModifiedDuringIteration()
+    {
+        var dict = new OrderedDictionary<string, int>();
+        dict.Add("a", 1);
+        dict.Add("b", 2);
+
+        var enumerator = dict.GetEnumerator();
+        enumerator.MoveNext(); // advance to first element
+        dict.Add("c", 3);     // bump version
+
+        Assert.Throws<InvalidOperationException>(() => enumerator.MoveNext());
+    }
+
+    [Fact]
+    public void Enumerator_Reset_ThrowsWhenModifiedDuringIteration()
+    {
+        var dict = new OrderedDictionary<string, int>();
+        dict.Add("a", 1);
+
+        IEnumerator enumerator = dict.GetEnumerator();
+        dict.Add("b", 2); // bump version after enumerator captured it
+
+        Assert.Throws<InvalidOperationException>(() => enumerator.Reset());
     }
 }

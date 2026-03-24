@@ -241,6 +241,98 @@ public sealed class PoolGovernorDeadlineTests
         Assert.Equal(1, gov.GetSnapshot().InUse);
     }
 
+    /// <summary>
+    /// A successful slow-path acquisition followed by release must record non-zero
+    /// wait and hold ticks in RecordWaitAndHold when trackMetrics=true.
+    /// Covers the waitTicks>0 and holdTicks>0 branches that are unreachable from
+    /// timeout-only tests (which throw before ever calling Release).
+    /// </summary>
+    [Fact]
+    public async Task AcquireAsync_WithContention_RecordsNonZeroWaitAndHoldTicks()
+    {
+        using var gov = new PoolGovernor(
+            PoolLabel.Reader, "recordwait-waithold", 1,
+            TimeSpan.FromSeconds(5),
+            trackMetrics: true);
+
+        // Fill the single slot — second acquire will block in the slow path.
+        var firstSlot = await gov.AcquireAsync();
+
+        var waitingTask = gov.AcquireAsync().AsTask();
+
+        // Give the waiter enough time to enter the slow path and block.
+        await Task.Delay(20);
+
+        // Release first slot so the waiter can proceed.
+        await firstSlot.DisposeAsync();
+
+        var secondSlot = await waitingTask;
+
+        // Hold briefly so holdTicks > 0.
+        await Task.Delay(10);
+        await secondSlot.DisposeAsync();
+
+        var snapshot = gov.GetSnapshot();
+        Assert.True(snapshot.TotalWaitTicks > 0,
+            $"Expected TotalWaitTicks > 0 but got {snapshot.TotalWaitTicks}");
+        Assert.True(snapshot.TotalHoldTicks > 0,
+            $"Expected TotalHoldTicks > 0 but got {snapshot.TotalHoldTicks}");
+    }
+
+    /// <summary>
+    /// When the turnstile is contended (fast-path Wait(0) fails) and trackMetrics=true,
+    /// the slow-path sync acquire must enter the metrics block that updates
+    /// PeakTurnstileQueued (line 227) and decrements TurnstileQueued in the
+    /// finally block (line 244).  Both lines are unreachable via the fast path.
+    /// </summary>
+    [Fact]
+    public void Acquire_WriterWithContendedTurnstile_TrackMetrics_HitsTurnstileQueuedBranches()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var gov = new PoolGovernor(
+            PoolLabel.Writer, "ts-metrics-slow", 1,
+            TimeSpan.FromMilliseconds(50),
+            turnstile: turnstile,
+            holdTurnstile: true,
+            trackMetrics: true);
+
+        turnstile.Wait(); // hold it — fast-path Wait(0) returns false, enters slow path
+        try
+        {
+            Assert.Throws<PoolSaturatedException>(() => gov.Acquire());
+            // Lines 227 (UpdatePeak) and 244 (Decrement in finally) were hit.
+            Assert.Equal(1, gov.GetSnapshot().TotalTurnstileTimeouts);
+        }
+        finally
+        {
+            turnstile.Release();
+        }
+    }
+
+    /// <summary>
+    /// A writer governor (holdTurnstile=true) that successfully acquires and then
+    /// releases a slot must decrement WritersActiveOrWaiting in the shared
+    /// TurnstileState — this covers the releaseWriterTurnstileInterest branch in
+    /// ReleaseToken (line 770) that is unreachable from timeout-only tests.
+    /// </summary>
+    [Fact]
+    public void Acquire_WriterWithTurnstile_SuccessfulRelease_DecrementsWriterInterest()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var gov = new PoolGovernor(
+            PoolLabel.Writer, "writer-release-interest", 1,
+            TimeSpan.FromSeconds(5),
+            turnstile: turnstile,
+            holdTurnstile: true);
+
+        using (var slot = gov.Acquire())
+        {
+            Assert.Equal(1, gov.GetSnapshot().InUse);
+        } // ReleaseToken called here with releaseWriterTurnstileInterest=true
+
+        Assert.Equal(0, gov.GetSnapshot().InUse);
+    }
+
     private static IDisposable StartDelayedReleaseThread(SemaphoreSlim turnstile, int delayMs)
     {
         var thread = new Thread(() =>

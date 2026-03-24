@@ -544,4 +544,35 @@ public class BenchmarkFairnessTests
         Assert.True(present.Count == 0,
             $"{fileName} should not contain: {string.Join(", ", present)}");
     }
+
+    // =========================================================================
+    // PostgreSqlConnectionGovernanceBenchmarks password hardening
+    // These tests were RED when "postgres" was hardcoded (PR #155 Copilot review P0).
+    // =========================================================================
+
+    [Fact]
+    public void PostgreSqlGovernanceBenchmark_DoesNotHardcodePassword()
+    {
+        const string fileName = "PostgreSqlConnectionGovernanceBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllAbsent(fileName, text, new[]
+        {
+            "\"POSTGRES_PASSWORD\", \"postgres\"",  // hardcoded env var value
+            "Password=postgres\""                    // hardcoded password literal in connection string
+        });
+    }
+
+    [Fact]
+    public void PostgreSqlGovernanceBenchmark_UsesRuntimeGeneratedPassword()
+    {
+        const string fileName = "PostgreSqlConnectionGovernanceBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "RandomNumberGenerator.GetBytes",
+            "GeneratePassword()"
+        });
+    }
 }

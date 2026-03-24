@@ -38,11 +38,10 @@ public class CoveragePush_EasyWinsTests
 
         using var txn = ctx.BeginTransaction();
 
-        // Getter
-        var originalName = ((IDatabaseContext)txn).Name;
-        Assert.NotNull(originalName); // DatabaseContext always has a name
-
-        // Setter
+        // TransactionContext.Name is init-only; it captures _context.Name at construction time.
+        var txnName = ((IDatabaseContext)txn).Name;
+        Assert.NotNull(txnName);
+        Assert.Equal(ctx.Name, txnName); // verify value was delegated from underlying context
 
         txn.Rollback();
     }

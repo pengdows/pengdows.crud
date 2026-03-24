@@ -9,7 +9,7 @@ namespace CrudBenchmarks;
 
 /// <summary>
 /// Benchmarks <c>CreateDbParameter&lt;Guid&gt;</c> across dialects that use the
-/// unified <c>GuidFormat</c> path.
+/// unified <c>GuidStorageFormat</c> path.
 ///
 /// Scenarios covered:
 ///   PassThrough  — SQL Server (DbType.Guid, provider-native)
