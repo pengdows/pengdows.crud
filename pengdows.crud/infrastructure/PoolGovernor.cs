@@ -754,6 +754,22 @@ internal sealed class PoolGovernor : IDisposable
         RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
         Interlocked.Decrement(ref _inUse);
 
+        // Release semaphore and turnstile BEFORE signaling drain-waiters.
+        // If the signal fires first, DisposeAsync can dispose these objects
+        // before Release() is called, causing ObjectDisposedException.
+        _semaphore?.Release();
+
+        // Writers release turnstile when slot is released
+        if (_holdTurnstile && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
+
+        if (releaseWriterTurnstileInterest && _turnstileState != null)
+        {
+            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+        }
+
         // Signal drain-waiters only if _inUse is still zero at the instant
         // the signal is set.  The read and the TrySetResult must happen under
         // the same lock that OnAcquired uses to reset the signal; otherwise a
@@ -766,19 +782,6 @@ internal sealed class PoolGovernor : IDisposable
             {
                 _drainSignal.TrySetResult(true);
             }
-        }
-
-        _semaphore?.Release();
-
-        // Writers release turnstile when slot is released
-        if (_holdTurnstile && _turnstile != null)
-        {
-            _turnstile.Release();
-        }
-
-        if (releaseWriterTurnstileInterest && _turnstileState != null)
-        {
-            Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
         }
     }
 
