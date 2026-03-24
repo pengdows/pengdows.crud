@@ -1,4 +1,6 @@
 event pengdows.crud.IDatabaseContext::MetricsUpdated : System.EventHandler`1<pengdows.crud.metrics.DatabaseMetrics>
+event pengdows.crud.tenant.ITenantContextRegistry::ContextCreated : System.Action`1<pengdows.crud.IDatabaseContext>
+event pengdows.crud.tenant.ITenantContextRegistry::ContextRemoved : System.Action`1<pengdows.crud.IDatabaseContext>
 interface pengdows.crud.IAuditValueResolver
 interface pengdows.crud.IAuditValues
 interface pengdows.crud.IDataReaderMapper

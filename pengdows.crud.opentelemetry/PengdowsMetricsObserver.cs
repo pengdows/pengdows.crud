@@ -25,7 +25,9 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private readonly ObservableGauge<int> _connectionsCurrent;
     private readonly ObservableGauge<double> _commandDurationP95;
 
-    public PengdowsMetricsObserver() : this(new Meter("pengdows.crud", "2.0.1"), true)
+    public PengdowsMetricsObserver()
+        : this(new Meter("pengdows.crud",
+                   typeof(PengdowsMetricsObserver).Assembly.GetName().Version?.ToString(3)), true)
     {
     }
 
@@ -58,6 +60,22 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
         _lastSnapshots[context.RootId] = context.Metrics;
         context.MetricsUpdated += HandleMetricsUpdated;
     }
+
+    public void Untrack(IDatabaseContext context)
+    {
+        if (!_contexts.TryRemove(context.RootId, out _))
+            return; // not tracked — idempotent
+
+        _lastSnapshots.TryRemove(context.RootId, out _);
+        context.MetricsUpdated -= HandleMetricsUpdated;
+    }
+
+    /// <summary>
+    /// Returns true if this observer is currently tracking the given context.
+    /// Intended for test assertions only.
+    /// </summary>
+    internal bool IsTracking(IDatabaseContext context) =>
+        _contexts.ContainsKey(context.RootId);
 
     private void HandleMetricsUpdated(object? sender, DatabaseMetrics e)
     {
@@ -106,11 +124,20 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     {
         foreach (var kv in _lastSnapshots)
         {
-            if (_contexts.TryGetValue(kv.Key, out var context))
+            if (!_contexts.TryGetValue(kv.Key, out var context))
+                continue;
+
+            // Skip and lazily evict disposed contexts. A disposed context can appear
+            // here when it was invalidated by TenantContextRegistry without an explicit
+            // Untrack call (e.g. during Dispose of the registry itself).
+            if (context.IsDisposed)
             {
-                var tags = new TagList { { "db.name", context.Name }, { "db.system", context.Product.ToString().ToLowerInvariant() } };
-                yield return new Measurement<T>(selector(kv.Value), tags);
+                Untrack(context);
+                continue;
             }
+
+            var tags = new TagList { { "db.name", context.Name }, { "db.system", context.Product.ToString().ToLowerInvariant() } };
+            yield return new Measurement<T>(selector(kv.Value), tags);
         }
     }
 
