@@ -118,11 +118,28 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                 "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
         }
 
-        return _contexts.GetOrAdd(
+        var lazy = _contexts.GetOrAdd(
             tenant,
             key => new Lazy<IDatabaseContext>(
                 () => CreateDatabaseContext(key),
-                LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+                LazyThreadSafetyMode.ExecutionAndPublication));
+        try
+        {
+            return lazy.Value;
+        }
+        catch
+        {
+            // Remove the faulted Lazy so the next GetContext call gets a fresh attempt.
+            // TryRemove(KeyValuePair) checks both key and value before removing, making
+            // two concurrent fault scenarios safe:
+            //   (a) Thread A faults and removes; Thread B concurrently also holds the same
+            //       faulted Lazy and calls TryRemove — returns false (no-op), no corruption.
+            //   (b) Thread A faults and removes; Thread C immediately adds a healthy Lazy
+            //       for the same key — Thread A's TryRemove finds a different value and
+            //       returns false, leaving the healthy entry intact.
+            _contexts.TryRemove(new KeyValuePair<string, Lazy<IDatabaseContext>>(tenant, lazy));
+            throw;
+        }
     }
 
     /// <inheritdoc/>
