@@ -22,8 +22,8 @@
         3. SkipVerifyNoVendor defaults to true in Directory.Build.props for local builds;
            CI should override with -p:SkipVerifyNoVendor=false if the CI step is ever restored.
     -->
-    <!-- Interface baseline validation target - only runs for core assemblies -->
-    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
+    <!-- Interface baseline validation target - only runs for core assemblies on net8.0 (tool is net8.0-only) -->
+    <Target Name="ValidateInterfaceBaseline" AfterTargets="Build" Condition="'$(MSBuildProjectName)' == 'pengdows.crud.abstractions' And '$(TargetFramework)' == 'net8.0' And '$(SkipInterfaceValidation)' != 'true' And '$(TargetPath)' != ''">
         <Exec Command="dotnet &quot;$(InterfaceApiCheckTool)&quot; --verify --assembly &quot;$(TargetPath)&quot; --baseline &quot;$(MSBuildProjectDirectory)/ApiBaseline/interfaces.txt&quot;"/>
     </Target>
 </Project>
