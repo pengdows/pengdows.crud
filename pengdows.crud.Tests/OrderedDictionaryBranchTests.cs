@@ -168,6 +168,11 @@ public class OrderedDictionaryBranchTests
         var fallback = InvokePrivateStatic<int>("GetPrime", 2_359_299);
         Assert.True(fallback >= 2_359_299);
         Assert.True(fallback % 2 == 1);
+
+        // Even input beyond the prime table triggers min++ (line 698) before the search loop.
+        var fallbackEven = InvokePrivateStatic<int>("GetPrime", 2_359_300);
+        Assert.True(fallbackEven >= 2_359_300);
+        Assert.True(fallbackEven % 2 == 1);
     }
 
     [Fact]

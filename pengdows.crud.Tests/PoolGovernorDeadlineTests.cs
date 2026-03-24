@@ -280,6 +280,36 @@ public sealed class PoolGovernorDeadlineTests
     }
 
     /// <summary>
+    /// When the turnstile is contended (fast-path Wait(0) fails) and trackMetrics=true,
+    /// the slow-path sync acquire must enter the metrics block that updates
+    /// PeakTurnstileQueued (line 227) and decrements TurnstileQueued in the
+    /// finally block (line 244).  Both lines are unreachable via the fast path.
+    /// </summary>
+    [Fact]
+    public void Acquire_WriterWithContendedTurnstile_TrackMetrics_HitsTurnstileQueuedBranches()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var gov = new PoolGovernor(
+            PoolLabel.Writer, "ts-metrics-slow", 1,
+            TimeSpan.FromMilliseconds(50),
+            turnstile: turnstile,
+            holdTurnstile: true,
+            trackMetrics: true);
+
+        turnstile.Wait(); // hold it — fast-path Wait(0) returns false, enters slow path
+        try
+        {
+            Assert.Throws<PoolSaturatedException>(() => gov.Acquire());
+            // Lines 227 (UpdatePeak) and 244 (Decrement in finally) were hit.
+            Assert.Equal(1, gov.GetSnapshot().TotalTurnstileTimeouts);
+        }
+        finally
+        {
+            turnstile.Release();
+        }
+    }
+
+    /// <summary>
     /// A writer governor (holdTurnstile=true) that successfully acquires and then
     /// releases a slot must decrement WritersActiveOrWaiting in the shared
     /// TurnstileState — this covers the releaseWriterTurnstileInterest branch in
