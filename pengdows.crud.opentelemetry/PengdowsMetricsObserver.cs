@@ -79,7 +79,10 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
 
     private void HandleMetricsUpdated(object? sender, DatabaseMetrics e)
     {
-        if (sender is not IDatabaseContext context) return;
+        if (sender is not IDatabaseContext context)
+        {
+            return;
+        }
 
         if (_lastSnapshots.TryGetValue(context.RootId, out var last))
         {
