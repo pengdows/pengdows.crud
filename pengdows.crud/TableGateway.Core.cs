@@ -240,31 +240,8 @@ public partial class TableGateway<TEntity, TRowID> :
         // 4b. ReaderInsertedId plan (MySqlConnector): execute INSERT as a reader, read
         // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
         // No multi-statement support required — MySqlConnector deliberately omits it.
-        // The command is read while the reader is still open (InnerCommand is non-null);
-        // both are released when the reader disposes at the end of this block.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-        {
-            await using var sc = BuildCreate(entity, ctx);
-            object? generatedId = null;
-            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
-            {
-                if (reader is IInternalTrackedReader internalReader)
-                {
-                    generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
-                }
-            } // reader disposed — connection released
-
-            if (generatedId != null && generatedId != DBNull.Value)
-            {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
-                return true;
-            }
-
-            // Fallback for fakeDb: LastInsertedId property absent → session-scoped query
-            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
-            return true;
-        }
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
@@ -397,32 +374,10 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
-        // 4b. ReaderInsertedId plan (MySqlConnector): execute INSERT as a reader, read
-        // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
+        // 4b. ReaderInsertedId plan (MySqlConnector): see ExecuteReaderInsertedIdAsync.
         // No multi-statement support required.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-        {
-            await using var sc = BuildCreate(entity, ctx);
-            object? generatedId = null;
-            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
-            {
-                if (reader is IInternalTrackedReader internalReader)
-                {
-                    generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
-                }
-            }
-
-            if (generatedId != null && generatedId != DBNull.Value)
-            {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
-                return true;
-            }
-
-            // Fallback for fakeDb: LastInsertedId property absent → session-scoped query
-            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, cancellationToken).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
@@ -435,6 +390,32 @@ public partial class TableGateway<TEntity, TRowID> :
 
             return rowsAffected == 1;
         }
+    }
+
+    /// <summary>
+    /// Executes an INSERT as a reader (MySqlConnector path) and retrieves the generated key
+    /// from the command's LastInsertedId property (populated from the MySQL OK packet).
+    /// Falls back to <see cref="PopulateGeneratedIdAsync"/> when LastInsertedId is absent (e.g. fakeDb).
+    /// </summary>
+    private async ValueTask<bool> ExecuteReaderInsertedIdAsync(
+        TEntity entity,
+        IDatabaseContext ctx,
+        ISqlDialect dialect,
+        CancellationToken cancellationToken = default)
+    {
+        await using var sc = BuildCreate(entity, ctx);
+        object? generatedId = null;
+        await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
+        {
+            if (reader is IInternalTrackedReader internalReader)
+                generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
+        }
+        if (generatedId is not null && generatedId != DBNull.Value)
+            _idColumn!.PropertyInfo.SetValue(entity,
+                TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
+        else
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context,
