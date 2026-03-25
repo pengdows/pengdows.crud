@@ -21,6 +21,10 @@ namespace pengdows.crud.Tests;
 
 public class CoverageRaiseRestQuickWinsTests
 {
+    /// <summary>
+    /// Documents that SafeNonBlockingReads requires RCSI — a SQL Server-only feature.
+    /// PostgreSQL has no RCSI equivalent; this async path must also throw.
+    /// </summary>
     [Fact]
     public async Task BeginTransactionAsync_SafeNonBlockingReadsOnPostgreSql_Throws()
     {

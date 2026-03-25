@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
@@ -46,6 +47,10 @@ public class DatabaseContextIsolationTests
         Assert.Equal(expected, tx.IsolationLevel);
     }
 
+    /// <summary>
+    /// Documents that SafeNonBlockingReads requires RCSI — a SQL Server-only feature.
+    /// PostgreSQL has no equivalent; snapshot isolation there is serializable, not read-committed snapshot.
+    /// </summary>
     [Fact]
     public void BeginTransaction_ProfileRequiresRcsi_Throws()
     {
@@ -53,6 +58,28 @@ public class DatabaseContextIsolationTests
             new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
         Assert.Throws<TransactionModeNotSupportedException>(() =>
             context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public void BeginTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
+        Assert.Throws<TransactionModeNotSupportedException>(() =>
+            context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public async Task BeginTransactionAsync_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
+        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
+            await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
     }
 
     [Theory]

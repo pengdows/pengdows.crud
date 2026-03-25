@@ -110,4 +110,25 @@ public class BuildWrappedTableNameTests
         Assert.Contains("HangFire", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Job", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void BuildWrappedTableName_MultiDbEnvironment_PostgreSqlIncludesSchema_SqliteOmitsSchema()
+    {
+        var pgFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var pgContext = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", pgFactory);
+        var pgGateway = new TableGateway<SchemaEntity, long>(pgContext);
+
+        var sqliteFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var sqliteContext = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", sqliteFactory);
+        var sqliteGateway = new TableGateway<SchemaEntity, long>(sqliteContext);
+
+        var pgTableName = pgGateway.WrappedTableName;
+        var sqliteTableName = sqliteGateway.WrappedTableName;
+
+        Assert.Contains("HangFire", pgTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Job", pgTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("HangFire", sqliteTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Job", sqliteTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(pgTableName, sqliteTableName);
+    }
 }

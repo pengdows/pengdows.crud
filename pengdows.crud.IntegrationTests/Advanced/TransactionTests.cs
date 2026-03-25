@@ -378,7 +378,7 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.PostgreSql)
+            if (provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
             {
                 await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
                 {
