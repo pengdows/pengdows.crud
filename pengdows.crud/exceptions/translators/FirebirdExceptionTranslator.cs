@@ -6,7 +6,7 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates Firebird-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: timeout → unique/PK constraint → fallback.
+/// Detection order: unique/PK constraint → FK → NOT NULL → CHECK → timeout → fallback.
 /// Message-based detection is used because Firebird wraps ISC codes inside
 /// FbException.Errors; extracting them via reflection is fragile across provider
 /// versions. The violation message text is stable across Firebird 3–5.

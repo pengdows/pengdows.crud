@@ -137,6 +137,19 @@ public class MySqlDialectCompoundStatementTests
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public void NonMySql_GetLastInsertedIdFromCommand_BaseImpl_ReturnsNull()
+    {
+        // The base SqlDialect.GetLastInsertedIdFromCommand always returns null.
+        // Dialects that don't override it (SQLite, PostgreSQL, etc.) return null,
+        // prompting the ReaderInsertedId plan to fall back to PopulateGeneratedIdAsync.
+        using var ctx = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
+        var result = ctx.GetDialect().GetLastInsertedIdFromCommand(null);
+        Assert.Null(result);
+    }
 }
 
 /// <summary>

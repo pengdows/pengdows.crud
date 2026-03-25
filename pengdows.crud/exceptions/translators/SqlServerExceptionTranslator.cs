@@ -42,9 +42,6 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
 
         return errorCode switch
         {
-            2601 or 2627 => new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
             515 => new NotNullViolationException(
                 $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),

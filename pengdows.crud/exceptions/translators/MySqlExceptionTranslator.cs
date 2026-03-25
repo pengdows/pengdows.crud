@@ -42,9 +42,6 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
 
         return errorCode switch
         {
-            1062 or 1169 => new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
             1216 or 1451 or 1452 => new ForeignKeyViolationException(
                 $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),

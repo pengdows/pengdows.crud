@@ -273,21 +273,24 @@ internal class OracleDialect : SqlDialect
 
     public override string GetBaseSessionSettings(string? applicationName)
     {
-        // TODO: convert this to SbLite
-        var sb = new System.Text.StringBuilder();
+        // Use SbLite (stack-allocated) for zero-heap string building.
+        // Oracle MODULE limit is 48 chars of the actual value; truncate BEFORE escaping
+        // so that single-quote escaping ('' pairs) doesn't push the value over the limit
+        // and a truncation mid-pair doesn't produce broken PL/SQL string literals.
+        using var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append("BEGIN\n");
         sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_DATE_FORMAT = ''YYYY-MM-DD''';\n");
         sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_TIMESTAMP_FORMAT = ''YYYY-MM-DD HH24:MI:SS.FF''';\n");
         sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET TIME_ZONE = ''UTC''';\n");
         if (!string.IsNullOrWhiteSpace(applicationName))
         {
-            // Escape any embedded single quotes and enforce the 48-char Oracle MODULE limit.
-            var module = applicationName.Replace("'", "''");
-            if (module.Length > 48)
-            {
-                module = module[..48];
-            }
-            sb.Append($"  DBMS_APPLICATION_INFO.SET_MODULE(module_name => '{module}', action_name => NULL);\n");
+            // Truncate to 48 chars FIRST (respects Oracle MODULE column limit),
+            // then escape single quotes for the PL/SQL string literal.
+            var truncated = applicationName.Length > 48 ? applicationName[..48] : applicationName;
+            var module = truncated.Replace("'", "''");
+            sb.Append("  DBMS_APPLICATION_INFO.SET_MODULE(module_name => '");
+            sb.Append(module);
+            sb.Append("', action_name => NULL);\n");
         }
         sb.Append("END;");
         return sb.ToString();

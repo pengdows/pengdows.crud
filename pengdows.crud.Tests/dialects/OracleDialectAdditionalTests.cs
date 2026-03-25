@@ -230,4 +230,19 @@ public class OracleDialectAdditionalTests
         Assert.Equal(DbType.String, param.DbType);
         Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
     }
+
+    [Fact]
+    public void GetBaseSessionSettings_48CharNameWithTrailingQuote_EscapesBeforeTruncatingNotAfter()
+    {
+        var d = CreateDialect();
+        // 47 X's + single quote = exactly 48 chars.
+        // Bug (escape-then-truncate): escapes to "XXX...X''" (49 chars) then truncates to 48 → "XXX...X'"
+        // leaving a lone single-quote that breaks PL/SQL string literal syntax.
+        // Fix (truncate-then-escape): name is ≤48, no truncation, escape → "XXX...X''" (valid PL/SQL).
+        var name = new string('X', 47) + "'";
+        var settings = d.GetBaseSessionSettings(name);
+        // The PL/SQL literal must contain the properly escaped form: 47 X's + '' (two quotes = one quote value).
+        // 'XXX...X''' is: opening ', 47 X's, '' (escaped quote), closing ' — represents "XXX...X'" as MODULE value.
+        Assert.Contains("module_name => '" + new string('X', 47) + "'''", settings);
+    }
 }
