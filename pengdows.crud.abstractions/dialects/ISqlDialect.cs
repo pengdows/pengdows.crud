@@ -577,7 +577,7 @@ public interface ISqlDialect
     /// Returns <c>null</c> when the provider does not expose this property or the command is null.
     /// Used by the <see cref="GeneratedKeyPlan.ReaderInsertedId"/> path.
     /// </summary>
-    object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command);
+    object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command) => null;
 
     /// <summary>
     /// Indicates whether the dialect has a safe session-scoped last-id function.

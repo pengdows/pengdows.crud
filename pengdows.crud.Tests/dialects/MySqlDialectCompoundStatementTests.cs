@@ -150,6 +150,34 @@ public class MySqlDialectCompoundStatementTests
         var result = ctx.GetDialect().GetLastInsertedIdFromCommand(null);
         Assert.Null(result);
     }
+
+    [Fact]
+    public void GetLastInsertedIdFromCommand_DifferentCommandTypes_ResolvedIndependently()
+    {
+        // Guards against a naive single-slot non-type-keyed cache:
+        // if the cache stores one PropertyInfo for the first command type seen,
+        // calling with a second (different) command type would either return wrong data
+        // or throw TargetException. Property resolution must be keyed per command type.
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, isMySqlConnector: true);
+
+        // Command WITH the property
+        var cmdWith = new FakeCommandWithLastInsertedId(42L);
+        var result1 = dialect.GetLastInsertedIdFromCommand(cmdWith);
+
+        // Command WITHOUT the property — a single-slot cache populated from cmdWith
+        // would attempt prop.GetValue(cmdWithout) and throw TargetException.
+        var cmdWithout = new FakeCommandWithoutLastInsertedId();
+        var result2 = dialect.GetLastInsertedIdFromCommand(cmdWithout);
+
+        // Command WITH the property again — must still resolve correctly
+        var cmdWith2 = new FakeCommandWithLastInsertedId(99L);
+        var result3 = dialect.GetLastInsertedIdFromCommand(cmdWith2);
+
+        Assert.Equal(42L, result1);
+        Assert.Null(result2);
+        Assert.Equal(99L, result3);
+    }
 }
 
 /// <summary>

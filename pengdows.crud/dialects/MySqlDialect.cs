@@ -16,8 +16,10 @@
 // - LAST_INSERT_ID() for returning generated IDs.
 // =============================================================================
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -174,15 +176,22 @@ internal class MySqlDialect : SqlDialect
     /// Reads the generated auto-increment key from the DbCommand after INSERT using reflection.
     /// MySqlCommand.LastInsertedId is populated from the MySQL OK packet — no extra query needed.
     /// Returns null when the command is null or the property is absent (fakeDb, non-MySqlConnector providers).
+    /// PropertyInfo is cached per command type to eliminate per-call reflection overhead on
+    /// high-frequency INSERT workloads (e.g. bulk create loops).
     /// </summary>
-    public override object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command)
+    // Keyed by concrete command type so that mixed-type scenarios (e.g. fakeDbCommand in tests
+    // alongside a real MySqlCommand in prod) each resolve their own PropertyInfo independently.
+    private static readonly ConcurrentDictionary<Type, PropertyInfo?> s_lastInsertedIdProps = new();
+
+    public override object? GetLastInsertedIdFromCommand(DbCommand? command)
     {
         if (command is null)
         {
             return null;
         }
 
-        var prop = command.GetType().GetProperty("LastInsertedId");
+        var prop = s_lastInsertedIdProps.GetOrAdd(command.GetType(),
+            static t => t.GetProperty("LastInsertedId"));
         return prop?.GetValue(command);
     }
 

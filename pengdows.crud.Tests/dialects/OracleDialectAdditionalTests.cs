@@ -211,7 +211,7 @@ public class OracleDialectAdditionalTests
     }
 
     [Fact]
-    public void GetFinalSessionSettings_WithApplicationName_EmbeddsNameInSessionSql()
+    public void GetFinalSessionSettings_WithApplicationName_EmbedsNameInSessionSql()
     {
         var d = CreateDialect();
         var settings = d.GetFinalSessionSettings(false, "TestApp");
