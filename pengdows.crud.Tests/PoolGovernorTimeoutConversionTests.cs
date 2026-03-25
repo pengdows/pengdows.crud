@@ -96,25 +96,21 @@ public class PoolGovernorTimeoutConversionTests
     }
 
     [Fact]
-    public void Convert_OneTick_ReturnsAtLeastOne()
+    public void Convert_OneTick_ReturnsAtLeastOneAndAtMostOneSecond()
     {
-        // 1 tick = 100 ns — smallest representable TimeSpan must produce >= 1
-        Assert.True(Convert(TimeSpan.FromTicks(1)) >= 1);
+        // 1 tick = 100 ns — must not return 0 and must not exceed 1 second of Stopwatch ticks
+        var result = Convert(TimeSpan.FromTicks(1));
+        Assert.InRange(result, 1L, Stopwatch.Frequency);
     }
 
-    // ── Large values don't produce absurd or negative results ────────────
+    // ── Large values don't overflow or produce absurd results ────────────
 
     [Theory]
     [InlineData(60)]     // 1 minute
     [InlineData(3600)]   // 1 hour
-    public void Convert_LargeTimeout_IsReasonable(int seconds)
+    public void Convert_LargeWholeSecondTimeout_IsExact(int seconds)
     {
-        var result = Convert(TimeSpan.FromSeconds(seconds));
-
-        // Must be positive, must be >= seconds * Frequency (allowing 1-tick rounding down)
-        Assert.True(result > 0);
-        var lowerBound = (long)seconds * Stopwatch.Frequency - Stopwatch.Frequency / 1000;
-        Assert.True(result >= lowerBound,
-            $"Result {result} is unreasonably small for {seconds}s timeout");
+        // Large whole-second inputs must produce exactly n * Frequency — no overflow, no truncation
+        Assert.Equal((long)seconds * Stopwatch.Frequency, Convert(TimeSpan.FromSeconds(seconds)));
     }
 }
