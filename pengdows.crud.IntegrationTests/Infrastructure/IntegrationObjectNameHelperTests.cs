@@ -68,4 +68,21 @@ public sealed class IntegrationObjectNameHelperTests
 
         Assert.Equal("\"test_table\"", table);
     }
+
+    [Fact]
+    public void Table_LeavesOracleNamesUnqualified_BecauseConnectionStringIsRedacted()
+    {
+        // DatabaseContext.ConnectionString returns a redacted string where User Id=REDACTED.
+        // IntegrationObjectNameHelper must not use User Id as Oracle schema prefix, since
+        // Oracle tables are created in the connected user's schema by default.
+        using var context = new DatabaseContext(
+            "User Id=system;Password=mysecurepassword;Data Source=localhost:1521/FREEPDB1",
+            new fakeDbFactory(SupportedDatabase.Oracle));
+
+        var table = IntegrationObjectNameHelper.Table(context, "test_table");
+
+        Assert.DoesNotContain("REDACTED", table, StringComparison.Ordinal);
+        Assert.DoesNotContain("SYSTEM", table, StringComparison.Ordinal);
+        Assert.Equal("\"test_table\"", table);
+    }
 }

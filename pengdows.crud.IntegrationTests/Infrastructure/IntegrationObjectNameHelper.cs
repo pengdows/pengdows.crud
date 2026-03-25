@@ -34,9 +34,10 @@ internal static class IntegrationObjectNameHelper
                     ? [db]
                     : [],
             SupportedDatabase.DuckDB => [GetValue(builder, "schema") ?? "main"],
-            SupportedDatabase.Oracle => GetValue(builder, "User Id", "UID", "User") is { Length: > 0 } user
-                ? [user.ToUpperInvariant()]
-                : [],
+            // Oracle tables are created in the connected user's schema by default.
+            // DatabaseContext.ConnectionString is redacted (User Id → "REDACTED"), so we must
+            // not derive a schema prefix from it — doing so produces ORA-01918.
+            SupportedDatabase.Oracle => [],
             _ => []
         };
     }

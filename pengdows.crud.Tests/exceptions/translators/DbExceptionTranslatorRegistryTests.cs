@@ -47,12 +47,27 @@ public class DbExceptionTranslatorRegistryTests
     }
 
     [Fact]
-    public void Registry_Routes_Firebird_And_DuckDB_To_FallbackTranslator()
+    public void Registry_Routes_Firebird_To_FallbackTranslator()
     {
         var registry = new DbExceptionTranslatorRegistry();
 
         Assert.IsType<FallbackExceptionTranslator>(registry.Get(SupportedDatabase.Firebird));
-        Assert.IsType<FallbackExceptionTranslator>(registry.Get(SupportedDatabase.DuckDB));
+    }
+
+    [Fact]
+    public void Registry_Routes_DuckDB_To_DuckDbExceptionTranslator()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<DuckDbExceptionTranslator>(registry.Get(SupportedDatabase.DuckDB));
+    }
+
+    [Fact]
+    public void Registry_Routes_Oracle_To_OracleExceptionTranslator()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<OracleExceptionTranslator>(registry.Get(SupportedDatabase.Oracle));
     }
 
     [Fact]

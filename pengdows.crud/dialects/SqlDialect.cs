@@ -1437,6 +1437,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
                        ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23505; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return MessageIndicatesUniqueViolation(ex.Message);
         }
@@ -1473,6 +1480,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 return errorCode == 787 ||
                        message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23503; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
         }
@@ -1507,6 +1519,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.Sqlite:
                 return errorCode == 1299 ||
                        message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23502; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
@@ -1544,6 +1561,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.Sqlite:
                 return errorCode == 275 ||
                        message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23514; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
@@ -2679,6 +2701,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     errorCode == 1555 ||
                     errorCode == 2067 ||
                     (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses ANSI SQLSTATE codes; class 23 = constraint violations
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                // Message fallback: DuckDB drivers may not always populate SqlState
+                if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
                 {
                     category = DbErrorCategory.ConstraintViolation;
                     return true;

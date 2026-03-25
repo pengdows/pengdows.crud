@@ -377,7 +377,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     {
         return _wrappedTableNameCache.GetOrAdd(dialect, d =>
         {
-            if (string.IsNullOrWhiteSpace(_tableInfo.Schema))
+            if (string.IsNullOrWhiteSpace(_tableInfo.Schema) || !d.SupportsNamespaces)
             {
                 return d.WrapSimpleName(_tableInfo.Name);
             }
