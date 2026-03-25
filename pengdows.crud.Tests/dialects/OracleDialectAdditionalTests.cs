@@ -134,9 +134,89 @@ public class OracleDialectAdditionalTests
     public void GetBaseSessionSettings_IncludesNlsTimestampFormat()
     {
         var d = CreateDialect();
-        var settings = d.GetBaseSessionSettings();
+        // Use the string? overload — OracleDialect only overrides GetBaseSessionSettings(string?)
+        var settings = d.GetBaseSessionSettings(null);
         Assert.Contains("NLS_TIMESTAMP_FORMAT", settings);
         Assert.Contains("YYYY-MM-DD HH24:MI:SS.FF", settings);
+        Assert.Contains("BEGIN", settings);
+        Assert.Contains("END;", settings);
+    }
+
+    // ── GetBaseSessionSettings(string?) new behaviour ─────────────────────────
+
+    [Fact]
+    public void GetBaseSessionSettings_NullApplicationName_DoesNotIncludeModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.DoesNotContain("DBMS_APPLICATION_INFO", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_WhitespaceApplicationName_DoesNotIncludeModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("   ");
+        Assert.DoesNotContain("DBMS_APPLICATION_INFO", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_WithApplicationName_IncludesModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("MyApp");
+        Assert.Contains("DBMS_APPLICATION_INFO.SET_MODULE", settings);
+        Assert.Contains("module_name => 'MyApp'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IncludesUtcTimezone()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.Contains("TIME_ZONE = ''UTC''", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IncludesPLSqlWrapper()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.Contains("BEGIN", settings);
+        Assert.Contains("END;", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_ApplicationNameTooLong_IsTruncatedTo48Chars()
+    {
+        var d = CreateDialect();
+        var longName = new string('X', 60); // 60 chars, well over the 48-char Oracle MODULE limit
+        var settings = d.GetBaseSessionSettings(longName);
+        // The module_name value between the quotes should be exactly 48 chars
+        var marker = "module_name => '";
+        var start = settings.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var end = settings.IndexOf("'", start, StringComparison.Ordinal);
+        var moduleName = settings[start..end];
+        Assert.Equal(48, moduleName.Length);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_ApplicationNameWithSingleQuote_IsEscaped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("O'Brian");
+        Assert.Contains("O''Brian", settings);
+        // Ensure the raw unescaped form is not present (would break PL/SQL syntax)
+        Assert.DoesNotContain("'O'Brian'", settings);
+    }
+
+    [Fact]
+    public void GetFinalSessionSettings_WithApplicationName_EmbeddsNameInSessionSql()
+    {
+        var d = CreateDialect();
+        var settings = d.GetFinalSessionSettings(false, "TestApp");
+        Assert.Contains("TestApp", settings);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT", settings);
     }
 
     [Fact]

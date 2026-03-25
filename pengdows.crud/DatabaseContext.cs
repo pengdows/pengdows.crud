@@ -285,7 +285,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     /// <inheritdoc/>
-    public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings();
+    public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings(null);
 
     /// <inheritdoc/>
     public string GetReadOnlySessionSettings() => _dialect.GetReadOnlySessionSettings();

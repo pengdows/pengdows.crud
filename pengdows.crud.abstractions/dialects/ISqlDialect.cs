@@ -571,6 +571,15 @@ public interface ISqlDialect
     string GetCompoundInsertIdSuffix();
 
     /// <summary>
+    /// Reads the generated primary key from the <see cref="System.Data.Common.DbCommand"/> after
+    /// executing an INSERT, using provider-specific properties (e.g. MySqlCommand.LastInsertedId
+    /// populated from the MySQL OK packet). No second round-trip required.
+    /// Returns <c>null</c> when the provider does not expose this property or the command is null.
+    /// Used by the <see cref="GeneratedKeyPlan.ReaderInsertedId"/> path.
+    /// </summary>
+    object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command);
+
+    /// <summary>
     /// Indicates whether the dialect has a safe session-scoped last-id function.
     /// </summary>
     bool HasSessionScopedLastIdFunction();

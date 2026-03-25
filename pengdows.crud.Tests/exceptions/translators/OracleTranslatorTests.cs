@@ -127,4 +127,18 @@ public class OracleTranslatorTests
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
     }
+
+    // ── Detection order: ORA code wins over timeout message ───────────────────
+
+    [Fact]
+    public void OraCode1_WithTimeoutKeywordInMessage_ClassifiesAsUniqueNotTimeout()
+    {
+        // Oracle 23c includes column values in extended error messages; a row value that
+        // contains "timeout" must not be misclassified as CommandTimeoutException.
+        var raw = new NumberedDbException(1, "ORA-00001: unique constraint (SYS.UK_JOBS) violated; row value was 'timeout'");
+
+        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
 }

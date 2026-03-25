@@ -32,8 +32,10 @@ internal class TiDbDialect : MySqlDialect
     // but benefits from a "Pessimistic" transaction mode for correctness
     // in complex distributed workloads.
 
-    // MySql.Data provider has a bug/incompatibility with TiDB when preparing statements
-    public override bool PrepareStatements => false;
+    // Oracle MySql.Data has a bug/incompatibility with TiDB when preparing statements.
+    // MySqlConnector does not have this issue; binary-protocol parameters also avoid
+    // the server-side backslash processing that corrupts string values in text protocol.
+    public override bool PrepareStatements => _isMySqlConnector;
 
     // TiDB's Go AST parser does not implement stored procedure DDL (*ast.ProcedureInfo).
     // Stored procedures cannot be created or called on TiDB.

@@ -96,6 +96,31 @@ public class DuckDbTranslatorTests
         Assert.IsType<CheckConstraintViolationException>(result);
     }
 
+    // ── Detection order: SQLSTATE / message wins over timeout keyword ─────────
+
+    [Fact]
+    public void SqlState23505_WithTimeoutKeywordInMessage_ClassifiesBySqlStateNotTimeout()
+    {
+        // DuckDB error messages include the violating row values; a value containing "timeout"
+        // must not be misclassified as CommandTimeoutException when SQLSTATE is present.
+        var raw = new SqlStateDbException("23505", "Constraint Error: Duplicate key 'timeout_value' violates unique constraint 'pk'");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void UniqueViolationMessage_WithTimeoutKeyword_ClassifiesByPatternNotTimeout()
+    {
+        // Same scenario using the message-pattern fallback (no SqlState populated).
+        var raw = new SqliteMessageDbException("Duplicate key 'session_timeout' violates unique constraint 'pk_sessions'");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
     // ── Passthrough cases ─────────────────────────────────────────────────────
 
     [Fact]

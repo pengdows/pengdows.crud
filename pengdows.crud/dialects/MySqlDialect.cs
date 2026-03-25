@@ -88,7 +88,7 @@ internal class MySqlDialect : SqlDialect
     };
 
     private string? _sessionSettings;
-    private readonly bool _isMySqlConnector;
+    protected readonly bool _isMySqlConnector;
     private readonly SupportedDatabase _flavor;
     private volatile bool _prepareDisabledByServerLimit;
 
@@ -129,10 +129,12 @@ internal class MySqlDialect : SqlDialect
     public override int ParameterNameMaxLength => 64;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
 
-    // MySQL prepared statements default OFF to avoid max_prepared_stmt_count exhaustion.
-    // Opt-in via DatabaseContextConfiguration.ForceManualPrepare = true.
-    // ShouldDisablePrepareOn() still guards the opt-in path against error 1461.
-    public override bool PrepareStatements => false;
+    // MySqlConnector uses binary-protocol parameters (no SQL text substitution), so
+    // prepared statements are safe and correct — and avoid server-side backslash processing
+    // that can corrupt string values containing escape sequences when using text protocol.
+    // Oracle MySql.Data defaults OFF to avoid max_prepared_stmt_count exhaustion on older servers.
+    // ShouldDisablePrepareOn() guards against error 1461 on either path.
+    public override bool PrepareStatements => _isMySqlConnector;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
     // Retrying after exhaustion only compounds the problem.
@@ -157,18 +159,36 @@ internal class MySqlDialect : SqlDialect
     }
 
     /// <summary>
-    /// MySQL/MariaDB use the compound statement plan: INSERT ...; SELECT LAST_INSERT_ID()
-    /// executed as a single batch on one connection. This fixes the two-lease correctness
-    /// hazard where LAST_INSERT_ID() is session-scoped and a separate connection pool
-    /// lease could return a wrong or zero value.
+    /// MySqlConnector 2.x deliberately does not support AllowMultipleStatements, so the
+    /// CompoundStatement plan cannot work. Use ReaderInsertedId instead: execute the INSERT
+    /// as a reader and read LastInsertedId from the MySqlDataReader OK-packet property — no
+    /// second round-trip and no multi-statement support required.
+    ///
+    /// Oracle MySql.Data DOES support Allow Multiple Statements; keep CompoundStatement for
+    /// that provider so nothing regresses.
     /// </summary>
-    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.CompoundStatement;
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() =>
+        _isMySqlConnector ? GeneratedKeyPlan.ReaderInsertedId : GeneratedKeyPlan.CompoundStatement;
+
+    /// <summary>
+    /// Reads the generated auto-increment key from the DbCommand after INSERT using reflection.
+    /// MySqlCommand.LastInsertedId is populated from the MySQL OK packet — no extra query needed.
+    /// Returns null when the command is null or the property is absent (fakeDb, non-MySqlConnector providers).
+    /// </summary>
+    public override object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command)
+    {
+        if (command is null)
+        {
+            return null;
+        }
+
+        var prop = command.GetType().GetProperty("LastInsertedId");
+        return prop?.GetValue(command);
+    }
 
     /// <summary>
     /// SQL suffix appended to INSERT for compound execution.
-    /// Requires AllowMultipleStatements=true in the MySqlConnector connection string
-    /// (or "Allow Multiple Statements=true" for Oracle's MySql.Data).
-    /// Both options are injected automatically by PrepareConnectionStringForDataSource.
+    /// Requires Allow Multiple Statements=true (Oracle MySql.Data only).
     /// </summary>
     public override string GetCompoundInsertIdSuffix() => "; SELECT LAST_INSERT_ID()";
 
@@ -290,20 +310,10 @@ internal class MySqlDialect : SqlDialect
                     builder[resetKey] = false;
                     Logger.LogDebug("Injecting ConnectionReset=false for MySqlConnector to optimize lease performance (1 RTT strategy)");
                 }
-
-                // CORRECTNESS: Enable multi-statement execution for the CompoundStatement plan
-                // (INSERT ...; SELECT LAST_INSERT_ID()). This ensures both statements execute on
-                // the same connection in one round-trip, preventing the two-lease hazard where
-                // LAST_INSERT_ID() returns 0 or a stale value on a different pool connection.
-                // Safe: pengdows.crud always parameterizes values and never interpolates user
-                // data into SQL strings, so enabling multi-statement batching does not introduce
-                // SQL injection risk.
-                const string multiStmtKey = "AllowMultipleStatements";
-                if (!builder.ContainsKey(multiStmtKey))
-                {
-                    builder[multiStmtKey] = true;
-                    Logger.LogDebug("Injecting AllowMultipleStatements=true for MySqlConnector to support CompoundStatement generated-key plan");
-                }
+                // NOTE: AllowMultipleStatements is deliberately NOT injected for MySqlConnector.
+                // MySqlConnector 2.x does not support this option (it is not a known connection string
+                // property). The ReaderInsertedId plan reads LastInsertedId from the MySqlDataReader
+                // OK packet instead, requiring no multi-statement support.
             }
             else
             {

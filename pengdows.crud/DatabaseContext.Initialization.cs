@@ -278,13 +278,6 @@ public partial class DatabaseContext
 
             _sessionSettingsDetectionCompleted = true;
 
-            // PRE-COMPUTE SESSION SETTINGS: Compute the "ready-to-go" session strings once
-            // per context. GetFinalSessionSettings(bool) ensures that each dialect
-            // returns exactly ONE optimized string (combining baseline + intent)
-            // to ensure 1 RTT and 1 execution on the server on the hot path.
-            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false);
-            _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true);
-
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
             if (Product == SupportedDatabase.DuckDB)
@@ -321,6 +314,19 @@ public partial class DatabaseContext
             }
 
             InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);
+
+            // PRE-COMPUTE SESSION SETTINGS: computed after app name is resolved so dialects that
+            // embed the application name in session SQL (e.g. Oracle DBMS_APPLICATION_INFO) get
+            // the correct rw/ro-suffixed name. GetFinalSessionSettings produces exactly ONE
+            // optimized string per pool type (baseline + intent) for a single RTT on the hot path.
+            var rwAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+                ? null
+                : effectiveApplicationName + WriteApplicationNameSuffix;
+            var roAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+                ? null
+                : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
+            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false, rwAppName);
+            _cachedReadOnlySessionSettings  = _dialect.GetFinalSessionSettings(readOnly: true,  roAppName);
 
             // Validate read-only connection if an explicit RO connection string was provided
             if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&

@@ -32,6 +32,7 @@ public class TestTableCreator
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
             SupportedDatabase.CockroachDb => CreatePostgreSqlTableSql(),
+            SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")

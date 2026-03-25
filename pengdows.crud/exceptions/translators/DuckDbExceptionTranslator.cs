@@ -6,20 +6,16 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates DuckDB-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: timeout → SQLSTATE (23505/23503/23502/23514) →
-/// message patterns → fallback.
-/// SQLSTATE is checked first because DuckDB uses standard ANSI SQL codes.
+/// Detection order: SQLSTATE (23505/23503/23502/23514) → message patterns → timeout → fallback.
+/// SQLSTATE and message patterns are checked first because DuckDB error messages include
+/// the violating row values, which may contain user data such as "timeout" and would
+/// otherwise trigger a false-positive timeout classification.
 /// Message-pattern fallback covers drivers that do not populate SqlState.
 /// </remarks>
 internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
 {
     public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
     {
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
-        {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
-        }
-
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var message = exception.Message;
@@ -90,6 +86,11 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return new CheckConstraintViolationException(
                 $"{operationKind} violated a check constraint on {database}: {message}",
                 database, exception, errorCode: errorCode);
+        }
+
+        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        {
+            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

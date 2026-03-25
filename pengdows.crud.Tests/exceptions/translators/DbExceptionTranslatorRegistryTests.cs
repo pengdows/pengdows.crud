@@ -47,11 +47,53 @@ public class DbExceptionTranslatorRegistryTests
     }
 
     [Fact]
-    public void Registry_Routes_Firebird_To_FallbackTranslator()
+    public void Registry_Routes_Firebird_To_FirebirdExceptionTranslator()
     {
         var registry = new DbExceptionTranslatorRegistry();
 
-        Assert.IsType<FallbackExceptionTranslator>(registry.Get(SupportedDatabase.Firebird));
+        Assert.IsType<FirebirdExceptionTranslator>(registry.Get(SupportedDatabase.Firebird));
+    }
+
+    [Theory]
+    [InlineData("violation of PRIMARY or UNIQUE KEY constraint \"PK_x\" on table \"Job\"")]
+    [InlineData("violation of UNIQUE KEY constraint \"UQ_Job_State\" on table \"Job\"")]
+    public void FirebirdTranslator_UniqueConstraintViolation_Returns_UniqueConstraintViolationException(string message)
+    {
+        var translator = new FirebirdExceptionTranslator();
+        var inner = new InvalidOperationException(message);
+
+        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void FirebirdTranslator_UniqueViolation_WithTimeoutInKeyValue_IsNotMisclassifiedAsTimeout()
+    {
+        // Regression: distributed lock resources like "lock-timeout-{guid}" embed "timeout"
+        // in the key value, which appears in the Firebird exception message. The unique
+        // constraint check must run before LooksLikeTimeout so the PK violation is not
+        // swallowed as a CommandTimeoutException.
+        const string message =
+            "violation of PRIMARY or UNIQUE KEY constraint \"PK_HangFire_hf_lock\" on table \"hf_lock\"\n" +
+            "Problematic key value is (\"resource\" = 'lock-timeout-abc123')";
+        var translator = new FirebirdExceptionTranslator();
+        var inner = new InvalidOperationException(message);
+
+        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void FirebirdTranslator_GenericError_Returns_DatabaseOperationException()
+    {
+        var translator = new FirebirdExceptionTranslator();
+        var inner = new InvalidOperationException("some unrecognized Firebird error");
+
+        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+
+        Assert.IsType<DatabaseOperationException>(result);
     }
 
     [Fact]

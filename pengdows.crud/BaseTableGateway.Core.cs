@@ -183,7 +183,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             );
         }
 
-        WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema)
+        WrappedTableName = (!string.IsNullOrEmpty(_tableInfo.Schema) && _dialect.SupportsNamespaces
                                ? _dialect.WrapSimpleName(_tableInfo.Schema) +
                                  _dialect.CompositeIdentifierSeparator
                                : "")

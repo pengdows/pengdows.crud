@@ -86,4 +86,28 @@ public class BuildWrappedTableNameTests
         Assert.Contains("HangFire", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Job", sql, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ── WrappedTableName property (used by hangfire gateways) ─────────────────
+
+    [Fact]
+    public void WrappedTableName_Firebird_DropsSchemaPrefix_WhenDialectDoesNotSupportNamespaces()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        var gateway = new TableGateway<SchemaEntity, long>(context);
+
+        Assert.DoesNotContain("HangFire", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Job", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WrappedTableName_PostgreSql_IncludesSchemaPrefix_WhenDialectSupportsNamespaces()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+        var gateway = new TableGateway<SchemaEntity, long>(context);
+
+        Assert.Contains("HangFire", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Job", gateway.WrappedTableName, StringComparison.OrdinalIgnoreCase);
+    }
 }

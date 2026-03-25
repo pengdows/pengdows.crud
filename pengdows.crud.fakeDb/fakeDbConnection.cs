@@ -53,6 +53,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public fakeDbCommand? LastCreatedCommand { get; private set; }
 
     /// <summary>
+    /// When set, every command created by this connection will have its
+    /// <see cref="fakeDbCommand.LastInsertedId"/> pre-populated with this value.
+    /// Used to simulate the MySqlConnector OK-packet LastInsertedId for the ReaderInsertedId plan.
+    /// </summary>
+    public object? NextCommandLastInsertedId { get; set; }
+
+    /// <summary>
     /// Queue of output parameter values to apply after command execution.
     /// Each dictionary maps parameter name to its output value.
     /// </summary>
@@ -733,6 +740,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _customCommandBehavior?.Invoke();
 
         var command = new fakeDbCommand(this);
+        if (NextCommandLastInsertedId != null)
+        {
+            command.LastInsertedId = NextCommandLastInsertedId;
+        }
+
         CreatedCommands.Add(command);
         LastCreatedCommand = command;
         return command;

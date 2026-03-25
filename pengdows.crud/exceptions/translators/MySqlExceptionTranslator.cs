@@ -11,6 +11,16 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
+        // Check unique constraint codes before LooksLikeTimeout so that PK-violation messages
+        // that happen to contain "timeout" in their payload (e.g. a distributed-lock resource
+        // named "lock-timeout-<guid>") are not mis-classified as CommandTimeoutException.
+        if (errorCode is 1062 or 1169)
+        {
+            return new UniqueConstraintViolationException(
+                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName);
+        }
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) || errorCode == 1205)
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
