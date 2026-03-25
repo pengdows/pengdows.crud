@@ -210,6 +210,44 @@ public class OracleDialectAdditionalTests
         Assert.DoesNotContain("'O'Brian'", settings);
     }
 
+    // ── Control-character sanitization ────────────────────────────────────────────
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithNewline_NewlineStrippedFromModuleName()
+    {
+        // A raw \n inside the module name would break the PL/SQL string literal structure.
+        // After stripping control chars, "Before\nAfter" must become "BeforeAfter".
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("Before\nAfter");
+        Assert.Contains("module_name => 'BeforeAfter'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithCarriageReturn_Stripped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("App\rName");
+        Assert.Contains("module_name => 'AppName'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithNullByte_Stripped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("App\0Name");
+        Assert.Contains("module_name => 'AppName'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithQuoteAndControlChar_BothHandled()
+    {
+        // Verify control-char stripping and single-quote escaping work together.
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("O'\nBrian");
+        // \n stripped, ' doubled: result is "O''Brian"
+        Assert.Contains("module_name => 'O''Brian'", settings);
+    }
+
     [Fact]
     public void GetFinalSessionSettings_WithApplicationName_EmbedsNameInSessionSql()
     {

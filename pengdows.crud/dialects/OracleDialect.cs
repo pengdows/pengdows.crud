@@ -284,12 +284,34 @@ internal class OracleDialect : SqlDialect
         sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET TIME_ZONE = ''UTC''';\n");
         if (!string.IsNullOrWhiteSpace(applicationName))
         {
-            // Truncate to 48 chars FIRST (respects Oracle MODULE column limit),
-            // then escape single quotes for the PL/SQL string literal.
-            var truncated = applicationName.Length > 48 ? applicationName[..48] : applicationName;
-            var module = truncated.Replace("'", "''");
+            // Truncate to 48 chars FIRST (Oracle MODULE column limit), then in one
+            // character-by-character pass: strip control characters (newlines, null
+            // bytes, etc. that would break the PL/SQL string literal) and double
+            // any single quotes. Single-pass avoids allocations and eliminates the
+            // risk of a truncation splitting a doubled-quote pair.
+            // Trust boundary: ApplicationName is developer configuration; sanitization
+            // is defense-in-depth against accidental or injected control characters.
+            var src = applicationName.Length > 48
+                ? applicationName.AsSpan(0, 48)
+                : applicationName.AsSpan();
             sb.Append("  DBMS_APPLICATION_INFO.SET_MODULE(module_name => '");
-            sb.Append(module);
+            foreach (var c in src)
+            {
+                if (char.IsControl(c))
+                {
+                    continue;
+                }
+
+                if (c == '\'')
+                {
+                    sb.Append('\'');
+                    sb.Append('\'');
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
             sb.Append("', action_name => NULL);\n");
         }
         sb.Append("END;");
