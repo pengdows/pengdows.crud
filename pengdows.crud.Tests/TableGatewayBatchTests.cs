@@ -836,6 +836,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
         public bool RCSIEnabled => _context.RCSIEnabled;
         public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+        public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => _context.GetSupportedIsolationLevels();
         public bool IsDisposed => _context.IsDisposed;
 
         ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>

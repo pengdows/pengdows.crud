@@ -149,10 +149,9 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip for providers with limited isolation level support
-            if (!SupportsSerializableIsolation(provider))
+            if (!context.GetSupportedIsolationLevels().Contains(IsolationLevel.Serializable))
             {
-                Output.WriteLine($"Skipping serializable test for {provider}");
+                Output.WriteLine($"Skipping serializable test for {provider} (Serializable not supported)");
                 return;
             }
 
@@ -428,12 +427,6 @@ public class TransactionTests : DatabaseTestBase
             IsActive = true,
             CreatedOn = DateTime.UtcNow
         };
-    }
-
-    private static bool SupportsSerializableIsolation(SupportedDatabase provider)
-    {
-        // TiDB only supports ReadCommitted and Snapshot; Serializable is rejected by the isolation resolver.
-        return provider is not (SupportedDatabase.Sqlite or SupportedDatabase.Snowflake or SupportedDatabase.TiDb);
     }
 
     private static bool SupportsSavepoints(SupportedDatabase provider)

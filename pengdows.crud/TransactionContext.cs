@@ -297,6 +297,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
 
     /// <inheritdoc/>
+    public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => _context.GetSupportedIsolationLevels();
+
+    /// <inheritdoc/>
     public string ConnectionString => _context.ConnectionString;
 
     internal string RawConnectionString => InternalConnectionStringAccess.GetRawConnectionString(_context);

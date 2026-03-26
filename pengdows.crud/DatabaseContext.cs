@@ -252,6 +252,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public bool SnapshotIsolationEnabled { get; private set; }
 
+    /// <inheritdoc/>
+    public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => _isolationResolver.GetSupportedLevels();
+
     /// <summary>
     /// Returns a no-op locker.
     /// </summary>

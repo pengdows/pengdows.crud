@@ -131,4 +131,24 @@ public class DatabaseContextIsolationTests
         using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency);
         Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
     }
+
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer, IsolationLevel.Serializable, true)]
+    [InlineData(SupportedDatabase.PostgreSql, IsolationLevel.Serializable, true)]
+    [InlineData(SupportedDatabase.MySql, IsolationLevel.Serializable, true)]
+    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.Serializable, true)]
+    [InlineData(SupportedDatabase.TiDb, IsolationLevel.Serializable, false)]
+    [InlineData(SupportedDatabase.TiDb, IsolationLevel.ReadCommitted, true)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.Serializable, false)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted, true)]
+    public void GetSupportedIsolationLevels_ReflectsProviderCapabilities(
+        SupportedDatabase product, IsolationLevel level, bool expectedSupported)
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
+
+        var supported = context.GetSupportedIsolationLevels();
+
+        Assert.Equal(expectedSupported, supported.Contains(level));
+    }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using System.Data;
@@ -133,6 +134,7 @@ public class CoverageGapTests_Infrastructure
         public bool IsReadOnlyConnection => false;
         public bool RCSIEnabled => false;
         public bool SnapshotIsolationEnabled => false;
+        public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => new HashSet<IsolationLevel>();
         public bool SupportsInsertReturning => false;
         public string QuotePrefix => "\"";
         public string QuoteSuffix => "\"";

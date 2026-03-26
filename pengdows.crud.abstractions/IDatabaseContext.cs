@@ -204,6 +204,13 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     bool SnapshotIsolationEnabled { get; }
 
     /// <summary>
+    /// Returns the set of <see cref="IsolationLevel"/> values supported by this database context.
+    /// Use this to check provider capabilities before calling <see cref="BeginTransaction(IsolationLevel?,ExecutionType)"/>
+    /// with a specific level, rather than hardcoding per-provider knowledge in callers.
+    /// </summary>
+    IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels();
+
+    /// <summary>
     /// Creates a new SQL container for building statements.
     /// </summary>
     ISqlContainer CreateSqlContainer(string? query = null);
