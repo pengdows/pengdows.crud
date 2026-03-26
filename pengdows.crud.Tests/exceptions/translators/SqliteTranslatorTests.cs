@@ -75,4 +75,27 @@ public class SqliteTranslatorTests
         Assert.Equal(SupportedDatabase.Sqlite, result.Database);
         Assert.NotNull(result.InnerException);
     }
+
+    [Fact]
+    public void SqliteReadOnly_ErrorCode8_MapsTo_ReadOnlyViolationException()
+    {
+        var raw = new NumberedDbException(8, "SQLite Error 8: 'attempt to write a readonly database'");
+
+        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+        Assert.Equal(SupportedDatabase.Sqlite, result.Database);
+        Assert.NotNull(result.InnerException);
+    }
+
+    [Fact]
+    public void SqliteReadOnly_IsNotTransient()
+    {
+        var raw = new NumberedDbException(8, "attempt to write a readonly database");
+
+        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+        Assert.Equal(false, result.IsTransient);
+    }
 }

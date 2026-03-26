@@ -144,4 +144,55 @@ public class DuckDbTranslatorTests
         Assert.IsNotType<UniqueConstraintViolationException>(result);
         Assert.IsNotType<ForeignKeyViolationException>(result);
     }
+
+    // ── Read-only violation detection ─────────────────────────────────────────
+
+    [Fact]
+    public void DuckDb_SqlState25006_MapsTo_ReadOnlyViolationException()
+    {
+        var raw = new SqlStateDbException("25006", "Cannot execute statement of type 'INSERT' in read-only transaction");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+    }
+
+    [Theory]
+    [InlineData("Binder Error: Cannot execute statement of type \"INSERT\" on database \"mydb\" which is attached in read-only mode!")]
+    [InlineData("Binder Error: Cannot execute statement of type \"UPDATE\" on database \"mydb\" which is attached in read-only mode!")]
+    [InlineData("Binder Error: Cannot execute statement of type \"DELETE\" on database \"mydb\" which is attached in read-only mode!")]
+    [InlineData("Attempting to execute an unsupported query in read-only transaction")]
+    [InlineData("Cannot write to read-only database")]
+    public void DuckDb_ReadOnlyMessage_MapsTo_ReadOnlyViolationException(string message)
+    {
+        var raw = new SqliteMessageDbException(message);
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+    }
+
+    [Fact]
+    public void DuckDb_ReadOnlyViolation_IsNotTransient()
+    {
+        var raw = new SqlStateDbException("25006", "read-only transaction");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+        Assert.Equal(false, result.IsTransient);
+    }
+
+    [Fact]
+    public void DuckDb_ReadOnlyMessage_WithTimeoutKeyword_ClassifiesAsReadOnly_NotTimeout()
+    {
+        // Ensure a message like "read-only transaction timeout_user" doesn't get
+        // misclassified as a timeout just because the read-only check comes first.
+        var raw = new SqliteMessageDbException("Cannot execute in read-only transaction for session_timeout_user");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+        Assert.IsNotType<CommandTimeoutException>(result);
+    }
 }

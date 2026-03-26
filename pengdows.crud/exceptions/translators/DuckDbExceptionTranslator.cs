@@ -6,7 +6,8 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates DuckDB-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: SQLSTATE (23505/23503/23502/23514) → message patterns → timeout → fallback.
+/// Detection order: SQLSTATE (23505/23503/23502/23514/25006) → message patterns
+/// (constraint violations, then read-only) → timeout → fallback.
 /// SQLSTATE and message patterns are checked first because DuckDB error messages include
 /// the violating row values, which may contain user data such as "timeout" and would
 /// otherwise trigger a false-positive timeout classification.
@@ -50,6 +51,12 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
                     $"{operationKind} violated a check constraint on {database}: {message}",
                     database, exception, errorCode: errorCode);
             }
+
+            // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection
+            if (sqlState == "25006")
+            {
+                return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
+            }
         }
 
         // Message-based fallback for cases where the driver does not populate SqlState.
@@ -86,6 +93,20 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return new CheckConstraintViolationException(
                 $"{operationKind} violated a check constraint on {database}: {message}",
                 database, exception, errorCode: errorCode);
+        }
+
+        // DuckDB read-only access mode violation (message-based fallback when SqlState is absent).
+        // DuckDB enforces read-only at the connection/binder level and rejects writes before execution:
+        //   "Binder Error: Cannot execute statement of type "INSERT" on database "..." which is attached in read-only mode!"
+        //   "Binder Error: Cannot execute statement of type "UPDATE" on database "..." which is attached in read-only mode!"
+        // The error fires at bind time, not after partial execution, and is non-retryable.
+        // Also catches other drivers/wrappers that surface similar messages.
+        // Checked before timeout to prevent false-positive timeout classification when
+        // the word "timeout" appears in a read-only error message.
+        if (message.Contains("read-only", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("read only", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))

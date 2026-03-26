@@ -205,4 +205,34 @@ public class CompleteExceptionTests
         Assert.Equal("outer message", ex.Message);
         Assert.Same(inner, ex.InnerException);
     }
+
+    // ── ReadOnlyViolationException wiring ────────────────────────────────────
+
+    [Fact]
+    public void ReadOnlyViolationException_IsAssignableFrom_DatabaseOperationException()
+    {
+        var ex = new ReadOnlyViolationException("write on read-only", pengdows.crud.enums.SupportedDatabase.Sqlite);
+
+        Assert.IsAssignableFrom<DatabaseOperationException>(ex);
+        Assert.IsAssignableFrom<DatabaseException>(ex);
+    }
+
+    [Fact]
+    public void ReadOnlyViolationException_IsNotTransient()
+    {
+        var ex = new ReadOnlyViolationException("write on read-only", pengdows.crud.enums.SupportedDatabase.DuckDB);
+
+        Assert.Equal(false, ex.IsTransient);
+    }
+
+    [Fact]
+    public void ReadOnlyViolationException_WithInnerException_StoresInnerAndMessage()
+    {
+        var inner = new InvalidOperationException("root cause");
+        var ex = new ReadOnlyViolationException("write on read-only", pengdows.crud.enums.SupportedDatabase.Sqlite,
+            innerException: inner);
+
+        Assert.Equal("write on read-only", ex.Message);
+        Assert.Same(inner, ex.InnerException);
+    }
 }

@@ -80,6 +80,27 @@ public class ConnectionException : DatabaseOperationException
 }
 
 /// <summary>
+/// Thrown when a write operation is attempted on a connection opened in read-only mode.
+/// </summary>
+/// <remarks>
+/// Occurs for SQLite (SQLITE_READONLY, error code 8) and DuckDB (SQLSTATE 25006 or
+/// <c>access_mode=READ_ONLY</c> write attempts) when a modifying statement reaches a
+/// read-only connection. Not transient — the caller must use a writable context.
+/// </remarks>
+public class ReadOnlyViolationException : DatabaseOperationException
+{
+    public ReadOnlyViolationException(
+        string message,
+        SupportedDatabase database,
+        Exception? innerException = null,
+        string? sqlState = null,
+        int? errorCode = null)
+        : base(message, database, innerException, sqlState, errorCode, constraintName: null, isTransient: false)
+    {
+    }
+}
+
+/// <summary>
 /// Thrown when a transaction operation (begin, commit, or rollback) fails at the driver level.
 /// </summary>
 /// <remarks>
