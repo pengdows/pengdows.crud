@@ -336,6 +336,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public DatabaseMetrics Metrics => _context.Metrics;
 
     /// <inheritdoc/>
+    public PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label) => _context.GetPoolStatisticsSnapshot(label);
+
+    /// <inheritdoc/>
     public event EventHandler<DatabaseMetrics> MetricsUpdated
     {
         add => _context.MetricsUpdated += value;

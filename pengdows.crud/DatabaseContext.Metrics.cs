@@ -136,7 +136,7 @@ public partial class DatabaseContext
         return executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
     }
 
-    internal PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
+    public PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
     {
         var governor = label == PoolLabel.Reader ? _readerGovernor : _writerGovernor;
         if (governor == null)

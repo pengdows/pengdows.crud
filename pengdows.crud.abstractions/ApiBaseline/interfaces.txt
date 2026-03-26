@@ -43,6 +43,7 @@ method pengdows.crud.IDatabaseContext::CreateSqlContainer(string) -> pengdows.cr
 method pengdows.crud.IDatabaseContext::GenerateParameterName() -> string
 method pengdows.crud.IDatabaseContext::GenerateRandomName(int, int) -> string
 method pengdows.crud.IDatabaseContext::GetBaseSessionSettings() -> string
+method pengdows.crud.IDatabaseContext::GetPoolStatisticsSnapshot(pengdows.crud.enums.PoolLabel) -> pengdows.crud.metrics.PoolStatisticsSnapshot
 method pengdows.crud.IDatabaseContext::GetReadOnlySessionSettings() -> string
 method pengdows.crud.IDatabaseContext::GetSupportedIsolationLevels() -> System.Collections.Generic.IReadOnlySet`1<System.Data.IsolationLevel>
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string

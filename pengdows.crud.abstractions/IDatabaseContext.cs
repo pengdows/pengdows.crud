@@ -85,6 +85,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DatabaseMetrics Metrics { get; }
 
     /// <summary>
+    /// Gets a snapshot of connection pool statistics for the specified pool role.
+    /// Returns a disabled snapshot (all zeros, <c>Disabled = true</c>) when no pool
+    /// governor is active for that role (e.g., metrics disabled or disabled mode).
+    /// </summary>
+    /// <remarks>
+    /// The default implementation returns a disabled snapshot. Override in concrete
+    /// contexts that have pool governors (i.e., <see cref="DatabaseContext"/>).
+    /// </remarks>
+    PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label) =>
+        new(label, string.Empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true, false);
+
+    /// <summary>
     /// Raised whenever the metrics collector records a new observation.
     /// Subscribers receive the latest snapshot for the context.
     /// </summary>
