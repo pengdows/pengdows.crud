@@ -30,6 +30,7 @@ public class TestTableCreator
             SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
             SupportedDatabase.MySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
+            SupportedDatabase.TiDb => CreateMySqlTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
             SupportedDatabase.CockroachDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
@@ -351,7 +352,7 @@ public class TestTableCreator
                     {0}name{1} NVARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => string.Format(@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,

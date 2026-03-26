@@ -258,10 +258,10 @@ public class ConstraintViolationTests : DatabaseTestBase
                 return;
             }
 
-            // Skip SQLite which doesn't enforce FK by default
-            if (provider == SupportedDatabase.Sqlite)
+            // Skip SQLite and TiDB which don't enforce FK by default
+            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
             {
-                Output.WriteLine("Skipping FK test for SQLite");
+                Output.WriteLine($"Skipping FK test for {provider} (FK not enforced by default)");
                 return;
             }
 
@@ -289,9 +289,9 @@ public class ConstraintViolationTests : DatabaseTestBase
                 return;
             }
 
-            if (provider == SupportedDatabase.Sqlite)
+            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
             {
-                Output.WriteLine("Skipping FK test for SQLite");
+                Output.WriteLine($"Skipping FK test for {provider} (FK not enforced by default)");
                 return;
             }
 
@@ -321,9 +321,9 @@ public class ConstraintViolationTests : DatabaseTestBase
                 return;
             }
 
-            if (provider == SupportedDatabase.Sqlite)
+            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
             {
-                Output.WriteLine("Skipping FK delete test for SQLite");
+                Output.WriteLine($"Skipping FK delete test for {provider} (FK not enforced by default)");
                 return;
             }
 
@@ -745,7 +745,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                     [name] NVARCHAR(255) NOT NULL,
                     FOREIGN KEY ([test_table_id]) REFERENCES [dbo].[test_table]([id])
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => @"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => @"
                 CREATE TABLE IF NOT EXISTS test_related (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     test_table_id BIGINT NOT NULL,
@@ -804,7 +804,7 @@ public class ConstraintViolationTests : DatabaseTestBase
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             SupportedDatabase.SqlServer => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE ([name])",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb =>
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             SupportedDatabase.Oracle =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
@@ -837,7 +837,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             SupportedDatabase.SqlServer =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb =>
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             SupportedDatabase.Oracle =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
@@ -873,12 +873,14 @@ public class ConstraintViolationTests : DatabaseTestBase
             SupportedDatabase.SqlServer or
             SupportedDatabase.MySql or
             SupportedDatabase.MariaDb or
+            SupportedDatabase.TiDb or
             SupportedDatabase.Oracle or
             SupportedDatabase.Firebird;
     }
 
     private static bool SupportsCheckConstraints(SupportedDatabase provider)
     {
+        // TiDB parses CHECK constraint DDL but does not enforce it at runtime.
         return provider is SupportedDatabase.PostgreSql or
             SupportedDatabase.CockroachDb or
             SupportedDatabase.YugabyteDb or

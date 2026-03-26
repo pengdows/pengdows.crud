@@ -432,8 +432,8 @@ public class TransactionTests : DatabaseTestBase
 
     private static bool SupportsSerializableIsolation(SupportedDatabase provider)
     {
-        // Most databases support serializable, but behavior varies
-        return provider is not (SupportedDatabase.Sqlite or SupportedDatabase.Snowflake);
+        // TiDB only supports ReadCommitted and Snapshot; Serializable is rejected by the isolation resolver.
+        return provider is not (SupportedDatabase.Sqlite or SupportedDatabase.Snowflake or SupportedDatabase.TiDb);
     }
 
     private static bool SupportsSavepoints(SupportedDatabase provider)

@@ -59,7 +59,7 @@ public class TypeHydrationTableCreator
             SupportedDatabase.Sqlite => CreateSqliteSql(),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgreSqlSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSql(),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             _ => throw new NotSupportedException(
