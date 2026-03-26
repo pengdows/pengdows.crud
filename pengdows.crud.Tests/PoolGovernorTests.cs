@@ -178,4 +178,39 @@ public sealed class PoolGovernorTests
         await first.DisposeAsync();
         Assert.Equal(0, governor.GetSnapshot().InUse);
     }
+
+    // Regression: before the ReleaseToken release-before-drain fix, calling Dispose()
+    // concurrently with the last slot release caused ObjectDisposedException because
+    // ReleaseToken signaled drain-waiters BEFORE calling _semaphore.Release().
+    // WaitForDrainAsync would unblock DisposeAsync, which disposed the semaphore,
+    // and then the still-in-flight _semaphore.Release() threw.
+    //
+    // After the fix: _semaphore.Release() executes BEFORE the drain signal is set,
+    // so DisposeAsync never sees the semaphore in a partially-released state.
+    [Fact]
+    public async Task Dispose_ConcurrentWithLastSlotRelease_DoesNotThrow()
+    {
+        var governor = new PoolGovernor(PoolLabel.Writer, "writer-key", 1,
+            TimeSpan.FromSeconds(5), trackMetrics: true);
+
+        var slot = await governor.AcquireAsync();
+
+        // Race: WaitForDrainAsync blocks until InUse hits 0. Once it does, Dispose()
+        // is called. ReleaseToken must have already called _semaphore.Release() by
+        // then — otherwise the semaphore is disposed mid-Release().
+        var disposeTask = Task.Run(async () =>
+        {
+            await governor.WaitForDrainAsync(TimeSpan.FromSeconds(5));
+            governor.Dispose();
+        });
+
+        // Small delay so the drain waiter is parked before we release.
+        await Task.Delay(20);
+
+        // Release the slot — triggers ReleaseToken, which must not throw.
+        await slot.DisposeAsync();
+
+        // If ObjectDisposedException propagated, this will rethrow it.
+        await disposeTask;
+    }
 }
