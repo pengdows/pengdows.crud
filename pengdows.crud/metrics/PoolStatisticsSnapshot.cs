@@ -24,6 +24,7 @@
 //     TotalTurnstileTimeouts = timed out waiting for the fairness turnstile
 // =============================================================================
 
+using System.Diagnostics;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -46,4 +47,21 @@ public readonly record struct PoolStatisticsSnapshot(
     long TotalTurnstileTimeouts,
     long TotalCanceledWaits,
     bool Disabled,
-    bool Forbidden);
+    bool Forbidden)
+{
+    /// <summary>
+    /// Average time waiting to acquire a pool slot, in milliseconds.
+    /// Zero if no acquisitions have occurred.
+    /// </summary>
+    public double AverageWaitMs => TotalAcquired == 0
+        ? 0d
+        : (double)TotalWaitTicks / TotalAcquired / Stopwatch.Frequency * 1000d;
+
+    /// <summary>
+    /// Average time a pool slot was held before release, in milliseconds.
+    /// Zero if no acquisitions have occurred.
+    /// </summary>
+    public double AverageHoldMs => TotalAcquired == 0
+        ? 0d
+        : (double)TotalHoldTicks / TotalAcquired / Stopwatch.Frequency * 1000d;
+}

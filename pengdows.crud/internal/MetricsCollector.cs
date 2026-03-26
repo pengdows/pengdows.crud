@@ -34,6 +34,7 @@ internal sealed class MetricsCollector
     private readonly IMetricsOptions _options;
     private readonly MetricsCollector? _parent;
     private readonly Ewma _commandDuration = new(64);
+    private readonly Ewma _failedCommandDuration = new(64);
     private readonly Ewma _connectionHold = new(64);
     private readonly Ewma _connectionOpenDuration = new(64);
     private readonly Ewma _connectionCloseDuration = new(64);
@@ -342,6 +343,7 @@ internal sealed class MetricsCollector
             _commandDuration.GetValue(),
             percentiles.P95,
             percentiles.P99,
+            _failedCommandDuration.GetValue(),
             Volatile.Read(ref _maxParametersObserved),
             Interlocked.Read(ref _rowsReadTotal),
             Interlocked.Read(ref _rowsAffectedTotal),
@@ -414,10 +416,19 @@ internal sealed class MetricsCollector
             return;
         }
 
-        _commandDuration.AddSample(elapsed);
+        // Success and failure paths feed separate EWMAs so AvgCommandMs, P95, and P99
+        // all describe the same population (successful commands only). Mixing failures
+        // into the success EWMA causes Avg to diverge from percentiles when failures
+        // are disproportionately slow (e.g. a few slow constraint violations push Avg
+        // above P99, which is mathematically impossible for a consistent population).
         if (success)
         {
+            _commandDuration.AddSample(elapsed);
             _percentileRing?.Add(elapsed);
+        }
+        else
+        {
+            _failedCommandDuration.AddSample(elapsed);
         }
 
         if (elapsed >= _options.SlowCommandThreshold.TotalMilliseconds)
@@ -467,6 +478,7 @@ internal sealed class MetricsCollector
         double AvgCommandMs,
         double P95CommandMs,
         double P99CommandMs,
+        double AvgFailedCommandMs,
         int MaxParametersObserved,
         long RowsReadTotal,
         long RowsAffectedTotal,
@@ -502,6 +514,7 @@ internal sealed class MetricsCollector
         public double AvgCommandMs { get; } = AvgCommandMs;
         public double P95CommandMs { get; } = P95CommandMs;
         public double P99CommandMs { get; } = P99CommandMs;
+        public double AvgFailedCommandMs { get; } = AvgFailedCommandMs;
         public int MaxParametersObserved { get; } = MaxParametersObserved;
         public long RowsReadTotal { get; } = RowsReadTotal;
         public long RowsAffectedTotal { get; } = RowsAffectedTotal;

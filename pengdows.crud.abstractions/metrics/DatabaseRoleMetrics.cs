@@ -42,6 +42,9 @@ namespace pengdows.crud.metrics;
 /// <param name="ErrorDeadlocks">Total deadlock errors detected.</param>
 /// <param name="ErrorSerializationFailures">Total serialization failures (snapshot isolation conflicts).</param>
 /// <param name="ErrorConstraintViolations">Total constraint violation errors (unique, FK, not-null, check).</param>
+/// <param name="AvgFailedCommandMs">Exponential weighted moving average of failed command duration in milliseconds.
+/// Tracks cancelled, timed-out, and error-failed commands independently from <see cref="AvgCommandMs"/>
+/// so that the success-path latency distribution (Avg / P95 / P99) remains internally consistent.</param>
 public sealed record DatabaseRoleMetrics(
     int ConnectionsCurrent,
     int PeakOpenConnections,
@@ -74,7 +77,8 @@ public sealed record DatabaseRoleMetrics(
     double P99TransactionMs,
     long ErrorDeadlocks,
     long ErrorSerializationFailures,
-    long ErrorConstraintViolations)
+    long ErrorConstraintViolations,
+    double AvgFailedCommandMs = 0d)
 {
     /// <summary>
     /// Represents an empty role metrics snapshot (no role-specific tracking active).
