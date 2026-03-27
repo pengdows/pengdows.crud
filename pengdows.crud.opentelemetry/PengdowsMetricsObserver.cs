@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using pengdows.crud.enums;
 using pengdows.crud.metrics;
 
 namespace pengdows.crud.opentelemetry;
@@ -15,15 +16,21 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private readonly ConcurrentDictionary<Guid, DatabaseMetrics> _lastSnapshots = new();
     private readonly ConcurrentDictionary<Guid, IDatabaseContext> _contexts = new();
 
-    // Counters
+    // Counters (delta-based, driven by MetricsUpdated events)
     private readonly Counter<long> _commandsExecuted;
     private readonly Counter<long> _commandsFailed;
     private readonly Counter<long> _rowsRead;
     private readonly Counter<long> _rowsAffected;
 
-    // Observable Gauges (for values that don't need delta calculation)
+    // Observable Gauges (current values, polled on collection)
     private readonly ObservableGauge<int> _connectionsCurrent;
     private readonly ObservableGauge<double> _commandDurationP95;
+
+    // Pool gauges (polled per-context, per-role via GetPoolStatisticsSnapshot)
+    private readonly ObservableGauge<int> _poolSlotsInUse;
+    private readonly ObservableGauge<int> _poolSlotsQueued;
+    private readonly ObservableGauge<int> _poolSlotsMax;
+    private readonly ObservableGauge<double> _poolAvgWaitMs;
 
     public PengdowsMetricsObserver()
         : this(new Meter("pengdows.crud",
@@ -50,6 +57,21 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
 
         _commandDurationP95 = _meter.CreateObservableGauge("pengdows.db.client.command.duration.p95",
             () => GetGauges(m => (double)m.P95CommandMs), "ms", "Approximate P95 command duration");
+
+        // Pool gauges: one measurement per (context, pool label) pair.
+        // Pool stats are obtained by polling GetPoolStatisticsSnapshot on each tracked
+        // context — they are not available via the MetricsUpdated event path.
+        _poolSlotsInUse = _meter.CreateObservableGauge("pengdows.db.client.pool.slots.in_use",
+            () => GetPoolGauges(s => s.InUse), "{slot}", "Pool slots currently in use");
+
+        _poolSlotsQueued = _meter.CreateObservableGauge("pengdows.db.client.pool.slots.queued",
+            () => GetPoolGauges(s => s.Queued), "{slot}", "Pool slots currently queued (waiting for a slot)");
+
+        _poolSlotsMax = _meter.CreateObservableGauge("pengdows.db.client.pool.slots.max",
+            () => GetPoolGauges(s => s.MaxSlots), "{slot}", "Configured maximum pool slots");
+
+        _poolAvgWaitMs = _meter.CreateObservableGauge("pengdows.db.client.pool.wait_duration_avg",
+            () => GetPoolGaugesDouble(s => s.AverageWaitMs), "ms", "Average time waiting to acquire a pool slot");
     }
 
     public void Track(IDatabaseContext context)
@@ -92,26 +114,18 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
                 { "db.system", context.Product.ToString().ToLowerInvariant() }
             };
 
-            // Emit deltas for counters
+            // Emit aggregate (context-level) deltas. Role-specific data is not reliable
+            // here: MetricsCollector propagates child→parent before incrementing the child
+            // counter, so DatabaseMetrics.Read/Write counters are always stale by one
+            // command when this event fires. Pool metrics are handled separately via
+            // GetPoolGauges polling in the ObservableGauge callbacks.
             EmitDelta(_commandsExecuted, e.CommandsExecuted, last.CommandsExecuted, tags);
             EmitDelta(_commandsFailed, e.CommandsFailed, last.CommandsFailed, tags);
             EmitDelta(_rowsRead, e.RowsReadTotal, last.RowsReadTotal, tags);
             EmitDelta(_rowsAffected, e.RowsAffectedTotal, last.RowsAffectedTotal, tags);
-
-            // Role deltas
-            EmitRoleDeltas(context, e, last);
         }
 
         _lastSnapshots[context.RootId] = e;
-    }
-
-    private void EmitRoleDeltas(IDatabaseContext context, DatabaseMetrics current, DatabaseMetrics last)
-    {
-        var readTags = new TagList { { "db.name", context.Name }, { "db.system", context.Product.ToString().ToLowerInvariant() }, { "execution.role", "read" } };
-        EmitDelta(_commandsExecuted, current.Read.CommandsExecuted, last.Read.CommandsExecuted, readTags);
-
-        var writeTags = new TagList { { "db.name", context.Name }, { "db.system", context.Product.ToString().ToLowerInvariant() }, { "execution.role", "write" } };
-        EmitDelta(_commandsExecuted, current.Write.CommandsExecuted, last.Write.CommandsExecuted, writeTags);
     }
 
     private static void EmitDelta(Counter<long> counter, long current, long last, TagList tags)
@@ -141,6 +155,56 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
 
             var tags = new TagList { { "db.name", context.Name }, { "db.system", context.Product.ToString().ToLowerInvariant() } };
             yield return new Measurement<T>(selector(kv.Value), tags);
+        }
+    }
+
+    private IEnumerable<Measurement<int>> GetPoolGauges(Func<PoolStatisticsSnapshot, int> selector)
+    {
+        foreach (var kv in _contexts)
+        {
+            var context = kv.Value;
+            if (context.IsDisposed)
+            {
+                Untrack(context);
+                continue;
+            }
+
+            foreach (var label in new[] { PoolLabel.Reader, PoolLabel.Writer })
+            {
+                var snapshot = context.GetPoolStatisticsSnapshot(label);
+                var tags = new TagList
+                {
+                    { "db.name", context.Name },
+                    { "db.system", context.Product.ToString().ToLowerInvariant() },
+                    { "pool.label", label.ToString().ToLowerInvariant() }
+                };
+                yield return new Measurement<int>(selector(snapshot), tags);
+            }
+        }
+    }
+
+    private IEnumerable<Measurement<double>> GetPoolGaugesDouble(Func<PoolStatisticsSnapshot, double> selector)
+    {
+        foreach (var kv in _contexts)
+        {
+            var context = kv.Value;
+            if (context.IsDisposed)
+            {
+                Untrack(context);
+                continue;
+            }
+
+            foreach (var label in new[] { PoolLabel.Reader, PoolLabel.Writer })
+            {
+                var snapshot = context.GetPoolStatisticsSnapshot(label);
+                var tags = new TagList
+                {
+                    { "db.name", context.Name },
+                    { "db.system", context.Product.ToString().ToLowerInvariant() },
+                    { "pool.label", label.ToString().ToLowerInvariant() }
+                };
+                yield return new Measurement<double>(selector(snapshot), tags);
+            }
         }
     }
 

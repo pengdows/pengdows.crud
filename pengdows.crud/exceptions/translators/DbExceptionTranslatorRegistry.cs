@@ -8,6 +8,9 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator Postgres = new PostgresExceptionTranslator();
     private static readonly IDbExceptionTranslator MySql = new MySqlExceptionTranslator();
     private static readonly IDbExceptionTranslator Sqlite = new SqliteExceptionTranslator();
+    private static readonly IDbExceptionTranslator DuckDb = new DuckDbExceptionTranslator();
+    private static readonly IDbExceptionTranslator Oracle = new OracleExceptionTranslator();
+    private static readonly IDbExceptionTranslator Firebird = new FirebirdExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
     public IDbExceptionTranslator Get(SupportedDatabase database)
@@ -20,7 +23,9 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or
                 SupportedDatabase.TiDb => MySql,
             SupportedDatabase.Sqlite => Sqlite,
-            SupportedDatabase.Firebird or SupportedDatabase.DuckDB => Fallback,
+            SupportedDatabase.DuckDB => DuckDb,
+            SupportedDatabase.Oracle => Oracle,
+            SupportedDatabase.Firebird => Firebird,
             _ => Fallback
         };
     }

@@ -7,6 +7,7 @@ namespace pengdows.crud.exceptions.translators;
 /// </summary>
 /// <remarks>
 /// Detection order: timeout → connection (SQLITE_CANTOPEN/SQLITE_NOTADB) →
+/// read-only violation (SQLITE_READONLY = 8) →
 /// unique/PK constraint → check constraint → not-null → foreign-key → fallback.
 /// Error codes are extracted via reflection on the <c>SqliteException.SqliteErrorCode</c>
 /// property (Microsoft.Data.Sqlite), so this translator works without a hard reference
@@ -28,6 +29,12 @@ internal sealed class SqliteExceptionTranslator : IDbExceptionTranslator
         if (errorCode is 14 or 26)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
+        // SQLITE_READONLY = 8: write attempted on a read-only connection
+        if (errorCode is 8)
+        {
+            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
         if (message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||

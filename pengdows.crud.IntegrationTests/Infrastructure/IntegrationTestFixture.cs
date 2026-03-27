@@ -18,7 +18,9 @@ internal static class IntegrationTestConfiguration
         SupportedDatabase.Firebird,
         SupportedDatabase.CockroachDb,
         SupportedDatabase.DuckDB,
-        SupportedDatabase.Oracle
+        SupportedDatabase.Oracle,
+        SupportedDatabase.YugabyteDb,
+        SupportedDatabase.TiDb
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>

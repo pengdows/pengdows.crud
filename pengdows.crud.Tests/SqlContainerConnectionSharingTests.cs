@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using System.Data;
@@ -105,6 +106,7 @@ public class SqlContainerConnectionSharingTests
         public bool IsReadOnlyConnection => _context.IsReadOnlyConnection;
         public bool RCSIEnabled => _context.RCSIEnabled;
         public bool SnapshotIsolationEnabled => _context.SnapshotIsolationEnabled;
+        public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => _context.GetSupportedIsolationLevels();
         public bool IsDisposed => _context.IsDisposed;
 
         public event EventHandler<DatabaseMetrics> MetricsUpdated

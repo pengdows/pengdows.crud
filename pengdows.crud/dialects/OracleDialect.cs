@@ -255,18 +255,67 @@ internal class OracleDialect : SqlDialect
         return $"{query.TrimEnd()} FETCH FIRST 1 ROWS ONLY";
     }
 
-    private const string NlsDateFormatSetting = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
-
-    // TIMESTAMP columns (and TIMESTAMP WITH TIME ZONE) use a separate NLS parameter.
-    // Without this pin the format is locale-dependent, making TIMESTAMP round-trips non-portable.
-    private const string NlsTimestampFormatSetting =
-        "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';";
-
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
 
-    public override string GetBaseSessionSettings()
+    // Oracle does not support multiple SQL statements in a single ADO.NET ExecuteNonQuery call.
+    // Wrap all ALTER SESSION statements in a PL/SQL anonymous block so they execute atomically
+    // in one round-trip without ORA-00911 (invalid character; from bare semicolons in SQL context).
+    //
+    // TIME_ZONE = 'UTC': forces session timezone to UTC so TIMESTAMP WITH TIME ZONE columns
+    // store and return DateTime values correctly when the host machine uses a non-UTC timezone.
+    // Without this, ODP.NET ignores DateTime.Kind=Utc and Oracle interprets the raw DateTime
+    // bytes using the session's local offset, causing round-trip errors proportional to the offset.
+    //
+    // DBMS_APPLICATION_INFO.SET_MODULE: sets the MODULE column in V$SESSION so SQL Monitor and
+    // AWR reports show the application name (including the -rw / -ro pool suffix).
+    // Oracle does not support Application Name in the connection string, so this is the only way.
+    // MODULE max length is 48 chars; names longer than that are truncated to avoid ORA-06502.
+
+    public override string GetBaseSessionSettings(string? applicationName)
     {
-        return NlsDateFormatSetting + "\n" + NlsTimestampFormatSetting;
+        // Use SbLite (stack-allocated) for zero-heap string building.
+        // Oracle MODULE limit is 48 chars of the actual value; truncate BEFORE escaping
+        // so that single-quote escaping ('' pairs) doesn't push the value over the limit
+        // and a truncation mid-pair doesn't produce broken PL/SQL string literals.
+        using var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        sb.Append("BEGIN\n");
+        sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_DATE_FORMAT = ''YYYY-MM-DD''';\n");
+        sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_TIMESTAMP_FORMAT = ''YYYY-MM-DD HH24:MI:SS.FF''';\n");
+        sb.Append("  EXECUTE IMMEDIATE 'ALTER SESSION SET TIME_ZONE = ''UTC''';\n");
+        if (!string.IsNullOrWhiteSpace(applicationName))
+        {
+            // Truncate to 48 chars FIRST (Oracle MODULE column limit), then in one
+            // character-by-character pass: strip control characters (newlines, null
+            // bytes, etc. that would break the PL/SQL string literal) and double
+            // any single quotes. Single-pass avoids allocations and eliminates the
+            // risk of a truncation splitting a doubled-quote pair.
+            // Trust boundary: ApplicationName is developer configuration; sanitization
+            // is defense-in-depth against accidental or injected control characters.
+            var src = applicationName.Length > 48
+                ? applicationName.AsSpan(0, 48)
+                : applicationName.AsSpan();
+            sb.Append("  DBMS_APPLICATION_INFO.SET_MODULE(module_name => '");
+            foreach (var c in src)
+            {
+                if (char.IsControl(c))
+                {
+                    continue;
+                }
+
+                if (c == '\'')
+                {
+                    sb.Append('\'');
+                    sb.Append('\'');
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            sb.Append("', action_name => NULL);\n");
+        }
+        sb.Append("END;");
+        return sb.ToString();
     }
 
     public override string GetReadOnlySessionSettings()

@@ -63,5 +63,13 @@ public enum GeneratedKeyPlan
     /// (MySQL, MariaDB, SQLite pre-3.35) where connection pool may assign a different
     /// physical connection for the follow-up scalar query.
     /// </summary>
-    CompoundStatement = 7
+    CompoundStatement = 7,
+
+    /// <summary>
+    /// Execute INSERT as a reader and read the generated key from the provider-specific
+    /// DbDataReader property (e.g. MySqlDataReader.LastInsertedId) populated from the
+    /// database OK packet. No second round-trip and no multi-statement support required.
+    /// Used by MySqlConnector, which deliberately does not support AllowMultipleStatements.
+    /// </summary>
+    ReaderInsertedId = 8
 }

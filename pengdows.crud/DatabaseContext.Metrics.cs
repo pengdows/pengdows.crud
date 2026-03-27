@@ -136,7 +136,7 @@ public partial class DatabaseContext
         return executionType == ExecutionType.Read ? _readerMetricsCollector : _writerMetricsCollector;
     }
 
-    internal PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
+    public PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label)
     {
         var governor = label == PoolLabel.Reader ? _readerGovernor : _writerGovernor;
         if (governor == null)
@@ -252,7 +252,8 @@ public partial class DatabaseContext
             snapshot.ErrorSerializationFailures,
             snapshot.ErrorConstraintViolations,
             snapshot.SessionInitCount,
-            snapshot.AvgSessionInitMs);
+            snapshot.AvgSessionInitMs,
+            snapshot.AvgFailedCommandMs);
     }
 
     private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
@@ -289,7 +290,8 @@ public partial class DatabaseContext
             snapshot.P99TransactionMs,
             snapshot.ErrorDeadlocks,
             snapshot.ErrorSerializationFailures,
-            snapshot.ErrorConstraintViolations);
+            snapshot.ErrorConstraintViolations,
+            snapshot.AvgFailedCommandMs);
     }
 
     private void OnMetricsCollectorUpdated()

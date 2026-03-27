@@ -43,7 +43,9 @@ method pengdows.crud.IDatabaseContext::CreateSqlContainer(string) -> pengdows.cr
 method pengdows.crud.IDatabaseContext::GenerateParameterName() -> string
 method pengdows.crud.IDatabaseContext::GenerateRandomName(int, int) -> string
 method pengdows.crud.IDatabaseContext::GetBaseSessionSettings() -> string
+method pengdows.crud.IDatabaseContext::GetPoolStatisticsSnapshot(pengdows.crud.enums.PoolLabel) -> pengdows.crud.metrics.PoolStatisticsSnapshot
 method pengdows.crud.IDatabaseContext::GetReadOnlySessionSettings() -> string
+method pengdows.crud.IDatabaseContext::GetSupportedIsolationLevels() -> System.Collections.Generic.IReadOnlySet`1<System.Data.IsolationLevel>
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string
 method pengdows.crud.IDatabaseContext::WrapObjectName(string) -> string
@@ -220,6 +222,7 @@ method pengdows.crud.dialects.ISqlDialect::GetCompoundInsertIdSuffix() -> string
 method pengdows.crud.dialects.ISqlDialect::GetConnectionSessionSettings(pengdows.crud.IDatabaseContext, bool) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCorrelationTokenLookupQuery(string, string, string, string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetGeneratedKeyPlan() -> pengdows.crud.enums.GeneratedKeyPlan
+method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdFromCommand(System.Data.Common.DbCommand) -> object
 method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::GetNaturalKeyLookupQuery(string, string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>) -> string
 method pengdows.crud.dialects.ISqlDialect::GetRollbackToSavepointSql(string) -> string

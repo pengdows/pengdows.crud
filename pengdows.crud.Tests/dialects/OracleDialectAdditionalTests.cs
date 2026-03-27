@@ -134,9 +134,127 @@ public class OracleDialectAdditionalTests
     public void GetBaseSessionSettings_IncludesNlsTimestampFormat()
     {
         var d = CreateDialect();
-        var settings = d.GetBaseSessionSettings();
+        // Use the string? overload — OracleDialect only overrides GetBaseSessionSettings(string?)
+        var settings = d.GetBaseSessionSettings(null);
         Assert.Contains("NLS_TIMESTAMP_FORMAT", settings);
         Assert.Contains("YYYY-MM-DD HH24:MI:SS.FF", settings);
+        Assert.Contains("BEGIN", settings);
+        Assert.Contains("END;", settings);
+    }
+
+    // ── GetBaseSessionSettings(string?) new behaviour ─────────────────────────
+
+    [Fact]
+    public void GetBaseSessionSettings_NullApplicationName_DoesNotIncludeModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.DoesNotContain("DBMS_APPLICATION_INFO", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_WhitespaceApplicationName_DoesNotIncludeModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("   ");
+        Assert.DoesNotContain("DBMS_APPLICATION_INFO", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_WithApplicationName_IncludesModuleCall()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("MyApp");
+        Assert.Contains("DBMS_APPLICATION_INFO.SET_MODULE", settings);
+        Assert.Contains("module_name => 'MyApp'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IncludesUtcTimezone()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.Contains("TIME_ZONE = ''UTC''", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IncludesPLSqlWrapper()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings(null);
+        Assert.Contains("BEGIN", settings);
+        Assert.Contains("END;", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_ApplicationNameTooLong_IsTruncatedTo48Chars()
+    {
+        var d = CreateDialect();
+        var longName = new string('X', 60); // 60 chars, well over the 48-char Oracle MODULE limit
+        var settings = d.GetBaseSessionSettings(longName);
+        // The module_name value between the quotes should be exactly 48 chars
+        var marker = "module_name => '";
+        var start = settings.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var end = settings.IndexOf("'", start, StringComparison.Ordinal);
+        var moduleName = settings[start..end];
+        Assert.Equal(48, moduleName.Length);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_ApplicationNameWithSingleQuote_IsEscaped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("O'Brian");
+        Assert.Contains("O''Brian", settings);
+        // Ensure the raw unescaped form is not present (would break PL/SQL syntax)
+        Assert.DoesNotContain("'O'Brian'", settings);
+    }
+
+    // ── Control-character sanitization ────────────────────────────────────────────
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithNewline_NewlineStrippedFromModuleName()
+    {
+        // A raw \n inside the module name would break the PL/SQL string literal structure.
+        // After stripping control chars, "Before\nAfter" must become "BeforeAfter".
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("Before\nAfter");
+        Assert.Contains("module_name => 'BeforeAfter'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithCarriageReturn_Stripped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("App\rName");
+        Assert.Contains("module_name => 'AppName'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithNullByte_Stripped()
+    {
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("App\0Name");
+        Assert.Contains("module_name => 'AppName'", settings);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_AppNameWithQuoteAndControlChar_BothHandled()
+    {
+        // Verify control-char stripping and single-quote escaping work together.
+        var d = CreateDialect();
+        var settings = d.GetBaseSessionSettings("O'\nBrian");
+        // \n stripped, ' doubled: result is "O''Brian"
+        Assert.Contains("module_name => 'O''Brian'", settings);
+    }
+
+    [Fact]
+    public void GetFinalSessionSettings_WithApplicationName_EmbedsNameInSessionSql()
+    {
+        var d = CreateDialect();
+        var settings = d.GetFinalSessionSettings(false, "TestApp");
+        Assert.Contains("TestApp", settings);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT", settings);
     }
 
     [Fact]
@@ -149,5 +267,20 @@ public class OracleDialectAdditionalTests
         var param = d.CreateDbParameter("p", DbType.Guid, guid);
         Assert.Equal(DbType.String, param.DbType);
         Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_48CharNameWithTrailingQuote_EscapesBeforeTruncatingNotAfter()
+    {
+        var d = CreateDialect();
+        // 47 X's + single quote = exactly 48 chars.
+        // Bug (escape-then-truncate): escapes to "XXX...X''" (49 chars) then truncates to 48 → "XXX...X'"
+        // leaving a lone single-quote that breaks PL/SQL string literal syntax.
+        // Fix (truncate-then-escape): name is ≤48, no truncation, escape → "XXX...X''" (valid PL/SQL).
+        var name = new string('X', 47) + "'";
+        var settings = d.GetBaseSessionSettings(name);
+        // The PL/SQL literal must contain the properly escaped form: 47 X's + '' (two quotes = one quote value).
+        // 'XXX...X''' is: opening ', 47 X's, '' (escaped quote), closing ' — represents "XXX...X'" as MODULE value.
+        Assert.Contains("module_name => '" + new string('X', 47) + "'''", settings);
     }
 }

@@ -62,6 +62,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     }
 
     DbDataReader IInternalTrackedReader.InnerReader => _reader;
+    DbCommand? IInternalTrackedReader.InnerCommand => _command;
 
     protected override void DisposeManaged()
     {

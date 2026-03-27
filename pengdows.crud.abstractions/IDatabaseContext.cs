@@ -85,6 +85,18 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     DatabaseMetrics Metrics { get; }
 
     /// <summary>
+    /// Gets a snapshot of connection pool statistics for the specified pool role.
+    /// Returns a disabled snapshot (all zeros, <c>Disabled = true</c>) when no pool
+    /// governor is active for that role (e.g., metrics disabled or disabled mode).
+    /// </summary>
+    /// <remarks>
+    /// The default implementation returns a disabled snapshot. Override in concrete
+    /// contexts that have pool governors (i.e., <see cref="DatabaseContext"/>).
+    /// </remarks>
+    PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label) =>
+        new(label, string.Empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true, false);
+
+    /// <summary>
     /// Raised whenever the metrics collector records a new observation.
     /// Subscribers receive the latest snapshot for the context.
     /// </summary>
@@ -202,6 +214,13 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// True if snapshot isolation is enabled on the database.
     /// </summary>
     bool SnapshotIsolationEnabled { get; }
+
+    /// <summary>
+    /// Returns the set of <see cref="IsolationLevel"/> values supported by this database context.
+    /// Use this to check provider capabilities before calling <see cref="BeginTransaction(IsolationLevel?,ExecutionType)"/>
+    /// with a specific level, rather than hardcoding per-provider knowledge in callers.
+    /// </summary>
+    IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels();
 
     /// <summary>
     /// Creates a new SQL container for building statements.

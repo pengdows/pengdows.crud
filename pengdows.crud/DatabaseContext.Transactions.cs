@@ -50,7 +50,7 @@ public partial class DatabaseContext
         ExecutionType executionType = ExecutionType.Write)
     {
         if (isolationProfile == IsolationProfile.SafeNonBlockingReads
-            && Product == SupportedDatabase.PostgreSql)
+            && Product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
         {
             throw new TransactionModeNotSupportedException(
                 "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
@@ -78,7 +78,7 @@ public partial class DatabaseContext
         CancellationToken cancellationToken = default)
     {
         if (isolationProfile == IsolationProfile.SafeNonBlockingReads
-            && Product == SupportedDatabase.PostgreSql)
+            && Product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
         {
             throw new TransactionModeNotSupportedException(
                 "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");

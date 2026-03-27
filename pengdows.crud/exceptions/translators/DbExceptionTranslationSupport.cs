@@ -50,6 +50,19 @@ internal static partial class DbExceptionTranslationSupport
             constraintName: TryGetConstraintName(exception));
     }
 
+    public static ReadOnlyViolationException CreateReadOnlyViolation(
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return new ReadOnlyViolationException(
+            $"{operationKind} attempted a write on a read-only {database} connection: {exception.Message}",
+            database,
+            exception,
+            sqlState: TryGetSqlState(exception),
+            errorCode: TryGetErrorCode(exception));
+    }
+
     public static bool LooksLikeTimeout(Exception exception)
     {
         return exception is TimeoutException ||

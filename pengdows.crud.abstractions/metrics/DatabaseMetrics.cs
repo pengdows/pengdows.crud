@@ -41,6 +41,9 @@ namespace pengdows.crud.metrics;
 /// <param name="AvgSessionInitMs">Exponential weighted moving average of session settings application time in milliseconds.
 /// This is the time spent executing dialect-specific SET statements (e.g. SET SESSION sql_mode, SET SEARCH_PATH).
 /// Combined with <see cref="AvgConnectionOpenMs"/> this allows isolating TCP/auth cost from session-settings RTT cost.</param>
+/// <param name="AvgFailedCommandMs">Exponential weighted moving average of failed command duration in milliseconds.
+/// Tracks cancelled, timed-out, and error-failed commands independently from <see cref="AvgCommandMs"/>
+/// so that the success-path latency distribution (Avg / P95 / P99) remains internally consistent.</param>
 public sealed record DatabaseMetrics(
     DatabaseRoleMetrics Read,
     DatabaseRoleMetrics Write,
@@ -77,4 +80,5 @@ public sealed record DatabaseMetrics(
     long ErrorSerializationFailures,
     long ErrorConstraintViolations,
     long SessionInitCount,
-    double AvgSessionInitMs);
+    double AvgSessionInitMs,
+    double AvgFailedCommandMs = 0d);

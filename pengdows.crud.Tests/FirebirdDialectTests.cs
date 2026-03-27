@@ -106,4 +106,65 @@ public class FirebirdDialectTests
             "statement handle conflicts with the server-side plan cache across pool leases. " +
             "Execution-time preparation is used instead.");
     }
+
+    [Theory]
+    [InlineData(DateTimeKind.Utc)]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public void CreateDbParameter_DateTime_PreservesKind(DateTimeKind kind)
+    {
+        // Firebird TIMESTAMP WITH TIME ZONE requires an explicit timezone (Utc or Local).
+        // DateTimeKind.Unspecified causes "Incorrect time zone value" from the provider.
+        // CreateDbParameter must NOT normalize Utc/Local to Unspecified for DbType.DateTime.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var dt = DateTime.SpecifyKind(new DateTime(2024, 6, 15, 12, 0, 0), kind);
+
+        var param = dialect.CreateDbParameter("p", DbType.DateTime, dt);
+
+        var stored = Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(kind, stored.Kind);
+        Assert.Equal(dt.Year, stored.Year);
+        Assert.Equal(dt.Hour, stored.Hour);
+    }
+
+    // ── Constraint detection ───────────────────────────────────────────────────
+
+    [Fact]
+    public void IsUniqueViolation_FirebirdPrimaryKeyMessage_ReturnsTrue()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var ex = new TestDbException(
+            "violation of PRIMARY OR UNIQUE KEY constraint \"PK_TEST\" on table \"TEST_TABLE\"");
+
+        Assert.True(dialect.IsUniqueViolation(ex));
+    }
+
+    [Fact]
+    public void IsUniqueViolation_FirebirdUniqueConstraintMessage_ReturnsTrue()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var ex = new TestDbException(
+            "violation of UNIQUE KEY constraint \"UQ_NAME\" on table \"TEST_TABLE\"");
+
+        Assert.True(dialect.IsUniqueViolation(ex));
+    }
+
+    [Fact]
+    public void IsNotNullViolation_FirebirdValidationErrorMessage_ReturnsTrue()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var ex = new TestDbException(
+            "validation error for column \"name\", value \"*** null ***\"");
+
+        Assert.True(dialect.IsNotNullViolation(ex));
+    }
+
+    private sealed class TestDbException : System.Data.Common.DbException
+    {
+        public TestDbException(string message) : base(message) { }
+    }
 }

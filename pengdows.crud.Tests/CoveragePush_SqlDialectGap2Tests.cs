@@ -43,6 +43,12 @@ public class CoveragePush_SqlDialectGap2Tests
         return new DatabaseContext("Data Source=:memory:;EmulatedProduct=DuckDB", factory);
     }
 
+    private static IDatabaseContext CreateFirebirdContext()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        return new DatabaseContext("Data Source=:memory:;EmulatedProduct=Firebird", factory);
+    }
+
     private static IDatabaseContext CreateSqliteContext()
     {
         return new DatabaseContext(
@@ -157,14 +163,14 @@ public class CoveragePush_SqlDialectGap2Tests
     }
 
     // =========================================================================
-    // Violation detection — default cases (DuckDb hits the default: branch)
+    // Violation detection — default cases (Firebird hits the default: branch)
     // Lines: 1476 (FK), 1511-1512 (NotNull), 1548 (Check)
     // =========================================================================
 
     [Fact]
     public void IsForeignKeyViolation_UnknownDb_MessageContainsForeignKey_ReturnsTrue()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("foreign key constraint failed");
         Assert.True(dialect.IsForeignKeyViolation(ex));
@@ -173,7 +179,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsForeignKeyViolation_UnknownDb_UnrelatedMessage_ReturnsFalse()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("some other error");
         Assert.False(dialect.IsForeignKeyViolation(ex));
@@ -182,7 +188,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsNotNullViolation_UnknownDb_MessageContainsNotNull_ReturnsTrue()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("NOT NULL constraint violated");
         Assert.True(dialect.IsNotNullViolation(ex));
@@ -191,7 +197,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsNotNullViolation_UnknownDb_MessageContainsDashNotNull_ReturnsTrue()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("not-null constraint");
         Assert.True(dialect.IsNotNullViolation(ex));
@@ -200,7 +206,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsNotNullViolation_UnknownDb_UnrelatedMessage_ReturnsFalse()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("connection failed");
         Assert.False(dialect.IsNotNullViolation(ex));
@@ -209,7 +215,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsCheckConstraintViolation_UnknownDb_MessageContainsCheckConstraint_ReturnsTrue()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("check constraint failed on column x");
         Assert.True(dialect.IsCheckConstraintViolation(ex));
@@ -218,7 +224,7 @@ public class CoveragePush_SqlDialectGap2Tests
     [Fact]
     public void IsCheckConstraintViolation_UnknownDb_UnrelatedMessage_ReturnsFalse()
     {
-        using var ctx = CreateDuckDbContext();
+        using var ctx = CreateFirebirdContext();
         var dialect = GetSqlDialect(ctx);
         var ex = new FakeDbException("value out of range");
         Assert.False(dialect.IsCheckConstraintViolation(ex));

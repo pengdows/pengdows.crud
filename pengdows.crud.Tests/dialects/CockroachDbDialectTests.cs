@@ -83,4 +83,19 @@ public class CockroachDbDialectTests
         Assert.Contains("search_path=crdb_schema", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("client_encoding=UTF8", result, StringComparison.OrdinalIgnoreCase);
     }
+
+    // Regression: CockroachDB inherits PostgreSqlDialect but the base SqlDialect
+    // switch only matched SupportedDatabase.PostgreSql, leaving CockroachDb to the
+    // wildcard branch which returns string.Empty → INSERT had no RETURNING clause →
+    // generated ID was null → fallback to SELECT lastval() → fails on CockroachDB.
+    [Fact]
+    public void RenderInsertReturningClause_ReturnsReturningClause()
+    {
+        var dialect = CreateDialect();
+
+        var result = dialect.RenderInsertReturningClause("\"Id\"");
+
+        Assert.Contains("RETURNING", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"Id\"", result);
+    }
 }

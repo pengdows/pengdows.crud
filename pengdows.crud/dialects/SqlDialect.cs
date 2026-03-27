@@ -622,7 +622,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual string GetFinalSessionSettings(bool readOnly)
     {
-        var baseline = GetBaseSessionSettings();
+        return GetFinalSessionSettings(readOnly, null);
+    }
+
+    public virtual string GetFinalSessionSettings(bool readOnly, string? applicationName)
+    {
+        var baseline = GetBaseSessionSettings(applicationName);
         var intent = readOnly ? GetReadOnlySessionSettings() : GetReadOnlyTransactionResetSql();
 
         if (string.IsNullOrWhiteSpace(baseline))
@@ -1275,7 +1280,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return BuildSessionSettings(GetBaseSessionSettings(), GetReadOnlySessionSettings(), readOnly);
+        return BuildSessionSettings(GetBaseSessionSettings(null), GetReadOnlySessionSettings(), readOnly);
     }
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)
@@ -1437,6 +1442,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
                        ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23505; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Firebird:
+                // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"
+                return ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
+                       ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return MessageIndicatesUniqueViolation(ex.Message);
         }
@@ -1473,6 +1490,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 return errorCode == 787 ||
                        message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23503; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
         }
@@ -1507,6 +1529,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.Sqlite:
                 return errorCode == 1299 ||
                        message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23502; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Firebird:
+                // Firebird: "validation error for column X, value \"*** null ***\""
+                return message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
@@ -1544,6 +1577,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.Sqlite:
                 return errorCode == 275 ||
                        message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses SQLSTATE 23514; fall back to message when driver doesn't populate SqlState
+                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
@@ -1743,6 +1781,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual string GetBaseSessionSettings()
     {
         return string.Empty;
+    }
+
+    // Overload that passes the application name to dialects that can embed it in session SQL
+    // (e.g. Oracle via DBMS_APPLICATION_INFO). Default implementation ignores applicationName
+    // and delegates to the parameterless override so all existing dialect overrides still work.
+    public virtual string GetBaseSessionSettings(string? applicationName)
+    {
+        return GetBaseSessionSettings();
     }
 
     /// <summary>
@@ -2277,6 +2323,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
+    /// Reads the generated key from the command via provider-specific reflection.
+    /// Base returns null; override in dialects where the provider exposes a LastInsertedId property.
+    /// </summary>
+    public virtual object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command)
+    {
+        return null;
+    }
+
+    /// <summary>
     /// Gets the SQL query to retrieve the next value from a sequence.
     /// Default implementation is for Oracle; override for other sequence-supporting databases.
     /// </summary>
@@ -2483,6 +2538,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return DatabaseType switch
         {
             SupportedDatabase.PostgreSql => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.CockroachDb => $" RETURNING {idColumnWrapped}",
+            SupportedDatabase.YugabyteDb => $" RETURNING {idColumnWrapped}",
             SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
             SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
             SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
@@ -2679,6 +2736,38 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     errorCode == 1555 ||
                     errorCode == 2067 ||
                     (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.DuckDB:
+                // DuckDB uses ANSI SQLSTATE codes; class 23 = constraint violations
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                // Message fallback: DuckDB drivers may not always populate SqlState
+                if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Firebird:
+                // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                // Message fallback for drivers that do not populate SqlState
+                if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
                 {
                     category = DbErrorCategory.ConstraintViolation;
                     return true;

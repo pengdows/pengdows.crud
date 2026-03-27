@@ -10,6 +10,18 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
 
+        // Check specific error codes first so that PK-violation messages that happen to
+        // contain the word "timeout" in their payload (e.g. a distributed-lock resource
+        // named "lock-timeout-<guid>") are not mis-classified as CommandTimeoutException.
+        switch (errorCode)
+        {
+            case 2601:
+            case 2627:
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+        }
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) || errorCode == -2)
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
@@ -30,9 +42,6 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
 
         return errorCode switch
         {
-            2601 or 2627 => new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
             515 => new NotNullViolationException(
                 $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),

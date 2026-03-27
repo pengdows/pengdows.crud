@@ -378,6 +378,7 @@ public class TransactionContextTests
         public bool RCSIEnabled => false;
 
         public bool SnapshotIsolationEnabled => false;
+        public IReadOnlySet<IsolationLevel> GetSupportedIsolationLevels() => new HashSet<IsolationLevel>();
 
         public ILockerAsync GetLock() => NoOpAsyncLocker.Instance;
 

@@ -689,13 +689,8 @@ internal sealed class PoolGovernor : IDisposable
         return TimeSpan.FromSeconds((double)remainingTicks / Stopwatch.Frequency);
     }
 
-    private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout)
-    {
-        var converted = timeout.Ticks / TimeSpan.TicksPerSecond * Stopwatch.Frequency
-                        + timeout.Ticks % TimeSpan.TicksPerSecond * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
-
-        return Math.Max(1, converted);
-    }
+    private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout) =>
+        Math.Max(1L, (long)(timeout.TotalSeconds * Stopwatch.Frequency));
 
     private bool ShouldUseTurnstileGate(bool writerTurnstileInterestRegistered)
     {

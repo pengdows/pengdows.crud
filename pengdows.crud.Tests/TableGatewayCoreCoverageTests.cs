@@ -72,8 +72,8 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
         Assert.True(ReferenceEquals(result1, result2),
             "Expected schema-qualified name to be cached");
 
-        // Verify it contains the schema separator
-        Assert.Contains(dialect.CompositeIdentifierSeparator, result1);
+        // SQLite does not support namespaces, so schema is dropped — verify table name present
+        Assert.Contains(dialect.WrapSimpleName("core_schema"), result1);
     }
 
     [Fact]
@@ -246,8 +246,9 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void BuildWrappedTableName_IncludesSchemaWhenPresent()
+    public void BuildWrappedTableName_DropsSchemaForSqlite_WhenNamespacesNotSupported()
     {
+        // SQLite does not support namespaces — schema prefix must be omitted even when [Table] has one.
         TypeMap.Register<SchemaEntity>();
         var gateway = new TableGateway<SchemaEntity, int>(Context);
         var dialect = Context.GetDialect();
@@ -256,9 +257,10 @@ public class TableGatewayCoreCoverageTests : SqlLiteContextTestBase
                      ?? throw new InvalidOperationException("Missing helper");
 
         var wrapped = (string)method.Invoke(gateway, new object?[] { dialect })!;
-        var expected = dialect.WrapObjectName("schema") + dialect.CompositeIdentifierSeparator +
-                       dialect.WrapObjectName("core_schema");
-        Assert.Equal(expected, wrapped);
+
+        Assert.Equal(dialect.WrapSimpleName("core_schema"), wrapped);
+        Assert.DoesNotContain("schema" + dialect.CompositeIdentifierSeparator, wrapped,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Table("core_coverage")]

@@ -16,6 +16,13 @@ public class fakeDbCommand : DbCommand
     private Exception? _customExecuteException;
     public bool WasDisposed { get; private set; }
 
+    /// <summary>
+    /// Simulates MySqlCommand.LastInsertedId populated from the MySQL OK packet.
+    /// When set, MySqlDialect.GetLastInsertedIdFromCommand returns this value via reflection.
+    /// Default null triggers the fallback path (SELECT LAST_INSERT_ID()).
+    /// </summary>
+    public object? LastInsertedId { get; set; }
+
     public fakeDbCommand(DbConnection connection)
     {
         Connection = connection;

@@ -193,7 +193,7 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
-        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        // 4. Compound statement plan (MySQL Oracle MySql.Data, SQLite pre-3.35).
         // Appends the dialect's session-scoped ID query (e.g. "; SELECT LAST_INSERT_ID()")
         // to the INSERT and executes both as a single batch on one connection.
         // This fixes the two-lease hazard: LAST_INSERT_ID() / last_insert_rowid() are
@@ -236,6 +236,12 @@ public partial class TableGateway<TEntity, TRowID> :
             await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             return true;
         }
+
+        // 4b. ReaderInsertedId plan (MySqlConnector): execute INSERT as a reader, read
+        // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
+        // No multi-statement support required — MySqlConnector deliberately omits it.
+        if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
@@ -336,7 +342,7 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
-        // 4. Compound statement plan (MySQL, MariaDB, SQLite pre-3.35).
+        // 4. Compound statement plan (MySQL Oracle MySql.Data, SQLite pre-3.35).
         if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
         {
             await using var sc = BuildCreate(entity, ctx);
@@ -368,6 +374,11 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
+        // 4b. ReaderInsertedId plan (MySqlConnector): see ExecuteReaderInsertedIdAsync.
+        // No multi-statement support required.
+        if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, cancellationToken).ConfigureAwait(false);
+
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
@@ -379,6 +390,32 @@ public partial class TableGateway<TEntity, TRowID> :
 
             return rowsAffected == 1;
         }
+    }
+
+    /// <summary>
+    /// Executes an INSERT as a reader (MySqlConnector path) and retrieves the generated key
+    /// from the command's LastInsertedId property (populated from the MySQL OK packet).
+    /// Falls back to <see cref="PopulateGeneratedIdAsync"/> when LastInsertedId is absent (e.g. fakeDb).
+    /// </summary>
+    private async ValueTask<bool> ExecuteReaderInsertedIdAsync(
+        TEntity entity,
+        IDatabaseContext ctx,
+        ISqlDialect dialect,
+        CancellationToken cancellationToken = default)
+    {
+        await using var sc = BuildCreate(entity, ctx);
+        object? generatedId = null;
+        await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
+        {
+            if (reader is IInternalTrackedReader internalReader)
+                generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
+        }
+        if (generatedId is not null && generatedId != DBNull.Value)
+            _idColumn!.PropertyInfo.SetValue(entity,
+                TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
+        else
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context,

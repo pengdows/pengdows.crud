@@ -193,6 +193,102 @@ public class TenantTests
         Assert.Equal(0, removedCount);
     }
 
+    // Verifies that ContextCreated fires when GetContext successfully creates a new context.
+    // PengdowsTelemetryService depends on this to begin tracking the context in OTel.
+    [Fact]
+    public void GetContext_OnFirstSuccessfulCall_RaisesContextCreated()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var createdContexts = new List<IDatabaseContext>();
+        registry.ContextCreated += ctx => createdContexts.Add(ctx);
+
+        using var returned = registry.GetContext("new-tenant");
+
+        Assert.Single(createdContexts);
+        Assert.Same(returned, createdContexts[0]);
+    }
+
+    // Verifies that ContextCreated fires exactly once even when the same tenant key
+    // is requested multiple times — the second call returns the cached context.
+    [Fact]
+    public void GetContext_OnSubsequentCalls_DoesNotRaiseContextCreatedAgain()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var fireCount = 0;
+        registry.ContextCreated += _ => fireCount++;
+
+        registry.GetContext("cached-tenant");
+        registry.GetContext("cached-tenant");
+        registry.GetContext("cached-tenant");
+
+        Assert.Equal(1, fireCount);
+    }
+
+    // Verifies that ContextCreated is NOT raised when the factory faults — a context
+    // that was never successfully constructed must not appear in OTel tracking.
+    [Fact]
+    public void GetContext_WhenFactoryFaults_DoesNotRaiseContextCreated()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new AlwaysThrowsFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var fireCount = 0;
+        registry.ContextCreated += _ => fireCount++;
+
+        Assert.Throws<InvalidOperationException>(() => registry.GetContext("bad-tenant"));
+
+        Assert.Equal(0, fireCount);
+    }
+
     // Proves the concurrent-remove invariant: many threads faulting on the same
     // tenant key all receive the original exception. TryRemove(KeyValuePair) in
     // GetContext guarantees idempotency — the first remover succeeds, the rest

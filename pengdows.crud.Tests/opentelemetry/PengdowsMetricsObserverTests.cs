@@ -410,6 +410,127 @@ public class PengdowsMetricsObserverTests
         Assert.False(observer.IsTracking(ctx));
     }
 
+    // ── EmitRoleDeltas dead-code removal ─────────────────────────────────
+    // EmitRoleDeltas emits to _commandsExecuted with execution.role tags. Due to
+    // parent-first ordering in MetricsCollector.CommandSucceeded, role counters are
+    // always 0 when the event fires, so EmitRoleDeltas never actually emits — it is
+    // dead code. Removing it eliminates a potential double-count if ordering changes.
+    //
+    // This test verifies the exact-once invariant: 1 command → total delta == 1
+    // (from the aggregate path in HandleMetricsUpdated).
+    [Fact]
+    public async Task CommandsExecuted_ExactDeltaOfOne_PerSingleCommand()
+    {
+        var meterName = "test.dc." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = new DatabaseContext(MakeConfig("dc-test"), factory);
+
+        long totalDelta = 0;
+        var anySeen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.SetMeasurementEventCallback<long>((inst, val, _, _) =>
+        {
+            if (inst.Name == "pengdows.db.client.commands.executed")
+            {
+                Interlocked.Add(ref totalDelta, val);
+                anySeen.TrySetResult(true);
+            }
+        });
+        listener.Start();
+
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
+
+        await anySeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(50);
+
+        Assert.Equal(1L, Interlocked.Read(ref totalDelta));
+    }
+
+    // ── Pool metric gauges ────────────────────────────────────────────────
+    // RED: No pool instruments exist in PengdowsMetricsObserver — instrument not published.
+    [Fact]
+    public void PoolGauge_SlotsInUse_EmittedWithPoolLabelTagForEachRole()
+    {
+        var meterName = "test.pool.iu." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("pool-iu-test"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        var poolLabels = new List<string?>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.SetMeasurementEventCallback<int>((inst, _, tags, _) =>
+        {
+            if (inst.Name == "pengdows.db.client.pool.slots.in_use")
+                poolLabels.Add(GetTagValue(tags, "pool.label"));
+        });
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        // One measurement per pool label (reader + writer) per tracked context
+        Assert.Equal(2, poolLabels.Count);
+        Assert.Contains("reader", poolLabels);
+        Assert.Contains("writer", poolLabels);
+    }
+
+    [Fact]
+    public void PoolGauge_SlotsQueued_EmittedForTrackedContext()
+    {
+        var meterName = "test.pool.q." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("pool-q-test"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        var measuredCount = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.SetMeasurementEventCallback<int>((inst, _, _, _) =>
+        {
+            if (inst.Name == "pengdows.db.client.pool.slots.queued")
+                Interlocked.Increment(ref measuredCount);
+        });
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        // 2 pool roles × 1 context = 2 measurements
+        Assert.Equal(2, measuredCount);
+    }
+
+    [Fact]
+    public void PoolGauge_StopsEmitting_AfterUntrack()
+    {
+        var meterName = "test.pool.ut." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("pool-ut-test"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        var measuredCount = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.SetMeasurementEventCallback<int>((inst, _, _, _) =>
+        {
+            if (inst.Name == "pengdows.db.client.pool.slots.in_use")
+                Interlocked.Increment(ref measuredCount);
+        });
+        listener.Start();
+
+        observer.Untrack(ctx);
+        listener.RecordObservableInstruments();
+
+        Assert.Equal(0, measuredCount); // no measurements after untrack
+    }
+
     // ── Test double for ITenantContextRegistry ────────────────────────────
     // ContextCreated/ContextRemoved mirror the events on TenantContextRegistry
     // that are not yet on the interface (will be added in green phase).

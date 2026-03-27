@@ -36,6 +36,11 @@ public enum DbErrorCategory
     Timeout = 4,
 
     /// <summary>
+    /// A write operation was attempted on a connection opened in read-only mode.
+    /// </summary>
+    ReadOnlyViolation = 5,
+
+    /// <summary>
     /// The exception could not be classified into a known category.
     /// </summary>
     Unknown = 99

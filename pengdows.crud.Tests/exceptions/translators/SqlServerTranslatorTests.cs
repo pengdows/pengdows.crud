@@ -1,3 +1,4 @@
+using System;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
@@ -112,5 +113,36 @@ public class SqlServerTranslatorTests
         var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
+    }
+
+    [Fact]
+    public void Timeout_ByLooksLikeTimeout_Maps_CommandTimeoutException()
+    {
+        // TimeoutException is not a DbException so errorCode = null (not -2).
+        // LooksLikeTimeout fires first via the `exception is TimeoutException` branch.
+        var raw = new TimeoutException("wait for lock expired");
+
+        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
+
+        Assert.IsType<CommandTimeoutException>(result);
+        Assert.True(result.IsTransient);
+    }
+
+    // Regression: distributed-lock resource names contain "timeout" (e.g. "lock-timeout-<guid>"),
+    // which caused LooksLikeTimeout to fire before the PK-violation error code was checked,
+    // translating a UniqueConstraintViolationException as a CommandTimeoutException.
+    [Theory]
+    [InlineData(2601)]
+    [InlineData(2627)]
+    public void PkViolation_WithTimeoutInResourceName_MapsTo_UniqueConstraintViolationException(int errorCode)
+    {
+        var msg = $"Violation of PRIMARY KEY constraint 'PK_HangFire_hf_lock'. " +
+                  $"Cannot insert duplicate key in object 'HangFire.hf_lock'. " +
+                  $"The duplicate key value is (lock-timeout-8daaef85-02cb-4691-b8b4-187049fc3618).";
+        var raw = new NumberedDbException(errorCode, msg);
+
+        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
     }
 }

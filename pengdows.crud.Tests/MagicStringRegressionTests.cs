@@ -88,9 +88,11 @@ public class MagicStringRegressionTests
     public void OracleDialect_ReadWriteSettings_ContainsBothNlsFormats()
     {
         var d = CreateOracleDialect();
-        var settings = d.GetBaseSessionSettings();
-        Assert.Contains("NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
-        Assert.Contains("NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
+        // Use the applicationName overload; OracleDialect only overrides GetBaseSessionSettings(string?)
+        var settings = d.GetBaseSessionSettings(null);
+        // NLS values are inside a PL/SQL EXECUTE IMMEDIATE block — single quotes are escaped as ''
+        Assert.Contains("NLS_DATE_FORMAT = ''YYYY-MM-DD''", settings);
+        Assert.Contains("NLS_TIMESTAMP_FORMAT = ''YYYY-MM-DD HH24:MI:SS.FF''", settings);
     }
 
     [Fact]
