@@ -23,7 +23,7 @@
           Override locally via Directory.Build.user.props or -p:SkipInterfaceValidation=true.
         -->
         <SkipInterfaceValidation Condition="'$(SkipInterfaceValidation)' == ''">false</SkipInterfaceValidation>
-        <VersionPrefix>2.0.2</VersionPrefix>
+        <VersionPrefix>2.0.3</VersionPrefix>
         <Version>$(VersionPrefix)</Version>
         <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
         <FileVersion>$(VersionPrefix).0</FileVersion>
