@@ -203,6 +203,12 @@ public interface ISqlDialect
     bool SupportsXmlTypes { get; }
 
     /// <summary>
+    /// True when the database enforces read-only semantics at the transaction level
+    /// and can be safely tested with read-only transaction tests.
+    /// </summary>
+    bool SupportsReadOnlyTransactions { get; }
+
+    /// <summary>
     /// True when window function syntax is available.
     /// </summary>
     bool SupportsWindowFunctions { get; }

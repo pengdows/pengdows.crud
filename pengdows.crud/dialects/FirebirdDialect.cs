@@ -93,6 +93,7 @@ internal class FirebirdDialect : SqlDialect
 
     // Firebird provider can be overly strict during explicit prepare; defer to execution-time preparation
     public override bool PrepareStatements => false;
+    public override bool SupportsReadOnlyTransactions => true;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.ExecuteProcedure;
 
     /// <summary>

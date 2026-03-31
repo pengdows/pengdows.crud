@@ -141,6 +141,7 @@ internal class MySqlDialect : SqlDialect
     // Oracle MySql.Data defaults OFF to avoid max_prepared_stmt_count exhaustion on older servers.
     // ShouldDisablePrepareOn() guards against error 1461 on either path.
     public override bool PrepareStatements => _isMySqlConnector;
+    public override bool SupportsReadOnlyTransactions => true;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
     // Retrying after exhaustion only compounds the problem.

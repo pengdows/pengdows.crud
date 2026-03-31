@@ -405,6 +405,7 @@ property pengdows.crud.dialects.ISqlDialect::SupportsOnConflictWhere : bool { ge
 property pengdows.crud.dialects.ISqlDialect::SupportsOnDuplicateKey : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOuterJoins : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPropertyGraphQueries : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsReadOnlyTransactions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRegularExpressions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRowPatternMatching : bool { get; }

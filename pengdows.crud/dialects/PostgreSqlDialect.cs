@@ -193,6 +193,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     // PostgreSQL benefits from prepared statements
     public override bool PrepareStatements => true;
+    public override bool SupportsReadOnlyTransactions => true;
 
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);

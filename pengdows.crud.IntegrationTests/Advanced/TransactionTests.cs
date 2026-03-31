@@ -114,7 +114,7 @@ public class TransactionTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Skip for databases that don't support read-only transactions properly
-            if (!SupportsReadOnlyTransactions(provider))
+            if (!SupportsReadOnlyTransactions(context))
             {
                 Output.WriteLine($"Skipping read-only transaction test for {provider}");
                 return;

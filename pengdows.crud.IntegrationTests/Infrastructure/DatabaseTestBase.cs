@@ -254,14 +254,13 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
     /// <summary>
     /// Returns true for providers that enforce read-only at the transaction level.
-    /// Oracle is excluded: its read-only transactions pin a consistent snapshot, and the per-test
-    /// DDL reset path can cause ORA-01466 when Oracle later re-reads the recreated tables.
+    /// Delegates to <see cref="ISqlDialect.SupportsReadOnlyTransactions"/> so each dialect
+    /// self-reports its capability rather than maintaining a hardcoded list here.
+    /// Note: Oracle is excluded at the dialect level because its read-only transactions pin a
+    /// consistent snapshot, which is incompatible with the per-test DDL reset path (ORA-01466).
     /// </summary>
-    protected static bool SupportsReadOnlyTransactions(SupportedDatabase provider) =>
-        provider is SupportedDatabase.PostgreSql
-            or SupportedDatabase.SqlServer
-            or SupportedDatabase.MySql
-            or SupportedDatabase.MariaDb;
+    protected static bool SupportsReadOnlyTransactions(IDatabaseContext context) =>
+        context.Dialect.SupportsReadOnlyTransactions;
 
     private static bool IsTableMissingException(Exception ex)
     {

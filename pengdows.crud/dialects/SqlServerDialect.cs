@@ -136,6 +136,7 @@ internal class SqlServerDialect : SqlDialect
 
     // SQL Server relies on sp_executesql and server plan cache, not manual prepare
     public override bool PrepareStatements => false;
+    public override bool SupportsReadOnlyTransactions => true;
 
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);

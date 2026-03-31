@@ -404,6 +404,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // SQL:2003 features
     public virtual bool SupportsMerge => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
     public virtual bool SupportsXmlTypes => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
+    public virtual bool SupportsReadOnlyTransactions => false;
     public virtual bool SupportsWindowFunctions => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
     public virtual bool SupportsCommonTableExpressions => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
 
