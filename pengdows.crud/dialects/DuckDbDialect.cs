@@ -66,6 +66,13 @@ internal class DuckDbDialect : SqlDialect
     // DuckDB supports prepare for modest performance gains
     public override bool PrepareStatements => true;
 
+    // DuckDB only supports SERIALIZABLE isolation.
+    public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
+
+    // DuckDB does not enforce unique or check constraints in the same way OLTP databases do.
+    public override bool SupportsUniqueConstraints => false;
+    public override bool SupportsCheckConstraints => false;
+
     // DuckDB stores GUIDs as VARCHAR UUID strings (no native UUID column type in older versions).
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 

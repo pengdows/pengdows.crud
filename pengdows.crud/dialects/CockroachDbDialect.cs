@@ -10,6 +10,7 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -28,6 +29,9 @@ internal class CockroachDbDialect : PostgreSqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.CockroachDb;
+
+    // CockroachDB only supports SERIALIZABLE isolation; READ COMMITTED is not available.
+    public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 
     // CockroachDB supports native UPSERT which is more efficient than ON CONFLICT
     // in some distributed scenarios, though it also fully supports ON CONFLICT.

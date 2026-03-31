@@ -209,6 +209,41 @@ public interface ISqlDialect
     bool SupportsReadOnlyTransactions { get; }
 
     /// <summary>
+    /// The lowest isolation level that is semantically equivalent to READ COMMITTED for this database.
+    /// CockroachDB and DuckDB only support SERIALIZABLE; all others support READ COMMITTED.
+    /// </summary>
+    IsolationLevel ReadCommittedCompatibleIsolationLevel { get; }
+
+    /// <summary>
+    /// True when the database enforces constraint violations at runtime.
+    /// Snowflake parses constraint DDL but does not enforce it.
+    /// </summary>
+    bool EnforcesConstraints { get; }
+
+    /// <summary>
+    /// True when the database enforces foreign key constraints at runtime.
+    /// SQLite and TiDB do not enforce FK constraints by default.
+    /// </summary>
+    bool EnforcesForeignKeyConstraints { get; }
+
+    /// <summary>
+    /// True when the database enforces unique constraints at runtime.
+    /// </summary>
+    bool SupportsUniqueConstraints { get; }
+
+    /// <summary>
+    /// True when the database enforces check constraints at runtime.
+    /// TiDB parses CHECK constraint DDL but does not enforce it.
+    /// </summary>
+    bool SupportsCheckConstraints { get; }
+
+    /// <summary>
+    /// The <see cref="DbType"/> to use when binding a boolean parameter for this database.
+    /// Most databases use <see cref="DbType.Boolean"/>; SQLite uses <see cref="DbType.Int32"/>.
+    /// </summary>
+    DbType BooleanDbType { get; }
+
+    /// <summary>
     /// True when window function syntax is available.
     /// </summary>
     bool SupportsWindowFunctions { get; }

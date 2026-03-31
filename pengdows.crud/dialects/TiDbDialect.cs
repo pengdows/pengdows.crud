@@ -41,6 +41,11 @@ internal class TiDbDialect : MySqlDialect
     // Stored procedures cannot be created or called on TiDB.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
+    // TiDB does not enforce FK constraints by default (compatibility mode).
+    // TiDB parses CHECK constraint DDL but does not enforce it at runtime.
+    public override bool EnforcesForeignKeyConstraints => false;
+    public override bool SupportsCheckConstraints => false;
+
     public override string GetBaseSessionSettings()
     {
         return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");

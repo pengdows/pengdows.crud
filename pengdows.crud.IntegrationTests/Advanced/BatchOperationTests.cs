@@ -45,7 +45,7 @@ public class BatchOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Insert in transaction using native batch pathway
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var insertedCount = await helper.CreateAsync(entities, transaction);
 
             transaction.Commit();
@@ -78,7 +78,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 2000 + i))
                 .ToList();
 
-            await using (var seedTransaction = await context.BeginTransactionAsync(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = await context.BeginTransactionAsync(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(entities, seedTransaction);
                 Assert.Equal(entities.Count, seededCount);
@@ -97,7 +97,7 @@ public class BatchOperationTests : DatabaseTestBase
 
             // Act - Batch update in transaction (uses native multi-row path where supported,
             // falls back to individual UPDATE statements for dialects without batch update support)
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
 
             var totalUpdated = await helper.UpdateAsync(entities, transaction);
 
@@ -134,7 +134,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .ToList();
 
             var helper = CreateTableGateway(context);
-            await using (var seedTransaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(entities, seedTransaction);
                 Assert.Equal(entities.Count, seededCount);
@@ -178,7 +178,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 4000 + i))
                 .ToList();
 
-            await using (var seedTransaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(entities, seedTransaction);
                 Assert.Equal(entities.Count, seededCount);
@@ -214,7 +214,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 5000 + i))
                 .ToList();
 
-            await using (var seedTransaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(entities, seedTransaction);
                 Assert.Equal(entities.Count, seededCount);
@@ -241,7 +241,7 @@ public class BatchOperationTests : DatabaseTestBase
                     entity.Value += 1000;
                 }
 
-                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
                 var updatedCount = await helper.UpdateAsync(retrieved, transaction);
                 transaction.Commit();
                 totalProcessed += updatedCount;
@@ -290,7 +290,7 @@ public class BatchOperationTests : DatabaseTestBase
             var insertedIds = batchEntities.Select(e => e.Id).ToList();
 
             // Act - Single large transaction via batch insert
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var insertedCount = await helper.CreateAsync(batchEntities, transaction);
             transaction.Commit();
             sw.Stop();
@@ -324,7 +324,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .ToList();
 
             var helper = CreateTableGateway(context);
-            await using (var seedTransaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(existingEntities, seedTransaction);
                 Assert.Equal(existingEntities.Count, seededCount);
@@ -346,7 +346,7 @@ public class BatchOperationTests : DatabaseTestBase
             var sw = Stopwatch.StartNew();
 
             // Act - Upsert all (mix of updates and inserts)
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
 
             var totalUpserted = await helper.UpsertAsync(allEntities, transaction);
 
@@ -384,7 +384,7 @@ public class BatchOperationTests : DatabaseTestBase
                     .Select(i => CreateTestEntity(NameEnum.Test, 8000 + batch * 1000 + i))
                     .ToList();
 
-                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
                 var insertedCount = await helper.CreateAsync(entities, transaction);
                 Assert.Equal(entities.Count, insertedCount);
 
@@ -417,7 +417,7 @@ public class BatchOperationTests : DatabaseTestBase
                 .Select(i => CreateTestEntity(NameEnum.Test, 9000 + i))
                 .ToList();
 
-            await using (var seedTransaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider)))
+            await using (var seedTransaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
             {
                 var seededCount = await helper.CreateAsync(entities, seedTransaction);
                 Assert.Equal(entities.Count, seededCount);
@@ -464,7 +464,7 @@ public class BatchOperationTests : DatabaseTestBase
 
             // Act - Insert in transaction but rollback
             {
-                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
 
                 var insertedCount = await helper.CreateAsync(entities, transaction);
                 Assert.Equal(entities.Count, insertedCount);
@@ -525,10 +525,4 @@ public class BatchOperationTests : DatabaseTestBase
         return true;
     }
 
-    private static IsolationLevel GetReadCommittedCompatibleIsolationLevel(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB
-            ? IsolationLevel.Serializable
-            : IsolationLevel.ReadCommitted;
-    }
 }
