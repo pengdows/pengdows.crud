@@ -66,9 +66,13 @@ internal class MySqlDialect : SqlDialect
     // Minimum server version requirement:
     //   MySQL:   5.7.20+ (transaction_read_only introduced as a session variable in 5.7.20)
     //            8.0+    (fully supported and preferred)
-    //   MariaDB: 10.4+   (transaction_read_only system variable added in 10.4)
     //
-    // If your deployment targets MySQL < 5.7.20 or MariaDB < 10.4, use
+    // MariaDB note: MariaDB uses tx_read_only (the original pre-5.7.20 MySQL name).
+    // The transaction_read_only alias was never adopted by MariaDB — using it raises
+    // "Unknown system variable 'transaction_read_only'". MariaDbDialect overrides
+    // GetReadOnlySessionSettings() and GetReadOnlyTransactionResetSql() to use tx_read_only.
+    //
+    // If your deployment targets MySQL < 5.7.20, use
     // 'SET SESSION TRANSACTION READ ONLY' instead (single-transaction semantics only).
     protected const string SetSessionReadOnlySql = "SET SESSION transaction_read_only = 1;";
     protected const string SetSessionReadWriteSql = "SET SESSION transaction_read_only = 0;";

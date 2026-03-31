@@ -53,9 +53,10 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     IDataSourceInformation DataSourceInfo { get; }
 
     /// <summary>
-    /// Timeout for internal mode locks (SingleWriter / SingleConnection) and
-    /// transaction completion locks (Commit / Rollback). <c>null</c> means wait
-    /// indefinitely. Corresponds to <see cref="configuration.IDatabaseContextConfiguration.ModeLockTimeout"/>.
+    /// Timeout for internal mode locks (SingleConnection) and transaction completion locks
+    /// (Commit / Rollback). <c>null</c> means wait indefinitely.
+    /// Note: SingleWriter uses governor slot acquisition governed by <c>PoolAcquireTimeout</c>, not this value.
+    /// Corresponds to <see cref="configuration.IDatabaseContextConfiguration.ModeLockTimeout"/>.
     /// </summary>
     TimeSpan? ModeLockTimeout { get; }
 

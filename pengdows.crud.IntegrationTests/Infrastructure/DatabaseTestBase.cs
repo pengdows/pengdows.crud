@@ -258,7 +258,10 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// DDL reset path can cause ORA-01466 when Oracle later re-reads the recreated tables.
     /// </summary>
     protected static bool SupportsReadOnlyTransactions(SupportedDatabase provider) =>
-        provider is SupportedDatabase.PostgreSql or SupportedDatabase.SqlServer or SupportedDatabase.MySql;
+        provider is SupportedDatabase.PostgreSql
+            or SupportedDatabase.SqlServer
+            or SupportedDatabase.MySql
+            or SupportedDatabase.MariaDb;
 
     private static bool IsTableMissingException(Exception ex)
     {

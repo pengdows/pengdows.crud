@@ -17,12 +17,14 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - If you add a context lock, you will serialize unrelated work and risk deadlocks.
 
 4. **Connection lock is the real guard.**
-   - Shared connections (SingleWriter/SingleConnection) must serialize through the connection lock.
+   - Shared connections (SingleConnection) must serialize through the connection lock.
+   - SingleWriter serializes writes via the governor (WriteSlots=1), not a connection lock — connections are ephemeral.
    - Ephemeral connections (Standard/KeepAlive) use a NoOp lock for zero overhead.
 
 5. **ITrackedReader is a lease, not just a wrapper.**
    - It pins the connection and holds the connection lock until disposal.
-   - Long-lived readers = blocked writers in SingleWriter/SingleConnection modes.
+   - Long-lived readers = blocked writers in SingleConnection mode.
+   - In SingleWriter mode, long-lived readers may delay writers waiting on the turnstile, but do not hold a connection lock.
 
 6. **MetricsUpdated events must never re-enter DatabaseContext.**
    - Events are fired without locks by design.

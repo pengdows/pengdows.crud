@@ -16,7 +16,8 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 **Concurrent callers are supported:**
 - **Standard**: parallel operations using ephemeral connections
-- **KeepAlive/SingleWriter/SingleConnection**: operations serialize on shared connection lock
+- **KeepAlive/SingleConnection**: operations serialize on shared connection lock
+- **SingleWriter**: writes serialize via pool governor (MaxConcurrentWrites=1); reads are fully concurrent on ephemeral connections
 
 **APIs returning `ITrackedReader` hold a connection lease** until the reader is disposed.
 
@@ -81,7 +82,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 |------|-----------------|----------|
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
 | **KeepAlive** | ✅ Fully concurrent | Sentinel connection stays open but unused. Operations get ephemeral connections. |
-| **SingleWriter** | ⚠️ Writes serialize | One persistent write connection (serialized). Reads get ephemeral connections (concurrent). |
+| **SingleWriter** | ⚠️ Writes serialize | Governor-serialized ephemeral writes (MaxConcurrentWrites=1). Reads get ephemeral connections (concurrent). No pinned connection. |
 | **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
 | **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
 
@@ -683,7 +684,7 @@ public class OrderService
 | **Context Lifetime** | Scoped (per request) | Singleton (per connection string) |
 | **Change Tracking** | Automatic | None (stateless) |
 | **Transactions** | Implicit (SaveChanges) | Explicit (BeginTransaction) |
-| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, SingleWriter=pinned) |
+| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, SingleWriter=governor over pool, SingleConnection=single pinned) |
 | **Unit of Work** | DbContext | TransactionContext |
 | **Concurrency Model** | One context per request (isolated) | One context for all requests (serialized at connection/transaction level) |
 | **SQL Control** | LINQ to SQL (generated) | Raw SQL (full control) |
@@ -701,8 +702,8 @@ services.AddScoped<DatabaseContext>(sp =>
     new DatabaseContext(sqliteConnectionString, SqliteFactory.Instance));
 
 // Result: Each HTTP request creates a new DatabaseContext
-// Problem: In SingleWriter mode, each context creates a persistent write connection
-// Outcome: Multiple write connections to SQLite → SQLITE_BUSY errors
+// Problem: In SingleWriter mode, each context creates its own governor (WriteSlots=1)
+// Outcome: No coordinated write serialization across contexts → SQLITE_BUSY errors
 ```
 
 **2. Scoped Context = Broken :memory: Isolation**

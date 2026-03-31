@@ -260,7 +260,7 @@ await gateway.CreateAsync(newOrder, tenantCtx);
 | `ExecutionType.Read` | Read-only operation | May get ephemeral or shared connection |
 | `ExecutionType.Write` | Modifying operation | Gets write-capable connection |
 
-In `SingleWriter` mode, this determines whether you get the pinned write connection or an ephemeral read connection.
+In `SingleWriter` mode, this determines whether you acquire a governor-gated ephemeral write connection or an ungated ephemeral read connection.
 
 ## TypeMapRegistry.Register<T>()
 
