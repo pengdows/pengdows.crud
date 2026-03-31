@@ -31,7 +31,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
 
 ### SingleWriter
 
-- Semantics: Standard lifecycle plus a governor profile that enforces `MaxConcurrentWrites = 1` and `MaxConcurrentReads = N`.
+- Semantics: Identical to Standard, plus a governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
 - Reads:
   - Non-transactional → ephemeral read-only connections that use the read-only preamble.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).

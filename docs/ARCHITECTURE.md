@@ -16,8 +16,9 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 **Concurrent callers are supported:**
 - **Standard**: parallel operations using ephemeral connections
-- **KeepAlive/SingleConnection**: operations serialize on shared connection lock
-- **SingleWriter**: writes serialize via pool governor (MaxConcurrentWrites=1); reads are fully concurrent on ephemeral connections
+- **KeepAlive**: identical to Standard; additionally keeps one idle read connection open to prevent the DB from unloading
+- **SingleConnection**: operations serialize on shared connection lock (single persistent connection, RealAsyncLocker)
+- **SingleWriter**: identical to Standard; governor fixes writable connections to 1 concurrent writer and 0 writers on read-only connections; writer-starvation-prevention turnstile enabled
 
 **APIs returning `ITrackedReader` hold a connection lease** until the reader is disposed.
 
@@ -81,8 +82,8 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 | Mode | Concurrent Calls | Behavior |
 |------|-----------------|----------|
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
-| **KeepAlive** | ✅ Fully concurrent | Sentinel connection stays open but unused. Operations get ephemeral connections. |
-| **SingleWriter** | ⚠️ Writes serialize | Governor-serialized ephemeral writes (MaxConcurrentWrites=1). Reads get ephemeral connections (concurrent). No pinned connection. |
+| **KeepAlive** | ✅ Fully concurrent | Identical to Standard. One idle read connection is kept open to prevent DB unload; never used for operations. |
+| **SingleWriter** | ⚠️ Writes serialize | Identical to Standard. Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers. Writer-starvation-prevention turnstile on. |
 | **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
 | **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
 
@@ -177,7 +178,7 @@ handler.Invoke(this, metrics);  // No lock held during callback
 - Disposed when operation completes
 - Come from provider's connection pool (ADO.NET managed)
 
-**Persistent Connections (SingleWriter/SingleConnection modes)**:
+**Persistent Connections (SingleConnection mode)**:
 - Created during DatabaseContext initialization
 - Owned by DatabaseContext instance
 - Held open for lifetime of context
@@ -270,13 +271,12 @@ pengdows.crud uses **context-level + connection-level** locking:
 **ITrackedConnection.GetLock()** returns:
 
 - **RealAsyncLocker** (SemaphoreSlim-based) for **shared connections**:
-  - SingleWriter mode: Write connection is shared
   - SingleConnection mode: The one connection is shared
   - KeepAlive mode: Sentinel connection is shared (but never used for work)
 
 - **NoOpAsyncLocker** for **ephemeral connections**:
   - Standard mode: Each operation gets its own connection
-  - SingleWriter mode: Read connections are ephemeral
+  - SingleWriter mode: All connections are ephemeral (serialization via governor, not connection lock)
 
 **Implementation** (pengdows.crud/wrappers/TrackedConnection.cs):
 
@@ -458,12 +458,12 @@ app.Use(async (context, next) =>
 **KeepAlive mode** (`KeepAliveConnectionStrategy`):
 - One sentinel connection kept open (never used)
 - Prevents database unload (LocalDB, embedded SQLite)
-- All work uses ephemeral connections (like Standard)
+- All work uses ephemeral connections (identical to Standard)
 
 **SingleWriter mode** (`StandardConnectionStrategy` + governor policy):
 - Per-operation connections for both reads and writes
-- Governor enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`
-- Turnstile fairness gate prevents reader starvation (writer-preference)
+- Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers
+- Writer-starvation-prevention turnstile enabled
 - Ideal for file-based SQLite/DuckDB when writes must serialize
 
 **SingleConnection mode** (`SingleConnectionStrategy`):
@@ -684,7 +684,7 @@ public class OrderService
 | **Context Lifetime** | Scoped (per request) | Singleton (per connection string) |
 | **Change Tracking** | Automatic | None (stateless) |
 | **Transactions** | Implicit (SaveChanges) | Explicit (BeginTransaction) |
-| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, SingleWriter=governor over pool, SingleConnection=single pinned) |
+| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, KeepAlive=pooled+sentinel, SingleWriter=governor over pool, SingleConnection=single pinned) |
 | **Unit of Work** | DbContext | TransactionContext |
 | **Concurrency Model** | One context per request (isolated) | One context for all requests (serialized at connection/transaction level) |
 | **SQL Control** | LINQ to SQL (generated) | Raw SQL (full control) |
@@ -970,8 +970,7 @@ This section documents **contracts between internal components** that aren't vis
 
 **Contract**:
 - Strategy **must** return ephemeral connections via internal GetConnection for Standard/KeepAlive modes
-- Strategy **must** return the persistent connection for SingleWriter write operations
-- Strategy **must** return ephemeral read connections for SingleWriter read operations
+- Strategy **must** return ephemeral connections for SingleWriter operations (both reads and writes; governor serializes via permits, not connection sharing)
 - Strategy **must** return the persistent connection for SingleConnection all operations
 
 **Enforcement**: Strategy implementations in `pengdows.crud/strategies/connection/`
@@ -1071,8 +1070,8 @@ This section documents **contracts between internal components** that aren't vis
 - DatabaseContext overhead: Minimal (delegate calls)
 
 **SingleWriter mode**:
-- Write connection: Zero allocation (reused)
-- Read connections: Provider pool
+- All connections: Provider pool (ephemeral, like Standard)
+- Write serialization via governor permit (no persistent connection)
 
 **SingleConnection mode**:
 - Zero connection allocations (one connection for lifetime)
