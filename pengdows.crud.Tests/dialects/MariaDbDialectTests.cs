@@ -49,6 +49,10 @@ public class MariaDbDialectTests
         Assert.Equal("SELECT LAST_INSERT_ID()", d.GetLastInsertedIdQuery());
         Assert.True(d.SupportsIdentityColumns);
         Assert.False(d.SupportsJsonTypes);
+        Assert.True(d.PrepareStatements);
+        Assert.Equal(DbType.Boolean, d.BooleanDbType);
+        Assert.Equal("Min Pool Size", d.MinPoolSizeSettingName);
+        Assert.Equal("Max Pool Size", d.MaxPoolSizeSettingName);
 
         // ANSI double-quote wrapping (inherited from MySqlDialect, matches ANSI_QUOTES mode)
         Assert.Equal("\"s\".\"t\"", d.WrapObjectName("s.t"));
@@ -62,16 +66,31 @@ public class MariaDbDialectTests
         SetVersion(d, new Version(10, 1));
         Assert.False(d.SupportsWindowFunctions);
         Assert.False(d.SupportsCommonTableExpressions);
+        Assert.False(d.SupportsOffsetFetch);
 
         SetVersion(d, new Version(10, 2));
         Assert.True(d.SupportsWindowFunctions);
         Assert.True(d.SupportsCommonTableExpressions);
+        Assert.False(d.SupportsOffsetFetch);
+
+        SetVersion(d, new Version(10, 6));
+        Assert.True(d.SupportsOffsetFetch);
 
         SetVersion(d, new Version(5, 7));
         Assert.False(d.SupportsWindowFunctions);
         Assert.Equal(SqlStandardLevel.Sql99, d.DetermineStandardCompliance(new Version(5, 7)));
 
         Assert.Equal(SqlStandardLevel.Sql92, d.DetermineStandardCompliance(null));
+    }
+
+    [Fact]
+    public void DetermineStandardCompliance_Handles_MariaDb_10_x()
+    {
+        var d = CreateDialect();
+        Assert.Equal(SqlStandardLevel.Sql2008, d.DetermineStandardCompliance(new Version(10, 2)));
+        Assert.Equal(SqlStandardLevel.Sql2008, d.DetermineStandardCompliance(new Version(11, 0)));
+        Assert.Equal(SqlStandardLevel.Sql2003, d.DetermineStandardCompliance(new Version(10, 0)));
+        Assert.Equal(SqlStandardLevel.Sql2003, d.DetermineStandardCompliance(new Version(10, 1)));
     }
 
     [Fact]
@@ -141,6 +160,24 @@ public class MariaDbDialectTests
     }
 
     [Fact]
+    public void SessionSettings_Are_MariaDb_Specific()
+    {
+        var d = CreateDialect();
+        
+        // Final session settings (combined)
+        var settings = d.GetFinalSessionSettings(readOnly: true);
+        Assert.Contains("SET SESSION tx_read_only = 1;", settings);
+        Assert.DoesNotContain("transaction_read_only", settings);
+
+        settings = d.GetFinalSessionSettings(readOnly: false);
+        Assert.Contains("SET SESSION tx_read_only = 0;", settings);
+
+        // Individual overrides
+        Assert.Equal("SET SESSION tx_read_only = 1;", d.GetReadOnlySessionSettings());
+        Assert.Equal("SET SESSION tx_read_only = 0;", d.GetReadOnlyTransactionResetSql());
+    }
+
+    [Fact]
     public void TryEnterReadOnlyTransaction_ExecutesReadOnlyCommand()
     {
         var dialect = CreateDialect();
@@ -168,15 +205,26 @@ public class MariaDbDialectTests
     [Fact]
     public async Task TryEnterReadOnlyTransactionAsync_ExecutesReadOnlyCommand()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
-        factory.EnableDataPersistence = true;
-        using var ctx = new DatabaseContext(
-            "Server=localhost;Database=test;EmulatedProduct=MariaDb", factory);
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container
+            .Setup(c => c.DisposeAsync())
+            .Returns(ValueTask.CompletedTask)
+            .Verifiable();
 
-        using var txn = ctx.BeginTransaction();
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET SESSION tx_read_only = 1;"))
+            .Returns(container.Object)
+            .Verifiable();
 
-        await ctx.GetDialect().TryEnterReadOnlyTransactionAsync(txn, CancellationToken.None);
+        await dialect.TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
 
-        txn.Rollback();
+        container.Verify();
+        transaction.Verify();
     }
 }
