@@ -33,19 +33,19 @@ public class BuildPackagesScriptTests
     }
 
     // =========================================================================
-    // Version consistency — Directory.Build.props must declare 2.0.3
-    // This test was RED when the version was 2.0.2 (bumped after publishing 2.0.2 packages).
+    // Version consistency — Directory.Build.props must declare 2.0.4
+    // This test was RED when the version was 2.0.3 (bumped after publishing 2.0.3 packages).
     // =========================================================================
 
     [Fact]
-    public void DirectoryBuildProps_Version_Is_2_0_3()
+    public void DirectoryBuildProps_Version_Is_2_0_4()
     {
         var root = GetRepoRoot();
         var propsPath = Path.Combine(root, "Directory.Build.props");
         Assert.True(File.Exists(propsPath), $"Directory.Build.props not found at {propsPath}");
 
         var contents = File.ReadAllText(propsPath);
-        Assert.Contains("<VersionPrefix>2.0.3</VersionPrefix>", contents, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>2.0.4</VersionPrefix>", contents, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>", contents, StringComparison.Ordinal);
         Assert.Contains("<FileVersion>$(VersionPrefix).0</FileVersion>", contents, StringComparison.Ordinal);
     }

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -162,5 +163,20 @@ public class MariaDbDialectTests
 
         container.Verify();
         transaction.Verify();
+    }
+
+    [Fact]
+    public async Task TryEnterReadOnlyTransactionAsync_ExecutesReadOnlyCommand()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        factory.EnableDataPersistence = true;
+        using var ctx = new DatabaseContext(
+            "Server=localhost;Database=test;EmulatedProduct=MariaDb", factory);
+
+        using var txn = ctx.BeginTransaction();
+
+        await ctx.GetDialect().TryEnterReadOnlyTransactionAsync(txn, CancellationToken.None);
+
+        txn.Rollback();
     }
 }
