@@ -191,7 +191,8 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 30. Per-dialect session settings (from code):
 - SQL Server: baseline ANSI `SET` batch (`SqlServerDialect.GetBaseSessionSettings`, `DefaultSessionSettings`)
 - PostgreSQL: single `SET ... default_transaction_read_only=on/off` + baseline options
-- MySQL/MariaDB: baseline `sql_mode` + `SET SESSION transaction_read_only = 1/0`
+- MySQL: baseline `sql_mode` + `SET SESSION transaction_read_only = 1/0`
+- MariaDB: baseline `sql_mode` + `SET SESSION tx_read_only = 1/0`
 - Oracle: base `ALTER SESSION SET NLS_DATE_FORMAT...`; read-only enforced at tx start (`SET TRANSACTION READ ONLY`)
 - CockroachDB: PostgreSQL baseline + `SET client_encoding='UTF8'; SET lock_timeout='30s';`
 - YugabyteDB: PostgreSQL baseline + same encoding/lock timeout overrides
@@ -390,7 +391,8 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 73. Per-provider mechanisms:
 - SQL Server: connection string `ApplicationIntent=ReadOnly` (routing hint), plus permissions for hard enforcement.
 - PostgreSQL: connection parameter options + session setting `default_transaction_read_only`.
-- MySQL/MariaDB: session variable `transaction_read_only` and transaction entry helpers.
+- MySQL: session variable `transaction_read_only`.
+- MariaDB: session variable `tx_read_only`.
 - Oracle: `SET TRANSACTION READ ONLY` at tx start; no persistent session read-only.
 - SQLite: `Mode=ReadOnly` connection string (except memory).
 - DuckDB: `access_mode=READ_ONLY` connection string.
