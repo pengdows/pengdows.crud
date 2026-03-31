@@ -84,15 +84,15 @@ public enum DbMode
     KeepAlive = 1,
 
     /// <summary>
-    /// Maintains one persistent write connection, acquires ephemeral read connections as needed.
-    /// Designed for databases with single-writer constraints.
+    /// Serializes writes via a pool governor (WriteSlots=1); both reads and writes use ephemeral connections.
+    /// Designed for databases with single-writer constraints (e.g., file-based SQLite, DuckDB).
     /// </summary>
     /// <remarks>
     /// <para><b>Behavior:</b></para>
     /// <list type="bullet">
-    ///   <item><description>One persistent connection handles ALL write operations</description></item>
+    ///   <item><description>Write operations acquire a governor permit (MaxConcurrentWrites=1) before opening an ephemeral connection</description></item>
     ///   <item><description>Read operations open ephemeral connections (opened/closed per operation)</description></item>
-    ///   <item><description>Serializes writes through the single writer connection</description></item>
+    ///   <item><description>Serializes writes through the governor turnstile, not a pinned connection</description></item>
     ///   <item><description>Reads can execute concurrently on separate connections</description></item>
     ///   <item><description>Inside transactions, all operations (read and write) use the transaction's connection</description></item>
     /// </list>

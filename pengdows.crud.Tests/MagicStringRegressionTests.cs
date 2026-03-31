@@ -243,7 +243,7 @@ public class MagicStringRegressionTests
     {
         var d = CreateMariaDbDialect();
         using var ctx = CreateContext(SupportedDatabase.MariaDb);
-        Assert.Contains("SET SESSION transaction_read_only = 1;",
+        Assert.Contains("SET SESSION tx_read_only = 1;",
             d.GetConnectionSessionSettings(ctx, readOnly: true));
     }
 

@@ -67,6 +67,12 @@ internal class SnowflakeDialect : SqlDialect
 
     public override bool PrepareStatements => true;
 
+    // Snowflake parses constraint DDL but does not enforce any constraints at runtime.
+    public override bool EnforcesConstraints => false;
+    public override bool EnforcesForeignKeyConstraints => false;
+    public override bool SupportsUniqueConstraints => false;
+    public override bool SupportsCheckConstraints => false;
+
     // Snowflake stored procedures use CALL proc_name(args) syntax.
     // ProcWrappingStyle.None would map to UnsupportedProcWrappingStrategy and throw at runtime.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;

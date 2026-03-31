@@ -14,7 +14,7 @@ public class ReadOnlySessionSettingsTests
     {
         { SupportedDatabase.PostgreSql, "SET default_transaction_read_only = on;" },
         { SupportedDatabase.MySql, "SET SESSION transaction_read_only = 1;" },
-        { SupportedDatabase.MariaDb, "SET SESSION transaction_read_only = 1;" },
+        { SupportedDatabase.MariaDb, "SET SESSION tx_read_only = 1;" },
         { SupportedDatabase.Oracle, "" },
         // SQLite, DuckDB, and Snowflake use connection string enforcement — no session SQL
         { SupportedDatabase.Sqlite, "" },

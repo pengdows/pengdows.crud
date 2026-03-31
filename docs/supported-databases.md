@@ -38,7 +38,7 @@ Two thresholds matter for each database:
 | PostgreSQL | 9.5 | 15 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
 | Oracle | 12c | 19c | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c |
 | MySQL | 5.7.20 | 8.0 | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
-| MariaDB | 10.2 | 10.4 | CTEs and window functions at 10.2; `transaction_read_only` session variable requires 10.4 |
+| MariaDB | 10.2 | 10.4 | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
 | SQLite | 3.24 | 3.35 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
 | Firebird | 2.5 | 3.0 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 |
 | DuckDB | 0.8.0 | 1.0.0 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
@@ -47,7 +47,8 @@ Two thresholds matter for each database:
 | Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
-> MySQL 5.7.20+ or MariaDB 10.4+. Earlier versions only support `SET SESSION TRANSACTION READ ONLY`
+> MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
+> Earlier versions only support `SET SESSION TRANSACTION READ ONLY`
 > which applies to the next transaction only, not the session persistently.
 
 ### Feature Version Thresholds
@@ -101,7 +102,8 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | **SQLite** | Yes | Yes | **Yes** | `Mode=ReadOnly` + `PRAGMA query_only = ON` |
 | **DuckDB** | Yes | Yes | **Yes** | `access_mode=READ_ONLY` + `SET access_mode = 'read_only'` |
 | **SQL Server** | Yes | No | No | `ApplicationIntent=ReadOnly` (Driver-managed) |
-| **MySQL / MariaDB** | No | Yes | No | `SET SESSION transaction_read_only = 1` (MySQL 5.7.20+ / MariaDB 10.4+) |
+| **MySQL** | No | Yes | No | `SET SESSION transaction_read_only = 1` (5.7.20+) |
+| **MariaDB** | No | Yes | No | `SET SESSION tx_read_only = 1` (10.1+) |
 | **Snowflake** | No | Yes | No | `ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE` |
 | **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` |
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |

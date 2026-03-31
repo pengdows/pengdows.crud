@@ -43,7 +43,7 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 * Otherwise behaves like `Standard`.
 
 ### SingleWriter
-* Uses the Standard lifecycle (no pinned connections) but adds a governor profile that enforces `MaxConcurrentWrites = 1` and `MaxConcurrentReads = N`.
+* Identical to Standard (no pinned connections); governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
 * A writer-preference turnstile pauses new readers when a writer is queued, guaranteeing fairness for SQLite/DuckDB workloads.
 * Triggered automatically for file-based SQLite/DuckDB and shared in-memory pools so writers serialize safely without blocking the entire process (see Connection Pooling).
 
@@ -60,7 +60,7 @@ se (see Connection Pooling).
 
 ## Shared connection locking & timeouts
 
-Persistent connections (KeepAlive's sentinel and the SingleConnection pin) rely on `RealAsyncLocker` instances that serialize operations through a shared `SemaphoreSlim`. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which includes a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
+The SingleConnection pin relies on a `RealAsyncLocker` backed by a `SemaphoreSlim` to serialize all operations through the shared connection. KeepAlive's sentinel is a persistent connection that keeps the database loaded but is never used for work — actual operations use ephemeral connections with no serialization overhead. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which includes a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
 
 ## Pool governors & acquisition windows
 

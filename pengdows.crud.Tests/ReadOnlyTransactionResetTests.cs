@@ -189,10 +189,10 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("transaction_read_only = 1", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("tx_read_only = 1", StringComparison.OrdinalIgnoreCase));
 
         Assert.Contains(commands,
-            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("tx_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -214,6 +214,6 @@ public class ReadOnlyTransactionResetTests
         var commands = CollectCommands(factory);
 
         Assert.Contains(commands,
-            c => c.Contains("transaction_read_only = 0", StringComparison.OrdinalIgnoreCase));
+            c => c.Contains("tx_read_only = 0", StringComparison.OrdinalIgnoreCase));
     }
 }

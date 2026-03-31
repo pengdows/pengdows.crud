@@ -136,8 +136,10 @@ public class SingleWriterReadOnlyEnhancedTests
                             cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
                         break;
                     case SupportedDatabase.MySql:
-                    case SupportedDatabase.MariaDb:
                         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("transaction_read_only = 1"));
+                        break;
+                    case SupportedDatabase.MariaDb:
+                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("tx_read_only = 1"));
                         break;
                     case SupportedDatabase.Oracle:
                         Assert.Contains(readOnlyConnection.Commands, c => c.Contains("READ ONLY"));

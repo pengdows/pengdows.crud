@@ -86,6 +86,15 @@ internal class SqliteDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
+
+    // SQLite does not enforce FK constraints by default (PRAGMA foreign_keys = ON is required).
+    // Unique and check constraint support is limited in older versions and not tested here.
+    public override bool EnforcesForeignKeyConstraints => false;
+    public override bool SupportsUniqueConstraints => false;
+    public override bool SupportsCheckConstraints => false;
+
+    // SQLite has no native BOOLEAN type; store as INTEGER.
+    public override DbType BooleanDbType => DbType.Int32;
     public override bool SupportsJsonTypes => IsVersionAtLeast(3, 45);
     public override bool SupportsWindowFunctions => IsVersionAtLeast(3, 25);
     public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);

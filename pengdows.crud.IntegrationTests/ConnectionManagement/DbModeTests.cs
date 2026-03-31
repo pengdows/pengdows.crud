@@ -93,7 +93,7 @@ public class DbModeTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 301);
 
             // Act - Within transaction, connection should stay open
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             var connCountInTransaction = transaction.NumberOfOpenConnections;
@@ -231,7 +231,7 @@ public class DbModeTests : DatabaseTestBase
                 container.AddParameterWithValue("id", DbType.Int64, entity.Id);
                 container.AddParameterWithValue("name", DbType.String, entity.Name.ToString());
                 container.AddParameterWithValue("value", DbType.Int32, entity.Value);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), entity.IsActive);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, entity.IsActive);
                 container.AddParameterWithValue("created", DbType.DateTime, entity.CreatedOn);
 
                 await using var command = container.CreateCommand(writeConnection);
@@ -254,7 +254,7 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Skip providers that don't properly support read-only transactions
-            if (!SupportsReadOnlyTransactions(provider))
+            if (!SupportsReadOnlyTransactions(context))
             {
                 Output.WriteLine($"Skipping read-only transaction test for {provider}");
                 return;
@@ -266,7 +266,7 @@ public class DbModeTests : DatabaseTestBase
 
             // Act - Begin read-only transaction
             await using var readTransaction = context.BeginTransaction(
-                GetReadCommittedCompatibleIsolationLevel(provider),
+                context.Dialect.ReadCommittedCompatibleIsolationLevel,
                 ExecutionType.Read);
 
             var helper = CreateTableGateway(context);
@@ -290,7 +290,7 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange & Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
 
             var conn1 = transaction.GetConnection(ExecutionType.Write);
             var conn2 = transaction.GetConnection(ExecutionType.Write);
@@ -352,7 +352,7 @@ public class DbModeTests : DatabaseTestBase
             // Act - Sequential transactions
             foreach (var entity in entities)
             {
-                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
                 var helper = CreateTableGateway(context);
 
                 await helper.CreateAsync(entity, transaction);
@@ -426,14 +426,14 @@ public class DbModeTests : DatabaseTestBase
             await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Transaction 1: Read the entity
-            await using var tx1 = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var tx1 = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper1 = CreateTableGateway(context);
             var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
             Assert.NotNull(read1);
             Assert.Equal(entity.Value, read1!.Value);
 
             // Transaction 2: Update but don't commit
-            await using var tx2 = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var tx2 = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper2 = CreateTableGateway(context);
             var read2 = await helper2.RetrieveOneAsync(entity.Id, tx2);
             read2!.Value = 2000;
@@ -476,15 +476,4 @@ public class DbModeTests : DatabaseTestBase
         };
     }
 
-    private static DbType GetBooleanDbType(SupportedDatabase provider)
-    {
-        return provider == SupportedDatabase.Sqlite ? DbType.Int32 : DbType.Boolean;
-    }
-
-    private static IsolationLevel GetReadCommittedCompatibleIsolationLevel(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB
-            ? IsolationLevel.Serializable
-            : IsolationLevel.ReadCommitted;
-    }
 }

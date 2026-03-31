@@ -38,7 +38,7 @@ public class TransactionTests : DatabaseTestBase
             var entity = CreateTestEntity(NameEnum.Test, 100);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity, transaction);
@@ -65,7 +65,7 @@ public class TransactionTests : DatabaseTestBase
             var entity = CreateTestEntity(NameEnum.Test, 200);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity, transaction);
@@ -92,7 +92,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act - Read within transaction
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
 
@@ -101,7 +101,7 @@ public class TransactionTests : DatabaseTestBase
             Assert.Equal(entity.Id, retrieved.Id);
             var allowedIsolationLevels = new[]
             {
-                GetReadCommittedCompatibleIsolationLevel(provider),
+                context.Dialect.ReadCommittedCompatibleIsolationLevel,
                 IsolationLevel.Serializable
             };
             Assert.Contains(transaction.IsolationLevel, allowedIsolationLevels);
@@ -114,7 +114,7 @@ public class TransactionTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Skip for databases that don't support read-only transactions properly
-            if (!SupportsReadOnlyTransactions(provider))
+            if (!SupportsReadOnlyTransactions(context))
             {
                 Output.WriteLine($"Skipping read-only transaction test for {provider}");
                 return;
@@ -126,7 +126,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act - Read-only transaction
             await using var readOnlyTransaction = context.BeginTransaction(
-                GetReadCommittedCompatibleIsolationLevel(provider),
+                context.Dialect.ReadCommittedCompatibleIsolationLevel,
                 ExecutionType.Read);
 
             var helper = CreateTableGateway(context);
@@ -182,7 +182,7 @@ public class TransactionTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Skip for providers without savepoint support
-            if (!SupportsSavepoints(provider))
+            if (!context.Dialect.SupportsSavepoints)
             {
                 Output.WriteLine($"Skipping savepoint test for {provider}");
                 return;
@@ -193,7 +193,7 @@ public class TransactionTests : DatabaseTestBase
             var entity2 = CreateTestEntity(NameEnum.Test2, 601);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             // Create first entity
@@ -224,7 +224,7 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (!SupportsSavepoints(provider))
+            if (!context.Dialect.SupportsSavepoints)
             {
                 Output.WriteLine($"Skipping multiple savepoints test for {provider}");
                 return;
@@ -236,7 +236,7 @@ public class TransactionTests : DatabaseTestBase
             var entity3 = CreateTestEntity(NameEnum.Test, 702);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             await helper.CreateAsync(entity1, transaction);
@@ -273,7 +273,7 @@ public class TransactionTests : DatabaseTestBase
 
             // Act
             {
-                await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
                 var helper = CreateTableGateway(context);
                 await helper.CreateAsync(entity, transaction);
                 // Dispose without commit
@@ -299,7 +299,7 @@ public class TransactionTests : DatabaseTestBase
             };
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             foreach (var entity in entities)
@@ -330,7 +330,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             var retrieved = await helper.RetrieveOneAsync(entity.Id, transaction);
@@ -360,7 +360,7 @@ public class TransactionTests : DatabaseTestBase
             await CreateTableGateway(context).CreateAsync(entity, context);
 
             // Act
-            await using var transaction = context.BeginTransaction(GetReadCommittedCompatibleIsolationLevel(provider));
+            await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
             await helper.DeleteAsync(entity.Id, transaction);
@@ -429,22 +429,4 @@ public class TransactionTests : DatabaseTestBase
         };
     }
 
-    private static bool SupportsSavepoints(SupportedDatabase provider)
-    {
-        // Most modern databases support savepoints
-        return provider is SupportedDatabase.PostgreSql or
-            SupportedDatabase.SqlServer or
-            SupportedDatabase.Oracle or
-            SupportedDatabase.MySql or
-            SupportedDatabase.MariaDb or
-            SupportedDatabase.Sqlite or
-            SupportedDatabase.Firebird;
-    }
-
-    private static IsolationLevel GetReadCommittedCompatibleIsolationLevel(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB
-            ? IsolationLevel.Serializable
-            : IsolationLevel.ReadCommitted;
-    }
 }

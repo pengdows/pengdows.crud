@@ -49,9 +49,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -79,9 +79,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -112,9 +112,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -145,7 +145,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 container.AddParameterWithValue("id", DbType.Int64, id);
                 container.AddParameterWithValue("name", DbType.String, "Test");
                 container.AddParameterWithValue("value", DbType.Int32, 100);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -170,7 +170,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 container.AddParameterWithValue("id", DbType.Int64, id); // Same ID
                 container.AddParameterWithValue("name", DbType.String, "Test2");
                 container.AddParameterWithValue("value", DbType.Int32, 200);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -183,14 +183,14 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping unique constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
             // Skip providers where we can't easily add unique constraints
-            if (!SupportsUniqueConstraints(provider))
+            if (!context.Dialect.SupportsUniqueConstraints)
             {
                 Output.WriteLine($"Skipping unique constraint test for {provider}");
                 return;
@@ -216,13 +216,13 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping unique constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
-            if (!SupportsUniqueConstraints(provider))
+            if (!context.Dialect.SupportsUniqueConstraints)
             {
                 Output.WriteLine($"Skipping unique constraint test for {provider}");
                 return;
@@ -252,14 +252,14 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping FK constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
             // Skip SQLite and TiDB which don't enforce FK by default
-            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
+            if (!context.Dialect.EnforcesForeignKeyConstraints)
             {
                 Output.WriteLine($"Skipping FK test for {provider} (FK not enforced by default)");
                 return;
@@ -283,13 +283,13 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping FK constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
-            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
+            if (!context.Dialect.EnforcesForeignKeyConstraints)
             {
                 Output.WriteLine($"Skipping FK test for {provider} (FK not enforced by default)");
                 return;
@@ -315,13 +315,13 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping FK constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
-            if (provider is SupportedDatabase.Sqlite or SupportedDatabase.TiDb)
+            if (!context.Dialect.EnforcesForeignKeyConstraints)
             {
                 Output.WriteLine($"Skipping FK delete test for {provider} (FK not enforced by default)");
                 return;
@@ -349,9 +349,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -382,7 +382,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("value", DbType.Int32, 400);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -395,9 +395,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -425,7 +425,7 @@ public class ConstraintViolationTests : DatabaseTestBase
 
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("value", DbType.Int32, 401);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -444,14 +444,14 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping CHECK constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
             // Skip providers that don't support CHECK constraints well
-            if (!SupportsCheckConstraints(provider))
+            if (!context.Dialect.SupportsCheckConstraints)
             {
                 Output.WriteLine($"Skipping CHECK constraint test for {provider}");
                 return;
@@ -486,7 +486,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("name", DbType.String, "Test");
                 container.AddParameterWithValue("value", DbType.Int32, -100); // Negative value should violate CHECK
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -499,13 +499,13 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping CHECK constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
-            if (!SupportsCheckConstraints(provider))
+            if (!context.Dialect.SupportsCheckConstraints)
             {
                 Output.WriteLine($"Skipping CHECK constraint test for {provider}");
                 return;
@@ -538,7 +538,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                 container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
                 container.AddParameterWithValue("name", DbType.String, "Test");
                 container.AddParameterWithValue("value", DbType.Int32, -100);
-                container.AddParameterWithValue("active", GetBooleanDbType(provider), true);
+                container.AddParameterWithValue("active", context.Dialect.BooleanDbType, true);
                 container.AddParameterWithValue("created", DbType.DateTime, DateTime.UtcNow);
 
                 await container.ExecuteNonQueryAsync();
@@ -557,13 +557,13 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
-            if (provider is SupportedDatabase.DuckDB or SupportedDatabase.CockroachDb)
+            if (context.Dialect.ReadCommittedCompatibleIsolationLevel != System.Data.IsolationLevel.ReadCommitted)
             {
                 Output.WriteLine($"Skipping ReadCommitted transaction test for {provider} (only Serializable isolation is supported)");
                 return;
@@ -607,9 +607,9 @@ public class ConstraintViolationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping constraint violation test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 
@@ -858,37 +858,6 @@ public class ConstraintViolationTests : DatabaseTestBase
                 // Constraint might already exist, ignore
             }
         }
-    }
-
-    private static DbType GetBooleanDbType(SupportedDatabase provider)
-    {
-        return provider == SupportedDatabase.Sqlite ? DbType.Int32 : DbType.Boolean;
-    }
-
-    private static bool SupportsUniqueConstraints(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.PostgreSql or
-            SupportedDatabase.CockroachDb or
-            SupportedDatabase.YugabyteDb or
-            SupportedDatabase.SqlServer or
-            SupportedDatabase.MySql or
-            SupportedDatabase.MariaDb or
-            SupportedDatabase.TiDb or
-            SupportedDatabase.Oracle or
-            SupportedDatabase.Firebird;
-    }
-
-    private static bool SupportsCheckConstraints(SupportedDatabase provider)
-    {
-        // TiDB parses CHECK constraint DDL but does not enforce it at runtime.
-        return provider is SupportedDatabase.PostgreSql or
-            SupportedDatabase.CockroachDb or
-            SupportedDatabase.YugabyteDb or
-            SupportedDatabase.SqlServer or
-            SupportedDatabase.MySql or
-            SupportedDatabase.MariaDb or
-            SupportedDatabase.Oracle or
-            SupportedDatabase.Firebird;
     }
 
     private static DbException ExtractInnerDbException(DatabaseException exception)

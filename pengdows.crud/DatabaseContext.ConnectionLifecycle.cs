@@ -11,7 +11,7 @@
 // - Delegates to IConnectionStrategy for mode-specific behavior:
 //   * Standard - Creates ephemeral connections from pool
 //   * KeepAlive - Maintains sentinel + ephemeral work connections
-//   * SingleWriter - Pinned writer + ephemeral readers
+//   * SingleWriter - Governor-serialized ephemeral writer + ephemeral readers
 //   * SingleConnection - All operations on one connection
 // - Pool governor integration for connection limiting/backpressure.
 // - Session settings application (timeouts, read-only mode).

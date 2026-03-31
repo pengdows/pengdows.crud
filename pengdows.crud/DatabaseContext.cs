@@ -62,7 +62,9 @@ namespace pengdows.crud;
 /// <para>
 /// <strong>Concurrent callers are supported:</strong>
 /// Standard mode: parallel operations using ephemeral connections.
-/// KeepAlive/SingleConnection modes: operations serialize on shared connection lock. SingleWriter uses the governor to serialize writes without a persistent connection.
+/// KeepAlive mode: identical to Standard; additionally keeps one idle read connection open to prevent the DB from unloading.
+/// SingleConnection mode: all operations share one persistent connection and serialize on a shared lock.
+/// SingleWriter uses the governor to serialize writes without a persistent connection.
 /// APIs returning <see cref="wrappers.ITrackedReader"/> hold a connection lease until disposed.
 /// </para>
 /// <para><strong>Lifetime:</strong></para>
@@ -86,7 +88,7 @@ namespace pengdows.crud;
 ///   </item>
 ///   <item>
 ///     <description>
-///     <b>SingleWriter:</b> Standard lifecycle with a governor that allows many readers but only one writer at a time; reads still use ephemeral connections.
+///     <b>SingleWriter:</b> identical to Standard; governor caps writable connections to 1 concurrent writer and 0 writers on read-only connections; writer-starvation-prevention turnstile enabled.
 ///     </description>
 ///   </item>
 ///   <item>

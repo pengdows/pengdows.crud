@@ -5,9 +5,15 @@
 // AI SUMMARY:
 // - Inherits from MySqlDialect with MariaDB-specific overrides.
 // - Key differences from MySQL:
+//   * Read-only session variable: tx_read_only (MariaDB) vs transaction_read_only (MySQL 5.7.20+/8.0+)
+//     MySQL 8.0.3 removed tx_read_only; MariaDB never adopted transaction_read_only.
 //   * No native JSON type (uses LONGTEXT)
 //   * CTEs and window functions in 10.2+ (earlier than MySQL 8.0)
 //   * No INSERT ... AS alias syntax for upserts
+//   * Prepared statements default ON (vs OFF for MySQL)
+//   * OFFSET/FETCH syntax in 10.6+ (MySQL never supported it)
+//   * Version numbering is 10.x era (different from MySQL's simple major versioning);
+//     DetermineStandardCompliance uses MariaDB-specific major/minor thresholds
 // - Uses LAST_INSERT_ID() for returning generated IDs.
 // - Session settings: Inherits ANSI_QUOTES mode from MySqlDialect.
 // - AUTO_INCREMENT for identity columns.
@@ -33,13 +39,23 @@ namespace pengdows.crud.dialects;
 /// <strong>Feature Differences:</strong>
 /// </para>
 /// <list type="bullet">
+/// <item><description>Read-only session variable: uses <c>tx_read_only</c> (MariaDB never adopted MySQL's <c>transaction_read_only</c> alias; MySQL 8.0.3 removed <c>tx_read_only</c>)</description></item>
 /// <item><description>No native JSON type (mapped to LONGTEXT)</description></item>
-/// <item><description>CTEs and window functions available in 10.2+ (vs MySQL 8.0)</description></item>
-/// <item><description>Different upsert alias syntax handling</description></item>
+/// <item><description>CTEs and window functions available in 10.2+ (vs MySQL 8.0+)</description></item>
+/// <item><description>No <c>INSERT ... AS</c> alias syntax for upserts</description></item>
+/// <item><description>Prepared statements enabled by default (vs conservative MySQL default)</description></item>
+/// <item><description>OFFSET/FETCH syntax supported in 10.6+ (MySQL never supported it)</description></item>
+/// <item><description>Version numbering uses 10.x era scheme; <see cref="DetermineStandardCompliance"/> uses MariaDB-specific major/minor thresholds</description></item>
 /// </list>
 /// </remarks>
 internal class MariaDbDialect : MySqlDialect
 {
+    // MariaDB uses tx_read_only (the original MySQL name); transaction_read_only was added
+    // as an alias in MySQL 5.7.20 but MariaDB never adopted it — using it on MariaDB 10.x
+    // raises "Unknown system variable 'transaction_read_only'".
+    private const string MariaDbReadOnlySql = "SET SESSION tx_read_only = 1;";
+    private const string MariaDbReadWriteSql = "SET SESSION tx_read_only = 0;";
+
     internal MariaDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -120,20 +136,30 @@ internal class MariaDbDialect : MySqlDialect
         return SqlStandardLevel.Sql92;
     }
 
+    public override string GetFinalSessionSettings(bool readOnly)
+    {
+        // 1 RTT / 1 Command Optimization: Combine sql_mode and session-persistent read-only intent.
+        // MariaDB uses tx_read_only, so we MUST override the MySqlDialect implementation
+        // that hardcodes transaction_read_only.
+        var baseline = GetBaseSessionSettings();
+        var intent = readOnly ? MariaDbReadOnlySql : MariaDbReadWriteSql;
+
+        return baseline.TrimEnd(';') + "; " + intent;
+    }
+
+    public override string GetReadOnlySessionSettings() => MariaDbReadOnlySql;
+
+    internal override string? GetReadOnlyTransactionResetSql() => MariaDbReadWriteSql;
+
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
-        TryExecuteReadOnlySql(transaction, SetSessionReadOnlySql, "MariaDB");
+        TryExecuteReadOnlySql(transaction, MariaDbReadOnlySql, "MariaDB");
     }
 
     public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default)
     {
-        return TryExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, "MariaDB", cancellationToken);
-    }
-
-    internal override string? GetReadOnlyTransactionResetSql()
-    {
-        return SetSessionReadWriteSql;
+        return TryExecuteReadOnlySqlAsync(transaction, MariaDbReadOnlySql, "MariaDB", cancellationToken);
     }
 
     private bool IsAtLeast(int major, int minor)
