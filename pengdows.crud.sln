@@ -26,6 +26,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.stormgate.Tests", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.opentelemetry", "pengdows.crud.opentelemetry\pengdows.crud.opentelemetry.csproj", "{1A618084-67C3-4FB6-B03C-5A0A4D744BB0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.analyzers", "tools\pengdows.crud.analyzers\pengdows.crud.analyzers.csproj", "{DB0D4533-FDFC-4ECE-867A-56422CED657D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.analyzers.Tests", "tools\pengdows.crud.analyzers.Tests\pengdows.crud.analyzers.Tests.csproj", "{AB996B0B-ABBE-45C8-A53C-11F82D49F840}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -180,6 +184,30 @@ Global
 		{1A618084-67C3-4FB6-B03C-5A0A4D744BB0}.Release|x64.Build.0 = Release|Any CPU
 		{1A618084-67C3-4FB6-B03C-5A0A4D744BB0}.Release|x86.ActiveCfg = Release|Any CPU
 		{1A618084-67C3-4FB6-B03C-5A0A4D744BB0}.Release|x86.Build.0 = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|x64.Build.0 = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Debug|x86.Build.0 = Debug|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|x64.ActiveCfg = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|x64.Build.0 = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|x86.ActiveCfg = Release|Any CPU
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D}.Release|x86.Build.0 = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|x64.Build.0 = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Debug|x86.Build.0 = Debug|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|x64.ActiveCfg = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|x64.Build.0 = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|x86.ActiveCfg = Release|Any CPU
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -187,5 +215,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{85B4A8BB-7883-464F-9330-AF0C3AF30E6B} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{39EA517F-A6A3-4E5A-8B06-D451DF0AA1AD} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{DB0D4533-FDFC-4ECE-867A-56422CED657D} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{AB996B0B-ABBE-45C8-A53C-11F82D49F840} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

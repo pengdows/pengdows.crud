@@ -313,6 +313,9 @@ jobs:
 
       - name: Pack with custom version
         run: |
+          dotnet pack tools/pengdows.crud.analyzers/pengdows.crud.analyzers.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
           dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
@@ -341,6 +344,8 @@ jobs:
           set -euo pipefail
 
           VERSION="${{ steps.version.outputs.version }}"
+          status_analyzers=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/${VERSION}.nupkg")
           status_crud=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/${VERSION}.nupkg")
           status_abstractions=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -351,13 +356,14 @@ jobs:
             "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg")
 
           echo "NuGet status for v$VERSION:"
+          echo "  pengdows.crud.analyzers: $status_analyzers"
           echo "  pengdows.crud: $status_crud"
           echo "  pengdows.crud.abstractions: $status_abstractions"
           echo "  pengdows.crud.fakedb: $status_fakedb"
           echo "  pengdows.stormgate: $status_stormgate"
 
           all_published=true
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" != "200" ]]; then
               all_published=false
               break
@@ -365,7 +371,7 @@ jobs:
           done
 
           any_published=false
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" == "200" ]]; then
               any_published=true
               break
@@ -387,6 +393,10 @@ jobs:
         if: steps.nuget_check.outputs.skip != 'true'
         run: |
           set -euo pipefail
+          dotnet nuget push tools/pengdows.crud.analyzers/bin/Release/pengdows.crud.analyzers.${{ steps.version.outputs.version }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
           dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY" \

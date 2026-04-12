@@ -21,6 +21,12 @@
         <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
     </PropertyGroup>
     <ItemGroup>
+        <PackageReference Include="pengdows.crud.analyzers" Version="2.0.4">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+    <ItemGroup>
         <PackageReference Include="coverlet.collector" Version="6.0.4">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>

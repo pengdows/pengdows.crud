@@ -154,7 +154,7 @@ await gateway.BatchDeleteAsync(new[] { item });
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
 - Audit fields via `[CreatedBy]`/`[CreatedOn]`, `[LastUpdatedBy]`/`[LastUpdatedOn]` attributes
-- SQL dialect abstraction supports multiple databases (SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, CockroachDB)
+- SQL dialect abstraction supports 15 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, TimescaleDB)
 - Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy via context-per-tenant (not query filtering)
 
@@ -716,6 +716,7 @@ MySQL/PostgreSQL suites.
   var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");
   ```
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
+- `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
 - `WrapObjectName` behavior by database: SQL Server `[name]`, PostgreSQL `"name"`, MySQL `` `name` ``, Oracle `"name"`.
 
 ## Commit & Pull Request Guidelines

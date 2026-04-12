@@ -429,4 +429,68 @@ public class TableGatewayBatchAndStreamTests
             }
         });
     }
+
+    // =========================================================================
+    // Round-trip: BatchCreateAsync → LoadListAsync (Issue 3 from TEST_SETUP_ISSUES.md)
+    // These tests verify that batch-written data lands in the correct columns,
+    // not just that the row-count return value is non-negative.
+    // =========================================================================
+
+    [Fact]
+    public async Task BatchCreateAsync_RoundTrip_AllEntitiesPersistedWithCorrectValues()
+    {
+        await using var ctx = MakeSqliteContext();
+        var gw = new TableGateway<BatchEntity, int>(ctx);
+
+        var entities = new[]
+        {
+            new BatchEntity { Id = 1, Name = "alpha", Value = 10 },
+            new BatchEntity { Id = 2, Name = "beta",  Value = 20 },
+            new BatchEntity { Id = 3, Name = "gamma", Value = 30 }
+        };
+
+        var affected = await gw.BatchCreateAsync(entities);
+        Assert.True(affected > 0);
+
+        var sc = gw.BuildBaseRetrieve("e");
+        var retrieved = await gw.LoadListAsync(sc);
+
+        Assert.Equal(3, retrieved.Count);
+
+        var sorted = retrieved.OrderBy(e => e.Id).ToList();
+        Assert.Equal(1, sorted[0].Id);
+        Assert.Equal("alpha", sorted[0].Name);
+        Assert.Equal(10, sorted[0].Value);
+
+        Assert.Equal(2, sorted[1].Id);
+        Assert.Equal("beta", sorted[1].Name);
+        Assert.Equal(20, sorted[1].Value);
+
+        Assert.Equal(3, sorted[2].Id);
+        Assert.Equal("gamma", sorted[2].Name);
+        Assert.Equal(30, sorted[2].Value);
+    }
+
+    [Fact]
+    public async Task BatchCreateAsync_RoundTrip_RetrieveById_ReturnsCorrectEntity()
+    {
+        await using var ctx = MakeSqliteContext();
+        var gw = new TableGateway<BatchEntity, int>(ctx);
+
+        var entities = new[]
+        {
+            new BatchEntity { Id = 11, Name = "one",   Value = 100 },
+            new BatchEntity { Id = 12, Name = "two",   Value = 200 },
+            new BatchEntity { Id = 13, Name = "three", Value = 300 }
+        };
+        await gw.BatchCreateAsync(entities);
+
+        var sc = gw.BuildRetrieve(new[] { 12 }, "e");
+        var result = await gw.LoadSingleAsync(sc);
+
+        Assert.NotNull(result);
+        Assert.Equal(12, result.Id);
+        Assert.Equal("two", result.Name);
+        Assert.Equal(200, result.Value);
+    }
 }

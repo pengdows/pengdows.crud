@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -246,5 +248,136 @@ public class FakeDataStoreTests
 
         Assert.True(reader.Read());
         Assert.False(reader.Read()); // only one null row
+    }
+
+    // ── IN clause ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Select_WithInClause_ReturnsOnlyMatchingRows()
+    {
+        using var conn = MakeConnection();
+
+        using var i1 = conn.CreateCommand();
+        i1.CommandText = "INSERT INTO colors (name) VALUES ('red')";
+        await i1.ExecuteNonQueryAsync();
+
+        using var i2 = conn.CreateCommand();
+        i2.CommandText = "INSERT INTO colors (name) VALUES ('blue')";
+        await i2.ExecuteNonQueryAsync();
+
+        using var i3 = conn.CreateCommand();
+        i3.CommandText = "INSERT INTO colors (name) VALUES ('green')";
+        await i3.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM colors WHERE name IN (@p0, @p1)";
+        var pa = selectCmd.CreateParameter();
+        pa.ParameterName = "@p0";
+        pa.Value = "red";
+        selectCmd.Parameters.Add(pa);
+        var pb = selectCmd.CreateParameter();
+        pb.ParameterName = "@p1";
+        pb.Value = "green";
+        selectCmd.Parameters.Add(pb);
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        var rows = new List<string>();
+        while (reader.Read()) rows.Add(reader["name"]?.ToString() ?? "");
+
+        Assert.Equal(2, rows.Count);
+        Assert.Contains("red", rows);
+        Assert.Contains("green", rows);
+        Assert.DoesNotContain("blue", rows);
+    }
+
+    [Fact]
+    public async Task Select_WithInClause_SingleParam_ReturnsMatchingRow()
+    {
+        using var conn = MakeConnection();
+
+        using var i1 = conn.CreateCommand();
+        i1.CommandText = "INSERT INTO items (name) VALUES ('alpha')";
+        await i1.ExecuteNonQueryAsync();
+
+        using var i2 = conn.CreateCommand();
+        i2.CommandText = "INSERT INTO items (name) VALUES ('beta')";
+        await i2.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM items WHERE name IN (@w0)";
+        var p = selectCmd.CreateParameter();
+        p.ParameterName = "@w0";
+        p.Value = "alpha";
+        selectCmd.Parameters.Add(p);
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal("alpha", reader["name"]?.ToString());
+        Assert.False(reader.Read()); // beta must not appear
+    }
+
+    // ── Comparison operators ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Select_WithGreaterThanOrEqual_FiltersCorrectly()
+    {
+        using var conn = MakeConnection();
+
+        for (var i = 1; i <= 5; i++)
+        {
+            using var ins = conn.CreateCommand();
+            ins.CommandText = $"INSERT INTO nums (val) VALUES ({i})";
+            await ins.ExecuteNonQueryAsync();
+        }
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM nums WHERE val >= 3";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        var rows = new List<object?>();
+        while (reader.Read()) rows.Add(reader["val"]);
+
+        Assert.Equal(3, rows.Count); // 3, 4, 5
+    }
+
+    [Fact]
+    public async Task Select_WithNotEqual_FiltersCorrectly()
+    {
+        using var conn = MakeConnection();
+
+        using var i1 = conn.CreateCommand();
+        i1.CommandText = "INSERT INTO colors (name) VALUES ('red')";
+        await i1.ExecuteNonQueryAsync();
+
+        using var i2 = conn.CreateCommand();
+        i2.CommandText = "INSERT INTO colors (name) VALUES ('blue')";
+        await i2.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM colors WHERE name != 'red'";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal("blue", reader["name"]?.ToString());
+        Assert.False(reader.Read());
+    }
+
+    // ── Unrecognized predicate ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Select_WithUnsupportedPredicate_ThrowsNotSupportedException()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO things (name) VALUES ('x')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        // BETWEEN is not supported; verify it throws rather than silently matching everything
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM things WHERE name BETWEEN 'a' AND 'z'";
+
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => selectCmd.ExecuteReaderAsync());
     }
 }
