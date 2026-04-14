@@ -152,19 +152,19 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
         if (entities.Count == 0)
         {
             return 0;
         }
 
+        var ctx = context ?? _context;
         // Single entity fast path
         if (entities.Count == 1)
         {
-            return await UpdateAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+            return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var containers = BuildBatchUpdate(entities, context);
+        var containers = BuildBatchUpdate(entities, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)
