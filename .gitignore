@@ -17,6 +17,11 @@ riderModule.iml
 *.sln.docstates
 *.snk
 
+# CI-managed state (stored in GitHub repository variables)
+.github/coverage-baseline.txt
+.github/coverage-baseline.stormgate.txt
+.github/coverage-baseline.opentelemetry.txt
+
 # Coverage
 TestResults*/
 coverage-report/
