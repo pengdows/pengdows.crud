@@ -180,12 +180,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return 0;
         }
 
+        var ctx = context ?? _context;
         if (entities.Count == 1)
         {
-            return await UpsertAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+            return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var containers = BuildBatchUpsert(entities, context);
+        var containers = BuildBatchUpsert(entities, ctx);
         var total = 0;
         foreach (var sc in containers)
         {

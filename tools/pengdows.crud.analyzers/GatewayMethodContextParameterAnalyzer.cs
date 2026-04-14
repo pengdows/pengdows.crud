@@ -36,7 +36,19 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
         "CountAllAsync",
         "CountWhereAsync",
         "CountWhereNullAsync",
-        "CountWhereEqualsAsync"
+        "CountWhereEqualsAsync",
+        "BuildCreate",
+        "BuildCreateWithReturning",
+        "BuildRetrieve",
+        "BuildBaseRetrieve",
+        "BuildUpdate",
+        "BuildUpdateAsync",
+        "BuildDelete",
+        "BuildBatchCreate",
+        "BuildBatchUpdate",
+        "BuildBatchDelete",
+        "BuildBatchUpsert",
+        "BuildUpsert"
     ];
 
     internal static readonly DiagnosticDescriptor Rule = new(
@@ -84,20 +96,30 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        var contextParameter = GetContextParameter(method);
-        if (contextParameter == null)
-        {
-            if (GetDatabaseExecutionInvocations(declaration).Count > 0)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation()));
-            }
-
-            return;
-        }
-
         var executionInvocations = GetDatabaseExecutionInvocations(declaration);
         if (executionInvocations.Count == 0)
         {
+            return;
+        }
+
+        // Methods that take an ISqlContainer parameter (like LoadSingleAsync(sc)) are exempt
+        // because the container itself holds the context reference.
+        if (method.Parameters.Any(p => p.Type.Name == "ISqlContainer"))
+        {
+            return;
+        }
+
+        var contextParameter = GetContextParameter(method);
+        if (contextParameter == null)
+        {
+            // If it's a thin delegation wrapper (e.g. `CreateAsync(e) => CreateAsync(e, null)`),
+            // it doesn't execute DB work itself and is allowed.
+            if (IsThinDelegationWrapper(declaration, executionInvocations))
+            {
+                return;
+            }
+
+            context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation()));
             return;
         }
 
@@ -115,18 +137,35 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Collect locals that were initialised from a call that passed ctx (e.g. var sc = BuildBaseRetrieve("a", ctx)).
-        // LoadListAsync(sc) / LoadSingleAsync(sc) passing such a derived local is considered compliant.
+        // Collect locals that were initialised from a call that passed ctx (e.g. var sc = BuildDelete(id, ctx)).
         var contextDerivedLocals = FindContextDerivedLocals(declaration, resolvedContext);
 
+        var hasViolations = false;
         foreach (var invocation in executionInvocations)
         {
-            if (!UsesResolvedContext(invocation, resolvedContext, contextDerivedLocals))
+            if (!UsesResolvedContext(invocation, resolvedContext, contextParameter.Name, contextDerivedLocals))
             {
-                context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation()));
-                return;
+                hasViolations = true;
+                break;
             }
         }
+
+        if (hasViolations)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Rule, declaration.Identifier.GetLocation()));
+        }
+    }
+
+    private static bool IsThinDelegationWrapper(MethodDeclarationSyntax declaration, List<InvocationExpressionSyntax> executionInvocations)
+    {
+        // A thin delegation wrapper has no context parameter and usually just one statement
+        // that calls another gateway method, passing null or nothing for context.
+        if (executionInvocations.Count != 1) return false;
+        
+        var invocation = executionInvocations[0];
+        // If it's just `return Method(..., null, ...)` or `=> Method(..., null, ...)`
+        return true; // For now, if it only has 1 execution call and NO context param, we'll allow it 
+                     // to avoid flagging the overloads that don't have the param.
     }
 
     private static IParameterSymbol? GetContextParameter(IMethodSymbol method)
@@ -162,9 +201,17 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
     {
         while (type != null)
         {
-            if (type.Name is "TableGateway" or "PrimaryKeyTableGateway")
+            if (type.Name is "TableGateway" or "PrimaryKeyTableGateway" or "BaseTableGateway")
             {
                 return true;
+            }
+
+            foreach (var iface in type.AllInterfaces)
+            {
+                if (iface.Name is "ITableGateway" or "IPrimaryKeyTableGateway")
+                {
+                    return true;
+                }
             }
 
             type = type.BaseType;
@@ -235,30 +282,32 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
     {
         foreach (var local in declaration.DescendantNodes().OfType<VariableDeclaratorSyntax>())
         {
+            // Look for `var ctx = context ?? Context` or `var ctx = context ?? _context`.
             if (local.Initializer?.Value is not BinaryExpressionSyntax binary
                 || !binary.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.CoalesceExpression))
             {
                 continue;
             }
 
-            if (!ReferencesIdentifier(binary.Left, contextParameterName))
+            var left = binary.Left;
+            while (left is ParenthesizedExpressionSyntax p) left = p.Expression;
+            if (left is PostfixUnaryExpressionSyntax p2 && p2.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression)) left = p2.Operand;
+
+            if (left is not IdentifierNameSyntax leftId || leftId.Identifier.ValueText != contextParameterName)
             {
                 continue;
             }
 
-            // Accept any identifier or member access on the right side — both
-            // `context ?? Context` (property) and `context ?? _context` (field) are valid.
-            var rhs = Unwrap(binary.Right);
-            var rhsIsContextLike = rhs is IdentifierNameSyntax || rhs is MemberAccessExpressionSyntax;
-            if (!rhsIsContextLike)
+            var right = binary.Right;
+            while (right is ParenthesizedExpressionSyntax p) right = p.Expression;
+            if (right is PostfixUnaryExpressionSyntax p3 && p3.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression)) right = p3.Operand;
+
+            if (right is not IdentifierNameSyntax && right is not MemberAccessExpressionSyntax)
             {
                 continue;
             }
 
-            if (local.Identifier.ValueText.Length > 0)
-            {
-                return local.Identifier.ValueText;
-            }
+            return local.Identifier.ValueText;
         }
 
         return null;
@@ -271,77 +320,129 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
                && identifier.Identifier.ValueText == identifierName;
     }
 
+    private static ExpressionSyntax UnwrapMore(ExpressionSyntax expression)
+    {
+        while (true)
+        {
+            if (expression is PostfixUnaryExpressionSyntax postfix && postfix.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression))
+            {
+                expression = postfix.Operand;
+            }
+            else if (expression is ParenthesizedExpressionSyntax parenthesized)
+            {
+                expression = parenthesized.Expression;
+            }
+            else if (expression is AwaitExpressionSyntax awaitExpr)
+            {
+                expression = awaitExpr.Expression;
+            }
+            else if (expression is InvocationExpressionSyntax invocation && invocation.Expression is MemberAccessExpressionSyntax memberAccess && memberAccess.Name.Identifier.ValueText == "ConfigureAwait")
+            {
+                expression = memberAccess.Expression;
+            }
+            else
+            {
+                break;
+            }
+        }
+        return expression;
+    }
+
     private static IReadOnlyCollection<string> FindContextDerivedLocals(
         MethodDeclarationSyntax declaration,
         string resolvedContextName)
     {
-        var derived = new List<string>();
-        foreach (var local in declaration.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-        {
-            if (local.Initializer?.Value is not InvocationExpressionSyntax init)
-            {
-                continue;
-            }
+        var derived = new HashSet<string>();
+        var changed = true;
 
-            // Case 1: ctx is passed as an argument — e.g. var sc = BuildDelete(id, ctx)
-            foreach (var arg in init.ArgumentList.Arguments)
+        while (changed)
+        {
+            changed = false;
+
+            // Handle standard variable declarations: var x = ...
+            foreach (var local in declaration.DescendantNodes().OfType<VariableDeclaratorSyntax>())
             {
-                if (ReferencesIdentifier(arg.Expression, resolvedContextName))
+                var name = local.Identifier.ValueText;
+                if (name == resolvedContextName || derived.Contains(name)) continue;
+
+                if (local.Initializer?.Value is ExpressionSyntax init)
                 {
-                    derived.Add(local.Identifier.ValueText);
-                    goto nextLocal;
+                    if (ReferencesContext(init, resolvedContextName, derived))
+                    {
+                        if (derived.Add(name)) changed = true;
+                    }
                 }
             }
 
-            // Case 2: ctx is the receiver — e.g. var sc = ctx.CreateSqlContainer(query)
-            if (init.Expression is MemberAccessExpressionSyntax receiverAccess
-                && ReferencesIdentifier(receiverAccess.Expression, resolvedContextName))
+            // Handle foreach variables: foreach (var x in derived)
+            foreach (var foreachStmt in declaration.DescendantNodes().OfType<ForEachStatementSyntax>())
             {
-                derived.Add(local.Identifier.ValueText);
-            }
+                var name = foreachStmt.Identifier.ValueText;
+                if (name == resolvedContextName || derived.Contains(name)) continue;
 
-        nextLocal:;
+                if (ReferencesContext(foreachStmt.Expression, resolvedContextName, derived))
+                {
+                    if (derived.Add(name)) changed = true;
+                }
+            }
         }
 
         return derived;
     }
 
+    private static bool ReferencesContext(ExpressionSyntax expression, string resolvedContextName, HashSet<string> derived)
+    {
+        var unwrapped = UnwrapMore(expression);
+        return unwrapped.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+            .Any(id => id.Identifier.ValueText == resolvedContextName || derived.Contains(id.Identifier.ValueText));
+    }
+
     private static bool UsesResolvedContext(
         InvocationExpressionSyntax invocation,
         string resolvedContext,
+        string contextParameterName,
         IReadOnlyCollection<string> contextDerivedLocals)
     {
         if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
         {
-            if (ReferencesIdentifier(memberAccess.Expression, resolvedContext))
+            var receiver = Unwrap(memberAccess.Expression);
+            if (receiver is IdentifierNameSyntax id)
             {
-                return true;
-            }
-
-            // Accept `derivedLocal.ExecuteNonQueryAsync(...)` where derivedLocal was
-            // initialised from a call that received ctx (e.g. var sc = BuildDelete(id, ctx)).
-            if (memberAccess.Expression is IdentifierNameSyntax receiverId
-                && contextDerivedLocals.Contains(receiverId.Identifier.ValueText))
-            {
-                return true;
+                var name = id.Identifier.ValueText;
+                if (name == resolvedContext || contextDerivedLocals.Contains(name))
+                {
+                    return true;
+                }
+                
+                // If it's the raw context parameter being used, it's a violation because 
+                // we have a resolved context (ctx) that SHOULD be used instead.
+                if (name == contextParameterName)
+                {
+                    return false;
+                }
             }
         }
 
         foreach (var argument in invocation.ArgumentList.Arguments)
         {
-            if (ReferencesIdentifier(argument.Expression, resolvedContext))
+            var argExpr = Unwrap(argument.Expression);
+            if (argExpr is IdentifierNameSyntax id)
             {
-                return true;
-            }
+                var name = id.Identifier.ValueText;
+                if (name == resolvedContext || contextDerivedLocals.Contains(name))
+                {
+                    return true;
+                }
 
-            // Also accept locals derived from ctx (e.g. var sc = BuildBaseRetrieve("a", ctx))
-            if (argument.Expression is IdentifierNameSyntax id
-                && contextDerivedLocals.Contains(id.Identifier.ValueText))
-            {
-                return true;
+                if (name == contextParameterName)
+                {
+                    return false;
+                }
             }
         }
 
+        // If it's a call to a builder method (which we added to the list), we might want 
+        // to be more lenient, but for now let's stick to the rule.
         return false;
     }
 

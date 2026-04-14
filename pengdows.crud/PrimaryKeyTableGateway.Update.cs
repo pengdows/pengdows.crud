@@ -46,7 +46,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
             throw new ArgumentNullException(nameof(objectToUpdate));
         }
 
-        await using var sc = await BuildUpdateAsync(objectToUpdate, context, cancellationToken).ConfigureAwait(false);
+        var ctx = context ?? _context;
+        await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
@@ -54,8 +55,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
     public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
+        var ctx = context ?? _context;
         await using var sc =
-            await BuildUpdateAsync(objectToUpdate, loadOriginal, context, cancellationToken).ConfigureAwait(false);
+            await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
         return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
     }
 
@@ -114,12 +116,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return 0;
         }
 
+        var ctx = context ?? _context;
         if (entities.Count == 1)
         {
-            return await UpdateAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+            return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var containers = BuildBatchUpdate(entities, context);
+        var containers = BuildBatchUpdate(entities, ctx);
         var total = 0;
         foreach (var sc in containers)
         {
