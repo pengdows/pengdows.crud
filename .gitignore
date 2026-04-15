@@ -52,6 +52,11 @@ output.txt
 coverage-*.xml
 coverage-*.json
 artifacts/
+!artifacts/
+artifacts/*
+!artifacts/local-packages/
+artifacts/local-packages/*
+!artifacts/local-packages/.gitkeep
 
 # Debug/scratch files
 debug_*.cs
