@@ -583,7 +583,9 @@ public class PengdowsMetricsObserverTests
         listener.InstrumentPublished = (inst, _) =>
         {
             if (inst.Meter.Name == meterName && inst.Name == instrumentName)
+            {
                 seen = true;
+            }
         };
         listener.Start();
 
@@ -622,10 +624,19 @@ public class PengdowsMetricsObserverTests
 
         var count = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<double>((inst, _, _, _) =>
         {
-            if (inst.Name == gaugeName) Interlocked.Increment(ref count);
+            if (inst.Name == gaugeName)
+            {
+                Interlocked.Increment(ref count);
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();

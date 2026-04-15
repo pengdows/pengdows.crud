@@ -282,7 +282,10 @@ public class FakeDataStoreTests
         using var reader = await selectCmd.ExecuteReaderAsync();
 
         var rows = new List<string>();
-        while (reader.Read()) rows.Add(reader["name"]?.ToString() ?? "");
+        while (reader.Read())
+        {
+            rows.Add(reader["name"]?.ToString() ?? "");
+        }
 
         Assert.Equal(2, rows.Count);
         Assert.Contains("red", rows);
@@ -326,7 +329,11 @@ public class FakeDataStoreTests
         for (var i = 1; i <= 5; i++)
         {
             using var ins = conn.CreateCommand();
-            ins.CommandText = $"INSERT INTO nums (val) VALUES ({i})";
+            ins.CommandText = "INSERT INTO nums (val) VALUES (@val)";
+            var p = ins.CreateParameter();
+            p.ParameterName = "@val";
+            p.Value = i;
+            ins.Parameters.Add(p);
             await ins.ExecuteNonQueryAsync();
         }
 
@@ -335,7 +342,10 @@ public class FakeDataStoreTests
         using var reader = await selectCmd.ExecuteReaderAsync();
 
         var rows = new List<object?>();
-        while (reader.Read()) rows.Add(reader["val"]);
+        while (reader.Read())
+        {
+            rows.Add(reader["val"]);
+        }
 
         Assert.Equal(3, rows.Count); // 3, 4, 5
     }

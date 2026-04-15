@@ -245,11 +245,26 @@ public class FakeDataStore
                 // Track last inserted ID for any numeric Id column
                 if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] != null)
                 {
-                    try { _lastInsertId = Convert.ToInt32(values[i]); } catch { /* non-numeric id */ }
+                    try
+                    {
+                        _lastInsertId = Convert.ToInt32(values[i]);
+                    }
+                    catch (FormatException)
+                    {
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    catch (OverflowException)
+                    {
+                    }
                 }
             }
 
-            lock (_lockObject) { _tables[table].Add(rowData); }
+            lock (_lockObject)
+            {
+                _tables[table].Add(rowData);
+            }
             rowsInserted++;
         }
 

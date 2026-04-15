@@ -187,20 +187,53 @@ public class HydrationHotPathBenchmarks : IDisposable
 
     private static string BuildSql(int rowCount)
     {
-        return $"""
-                SELECT
-                    id,
-                    name,
-                    email,
-                    age,
-                    salary,
-                    is_active AS IsActive,
-                    created_at AS CreatedAt,
-                    score
-                FROM hydration_benchmark
-                ORDER BY id
-                LIMIT {rowCount}
-                """;
+        return rowCount switch
+        {
+            100 => """
+                   SELECT
+                       id,
+                       name,
+                       email,
+                       age,
+                       salary,
+                       is_active AS IsActive,
+                       created_at AS CreatedAt,
+                       score
+                   FROM hydration_benchmark
+                   ORDER BY id
+                   LIMIT 100
+                   """,
+            1000 => """
+                    SELECT
+                        id,
+                        name,
+                        email,
+                        age,
+                        salary,
+                        is_active AS IsActive,
+                        created_at AS CreatedAt,
+                        score
+                    FROM hydration_benchmark
+                    ORDER BY id
+                    LIMIT 1000
+                    """,
+            5000 => """
+                    SELECT
+                        id,
+                        name,
+                        email,
+                        age,
+                        salary,
+                        is_active AS IsActive,
+                        created_at AS CreatedAt,
+                        score
+                    FROM hydration_benchmark
+                    ORDER BY id
+                    LIMIT 5000
+                    """,
+            _ => throw new ArgumentOutOfRangeException(nameof(rowCount), rowCount,
+                "Unsupported benchmark row count.")
+        };
     }
 
     [Table("hydration_benchmark")]

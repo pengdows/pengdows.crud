@@ -110,12 +110,16 @@ public sealed class DatabaseContextSingletonAnalyzer : DiagnosticAnalyzer
         // Strip generic type arguments: "ITableGateway<Provider, Guid>" → "ITableGateway"
         var angleBracket = typeName.IndexOf('<');
         if (angleBracket >= 0)
+        {
             typeName = typeName.Substring(0, angleBracket).TrimEnd();
+        }
 
         // Strip namespace prefix: "pengdows.crud.TableGateway" → "TableGateway"
         var dot = typeName.LastIndexOf('.');
         if (dot >= 0)
+        {
             typeName = typeName.Substring(dot + 1);
+        }
 
         return typeName;
     }
