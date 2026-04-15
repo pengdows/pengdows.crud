@@ -158,14 +158,13 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
 
     private static bool IsThinDelegationWrapper(MethodDeclarationSyntax declaration, List<InvocationExpressionSyntax> executionInvocations)
     {
-        // A thin delegation wrapper has no context parameter and usually just one statement
-        // that calls another gateway method, passing null or nothing for context.
+        // A thin delegation wrapper is a no-context overload that delegates to itself:
+        // e.g. `public ValueTask<bool> CreateAsync(TEntity entity) => CreateAsync(entity, null)`
+        // Calling a *different* execution method is real DB work and must be flagged.
         if (executionInvocations.Count != 1) return false;
-        
-        var invocation = executionInvocations[0];
-        // If it's just `return Method(..., null, ...)` or `=> Method(..., null, ...)`
-        return true; // For now, if it only has 1 execution call and NO context param, we'll allow it 
-                     // to avoid flagging the overloads that don't have the param.
+
+        var invokedName = GetInvokedMethodName(executionInvocations[0]);
+        return invokedName == declaration.Identifier.ValueText;
     }
 
     private static IParameterSymbol? GetContextParameter(IMethodSymbol method)
