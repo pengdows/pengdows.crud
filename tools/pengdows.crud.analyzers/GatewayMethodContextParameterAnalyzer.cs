@@ -161,7 +161,10 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
         // A thin delegation wrapper is a no-context overload that delegates to itself:
         // e.g. `public ValueTask<bool> CreateAsync(TEntity entity) => CreateAsync(entity, null)`
         // Calling a *different* execution method is real DB work and must be flagged.
-        if (executionInvocations.Count != 1) return false;
+        if (executionInvocations.Count != 1)
+        {
+            return false;
+        }
 
         var invokedName = GetInvokedMethodName(executionInvocations[0]);
         return invokedName == declaration.Identifier.ValueText;
@@ -290,7 +293,10 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
 
             var left = binary.Left;
             while (left is ParenthesizedExpressionSyntax p) left = p.Expression;
-            if (left is PostfixUnaryExpressionSyntax p2 && p2.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression)) left = p2.Operand;
+            if (left is PostfixUnaryExpressionSyntax p2 && p2.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression))
+            {
+                left = p2.Operand;
+            }
 
             if (left is not IdentifierNameSyntax leftId || leftId.Identifier.ValueText != contextParameterName)
             {
@@ -299,7 +305,10 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
 
             var right = binary.Right;
             while (right is ParenthesizedExpressionSyntax p) right = p.Expression;
-            if (right is PostfixUnaryExpressionSyntax p3 && p3.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression)) right = p3.Operand;
+            if (right is PostfixUnaryExpressionSyntax p3 && p3.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression))
+            {
+                right = p3.Operand;
+            }
 
             if (right is not IdentifierNameSyntax && right is not MemberAccessExpressionSyntax)
             {
@@ -362,13 +371,19 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             foreach (var local in declaration.DescendantNodes().OfType<VariableDeclaratorSyntax>())
             {
                 var name = local.Identifier.ValueText;
-                if (name == resolvedContextName || derived.Contains(name)) continue;
+                if (name == resolvedContextName || derived.Contains(name))
+                {
+                    continue;
+                }
 
                 if (local.Initializer?.Value is ExpressionSyntax init)
                 {
                     if (ReferencesContext(init, resolvedContextName, derived))
                     {
-                        if (derived.Add(name)) changed = true;
+                        if (derived.Add(name))
+                        {
+                            changed = true;
+                        }
                     }
                 }
             }
@@ -377,11 +392,17 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             foreach (var foreachStmt in declaration.DescendantNodes().OfType<ForEachStatementSyntax>())
             {
                 var name = foreachStmt.Identifier.ValueText;
-                if (name == resolvedContextName || derived.Contains(name)) continue;
+                if (name == resolvedContextName || derived.Contains(name))
+                {
+                    continue;
+                }
 
                 if (ReferencesContext(foreachStmt.Expression, resolvedContextName, derived))
                 {
-                    if (derived.Add(name)) changed = true;
+                    if (derived.Add(name))
+                    {
+                        changed = true;
+                    }
                 }
             }
         }
