@@ -141,12 +141,17 @@ public class PengdowsMetricsObserverTests
         var listener = new MeterListener();
         listener.InstrumentPublished = (inst, l) =>
         {
-            if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst);
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
         };
         listener.SetMeasurementEventCallback<int>((inst, _, tags, _) =>
         {
             if (inst.Name == "pengdows.db.client.connections.current")
+            {
                 seenDbNames.Add(GetTagValue(tags, "db.name") ?? "");
+            }
         });
         listener.Start();
         return listener;
@@ -224,11 +229,19 @@ public class PengdowsMetricsObserverTests
 
         long deltaAfterUntrack = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, val, tags, _) =>
         {
             if (inst.Name == "pengdows.db.client.commands.executed")
+            {
                 Interlocked.Add(ref deltaAfterUntrack, val);
+            }
         });
         listener.Start();
 
@@ -310,7 +323,10 @@ public class PengdowsMetricsObserverTests
         using var listener = new MeterListener();
         listener.InstrumentPublished = (inst, _) =>
         {
-            if (inst.Meter.Name == "pengdows.crud") seen = inst.Meter.Version;
+            if (inst.Meter.Name == "pengdows.crud")
+            {
+                seen = inst.Meter.Version;
+            }
         };
         listener.Start();
 
@@ -429,7 +445,13 @@ public class PengdowsMetricsObserverTests
         long totalDelta = 0;
         var anySeen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, val, _, _) =>
         {
             if (inst.Name == "pengdows.db.client.commands.executed")
@@ -465,11 +487,19 @@ public class PengdowsMetricsObserverTests
 
         var poolLabels = new List<string?>();
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<int>((inst, _, tags, _) =>
         {
             if (inst.Name == "pengdows.db.client.pool.slots.in_use")
+            {
                 poolLabels.Add(GetTagValue(tags, "pool.label"));
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();
@@ -492,11 +522,19 @@ public class PengdowsMetricsObserverTests
 
         var measuredCount = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<int>((inst, _, _, _) =>
         {
             if (inst.Name == "pengdows.db.client.pool.slots.queued")
+            {
                 Interlocked.Increment(ref measuredCount);
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();
@@ -517,11 +555,19 @@ public class PengdowsMetricsObserverTests
 
         var measuredCount = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<int>((inst, _, _, _) =>
         {
             if (inst.Name == "pengdows.db.client.pool.slots.in_use")
+            {
                 Interlocked.Increment(ref measuredCount);
+            }
         });
         listener.Start();
 
@@ -661,10 +707,19 @@ public class PengdowsMetricsObserverTests
 
         var count = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<int>((inst, _, _, _) =>
         {
-            if (inst.Name == gaugeName) Interlocked.Increment(ref count);
+            if (inst.Name == gaugeName)
+            {
+                Interlocked.Increment(ref count);
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();
@@ -684,10 +739,19 @@ public class PengdowsMetricsObserverTests
 
         var count = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, _, _, _) =>
         {
-            if (inst.Name == "pengdows.db.client.statements.cached") Interlocked.Increment(ref count);
+            if (inst.Name == "pengdows.db.client.statements.cached")
+            {
+                Interlocked.Increment(ref count);
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();
@@ -711,10 +775,19 @@ public class PengdowsMetricsObserverTests
 
         var count = 0;
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, _, _, _) =>
         {
-            if (inst.Name == counterName) Interlocked.Increment(ref count);
+            if (inst.Name == counterName)
+            {
+                Interlocked.Increment(ref count);
+            }
         });
         listener.Start();
         listener.RecordObservableInstruments();
@@ -735,13 +808,24 @@ public class PengdowsMetricsObserverTests
         long totalCommitted = 0;
         var commandSeen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, val, _, _) =>
         {
             if (inst.Name == "pengdows.db.client.transactions.committed")
+            {
                 Interlocked.Add(ref totalCommitted, val);
+            }
+
             if (inst.Name == "pengdows.db.client.commands.executed")
+            {
                 commandSeen.TrySetResult(true);
+            }
         });
         listener.Start();
 
@@ -774,13 +858,24 @@ public class PengdowsMetricsObserverTests
         long totalRolledBack = 0;
         var commandSeen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var listener = new MeterListener();
-        listener.InstrumentPublished = (inst, l) => { if (inst.Meter.Name == meterName) l.EnableMeasurementEvents(inst); };
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
         listener.SetMeasurementEventCallback<long>((inst, val, _, _) =>
         {
             if (inst.Name == "pengdows.db.client.transactions.rolled_back")
+            {
                 Interlocked.Add(ref totalRolledBack, val);
+            }
+
             if (inst.Name == "pengdows.db.client.commands.executed")
+            {
                 commandSeen.TrySetResult(true);
+            }
         });
         listener.Start();
 

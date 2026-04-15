@@ -126,6 +126,33 @@ internal static class BenchmarkCorrectnessArtifacts
         }
     }
 
+    public static int CountFailures(string summaryTitle, string parameterKey, string scenario, string frameworkName)
+    {
+        var path = GetPath(ExtractBenchmarkClassName(summaryTitle));
+        if (!File.Exists(path))
+            return 0;
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var payload = JsonSerializer.Deserialize<CorrectnessArtifact>(json, SerializerOptions);
+            if (payload?.Issues == null)
+                return 0;
+
+            var normalizedParam = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
+            return payload.Issues
+                .Where(issue =>
+                    string.Equals(string.IsNullOrWhiteSpace(issue.ParameterKey) ? "*" : issue.ParameterKey, normalizedParam, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(issue.Scenario, scenario, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(issue.Framework, frameworkName, StringComparison.OrdinalIgnoreCase))
+                .Sum(issue => issue.Count);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     private static string ExtractBenchmarkClassName(string summaryTitle)
     {
         var titleWithoutTimestamp = summaryTitle;

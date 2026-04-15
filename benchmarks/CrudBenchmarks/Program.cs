@@ -95,6 +95,7 @@ public class Program
             AddColumnProvider(DefaultColumnProviders.Instance);
             AddColumn(StatisticColumn.P95);
             AddColumn(new PercentileColumn("P99", 99));
+            AddColumn(new CorrectnessColumn());
             AddJob(Job.Default
                 .WithToolchain(InProcessNoEmitToolchain.Instance)
                 .WithId("InProcess"));
@@ -110,6 +111,7 @@ public class Program
             AddColumnProvider(DefaultColumnProviders.Instance);
             AddColumn(StatisticColumn.P95);
             AddColumn(new PercentileColumn("P99", 99));
+            AddColumn(new CorrectnessColumn());
             AddExporter(MarkdownExporter.GitHub);
             AddExporter(CsvExporter.Default);
             AddExporter(HtmlExporter.Default);
@@ -163,6 +165,63 @@ public class Program
             else
                 divisor = 1.0;
             return (nanoseconds / divisor).ToString("N2");
+        }
+
+        public override string ToString() => ColumnName;
+    }
+
+    private sealed class CorrectnessColumn : IColumn
+    {
+        public string Id => "Correctness.Failures";
+        public string ColumnName => "Fails";
+        public bool IsDefault(Summary summary, BenchmarkCase benchmarkCase) => false;
+        public bool IsAvailable(Summary summary) => true;
+        public bool AlwaysShow => true;
+        public ColumnCategory Category => ColumnCategory.Custom;
+        public int PriorityInCategory => 0;
+        public bool IsNumeric => false;
+        public UnitType UnitType => UnitType.Dimensionless;
+        public string Legend => "Correctness failures recorded for this benchmark (0 = all operations succeeded)";
+
+        public string GetValue(Summary summary, BenchmarkCase benchmarkCase) =>
+            GetValue(summary, benchmarkCase, SummaryStyle.Default);
+
+        public string GetValue(Summary summary, BenchmarkCase benchmarkCase, SummaryStyle style)
+        {
+            var methodName = benchmarkCase.Descriptor.WorkloadMethod.Name;
+            string? framework = null;
+            string? scenario = null;
+
+            if (methodName.EndsWith("_Pengdows", StringComparison.Ordinal))
+            {
+                framework = "Pengdows";
+                scenario = methodName[..^"_Pengdows".Length];
+            }
+            else if (methodName.EndsWith("_Dapper", StringComparison.Ordinal))
+            {
+                framework = "Dapper";
+                scenario = methodName[..^"_Dapper".Length];
+            }
+            else if (methodName.EndsWith("_EntityFramework", StringComparison.Ordinal))
+            {
+                framework = "EntityFramework";
+                scenario = methodName[..^"_EntityFramework".Length];
+            }
+
+            if (framework == null || scenario == null)
+                return "-";
+
+            var displayInfo = benchmarkCase.DisplayInfo;
+            var start = displayInfo.IndexOf('[');
+            var end = displayInfo.LastIndexOf(']');
+            var paramKey = (start >= 0 && end > start)
+                ? displayInfo.Substring(start + 1, end - start - 1).Trim()
+                : "No parameters";
+
+            var count = BenchmarkCorrectnessArtifacts.CountFailures(
+                summary.Title, paramKey, scenario, framework);
+
+            return count.ToString();
         }
 
         public override string ToString() => ColumnName;

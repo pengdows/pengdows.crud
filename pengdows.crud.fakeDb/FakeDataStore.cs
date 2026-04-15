@@ -191,7 +191,10 @@ public class FakeDataStore
                     ["Id"] = nextId,
                     ["Data"] = simpleMatch.Groups[2].Value.Trim()
                 };
-                lock (_lockObject) { _tables[tableName].Add(row); }
+                lock (_lockObject)
+                {
+                    _tables[tableName].Add(row);
+                }
                 return 1;
             }
 
@@ -251,12 +254,15 @@ public class FakeDataStore
                     }
                     catch (FormatException)
                     {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
                     }
                     catch (InvalidCastException)
                     {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
                     }
                     catch (OverflowException)
                     {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
                     }
                 }
             }
