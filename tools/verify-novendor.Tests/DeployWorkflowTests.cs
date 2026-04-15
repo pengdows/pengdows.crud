@@ -31,9 +31,10 @@ public class DeployWorkflowTests
 
         Assert.Contains("-targetdir:\"coverage-report-stormgate\"", workflow, StringComparison.Ordinal);
         Assert.Contains("-assemblyfilters:\"+pengdows.stormgate;-pengdows.stormgate.Tests\"", workflow, StringComparison.Ordinal);
-        Assert.Contains(".github/coverage-baseline.stormgate.txt", workflow, StringComparison.Ordinal);
+        Assert.Contains("baseline=\"${{ vars.COVERAGE_BASELINE_STORMGATE }}\"", workflow, StringComparison.Ordinal);
         Assert.Contains("stormgate_coverage: ${{ steps.stormgate_coverage.outputs.coverage }}", workflow, StringComparison.Ordinal);
-        Assert.Contains("new_stormgate_coverage=\"${{ needs.build-and-test.outputs.stormgate_coverage }}\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("ratchet COVERAGE_BASELINE_STORMGATE \\", workflow, StringComparison.Ordinal);
+        Assert.Contains("\"${{ needs.build-and-test.outputs.stormgate_coverage }}\" \\", workflow, StringComparison.Ordinal);
     }
 
     [Fact]
