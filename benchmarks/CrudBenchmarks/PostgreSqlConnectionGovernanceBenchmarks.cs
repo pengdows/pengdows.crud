@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using Dapper;
 using DotNet.Testcontainers.Builders;
@@ -36,6 +39,11 @@ namespace CrudBenchmarks;
 [SimpleJob(warmupCount: 1, iterationCount: 3, invocationCount: 5)]
 public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 {
+    private const string FrameworkDapper = "Dapper";
+    private const string FrameworkStormGate = "StormGate";
+    private const string FrameworkEntityFramework = "EntityFramework";
+    private const string ScenarioUncontrolled = "Uncontrolled";
+    private const string ScenarioGoverned = "Governed";
     private const int PgMaxConnections = 25;   // deliberately low — below default Npgsql pool max
     private const int StormGatePermits = 20;   // well under server limit; tasks queue, not crash
     private const int Parallelism = 100;       // 4× the server limit — enough to saturate it
@@ -57,6 +65,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private DbContextOptions<GovEfDbContext> _efOptions = null!;
 
     private string _querySql = null!;
+    private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
+    private readonly ConcurrentBag<long> _stormGateLatencyTicks = new();
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -105,11 +115,15 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task Dapper_Uncontrolled()
     {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             await using var conn = await _dapperDataSource.OpenConnectionAsync();
-            await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
-        });
+            var item = await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioUncontrolled, FrameworkDapper, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkDapper, $"Exception: {ex.GetType().Name}"));
     }
 
     // ── Dapper + StormGate ────────────────────────────────────────────────────
@@ -120,11 +134,18 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [Benchmark(Baseline = true)]
     public async Task Dapper_StormGate()
     {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
+            var stopwatch = Stopwatch.StartNew();
             await using var conn = await _stormGate.OpenAsync();
-            await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
-        });
+            var item = await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
+            stopwatch.Stop();
+            _stormGateLatencyTicks.Add(stopwatch.ElapsedTicks);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkStormGate, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGoverned, FrameworkStormGate, $"Exception: {ex.GetType().Name}"));
     }
 
     // ── Uncontrolled EF Core ──────────────────────────────────────────────────
@@ -135,11 +156,15 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [Benchmark]
     public async Task EF_Uncontrolled()
     {
-        await BenchmarkConcurrency.RunConcurrent(OperationsPerRun, Parallelism, async () =>
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             await using var ctx = new GovEfDbContext(_efOptions);
-            await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
-        });
+            var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
+            if (item == null)
+            {
+                MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}"));
     }
 
     // ── Setup helpers ─────────────────────────────────────────────────────────
@@ -177,6 +202,21 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        BenchmarkCorrectnessArtifacts.Write(nameof(PostgreSqlConnectionGovernanceBenchmarks),
+            _correctnessIssues
+                .OrderBy(pair => pair.Key.ParameterKey, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Scenario, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Framework, StringComparer.Ordinal)
+                .ThenBy(pair => pair.Key.Reason, StringComparer.Ordinal)
+                .Select(pair => new CorrectnessIssue(
+                    pair.Key.ParameterKey == "*" ? null : pair.Key.ParameterKey,
+                    pair.Key.Scenario,
+                    pair.Key.Framework,
+                    pair.Key.Reason,
+                    pair.Value))
+                .ToArray());
+        WriteLatencySidecar();
+
         _stormGate.Dispose();
         await _dapperDataSource.DisposeAsync();
 
@@ -188,6 +228,73 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() => await GlobalCleanup();
+
+    private void MarkInvalid(string scenario, string framework, string reason)
+    {
+        var key = new CorrectnessIssueKey("*", scenario, framework, reason);
+        _correctnessIssues.AddOrUpdate(key, 1, static (_, current) => current + 1);
+    }
+
+    private void WriteLatencySidecar()
+    {
+        var ticks = _stormGateLatencyTicks.ToArray();
+        Array.Sort(ticks);
+
+        static double TicksToMs(long t) => (double)t / Stopwatch.Frequency * 1000.0;
+
+        long Percentile(long[] sorted, double pct)
+        {
+            if (sorted.Length == 0)
+            {
+                return 0;
+            }
+
+            var idx = (int)Math.Ceiling(pct / 100.0 * sorted.Length) - 1;
+            return sorted[Math.Max(0, Math.Min(idx, sorted.Length - 1))];
+        }
+
+        var stormGateFailureCount = _correctnessIssues
+            .Where(kvp => kvp.Key.Framework == FrameworkStormGate)
+            .Sum(kvp => kvp.Value);
+        var dapperFailureCount = _correctnessIssues
+            .Where(kvp => kvp.Key.Framework == FrameworkDapper)
+            .Sum(kvp => kvp.Value);
+        var efFailureCount = _correctnessIssues
+            .Where(kvp => kvp.Key.Framework == FrameworkEntityFramework)
+            .Sum(kvp => kvp.Value);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# PostgreSqlConnectionGovernanceBenchmarks — Governed Latency");
+        sb.AppendLine();
+        sb.AppendLine($"PostgreSQL max_connections: {PgMaxConnections}");
+        sb.AppendLine($"StormGate permits: {StormGatePermits}");
+        sb.AppendLine($"Parallelism: {Parallelism}");
+        sb.AppendLine($"Operations per run: {OperationsPerRun}");
+        sb.AppendLine();
+        sb.AppendLine("| Metric | Value |");
+        sb.AppendLine("|--------|-------|");
+        sb.AppendLine($"| P50 | {TicksToMs(Percentile(ticks, 50)):F3} ms |");
+        sb.AppendLine($"| P95 | {TicksToMs(Percentile(ticks, 95)):F3} ms |");
+        sb.AppendLine($"| P99 | {TicksToMs(Percentile(ticks, 99)):F3} ms |");
+        sb.AppendLine($"| Max | {(ticks.Length == 0 ? 0 : TicksToMs(ticks[^1])):F3} ms |");
+        sb.AppendLine();
+        sb.AppendLine($"StormGate failure count: {stormGateFailureCount}");
+        sb.AppendLine($"Dapper uncontrolled failure count: {dapperFailureCount}");
+        sb.AppendLine($"EF uncontrolled failure count: {efFailureCount}");
+
+        try
+        {
+            var dir = Path.Combine("BenchmarkDotNet.Artifacts", "results");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{nameof(PostgreSqlConnectionGovernanceBenchmarks)}-latency.md");
+            File.WriteAllText(path, sb.ToString());
+            Console.WriteLine($"[PostgreSqlConnectionGovernanceBenchmarks] Wrote {path}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PostgreSqlConnectionGovernanceBenchmarks] Failed to write latency sidecar: {ex.Message}");
+        }
+    }
 
     // ── Nested types ──────────────────────────────────────────────────────────
 

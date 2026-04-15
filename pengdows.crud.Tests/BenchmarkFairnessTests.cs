@@ -437,6 +437,38 @@ public class BenchmarkFairnessTests
     }
 
     [Fact]
+    public void HydrationHotPathBenchmarks_NormalizeConnectionSetupOutsideTheMeasuredPath()
+    {
+        const string fileName = "HydrationHotPathBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "public class HydrationHotPathBenchmarks",
+            "DbMode = DbMode.SingleConnection",
+            "_dapperConnection.Open()",
+            "[Params(100, 1000, 5000)]",
+            "HydrationOnly_Pengdows",
+            "HydrationOnly_Dapper",
+            "CreateSqlContainer(",
+            "Query<HydrationBenchEntity>("
+        });
+    }
+
+    [Fact]
+    public void HydrationHotPathBenchmarks_UseCrossFrameworkMethodSuffixesForRatioReports()
+    {
+        const string fileName = "HydrationHotPathBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "public async Task<List<HydrationBenchEntity>> HydrationOnly_Pengdows()",
+            "public List<HydrationBenchEntity> HydrationOnly_Dapper()"
+        });
+    }
+
+    [Fact]
     public void OptInBenchmarkAttribute_IsDefined()
     {
         const string fileName = "OptInBenchmarkAttribute.cs";
@@ -573,6 +605,38 @@ public class BenchmarkFairnessTests
         {
             "RandomNumberGenerator.GetBytes",
             "GeneratePassword()"
+        });
+    }
+
+    [Fact]
+    public void PostgreSqlGovernanceBenchmark_RecordsFailureCountsInsteadOfRelyingOnNaRows()
+    {
+        const string fileName = "PostgreSqlConnectionGovernanceBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "ConcurrentDictionary<CorrectnessIssueKey, int>",
+            "BenchmarkCorrectnessArtifacts.Write(",
+            "RunConcurrentWithErrors",
+            "MarkInvalid(",
+            "nameof(PostgreSqlConnectionGovernanceBenchmarks)"
+        });
+    }
+
+    [Fact]
+    public void PostgreSqlGovernanceBenchmark_WritesGovernedLatencySidecar()
+    {
+        const string fileName = "PostgreSqlConnectionGovernanceBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllPresent(fileName, text, new[]
+        {
+            "WriteLatencySidecar()",
+            "P50",
+            "P95",
+            "P99",
+            "StormGate failure count"
         });
     }
 }
