@@ -224,15 +224,33 @@ public partial class DatabaseContext
             _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
             _firstOpenHandlerAsyncRw = async (tc, ct) =>
             {
-                try { await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+                try
+                {
+                    await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+                }
             };
             _firstOpenHandlerAsyncRo = async (tc, ct) =>
             {
-                try { await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name); }
+                try
+                {
+                    await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+                }
             };
             _prepareMode = configuration.PrepareMode;
             _readerPlanCacheSize = configuration.ReaderPlanCacheSize;

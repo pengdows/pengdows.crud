@@ -212,8 +212,14 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         {
             if (File.Exists(f))
             {
-                try { File.Delete(f); }
-                catch { /* best-effort */ }
+                try
+                {
+                    File.Delete(f);
+                }
+                catch
+                {
+                    /* best-effort */
+                }
             }
         }
     }

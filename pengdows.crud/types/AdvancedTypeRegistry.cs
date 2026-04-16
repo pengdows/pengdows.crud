@@ -390,8 +390,14 @@ internal class AdvancedTypeRegistry
                 if (value != null)
                 {
                     decimal dec;
-                    if (value is decimal d) dec = d;
-                    else dec = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    if (value is decimal d)
+                    {
+                        dec = d;
+                    }
+                    else
+                    {
+                        dec = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    }
 
                     param.Value = (double)dec;
 

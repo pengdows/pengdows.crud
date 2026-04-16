@@ -206,9 +206,14 @@ internal static class DatabaseDetectionService
                 {
                     cmd.CommandText = "SELECT @@aurora_version";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    {
                         return SupportedDatabase.AuroraMySql;
+                    }
                 }
-                catch { /* not aurora mysql */ }
+                catch
+                {
+                    /* not aurora mysql */
+                }
             }
 
             // SELECT version() — safe probe that never throws; used first for PG-family because
@@ -237,7 +242,10 @@ internal static class DatabaseDetectionService
                         return SupportedDatabase.CockroachDb;
                     }
                 }
-                catch { /* version() not available */ }
+                catch
+                {
+                    /* version() not available */
+                }
             }
 
             // YugabyteDB fallback: Query pg_settings for a YugabyteDB-only GUC. Runs after
@@ -250,9 +258,14 @@ internal static class DatabaseDetectionService
                     cmd.CommandText =
                         "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    {
                         return SupportedDatabase.YugabyteDb;
+                    }
                 }
-                catch { /* pg_settings unavailable — very unusual, continue */ }
+                catch
+                {
+                    /* pg_settings unavailable — very unusual, continue */
+                }
             }
 
             // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
@@ -264,9 +277,14 @@ internal static class DatabaseDetectionService
                 {
                     cmd.CommandText = "SELECT aurora_version()";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    {
                         return SupportedDatabase.AuroraPostgreSql;
+                    }
                 }
-                catch { /* not aurora pg */ }
+                catch
+                {
+                    /* not aurora pg */
+                }
             }
         }
         catch

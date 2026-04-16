@@ -654,8 +654,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             // Guard against ObjectDisposedException: if Dispose() races with this Release()
             // it may have already called _completionLock.Dispose(). Swallowing the exception
             // here is safe — the connection was already closed in CompleteTransaction.finally.
-            try { _completionLock.Release(); }
-            catch (ObjectDisposedException) { }
+            try
+            {
+                _completionLock.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
 
@@ -675,8 +680,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         finally
         {
             // Guard against ObjectDisposedException: same race as the sync path.
-            try { _completionLock.Release(); }
-            catch (ObjectDisposedException) { }
+            try
+            {
+                _completionLock.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
 
@@ -796,8 +806,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        try { _completionLock.Release(); }
-                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
+                        try
+                        {
+                            _completionLock.Release();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            shouldDisposeLock = false;
+                        }
                     }
                 }
                 else
@@ -846,8 +862,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        try { _completionLock.Release(); }
-                        catch (ObjectDisposedException) { shouldDisposeLock = false; }
+                        try
+                        {
+                            _completionLock.Release();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            shouldDisposeLock = false;
+                        }
                     }
                 }
                 else

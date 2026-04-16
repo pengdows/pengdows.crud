@@ -35,7 +35,9 @@ public class fakeDbDataReader : DbDataReader
     {
         _resultSets = resultSets.Select(rs => rs.ToList()).ToList();
         if (_resultSets.Count == 0)
+        {
             _resultSets.Add(new List<Dictionary<string, object>>());
+        }
     }
 
     private List<Dictionary<string, object>> CurrentRows => _resultSets[_currentSetIndex];
