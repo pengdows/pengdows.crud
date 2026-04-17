@@ -41,6 +41,22 @@ public sealed class PatchCoverageRegressionTests
     }
 
     [Fact]
+    public void CompleteTransactionWithWait_NormalPath_CompletesSuccessfully()
+    {
+        using var context = CreateContext();
+        var tx = CreateSyntheticTransactionContext(context);
+
+        var method = typeof(TransactionContext).GetMethod("CompleteTransactionWithWait", AnyInstance);
+        Assert.NotNull(method);
+
+        // No RollbackAction set — Rollback() is a no-op, Release() succeeds, covers the try's leave path.
+        method!.Invoke(tx, new object[] { new Action(() => { }), false });
+
+        Assert.True(tx.IsCompleted);
+        Assert.True(tx.WasRolledBack);
+    }
+
+    [Fact]
     public async Task CompleteTransactionWithWaitAsync_WhenCompletionLockWasDisposed_DoesNotThrowOnRelease()
     {
         using var context = CreateContext();
@@ -64,6 +80,62 @@ public sealed class PatchCoverageRegressionTests
 
         Assert.True(tx.IsCompleted);
         Assert.True(tx.WasRolledBack);
+    }
+
+    [Fact]
+    public void CompleteTransactionWithWait_WhenCompletionLockTimesOut_ThrowsInvalidOperationException()
+    {
+        using var context = CreateContext(TimeSpan.FromMilliseconds(1));
+        var tx = CreateSyntheticTransactionContext(context);
+        var completionLock = (SemaphoreSlim)GetField(tx, "_completionLock")!;
+        completionLock.Wait();
+
+        var method = typeof(TransactionContext).GetMethod("CompleteTransactionWithWait", AnyInstance);
+        Assert.NotNull(method);
+
+        try
+        {
+            var ex = Assert.Throws<TargetInvocationException>(() => method!.Invoke(tx, new object[]
+            {
+                new Action(() => { }),
+                false
+            }));
+            Assert.IsType<InvalidOperationException>(ex.InnerException);
+            Assert.Equal("Transaction completion timed out waiting for internal lock.", ex.InnerException!.Message);
+        }
+        finally
+        {
+            completionLock.Release();
+        }
+    }
+
+    [Fact]
+    public async Task CompleteTransactionWithWaitAsync_WhenCompletionLockTimesOut_ThrowsInvalidOperationException()
+    {
+        using var context = CreateContext(TimeSpan.FromMilliseconds(1));
+        var tx = CreateSyntheticTransactionContext(context);
+        var completionLock = (SemaphoreSlim)GetField(tx, "_completionLock")!;
+        completionLock.Wait();
+
+        var method = typeof(TransactionContext).GetMethod("CompleteTransactionWithWaitAsync", AnyInstance);
+        Assert.NotNull(method);
+
+        try
+        {
+            var valueTask = Assert.IsType<ValueTask>(method!.Invoke(tx, new object?[]
+            {
+                new Func<ValueTask>(() => ValueTask.CompletedTask),
+                false,
+                CancellationToken.None
+            }));
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => valueTask.AsTask());
+            Assert.Equal("Transaction completion timed out waiting for internal lock.", ex.Message);
+        }
+        finally
+        {
+            completionLock.Release();
+        }
     }
 
     [Fact]
@@ -205,12 +277,13 @@ public sealed class PatchCoverageRegressionTests
         Assert.Equal(2, convertibleParameter.Scale);
     }
 
-    private static DatabaseContext CreateContext()
+    private static DatabaseContext CreateContext(TimeSpan? modeLockTimeout = null)
     {
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=patch-coverage;EmulatedProduct=Sqlite",
-            DbMode = DbMode.SingleConnection
+            DbMode = DbMode.SingleConnection,
+            ModeLockTimeout = modeLockTimeout
         };
 
         return new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite), NullLoggerFactory.Instance);
