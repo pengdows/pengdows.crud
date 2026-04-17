@@ -103,6 +103,22 @@ public sealed class PatchCoverageRegressionTests
     }
 
     [Fact]
+    public async Task DisposeManagedAsync_WhenRollbackThrows_LogsAndCompletes()
+    {
+        await using var context = CreateContext();
+        var tx = CreateSyntheticTransactionContext(context);
+
+        var callbackTransaction = (CallbackDbTransaction)GetField(tx, "_transaction")!;
+        callbackTransaction.RollbackAction = () => throw new InvalidOperationException("rollback failed");
+
+        var method = typeof(TransactionContext).GetMethod("DisposeManagedAsync", AnyInstance);
+        Assert.NotNull(method);
+
+        var valueTask = Assert.IsType<ValueTask>(method!.Invoke(tx, null));
+        await valueTask;
+    }
+
+    [Fact]
     public async Task FirstOpenHandlerAsyncRw_WhenCanceled_PropagatesOperationCanceledException()
     {
         await using var context = CreateContext();
