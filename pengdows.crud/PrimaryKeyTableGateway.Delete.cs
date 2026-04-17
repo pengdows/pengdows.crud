@@ -86,13 +86,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return 0;
         }
 
+        var ctx = context ?? _context;
         if (entities.Count == 1)
         {
-            var ctx = context ?? _context;
             return await CreateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false) ? 1 : 0;
         }
 
-        var containers = BuildBatchCreate(entities, context);
+        var containers = BuildBatchCreate(entities, ctx);
         var total = 0;
         foreach (var sc in containers)
         {
@@ -194,7 +194,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return 0;
         }
 
-        var containers = BuildBatchDelete(entities, context);
+        var ctx = context ?? _context;
+        var containers = BuildBatchDelete(entities, ctx);
         var total = 0;
         foreach (var sc in containers)
         {

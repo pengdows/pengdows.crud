@@ -105,6 +105,7 @@ These rules are not stylistic preferences. They exist because violations create 
 * **TransactionScope is forbidden** — use `BeginTransaction`.
 * No string interpolation for SQL values.
 * No unquoted identifiers in custom SQL — use `WrapObjectName`.
+* Where available, use `pengdows.crud.analyzers` to machine-enforce review invariants. Current analyzer coverage includes raw SQL predicate/join value injection (`PGC008`).
 * **One statement per line, always.** `if (something) break;` on one line is forbidden. The break is invisible in a diff and makes debugger breakpoints ambiguous. This is how correctness defects hide.
 * **Braces are required for all control flow blocks without exception.** Brace-free single-line blocks are forbidden regardless of brevity. Braces and parentheses compile to nothing — file length is not a valid reason to omit them. An unbraced block is one added line away from a silent correctness bug.
 * **After any scope-exiting statement — `return`, `break`, `continue`, or `throw` — do not use `else`.** The else branch is already implied by the exit. An else after a scope exit is logically redundant and adds indentation that obscures control flow.
@@ -284,5 +285,4 @@ Compliance with this policy is enforced via:
 2. **Copilot Instructions (`.github/copilot-instructions.md`)**: Configures GitHub Copilot Code Review to use this policy as its primary system prompt for PR analysis.
 3. **CI Checks (`.github/workflows/deploy.yml`)**: Automated `grep` checks in the build pipeline to catch P0 violations like `TransactionScope` usage before merge.
 4. **Manual Peer Review**: All PRs require approval from a maintainer who verifies adherence to this policy and project-specific invariants.
-
 

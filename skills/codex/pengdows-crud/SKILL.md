@@ -486,6 +486,7 @@ public class OrderItem
 ### Custom SQL with SqlContainer
 
 **IMPORTANT:** Always use `WrapObjectName()` for column names and aliases to ensure proper quoting per database dialect.
+**IMPORTANT:** Always parameterize predicate and join values. `pengdows.crud.analyzers` flags raw predicate/join value injection as `PGC008`; `IS NULL` and `IS NOT NULL` are the normal exceptions.
 
 ```csharp
 // Inside your extended gateway class

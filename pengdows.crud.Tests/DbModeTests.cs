@@ -146,7 +146,13 @@ public class DbModeTests
         }
         finally
         {
-            try { File.Delete(dbFile); } catch { }
+            try
+            {
+                File.Delete(dbFile);
+            }
+            catch
+            {
+            }
         }
     }
 

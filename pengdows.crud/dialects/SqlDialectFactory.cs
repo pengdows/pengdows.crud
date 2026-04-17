@@ -6,8 +6,9 @@
 // - CreateDialectAsync() - Creates and initializes dialect from live connection.
 // - CreateDialectForType() - Creates dialect for known SupportedDatabase type.
 // - Auto-detection flow: Delegates to DatabaseDetectionService for robust identification.
-// - Supported dialects: SqlServer, PostgreSql, MySql, MariaDb, Oracle,
-//   Sqlite, Firebird, DuckDb, CockroachDb, YugabyteDb, TiDb, Snowflake.
+// - Supported dialects: SqlServer, PostgreSql, MySql, AuroraMySql, MariaDb, Oracle,
+//   Sqlite, Firebird, DuckDb, CockroachDb, YugabyteDb, TiDb, Snowflake, AuroraPostgreSql.
+//   TimescaleDB is detected at runtime and routed to PostgreSqlDialect.
 // - Each dialect is initialized via DetectDatabaseInfoAsync() after creation.
 // =============================================================================
 

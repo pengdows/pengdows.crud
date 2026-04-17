@@ -168,14 +168,14 @@ public class FakeDataStore
 
     private int HandleInsert(string commandText, DbParameterCollection? parameters)
     {
-        // Simple INSERT parsing - matches "INSERT INTO table_name (col1, col2) VALUES (val1, val2)"
-        var insertMatch = Regex.Match(commandText,
-            @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)",
+        // Match INSERT INTO table (columns) portion — handles both single and multi-row VALUES
+        var headerMatch = Regex.Match(commandText,
+            @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*",
             RegexOptions.IgnoreCase);
 
-        if (!insertMatch.Success)
+        if (!headerMatch.Success)
         {
-            // Try simple INSERT INTO table VALUES format
+            // Try columnar INSERT INTO table VALUES format (no explicit column list)
             var simpleMatch = Regex.Match(commandText,
                 @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s+VALUES\s*\(([^)]+)\)",
                 RegexOptions.IgnoreCase);
@@ -184,7 +184,6 @@ public class FakeDataStore
                 var tableName = CleanIdentifier(simpleMatch.Groups[1].Value);
                 EnsureTable(tableName);
 
-                // For simple format, create a generic row with auto-assigned ID
                 var nextId = _nextId++;
                 _lastInsertId = nextId;
                 var row = new Dictionary<string, object?>
@@ -192,60 +191,90 @@ public class FakeDataStore
                     ["Id"] = nextId,
                     ["Data"] = simpleMatch.Groups[2].Value.Trim()
                 };
-
                 lock (_lockObject)
                 {
                     _tables[tableName].Add(row);
                 }
-
                 return 1;
             }
 
-            return 1; // Return 1 for unrecognized INSERT formats
+            return 1; // Unrecognized INSERT format — treat as success
         }
 
-        var table = CleanIdentifier(insertMatch.Groups[1].Value);
-        var columnsPart = insertMatch.Groups[2].Value;
-        var valuesPart = insertMatch.Groups[3].Value;
-
-        EnsureTable(table);
-
-        // Parse columns
-        var columns = columnsPart.Split(',')
+        var table = CleanIdentifier(headerMatch.Groups[1].Value);
+        var columns = headerMatch.Groups[2].Value
+            .Split(',')
             .Select(c => CleanIdentifier(c.Trim()))
             .ToList();
 
-        // Parse values (handle parameters and literals)
-        var values = ParseValues(valuesPart, parameters);
+        EnsureTable(table);
 
-        // Create row data
-        var rowData = new Dictionary<string, object?>();
-
-        // Auto-assign ID if not provided
-        if (!columns.Any(c => c.Equals("Id", StringComparison.OrdinalIgnoreCase)))
+        // Extract ALL value-row groups after the VALUES keyword.
+        // Multi-row batch: VALUES (...), (...), (...)
+        // Truncate before any trailing clause so their parentheses aren't misread as value rows:
+        //   ON CONFLICT (col) DO UPDATE ...   (SQLite upsert)
+        //   RETURNING id                       (PostgreSQL identity)
+        //   OUTPUT INSERTED.id                 (SQL Server identity)
+        //   ON DUPLICATE KEY UPDATE ...        (MySQL upsert)
+        var afterValues = commandText.Substring(headerMatch.Index + headerMatch.Length);
+        var trailingClause = Regex.Match(afterValues,
+            @"\s+(ON\s+CONFLICT|ON\s+DUPLICATE\s+KEY|RETURNING|OUTPUT)\b",
+            RegexOptions.IgnoreCase);
+        if (trailingClause.Success)
         {
-            var nextId = _nextId++;
-            _lastInsertId = nextId;
-            rowData["Id"] = nextId;
+            afterValues = afterValues.Substring(0, trailingClause.Index);
         }
 
-        for (var i = 0; i < Math.Min(columns.Count, values.Count); i++)
-        {
-            rowData[columns[i]] = values[i];
+        var valueRowMatches = Regex.Matches(afterValues, @"\(([^)]+)\)");
 
-            // Track the last insert ID if an ID column was explicitly provided
-            if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] is int explicitId)
+        var rowsInserted = 0;
+        foreach (Match rowMatch in valueRowMatches)
+        {
+            var values = ParseValues(rowMatch.Groups[1].Value, parameters);
+            var rowData = new Dictionary<string, object?>();
+
+            // Auto-assign ID when the table has no explicit Id column
+            if (!columns.Any(c => c.Equals("Id", StringComparison.OrdinalIgnoreCase)))
             {
-                _lastInsertId = explicitId;
+                var nextId = _nextId++;
+                _lastInsertId = nextId;
+                rowData["Id"] = nextId;
             }
+
+            for (var i = 0; i < Math.Min(columns.Count, values.Count); i++)
+            {
+                rowData[columns[i]] = values[i];
+
+                // Track last inserted ID for any numeric Id column
+                if (columns[i].Equals("Id", StringComparison.OrdinalIgnoreCase) && values[i] != null)
+                {
+                    try
+                    {
+                        _lastInsertId = Convert.ToInt32(values[i]);
+                    }
+                    catch (FormatException)
+                    {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
+                    }
+                    catch (InvalidCastException)
+                    {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
+                    }
+                    catch (OverflowException)
+                    {
+                        // Best-effort ID tracking; safe to ignore for non-numeric primary keys
+                    }
+                }
+            }
+
+            lock (_lockObject)
+            {
+                _tables[table].Add(rowData);
+            }
+            rowsInserted++;
         }
 
-        lock (_lockObject)
-        {
-            _tables[table].Add(rowData);
-        }
-
-        return 1;
+        return rowsInserted > 0 ? rowsInserted : 1;
     }
 
     private int HandleUpdate(string commandText, DbParameterCollection? parameters)
@@ -341,9 +370,9 @@ public class FakeDataStore
             return HandleLiteralSelect(literalMatch.Groups[1].Value.Trim(), parameters);
         }
 
-        // Handle SELECT * FROM table
+        // Handle SELECT * FROM table [alias] [WHERE ...] [ORDER BY ...]
         var selectMatch = Regex.Match(commandText,
-            @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
+            @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+(?:AS\s+)?[`\[\]""'\w]+)?(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
             RegexOptions.IgnoreCase);
 
         if (!selectMatch.Success)
@@ -552,22 +581,96 @@ public class FakeDataStore
                 return MatchesSqlLike(rowVal, pattern);
             }
 
-            // Equality: col = value / col = @param
-            var eqMatch = Regex.Match(trimmed,
-                @"^([`\[\]""'\w.]+)\s*=\s*(.+)$", RegexOptions.IgnoreCase);
-            if (eqMatch.Success)
+            // IN: col IN (@p0, @p1, ...) or col IN ('a', 'b')
+            var inMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s+IN\s*\(([^)]+)\)$", RegexOptions.IgnoreCase);
+            if (inMatch.Success)
             {
-                var col = ResolveRowKey(row, CleanIdentifier(eqMatch.Groups[1].Value));
+                var col = ResolveRowKey(row, CleanIdentifier(inMatch.Groups[1].Value));
                 if (col == null)
                 {
                     return false;
                 }
-                var compareValue = GetCompareValue(eqMatch.Groups[2].Value.Trim(), parameters);
-                return Equals(row[col], compareValue);
+
+                var inValues = inMatch.Groups[2].Value.Split(',')
+                    .Select(v => GetCompareValue(v.Trim(), parameters))
+                    .ToList();
+                return inValues.Any(v => Equals(row[col], v));
             }
 
-        // Default: can't parse → assume match
-        return true;
+            // Comparison operators: >=, <=, !=, <>, >, < (must check multi-char ops first)
+            // Also handles simple equality (=) — matched last to avoid conflicting with >= etc.
+            var cmpMatch = Regex.Match(trimmed,
+                @"^([`\[\]""'\w.]+)\s*(>=|<=|!=|<>|>|<|=)\s*(.+)$", RegexOptions.IgnoreCase);
+            if (cmpMatch.Success)
+            {
+                var col = ResolveRowKey(row, CleanIdentifier(cmpMatch.Groups[1].Value));
+                if (col == null)
+                {
+                    return false;
+                }
+
+                var op = cmpMatch.Groups[2].Value;
+                var compareValue = GetCompareValue(cmpMatch.Groups[3].Value.Trim(), parameters);
+                return EvaluateComparison(row[col], op, compareValue);
+            }
+
+        // Unrecognized predicate — throw so tests don't silently pass with no filtering
+        throw new NotSupportedException(
+            $"FakeDataStore: WHERE predicate not supported: '{trimmed}'. " +
+            "Extend EvaluateWhereClause to handle this pattern.");
+    }
+
+    private static bool EvaluateComparison(object? left, string op, object? right)
+    {
+        if (left == null || right == null)
+        {
+            // NULL comparisons: only = and <>/!= are defined
+            return op is "=" ? left == right : (op is "!=" or "<>") && left != right;
+        }
+
+        // Attempt numeric comparison first; fall back to string comparison
+        if (TryToDouble(left, out var ld) && TryToDouble(right, out var rd))
+        {
+            return op switch
+            {
+                "="  => ld == rd,
+                "!=" or "<>" => ld != rd,
+                ">"  => ld > rd,
+                ">=" => ld >= rd,
+                "<"  => ld < rd,
+                "<=" => ld <= rd,
+                _    => false
+            };
+        }
+
+        var ls = left.ToString() ?? "";
+        var rs = right.ToString() ?? "";
+        var cmp = string.Compare(ls, rs, StringComparison.OrdinalIgnoreCase);
+        return op switch
+        {
+            "="  => cmp == 0,
+            "!=" or "<>" => cmp != 0,
+            ">"  => cmp > 0,
+            ">=" => cmp >= 0,
+            "<"  => cmp < 0,
+            "<=" => cmp <= 0,
+            _    => false
+        };
+    }
+
+    private static bool TryToDouble(object value, out double result)
+    {
+        try
+        {
+            result = Convert.ToDouble(value);
+            return true;
+        }
+        catch
+        {
+            result = 0;
+            return false;
+        }
     }
 
     private string? ResolveRowKey(Dictionary<string, object?> row, string column)

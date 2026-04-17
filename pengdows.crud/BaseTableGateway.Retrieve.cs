@@ -40,12 +40,11 @@ public abstract partial class BaseTableGateway<TEntity>
     public ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions,
         IDatabaseContext? context = null)
     {
+        var ctx = context ?? _context;
         if (extraSelectExpressions.Count == 0)
         {
-            return BuildBaseRetrieve(alias, context);
+            return BuildBaseRetrieve(alias, ctx);
         }
-
-        var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var sc = ctx.CreateSqlContainer();
         sc.Query.Append(BuildBaseRetrieveSql(alias, dialect, extraSelectExpressions));

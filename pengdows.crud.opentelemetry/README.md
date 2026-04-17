@@ -17,30 +17,15 @@ Register the instrumentation in your `Program.cs`:
 ```csharp
 using pengdows.crud.opentelemetry;
 
-// Standard OpenTelemetry setup
+// Standard OpenTelemetry metrics setup
 builder.Services.AddOpenTelemetry()
     .WithMetrics(metrics => metrics
         .AddMeter("pengdows.crud")
-        .AddPrometheusExporter())
-    .WithTracing(tracing => tracing
-        .AddSource("pengdows.crud")
-        .AddConsoleExporter());
+        .AddPrometheusExporter());
 
 // Add pengdows.crud instrumentation
 builder.Services.AddPengdowsTelemetry();
 ```
-
-## Tracing
-
-Tracing is automatically enabled when you add the `pengdows.crud` source to your OpenTelemetry `TracerProvider`.
-
-### Spans
-
-| Operation | Span Name | Tags |
-|-----------|-----------|------|
-| `ExecuteNonQueryAsync` | `ExecuteNonQuery` | `db.statement`, `db.system`, `db.name`, `db.rows_affected` |
-| `ExecuteReaderAsync` | `ExecuteReader` | `db.statement`, `db.system`, `db.name` |
-| `ExecuteScalar...` | `ExecuteReader` | (Uses reader tracing internally) |
 
 ## Metrics
 
@@ -60,9 +45,9 @@ All metrics are prefixed with `pengdows.db.`.
 ### Tags
 
 All metrics include the following tags:
-* `db.name`: The value of `DatabaseContextConfiguration.ApplicationName`.
+* `db.name`: The value of `IDatabaseContext.Name`.
 * `db.system`: The database product (e.g., `postgresql`, `sqlite`).
-* `execution.role`: (Optional) `read` or `write` for role-specific breakdown.
+* `pool.label`: Present on pool metrics with values such as `reader` or `writer`.
 
 ## Multi-Tenancy
 
@@ -75,7 +60,7 @@ context.TrackPengdowsMetrics(serviceProvider);
 
 ## Resource Protection
 
-This library is designed for zero overhead on hot paths. Metrics are collected from existing background events already firing within the core library.
+This library is designed to avoid adding instrumentation work to the query hot path. Metrics are exported from `IDatabaseContext` metric snapshots and update events rather than by wrapping every call site with additional telemetry code.
 
 ## Support
 

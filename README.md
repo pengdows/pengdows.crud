@@ -58,6 +58,10 @@ When product detection cannot identify the connected database, the library falls
 dotnet add package pengdows.crud
 ```
 
+```bash
+dotnet add package pengdows.crud.analyzers
+```
+
 ```csharp
 using Microsoft.Data.SqlClient;
 using pengdows.crud;
@@ -112,6 +116,29 @@ var ctx = new DatabaseContext(
 var dataSource = NpgsqlDataSource.Create(connectionString);
 var ctx = new DatabaseContext(configuration, dataSource, NpgsqlFactory.Instance);
 ```
+
+## Roslyn Analyzers
+
+`pengdows.crud.analyzers` adds framework-specific Roslyn rules for common misuse patterns in custom gateway code.
+
+Current rules include:
+
+- `PGC008`: do not inject raw values into SQL predicates or joins; parameterize the value instead
+
+```csharp
+// Bad
+sc.Query.Append($" WHERE o.customer_id = {customerId}");
+sc.Query.Append(" INNER JOIN customers c ON c.id = " + customerId);
+
+// Good
+sc.Query.Append(" WHERE ");
+sc.Query.Append(sc.WrapObjectName("o.customer_id"));
+sc.Query.Append(" = ");
+var p = sc.AddParameterWithValue("customerId", DbType.Int64, customerId);
+sc.Query.Append(sc.MakeParameterName(p));
+```
+
+`IS NULL` and `IS NOT NULL` are the normal exceptions. For custom `SELECT` queries, prefer `BuildBaseRetrieve(...)` so table naming, quoting, and aliases start from the gateway's safe defaults.
 
 ## Key Mapping Rules
 

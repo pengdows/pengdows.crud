@@ -599,6 +599,42 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.All(recordingContext.CreatedContainers, container => Assert.True(container.IsDisposed));
     }
 
+    [Fact]
+    public async Task BatchUpdateAsync_SingleEntity_ExecutesUpdateSql()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntitySimple, int>(recordingContext);
+
+        await helper.BatchUpdateAsync(new[]
+        {
+            new TestEntitySimple { Id = 1, Name = "updated" }
+        });
+
+        var container = Assert.Single(recordingContext.CreatedContainers);
+        Assert.Contains("UPDATE", container.LastCommandText);
+        Assert.DoesNotContain("INSERT INTO", container.LastCommandText);
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_MultipleEntities_ExecutesUpdateSql()
+    {
+        await using var recordingContext = new RecordingBatchContext((DatabaseContext)_sqliteContext);
+        var helper = new TableGateway<TestEntitySimple, int>(recordingContext);
+
+        await helper.BatchUpdateAsync(new[]
+        {
+            new TestEntitySimple { Id = 1, Name = "x" },
+            new TestEntitySimple { Id = 2, Name = "y" }
+        });
+
+        Assert.NotEmpty(recordingContext.CreatedContainers);
+        Assert.All(recordingContext.CreatedContainers, container =>
+        {
+            Assert.Contains("UPDATE", container.LastCommandText);
+            Assert.DoesNotContain("INSERT INTO", container.LastCommandText);
+        });
+    }
+
     // =========================================================================
     // BuildBatchUpdate — Empty, Null, Fallback Dialects
     // =========================================================================
@@ -973,6 +1009,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
         }
 
         public bool IsDisposed { get; private set; }
+        public string LastCommandText { get; private set; } = string.Empty;
         public ISqlQueryBuilder Query => _inner.Query;
         public int ParameterCount => _inner.ParameterCount;
         public bool HasWhereAppended => _inner.HasWhereAppended;
@@ -995,10 +1032,29 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public void SetParameterValue(string parameterName, object? newValue) => _inner.SetParameterValue(parameterName, newValue);
         public object? GetParameterValue(string parameterName) => _inner.GetParameterValue(parameterName);
         public T GetParameterValue<T>(string parameterName) => _inner.GetParameterValue<T>(parameterName);
-        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text) => _inner.ExecuteNonQueryAsync(commandType);
-        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteNonQueryAsync(commandType, cancellationToken);
-        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteNonQueryAsync(executionType, commandType);
-        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteNonQueryAsync(executionType, commandType, cancellationToken);
+        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType = CommandType.Text)
+        {
+            LastCommandText = Query.ToString();
+            return _inner.ExecuteNonQueryAsync(commandType);
+        }
+
+        public ValueTask<int> ExecuteNonQueryAsync(CommandType commandType, CancellationToken cancellationToken)
+        {
+            LastCommandText = Query.ToString();
+            return _inner.ExecuteNonQueryAsync(commandType, cancellationToken);
+        }
+
+        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType = CommandType.Text)
+        {
+            LastCommandText = Query.ToString();
+            return _inner.ExecuteNonQueryAsync(executionType, commandType);
+        }
+
+        public ValueTask<int> ExecuteNonQueryAsync(ExecutionType executionType, CommandType commandType, CancellationToken cancellationToken)
+        {
+            LastCommandText = Query.ToString();
+            return _inner.ExecuteNonQueryAsync(executionType, commandType, cancellationToken);
+        }
         public ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType = CommandType.Text) => _inner.ExecuteScalarRequiredAsync<T>(commandType);
         public ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType commandType, CancellationToken cancellationToken) => _inner.ExecuteScalarRequiredAsync<T>(commandType, cancellationToken);
         public ValueTask<T> ExecuteScalarRequiredAsync<T>(ExecutionType executionType, CommandType commandType = CommandType.Text) => _inner.ExecuteScalarRequiredAsync<T>(executionType, commandType);

@@ -434,6 +434,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
+- `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
 
 ## Additional Requirements
 

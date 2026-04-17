@@ -52,10 +52,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Mocks\" />
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
         <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj"/>
         <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
@@ -65,10 +61,6 @@
         <None Include="xunit.runner.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-    </ItemGroup>
-
-    <ItemGroup>
-        <Folder Include="Mocks\"/>
     </ItemGroup>
 
     <ItemGroup>

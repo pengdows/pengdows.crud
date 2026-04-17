@@ -24,6 +24,7 @@ concurrency:
 
 permissions:
   contents: write  # Needed for git push and release creation
+  actions: write   # Needed for gh variable set (coverage ratchet)
 
 jobs:
   build-and-test:
@@ -32,6 +33,7 @@ jobs:
     outputs:
       coverage: ${{ steps.coverage.outputs.coverage }}
       stormgate_coverage: ${{ steps.stormgate_coverage.outputs.coverage }}
+      opentelemetry_coverage: ${{ steps.opentelemetry_coverage.outputs.coverage }}
 
     steps:
       - name: Checkout code
@@ -125,6 +127,15 @@ jobs:
               -assemblyfilters:"+pengdows.stormgate;-pengdows.stormgate.Tests" \
               -classfilters:"-*Test*;-*Mock*"
 
+      - name: Generate opentelemetry coverage report
+        run: |
+            reportgenerator \
+              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -targetdir:"coverage-report-opentelemetry" \
+              -reporttypes:"Html;Cobertura" \
+              -assemblyfilters:"+pengdows.crud.opentelemetry" \
+              -classfilters:"-*Test*;-*Mock*"
+
       - name: Enforce pengdows.crud coverage floor and ratchet from Cobertura XML
         id: coverage
         run: |
@@ -148,15 +159,13 @@ jobs:
           echo "📊 pengdows.crud line coverage (from ${xml_file}): $coverage_percent%"
 
           minimum_floor=83
-          baseline_file=".github/coverage-baseline.txt"
-          if [[ ! -f "$baseline_file" ]]; then
-            echo "❌ Missing $baseline_file"
-            exit 1
+          baseline="${{ vars.COVERAGE_BASELINE }}"
+          if [[ -z "$baseline" ]]; then
+            echo "ℹ️ No COVERAGE_BASELINE variable set — using minimum floor"
+            baseline="$minimum_floor"
           fi
-
-          baseline=$(tr -d '[:space:]' < "$baseline_file")
           if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
+            echo "❌ Invalid COVERAGE_BASELINE value: '$baseline'"
             exit 1
           fi
 
@@ -201,15 +210,64 @@ jobs:
           echo "📊 pengdows.stormgate line coverage (from ${xml_file}): $coverage_percent%"
 
           minimum_floor=83
-          baseline_file=".github/coverage-baseline.stormgate.txt"
-          if [[ ! -f "$baseline_file" ]]; then
-            echo "❌ Missing $baseline_file"
+          baseline="${{ vars.COVERAGE_BASELINE_STORMGATE }}"
+          if [[ -z "$baseline" ]]; then
+            echo "ℹ️ No COVERAGE_BASELINE_STORMGATE variable set — using minimum floor"
+            baseline="$minimum_floor"
+          fi
+          if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "❌ Invalid COVERAGE_BASELINE_STORMGATE value: '$baseline'"
             exit 1
           fi
 
-          baseline=$(tr -d '[:space:]' < "$baseline_file")
+          required="$minimum_floor"
+          baseline_higher=$(awk "BEGIN { print ($baseline > $required) ? 1 : 0 }")
+          if [[ "$baseline_higher" -eq 1 ]]; then
+            required="$baseline"
+          fi
+
+          echo "🧭 Minimum floor: ${minimum_floor}%"
+          echo "🧭 Baseline ratchet: ${baseline}%"
+          echo "🧭 Effective required coverage: ${required}%"
+
+          too_low=$(awk "BEGIN { print ($coverage_percent < $required) ? 1 : 0 }")
+          if [[ "$too_low" -eq 1 ]]; then
+            echo "❌ Coverage $coverage_percent% is below required $required%"
+            exit 1
+          else
+            echo "✅ Coverage $coverage_percent% meets threshold"
+          fi
+
+          echo "coverage=$coverage_percent" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce pengdows.crud.opentelemetry coverage floor and ratchet from Cobertura XML
+        id: opentelemetry_coverage
+        run: |
+          set -euo pipefail
+
+          xml_file="coverage-report-opentelemetry/Cobertura.xml"
+          if [[ ! -f "${xml_file}" ]]; then
+            echo "❌ ${xml_file} not found"
+            exit 1
+          fi
+
+          rate=$(grep -m1 'line-rate="' "$xml_file" | sed -n 's/.*line-rate="\([^"]*\)".*/\1/p')
+          if [[ -z "${rate}" ]]; then
+            echo "❌ Could not parse line-rate from Cobertura XML"
+            exit 1
+          fi
+
+          coverage_percent=$(awk "BEGIN { printf \"%.2f\", ${rate} * 100 }")
+          echo "📊 pengdows.crud.opentelemetry line coverage (from ${xml_file}): $coverage_percent%"
+
+          minimum_floor=83
+          baseline="${{ vars.COVERAGE_BASELINE_OPENTELEMETRY }}"
+          if [[ -z "$baseline" ]]; then
+            echo "ℹ️ No COVERAGE_BASELINE_OPENTELEMETRY variable set — using minimum floor"
+            baseline="$minimum_floor"
+          fi
           if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
+            echo "❌ Invalid COVERAGE_BASELINE_OPENTELEMETRY value: '$baseline'"
             exit 1
           fi
 
@@ -274,6 +332,12 @@ jobs:
           name: coverage-report-stormgate
           path: coverage-report-stormgate
 
+      - name: Upload opentelemetry coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-opentelemetry
+          path: coverage-report-opentelemetry
+
   publish:
     name: Publish NuGet Package
     runs-on: ubuntu-latest
@@ -313,6 +377,9 @@ jobs:
 
       - name: Pack with custom version
         run: |
+          dotnet pack tools/pengdows.crud.analyzers/pengdows.crud.analyzers.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
           dotnet pack pengdows.crud.abstractions/pengdows.crud.abstractions.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
@@ -341,6 +408,8 @@ jobs:
           set -euo pipefail
 
           VERSION="${{ steps.version.outputs.version }}"
+          status_analyzers=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/${VERSION}.nupkg")
           status_crud=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/${VERSION}.nupkg")
           status_abstractions=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -351,13 +420,14 @@ jobs:
             "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg")
 
           echo "NuGet status for v$VERSION:"
+          echo "  pengdows.crud.analyzers: $status_analyzers"
           echo "  pengdows.crud: $status_crud"
           echo "  pengdows.crud.abstractions: $status_abstractions"
           echo "  pengdows.crud.fakedb: $status_fakedb"
           echo "  pengdows.stormgate: $status_stormgate"
 
           all_published=true
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" != "200" ]]; then
               all_published=false
               break
@@ -365,7 +435,7 @@ jobs:
           done
 
           any_published=false
-          for status in "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
             if [[ "$status" == "200" ]]; then
               any_published=true
               break
@@ -387,6 +457,10 @@ jobs:
         if: steps.nuget_check.outputs.skip != 'true'
         run: |
           set -euo pipefail
+          dotnet nuget push tools/pengdows.crud.analyzers/bin/Release/pengdows.crud.analyzers.${{ steps.version.outputs.version }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
           dotnet nuget push pengdows.crud.abstractions/bin/Release/pengdows.crud.abstractions.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY" \
@@ -467,10 +541,6 @@ jobs:
           echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
           echo "next_assembly_version=$next_assembly_version" >> "$GITHUB_OUTPUT"
 
-      - name: Note protected branch push skip
-        if: ${{ github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
-        run: echo "Branch is protected; skipping automated semver bump commit and push."
-
       - name: Bump version for next release
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
@@ -480,39 +550,49 @@ jobs:
           sed -i -E "s|<AssemblyVersion>[^<]+</AssemblyVersion>|<AssemblyVersion>${{ steps.next_version.outputs.next_assembly_version }}</AssemblyVersion>|" Directory.Build.props
           sed -i -E "s|<FileVersion>[^<]+</FileVersion>|<FileVersion>${{ steps.next_version.outputs.next_assembly_version }}</FileVersion>|" Directory.Build.props
 
-          # Verify the bump actually applied — sed exits 0 even when no lines matched,
-          # so an unchanged file means the pattern didn't match (e.g. reformatted XML).
           if git diff --exit-code Directory.Build.props > /dev/null 2>&1; then
             echo "❌ Version bump had no effect — sed pattern did not match Directory.Build.props"
             exit 1
           fi
 
-          # Ratchet coverage baseline if this deploy improved coverage.
-          new_coverage="${{ needs.build-and-test.outputs.coverage }}"
-          current_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.txt)
-          is_higher=$(awk "BEGIN { print ($new_coverage > $current_baseline) ? 1 : 0 }")
-          if [[ "$is_higher" -eq 1 ]]; then
-            printf '%s\n' "$new_coverage" > .github/coverage-baseline.txt
-            echo "📈 Coverage baseline ratcheted: ${current_baseline}% → ${new_coverage}%"
-          else
-            echo "ℹ️ Coverage baseline unchanged at ${current_baseline}%"
-          fi
+      - name: Ratchet coverage baselines
+        if: steps.nuget_check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
 
-          new_stormgate_coverage="${{ needs.build-and-test.outputs.stormgate_coverage }}"
-          current_stormgate_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.stormgate.txt)
-          is_stormgate_higher=$(awk "BEGIN { print ($new_stormgate_coverage > $current_stormgate_baseline) ? 1 : 0 }")
-          if [[ "$is_stormgate_higher" -eq 1 ]]; then
-            printf '%s\n' "$new_stormgate_coverage" > .github/coverage-baseline.stormgate.txt
-            echo "📈 Stormgate coverage baseline ratcheted: ${current_stormgate_baseline}% → ${new_stormgate_coverage}%"
-          else
-            echo "ℹ️ Stormgate coverage baseline unchanged at ${current_stormgate_baseline}%"
-          fi
+          ratchet() {
+            local var_name="$1" new_val="$2"
+            local current="${3:-0}"
+            if [[ -z "$current" ]]; then current="0"; fi
+            local is_higher
+            is_higher=$(awk "BEGIN { print ($new_val > $current) ? 1 : 0 }")
+            if [[ "$is_higher" -eq 1 ]]; then
+              gh variable set "$var_name" --body "$new_val"
+              echo "📈 $var_name ratcheted: ${current}% → ${new_val}%"
+            else
+              echo "ℹ️ $var_name unchanged at ${current}%"
+            fi
+          }
+
+          ratchet COVERAGE_BASELINE \
+            "${{ needs.build-and-test.outputs.coverage }}" \
+            "${{ vars.COVERAGE_BASELINE }}"
+
+          ratchet COVERAGE_BASELINE_STORMGATE \
+            "${{ needs.build-and-test.outputs.stormgate_coverage }}" \
+            "${{ vars.COVERAGE_BASELINE_STORMGATE }}"
+
+          ratchet COVERAGE_BASELINE_OPENTELEMETRY \
+            "${{ needs.build-and-test.outputs.opentelemetry_coverage }}" \
+            "${{ vars.COVERAGE_BASELINE_OPENTELEMETRY }}"
 
       - name: Commit semver bump
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
-          git add Directory.Build.props .github/coverage-baseline.txt .github/coverage-baseline.stormgate.txt
+          git add Directory.Build.props
           git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
 
       - name: Push semver bump commit

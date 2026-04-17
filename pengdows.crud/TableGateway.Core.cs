@@ -991,7 +991,8 @@ public partial class TableGateway<TEntity, TRowID> :
     public async ValueTask<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
-        var containers = BuildBatchDelete(ids, context);
+        var ctx = context ?? _context;
+        var containers = BuildBatchDelete(ids, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)
@@ -1062,7 +1063,8 @@ public partial class TableGateway<TEntity, TRowID> :
             return 0;
         }
 
-        var containers = BuildBatchDelete(entities, context);
+        var ctx = context ?? _context;
+        var containers = BuildBatchDelete(entities, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)

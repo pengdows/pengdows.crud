@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
+<coverage line-rate="1" branch-rate="1" lines-covered="0" lines-valid="0" branches-covered="0" branches-valid="0" complexity="NaN" version="0" timestamp="1776249719">
+  <sources>
+    <source>/home/alaricd/prj/pengdows/pengdows.crud/pengdows.crud/</source>
+  </sources>
+  <packages />
+</coverage>

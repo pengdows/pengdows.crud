@@ -104,15 +104,15 @@ public partial class TableGateway<TEntity, TRowID>
             return 0;
         }
 
+        var ctx = context ?? _context;
         // Single entity fast path
         if (entities.Count == 1)
         {
-            var ctx = context ?? _context;
             var success = await CreateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
             return success ? 1 : 0;
         }
 
-        var containers = BuildBatchCreate(entities, context);
+        var containers = BuildBatchCreate(entities, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)
@@ -152,19 +152,19 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-
         if (entities.Count == 0)
         {
             return 0;
         }
 
+        var ctx = context ?? _context;
         // Single entity fast path
         if (entities.Count == 1)
         {
-            return await UpdateAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+            return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var containers = BuildBatchUpdate(entities, context);
+        var containers = BuildBatchUpdate(entities, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)
@@ -368,13 +368,14 @@ public partial class TableGateway<TEntity, TRowID>
             return 0;
         }
 
+        var ctx = context ?? _context;
         // Single entity fast path
         if (entities.Count == 1)
         {
-            return await UpsertAsync(entities[0], context, cancellationToken).ConfigureAwait(false);
+            return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var containers = BuildBatchUpsert(entities, context);
+        var containers = BuildBatchUpsert(entities, ctx);
         var totalAffected = 0;
 
         foreach (var sc in containers)

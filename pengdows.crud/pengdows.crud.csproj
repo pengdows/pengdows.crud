@@ -21,6 +21,9 @@
         <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
     </PropertyGroup>
     <ItemGroup>
+        <ProjectReference Include="..\tools\pengdows.crud.analyzers\pengdows.crud.analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+    <ItemGroup>
         <PackageReference Include="coverlet.collector" Version="6.0.4">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
