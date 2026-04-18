@@ -159,13 +159,15 @@ jobs:
           echo "📊 pengdows.crud line coverage (from ${xml_file}): $coverage_percent%"
 
           minimum_floor=83
-          baseline="${{ vars.COVERAGE_BASELINE }}"
-          if [[ -z "$baseline" ]]; then
-            echo "ℹ️ No COVERAGE_BASELINE variable set — using minimum floor"
-            baseline="$minimum_floor"
+          baseline_file=".github/coverage-baseline.txt"
+          if [[ ! -f "$baseline_file" ]]; then
+            echo "❌ Missing $baseline_file"
+            exit 1
           fi
+
+          baseline=$(tr -d '[:space:]' < "$baseline_file")
           if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid COVERAGE_BASELINE value: '$baseline'"
+            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
             exit 1
           fi
 
@@ -210,13 +212,15 @@ jobs:
           echo "📊 pengdows.stormgate line coverage (from ${xml_file}): $coverage_percent%"
 
           minimum_floor=83
-          baseline="${{ vars.COVERAGE_BASELINE_STORMGATE }}"
-          if [[ -z "$baseline" ]]; then
-            echo "ℹ️ No COVERAGE_BASELINE_STORMGATE variable set — using minimum floor"
-            baseline="$minimum_floor"
+          baseline_file=".github/coverage-baseline.stormgate.txt"
+          if [[ ! -f "$baseline_file" ]]; then
+            echo "❌ Missing $baseline_file"
+            exit 1
           fi
+
+          baseline=$(tr -d '[:space:]' < "$baseline_file")
           if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid COVERAGE_BASELINE_STORMGATE value: '$baseline'"
+            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
             exit 1
           fi
 
@@ -261,13 +265,15 @@ jobs:
           echo "📊 pengdows.crud.opentelemetry line coverage (from ${xml_file}): $coverage_percent%"
 
           minimum_floor=83
-          baseline="${{ vars.COVERAGE_BASELINE_OPENTELEMETRY }}"
-          if [[ -z "$baseline" ]]; then
-            echo "ℹ️ No COVERAGE_BASELINE_OPENTELEMETRY variable set — using minimum floor"
-            baseline="$minimum_floor"
+          baseline_file=".github/coverage-baseline.opentelemetry.txt"
+          if [[ ! -f "$baseline_file" ]]; then
+            echo "❌ Missing $baseline_file"
+            exit 1
           fi
+
+          baseline=$(tr -d '[:space:]' < "$baseline_file")
           if ! [[ "$baseline" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "❌ Invalid COVERAGE_BASELINE_OPENTELEMETRY value: '$baseline'"
+            echo "❌ Invalid baseline value in $baseline_file: '$baseline'"
             exit 1
           fi
 
@@ -555,44 +561,42 @@ jobs:
             exit 1
           fi
 
-      - name: Ratchet coverage baselines
-        if: steps.nuget_check.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
+          # Ratchet coverage baselines if this deploy improved coverage.
+          new_coverage="${{ needs.build-and-test.outputs.coverage }}"
+          current_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.txt)
+          is_higher=$(awk "BEGIN { print ($new_coverage > $current_baseline) ? 1 : 0 }")
+          if [[ "$is_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_coverage" > .github/coverage-baseline.txt
+            echo "📈 Coverage baseline ratcheted: ${current_baseline}% → ${new_coverage}%"
+          else
+            echo "ℹ️ Coverage baseline unchanged at ${current_baseline}%"
+          fi
 
-          ratchet() {
-            local var_name="$1" new_val="$2"
-            local current="${3:-0}"
-            if [[ -z "$current" ]]; then current="0"; fi
-            local is_higher
-            is_higher=$(awk "BEGIN { print ($new_val > $current) ? 1 : 0 }")
-            if [[ "$is_higher" -eq 1 ]]; then
-              gh variable set "$var_name" --body "$new_val"
-              echo "📈 $var_name ratcheted: ${current}% → ${new_val}%"
-            else
-              echo "ℹ️ $var_name unchanged at ${current}%"
-            fi
-          }
+          new_stormgate_coverage="${{ needs.build-and-test.outputs.stormgate_coverage }}"
+          current_stormgate_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.stormgate.txt)
+          is_stormgate_higher=$(awk "BEGIN { print ($new_stormgate_coverage > $current_stormgate_baseline) ? 1 : 0 }")
+          if [[ "$is_stormgate_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_stormgate_coverage" > .github/coverage-baseline.stormgate.txt
+            echo "📈 Stormgate coverage baseline ratcheted: ${current_stormgate_baseline}% → ${new_stormgate_coverage}%"
+          else
+            echo "ℹ️ Stormgate coverage baseline unchanged at ${current_stormgate_baseline}%"
+          fi
 
-          ratchet COVERAGE_BASELINE \
-            "${{ needs.build-and-test.outputs.coverage }}" \
-            "${{ vars.COVERAGE_BASELINE }}"
-
-          ratchet COVERAGE_BASELINE_STORMGATE \
-            "${{ needs.build-and-test.outputs.stormgate_coverage }}" \
-            "${{ vars.COVERAGE_BASELINE_STORMGATE }}"
-
-          ratchet COVERAGE_BASELINE_OPENTELEMETRY \
-            "${{ needs.build-and-test.outputs.opentelemetry_coverage }}" \
-            "${{ vars.COVERAGE_BASELINE_OPENTELEMETRY }}"
+          new_opentelemetry_coverage="${{ needs.build-and-test.outputs.opentelemetry_coverage }}"
+          current_opentelemetry_baseline=$(tr -d '[:space:]' < .github/coverage-baseline.opentelemetry.txt)
+          is_opentelemetry_higher=$(awk "BEGIN { print ($new_opentelemetry_coverage > $current_opentelemetry_baseline) ? 1 : 0 }")
+          if [[ "$is_opentelemetry_higher" -eq 1 ]]; then
+            printf '%s\n' "$new_opentelemetry_coverage" > .github/coverage-baseline.opentelemetry.txt
+            echo "📈 OpenTelemetry coverage baseline ratcheted: ${current_opentelemetry_baseline}% → ${new_opentelemetry_coverage}%"
+          else
+            echo "ℹ️ OpenTelemetry coverage baseline unchanged at ${current_opentelemetry_baseline}%"
+          fi
 
       - name: Commit semver bump
         if: ${{ !github.ref_protected && steps.nuget_check.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
-          git add Directory.Build.props
+          git add Directory.Build.props .github/coverage-baseline.txt .github/coverage-baseline.stormgate.txt .github/coverage-baseline.opentelemetry.txt
           git commit -m "chore: bump version to v${{ steps.next_version.outputs.next_version }} [skip ci]"
 
       - name: Push semver bump commit
