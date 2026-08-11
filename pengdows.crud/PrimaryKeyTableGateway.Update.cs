@@ -6,6 +6,7 @@
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -29,12 +30,29 @@ public partial class PrimaryKeyTableGateway<TEntity>
     }
 
     /// <inheritdoc/>
-    public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+    public async ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
-        // TODO: PrimaryKeyTableGateway does not support loading the original entity by row ID
-        // (there is no TRowID type parameter). The loadOriginal flag is ignored.
-        return BuildUpdateAsync(objectToUpdate, context, cancellationToken);
+        if (objectToUpdate == null)
+        {
+            throw new ArgumentNullException(nameof(objectToUpdate));
+        }
+
+        var ctx = context ?? _context;
+
+        if (loadOriginal)
+        {
+            var original = await RetrieveOneAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
+            if (original == null)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: row was deleted before update.", ctx.Product);
+            }
+
+            ConcurrencyConflictChecker.EnsureNotStale(_tableInfo, original, objectToUpdate, ctx.Product);
+        }
+
+        return BuildUpdateByPk(objectToUpdate, ctx);
     }
 
     /// <inheritdoc/>
@@ -48,7 +66,14 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         var ctx = context ?? _context;
         await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        if (rowsAffected == 0 && _versionColumn != null)
+        {
+            throw new ConcurrencyConflictException(
+                $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.", ctx.Product);
+        }
+
+        return rowsAffected;
     }
 
     /// <inheritdoc/>
@@ -58,7 +83,14 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var ctx = context ?? _context;
         await using var sc =
             await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        if (rowsAffected == 0 && _versionColumn != null)
+        {
+            throw new ConcurrencyConflictException(
+                $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.", ctx.Product);
+        }
+
+        return rowsAffected;
     }
 
     // =========================================================================

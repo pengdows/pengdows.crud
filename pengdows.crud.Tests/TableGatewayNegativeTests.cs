@@ -32,7 +32,7 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
     {
         await BuildTestTable();
         var entity = new TestEntity { Id = 123, Name = "missing" };
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
     }
 

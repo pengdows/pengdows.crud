@@ -36,6 +36,8 @@ method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System
 method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
 method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
+method pengdows.crud.IDatabaseContext::ColumnName<T, TValue>(System.Linq.Expressions.Expression`1<System.Func`2<T, TValue>>) -> string
+method pengdows.crud.IDatabaseContext::ColumnName<T>(System.Linq.Expressions.Expression`1<System.Func`2<T, object>>) -> string
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
@@ -49,6 +51,8 @@ method pengdows.crud.IDatabaseContext::GetSupportedIsolationLevels() -> System.C
 method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbParameter) -> string
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string
 method pengdows.crud.IDatabaseContext::WrapObjectName(string) -> string
+method pengdows.crud.IDatabaseContext::WrappedColumnName<T, TValue>(System.Linq.Expressions.Expression`1<System.Func`2<T, TValue>>) -> string
+method pengdows.crud.IDatabaseContext::WrappedColumnName<T>(System.Linq.Expressions.Expression`1<System.Func`2<T, object>>) -> string
 method pengdows.crud.IDatabaseContextFactory::Create(pengdows.crud.configuration.IDatabaseContextConfiguration, System.Data.Common.DbProviderFactory, Microsoft.Extensions.Logging.ILoggerFactory) -> pengdows.crud.IDatabaseContext
 method pengdows.crud.IEphemeralSecureString::Reveal() -> string
 method pengdows.crud.IEphemeralSecureString::WithRevealed(System.Action`1<string>) -> void

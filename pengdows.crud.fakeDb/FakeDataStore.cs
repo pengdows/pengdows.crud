@@ -540,6 +540,13 @@ public class FakeDataStore
     {
         var trimmed = whereClause.Trim();
 
+            // Strip a single fully-enclosing layer of parentheses, e.g.
+            // "(order_id = @k0 AND line_number = @k1)" from composite-key predicates.
+            while (IsFullyWrapped(trimmed))
+            {
+                trimmed = trimmed.Substring(1, trimmed.Length - 2).Trim();
+            }
+
             // AND: split and evaluate each part
             var andParts = Regex.Split(trimmed, @"\s+AND\s+", RegexOptions.IgnoreCase);
             if (andParts.Length > 1)
@@ -619,6 +626,33 @@ public class FakeDataStore
         throw new NotSupportedException(
             $"FakeDataStore: WHERE predicate not supported: '{trimmed}'. " +
             "Extend EvaluateWhereClause to handle this pattern.");
+    }
+
+    private static bool IsFullyWrapped(string s)
+    {
+        if (s.Length < 2 || s[0] != '(' || s[^1] != ')')
+        {
+            return false;
+        }
+
+        var depth = 0;
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '(')
+            {
+                depth++;
+            }
+            else if (s[i] == ')')
+            {
+                depth--;
+                if (depth == 0 && i != s.Length - 1)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return depth == 0;
     }
 
     private static bool EvaluateComparison(object? left, string op, object? right)

@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Linq.Expressions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -175,6 +176,34 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <param name="name">The identifier to wrap.</param>
     /// <returns>The wrapped identifier or an empty string if <paramref name="name"/> is null or empty.</returns>
     string WrapObjectName(string name);
+
+    /// <summary>
+    /// Returns the mapped database column name for the property identified by
+    /// <paramref name="expression"/>.
+    /// </summary>
+    /// <typeparam name="T">The entity type.</typeparam>
+    /// <typeparam name="TValue">The property's CLR type.</typeparam>
+    /// <param name="expression">A direct property-access lambda: <c>x => x.PropertyName</c>.</param>
+    /// <returns>The database column name as declared in <c>[Column("name", ...)]</c>.</returns>
+    string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression);
+
+    /// <summary>
+    /// Returns the mapped database column name for the property identified by
+    /// <paramref name="expression"/>, using an <c>object?</c>-typed lambda.
+    /// </summary>
+    string ColumnName<T>(Expression<Func<T, object?>> expression);
+
+    /// <summary>
+    /// Returns the dialect-quoted database column name for the property identified by
+    /// <paramref name="expression"/>.
+    /// </summary>
+    string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression);
+
+    /// <summary>
+    /// Returns the dialect-quoted database column name for the property identified by
+    /// <paramref name="expression"/>, using an <c>object?</c>-typed lambda.
+    /// </summary>
+    string WrappedColumnName<T>(Expression<Func<T, object?>> expression);
 
     /// <summary>
     /// Formats a parameter name according to the provider's conventions.

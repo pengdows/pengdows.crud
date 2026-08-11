@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -926,6 +927,11 @@ public class TableGatewayBatchTests : IAsyncLifetime
         {
             return _context.WrapObjectName(name);
         }
+
+        public string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => _context.ColumnName<T, TValue>(expression);
+        public string ColumnName<T>(Expression<Func<T, object?>> expression) => _context.ColumnName<T>(expression);
+        public string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => _context.WrappedColumnName<T, TValue>(expression);
+        public string WrappedColumnName<T>(Expression<Func<T, object?>> expression) => _context.WrappedColumnName<T>(expression);
 
         public string MakeParameterName(DbParameter dbParameter)
         {

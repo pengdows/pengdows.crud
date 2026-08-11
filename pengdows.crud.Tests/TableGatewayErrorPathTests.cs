@@ -142,12 +142,12 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateAsync_WithLoadOriginal_OriginalNotFound_ThrowsInvalidOperationException()
+    public async Task UpdateAsync_WithLoadOriginal_OriginalNotFound_ThrowsConcurrencyConflictException()
     {
         var helper = new TableGateway<TestEntity, long>(Context);
         var entity = new TestEntity { Id = 999, Name = "NonExistent" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.UpdateAsync(entity, true).AsTask());
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => helper.UpdateAsync(entity, true).AsTask());
     }
 
     [Fact]

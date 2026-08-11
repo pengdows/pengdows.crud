@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using System.Data;
@@ -119,6 +120,11 @@ public class SqlContainerConnectionSharingTests
         {
             return _context.WrapObjectName(name);
         }
+
+        public string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => _context.ColumnName<T, TValue>(expression);
+        public string ColumnName<T>(Expression<Func<T, object?>> expression) => _context.ColumnName<T>(expression);
+        public string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => _context.WrappedColumnName<T, TValue>(expression);
+        public string WrappedColumnName<T>(Expression<Func<T, object?>> expression) => _context.WrappedColumnName<T>(expression);
 
         public string MakeParameterName(DbParameter dbParameter)
         {

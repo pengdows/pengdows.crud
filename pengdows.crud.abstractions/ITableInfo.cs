@@ -21,6 +21,12 @@ internal interface ITableInfo
     IReadOnlyDictionary<string, IColumnInfo> Columns { get; }
 
     /// <summary>
+    /// Collection of columns keyed by CLR property name (case-sensitive).
+    /// Used for expression-based column name resolution.
+    /// </summary>
+    IReadOnlyDictionary<string, IColumnInfo> ColumnsByPropertyName { get; }
+
+    /// <summary>
     /// Columns sorted by their <see cref="IColumnInfo.Ordinal"/>.
     /// </summary>
     IReadOnlyList<IColumnInfo> OrderedColumns { get; }

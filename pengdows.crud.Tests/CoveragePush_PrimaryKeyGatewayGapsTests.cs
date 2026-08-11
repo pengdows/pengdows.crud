@@ -92,13 +92,26 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
     // =========================================================================
 
     [Fact]
-    public async Task BuildUpdateAsync_WithLoadOriginalTrue_DelegatesToBuildUpdateAsync()
+    public async Task BuildUpdateAsync_WithLoadOriginalTrue_ReloadsRow_ThrowsWhenRowMissing()
     {
         using var ctx = MakeContext();
         var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
         var entity = new GapOrderLine { OrderId = 1, LineNumber = 1, ProductCode = "X", Quantity = 3 };
 
-        // loadOriginal=true is silently ignored — should still build valid UPDATE SQL
+        // loadOriginal=true now actually reloads the row by PK before building SQL;
+        // since this entity was never created, the reload finds nothing.
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            async () => await gw.BuildUpdateAsync(entity, loadOriginal: true));
+    }
+
+    [Fact]
+    public async Task BuildUpdateAsync_WithLoadOriginalTrue_BuildsValidSql_WhenRowExists()
+    {
+        using var ctx = MakeContext();
+        var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
+        var entity = new GapOrderLine { OrderId = 1, LineNumber = 1, ProductCode = "X", Quantity = 3 };
+        await gw.CreateAsync(entity);
+
         await using var sc = await gw.BuildUpdateAsync(entity, loadOriginal: true);
         var sql = sc.Query.ToString();
 
@@ -143,6 +156,7 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
         using var ctx = MakeContext();
         var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
         var entity = new GapOrderLine { OrderId = 3, LineNumber = 1, ProductCode = "Z", Quantity = 2 };
+        await gw.CreateAsync(entity);
 
         var rows = await gw.UpdateAsync(entity, loadOriginal: true);
         Assert.True(rows >= 0);

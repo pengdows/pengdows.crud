@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -114,7 +115,7 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "one" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
     }
 }

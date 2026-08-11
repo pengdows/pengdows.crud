@@ -12,7 +12,10 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -80,6 +83,35 @@ public abstract class ContextBase : SafeAsyncDisposableBase
     public string WrapObjectName(string name)
     {
         return DialectCore.WrapObjectName(name);
+    }
+
+    /// <inheritdoc/>
+    public string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression)
+    {
+        // Cast is safe: all concrete subclasses (DatabaseContext, TransactionContext) implement ITypeMapAccessor.
+        var registry = ((ITypeMapAccessor)this).TypeMapRegistry;
+        return DialectCore.ColumnName(registry, expression);
+    }
+
+    /// <inheritdoc/>
+    public string ColumnName<T>(Expression<Func<T, object?>> expression)
+    {
+        var registry = ((ITypeMapAccessor)this).TypeMapRegistry;
+        return DialectCore.ColumnName(registry, expression);
+    }
+
+    /// <inheritdoc/>
+    public string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression)
+    {
+        var registry = ((ITypeMapAccessor)this).TypeMapRegistry;
+        return DialectCore.WrappedColumnName(registry, expression);
+    }
+
+    /// <inheritdoc/>
+    public string WrappedColumnName<T>(Expression<Func<T, object?>> expression)
+    {
+        var registry = ((ITypeMapAccessor)this).TypeMapRegistry;
+        return DialectCore.WrappedColumnName(registry, expression);
     }
 
     /// <inheritdoc/>

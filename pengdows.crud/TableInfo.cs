@@ -54,6 +54,13 @@ internal class TableInfo : ITableInfo
     // ITableInfo exposes a read-only view so callers holding ITableInfo cannot mutate metadata.
     IReadOnlyDictionary<string, IColumnInfo> ITableInfo.Columns => Columns;
 
+    // Reverse index keyed by CLR property name (case-sensitive) for expression-based resolution.
+    // Populated by TypeMapRegistry alongside Columns; used by SqlDialectExtensions lookups.
+    internal Dictionary<string, IColumnInfo> ColumnsByPropertyName { get; } =
+        new(StringComparer.Ordinal);
+
+    IReadOnlyDictionary<string, IColumnInfo> ITableInfo.ColumnsByPropertyName => ColumnsByPropertyName;
+
     /// <summary>
     /// Gets or sets the database schema name (e.g., "dbo", "public").
     /// </summary>

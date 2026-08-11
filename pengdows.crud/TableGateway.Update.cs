@@ -22,6 +22,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -67,8 +68,11 @@ public partial class TableGateway<TEntity, TRowID>
             original = await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             if (original == null)
             {
-                throw new InvalidOperationException("Original record not found for update.");
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: row was deleted before update.", ctx.Product);
             }
+
+            ConcurrencyConflictChecker.EnsureNotStale(_tableInfo, original, objectToUpdate, ctx.Product);
         }
 
         return BuildUpdateInternal(objectToUpdate, original, ctx);

@@ -352,6 +352,7 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
         }
 
         tableInfo.Columns[ci.Name] = ci;
+        tableInfo.ColumnsByPropertyName[prop.Name] = ci;
     }
 
     private static void CaptureSpecialColumns(Type entityType, TableInfo tableInfo, ColumnInfo ci)

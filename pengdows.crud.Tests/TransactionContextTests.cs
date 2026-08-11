@@ -8,6 +8,7 @@ using System.Data;
 using System.Text.RegularExpressions;
 using System.Data.Common;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -368,6 +369,10 @@ public class TransactionContextTests
         public string CompositeIdentifierSeparator => _dialect.CompositeIdentifierSeparator;
 
         public string WrapObjectName(string name) => _dialect.WrapObjectName(name);
+        public string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => throw new NotImplementedException();
+        public string ColumnName<T>(Expression<Func<T, object?>> expression) => throw new NotImplementedException();
+        public string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => throw new NotImplementedException();
+        public string WrappedColumnName<T>(Expression<Func<T, object?>> expression) => throw new NotImplementedException();
 
         public string MakeParameterName(DbParameter dbParameter) => _dialect.MakeParameterName(dbParameter);
 

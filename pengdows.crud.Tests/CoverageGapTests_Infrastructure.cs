@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using System.Data;
@@ -152,6 +153,10 @@ public class CoverageGapTests_Infrastructure
 
         public DbParameter CreateDbParameter<T>(DbType type, T value) => throw new NotImplementedException();
         public string WrapObjectName(string name) => throw new NotImplementedException();
+        public string ColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => throw new NotImplementedException();
+        public string ColumnName<T>(Expression<Func<T, object?>> expression) => throw new NotImplementedException();
+        public string WrappedColumnName<T, TValue>(Expression<Func<T, TValue>> expression) => throw new NotImplementedException();
+        public string WrappedColumnName<T>(Expression<Func<T, object?>> expression) => throw new NotImplementedException();
         public string MakeParameterName(DbParameter dbParameter) => throw new NotImplementedException();
         public string MakeParameterName(string parameterName) => throw new NotImplementedException();
 
