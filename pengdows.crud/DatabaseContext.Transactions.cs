@@ -21,7 +21,6 @@ using System.Data;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
-using pengdows.crud.exceptions;
 
 namespace pengdows.crud;
 
@@ -49,14 +48,7 @@ public partial class DatabaseContext
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write)
     {
-        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
-            && Product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
-        {
-            throw new TransactionModeNotSupportedException(
-                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
-        }
-
-        var level = _isolationResolver.Resolve(isolationProfile);
+        var level = _isolationResolver.ResolveForTransaction(isolationProfile);
         return BeginTransaction(level, executionType);
     }
 
@@ -77,14 +69,7 @@ public partial class DatabaseContext
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default)
     {
-        if (isolationProfile == IsolationProfile.SafeNonBlockingReads
-            && Product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
-        {
-            throw new TransactionModeNotSupportedException(
-                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
-        }
-
-        var level = _isolationResolver.Resolve(isolationProfile);
+        var level = _isolationResolver.ResolveForTransaction(isolationProfile);
         return await BeginTransactionAsync(level, executionType, cancellationToken)
             .ConfigureAwait(false);
     }

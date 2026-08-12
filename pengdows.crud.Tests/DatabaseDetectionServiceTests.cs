@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using Xunit;
@@ -234,6 +235,45 @@ public class DatabaseDetectionServiceTests
     {
         var result = DatabaseDetectionService.DetectProduct(null, null);
         Assert.Equal(SupportedDatabase.Unknown, result);
+    }
+
+    #endregion
+
+    #region Detection Evidence
+
+    [Fact]
+    public void DetectFromConnectionWithDetail_FlavorProbeThrows_RecordsFailureButStillResolvesViaSchemaFallback()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.SetFailOnCommand(true);
+
+        var result = DatabaseDetectionService.DetectFromConnectionWithDetail(connection);
+
+        // Public-facing behavior unchanged: schema-based detection still resolves MySql
+        // even though the flavor-refinement probe (which needs CreateCommand) fails.
+        Assert.Equal(SupportedDatabase.MySql, result.ResolvedProduct);
+
+        // BUG today: this evidence is silently discarded — DetectFromConnection returns
+        // a bare enum with zero trace of the flavor-probe failure.
+        Assert.Contains(result.Attempts, a => !a.Succeeded && !string.IsNullOrEmpty(a.FailureReason));
+
+        // Existing bare-enum entry point is unchanged and still works identically.
+        connection.SetFailOnCommand(true);
+        var bare = DatabaseDetectionService.DetectFromConnection(connection);
+        Assert.Equal(result.ResolvedProduct, bare);
+    }
+
+    [Fact]
+    public void DetectFromConnectionWithDetail_Success_RecordsSuccessfulAttempts()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        using var connection = factory.CreateConnection();
+
+        var result = DatabaseDetectionService.DetectFromConnectionWithDetail(connection);
+
+        Assert.Equal(SupportedDatabase.PostgreSql, result.ResolvedProduct);
+        Assert.Contains(result.Attempts, a => a.Succeeded);
     }
 
     #endregion

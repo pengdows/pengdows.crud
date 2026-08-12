@@ -273,6 +273,7 @@ property pengdows.crud.IDataSourceInformation::ParameterMarker : string { get; }
 property pengdows.crud.IDataSourceInformation::ParameterMarkerPattern : string { get; }
 property pengdows.crud.IDataSourceInformation::ParameterNameMaxLength : int { get; }
 property pengdows.crud.IDataSourceInformation::ParameterNamePatternRegex : System.Text.RegularExpressions.Regex { get; }
+property pengdows.crud.IDataSourceInformation::ParsedVersion : System.Version { get; }
 property pengdows.crud.IDataSourceInformation::ProcWrappingStyle : pengdows.crud.enums.ProcWrappingStyle { get; }
 property pengdows.crud.IDataSourceInformation::Product : pengdows.crud.enums.SupportedDatabase { get; }
 property pengdows.crud.IDataSourceInformation::QuotePrefix : string { get; }
@@ -318,6 +319,7 @@ property pengdows.crud.IMapperOptions::ColumnsOnly : bool { get; }
 property pengdows.crud.IMapperOptions::EnumMode : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IMapperOptions::NamePolicy : System.Func`2<string, string> { get; }
 property pengdows.crud.IMapperOptions::Strict : bool { get; }
+property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::WrappedTableName : string { get; }
 property pengdows.crud.ISqlContainer::CompositeIdentifierSeparator : string { get; }
@@ -328,6 +330,7 @@ property pengdows.crud.ISqlContainer::QuotePrefix : string { get; }
 property pengdows.crud.ISqlContainer::QuoteSuffix : string { get; }
 property pengdows.crud.ISqlQueryBuilder::Length : int { get; }
 property pengdows.crud.ISqlQueryBuilder::Version : int { get; }
+property pengdows.crud.ITableGateway`2<TEntity, TRowID>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::WrappedTableName : string { get; }
 property pengdows.crud.ITransactionContext::IsCompleted : bool { get; }
@@ -342,6 +345,8 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetric
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableSingleWriterFairness : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentReads : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentWrites : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxQueuedReads : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxQueuedWrites : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MetricsOptions : pengdows.crud.metrics.IMetricsOptions { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ModeLockTimeout : System.Nullable`1<System.TimeSpan> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::PoolAcquireTimeout : System.TimeSpan { get; set; }
@@ -350,6 +355,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ProviderName
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : pengdows.crud.enums.SessionInitializationFailureMode { get; set; }
 property pengdows.crud.connection.IConnectionLocalState::PrepareDisabled : bool { get; }
 property pengdows.crud.connection.IConnectionLocalState::SessionSettingsApplied : bool { get; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }

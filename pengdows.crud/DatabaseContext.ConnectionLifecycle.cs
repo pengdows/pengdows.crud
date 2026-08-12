@@ -27,6 +27,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.threading;
@@ -209,6 +210,12 @@ public partial class DatabaseContext
             // logical connection will retry the SET on next first-open. For StandardMode
             // (ephemeral connections) each TrackedConnection is fresh anyway.
             _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
+            {
+                throw new ConnectionException(
+                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                    Product, ex);
+            }
             return;
         }
 
@@ -289,6 +296,12 @@ public partial class DatabaseContext
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
+            {
+                throw new ConnectionException(
+                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                    Product, ex);
+            }
             return;
         }
 

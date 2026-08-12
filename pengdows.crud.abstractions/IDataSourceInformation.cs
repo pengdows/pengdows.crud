@@ -61,6 +61,12 @@ public interface IDataSourceInformation
     string DatabaseProductVersion { get; }
 
     /// <summary>
+    /// Gets the parsed <see cref="System.Version"/> of the database product, or
+    /// <c>null</c> if the version string could not be parsed.
+    /// </summary>
+    Version? ParsedVersion { get; }
+
+    /// <summary>
     /// Gets the separator used when quoting composite identifiers (e.g., schema.table).
     /// </summary>
     string CompositeIdentifierSeparator { get; }

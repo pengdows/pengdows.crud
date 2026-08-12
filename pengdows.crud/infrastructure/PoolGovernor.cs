@@ -44,6 +44,8 @@ namespace pengdows.crud.infrastructure;
 internal sealed class PoolGovernor : IDisposable
 {
     private const string NotInitializedMessage = "Pool governor is not initialized.";
+    private const int QueueDepthMultiplier = 8;
+    private const int MinQueueDepth = 32;
     private static readonly ConditionalWeakTable<SemaphoreSlim, TurnstileState> SharedTurnstileStates = new();
 
     private readonly PoolLabel _label;
@@ -52,6 +54,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly TimeSpan _acquireTimeout;
     private readonly long _acquireTimeoutStopwatchTicks;
     private readonly int _maxSlots;
+    private readonly int _maxQueueDepth;
     private readonly bool _disabled;
     private readonly bool _forbidden;
     private readonly bool _trackMetrics;
@@ -69,6 +72,7 @@ internal sealed class PoolGovernor : IDisposable
     private long _peakInUse;
     private long _queued;
     private long _peakQueued;
+    private long _queueDepth; // unconditional — decoupled from _trackMetrics, used only for admission control.
     private long _turnstileQueued;
     private long _peakTurnstileQueued;
     private long _totalAcquired;
@@ -89,7 +93,8 @@ internal sealed class PoolGovernor : IDisposable
         SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
-        bool ownsTurnstile = false)
+        bool ownsTurnstile = false,
+        int? maxQueueDepth = null)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -127,7 +132,13 @@ internal sealed class PoolGovernor : IDisposable
             throw new ArgumentOutOfRangeException(nameof(maxSlots), "Pool governor requires at least one slot.");
         }
 
+        if (maxQueueDepth is < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxQueueDepth), "Queue depth cap must be >= 0.");
+        }
+
         _maxSlots = maxSlots;
+        _maxQueueDepth = maxQueueDepth ?? Math.Max(maxSlots * QueueDepthMultiplier, MinQueueDepth);
 
         if (sharedSemaphore != null)
         {
@@ -159,6 +170,13 @@ internal sealed class PoolGovernor : IDisposable
 
     public PoolLabel Label => _label;
     public string PoolKeyHash => _poolKeyHash;
+
+    /// <summary>
+    /// Maximum number of callers allowed to queue for a slot before further callers are
+    /// rejected immediately with <see cref="PoolSaturatedException"/>, rather than waiting
+    /// out the full acquire timeout. Exposed internally for test verification.
+    /// </summary>
+    internal int MaxQueueDepth => _maxQueueDepth;
 
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
@@ -262,6 +280,15 @@ internal sealed class PoolGovernor : IDisposable
                 return OnAcquired(waitStart, releaseWriterInterestOnRelease);
             }
 
+            // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
+            // so a caller storm is bounded even when metrics tracking is disabled.
+            var queueDepth = Interlocked.Increment(ref _queueDepth);
+            if (queueDepth > _maxQueueDepth)
+            {
+                Interlocked.Decrement(ref _queueDepth);
+                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+            }
+
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
             if (_trackMetrics)
             {
@@ -302,6 +329,7 @@ internal sealed class PoolGovernor : IDisposable
                 {
                     Interlocked.Decrement(ref _queued);
                 }
+                Interlocked.Decrement(ref _queueDepth);
             }
         }
         catch
@@ -484,6 +512,15 @@ internal sealed class PoolGovernor : IDisposable
                 return OnAcquired(waitStart, releaseWriterInterestOnRelease);
             }
 
+            // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
+            // so a caller storm is bounded even when metrics tracking is disabled.
+            var queueDepth = Interlocked.Increment(ref _queueDepth);
+            if (queueDepth > _maxQueueDepth)
+            {
+                Interlocked.Decrement(ref _queueDepth);
+                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+            }
+
             var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
             if (_trackMetrics)
             {
@@ -524,6 +561,7 @@ internal sealed class PoolGovernor : IDisposable
                 {
                     Interlocked.Decrement(ref _queued);
                 }
+                Interlocked.Decrement(ref _queueDepth);
             }
         }
         catch

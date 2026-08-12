@@ -132,13 +132,15 @@ public abstract partial class BaseTableGateway<TEntity>
 
         var timestamp = ResolveAuditTimestamp(auditValues);
 
-        if (_auditLastUpdatedOnSetter != null)
+        if (_auditLastUpdatedOnSetter != null
+            && (updateOnly ? !_tableInfo.LastUpdatedOn!.IsNonUpdateable : !_tableInfo.LastUpdatedOn!.IsNonInsertable))
         {
             var coercedTime = CoerceTimestamp(timestamp, _tableInfo.LastUpdatedOn!.PropertyInfo.PropertyType);
             _auditLastUpdatedOnSetter(obj, coercedTime);
         }
 
-        if (_auditLastUpdatedBySetter != null && auditValues != null)
+        if (_auditLastUpdatedBySetter != null && auditValues != null
+            && (updateOnly ? !_tableInfo.LastUpdatedBy!.IsNonUpdateable : !_tableInfo.LastUpdatedBy!.IsNonInsertable))
         {
             var coercedUserId = Coerce(auditValues.UserId, _tableInfo.LastUpdatedBy!.PropertyInfo.PropertyType);
             _auditLastUpdatedBySetter(obj, coercedUserId);
@@ -149,20 +151,21 @@ public abstract partial class BaseTableGateway<TEntity>
             return;
         }
 
-        if (_auditCreatedOnSetter != null)
+        if (_auditCreatedOnSetter != null && !_tableInfo.CreatedOn!.IsNonInsertable)
         {
             var currentValue = _tableInfo.CreatedOn!.MakeParameterValueFromField(obj);
-            if (IsDefaultTimestamp(currentValue))
+            if (AuditCreationPolicy == pengdows.crud.enums.AuditCreationPolicy.Authoritative || IsDefaultTimestamp(currentValue))
             {
                 var coercedTime = CoerceTimestamp(timestamp, _tableInfo.CreatedOn.PropertyInfo.PropertyType);
                 _auditCreatedOnSetter(obj, coercedTime);
             }
         }
 
-        if (_auditCreatedBySetter != null && auditValues != null)
+        if (_auditCreatedBySetter != null && auditValues != null && !_tableInfo.CreatedBy!.IsNonInsertable)
         {
             var currentValue = _tableInfo.CreatedBy!.MakeParameterValueFromField(obj);
-            if (currentValue == null
+            if (AuditCreationPolicy == pengdows.crud.enums.AuditCreationPolicy.Authoritative
+                || currentValue == null
                 || currentValue as string == string.Empty
                 || Utils.IsZeroNumeric(currentValue)
                 || (currentValue is Guid guid && guid == Guid.Empty))

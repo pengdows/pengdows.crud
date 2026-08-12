@@ -117,6 +117,9 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// <inheritdoc/>
     public EnumParseFailureMode EnumParseBehavior { get; init; }
 
+    /// <inheritdoc/>
+    public AuditCreationPolicy AuditCreationPolicy { get; set; } = AuditCreationPolicy.PreserveExplicitValues;
+
     protected IDatabaseContext Context => _context;
 
     // =========================================================================

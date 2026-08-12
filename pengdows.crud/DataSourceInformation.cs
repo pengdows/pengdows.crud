@@ -79,8 +79,14 @@ internal class DataSourceInformation : IDataSourceInformation
         ParsedVersion = info.ParsedVersion;
         Product = info.DatabaseType;
         StandardCompliance = info.StandardCompliance;
-        ParameterMarkerPattern = string.Empty;
+        ParameterMarkerPattern = BuildParameterMarkerPattern(dialect);
         ParameterNamePatternRegex = dialect.ParameterNamePattern;
+    }
+
+    private static string BuildParameterMarkerPattern(ISqlDialect dialect)
+    {
+        var escapedMarker = Regex.Escape(dialect.ParameterMarker);
+        return dialect.SupportsNamedParameters ? escapedMarker + "\\w+" : escapedMarker;
     }
 
     /// <inheritdoc />

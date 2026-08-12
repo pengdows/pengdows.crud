@@ -218,10 +218,16 @@ public partial class DatabaseContext
                         break;
                 }
             };
-            // ExecuteSessionSettings handles its own exceptions internally (logs + returns).
-            // No outer try-catch needed here.
+            // ExecuteSessionSettings/ExecuteSessionSettingsAsync handle their own exceptions
+            // internally (log + return, or throw ConnectionException when FailClosed is
+            // configured). No outer try-catch needed here for the sync handlers.
             _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
             _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
+            // The async handlers keep a thin outer catch — NOT to re-catch session-settings
+            // failures (ExecuteSessionSettingsAsync already handles those, including the
+            // FailClosed throw), but purely as a safety net for the logging call inside its
+            // own catch block throwing (e.g. a broken logging sink). OperationCanceledException
+            // and ConnectionException (the FailClosed signal) must still propagate untouched.
             _firstOpenHandlerAsyncRw = async (tc, ct) =>
             {
                 try
@@ -229,6 +235,10 @@ public partial class DatabaseContext
                     await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (ConnectionException)
                 {
                     throw;
                 }
@@ -247,6 +257,10 @@ public partial class DatabaseContext
                 {
                     throw;
                 }
+                catch (ConnectionException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
@@ -257,6 +271,9 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
+            _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
+            _maxQueuedWrites = configuration.MaxQueuedWrites;
+            _maxQueuedReads = configuration.MaxQueuedReads;
             _configuredReadPoolSize = normalizedReadPoolSize;
             _configuredWritePoolSize = normalizedWritePoolSize;
             if (configuration.EnableMetrics)
@@ -740,7 +757,8 @@ public partial class DatabaseContext
             _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: true,
-            ownsTurnstile: turnstile != null); // Writers hold turnstile until slot released
+            ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
+            maxQueueDepth: _maxQueuedWrites);
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -751,7 +769,8 @@ public partial class DatabaseContext
             _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: false,
-            ownsTurnstile: false); // Readers touch-and-release turnstile
+            ownsTurnstile: false, // Readers touch-and-release turnstile
+            maxQueueDepth: _maxQueuedReads);
 
         // Attach slot for modes with persistent connections.
         if (ConnectionMode == DbMode.KeepAlive)
@@ -1304,7 +1323,8 @@ public partial class DatabaseContext
         bool trackMetrics = false,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
-        bool ownsTurnstile = false)
+        bool ownsTurnstile = false,
+        int? maxQueueDepth = null)
     {
         if (disabled || !maxSlots.HasValue)
         {
@@ -1329,7 +1349,8 @@ public partial class DatabaseContext
             sharedSemaphore: sharedSemaphore,
             turnstile: turnstile,
             holdTurnstile: holdTurnstile,
-            ownsTurnstile: ownsTurnstile);
+            ownsTurnstile: ownsTurnstile,
+            maxQueueDepth: maxQueueDepth);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)
