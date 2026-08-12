@@ -35,6 +35,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 {
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
+    private readonly IAsyncDisposable? _contextLocker;
     private DbCommand? _command;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
@@ -50,11 +51,13 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         bool shouldCloseConnection,
         DbCommand? command = null,
         MetricsCollector? metricsCollector = null,
-        IReaderLifetimeListener? lifetimeListener = null)
+        IReaderLifetimeListener? lifetimeListener = null,
+        IAsyncDisposable? contextLocker = null)
     {
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
+        _contextLocker = contextLocker;
         _shouldCloseConnection = shouldCloseConnection;
         _command = command;
         _metricsCollector = metricsCollector;
@@ -85,7 +88,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             _connection.Dispose();
         }
 
-        DisposeLockerSynchronously();
+        DisposeLockerSynchronously(_connectionLocker);
+        DisposeLockerSynchronously(_contextLocker);
         _lifetimeListener?.OnReaderDisposed();
     }
 
@@ -286,6 +290,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
 
         await _connectionLocker.DisposeAsync().ConfigureAwait(false);
+        if (_contextLocker != null)
+        {
+            await _contextLocker.DisposeAsync().ConfigureAwait(false);
+        }
+
         _lifetimeListener?.OnReaderDisposed();
     }
 
@@ -437,20 +446,20 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
     }
 
-    private void DisposeLockerSynchronously()
+    private static void DisposeLockerSynchronously(IAsyncDisposable? locker)
     {
-        if (_connectionLocker == null)
+        if (locker == null)
         {
             return;
         }
 
-        if (_connectionLocker is IDisposable disposable)
+        if (locker is IDisposable disposable)
         {
             disposable.Dispose();
             return;
         }
 
-        Task.Run(async () => { await _connectionLocker.DisposeAsync().ConfigureAwait(false); }).GetAwaiter()
+        Task.Run(async () => { await locker.DisposeAsync().ConfigureAwait(false); }).GetAwaiter()
             .GetResult();
     }
 
