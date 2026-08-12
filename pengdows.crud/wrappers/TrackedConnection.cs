@@ -57,12 +57,15 @@ namespace pengdows.crud.wrappers;
 ///   <item><description>
 ///     <b>Shared connections (isSharedConnection=true):</b> Returns <see cref="RealAsyncLocker"/> backed by
 ///     <see cref="SemaphoreSlim"/>. This serializes access to the connection, ensuring only one operation
-///     at a time can use it. Used in SingleWriter and SingleConnection modes.
+///     at a time can use it. Used in SingleConnection mode for the one persistent connection every
+///     operation reuses.
 ///   </description></item>
 ///   <item><description>
 ///     <b>Ephemeral connections (isSharedConnection=false):</b> Returns <see cref="NoOpAsyncLocker"/>.
-///     No locking overhead since each operation gets its own connection. Used in Standard and KeepAlive modes
-///     (and for read connections in SingleWriter mode).
+///     No locking overhead since each operation gets its own connection. Used in Standard and KeepAlive
+///     modes, and for <em>all</em> connections (read and write) in SingleWriter mode — write concurrency
+///     there is serialized by <c>PoolGovernor</c> admission control (<c>MaxConcurrentWrites=1</c>), not
+///     by a connection-level lock, so there is no persistent connection to lock in the first place.
 ///   </description></item>
 /// </list>
 /// <para>

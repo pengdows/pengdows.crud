@@ -4,7 +4,15 @@
 //
 // AI SUMMARY:
 // - Implements ILockerAsync with actual SemaphoreSlim-based locking.
-// - Used for shared (persistent) connections in SingleWriter/SingleConnection modes.
+// - Used for two independent purposes, both genuine shared-resource serialization:
+//   * TrackedConnection's shared (persistent) connection lock in SingleConnection mode
+//     (the one connection every operation reuses).
+//   * The connection-open serialization gate (RequiresSerializedOpen) for providers that
+//     require single-threaded connection opens (currently DuckDB) — see
+//     DatabaseContext.GetConnectionOpenLock().
+// - SingleWriter mode does NOT use this locker: it serializes writes via PoolGovernor
+//   (MaxConcurrentWrites=1) over ephemeral, NoOp-locked connections
+//   (StandardConnectionStrategy) — there is no persistent connection to lock.
 // - Key methods:
 //   * Lock(): Sync lock acquisition with optional timeout
 //   * LockAsync(ct): Async lock acquisition with cancellation
