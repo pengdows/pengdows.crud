@@ -178,6 +178,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private SessionInitializationFailureMode _sessionInitializationFailureMode = SessionInitializationFailureMode.BestEffort;
     private int? _maxQueuedWrites;
     private int? _maxQueuedReads;
+    private IReadOnlyList<string>? _uniqueConnectionStringClaims;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
@@ -483,6 +484,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         DisposePoolGovernors();
         DisposeOwnedDataSources();
+        UniqueConnectionStringRegistry.ReleaseAll(this, _uniqueConnectionStringClaims);
+        _uniqueConnectionStringClaims = null;
 
         base.DisposeManaged();
     }
@@ -527,6 +530,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         await DisposePoolGovernorsAsync().ConfigureAwait(false);
         await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
+        UniqueConnectionStringRegistry.ReleaseAll(this, _uniqueConnectionStringClaims);
+        _uniqueConnectionStringClaims = null;
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }

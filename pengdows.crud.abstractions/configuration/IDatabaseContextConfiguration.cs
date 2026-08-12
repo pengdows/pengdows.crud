@@ -190,4 +190,29 @@ public interface IDatabaseContextConfiguration
     /// built-in default (proportional to <see cref="MaxConcurrentReads"/>).
     /// </summary>
     int? MaxQueuedReads { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, throws <see cref="InvalidOperationException"/> at construction if another
+    /// live <c>DatabaseContext</c> in this process already uses the same connection string (or
+    /// <see cref="ReadOnlyConnectionString"/>). Defaults to <c>false</c> — current (2.0) behavior,
+    /// with no cross-context checking.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two <c>DatabaseContext</c> instances pointed at the same physical connection string each run
+    /// independent <c>PoolGovernor</c> admission control — neither one knows about the other, so
+    /// their combined admitted connections can exceed what the underlying provider pool was sized
+    /// for. The supported pattern is one <c>DatabaseContext</c> per connection string, registered
+    /// as a singleton; this flag is an opt-in safety net for production that catches the common
+    /// misconfiguration (e.g. accidentally registering the context as non-singleton) without
+    /// affecting anyone who doesn't enable it.
+    /// </para>
+    /// <para>
+    /// Left <c>false</c> by default specifically so test suites (including this library's own,
+    /// and consumers using <c>pengdows.crud.fakeDb</c>) can freely construct many contexts against
+    /// the same connection string — a fake/test connection string doesn't represent a real
+    /// contended physical resource, so the check would produce false positives there.
+    /// </para>
+    /// </remarks>
+    bool EnforceUniqueConnectionString { get; set; }
 }

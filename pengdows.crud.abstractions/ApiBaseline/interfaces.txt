@@ -343,6 +343,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ConnectionSt
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DbMode : pengdows.crud.enums.DbMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetrics : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableSingleWriterFairness : bool { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::EnforceUniqueConnectionString : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentReads : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxConcurrentWrites : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::MaxQueuedReads : System.Nullable`1<int> { get; set; }

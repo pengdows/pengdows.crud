@@ -406,6 +406,11 @@ public partial class DatabaseContext
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
 
+            if (configuration.EnforceUniqueConnectionString)
+            {
+                _uniqueConnectionStringClaims = ClaimUniqueConnectionStrings(configuration);
+            }
+
             // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
         }
         catch (Exception e)
@@ -1634,6 +1639,24 @@ public partial class DatabaseContext
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Claims the raw, caller-supplied connection string(s) — not the internally-decorated
+    /// reader/writer variants — for <see cref="IDatabaseContextConfiguration.EnforceUniqueConnectionString"/>.
+    /// </summary>
+    private IReadOnlyList<string> ClaimUniqueConnectionStrings(IDatabaseContextConfiguration configuration)
+    {
+        var keys = new List<string>(2) { ComputePoolKeyHash(configuration.ConnectionString) };
+
+        if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
+            !string.Equals(configuration.ReadOnlyConnectionString, configuration.ConnectionString,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            keys.Add(ComputePoolKeyHash(configuration.ReadOnlyConnectionString));
+        }
+
+        return UniqueConnectionStringRegistry.ClaimAll(this, keys);
     }
 
     private string BuildReadOnlyConnectionStringFromBase(string baseConnectionString)
