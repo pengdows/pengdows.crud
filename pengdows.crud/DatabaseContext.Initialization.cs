@@ -739,7 +739,16 @@ public partial class DatabaseContext
         // read replica), sharing the turnstile would incorrectly gate replica reads behind
         // primary writes — those operations are independent and should not compete.
         // Also skip when writes are forbidden — no writes means no turnstile needed.
-        var sharesTurnstile = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
+        //
+        // NOTE: this is deliberately NOT a comparison of the writer/reader connection-string
+        // hashes (writerKey/readerKey) — those strings are intentionally mutated differently
+        // for reader vs. writer during InitializeReadOnlyConnectionResources (pooling stripped
+        // from the reader, an "-rw" ApplicationName suffix + MaxPoolSize=1 on the writer) even
+        // when the caller supplied only one connection string, so a hash comparison is always
+        // false for the common single-connection-string SingleWriter case. Whether reader and
+        // writer target the same physical server is determined by whether the caller supplied
+        // an explicit ReadOnlyConnectionString, not by whether the derived strings still match.
+        var sharesTurnstile = !_explicitReadOnlyConnectionString;
 
         SemaphoreSlim? turnstile = null;
         if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile
