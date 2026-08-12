@@ -1467,9 +1467,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
                 cmd,
                 metrics,
-                this);
+                this,
+                contextLocker);
             cmd = null;
-            lockTransferred = true; // TrackedReader now owns the lock
+            lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
             if (activity != null)
             {
@@ -1559,7 +1560,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
-            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            if (!lockTransferred && contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
             {
                 try
                 {
