@@ -74,10 +74,19 @@ internal static class DatabaseDetectionService
     /// Preferred method when connection is available.
     /// </summary>
     public static SupportedDatabase DetectFromConnection(IDbConnection? connection)
+        => DetectFromConnectionWithDetail(connection).ResolvedProduct;
+
+    /// <summary>
+    /// Same detection as <see cref="DetectFromConnection"/>, but returns the full trail of
+    /// probes attempted (and why any of them failed) instead of discarding that evidence.
+    /// </summary>
+    internal static DatabaseDetectionResult DetectFromConnectionWithDetail(IDbConnection? connection)
     {
+        var attempts = new List<DetectionProbeAttempt>();
+
         if (connection == null)
         {
-            return SupportedDatabase.Unknown;
+            return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
         }
 
         try
@@ -112,49 +121,60 @@ internal static class DatabaseDetectionService
                     if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
                         productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
                     {
-                        return SupportedDatabase.MariaDb;
+                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
+                        return new DatabaseDetectionResult(SupportedDatabase.MariaDb, attempts);
                     }
 
                     // TiDB reports DataSourceProductName = "MySQL" but its version contains "TiDB"
                     if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
                         productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
                     {
-                        return SupportedDatabase.TiDb;
+                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
+                        return new DatabaseDetectionResult(SupportedDatabase.TiDb, attempts);
                     }
                 }
+
+                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
             }
-            catch
+            catch (Exception ex)
             {
                 // Schema unavailable — continue to flavor detection
+                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message));
             }
 
             // Step 2: Flavor refinement — runs probes gated on the base product.
             // Aurora MySQL probe only runs for MySql/Unknown base; Aurora PG only for PostgreSql/Unknown.
             // This avoids unnecessary round-trips to SQLite, Oracle, SQL Server, etc.
-            var flavor = DetectFlavor(connection, detected);
+            var (flavor, flavorAttempts) = DetectFlavorWithDetail(connection, detected);
+            attempts.AddRange(flavorAttempts);
             if (flavor != SupportedDatabase.Unknown)
             {
-                return flavor;
+                return new DatabaseDetectionResult(flavor, attempts);
             }
 
             if (detected != SupportedDatabase.Unknown)
             {
-                return detected;
+                return new DatabaseDetectionResult(detected, attempts);
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Fall back to other detection methods
+            attempts.Add(new DetectionProbeAttempt("DetectFromConnection", false, ex.Message));
         }
 
-        return SupportedDatabase.Unknown;
+        return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
     }
 
-    private static SupportedDatabase DetectFlavor(IDbConnection? connection, SupportedDatabase detected)
+    private static (SupportedDatabase Product, List<DetectionProbeAttempt> Attempts) DetectFlavorWithDetail(
+        IDbConnection? connection,
+        SupportedDatabase detected)
     {
+        var attempts = new List<DetectionProbeAttempt>();
+
         if (connection == null)
         {
-            return SupportedDatabase.Unknown;
+            return (SupportedDatabase.Unknown, attempts);
         }
 
         try
@@ -178,16 +198,19 @@ internal static class DatabaseDetectionService
             {
                 if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
                 {
-                    return SupportedDatabase.TiDb;
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.TiDb, attempts);
                 }
                 if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
                     serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
                 {
-                    return SupportedDatabase.YugabyteDb;
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.YugabyteDb, attempts);
                 }
                 if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
                 {
-                    return SupportedDatabase.CockroachDb;
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.CockroachDb, attempts);
                 }
             }
 
@@ -207,12 +230,14 @@ internal static class DatabaseDetectionService
                     cmd.CommandText = "SELECT @@aurora_version";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
                     {
-                        return SupportedDatabase.AuroraMySql;
+                        attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
+                        return (SupportedDatabase.AuroraMySql, attempts);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     /* not aurora mysql */
+                    attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", false, ex.Message));
                 }
             }
 
@@ -230,21 +255,27 @@ internal static class DatabaseDetectionService
 
                     if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
                     {
-                        return SupportedDatabase.TiDb;
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.TiDb, attempts);
                     }
                     if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
                         version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
                     {
-                        return SupportedDatabase.YugabyteDb;
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.YugabyteDb, attempts);
                     }
                     if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
                     {
-                        return SupportedDatabase.CockroachDb;
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.CockroachDb, attempts);
                     }
+
+                    attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
                 }
-                catch
+                catch (Exception ex)
                 {
                     /* version() not available */
+                    attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
                 }
             }
 
@@ -259,12 +290,16 @@ internal static class DatabaseDetectionService
                         "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
                     {
-                        return SupportedDatabase.YugabyteDb;
+                        attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
+                        return (SupportedDatabase.YugabyteDb, attempts);
                     }
+
+                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
                 }
-                catch
+                catch (Exception ex)
                 {
                     /* pg_settings unavailable — very unusual, continue */
+                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", false, ex.Message));
                 }
             }
 
@@ -278,21 +313,26 @@ internal static class DatabaseDetectionService
                     cmd.CommandText = "SELECT aurora_version()";
                     if (cmd.ExecuteScalar() is string { Length: > 0 })
                     {
-                        return SupportedDatabase.AuroraPostgreSql;
+                        attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
+                        return (SupportedDatabase.AuroraPostgreSql, attempts);
                     }
+
+                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
                 }
-                catch
+                catch (Exception ex)
                 {
                     /* not aurora pg */
+                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", false, ex.Message));
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Ignore
+            attempts.Add(new DetectionProbeAttempt("DetectFlavor", false, ex.Message));
         }
 
-        return SupportedDatabase.Unknown;
+        return (SupportedDatabase.Unknown, attempts);
     }
 
     /// <summary>

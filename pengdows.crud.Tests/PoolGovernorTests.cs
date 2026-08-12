@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.exceptions;
@@ -212,5 +213,50 @@ public sealed class PoolGovernorTests
 
         // If ObjectDisposedException propagated, this will rethrow it.
         await disposeTask;
+    }
+
+    // Regression: today, waiters beyond maxSlots pile up on the semaphore unbounded —
+    // the only shedding mechanism is the acquire-timeout deadline. This proves a
+    // (cap+1)th waiter is rejected immediately once the queue depth cap is hit,
+    // rather than waiting out the (deliberately long) acquire timeout.
+    [Fact]
+    public async Task AcquireAsync_WhenQueueDepthExceeded_ThrowsImmediately_NotAfterFullTimeout()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "queue-cap-key", 1,
+            TimeSpan.FromSeconds(30), trackMetrics: false); // metrics OFF on purpose — must still protect.
+
+        var held = await governor.AcquireAsync(); // occupies the only slot indefinitely
+        using var cts = new CancellationTokenSource();
+
+        var cap = governor.MaxQueueDepth;
+        var blockedWaiters = new Task[cap];
+        for (var i = 0; i < cap; i++)
+        {
+            blockedWaiters[i] = governor.AcquireAsync(cts.Token).AsTask();
+        }
+
+        try
+        {
+            // Give the queued waiters a moment to actually register as queued before
+            // sending the one that should be rejected immediately.
+            await Task.Delay(50);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await Assert.ThrowsAsync<PoolSaturatedException>(async () => await governor.AcquireAsync());
+            sw.Stop();
+
+            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
+                $"Expected immediate rejection, took {sw.Elapsed}");
+        }
+        finally
+        {
+            // Unblock and clean up the queued waiters so nothing lingers past this test.
+            cts.Cancel();
+            await held.DisposeAsync();
+            await Task.WhenAll(blockedWaiters.Select(async t =>
+            {
+                try { await t; } catch (OperationCanceledException) { }
+            }));
+        }
     }
 }

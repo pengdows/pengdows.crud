@@ -96,4 +96,84 @@ public class DatabaseContextConfigurationValidationTests
         config.MaxConcurrentReads = null;
         Assert.Null(config.MaxConcurrentReads);
     }
+
+    // -------------------------------------------------------------------------
+    // MaxQueuedWrites
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void MaxQueuedWrites_Default_IsNull()
+    {
+        var config = new DatabaseContextConfiguration();
+        Assert.Null(config.MaxQueuedWrites);
+    }
+
+    [Fact]
+    public void MaxQueuedWrites_Zero_SetsValue()
+    {
+        var config = new DatabaseContextConfiguration();
+        config.MaxQueuedWrites = 0;
+        Assert.Equal(0, config.MaxQueuedWrites);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    [InlineData(int.MinValue)]
+    public void MaxQueuedWrites_Negative_ThrowsArgumentOutOfRangeException(int value)
+    {
+        var config = new DatabaseContextConfiguration();
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxQueuedWrites = value);
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(64)]
+    public void MaxQueuedWrites_Positive_SetsValue(int value)
+    {
+        var config = new DatabaseContextConfiguration();
+        config.MaxQueuedWrites = value;
+        Assert.Equal(value, config.MaxQueuedWrites);
+    }
+
+    // -------------------------------------------------------------------------
+    // MaxQueuedReads
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void MaxQueuedReads_Default_IsNull()
+    {
+        var config = new DatabaseContextConfiguration();
+        Assert.Null(config.MaxQueuedReads);
+    }
+
+    [Fact]
+    public void MaxQueuedReads_Zero_SetsValue()
+    {
+        var config = new DatabaseContextConfiguration();
+        config.MaxQueuedReads = 0;
+        Assert.Equal(0, config.MaxQueuedReads);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    [InlineData(int.MinValue)]
+    public void MaxQueuedReads_Negative_ThrowsArgumentOutOfRangeException(int value)
+    {
+        var config = new DatabaseContextConfiguration();
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => config.MaxQueuedReads = value);
+        Assert.Equal("value", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(64)]
+    public void MaxQueuedReads_Positive_SetsValue(int value)
+    {
+        var config = new DatabaseContextConfiguration();
+        config.MaxQueuedReads = value;
+        Assert.Equal(value, config.MaxQueuedReads);
+    }
 }

@@ -191,4 +191,58 @@ public class IsolationResolverTests
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
     }
+
+    [Theory]
+    [InlineData(SupportedDatabase.TiDb, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted)]
+    public void ResolveWithDetail_StrictConsistency_FlagsDegradedWhenBelowSerializable(
+        SupportedDatabase product, IsolationLevel expectedLevel)
+    {
+        var resolver = new IsolationResolver(product, false, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
+
+        Assert.Equal(expectedLevel, resolution.Level);
+        Assert.True(resolution.Degraded);
+    }
+
+    [Fact]
+    public void ResolveWithDetail_StrictConsistency_PostgreSql_NotDegraded()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
+
+        Assert.Equal(IsolationLevel.Serializable, resolution.Level);
+        Assert.False(resolution.Degraded);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public void ResolveForTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    {
+        var resolver = new IsolationResolver(product, false, false);
+
+        Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
+            resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Fact]
+    public void ResolveForTransaction_SqlServer_SafeNonBlockingReads_ReturnsResolvedLevel()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, true, true);
+
+        Assert.Equal(IsolationLevel.Snapshot,
+            resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Fact]
+    public void ResolveForTransaction_StrictConsistency_NeverThrowsForPostgresCompatibleDatabases()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
+
+        Assert.Equal(IsolationLevel.Serializable,
+            resolver.ResolveForTransaction(IsolationProfile.StrictConsistency));
+    }
 }

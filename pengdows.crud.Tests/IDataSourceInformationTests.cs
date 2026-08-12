@@ -21,4 +21,15 @@ public class IDataSourceInformationTests
         Assert.False(string.IsNullOrWhiteSpace(info.ParameterMarker));
         Assert.True(info.MaxOutputParameters >= 0);
     }
+
+    [Fact]
+    public void IDataSourceInformation_ExposesParsedVersion()
+    {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        using var tracked = new TrackedConnection(conn);
+        IDataSourceInformation info =
+            DataSourceInformation.Create(tracked, SqliteFactory.Instance, NullLoggerFactory.Instance);
+
+        Assert.NotNull(info.ParsedVersion);
+    }
 }

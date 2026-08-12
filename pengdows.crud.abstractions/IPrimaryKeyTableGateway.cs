@@ -35,6 +35,12 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// Determines what happens when enum parsing fails.
     /// </summary>
     EnumParseFailureMode EnumParseBehavior { get; }
+
+    /// <summary>
+    /// Controls how <c>CreatedBy</c>/<c>CreatedOn</c> audit fields treat an entity's existing
+    /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
+    /// </summary>
+    AuditCreationPolicy AuditCreationPolicy { get; set; }
     // =========================================================================
     // CREATE
     // =========================================================================

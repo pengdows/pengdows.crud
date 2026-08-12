@@ -139,7 +139,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRo = null!;
     private DataSourceInformation _dataSourceInfo = null!;
     private readonly SqlDialect _dialect = null!;
-    private IIsolationResolver _isolationResolver = null!;
+    private IsolationResolver _isolationResolver = null!;
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
     private long _peakOpenConnections;
@@ -175,6 +175,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private TimeSpan? _modeLockTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultModeLockSeconds);
     private bool _effectivePoolGovernorEnabled = true;
     private bool _enableSingleWriterFairness = true;
+    private SessionInitializationFailureMode _sessionInitializationFailureMode = SessionInitializationFailureMode.BestEffort;
+    private int? _maxQueuedWrites;
+    private int? _maxQueuedReads;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;

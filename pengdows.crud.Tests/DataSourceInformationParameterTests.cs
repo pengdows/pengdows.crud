@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
@@ -35,9 +36,11 @@ public class DataSourceInformationParameterTests
             new fakeDbFactory(SupportedDatabase.Sqlite),
             NullLoggerFactory.Instance);
 
-        // ParameterMarkerPattern defaults to empty
-        Assert.Equal(string.Empty, info.ParameterMarkerPattern);
-        Assert.NotEqual("@", info.ParameterMarkerPattern);
+        // ParameterMarkerPattern reflects the dialect's marker/named-parameter settings.
+        // Sqlite: ParameterMarker = "@", SupportsNamedParameters = true.
+        Assert.Equal("@\\w+", info.ParameterMarkerPattern);
+        Assert.Matches(info.ParameterMarkerPattern, "@customerId");
+        Assert.DoesNotMatch(info.ParameterMarkerPattern, "no marker here");
 
         // ParameterNameMaxLength reflects dialect setting
         Assert.Equal(255, info.ParameterNameMaxLength);
@@ -48,6 +51,20 @@ public class DataSourceInformationParameterTests
         var invalidName = "1invalid";
         Assert.Matches(info.ParameterNamePatternRegex, validName);
         Assert.DoesNotMatch(info.ParameterNamePatternRegex, invalidName);
+    }
+
+    [Fact]
+    public void ParameterMarkerPattern_PositionalDialect_HasNoNameSuffix()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown.ToString());
+        var dialect = new Sql92Dialect(factory, NullLogger<Sql92Dialect>.Instance);
+
+        var info = new DataSourceInformation(dialect);
+
+        // Sql92 fallback dialect: ParameterMarker = "?", SupportsNamedParameters = false.
+        Assert.Equal("\\?", info.ParameterMarkerPattern);
+        Assert.Matches(info.ParameterMarkerPattern, "?");
+        Assert.DoesNotMatch(info.ParameterMarkerPattern, "@customerId");
     }
 
     [Fact]

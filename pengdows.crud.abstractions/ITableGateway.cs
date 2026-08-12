@@ -32,6 +32,12 @@ public interface ITableGateway<TEntity, TRowID>
     EnumParseFailureMode EnumParseBehavior { get; }
 
     /// <summary>
+    /// Controls how <c>CreatedBy</c>/<c>CreatedOn</c> audit fields treat an entity's existing
+    /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
+    /// </summary>
+    AuditCreationPolicy AuditCreationPolicy { get; set; }
+
+    /// <summary>
     /// Builds a SQL INSERT for the given object.
     /// </summary>
     /// <remarks>

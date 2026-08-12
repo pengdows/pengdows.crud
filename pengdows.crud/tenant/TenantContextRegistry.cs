@@ -57,6 +57,7 @@ namespace pengdows.crud.tenant;
 public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegistry
 {
     private readonly ConcurrentDictionary<string, Lazy<IDatabaseContext>> _contexts = new();
+    private readonly object _admissionLock = new();
     private readonly ILoggerFactory _loggerFactory;
     private readonly ITenantConnectionResolver _resolver;
     private readonly IServiceProvider _serviceProvider;
@@ -108,21 +109,58 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             throw new ArgumentNullException(nameof(tenant), "Tenant identifier must not be null or empty.");
         }
 
-        // Enforce cap: only block addition of genuinely new tenants.
-        if (_maxTenantCount.HasValue
-            && _contexts.Count >= _maxTenantCount.Value
-            && !_contexts.ContainsKey(tenant))
+        // Fast path: already-cached tenant — fully lock-free, no behavior change and no
+        // contention with the admission lock below.
+        if (_contexts.TryGetValue(tenant, out var existingLazy))
         {
-            throw new InvalidOperationException(
-                $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
-                "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
+            return ResolveLazy(tenant, existingLazy);
         }
 
-        var lazy = _contexts.GetOrAdd(
-            tenant,
-            key => new Lazy<IDatabaseContext>(
-                () => CreateDatabaseContext(key),
-                LazyThreadSafetyMode.ExecutionAndPublication));
+        Lazy<IDatabaseContext> lazy;
+        if (_maxTenantCount.HasValue)
+        {
+            // Cap enforcement requires the count-check and the add to be atomic together,
+            // otherwise two threads racing to admit two DIFFERENT new tenants can both pass
+            // the check before either calls GetOrAdd, letting the cap be exceeded. Only the
+            // fast dictionary check+add happens under the lock; CreateDatabaseContext() stays
+            // deferred inside Lazy<T>.Value, resolved outside the lock below, so hold time
+            // stays negligible even though tenant construction itself may be slow.
+            lock (_admissionLock)
+            {
+                if (!_contexts.TryGetValue(tenant, out existingLazy))
+                {
+                    if (_contexts.Count >= _maxTenantCount.Value)
+                    {
+                        throw new InvalidOperationException(
+                            $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
+                            "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
+                    }
+
+                    existingLazy = _contexts.GetOrAdd(
+                        tenant,
+                        key => new Lazy<IDatabaseContext>(
+                            () => CreateDatabaseContext(key),
+                            LazyThreadSafetyMode.ExecutionAndPublication));
+                }
+            }
+
+            lazy = existingLazy;
+        }
+        else
+        {
+            // No cap configured: unchanged, fully lock-free hot path.
+            lazy = _contexts.GetOrAdd(
+                tenant,
+                key => new Lazy<IDatabaseContext>(
+                    () => CreateDatabaseContext(key),
+                    LazyThreadSafetyMode.ExecutionAndPublication));
+        }
+
+        return ResolveLazy(tenant, lazy);
+    }
+
+    private IDatabaseContext ResolveLazy(string tenant, Lazy<IDatabaseContext> lazy)
+    {
         try
         {
             return lazy.Value;

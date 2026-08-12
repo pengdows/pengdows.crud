@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -808,6 +809,75 @@ public class CoverageGapTests_DialectAndTenant
         // Slot freed; new tenant should succeed.
         var ex = Record.Exception(() => registry.GetContext("t2"));
         Assert.Null(ex);
+    }
+
+    // Uses a Moq-backed IDatabaseContext instead of StubContextFactory's real DatabaseContext —
+    // the race under test is purely in the registry's own ConcurrentDictionary/cap-check logic,
+    // not in DatabaseContext construction, so a cheap fake keeps this stress test fast.
+    private class FastMockContextFactory : IDatabaseContextFactory
+    {
+        public IDatabaseContext Create(
+            IDatabaseContextConfiguration configuration,
+            DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            return new Moq.Mock<IDatabaseContext>().Object;
+        }
+    }
+
+    [Fact]
+    public void TenantContextRegistry_MaxTenantCount_ConcurrentDistinctTenants_NeverExceedsCap()
+    {
+        const int cap = 10;
+        const int contenders = 30; // distinct tenant names racing for `cap` slots
+        const int trials = 30; // amplify a razor-thin race window into near-certainty
+
+        for (var trial = 0; trial < trials; trial++)
+        {
+            using var sp = BuildServiceProvider();
+            using var registry = new TenantContextRegistry(
+                sp,
+                new StubTenantResolver(),
+                new FastMockContextFactory(),
+                NullLoggerFactory.Instance,
+                maxTenantCount: cap);
+
+            using var barrier = new Barrier(contenders);
+            var successes = 0;
+            var failures = 0;
+
+            // Dedicated Thread objects (not Parallel.For/thread-pool tasks) — the thread
+            // pool's slow injection heuristic (~1 new thread per ~0.5-1s once existing
+            // threads are seen blocked) would otherwise stall Barrier.SignalAndWait()
+            // for many seconds before all `contenders` threads are actually running.
+            var threads = new Thread[contenders];
+            for (var i = 0; i < contenders; i++)
+            {
+                var index = i;
+                threads[i] = new Thread(() =>
+                {
+                    barrier.SignalAndWait();
+                    try
+                    {
+                        registry.GetContext($"tenant-{trial}-{index}"); // every call targets a NEW key
+                        Interlocked.Increment(ref successes);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        Interlocked.Increment(ref failures);
+                    }
+                });
+                threads[i].Start();
+            }
+
+            foreach (var thread in threads)
+            {
+                thread.Join();
+            }
+
+            Assert.True(successes <= cap, $"trial {trial}: {successes} succeeded, cap was {cap}");
+            Assert.Equal(contenders, successes + failures);
+        }
     }
 
     [Fact]

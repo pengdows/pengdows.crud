@@ -24,6 +24,7 @@
 
 using System.Data;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.isolation;
@@ -56,6 +57,22 @@ internal sealed class IsolationResolver : IIsolationResolver
         return ResolveWithDetail(profile).Level;
     }
 
+    /// <summary>
+    /// Resolves an isolation profile for use when beginning a transaction, applying any
+    /// product-specific rejections that don't belong in the general-purpose <see cref="Resolve"/>.
+    /// </summary>
+    internal IsolationLevel ResolveForTransaction(IsolationProfile profile)
+    {
+        if (profile == IsolationProfile.SafeNonBlockingReads
+            && _product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
+        {
+            throw new TransactionModeNotSupportedException(
+                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
+        }
+
+        return Resolve(profile);
+    }
+
     public IsolationResolution ResolveWithDetail(IsolationProfile profile)
     {
         if (!_profileMap.TryGetValue(profile, out var level))
@@ -82,6 +99,14 @@ internal sealed class IsolationResolver : IIsolationResolver
         }
 
         if (level != originalLevel)
+        {
+            degraded = true;
+        }
+
+        // StrictConsistency's entire purpose is a Serializable-equivalent guarantee.
+        // Any product whose mapping falls short of Serializable has degraded the
+        // requested guarantee, regardless of which product's mapping table produced it.
+        if (profile == IsolationProfile.StrictConsistency && level != IsolationLevel.Serializable)
         {
             degraded = true;
         }
