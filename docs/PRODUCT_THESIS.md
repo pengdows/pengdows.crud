@@ -203,12 +203,19 @@ A second path used to exist and has been closed: `IDatabaseContext.DataSource` w
 public `DbDataSource?` from the 2.0 rewrite (commit `d89b369`) until this document's own
 audit caught it — any caller could reach past `ISqlContainer`/gateways entirely and call
 `DataSource.CreateConnection()` for a raw provider connection, outside governor
-accounting, session settings, and disposal tracking. `DataSource` is now `internal`
-(exposed only through the also-`internal` `IInternalConnectionProvider`, the same pattern
-`GetConnection` already used) and is not part of `IDatabaseContext` or `ITransactionContext`
-— no caller holding either public interface can reach it, deliberately or otherwise. A
-compile-time guard (`IDatabaseContextPublicSurfaceTests.cs`) checks both interfaces'
-full closure for a `DataSource` member so this cannot silently regress.
+accounting, session settings, and disposal tracking. The fix went further than making it
+`internal`: `DataSource` was removed as a named accessor entirely, from
+`IDatabaseContext`, `ITransactionContext`, `DatabaseContext`, and
+`TransactionContext` alike. Nothing internal ever needed it as a reusable property in the
+first place — every real connection-creation path (`DatabaseContext.ResolveDataSource`,
+`FactoryCreateConnection`) already reads the private `_dataSource`/`_readerDataSource`
+fields directly; the property existed only to be read back by callers and tests. Keeping
+even an internal-only accessor around would have been a standing temptation for future
+code to grab the raw `DbDataSource` instead of going through governance, so it doesn't
+exist at all now — tests that need to verify which `DbDataSource` a constructor wired up
+read the private field via reflection instead. A compile-time guard
+(`IDatabaseContextPublicSurfaceTests.cs`) checks both interfaces' full closure for a
+`DataSource` member so it cannot silently reappear.
 
 ## 6. Stored procedures and functions are portable execution operations
 
