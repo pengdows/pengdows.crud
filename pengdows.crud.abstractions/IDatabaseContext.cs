@@ -41,13 +41,6 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string Name { get; }
 
     /// <summary>
-    /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
-    /// When available, provides better performance through shared prepared statement caching.
-    /// Null if using traditional DbProviderFactory approach.
-    /// </summary>
-    DbDataSource? DataSource { get; }
-
-    /// <summary>
     /// Metadata gathered from connection.GetSchema and provider heuristics.
     /// </summary>
     IDataSourceInformation DataSourceInfo { get; }

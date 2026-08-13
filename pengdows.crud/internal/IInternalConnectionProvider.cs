@@ -12,6 +12,7 @@
 // - Returns ITrackedConnection with locking and lifecycle tracking.
 // =============================================================================
 
+using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -29,4 +30,11 @@ internal interface IInternalConnectionProvider
     void CloseAndDisposeConnection(ITrackedConnection? connection);
 
     ValueTask CloseAndDisposeConnectionAsync(ITrackedConnection? connection);
+
+    /// <summary>
+    /// The raw provider DbDataSource, if one is in use. Deliberately not on the public
+    /// IDatabaseContext/ITransactionContext surface: DbDataSource.CreateConnection() would
+    /// let any caller bypass governor accounting, session settings, and disposal tracking.
+    /// </summary>
+    DbDataSource? DataSource { get; }
 }

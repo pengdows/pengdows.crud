@@ -182,6 +182,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
+    private bool _readOnlyConnectionStringTargetsSameDatabase;
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";
@@ -224,9 +225,12 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
     /// When available, provides better performance through shared prepared statement caching.
     /// Null if using traditional DbProviderFactory approach.
+    /// Deliberately not public: DbDataSource.CreateConnection() would let a caller bypass
+    /// governor accounting, session settings, and disposal tracking entirely.
     /// </summary>
-    /// <inheritdoc/>
-    public DbDataSource? DataSource => _dataSource;
+    internal DbDataSource? DataSource => _dataSource;
+
+    DbDataSource? IInternalConnectionProvider.DataSource => _dataSource;
 
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;

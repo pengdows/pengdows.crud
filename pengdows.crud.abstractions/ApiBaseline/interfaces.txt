@@ -290,7 +290,6 @@ property pengdows.crud.IDataSourceInformation::SupportsTruncateTable : bool { ge
 property pengdows.crud.IDatabaseContext::CompositeIdentifierSeparator : string { get; }
 property pengdows.crud.IDatabaseContext::ConnectionMode : pengdows.crud.enums.DbMode { get; }
 property pengdows.crud.IDatabaseContext::ConnectionString : string { get; }
-property pengdows.crud.IDatabaseContext::DataSource : System.Data.Common.DbDataSource { get; }
 property pengdows.crud.IDatabaseContext::DataSourceInfo : pengdows.crud.IDataSourceInformation { get; }
 property pengdows.crud.IDatabaseContext::DatabaseProductName : string { get; }
 property pengdows.crud.IDatabaseContext::Dialect : pengdows.crud.dialects.ISqlDialect { get; }

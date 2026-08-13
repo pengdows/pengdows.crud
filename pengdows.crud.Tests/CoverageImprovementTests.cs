@@ -596,7 +596,9 @@ public class CoverageImprovementTests
 
         // Act
         using var transaction = context.BeginTransaction();
-        var dataSource = transaction.DataSource;
+        // DataSource is deliberately internal, not on ITransactionContext's public surface
+        // (see docs/PRODUCT_THESIS.md principle 5) — access it via the concrete type.
+        var dataSource = ((TransactionContext)transaction).DataSource;
 
         // Assert - May be null for fakeDb
         Assert.True(dataSource == null || dataSource != null);

@@ -310,8 +310,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
 
-    /// <inheritdoc/>
-    public DbDataSource? DataSource => _context.DataSource;
+    // Not on the public IDatabaseContext/ITransactionContext surface — see
+    // IInternalConnectionProvider.DataSource for why.
+    internal DbDataSource? DataSource => (_context as IInternalConnectionProvider)?.DataSource;
+
+    DbDataSource? IInternalConnectionProvider.DataSource => DataSource;
 
     /// <inheritdoc/>
     public int MaxParameterLimit => _context.MaxParameterLimit;
