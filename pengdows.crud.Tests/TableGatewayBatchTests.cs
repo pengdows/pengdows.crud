@@ -853,7 +853,6 @@ public class TableGatewayBatchTests : IAsyncLifetime
 
         public string Name => _context.Name;
 
-        public DbDataSource? DataSource => _context.DataSource;
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
         public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

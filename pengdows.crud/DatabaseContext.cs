@@ -221,17 +221,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal string RawConnectionString => _connectionString;
 
-    /// <summary>
-    /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
-    /// When available, provides better performance through shared prepared statement caching.
-    /// Null if using traditional DbProviderFactory approach.
-    /// Deliberately not public: DbDataSource.CreateConnection() would let a caller bypass
-    /// governor accounting, session settings, and disposal tracking entirely.
-    /// </summary>
-    internal DbDataSource? DataSource => _dataSource;
-
-    DbDataSource? IInternalConnectionProvider.DataSource => _dataSource;
-
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
 

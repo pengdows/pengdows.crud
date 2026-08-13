@@ -81,8 +81,6 @@ public class SqlContainerConnectionSharingTests
 
         public string Name => _context.Name;
 
-        public DbDataSource? DataSource => _context.DataSource;
-
         ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry =>
             (_context as ITypeMapAccessor)?.TypeMapRegistry ??
             throw new InvalidOperationException("IDatabaseContext must expose an internal TypeMapRegistry.");

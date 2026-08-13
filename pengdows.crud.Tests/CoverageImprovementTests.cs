@@ -588,23 +588,6 @@ public class CoverageImprovementTests
     }
 
     [Fact]
-    public void TransactionContext_DataSource_ReturnsValue()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        using var transaction = context.BeginTransaction();
-        // DataSource is deliberately internal, not on ITransactionContext's public surface
-        // (see docs/PRODUCT_THESIS.md principle 5) — access it via the concrete type.
-        var dataSource = ((TransactionContext)transaction).DataSource;
-
-        // Assert - May be null for fakeDb
-        Assert.True(dataSource == null || dataSource != null);
-    }
-
-    [Fact]
     public void TransactionContext_Metrics_ReturnsSnapshot()
     {
         // Arrange

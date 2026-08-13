@@ -540,7 +540,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode);
     }
@@ -562,7 +562,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Same(typeMap, context.TypeMapRegistry);
     }
 
@@ -588,7 +588,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Equal(mode, context.ConnectionMode);
         Assert.Equal(readWriteMode, context.ReadWriteMode);
         Assert.Same(typeMap, context.TypeMapRegistry);

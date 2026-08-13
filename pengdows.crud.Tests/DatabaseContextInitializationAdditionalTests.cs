@@ -19,8 +19,8 @@ public class DatabaseContextInitializationAdditionalTests
         var factory = new StringDataSourceFactory();
         using var ctx = new DatabaseContext("Data Source=:memory:", factory);
 
-        Assert.NotNull(ctx.DataSource);
-        Assert.IsType<TestDataSource>(ctx.DataSource);
+        Assert.NotNull(ctx.GetInternalDataSource());
+        Assert.IsType<TestDataSource>(ctx.GetInternalDataSource());
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class DatabaseContextInitializationAdditionalTests
         var factory = new ThrowingDataSourceFactory();
         using var ctx = new DatabaseContext("Data Source=:memory:", factory);
 
-        Assert.NotNull(ctx.DataSource);
+        Assert.NotNull(ctx.GetInternalDataSource());
     }
 
     [Fact]
