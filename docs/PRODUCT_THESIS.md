@@ -61,14 +61,17 @@ Application / Gateway
 
 `TransactionContext` is the alternate execution scope in this same picture: when a
 transaction is open, `ISqlContainer` uses the transaction's pinned connection instead of
-acquiring and releasing an ephemeral one per operation, but every other step — dialect,
-governor accounting, metrics, exception translation — still runs the same way. This
-answers one of the coordination questions posed below directly: a transaction acquires
-its governed connection once, at `BeginTransaction`, and pins it for the transaction's
-entire lifetime — `TransactionContext.GetConnection()` always returns that same pinned
-connection rather than re-acquiring a governed connection per operation. Commands inside
-the transaction reuse it; dialect handling, command metrics, and exception translation
-still run through the same execution machinery either way.
+acquiring and releasing an ephemeral one per operation. This answers one of the
+coordination questions posed below directly: a transaction acquires its governed
+connection exactly once, at `BeginTransaction`, and pins it for the transaction's entire
+lifetime — `TransactionContext.GetConnection()` (an `internal` method; `ITransactionContext`'s
+public surface does not expose it) always returns that same cached connection rather than
+asking the governor for a fresh one, so governor admission control is consulted once per
+transaction, not once per command inside it. Everything downstream of connection
+acquisition still runs per command exactly as it does outside a transaction: dialect
+handling, command metrics, and exception translation execute through the same machinery
+for every statement, whether or not a transaction is pinning the connection underneath
+them.
 
 **Why "best of breed" assembly does not produce this on its own.** A library exists for
 almost every individual concern here — a mapper, a retry/concurrency policy, a connection
@@ -135,8 +138,11 @@ layer applies where matters more than a single "read-only is enforced" claim wou
    covers every database, including the ones with no enforcement below it.
 2. **Connection/session-level database enforcement** — real, engine-level rejection,
    independent of any transaction: PostgreSQL (`SET default_transaction_read_only = on`),
-   MySQL/MariaDB (`SET SESSION transaction_read_only = 1`), SQLite (`Mode=ReadOnly` in the
-   connection string), and DuckDB (`access_mode=READ_ONLY`).
+   MySQL (`SET SESSION transaction_read_only = 1`) and MariaDB (`SET SESSION tx_read_only
+   = 1`) — the two forks need distinct SQL despite `MariaDbDialect` inheriting from
+   `MySqlDialect`, since MariaDB never adopted the `transaction_read_only` name and MySQL
+   8.0.3 removed the older `tx_read_only` one — SQLite (`Mode=ReadOnly` in the connection
+   string), and DuckDB (`access_mode=READ_ONLY`).
 3. **Transaction-level database enforcement** — Oracle has no persistent session-level
    read-only mode (`OracleDialect.GetReadOnlySessionSettings()` returns an empty string,
    with the source comment explaining why: "Oracle has no true persistent session-level
