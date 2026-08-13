@@ -34,10 +34,48 @@ change continuously and are intentionally not baked into this document as fixed 
 pull current numbers from nuget.org before using them in external-facing material (sales
 collateral, onboarding decks).
 
-## Per-dialect numeric capability limits (principle 6)
+## Per-dialect capability flags (principle 6)
 
 `MaxOutputParameters` per-dialect cap, as currently implemented: SQL Server/Oracle 1024,
 MySQL/Snowflake 65535, Firebird 1499, PostgreSQL 100.
+
+Other stored-procedure capability flags, as currently implemented:
+- `SupportsNamedParameters` — `false` only for the generic ANSI/ODBC fallback dialect.
+- `SupportsRepeatedNamedParameters` — `false` only for Oracle (no reusing a bind-variable
+  name within one statement).
+- `RequiresStoredProcParameterNameMatch` — `true` for PostgreSQL and Oracle.
+
+## MySQL vs. MariaDB read-only session SQL (principle 4)
+
+PostgreSQL: `SET default_transaction_read_only = on`. SQLite: `Mode=ReadOnly` in the
+connection string. DuckDB: `access_mode=READ_ONLY`.
+
+MySQL and MariaDB differ despite `MariaDbDialect` inheriting from `MySqlDialect`: MySQL
+uses `SET SESSION transaction_read_only = 1`, MariaDB uses `SET SESSION tx_read_only = 1`.
+Per `MySqlDialect.cs`'s own version-history comment: MariaDB never adopted MySQL's
+`transaction_read_only` alias, and MySQL 8.0.3 removed the older `tx_read_only` name — so
+the two forks need distinct SQL, not a shared implementation, even though one dialect class
+inherits from the other.
+
+## Complete analyzer rule list (principle 9)
+
+The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
+
+- **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
+  as `AddScoped`/`AddTransient` are errors; these types must be singletons.
+- **PGC008** — raw/interpolated value injection into SQL `WHERE`/`JOIN ON`/`HAVING`/`AND`/`OR`
+  is an error; values must be parameterized (`IS NULL`/`IS NOT NULL` are exempt).
+- **PGC025** — gateway execution/build methods must resolve and use the execution context
+  parameter (see thesis principle 3).
+- **PGC026** — warns on the split `WrapObjectName("alias") + "." + WrapObjectName("column")`
+  pattern in favor of the single-call `WrapObjectName("alias.column")` form.
+
+## BenchmarkValidation mechanism (principle 10)
+
+`BenchmarkValidation` asserts the target index actually exists and captures
+`SET STATISTICS XML`/`SHOWPLAN` output to fail the benchmark run if the captured query plan
+doesn't actually use that index — catching the case where a benchmark claims to measure an
+indexed-lookup path but the query planner silently chose a different plan.
 
 ## DataSource removal history (principle 5)
 

@@ -137,12 +137,11 @@ layer applies where matters more than a single "read-only is enforced" claim wou
    with `ReadWriteMode.ReadOnly`, before any provider call is made. This layer alone
    covers every database, including the ones with no enforcement below it.
 2. **Connection/session-level database enforcement** — real, engine-level rejection,
-   independent of any transaction: PostgreSQL (`SET default_transaction_read_only = on`),
-   MySQL (`SET SESSION transaction_read_only = 1`) and MariaDB (`SET SESSION tx_read_only
-   = 1`) — the two forks need distinct SQL despite `MariaDbDialect` inheriting from
-   `MySqlDialect`, since MariaDB never adopted the `transaction_read_only` name and MySQL
-   8.0.3 removed the older `tx_read_only` one — SQLite (`Mode=ReadOnly` in the connection
-   string), and DuckDB (`access_mode=READ_ONLY`).
+   independent of any transaction: PostgreSQL, SQLite, DuckDB, and — notably — MySQL and
+   MariaDB each need their *own* session-level SQL despite `MariaDbDialect` inheriting from
+   `MySqlDialect`, because the two forks disagree on the setting's name (see
+   [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the exact statements and
+   why they diverged).
 3. **Transaction-level database enforcement** — Oracle has no persistent session-level
    read-only mode (`OracleDialect.GetReadOnlySessionSettings()` returns an empty string,
    with the source comment explaining why: "Oracle has no true persistent session-level
@@ -205,19 +204,16 @@ and its regression test.
 
 `CommandType.StoredProcedure` alone does not make a call portable — invocation syntax,
 parameter binding rules, and output-parameter limits vary by database. pengdows.crud
-models this explicitly on `ISqlDialect`:
-
-- `SupportsNamedParameters` — false only for the generic ANSI/ODBC fallback dialect
-- `SupportsRepeatedNamedParameters` — false only for Oracle (no reusing a bind-variable
-  name within one statement)
-- `RequiresStoredProcParameterNameMatch` — true for PostgreSQL and Oracle
-- `MaxOutputParameters` — an explicit per-dialect numeric cap rather than one global limit
-  (see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for current values)
-- `ProcWrappingStyle` — `None | Call | Exec | PostgreSQL | Oracle | ExecuteProcedure`,
-  realized by `ProcWrappingStrategyFactory` (`pengdows.crud/strategies/proc/`): SQL Server
-  emits `EXEC proc arg1 arg2`, Oracle emits `BEGIN proc(args); END;`, MySQL/Snowflake emit
-  `CALL proc(args)`, PostgreSQL emits `SELECT * FROM func(args)` for reads and
-  `CALL proc(args)` for writes.
+models this explicitly on `ISqlDialect` via a set of typed capability flags —
+`SupportsNamedParameters`, `SupportsRepeatedNamedParameters`,
+`RequiresStoredProcParameterNameMatch`, `MaxOutputParameters` — rather than a single
+one-size-fits-all invocation string (current per-dialect values for all of these:
+see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md)). `ProcWrappingStyle` is
+the most visible: SQL Server emits `EXEC proc arg1 arg2`, Oracle emits
+`BEGIN proc(args); END;`, MySQL/Snowflake emit `CALL proc(args)`, and PostgreSQL emits
+`SELECT * FROM func(args)` for reads vs `CALL proc(args)` for writes — all realized by the
+same `ProcWrappingStrategyFactory` (`pengdows.crud/strategies/proc/`) reading whichever
+style the target dialect declares.
 
 The application expresses one operation; the execution context supplies the invocation
 mechanics for the current dialect.
@@ -289,19 +285,15 @@ framework rather than left as a convention callers have to remember:
 
 ## 9. Compile-time analyzers enforce detectable architectural invariants
 
-The `pengdows.crud.analyzers` Roslyn package currently defines four rules, each a
-self-contained `DiagnosticAnalyzer`:
-
-- **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
-  as `AddScoped`/`AddTransient` are errors; these types must be singletons.
-- **PGC008** — raw/interpolated value injection into SQL `WHERE`/`JOIN ON`/`HAVING`/`AND`/`OR`
-  is an error; values must be parameterized (`IS NULL`/`IS NOT NULL` are exempt).
-- **PGC025** — gateway execution/build methods must resolve and use the execution context
-  parameter (see principle 3).
-- **PGC026** — warns on the split `WrapObjectName("alias") + "." + WrapObjectName("column")`
-  pattern in favor of the single-call `WrapObjectName("alias.column")` form.
-
-These are invariants the compiler checks, not conventions documented and hoped for.
+The `pengdows.crud.analyzers` Roslyn package turns some of the invariants above from
+documented convention into compiler errors — each rule a self-contained
+`DiagnosticAnalyzer`. Two illustrate the range: **PGC001** makes DI registrations of
+`DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway` as `AddScoped`/`AddTransient` a
+compile error, since these types must be singletons; **PGC008** makes raw/interpolated
+value injection into SQL `WHERE`/`JOIN ON`/`HAVING`/`AND`/`OR` a compile error, forcing
+parameterization (`IS NULL`/`IS NOT NULL` are exempt). See
+[`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the complete, current rule
+list — these are invariants the compiler checks, not conventions documented and hoped for.
 
 ## 10. Performance and testing are part of the architecture, not an afterthought
 
@@ -321,7 +313,7 @@ Each claim has a specific proof, not a general assurance:
 | This native error translates correctly | Force the real native failure and check the typed exception |
 | This abstraction is cheap | Benchmark it in `benchmarks/CrudBenchmarks/`, with the harness itself under test for fairness |
 | This edge case is handled | Simulate it deterministically via `fakeDb` |
-| This benchmark actually measured what it claims to | `BenchmarkValidation` asserts the target index exists and captures `SET STATISTICS XML`/`SHOWPLAN` to fail the run if the query plan doesn't use it |
+| This benchmark actually measured what it claims to | `BenchmarkValidation` checks the benchmark exercised the code path it claims to, rather than trusting the harness blindly (see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the exact mechanism) |
 
 The two test layers are complementary, not redundant: a fake provider can confirm your code
 called the right method with the right arguments, but it cannot confirm a real Oracle
