@@ -47,3 +47,19 @@ just that it did — is populated (`RecordReadRequest`/`RecordWriteRequest` are 
 `DatabaseContext.ConnectionLifecycle.cs`) but its snapshot is never read anywhere in the
 codebase, including by the OTel bridge. It is real internal tracking, not yet a surfaced
 capability.
+
+## Test coverage backing specific thesis claims
+
+Principle 10 says every claim has a specific proof rather than a general assurance. The
+table below is the volatile half of that promise — exact test file names, which will
+rename/move/split over time — for the claims that got a source-level audit on 2026-08-13:
+
+| Claim (PRODUCT_THESIS.md) | Proof |
+|---|---|
+| Normal execution paths release their connection on every path, including exception paths (principle 5, "unleakable by accident") | `pengdows.crud.Tests/ExecuteReaderWriteConnectionLeakTests.cs` — asserts the connection is disposed when `ExecuteReaderAsync` fails before a `TrackedReader` is created |
+| MySQL and MariaDB use different read-only session SQL (`transaction_read_only` vs `tx_read_only`) (principle 4) | `pengdows.crud.Tests/ReadOnlySessionSettingsTests.cs` and `pengdows.crud.Tests/dialects/MariaDbDialectTests.cs` — the latter explicitly asserts `Assert.DoesNotContain("transaction_read_only", settings)` for MariaDB |
+| A transaction acquires its governed connection exactly once, not once per command inside it (principle 2) | `pengdows.crud.Tests/TransactionGovernorAcquisitionTests.cs` (added 2026-08-13) — asserts `PoolGovernor.TotalAcquired` moves by 1 for 5 commands inside one transaction, vs. by 5 for 5 sequential non-transactional commands (the contrast rules out a vacuous pass) |
+
+This table itself needs re-verification if any of the referenced test files are renamed,
+merged, or deleted — it's evidence of a point-in-time audit, not a standing contract that
+the tests will always exist under these names.
