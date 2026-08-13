@@ -63,8 +63,12 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 - **TransactionContext pins a single connection for its lifetime.** Its user lock serializes operations; the connection lock is still acquired per operation/reader.
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
-- **MySQL/MariaDB upserts depend on the `incoming` alias when the server supports it.**
-  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it (MySQL/MariaDB do for modern versions).
+- **MySQL upserts depend on the `incoming` alias when the server supports it; MariaDB never uses it.**
+  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it.
+    `MySqlDialect` overrides it to `"incoming"` when `UseUpsertAlias` (modern MySQL
+    versions); `MariaDbDialect` — despite inheriting from `MySqlDialect` — explicitly
+    overrides it back to `null`, since MariaDB doesn't support the alias syntax. Don't
+    assume the two forks share this behavior just because one inherits from the other.
   - `TableGateway` only injects `AS incoming` when the alias is provided so keep the property around even if you don’t use it.
   - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 

@@ -99,7 +99,7 @@ await tx.RollbackToSavepointAsync("checkpoint1", ct);
 |---------|--------|
 | `SafeNonBlockingReads` | Snapshot / repeatable-read equivalent where possible |
 | `StrictConsistency` | Serializable |
-| `ReadCommitted` | Read committed |
+| `FastWithRisks` | Read uncommitted / dirty reads (almost never recommended) |
 
 ## Connection sharing inside transactions
 

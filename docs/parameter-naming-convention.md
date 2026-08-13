@@ -15,6 +15,7 @@ TableGateway operations. Understanding these names is essential when reusing SQL
 | `v{n}` | VERSION (concurrency) | `NextVer()` | `BuildUpdateAsync` optimistic lock check |
 | `j{n}` | JOIN condition | `NextJoin()` | Custom joins |
 | `b{n}` | BATCH value | `NextBatch()` | `BuildBatchCreate`, `BuildBatchUpdate`, `BuildBatchUpsert` |
+| `p0` | single-ID fast path (exception — hardcoded literal, not from a counter) | — | `BuildRetrieve` when the ID collection has exactly one element |
 
 **Key rule**: always pass the base name (no `@`/`:`/`$` prefix) to `SetParameterValue()`.
 
@@ -28,7 +29,9 @@ TableGateway operations. Understanding these names is essential when reusing SQL
 var sc = gateway.BuildRetrieve(new[] { 1 });
 ```
 
-- **Single-element or multi-element IN clause**: `w0`, `w1`, `w2`, ... (one slot per bucket)
+- **Single-element fast path**: `p0` — a single ID takes a scalar-equality path, not the
+  IN-clause path, and is not part of the `w{n}` family at all.
+- **Multi-element IN clause**: `w0`, `w1`, `w2`, ... (one slot per bucket)
 - **PostgreSQL ANY clause** (set-valued): `w0` holds the entire array
 
 **Container reuse — single ID (scalar)**:
@@ -37,7 +40,7 @@ var sc = gateway.BuildRetrieve(new[] { 1 });
 _readSingleSc = gateway.BuildRetrieve(new[] { 1 });
 
 // Hot loop — update the scalar id each iteration
-_readSingleSc.SetParameterValue("w0", nextId);   // scalar int/long/Guid/string
+_readSingleSc.SetParameterValue("p0", nextId);   // scalar int/long/Guid/string — NOT w0
 result = await gateway.LoadSingleAsync(_readSingleSc);
 ```
 

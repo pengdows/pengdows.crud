@@ -2,7 +2,7 @@
 
 **Benchmark environment:** Ubuntu 24.04.4 LTS · AMD Ryzen 9 5950X (8 cores) · .NET 8.0.24 · BenchmarkDotNet v0.14.0
 
-**Reproducing:** Clone the repository and run `./run-benchmarks.sh` from the `benchmarks/CrudBenchmarks/` directory. Results land in `benchmarks/CrudBenchmarks/results/`.
+**Reproducing:** No `run-benchmarks.sh` exists in this repo — run `dotnet run -c Release --project benchmarks/CrudBenchmarks` directly, or use one of the existing scripts in `benchmarks/` (`run-thesis-proof.sh`, `run-simple-crud.sh`, or `CrudBenchmarks/verify-validation-artifacts.sh`); see `benchmarks/README.md` for current instructions. Results land in `benchmarks/CrudBenchmarks/results/`.
 
 ---
 

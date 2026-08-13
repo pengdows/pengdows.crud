@@ -1,6 +1,18 @@
 # pengdows.crud Architecture Review (Code-Level Answers)
 
-Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6, 2026. `pengdows.poco.mint` source is not present here, so mint-specific internals are marked accordingly.
+> **HISTORICAL SNAPSHOT — not current guidance.** This is a point-in-time Q&A review, not a
+> living document. A later, more thorough review (2026-08-12, written up in
+> `docs/FUTURE_WORK.md`) found and fixed real correctness bugs in subsystems this review
+> confidently describes as sound, which this file was never updated to reflect — notably
+> its dispose-path determinism claim (superseded by the transaction reader-lock-lifetime
+> fix) and its session-init failure-handling description (superseded by
+> `SessionInitializationFailureMode`, added after this review's cutoff). Treat
+> `docs/FUTURE_WORK.md` and `docs/PRODUCT_THESIS.md` as current; use this file only for
+> historical context on what a March 2026 review of the codebase looked like.
+
+Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6, 2026 (the
+review's stated cutoff; it was committed into the repo on 2026-03-22). `pengdows.poco.mint`
+source is not present here, so mint-specific internals are marked accordingly.
 
 ## Architecture
 

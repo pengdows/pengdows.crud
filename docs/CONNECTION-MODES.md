@@ -89,8 +89,17 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
   - Not reapplied when a connection is reused from pool or pinned.
 - Session settings are enforced at physical connection open. Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
-  - Every opened connection must enforce read-only at connection string and session level (e.g., `ApplicationIntent=ReadOnly`, `SET TRANSACTION READ ONLY`, `PRAGMA query_only = 1`).
-  - Write attempts bubble provider errors (not pre-guarded in code).
+  - `SqlContainer` pre-guards every write in code: it throws `NotSupportedException` for
+    `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is
+    made. This covers every database, including ones with no enforcement below it.
+  - Where the database itself also enforces read-only, the mechanism is dialect-specific and
+    not uniform: PostgreSQL/MySQL/MariaDB/SQLite/DuckDB enforce at the connection/session
+    level (distinct SQL/connection-string parameter per dialect — see
+    `docs/read-only-enforcement.md`); Oracle only enforces per-transaction (`SET TRANSACTION
+    READ ONLY`, no persistent session mode); SQL Server's `ApplicationIntent=ReadOnly` is
+    documented by `SqlServerDialect` as an Availability-Group routing hint only — it does
+    NOT enforce server-side read-only state. SQLite does not use `PRAGMA query_only`; it
+    uses `Mode=ReadOnly` in the connection string.
 
 ## 5. Connection Sharing & Transactions
 
@@ -124,7 +133,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Limits:
   - `MaxParameterLimit`, `MaxOutputParameters`, `ParameterNameMaxLength` come from `DataSourceInformation`.
   - Mode-independent.
-  - Fallback if unknown dialect: `MaxParameterLimit = 255` (lowest common across RDBMS).
+  - Fallback if unknown dialect: `MaxParameterLimit = 2000` (`SqlDialect`'s base default).
 
 ## 9. Edge Policies
 

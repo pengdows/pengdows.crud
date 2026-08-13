@@ -2,9 +2,9 @@
 
 ## Implementation snapshot
 
-`SqlDialect` maintains a lightweight `ConcurrentQueue<DbParameter>` so high-churn CRUD paths can reuse parameter instances instead of paying factory allocation costs on every call. Each rent clears the instance back to a neutral state and each return pushes it into a bounded pool (100 entries) to avoid unbounded memory growth.【F:pengdows.crud/dialects/SqlDialect.cs†L73-L83】【F:pengdows.crud/dialects/SqlDialect.cs†L503-L533】
+`SqlDialect` maintains a lightweight `ConcurrentQueue<DbParameter>` so high-churn CRUD paths can reuse parameter instances instead of paying factory allocation costs on every call. Each rent clears the instance back to a neutral state and each return pushes it into a bounded pool (100 entries) to avoid unbounded memory growth.【F:pengdows.crud/dialects/SqlDialect.cs†L150-L151】【F:pengdows.crud/dialects/SqlDialect.cs†L991】【F:pengdows.crud/dialects/SqlDialect.cs†L1026-L1033】
 
-Disposal of `SqlContainer` instances is the trigger that places parameters back into the pool, so callers that wrap containers in `using`/`await using` blocks automatically participate in reuse.【F:pengdows.crud/SqlContainer.cs†L995-L1018】
+Disposal of `SqlContainer` instances is the trigger that places parameters back into the pool, so callers that wrap containers in `using`/`await using` blocks automatically participate in reuse.【F:pengdows.crud/SqlContainer.cs†L917】【F:pengdows.crud/SqlContainer.cs†L2113-L2136】
 
 ## Tests that cover the pool
 
