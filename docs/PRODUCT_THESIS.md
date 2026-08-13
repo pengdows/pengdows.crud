@@ -5,7 +5,7 @@ conclusions below as established for architectural and competitive discussions. 
 re-derive or re-litigate them unless current source code contradicts them or a fresh
 competitive verification is explicitly requested. For implementation details (exact
 signatures, behavior of a specific method), the current code and
-[`pengdows.crud/CLAUDE.md`](../pengdows.crud/CLAUDE.md) remain authoritative; for current,
+[`CLAUDE.md`](../CLAUDE.md) remain authoritative; for current,
 volatile implementation status (exact numeric limits, package/publish state, instrument
 inventories), see [`docs/IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) — this
 document states the *why*, not the *how* or the *current status*.
@@ -16,7 +16,7 @@ convenience layer. Ten principles define it.
 ## 1. The database is the source of truth
 
 No code-first schema ownership. The application does not define the schema; it consumes
-a contract derived from it. [`pengdows.poco.mint`](../pengdows.crud/CLAUDE.md) inspects a
+a contract derived from it. [`pengdows.poco.mint`](https://github.com/pengdows/pengdows.poco.mint) inspects a
 real database schema and generates the `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`-annotated
 POCOs that pengdows.crud consumes. This can run as a DBA-driven, no-C#-required workflow
 (inspect → generate → hand contract to developers) or as a CI/CD step (schema → Mint CLI →
@@ -181,41 +181,25 @@ conflict error. Applying `SingleWriter` to DuckDB is pengdows.crud's own determi
 execution policy — a uniform, conservative mental model across file-based embedded
 engines — not a limitation DuckDB's engine imposes.
 
-Normal execution APIs are unleakable **by accident**; they are not unleakable against a
-caller deliberately working around them, and that distinction is worth being precise about
-rather than collapsing into a single "unleakable" or "not unleakable" verdict. Every
-non-lease execution path — `ExecuteNonQueryAsync`, the scalar methods, and the failure
-branch of `ExecuteReaderAsync` before a reader is successfully handed back — acquires its
-connection and releases it inside a `finally` block (`SqlContainer.Cleanup`) that runs on
-every return path, success, exception, or cancellation alike: there is no ordinary or
-exceptional code path in which using the API as intended leaves a connection open behind
-the caller's back. `ISqlContainer` and `ITrackedReader` also expose no
-`DbConnection`/`IDbConnection` accessor — there's no field in the ordinary execution
-surface to squirrel a connection into.
+Non-lease execution paths self-clean on every outcome. `ExecuteNonQueryAsync`, the scalar
+methods, and the failure branch of `ExecuteReaderAsync` before a reader is successfully
+handed back all acquire their connection and release it inside a `finally` block
+(`SqlContainer.Cleanup`) that runs on success, failure, and cancellation alike — there is
+no code path in which using these methods leaves a connection open behind the caller's
+back. `ISqlContainer` and `ITrackedReader` also expose no `DbConnection`/`IDbConnection`
+accessor, so there's no field on the ordinary execution surface to hold one in anyway.
 
-One thing can still hold a connection open: obtaining an `ITrackedReader` or an open
-`TransactionContext` and then never disposing it — the same "your lease, your disposal"
-obligation any ADO.NET reader or transaction imposes, one `using`/`await using` away from
-being closed, not a pengdows-specific gap. This does not happen from correct, ordinary use
-of the API.
+Lease-returning paths make ownership explicit instead of self-cleaning: obtaining an
+`ITrackedReader` or an open `TransactionContext` hands the caller a connection that stays
+open until that lease is disposed — the same obligation any ADO.NET reader or transaction
+imposes, not a pengdows-specific gap.
 
-A second path used to exist and has been closed: `IDatabaseContext.DataSource` was a
-public `DbDataSource?` from the 2.0 rewrite (commit `d89b369`) until this document's own
-audit caught it — any caller could reach past `ISqlContainer`/gateways entirely and call
-`DataSource.CreateConnection()` for a raw provider connection, outside governor
-accounting, session settings, and disposal tracking. The fix went further than making it
-`internal`: `DataSource` was removed as a named accessor entirely, from
-`IDatabaseContext`, `ITransactionContext`, `DatabaseContext`, and
-`TransactionContext` alike. Nothing internal ever needed it as a reusable property in the
-first place — every real connection-creation path (`DatabaseContext.ResolveDataSource`,
-`FactoryCreateConnection`) already reads the private `_dataSource`/`_readerDataSource`
-fields directly; the property existed only to be read back by callers and tests. Keeping
-even an internal-only accessor around would have been a standing temptation for future
-code to grab the raw `DbDataSource` instead of going through governance, so it doesn't
-exist at all now — tests that need to verify which `DbDataSource` a constructor wired up
-read the private field via reflection instead. A compile-time guard
-(`IDatabaseContextPublicSurfaceTests.cs`) checks both interfaces' full closure for a
-`DataSource` member so it cannot silently reappear.
+The public execution boundary does not expose the underlying `DbConnection` or
+`DbDataSource` either: callers execute through governed containers, readers, and
+transaction leases rather than acquiring provider connections directly.
+`IDatabaseContext.DataSource` briefly existed as a public escape hatch from exactly this —
+see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the removal history
+and its regression test.
 
 ## 6. Stored procedures and functions are portable execution operations
 

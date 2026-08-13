@@ -39,6 +39,38 @@ collateral, onboarding decks).
 `MaxOutputParameters` per-dialect cap, as currently implemented: SQL Server/Oracle 1024,
 MySQL/Snowflake 65535, Firebird 1499, PostgreSQL 100.
 
+## DataSource removal history (principle 5)
+
+`IDatabaseContext.DataSource` (a public `DbDataSource?`) was introduced in the 2.0 rewrite
+(commit `d89b369`, 2026-02-28) and stayed public until 2026-08-13, when this document's own
+audit caught it: any caller could reach past `ISqlContainer`/gateways entirely and call
+`DataSource.CreateConnection()` for a raw provider connection, outside governor accounting,
+session settings, and disposal tracking — the opposite of the 2.0 rewrite's own goal of
+removing public connection leaks.
+
+The fix went through two commits the same day:
+
+1. `e76bce0` first made `DataSource` `internal`, routed through
+   `IInternalConnectionProvider` (the same pattern `GetConnection` already used).
+2. `ad54140` removed it as a named accessor entirely — checking usage showed nothing
+   internal ever read the property; every real connection-creation path
+   (`DatabaseContext.ResolveDataSource`, `FactoryCreateConnection`) already read the
+   private `_dataSource`/`_readerDataSource` fields directly. The property only existed to
+   be read back by callers and tests, so keeping even an internal-only version would have
+   been a standing temptation for future code to grab the raw `DbDataSource` instead of
+   going through governance.
+
+Tests that need to verify which `DbDataSource` a constructor wired up now read the private
+field via reflection (`DatabaseContextTestExtensions.GetInternalDataSource()`) instead of a
+production accessor. A regression test, `pengdows.crud.Tests/IDatabaseContextPublicSurfaceTests.cs`,
+walks `IDatabaseContext`'s and `ITransactionContext`'s full `GetInterfaces()` closure (plain
+`Type.GetProperty` doesn't search base interfaces) so the property can't silently reappear
+on either public interface.
+
+**Not yet on GitHub as of 2026-08-13**: this fix lives on local branch `2.0.6`, which has
+not been pushed — `origin/main` is still at `2.0.5` and still has the public `DataSource`
+property. Re-verify this section once `2.0.6` (or its successor) is pushed and merged.
+
 ## Internal metrics wiring status
 
 `AttributionStats` (`pengdows.crud/metrics/AttributionStats.cs`) — a deeper internal
@@ -56,7 +88,7 @@ rename/move/split over time — for the claims that got a source-level audit on 
 
 | Claim (PRODUCT_THESIS.md) | Proof |
 |---|---|
-| Normal execution paths release their connection on every path, including exception paths (principle 5, "unleakable by accident") | `pengdows.crud.Tests/ExecuteReaderWriteConnectionLeakTests.cs` — asserts the connection is disposed when `ExecuteReaderAsync` fails before a `TrackedReader` is created |
+| Non-lease execution paths self-clean on every outcome, including exception paths (principle 5) | `pengdows.crud.Tests/ExecuteReaderWriteConnectionLeakTests.cs` — asserts the connection is disposed when `ExecuteReaderAsync` fails before a `TrackedReader` is created |
 | MySQL and MariaDB use different read-only session SQL (`transaction_read_only` vs `tx_read_only`) (principle 4) | `pengdows.crud.Tests/ReadOnlySessionSettingsTests.cs` and `pengdows.crud.Tests/dialects/MariaDbDialectTests.cs` — the latter explicitly asserts `Assert.DoesNotContain("transaction_read_only", settings)` for MariaDB |
 | A transaction acquires its governed connection exactly once, not once per command inside it (principle 2) | `pengdows.crud.Tests/TransactionGovernorAcquisitionTests.cs` (added 2026-08-13) — asserts `PoolGovernor.TotalAcquired` moves by 1 for 5 commands inside one transaction, vs. by 5 for 5 sequential non-transactional commands (the contrast rules out a vacuous pass) |
 | `IDatabaseContext`/`ITransactionContext` do not expose a `DataSource` property, even transitively through inherited interfaces (principle 5) | `pengdows.crud.Tests/IDatabaseContextPublicSurfaceTests.cs` (added 2026-08-13, same day the property was found public, then removed as a named accessor entirely — not merely made internal) — walks each interface's full `GetInterfaces()` closure since `Type.GetProperty` doesn't search base interfaces on its own |
