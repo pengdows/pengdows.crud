@@ -200,6 +200,16 @@ transaction leases rather than acquiring provider connections directly.
 see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the removal history
 and its regression test.
 
+Two things sometimes get raised as counterexamples to this and are worth naming as out of
+scope rather than caveats, because neither is a gap in pengdows.crud's API: reaching an
+`internal` type via reflection (`BindingFlags.NonPublic`) is a bypass of C#'s type system
+itself, available against any .NET library regardless of how it's designed, not something
+particular to this one; and a caller instantiating its own `SqlConnection`/
+`NpgsqlConnection`/etc. directly, independently of pengdows.crud, isn't a leak of anything
+pengdows.crud produced — that connection was never inside the governed system to begin
+with. Neither is "bypassing the API" in any meaningful sense — one bypasses the language's
+own access control, the other simply doesn't use the library for that connection at all.
+
 ## 6. Stored procedures and functions are portable execution operations
 
 `CommandType.StoredProcedure` alone does not make a call portable — invocation syntax,
