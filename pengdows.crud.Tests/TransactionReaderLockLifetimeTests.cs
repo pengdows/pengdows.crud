@@ -60,25 +60,54 @@ public class TransactionReaderLockLifetimeTests
     }
 
     [Fact]
-    public async Task ExecuteReaderAsync_InTransaction_BlocksConcurrentOperation_WhileReaderOpen()
+    public async Task ExecuteReaderAsync_InTransaction_NestedOperationOnSameFlow_ThrowsImmediately_WhileReaderOpen()
     {
         using var tx = CreateContext().BeginTransaction();
 
         var container = tx.CreateSqlContainer("SELECT 1");
         var reader = await container.ExecuteReaderAsync();
 
-        // A second operation reaching for the SAME TransactionContext's lock while the first
-        // reader is still open must not be able to proceed concurrently.
+        // A nested operation on the SAME transaction, from the SAME logical call flow that
+        // opened the still-active reader (e.g. a write issued mid-stream while iterating
+        // RetrieveStreamAsync), can never succeed — nothing will release the lock until this
+        // very call returns. Failing fast with a clear exception is correct; blocking would
+        // hang forever, since a reentrant lock would let the nested call reach the provider
+        // while a reader is still open on the same connection, which most providers don't
+        // support either.
         var secondLocker = tx.GetLock();
-        var acquiredConcurrently = await secondLocker.TryLockAsync(TimeSpan.FromMilliseconds(10));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => secondLocker.LockAsync().AsTask());
+        stopwatch.Stop();
 
-        if (acquiredConcurrently)
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000, "Nested same-flow use must fail fast, not block.");
+
+        await reader.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_InTransaction_AnotherThread_AlsoThrowsImmediately_WhileReaderOpen()
+    {
+        using var tx = CreateContext().BeginTransaction();
+
+        var container = tx.CreateSqlContainer("SELECT 1");
+        var reader = await container.ExecuteReaderAsync();
+
+        // A genuinely different logical caller (another thread sharing the same
+        // TransactionContext) must also fail fast, not wait — a reader left open on the
+        // connection means nobody can safely use it until the reader is disposed, regardless
+        // of who's asking. Waiting would either hang forever (if the waiter is the same flow
+        // that must dispose the reader) or eventually contend with the provider anyway (most
+        // providers reject a second command while a reader is open on the same connection).
+        var ex = await Task.Run(() =>
         {
-            await secondLocker.DisposeAsync();
-        }
+            var secondLocker = tx.GetLock();
+            return Assert.ThrowsAsync<InvalidOperationException>(
+                () => secondLocker.TryLockAsync(TimeSpan.FromSeconds(30)).AsTask());
+        });
 
         await reader.DisposeAsync();
 
-        Assert.False(acquiredConcurrently); // BUG today: this is true — lock was already released
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

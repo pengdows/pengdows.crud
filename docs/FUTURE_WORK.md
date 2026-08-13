@@ -134,6 +134,17 @@ comments in `RealAsyncLocker.cs`/`TrackedConnection.cs` that still described `Re
 used for SingleWriter mode — it isn't; SingleWriter serializes writes via `PoolGovernor` over
 ephemeral, NoOp-locked connections, with no persistent connection to lock.
 
+A second item ("TypeMapRegistry staleness / schema-invalidation policy") turned out to be a
+non-issue on closer inspection and was removed rather than listed as open: `TypeMapRegistry`
+caches `TableInfo` keyed by the .NET `Type` object and builds it purely from that type's
+attributes via reflection — it never reads live database schema, so there's nothing for it to
+go stale relative to. Compiled attributes are immutable for a `Type`'s lifetime, so a cache hit
+is correct forever; changing a POCO's attributes requires recompiling, which produces a new
+process with fresh types anyway. The only way to defeat this is deliberately minting a *new*
+`Type` for the *same* logical table repeatedly at runtime (hot-reload/dynamic codegen) instead
+of reusing one — a self-inflicted anti-pattern, not a library gap — and even then the cache size
+is bounded by how many tables the app actually uses.
+
 What's left:
 
 ### P1
@@ -143,12 +154,24 @@ What's left:
   fails, the entity's audit fields look like the write succeeded even though nothing was
   persisted. Fix requires reordering to resolve → bind → execute → apply-on-success, which
   touches the Build/Execute split fairly deeply.
-- **Detection probes are still synchronous.** `DatabaseDetectionResult` records probe evidence
-  now, but the underlying probes are still sync `ExecuteScalar()` calls reached from an `async`
-  method that never actually awaits I/O. Async/cancellable detection was scoped as a
-  `DatabaseContext.CreateAsync` factory and deliberately deferred — it requires rewriting the
-  ~400-line private constructor into a shared async core the sync constructor also routes
-  through, making the full test suite the regression gate for that rewrite.
+- **Detection probes are still synchronous — partially fixed.** Split into three phases by risk:
+  - Phase 1 (done): `DatabaseDetectionService` now has genuine async twins
+    (`DetectProductAsync`/`DetectFromConnectionAsync`/`DetectFromConnectionWithDetailAsync`/
+    `DetectFlavorWithDetailAsync`) using `DbCommand.ExecuteScalarAsync` for the round-trip probes
+    (Aurora/TiDB/Yugabyte/Cockroach), with `OperationCanceledException` propagating un-wrapped per
+    the project's exception-hierarchy convention. Covered by
+    `DatabaseDetectionServiceAsyncTests.cs`, which proves the async path is genuinely used (not a
+    sync fallback) via a command double whose `ExecuteScalar()` throws and whose
+    `ExecuteScalarAsync()` answers the probes. `GetSchema()` stays sync — no true async ADO.NET
+    equivalent exists.
+  - Phase 2 (not started): thread this through `SqlDialectFactory.CreateDialectAsync` and
+    `IConnectionStrategy.HandleDialectDetectionAsync` (new async method on the internal strategy
+    interface, implemented across Standard/SingleConnection/KeepAlive) instead of the current
+    `.GetAwaiter().GetResult()` wrapper. Still no public API impact.
+  - Phase 3 (not started, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
+    Requires rewriting the ~400-line private constructor into a shared async core the sync
+    constructor also routes through, making the full test suite the regression gate for that
+    rewrite. Deliberately deferred on its own merits, independent of Phases 1–2 being done.
 
 ### P2
 
@@ -176,9 +199,6 @@ What's left:
 
 ### P3
 
-- **TypeMapRegistry staleness / schema-invalidation policy.** Cached `TableInfo` never
-  invalidates on a live schema change; requires a new context/process restart. Needs a
-  deliberate decision (accept as documented constraint vs. add invalidation), not just a fix.
 - **One immutable capability snapshot.** Capability truth is still spread across
   dialect/detection/context structures rather than one typed, inspectable surface.
 - **Benchmark process issues** (misleading `Fails=0` reporting under contention, correctness

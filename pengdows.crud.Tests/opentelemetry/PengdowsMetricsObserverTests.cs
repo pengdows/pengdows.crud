@@ -896,6 +896,239 @@ public class PengdowsMetricsObserverTests
             "Expected transactions.rolled_back delta >= 1 after rollback");
     }
 
+    // =========================================================================
+    // OTel semantic-convention metrics — additive, alongside the custom names above
+    // =========================================================================
+
+    // ── db.client.operation.duration histogram ─────────────────────────────
+    // RED: no such instrument exists yet — no measurement will ever be seen.
+    [Fact]
+    public async Task OperationDurationHistogram_RecordsMeasurement_ForTrackedContext_OnSuccess()
+    {
+        var meterName = "test.opdur.ok." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("opdur-ok"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        double? seenDuration = null;
+        string? seenSystem = null;
+        string? seenErrorType = "unset";
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((inst, val, tags, _) =>
+        {
+            if (inst.Name == "db.client.operation.duration")
+            {
+                seenDuration = val;
+                seenSystem = GetTagValue(tags, "db.system.name");
+                seenErrorType = GetTagValue(tags, "error.type");
+            }
+        });
+        listener.Start();
+
+        await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
+
+        Assert.NotNull(seenDuration);
+        Assert.True(seenDuration >= 0);
+        Assert.Equal("sqlite", seenSystem);
+        Assert.Null(seenErrorType);
+    }
+
+    // RED: no error.type tagging exists yet.
+    [Fact]
+    public async Task OperationDurationHistogram_RecordsErrorType_OnFailure()
+    {
+        var meterName = "test.opdur.err." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetGlobalPersistentScalarException(new InvalidOperationException("boom"));
+        using var ctx = new DatabaseContext(MakeConfig("opdur-err"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        string? seenErrorType = null;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((inst, _, tags, _) =>
+        {
+            if (inst.Name == "db.client.operation.duration")
+            {
+                seenErrorType = GetTagValue(tags, "error.type");
+            }
+        });
+        listener.Start();
+
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>());
+
+        Assert.NotNull(seenErrorType);
+    }
+
+    // ── Isolation: Activities from an untracked context must not be recorded ──
+    // This is the reason the pengdows.context_id tag exists — without a per-context
+    // filter, this histogram would pick up every pengdows.crud Activity process-wide,
+    // including ones from concurrently-running, unrelated tests.
+    // RED: no filtering exists yet (instrument doesn't exist at all).
+    [Fact]
+    public async Task OperationDurationHistogram_IgnoresActivity_FromUntrackedContext()
+    {
+        var meterName = "test.opdur.untracked." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var trackedCtx = new DatabaseContext(MakeConfig("opdur-tracked"), factory);
+        using var untrackedCtx = new DatabaseContext(MakeConfig("opdur-untracked"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(trackedCtx); // untrackedCtx is deliberately never tracked
+
+        var measurementCount = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((inst, _, _, _) =>
+        {
+            if (inst.Name == "db.client.operation.duration")
+            {
+                Interlocked.Increment(ref measurementCount);
+            }
+        });
+        listener.Start();
+
+        await untrackedCtx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
+
+        Assert.Equal(0, measurementCount);
+    }
+
+    // ── db.client.connection.* pool metrics (additive, alongside custom names) ─
+    [Theory]
+    [InlineData("db.client.connection.count")]
+    [InlineData("db.client.connection.max")]
+    [InlineData("db.client.connection.pending_requests")]
+    [InlineData("db.client.connection.timeouts")]
+    public void SemconvPoolInstrument_IsPublished(string instrumentName)
+    {
+        var meterName = "test.semconv.inst." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+
+        var seen = false;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, _) =>
+        {
+            if (inst.Meter.Name == meterName && inst.Name == instrumentName)
+            {
+                seen = true;
+            }
+        };
+        listener.Start();
+
+        using var observer = new PengdowsMetricsObserver(meter);
+
+        Assert.True(seen, $"Instrument '{instrumentName}' was not published");
+    }
+
+    [Fact]
+    public void ConnectionCount_EmitsUsedState_WithPoolNameTag()
+    {
+        var meterName = "test.semconv.count." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("semconv-count"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        var states = new List<string?>();
+        var poolNames = new List<string?>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
+        listener.SetMeasurementEventCallback<int>((inst, _, tags, _) =>
+        {
+            if (inst.Name == "db.client.connection.count")
+            {
+                states.Add(GetTagValue(tags, "db.client.connection.state"));
+                poolNames.Add(GetTagValue(tags, "db.client.connection.pool.name"));
+            }
+        });
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        Assert.Equal(2, states.Count); // reader + writer pool
+        Assert.All(states, s => Assert.Equal("used", s));
+        Assert.All(poolNames, Assert.NotNull);
+    }
+
+    [Fact]
+    public void ConnectionTimeouts_ObservableCounter_EmitsPerPool()
+    {
+        var meterName = "test.semconv.timeouts." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var ctx = new DatabaseContext(MakeConfig("semconv-timeouts"), factory);
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(ctx);
+
+        var count = 0;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == meterName)
+            {
+                l.EnableMeasurementEvents(inst);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((inst, _, _, _) =>
+        {
+            if (inst.Name == "db.client.connection.timeouts")
+            {
+                Interlocked.Increment(ref count);
+            }
+        });
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        Assert.Equal(2, count); // reader + writer pool
+    }
+
+    // ── db.system.name mapping ──────────────────────────────────────────────
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite, "sqlite")]
+    [InlineData(SupportedDatabase.PostgreSql, "postgresql")]
+    [InlineData(SupportedDatabase.SqlServer, "microsoft.sql_server")]
+    [InlineData(SupportedDatabase.Oracle, "oracle.db")]
+    [InlineData(SupportedDatabase.Firebird, "firebirdsql")]
+    [InlineData(SupportedDatabase.MySql, "mysql")]
+    [InlineData(SupportedDatabase.MariaDb, "mariadb")]
+    [InlineData(SupportedDatabase.CockroachDb, "cockroachdb")]
+    [InlineData(SupportedDatabase.DuckDB, "duckdb")]
+    [InlineData(SupportedDatabase.Unknown, "other_sql")]
+    public void DbSystemNameMapper_MapsToOTelRegistryValues(SupportedDatabase product, string expected)
+    {
+        Assert.Equal(expected, DbSystemNameMapper.Map(product));
+    }
+
     // ── Test double for ITenantContextRegistry ────────────────────────────
     // ContextCreated/ContextRemoved mirror the events on TenantContextRegistry
     // that are not yet on the interface (will be added in green phase).

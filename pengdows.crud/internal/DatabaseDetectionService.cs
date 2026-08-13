@@ -77,6 +77,109 @@ internal static class DatabaseDetectionService
         => DetectFromConnectionWithDetail(connection).ResolvedProduct;
 
     /// <summary>
+    /// Async twin of <see cref="DetectFromConnection"/>. Unlike the sync version, the
+    /// round-trip flavor probes (Aurora/TiDB/Yugabyte/Cockroach) genuinely await I/O via
+    /// <see cref="DbCommand.ExecuteScalarAsync(CancellationToken)"/> instead of blocking.
+    /// The schema-based base-product lookup still uses the synchronous <c>GetSchema</c> — ADO.NET
+    /// has no true async equivalent for that call.
+    /// </summary>
+    public static async Task<SupportedDatabase> DetectFromConnectionAsync(
+        IDbConnection? connection, CancellationToken cancellationToken = default)
+    {
+        var result = await DetectFromConnectionWithDetailAsync(connection, cancellationToken).ConfigureAwait(false);
+        return result.ResolvedProduct;
+    }
+
+    /// <summary>
+    /// Async twin of <see cref="DetectFromConnectionWithDetail"/>.
+    /// </summary>
+    internal static async Task<DatabaseDetectionResult> DetectFromConnectionWithDetailAsync(
+        IDbConnection? connection, CancellationToken cancellationToken = default)
+    {
+        var attempts = new List<DetectionProbeAttempt>();
+
+        if (connection == null)
+        {
+            return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
+        }
+
+        try
+        {
+            // Step 1: Schema-based detection — no true async GetSchema equivalent in ADO.NET,
+            // so this step stays synchronous. It is a fast, typically-cached, no-round-trip
+            // metadata lookup, unlike the flavor probes below which are real queries.
+            var detected = SupportedDatabase.Unknown;
+            try
+            {
+                DataTable schema;
+                if (connection is DbConnection dbConn)
+                {
+                    schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                }
+                else if (connection is ITrackedConnection trackedConn)
+                {
+                    schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+                }
+                else
+                {
+                    schema = new DataTable();
+                }
+
+                if (schema.Rows.Count > 0)
+                {
+                    var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                    var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+
+                    detected = Match(productName, SchemaProductTokens);
+
+                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                        productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
+                        return new DatabaseDetectionResult(SupportedDatabase.MariaDb, attempts);
+                    }
+
+                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                        productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
+                        return new DatabaseDetectionResult(SupportedDatabase.TiDb, attempts);
+                    }
+                }
+
+                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
+            }
+            catch (Exception ex)
+            {
+                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message));
+            }
+
+            var (flavor, flavorAttempts) = await DetectFlavorWithDetailAsync(connection, detected, cancellationToken)
+                .ConfigureAwait(false);
+            attempts.AddRange(flavorAttempts);
+            if (flavor != SupportedDatabase.Unknown)
+            {
+                return new DatabaseDetectionResult(flavor, attempts);
+            }
+
+            if (detected != SupportedDatabase.Unknown)
+            {
+                return new DatabaseDetectionResult(detected, attempts);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            attempts.Add(new DetectionProbeAttempt("DetectFromConnection", false, ex.Message));
+        }
+
+        return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
+    }
+
+    /// <summary>
     /// Same detection as <see cref="DetectFromConnection"/>, but returns the full trail of
     /// probes attempted (and why any of them failed) instead of discarding that evidence.
     /// </summary>
@@ -164,6 +267,203 @@ internal static class DatabaseDetectionService
         }
 
         return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
+    }
+
+    /// <summary>
+    /// Async twin of <see cref="DetectFlavorWithDetail"/>. The round-trip probe queries use
+    /// <see cref="DbCommand.ExecuteScalarAsync(CancellationToken)"/> via <see cref="ExecuteScalarAsyncCore"/>
+    /// instead of blocking <c>ExecuteScalar()</c>. <c>ServerVersion</c> access is a plain property
+    /// read (no I/O), so it stays synchronous like the sync version.
+    /// </summary>
+    private static async Task<(SupportedDatabase Product, List<DetectionProbeAttempt> Attempts)> DetectFlavorWithDetailAsync(
+        IDbConnection? connection,
+        SupportedDatabase detected,
+        CancellationToken cancellationToken)
+    {
+        var attempts = new List<DetectionProbeAttempt>();
+
+        if (connection == null)
+        {
+            return (SupportedDatabase.Unknown, attempts);
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var serverVersion = string.Empty;
+            if (connection is DbConnection dbConn)
+            {
+                serverVersion = dbConn.ServerVersion;
+            }
+            else if (connection is ITrackedConnection tracked)
+            {
+                serverVersion = tracked.ServerVersion;
+            }
+            else if (connection.GetType().GetProperty("ServerVersion") is { } prop)
+            {
+                serverVersion = prop.GetValue(connection)?.ToString() ?? string.Empty;
+            }
+
+            if (!string.IsNullOrEmpty(serverVersion))
+            {
+                if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
+                {
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.TiDb, attempts);
+                }
+                if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                    serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                {
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.YugabyteDb, attempts);
+                }
+                if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                {
+                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
+                    return (SupportedDatabase.CockroachDb, attempts);
+                }
+            }
+
+            var isMySqlFamily = detected == SupportedDatabase.MySql || detected == SupportedDatabase.Unknown;
+            var isPgFamily = detected == SupportedDatabase.PostgreSql || detected == SupportedDatabase.Unknown;
+
+            using var cmd = connection.CreateCommand();
+
+            if (isMySqlFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT @@aurora_version";
+                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
+                    {
+                        attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
+                        return (SupportedDatabase.AuroraMySql, attempts);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", false, ex.Message));
+                }
+            }
+
+            if (isMySqlFamily || isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT version()";
+                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
+                    var version = scalar?.ToString() ?? string.Empty;
+
+                    if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.TiDb, attempts);
+                    }
+                    if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
+                        version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.YugabyteDb, attempts);
+                    }
+                    if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                        return (SupportedDatabase.CockroachDb, attempts);
+                    }
+
+                    attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
+                }
+            }
+
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText =
+                        "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
+                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
+                    {
+                        attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
+                        return (SupportedDatabase.YugabyteDb, attempts);
+                    }
+
+                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", false, ex.Message));
+                }
+            }
+
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT aurora_version()";
+                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
+                    {
+                        attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
+                        return (SupportedDatabase.AuroraPostgreSql, attempts);
+                    }
+
+                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", false, ex.Message));
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            attempts.Add(new DetectionProbeAttempt("DetectFlavor", false, ex.Message));
+        }
+
+        return (SupportedDatabase.Unknown, attempts);
+    }
+
+    /// <summary>
+    /// Executes a scalar command asynchronously when the command supports it (the normal ADO.NET
+    /// case), falling back to the synchronous path only for an <see cref="IDbCommand"/> that isn't
+    /// a real <see cref="DbCommand"/> — which no supported provider's <c>CreateCommand()</c> returns.
+    /// </summary>
+    private static Task<object?> ExecuteScalarAsyncCore(IDbCommand cmd, CancellationToken cancellationToken)
+    {
+        if (cmd is DbCommand dbCommand)
+        {
+            return dbCommand.ExecuteScalarAsync(cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(cmd.ExecuteScalar());
     }
 
     private static (SupportedDatabase Product, List<DetectionProbeAttempt> Attempts) DetectFlavorWithDetail(
@@ -387,6 +687,21 @@ internal static class DatabaseDetectionService
         }
 
         // Fall back to factory type
+        return DetectFromFactory(factory);
+    }
+
+    /// <summary>
+    /// Async twin of <see cref="DetectProduct"/>.
+    /// </summary>
+    public static async Task<SupportedDatabase> DetectProductAsync(
+        IDbConnection? connection, DbProviderFactory? factory, CancellationToken cancellationToken = default)
+    {
+        var fromConnection = await DetectFromConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+        if (fromConnection != SupportedDatabase.Unknown)
+        {
+            return fromConnection;
+        }
+
         return DetectFromFactory(factory);
     }
 

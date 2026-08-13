@@ -35,6 +35,11 @@ public interface ITableGateway<TEntity, TRowID>
     /// Controls how <c>CreatedBy</c>/<c>CreatedOn</c> audit fields treat an entity's existing
     /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
     /// </summary>
+    /// <remarks>
+    /// Per the project's DI lifetime rules, gateway instances are registered as singletons.
+    /// Setting this property mutates shared state visible to every concurrent caller of this
+    /// gateway instance — set it once at startup/registration time, not per-call.
+    /// </remarks>
     AuditCreationPolicy AuditCreationPolicy { get; set; }
 
     /// <summary>

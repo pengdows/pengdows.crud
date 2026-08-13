@@ -81,4 +81,30 @@ public class SingleWriterTurnstileActivationTests
         var writerTurnstile = GetGovernorField(context, "_writerGovernor", "_turnstile");
         Assert.Null(writerTurnstile);
     }
+
+    [Fact]
+    public void SingleWriter_ExplicitReadOnlyConnectionStringEqualsWriter_StillSharesTurnstile()
+    {
+        // Guard: a caller can explicitly set ReadOnlyConnectionString to the SAME value as
+        // ConnectionString (e.g. always setting both for consistency, without intending a
+        // separate replica). That still targets one physical database, so the turnstile must
+        // still be shared — "explicitly configured" alone is not the same question as "targets
+        // a different physical database."
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            ReadOnlyConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var writerTurnstile = GetGovernorField(context, "_writerGovernor", "_turnstile");
+        var readerTurnstile = GetGovernorField(context, "_readerGovernor", "_turnstile");
+
+        Assert.NotNull(writerTurnstile);
+        Assert.Same(writerTurnstile, readerTurnstile);
+    }
 }

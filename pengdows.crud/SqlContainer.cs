@@ -45,6 +45,7 @@ using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.proc;
 using pengdows.crud.threading;
+using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using pengdows.crud.@internal;
 
@@ -1472,6 +1473,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             cmd = null;
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
+            // A transaction's context lock now guards a reader that stays open for as long as
+            // the caller iterates it. Mark it so a nested command from the SAME logical flow
+            // fails fast instead of deadlocking (see ReusableAsyncLocker.MarkHeldByActiveReader).
+            if (contextLocker is ReusableAsyncLocker readerAwareLocker)
+            {
+                readerAwareLocker.MarkHeldByActiveReader();
+            }
+
             if (activity != null)
             {
                 activity.SetStatus(ActivityStatusCode.Ok);
@@ -1910,6 +1919,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity.SetTag("db.name", _context.Name);
             activity.SetTag("db.statement", Query.ToString());
             activity.SetTag("db.operation", operationName);
+            activity.SetTag("pengdows.context_id", _context.RootId.ToString());
         }
         return activity;
     }

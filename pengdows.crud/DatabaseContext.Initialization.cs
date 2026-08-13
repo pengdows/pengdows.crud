@@ -753,7 +753,10 @@ public partial class DatabaseContext
         // false for the common single-connection-string SingleWriter case. Whether reader and
         // writer target the same physical server is determined by whether the caller supplied
         // an explicit ReadOnlyConnectionString, not by whether the derived strings still match.
-        var sharesTurnstile = !_explicitReadOnlyConnectionString;
+        // An explicit ReadOnlyConnectionString that happens to equal ConnectionString verbatim
+        // (raw, pre-derivation) still targets the same physical database, so it must not disable
+        // sharing either.
+        var sharesTurnstile = !_explicitReadOnlyConnectionString || _readOnlyConnectionStringTargetsSameDatabase;
 
         SemaphoreSlim? turnstile = null;
         if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile
@@ -817,6 +820,9 @@ public partial class DatabaseContext
         string effectiveApplicationName)
     {
         _explicitReadOnlyConnectionString = !string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString);
+        _readOnlyConnectionStringTargetsSameDatabase = _explicitReadOnlyConnectionString &&
+            string.Equals(configuration.ReadOnlyConnectionString, configuration.ConnectionString,
+                StringComparison.OrdinalIgnoreCase);
         // 1. Derive reader connection string BEFORE adding -rw to writer so the reader
         //    does not inherit the write suffix.
         _readerConnectionString = BuildReaderConnectionString(configuration, effectiveApplicationName);

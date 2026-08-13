@@ -134,6 +134,32 @@ public class TrackedReaderBranchTests
     }
 
     [Fact]
+    public void Dispose_WhenConnectionLockerDisposeThrows_StillDisposesContextLocker()
+    {
+        using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
+        var contextLocker = new SpyLocker();
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), new ThrowingDisposeLocker(), false,
+            contextLocker: contextLocker);
+
+        Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+
+        Assert.True(contextLocker.WasDisposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenConnectionLockerDisposeThrows_StillDisposesContextLocker()
+    {
+        using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
+        var contextLocker = new SpyLocker();
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), new ThrowingDisposeLocker(), false,
+            contextLocker: contextLocker);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tracked.DisposeAsync().AsTask());
+
+        Assert.True(contextLocker.WasDisposed);
+    }
+
+    [Fact]
     public void Dispose_WithThrowingCommand_PropagatesCleanupFailure()
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
@@ -178,6 +204,35 @@ public class TrackedReaderBranchTests
     private sealed class AsyncOnlyLocker : IAsyncDisposable
     {
         public bool WasDisposed { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            WasDisposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingDisposeLocker : IAsyncDisposable, IDisposable
+    {
+        public void Dispose()
+        {
+            throw new InvalidOperationException("connection locker dispose failed");
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            throw new InvalidOperationException("connection locker dispose failed");
+        }
+    }
+
+    private sealed class SpyLocker : IAsyncDisposable, IDisposable
+    {
+        public bool WasDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            WasDisposed = true;
+        }
 
         public ValueTask DisposeAsync()
         {
