@@ -193,15 +193,22 @@ the caller's back. `ISqlContainer` and `ITrackedReader` also expose no
 `DbConnection`/`IDbConnection` accessor — there's no field in the ordinary execution
 surface to squirrel a connection into.
 
-Two things can still hold a connection open, and both require the caller to actively work
-against the API rather than merely fail to notice something: obtaining an `ITrackedReader`
-or an open `TransactionContext` and then never disposing it — the same "your lease, your
-disposal" obligation any ADO.NET reader or transaction imposes, one `using`/`await using`
-away from being closed, not a pengdows-specific gap — and reaching past the entire
-execution surface via the public `IDatabaseContext.DataSource` property to call
-`DataSource.CreateConnection()` directly, which requires deliberately bypassing
-`ISqlContainer`/gateways rather than stumbling into it. Nothing currently stops a caller
-determined to do either — but neither happens from correct, ordinary use of the API.
+One thing can still hold a connection open: obtaining an `ITrackedReader` or an open
+`TransactionContext` and then never disposing it — the same "your lease, your disposal"
+obligation any ADO.NET reader or transaction imposes, one `using`/`await using` away from
+being closed, not a pengdows-specific gap. This does not happen from correct, ordinary use
+of the API.
+
+A second path used to exist and has been closed: `IDatabaseContext.DataSource` was a
+public `DbDataSource?` from the 2.0 rewrite (commit `d89b369`) until this document's own
+audit caught it — any caller could reach past `ISqlContainer`/gateways entirely and call
+`DataSource.CreateConnection()` for a raw provider connection, outside governor
+accounting, session settings, and disposal tracking. `DataSource` is now `internal`
+(exposed only through the also-`internal` `IInternalConnectionProvider`, the same pattern
+`GetConnection` already used) and is not part of `IDatabaseContext` or `ITransactionContext`
+— no caller holding either public interface can reach it, deliberately or otherwise. A
+compile-time guard (`IDatabaseContextPublicSurfaceTests.cs`) checks both interfaces'
+full closure for a `DataSource` member so this cannot silently regress.
 
 ## 6. Stored procedures and functions are portable execution operations
 
