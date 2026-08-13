@@ -1,308 +1,117 @@
-# OpenTelemetry Metrics Adapter Plan
+# pengdows.crud OpenTelemetry Metrics
 
-> **STATUS: PLANNED — Not yet implemented in 2.0**
->
-> Nothing described in this document exists in the current codebase. No OpenTelemetry package,
-> adapter, or instrumentation hooks have been implemented. This document records the proposed
-> design for a future optional package. Do not reference any of the APIs, package names, or
-> registration helpers below as if they are available — they are not.
+> **STATUS: SHIPPED.** `pengdows.crud.opentelemetry` is a real, built, tested package
+> (`pengdows.crud.opentelemetry/`, tests in `pengdows.crud.Tests/opentelemetry/`). This
+> file used to be a pre-implementation plan (`opentelemetry-metrics-plan.md`) that said
+> "nothing described here exists" — that framing went stale the moment the package
+> shipped and was never updated, so treat anything you read elsewhere citing the old
+> filename or its instrument-name list as wrong. The package's own
+> [`README.md`](../pengdows.crud.opentelemetry/README.md) is the primary reference for
+> installation and the metrics table; this file keeps the design rationale (why it's
+> shaped the way it is) and points at source for the full, current instrument list rather
+> than duplicating it — see `docs/IMPLEMENTATION_EVIDENCE.md`'s Ecosystem section for a
+> point-in-time snapshot of what's shipped vs. still open.
 
-This document records the proposed design for exposing `pengdows.crud` metrics through
-OpenTelemetry in a future package. It is intentionally a plan, not a commitment.
+## What it does
 
-## Goal
+Bridges `IDatabaseContext.Metrics`/`MetricsUpdated` into `System.Diagnostics.Metrics`
+under `Meter` name `pengdows.crud` (`PengdowsMetricsObserver.MeterName`), without adding
+an OpenTelemetry dependency to the core `pengdows.crud` package. It auto-discovers both
+DI-registered contexts and per-tenant contexts via `ITenantContextRegistry`'s
+`ContextCreated`/`ContextRemoved` events, and supports manually tracking contexts created
+outside DI via `IDatabaseContext.TrackPengdowsMetrics(IServiceProvider)`. `Track`/`Untrack`
+are both idempotent.
 
-Provide an optional adapter package that publishes `pengdows.crud` runtime metrics to
-OpenTelemetry without adding a direct OpenTelemetry dependency to `pengdows.crud` itself.
+## Setup
 
-Recommended package name:
+```bash
+dotnet add package pengdows.crud.opentelemetry
+```
 
-- `pengdows.crud.opentelemetry`
+```csharp
+services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddMeter("pengdows.crud")
+        .AddPrometheusExporter());
+
+services.AddPengdowsTelemetry();
+```
+
+The real registration surface is exactly this small: `AddPengdowsTelemetry()` (an
+`IServiceCollection` extension registering `IPengdowsMetricsObserver` as a singleton plus
+a hosted service) and `TrackPengdowsMetrics()`. There is no options class — an earlier
+draft of this document proposed a `PengdowsCrudOpenTelemetryOptions` surface with
+filters/tag-enrichers/per-metric-family toggles; none of that was built, and there's no
+open work item to build it.
 
 ## Why a separate package
 
 - Keeps the core library dependency-light.
 - Avoids tying `pengdows.crud` releases to OpenTelemetry package churn.
 - Allows telemetry naming and tagging policy to evolve without expanding the core API surface.
-- Preserves the current internal collector and public snapshot/event model as the source of truth.
-
-## Existing metric sources
-
-The adapter should use existing runtime data rather than inventing a second metrics system.
-
-- `IDatabaseContext.Metrics`
-- `IDatabaseContext.MetricsUpdated`
-- `DatabaseMetrics.Read`
-- `DatabaseMetrics.Write`
-- `PoolStatisticsSnapshot`
-- `ModeContentionSnapshot`
-
-The main metric inventory is documented in [`metrics.md`](metrics.md).
-
-## Scope
-
-### In scope for v1
-
-- OpenTelemetry metrics only
-- Per-context export
-- Read/write role tagging
-- Error-category counters
-- Optional pool-governor metrics
-- Optional mode-contention metrics
-- DI registration helpers
-
-### Out of scope for v1
-
-- Tracing
-- Logs
-- Automatic SQL text enrichment
-- High-cardinality tenant tags by default
-- A one-to-one export of every pre-aggregated field as an OTel metric
+- Preserves the internal collector and public snapshot/event model as the source of truth.
 
 ## Architecture
 
-Use a hybrid export model.
+This is a hybrid export model, and the design held up through implementation:
 
-### 1. Snapshot cache
+1. **Snapshot cache** — `PengdowsMetricsObserver` subscribes to each tracked context's
+   `MetricsUpdated` and keeps the most recent `DatabaseMetrics` snapshot per context
+   (`_lastSnapshots`, keyed by `context.RootId`).
+2. **Delta-based counters** — for monotonic values (commands executed/failed, rows
+   read/affected, connections opened/closed, transactions committed/rolled back, errors by
+   category, statements prepared/evicted, session inits), `HandleMetricsUpdated` computes
+   `current - last` against the cached snapshot and adds the delta to an OTel `Counter<long>`
+   (`EmitDelta`, `PengdowsMetricsObserver.cs`).
+3. **Observable gauges for current state** — connections current/peak, command/transaction
+   duration EMA and approximate P95/P99, active transactions, cached prepared statements,
+   and per-pool slot/queue/turnstile state are all `ObservableGauge`s read live from the
+   cached snapshot and `PoolStatisticsSnapshot`, not pushed on an event.
+4. **Histograms** — the original plan deferred histograms until "raw duration hooks" existed
+   in `pengdows.crud`, since the public surface only exposed pre-aggregated
+   EMA/P95/P99 gauges. That got solved differently than planned: rather than adding new
+   hooks to `MetricsUpdated`, the shipped adapter derives a real `db.client.operation.duration`
+   histogram from the `ActivitySource("pengdows.crud")` spans `SqlContainer` already emits
+   for tracing, filtered to `Track()`ed contexts via a `pengdows.context_id` Activity tag.
+   The `pengdows.db.client.*` percentile/EMA gauges still ship alongside it rather than being
+   replaced — both naming schemes coexist so no existing consumer of the gauges breaks.
 
-Subscribe to `MetricsUpdated` and cache the most recent snapshot for each observed context.
-
-This cached snapshot becomes the source for observable gauges and a fallback for environments
-where event frequency is lower than scrape frequency.
-
-### 2. Delta-based counters
-
-For monotonic values, compute deltas between the previous and current snapshot and feed those
-into OpenTelemetry counters.
-
-Examples:
-
-- `ConnectionsOpened`
-- `CommandsExecuted`
-- `RowsReadTotal`
-- `TransactionsCommitted`
-
-### 3. Gauges for current state
-
-Use observable gauges for current values that naturally go up and down.
-
-Examples:
-
-- `ConnectionsCurrent`
-- `TransactionsActive`
-- pool `InUse`
-- pool `Queued`
-
-### 4. Histograms only when raw durations are available
-
-OpenTelemetry histograms are preferable to exporting precomputed percentiles, but they only
-make sense if the adapter can observe raw duration events.
-
-The current public surface primarily exposes pre-aggregated durations:
-
-- `AvgCommandMs`
-- `P95CommandMs`
-- `P99CommandMs`
-- `AvgTransactionMs`
-- `P95TransactionMs`
-- `P99TransactionMs`
-
-Therefore v1 should avoid pretending these are raw histogram inputs. Two acceptable paths exist:
-
-- Conservative v1: export counters and gauges only, plus the already-computed aggregates as
-  observable gauges with explicit names that indicate they are library-computed summaries.
-- Better v2: add internal hooks or a stable observer interface for raw duration events, then
-  publish true OpenTelemetry histograms.
-
-## Instrument mapping
-
-The list below is the recommended starting point. Naming should be reviewed against the
-current OpenTelemetry semantic conventions at implementation time.
-
-### Gauges
-
-- `pengdows.db.client.connections.current`
-- `pengdows.db.client.connections.peak`
-- `pengdows.db.client.transactions.active`
-- `pengdows.db.client.transactions.max`
-- `pengdows.db.client.command.duration.avg`
-- `pengdows.db.client.command.duration.p95`
-- `pengdows.db.client.command.duration.p99`
-- `pengdows.db.client.transaction.duration.avg`
-- `pengdows.db.client.transaction.duration.p95`
-- `pengdows.db.client.transaction.duration.p99`
-- `pengdows.db.client.connection.hold.duration.avg`
-- `pengdows.db.client.connection.open.duration.avg`
-- `pengdows.db.client.connection.close.duration.avg`
-- `pengdows.db.client.session.init.duration.avg`
-- `pengdows.db.client.parameters.max`
-- `pengdows.db.client.pool.in_use`
-- `pengdows.db.client.pool.peak_in_use`
-- `pengdows.db.client.pool.queued`
-- `pengdows.db.client.pool.peak_queued`
-- `pengdows.db.client.pool.turnstile_queued`
-- `pengdows.db.client.pool.peak_turnstile_queued`
-- `pengdows.db.client.mode_contention.current_waiters`
-- `pengdows.db.client.mode_contention.peak_waiters`
-
-### Counters
-
-- `pengdows.db.client.connections.opened`
-- `pengdows.db.client.connections.closed`
-- `pengdows.db.client.connections.long_lived`
-- `pengdows.db.client.commands.executed`
-- `pengdows.db.client.commands.failed`
-- `pengdows.db.client.commands.timed_out`
-- `pengdows.db.client.commands.cancelled`
-- `pengdows.db.client.commands.slow`
-- `pengdows.db.client.rows.read`
-- `pengdows.db.client.rows.affected`
-- `pengdows.db.client.statements.prepared`
-- `pengdows.db.client.statements.cached`
-- `pengdows.db.client.statements.evicted`
-- `pengdows.db.client.transactions.committed`
-- `pengdows.db.client.transactions.rolled_back`
-- `pengdows.db.client.errors`
-- `pengdows.db.client.session.init.count`
-- `pengdows.db.client.pool.acquired`
-- `pengdows.db.client.pool.slot_timeouts`
-- `pengdows.db.client.pool.turnstile_timeouts`
-- `pengdows.db.client.pool.canceled_waits`
-- `pengdows.db.client.mode_contention.waits`
-- `pengdows.db.client.mode_contention.timeouts`
-
-### Deferred histograms
-
-Only add these if raw duration samples can be observed safely:
-
-- `pengdows.db.client.command.duration`
-- `pengdows.db.client.transaction.duration`
-- `pengdows.db.client.connection.hold.duration`
-- `pengdows.db.client.connection.open.duration`
-- `pengdows.db.client.connection.close.duration`
-- `pengdows.db.client.session.init.duration`
-- `pengdows.db.client.pool.wait.duration`
-- `pengdows.db.client.pool.hold.duration`
-- `pengdows.db.client.mode_contention.wait.duration`
+`ModeContentionSnapshot`, referenced in an earlier draft of this document as an existing
+metric source, does not exist anywhere in source — mode-lock contention metrics were
+planned but never built, and there's no `mode_contention.*` instrument in the shipped
+observer. Don't assume it exists.
 
 ## Tags
 
-Use a minimal, stable, low-cardinality tag set.
+What's actually applied, per `PengdowsMetricsObserver.cs`:
 
-Recommended tags:
+- `db.name` / `db.system` — on every command/connection/transaction/error instrument.
+- `pool.label` (`reader`/`writer`) — additionally applied to pool-governor instruments only
+  (`pengdows.db.client.pool.*`); command/connection/transaction counters are **not** split
+  by read/write role, only by context. `docs/FUTURE_WORK.md` tracks this as a real,
+  still-open gap (the OTel bridge doesn't yet expose the `DatabaseMetrics.Read`/`.Write`
+  per-role split that `IDatabaseContext.GetPoolStatisticsSnapshot(PoolLabel)` already has
+  internally).
+- `error.type` — on trace-derived spans/exceptions only.
 
-- `db.system`
-- `db.mode`
-- `execution.role=read|write`
-- `pool.label=reader|writer`
-- `db.error.category=deadlock|serialization_failure|constraint_violation`
+No `db.mode` or `execution.role` tag exists — an earlier draft proposed both; neither was
+built.
 
-Optional tags:
+## What's still open
 
-- `db.name` only when low-cardinality and explicitly enabled
-- adapter-specific environment tags added by caller configuration
+Per `docs/FUTURE_WORK.md`'s OpenTelemetry section: the OTel semantic-convention pool-side
+histograms (`create_time`/`wait_time`/`use_time`) would require new event hooks inside
+`PoolGovernor`'s concurrency-critical code, deliberately deferred rather than rushed; and
+command/connection/transaction counters are not yet split by read/write role in the OTel
+bridge (see Tags, above). The package is also not yet published to NuGet as of this
+writing — check nuget.org for current status before citing it externally.
 
-Avoid by default:
+## Test coverage
 
-- raw connection strings
-- tenant ids
-- SQL text
-- pool key hashes
-- unbounded custom tags
-
-## Registration model
-
-Possible public API:
-
-```csharp
-services.AddPengdowsCrudOpenTelemetry(options =>
-{
-    options.IncludePoolMetrics = true;
-    options.IncludeModeContentionMetrics = true;
-    options.IncludeDatabaseName = false;
-});
-```
-
-Possible options surface:
-
-```csharp
-public sealed class PengdowsCrudOpenTelemetryOptions
-{
-    public bool IncludePoolMetrics { get; set; } = true;
-    public bool IncludeModeContentionMetrics { get; set; } = true;
-    public bool IncludeDatabaseName { get; set; }
-    public bool IncludeRoleMetrics { get; set; } = true;
-    public Func<IDatabaseContext, bool>? Filter { get; set; }
-    public Func<IDatabaseContext, TagList>? TagEnricher { get; set; }
-}
-```
-
-Observation helpers should likely include:
-
-- observing a single `IDatabaseContext`
-- observing contexts created through DI
-- observing contexts from `ITenantContextRegistry`
-
-## Implementation phases
-
-### Phase 1: design validation
-
-- Confirm package name and target frameworks
-- Review instrument names against active OpenTelemetry conventions
-- Decide whether pre-aggregated averages/percentiles should be exported in v1
-
-### Phase 2: minimal adapter
-
-- Create package skeleton
-- Add `Meter`
-- Add context registration and deduplication
-- Export counters and gauges from `DatabaseMetrics`
-- Add unit tests for delta handling and duplicate-registration prevention
-
-### Phase 3: extended diagnostics
-
-- Add pool governor metrics
-- Add mode contention metrics
-- Add optional read/write role instruments or tags
-- Add tests covering counter monotonicity and disposal behavior
-
-### Phase 4: histogram support
-
-- Evaluate whether raw duration hooks are needed in `pengdows.crud`
-- If yes, design a minimal non-invasive hook
-- Add histograms only after raw events are available and semantics are clear
-
-## Key risks
-
-- Double registration could double-count counters.
-- Recreated contexts could look like counter resets if identity is not handled carefully.
-- High-cardinality tags could make the adapter unsafe in multi-tenant production systems.
-- `MetricsUpdated` handlers must not call back into the same `DatabaseContext`.
-- Exporting both precomputed percentiles and histograms without careful naming would create
-  confusing duplicate telemetry.
-
-## Testing strategy
-
-When implemented, testing should cover:
-
-- metrics disabled: adapter emits nothing
-- metrics enabled: counters advance by correct deltas
-- gauges reflect current snapshot values
-- multiple contexts do not interfere with each other
-- duplicate registration is ignored or rejected
-- disposed contexts stop contributing
-- pool and contention metrics behave correctly when enabled
-- tags remain bounded and stable
-
-Use `pengdows.crud.fakeDb` for unit tests. Avoid real exporters in tests; inspect emitted
-measurements through test meters/readers.
-
-## Decision summary
-
-Recommended future direction:
-
-- Build an OpenTelemetry adapter
-- Keep it out of the core package
-- Start with counters and gauges
-- Defer true histograms until raw duration events are available
-- Keep tags conservative by default
+`pengdows.crud.Tests/opentelemetry/PengdowsMetricsObserverTests.cs` covers: metrics
+disabled/no contexts tracked emits nothing; counters advance by correct deltas across
+multiple `MetricsUpdated` events; gauges reflect the current snapshot; multiple contexts
+don't interfere (keyed by `RootId`); `Track`/`Untrack` are idempotent; disposed contexts
+stop contributing (`GetGauges` calls `Untrack` on `context.IsDisposed`); and pool metrics
+behave correctly. Tests use `pengdows.crud.fakeDb` and an in-process OTel `MeterListener`
+rather than a real exporter — the same approach this document originally recommended.
