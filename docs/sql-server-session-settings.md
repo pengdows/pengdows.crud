@@ -94,7 +94,7 @@ Omitting it is a deliberate and defensible choice. Teams with stored procedure-h
 
 ## Validation in Benchmarks
 
-The `benchmarks/` suite uses `DBCC USEROPTIONS` to capture the active session state and asserts that all seven settings are in effect before timed iterations begin. See `docs/INDEXED_VIEW_VALIDATION.md` for the artifact layout and validation report structure.
+The `benchmarks/` suite uses `DBCC USEROPTIONS` (`BenchmarkValidation.SqlServer.cs`) to capture the active session state and asserts that all seven settings are in effect before timed iterations begin.
 
 `SET STATISTICS XML ON; ... SET STATISTICS XML OFF` appears in benchmark code solely to capture query execution plans. It is ephemeral per-command usage, not a persistent session setting.
 
@@ -103,5 +103,4 @@ The `benchmarks/` suite uses `DBCC USEROPTIONS` to capture the active session st
 ## Related
 
 - [`docs/session-settings.md`](session-settings.md) — how settings are applied per-connection (mechanism)
-- [`docs/INDEXED_VIEW_VALIDATION.md`](INDEXED_VIEW_VALIDATION.md) — benchmark validation of session options
 - [`skills/claude/pengdows-crud/primary-keys.md`](../skills/claude/pengdows-crud/primary-keys.md) — clustering strategy and UUID anti-patterns
