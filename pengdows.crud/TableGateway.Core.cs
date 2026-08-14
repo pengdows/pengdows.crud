@@ -77,18 +77,42 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private IColumnInfo? _idColumn;
 
-    // Monolithic parameter binders, cached per dialect
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
+    // Multitenancy background for every cache in this block: TableGateway is a singleton shared
+    // across tenant contexts (see CLAUDE.md's multi-tenancy pattern: gateway.Method(entity,
+    // tenantCtx)). Two tenants on different versions/capability sets of the same engine (e.g.
+    // MySQL 8.0.18 vs 8.0.21) get distinct dialect instances with distinct
+    // ProductInfo.ParsedVersion — a cache keyed only by the coarse SupportedDatabase enum let
+    // whichever tenant's dialect built the entry first silently dictate SQL for every other
+    // same-enum tenant, even when a dialect property is explicitly version-gated (e.g.
+    // MySqlDialect.UpsertIncomingAlias).
+    //
+    // These three bake actual DbParameter construction into the cached delegate (see
+    // CompiledBinderFactory — it closes over the dialect instance itself via Expression.Constant
+    // and keeps calling dialect.CreateDbParameter for the lifetime of the cache entry), so they
+    // stay keyed by dialect INSTANCE (ConditionalWeakTable, reclaimed once a tenant's
+    // DatabaseContext/dialect is no longer referenced) rather than a version fingerprint —
+    // CreateDbParameter's behavior also depends on the live DbProviderFactory instance and, for
+    // Firebird, GuidStorageMode, neither of which a simple DatabaseType+version fingerprint
+    // captures. See docs/FUTURE_WORK.md's fingerprint-audit entry before changing this.
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
 
     // Per-dialect templates are cached in _templatesByDialect
 
-    // SQL templates cached per dialect to support context overrides
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
+    // Pure SQL-text/metadata templates — no DbParameter construction happens here, so unlike the
+    // binder caches above, DatabaseType+ParsedVersion (dialect.GetCacheFingerprint()) is a
+    // sufficient key: verified by audit that every property BuildCachedSqlTemplatesForDialect
+    // reads is either constant per DatabaseType or a pure function of ParsedVersion. Keyed by
+    // fingerprint STRING (not instance) so many tenants on the identical engine+version share one
+    // entry instead of accumulating one per tenant — common in practice (e.g. a managed fleet
+    // standardized on one version).
+    private readonly ConcurrentDictionary<string, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
 
-    // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.)
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedContainerTemplates>> _containersByDialect =
+    // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.) — bakes
+    // DbParameter construction (sample-entity insert values, template placeholders), so this
+    // stays instance-keyed for the same reason as the binder caches above.
+    private readonly ConditionalWeakTable<ISqlDialect, Lazy<CachedContainerTemplates>> _containersByDialect =
         new();
 
 
@@ -1191,20 +1215,20 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, dialect));
+        return _insertBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, dialect));
+        return _upsertBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
+        return _updateBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, d));
     }
 
     // CheckParameterLimit moved to BaseTableGateway.Core.cs

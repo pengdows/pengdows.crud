@@ -84,4 +84,17 @@ internal interface IInternalSqlDialect : ISqlDialect
     Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection);
 
     IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection);
+
+    /// <summary>
+    /// Identifies dialect instances that would generate identical cached SQL/metadata for the
+    /// gateway caches keyed by this value (see <c>TableGateway._templatesByDialect</c> and
+    /// siblings). Two dialect instances with equal fingerprints may safely share one cache entry;
+    /// unequal fingerprints must never share one. Implementations must include every property
+    /// they read during cached-template construction that can vary between instances of the same
+    /// <see cref="ISqlDialect.DatabaseType"/> — at minimum the detected server version, and any
+    /// other per-instance construction flag that affects generated SQL text (not raw
+    /// <see cref="DbParameter"/> construction — see the fingerprint audit in
+    /// docs/FUTURE_WORK.md for why parameter-baking caches aren't safely fingerprintable yet).
+    /// </summary>
+    string CacheFingerprint { get; }
 }

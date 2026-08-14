@@ -17,14 +17,14 @@ public abstract partial class BaseTableGateway<TEntity>
     {
         _readerPlans.Clear();
         _columnListCache.Clear();
-        foreach (var cache in _queryCache.Values)
+        foreach (var entry in _queryCache)
         {
-            cache.Clear();
+            entry.Value.Clear();
         }
 
-        foreach (var cache in _whereParameterNames.Values)
+        foreach (var entry in _whereParameterNames)
         {
-            cache.Clear();
+            entry.Value.Clear();
         }
     }
 }

@@ -28,7 +28,13 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // Per-dialect template cache
     // =========================================================================
 
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
+    // Keyed by dialect fingerprint (DatabaseType+ParsedVersion), not dialect instance or
+    // SupportedDatabase enum alone — see TableGateway._templatesByDialect's comment for the full
+    // rationale (multitenancy: two tenants on different versions of the same engine must never
+    // share a cached template; same-version tenants should share one). BuildPkTemplates is pure
+    // SQL text/metadata (no DbParameter construction), so unlike the binder/container caches this
+    // is safe to fingerprint-key.
+    private readonly ConcurrentDictionary<string, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
 
     /// <summary>Cached SQL fragments specific to PK-based operations.</summary>
     private sealed class PkTemplates
@@ -84,7 +90,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
     private PkTemplates GetPkTemplatesForDialect(ISqlDialect dialect) =>
         _pkTemplatesByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<PkTemplates>(() => BuildPkTemplates(dialect)))
+            .GetOrAdd(dialect.GetCacheFingerprint(), _ => new Lazy<PkTemplates>(() => BuildPkTemplates(dialect)))
             .Value;
 
     private PkTemplates BuildPkTemplates(ISqlDialect dialect)
