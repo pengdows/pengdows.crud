@@ -20,16 +20,22 @@ three frameworks operating against the same shared-cache in-memory SQLite databa
 | WriteStorm_Dapper | 1,054.46 ms | 1,054.7 ms | 1,054.77 ms | 0 | **268** | 3.05 MB |
 | WriteStorm_EntityFramework | 1,055.40 ms | 1,055.5 ms | 1,055.55 ms | 0 | **348** | 10.39 MB |
 
-`P÷D` (pengdows Mean ÷ Dapper Mean) = **0.071** — pengdows completed the storm in ~7% of
-Dapper's time (**~14x faster**). `EF÷P` = **14.074**.
+**This is a correctness/resilience result, not a raw-speed result.** "Fails = 0" for all
+three means every framework's writes were eventually, correctness-wise, all applied — none
+of them lost data. The difference is *how* they got there: Dapper and EF each hit hundreds
+of "database is locked" exceptions along the way (caught/retried by the benchmark harness,
+at real latency cost), while pengdows threw zero. The `SingleWriter` governor serializes
+write *tasks* at the application layer before they ever reach SQLite's own lock, so the
+contention that produces `SQLITE_BUSY` in the other two frameworks never occurs for
+pengdows in the first place.
 
-"Fails = 0" for all three means every framework's writes were eventually, correctness-wise,
-all applied — none of them lost data. The difference is *how* they got there: Dapper and EF
-each hit hundreds of "database is locked" exceptions along the way (caught/retried by the
-benchmark harness, at real latency cost), while pengdows threw zero. The `SingleWriter`
-governor serializes write *tasks* at the application layer before they ever reach SQLite's
-own lock, so the contention that produces `SQLITE_BUSY` in the other two frameworks never
-occurs for pengdows in the first place.
+The `P÷D` = **0.071** (`EF÷P` = **14.074**) time ratio is downstream of that, not an
+independent claim that pengdows executes faster in general: under this specific hostile,
+valid concurrency workload, pengdows spends no time on contention retries, while Dapper and
+EF spend most of their ~1,055 ms paying for exactly that. Don't cite this as "pengdows is
+~14x faster than Dapper" in isolation — it's "pengdows avoids the retry storm that
+contention otherwise causes," and the 14x is what avoiding it happens to cost the other two
+frameworks here.
 
 ### pengdows governor behavior during the storm
 
