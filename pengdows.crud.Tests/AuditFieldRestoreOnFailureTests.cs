@@ -122,6 +122,140 @@ public class AuditFieldRestoreOnFailureTests
         Assert.Equal(string.Empty, entity.LastUpdatedBy);
     }
 
+    /// <summary>
+    /// A catch block can only react to a THROWN exception — it can't see a normal "return false"
+    /// value. ExecuteNonQueryAsync affecting 0 rows without throwing (no exception, just an
+    /// unsuccessful write) is exactly that case, and needs its own explicit restore at the point
+    /// the 0-rows result is observed, not just in the generic catch.
+    /// </summary>
+    [Fact]
+    public async Task TableGateway_CreateAsync_RestoresAuditFieldsOnZeroRowsWithoutException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("creator"));
+
+        var entity = new AuditedItem { Id = 1, Name = "widget" };
+        factory.SetNonQueryResult(0);
+
+        var created = await gateway.CreateAsync(entity, ctx);
+
+        Assert.False(created);
+        Assert.Equal(default, entity.CreatedOn);
+        Assert.Equal(string.Empty, entity.CreatedBy);
+        Assert.Equal(default, entity.LastUpdatedOn);
+        Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task TableGateway_UpdateAsync_RestoresAuditFieldsOnZeroRowsWithoutException_Unversioned()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("updater"));
+
+        var originalLastUpdatedOn = new DateTime(2026, 6, 1);
+        var entity = new AuditedItem
+        {
+            Id = 1,
+            Name = "widget",
+            LastUpdatedOn = originalLastUpdatedOn,
+            LastUpdatedBy = "original-updater"
+        };
+
+        // No [Version] column, so 0 rows affected does NOT throw ConcurrencyConflictException —
+        // it just returns 0. Audit fields must still be restored.
+        factory.SetNonQueryResult(0);
+
+        var rowsAffected = await gateway.UpdateAsync(entity, loadOriginal: false, context: ctx);
+
+        Assert.Equal(0, rowsAffected);
+        Assert.Equal(originalLastUpdatedOn, entity.LastUpdatedOn);
+        Assert.Equal("original-updater", entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task TableGateway_UpsertAsync_RestoresAuditFieldsOnZeroRowsWithoutException_Unversioned()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("upserter"));
+
+        var entity = new AuditedItem { Id = 1, Name = "widget" };
+        factory.SetNonQueryResult(0);
+
+        var rowsAffected = await gateway.UpsertAsync(entity, ctx);
+
+        Assert.Equal(0, rowsAffected);
+        Assert.Equal(default, entity.CreatedOn);
+        Assert.Equal(string.Empty, entity.CreatedBy);
+        Assert.Equal(default, entity.LastUpdatedOn);
+        Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_CreateAsync_RestoresAuditFieldsOnZeroRowsWithoutException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("creator"));
+
+        var entity = new AuditedPkItem { Key = 1, Name = "widget" };
+        factory.SetNonQueryResult(0);
+
+        var created = await gateway.CreateAsync(entity, ctx);
+
+        Assert.False(created);
+        Assert.Equal(default, entity.CreatedOn);
+        Assert.Equal(string.Empty, entity.CreatedBy);
+        Assert.Equal(default, entity.LastUpdatedOn);
+        Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_UpdateAsync_RestoresAuditFieldsOnZeroRowsWithoutException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("updater"));
+
+        var originalLastUpdatedOn = new DateTime(2026, 6, 1);
+        var entity = new AuditedPkItem
+        {
+            Key = 1,
+            Name = "widget",
+            LastUpdatedOn = originalLastUpdatedOn,
+            LastUpdatedBy = "original-updater"
+        };
+
+        factory.SetNonQueryResult(0);
+
+        var rowsAffected = await gateway.UpdateAsync(entity, ctx);
+
+        Assert.Equal(0, rowsAffected);
+        Assert.Equal(originalLastUpdatedOn, entity.LastUpdatedOn);
+        Assert.Equal("original-updater", entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_UpsertAsync_RestoresAuditFieldsOnZeroRowsWithoutException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("upserter"));
+
+        var entity = new AuditedPkItem { Key = 1, Name = "widget" };
+        factory.SetNonQueryResult(0);
+
+        var rowsAffected = await gateway.UpsertAsync(entity, ctx);
+
+        Assert.Equal(0, rowsAffected);
+        Assert.Equal(default, entity.CreatedOn);
+        Assert.Equal(string.Empty, entity.CreatedBy);
+        Assert.Equal(default, entity.LastUpdatedOn);
+        Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
     [Fact]
     public async Task TableGateway_UpdateAsync_RestoresAuditFieldsOnFailure()
     {

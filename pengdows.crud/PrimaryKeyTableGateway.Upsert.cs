@@ -102,15 +102,21 @@ public partial class PrimaryKeyTableGateway<TEntity>
             await using var sc = BuildUpsert(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
-            if (rowsAffected == 0 && _versionColumn != null)
+            if (rowsAffected == 0)
             {
-                var canDetect = dialect.SupportsOnConflictWhere
-                    || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
-                if (canDetect)
+                // 0 rows affected without an exception is a failed write regardless of whether
+                // this entity is versioned or the dialect can detect a conflict.
+                RestoreAuditFields(entity, auditSnapshot);
+                if (_versionColumn != null)
                 {
-                    throw new ConcurrencyConflictException(
-                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                        ctx.Product);
+                    var canDetect = dialect.SupportsOnConflictWhere
+                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                    if (canDetect)
+                    {
+                        throw new ConcurrencyConflictException(
+                            $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                            ctx.Product);
+                    }
                 }
             }
 

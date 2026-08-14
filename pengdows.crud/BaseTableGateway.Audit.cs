@@ -241,6 +241,22 @@ public abstract partial class BaseTableGateway<TEntity>
     }
 
     /// <summary>
+    /// A catch block only reacts to a THROWN exception — it can't see a plain "return false".
+    /// Use this at every unsuccessful-result return point (not just in catch blocks) so a write
+    /// that fails without throwing (e.g. ExecuteNonQueryAsync affecting 0 rows) still gets its
+    /// audit fields restored.
+    /// </summary>
+    protected bool RestoreAuditFieldsIfFailed(bool succeeded, TEntity obj, in AuditFieldSnapshot snapshot)
+    {
+        if (!succeeded)
+        {
+            RestoreAuditFields(obj, snapshot);
+        }
+
+        return succeeded;
+    }
+
+    /// <summary>
     /// Validates audit resolver requirements and resolves audit values once for use
     /// across an entire batch.
     /// </summary>
