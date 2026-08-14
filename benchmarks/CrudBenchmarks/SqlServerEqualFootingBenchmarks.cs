@@ -218,7 +218,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
         const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
         const string filteredQuerySql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge ORDER BY id OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
-        const string aggregateSql = "SELECT AVG(salary) FROM benchmark WHERE is_active = 1";
+        const string aggregateSql = "SELECT AVG(salary) AS Value FROM benchmark WHERE is_active = 1";
 
         for (var pw = 0; pw < prewarmCount; pw++)
         {
@@ -312,7 +312,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
                     .FirstOrDefaultAsync();
                 _ = await efCtx.Benchmarks
                     .FromSqlRaw(readListSql,
-                        new SqlParameter("Age", 0),
+                        new SqlParameter("Age", 30),
                         new SqlParameter("Limit", RecordCount))
                     .AsNoTracking()
                     .ToListAsync();
