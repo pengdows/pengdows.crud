@@ -149,11 +149,6 @@ What's left:
 
 ### P1
 
-- **Audit mutation before execution succeeds.** `SetAuditFields` mutates the in-memory entity
-  during `Build*` (Create/Update), before the SQL has actually executed. If execution later
-  fails, the entity's audit fields look like the write succeeded even though nothing was
-  persisted. Fix requires reordering to resolve → bind → execute → apply-on-success, which
-  touches the Build/Execute split fairly deeply.
 - **Detection probes are still synchronous — partially fixed.** Split into three phases by risk:
   - Phase 1 (done): `DatabaseDetectionService` now has genuine async twins
     (`DetectProductAsync`/`DetectFromConnectionAsync`/`DetectFromConnectionWithDetailAsync`/
@@ -391,3 +386,84 @@ cleanly in two:
   same app) or add a way to source a stable factory identity onto `ISqlDialect`. Pick this up with
   its own dedicated TDD pass (a Firebird `GuidStorageMode`-collision red test, mirroring
   `TableGatewayMultiTenantDialectCacheTests`) before converting these four.
+
+---
+
+## Fixed: audit fields no longer claim a write that never persisted (2026-08-14)
+
+**What was wrong:** `SetAuditFields` mutates `LastUpdatedOn`/`LastUpdatedBy` (and
+`CreatedOn`/`CreatedBy` on create) as a side effect of `Build*` — before any SQL executes. If
+`Execute*` then fails, or (for `[Version]`-column entities) succeeds but affects 0 rows, the
+entity's audit fields were left claiming a write that never happened. Concretely: an
+optimistic-concurrency conflict (a normal, expected, already-documented outcome — see
+`ConcurrencyConflictException`) would leave `entity.LastUpdatedOn` showing "just now" even though
+the row in the database was untouched.
+
+**Revised severity, reached by working through it with the user rather than accepting the
+original filing at face value:** this is narrower than a blanket "always matters" defect. In the
+two most common usage patterns it's actually harmless:
+- **Retry with the same object until it succeeds** — each retry re-stamps a fresh value; the
+  final persisted state matches the final stamped state.
+- **Discard-and-reload on `ConcurrencyConflictException`** (the idiomatic response — refetch, let
+  the caller retry the business operation) — the wrongly-mutated object gets thrown away before
+  anyone observes it.
+
+It has real, non-self-correcting impact in two narrower cases: (1) the Build tier's own
+documented contract (`pengdows.crud/CLAUDE.md`: Build methods return an `ISqlContainer` "you
+inspect, modify, or execute yourself" — dry-run/inspect-without-executing is an explicitly
+supported use case, and there's no retry to paper over a write that was never attempted at all),
+and (2) anything that inspects the entity immediately after a caught failure without reloading
+(logging being the realistic example — reporting a timestamp that says "just now" for a write
+that was rejected).
+
+**Fix:** `BaseTableGateway.Audit.cs` gained `SnapshotAuditFields`/`RestoreAuditFields` — capture
+the entity's audit-column values immediately before `SetAuditFields` mutates them, restore them
+in a catch block (or before manually raising `ConcurrencyConflictException` on a 0-rows-affected
+result) whenever the write doesn't actually succeed. Zero added round trips — pure in-memory
+bookkeeping, consistent with this project's stance against paying round-trip costs for
+correctness that don't need them (see the SQL Server session-settings entry above for the same
+stance applied elsewhere).
+
+**Scope: single-entity convenience methods only.** Wired into all 8 call sites that mutate audit
+fields and execute in the same method body:
+- `TableGateway<TEntity,TRowID>`: both `CreateAsync` overloads (`TableGateway.Core.cs`),
+  `UpdateAsync(entity, loadOriginal, ...)` (`TableGateway.Core.cs`), `UpsertAsync`
+  (`TableGateway.Upsert.cs`)
+- `PrimaryKeyTableGateway<TEntity>`: `CreateAsync` (`PrimaryKeyTableGateway.Core.cs`), both
+  `UpdateAsync` overloads (`PrimaryKeyTableGateway.Update.cs`), `UpsertAsync`
+  (`PrimaryKeyTableGateway.Upsert.cs`)
+
+**Deliberately NOT covered by this fix — batch methods** (`BatchCreateAsync`/`BatchUpdateAsync`/
+`BatchUpsertAsync` on both gateway types): an audit of the batch code paths found they mutate
+audit fields for *every* entity in one upfront loop, before any container is built or executed;
+execution then happens container-by-container (or entity-by-entity for `PrimaryKeyTableGateway`'s
+per-entity batch update) with no surrounding try/catch. A failure partway through leaves earlier
+containers' entities correctly persisted-and-stamped, but every entity in a not-yet-executed
+container already carrying mutated (wrong) audit fields. A correct fix needs a snapshot scoped
+per-container (or per-entity), not one snapshot for the whole batch call — restoring everything on
+any failure would incorrectly roll back audit fields on entities whose row *did* get written.
+That's a different, bigger design than the single-entity fix and wasn't bundled in here.
+
+**Also explicitly out of scope, raised separately during this work — post-execution entity
+freshness on *success*:** even a fully successful `UpdateAsync` never writes the new `[Version]`
+value back into the caller's entity today. This splits into two cases with very different
+fixability:
+- **App-managed integer/counter version** (`SET version = version + 1`) — pengdows computed that
+  increment itself and knows the exact new value with certainty. Free fix (no round trip): write
+  it back to the entity on success. Not yet done.
+- **DB-managed `rowversion`/`timestamp`** (`byte[]`, already correctly excluded from the SET
+  clause — see `TableGateway.Sql.cs`'s "DB handles increment" comment) — the new value is
+  generated server-side. There's no free fix; closing this needs either `OUTPUT`/`RETURNING`
+  support to capture it inline, or the caller must explicitly reload. Staleness here is
+  structural, not an oversight.
+
+User's proposed design for a future pass: an enum/options parameter (e.g. `None` /
+`RefreshComputedFields` / `ReloadFromDatabase`) letting callers choose the cost/freshness
+trade-off explicitly per call, rather than the library silently picking one. Worth designing
+properly (dialect `OUTPUT`/`RETURNING` capability varies) rather than folding into a future bug
+fix — tracked here so the design isn't lost.
+
+Covered by `pengdows.crud.Tests/AuditFieldRestoreOnFailureTests.cs`: 7 tests across both gateway
+types and all three operations (Create/Update/Upsert), including a dedicated test for the
+version-conflict (0-rows-affected) path specifically, since that's a manually-raised exception
+rather than a caught one and needed its own coverage.

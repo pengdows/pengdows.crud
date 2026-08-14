@@ -91,24 +91,36 @@ public partial class PrimaryKeyTableGateway<TEntity>
             throw new ArgumentNullException(nameof(entity));
         }
 
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        await using var sc = BuildUpsert(entity, ctx);
-        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-        if (rowsAffected == 0 && _versionColumn != null)
+        // BuildUpsert mutates audit fields as a side effect of building the statement, before
+        // anything executes. Restore them whenever the write doesn't actually succeed —
+        // including the version-conflict/0-rows-affected case below.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
         {
-            var canDetect = dialect.SupportsOnConflictWhere
-                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
-            if (canDetect)
-            {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
-            }
-        }
+            var ctx = context ?? _context;
+            var dialect = GetDialect(ctx);
+            await using var sc = BuildUpsert(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
-        return rowsAffected;
+            if (rowsAffected == 0 && _versionColumn != null)
+            {
+                var canDetect = dialect.SupportsOnConflictWhere
+                    || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                if (canDetect)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
+            }
+
+            return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     // =========================================================================
