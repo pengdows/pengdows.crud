@@ -558,7 +558,7 @@ jobs:
       - name: Ratchet coverage baselines
         if: steps.nuget_check.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.ACTIONS_VARIABLES_TOKEN }}
         run: |
           set -euo pipefail
 
