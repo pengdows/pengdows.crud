@@ -203,6 +203,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public bool IsInitialized => _productInfo != null;
 
+    /// <inheritdoc cref="IInternalSqlDialect.CacheFingerprint"/>
+    public virtual string CacheFingerprint =>
+        $"{DatabaseType}|{(IsInitialized ? ProductInfo.ParsedVersion?.ToString() ?? "unversioned" : "uninitialized")}";
+
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
     public virtual string ParameterMarker => "?";
@@ -1745,7 +1749,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
             if (databaseType == DatabaseType)
             {
-                databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+                databaseType = await DatabaseDetectionService.DetectProductAsync(connection, Factory).ConfigureAwait(false);
             }
 
             var standardCompliance = DetermineStandardCompliance(parsedVersion);

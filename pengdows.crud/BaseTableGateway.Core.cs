@@ -94,10 +94,14 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     internal readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    // Keyed by dialect (SupportedDatabase) so different dialects never share SQL strings
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>> _queryCache = new();
+    // Keyed by dialect fingerprint (DatabaseType+ParsedVersion), not SupportedDatabase enum alone
+    // or dialect instance — see TableGateway._templatesByDialect's comment for the full rationale
+    // (multitenancy: different-version tenants of the same engine must never share cached SQL
+    // strings; same-version tenants should share one entry). Only ever holds plain SQL text
+    // strings, no DbParameter construction, so fingerprint-keying is safe here.
+    private readonly ConcurrentDictionary<string, BoundedCache<string, string>> _queryCache = new();
 
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames =
+    private readonly ConcurrentDictionary<string, BoundedCache<string, string[]>> _whereParameterNames =
         new();
 
     // Cache for wrapped table names per dialect
@@ -350,10 +354,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     // =========================================================================
 
     internal BoundedCache<string, string> GetOrCreateQueryCache(ISqlDialect dialect) =>
-        _queryCache.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string>(MaxCacheSize));
+        _queryCache.GetOrAdd(dialect.GetCacheFingerprint(), static _ => new BoundedCache<string, string>(MaxCacheSize));
 
     internal BoundedCache<string, string[]> GetOrCreateParamNamesCache(ISqlDialect dialect) =>
-        _whereParameterNames.GetOrAdd(dialect.DatabaseType,
+        _whereParameterNames.GetOrAdd(dialect.GetCacheFingerprint(),
             static _ => new BoundedCache<string, string[]>(MaxCacheSize));
 
     private static int ResolveReaderPlanCacheSize(IDatabaseContext context)

@@ -37,7 +37,7 @@ internal static class SqlDialectFactory
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
         // Use centralized detection service
-        var inferredType = DatabaseDetectionService.DetectProduct(connection, factory);
+        var inferredType = await DatabaseDetectionService.DetectProductAsync(connection, factory).ConfigureAwait(false);
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
         if (dialect is not IInternalSqlDialect internalDialect)
@@ -53,17 +53,36 @@ internal static class SqlDialectFactory
         ITrackedConnection connection,
         DbProviderFactory factory)
     {
-        return CreateDialectAsync(connection, factory, NullLoggerFactory.Instance).GetAwaiter().GetResult();
+        return CreateDialect(connection, factory, NullLoggerFactory.Instance);
     }
 
-
+    // Deliberately independent of CreateDialectAsync: this is the entry point used by the fully
+    // synchronous DatabaseContext constructor (via each IConnectionStrategy.HandleDialectDetection).
+    // Delegating to CreateDialectAsync().GetAwaiter().GetResult() would route product identification
+    // through DetectProductAsync/ExecuteScalarAsync for a call site that never awaits anything —
+    // pure sync-over-async with no benefit. DetectDatabaseInfoAsync below is unavoidably
+    // sync-over-async regardless (GetDatabaseVersionAsync/GetProductNameAsync have no sync
+    // implementation — see SqlDialect.GetDatabaseVersion, itself just
+    // GetDatabaseVersionAsync(...).GetAwaiter().GetResult()), so this only saves the one step that
+    // actually has a genuine synchronous path.
     internal static ISqlDialect CreateDialect(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
     {
         loggerFactory ??= NullLoggerFactory.Instance;
-        return CreateDialectAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
+        var logger = loggerFactory.CreateLogger<SqlDialect>();
+
+        var inferredType = DatabaseDetectionService.DetectProduct(connection, factory);
+
+        var dialect = CreateDialectForType(inferredType, factory, logger);
+        if (dialect is not IInternalSqlDialect internalDialect)
+        {
+            throw new InvalidOperationException("Dialect must support internal detection operations.");
+        }
+
+        internalDialect.DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
+        return dialect;
     }
 
     public static ISqlDialect CreateDialectForType(
