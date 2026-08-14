@@ -448,6 +448,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual bool SupportsSavepoints => false;
     public virtual bool SupportsDropTableIfExists => true;
 
+    // Only meaningful when SupportsMerge is true. Every dialect that currently sets
+    // SupportsMerge (SQL Server, Oracle, Snowflake, DuckDB 1.4+, PostgreSQL 15+) emits standard
+    // ANSI MERGE — Firebird is the sole exception (UPDATE OR INSERT MATCHING), so it overrides
+    // this to false. See ISqlDialect.EmitsAnsiMergeSyntax for the full rationale.
+    public virtual bool EmitsAnsiMergeSyntax => true;
+
+    // True only for dialects whose upsert syntax has no UPDATE/SET-clause requirement (Firebird).
+    public virtual bool SupportsPureKeyUpsert => false;
+
     /// <summary>
     /// Gets the SQL statement to create a savepoint with the given name.
     /// Override for databases with non-standard syntax (e.g., SQL Server uses SAVE TRANSACTION).
@@ -2565,6 +2574,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
     /// </summary>
     public virtual bool InsertReturningClauseBeforeValues => false;
+
+    // True only for Oracle, whose RETURNING ... INTO binds the generated value through an
+    // ADO.NET OUTPUT parameter rather than a result set.
+    public virtual bool RequiresOutputParameterForReturning => false;
 
     // Connection pooling properties - safe defaults for SQL-92 compatibility
     /// <summary>

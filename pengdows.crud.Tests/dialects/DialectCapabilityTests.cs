@@ -186,4 +186,101 @@ public class DialectCapabilityTests
     {
         Assert.Equal(DbType.Boolean, Create(db).BooleanDbType);
     }
+
+    // =========================================================================
+    // RequiresOutputParameterForReturning
+    // Only Oracle's RETURNING ... INTO binds through an ADO.NET OUTPUT parameter instead of a
+    // result set. Replaces a hardcoded `dialect.DatabaseType == SupportedDatabase.Oracle` check
+    // that previously lived in the gateway layer.
+    // =========================================================================
+
+    [Fact]
+    public void RequiresOutputParameterForReturning_IsTrue_ForOracle()
+    {
+        Assert.True(Create(SupportedDatabase.Oracle).RequiresOutputParameterForReturning);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void RequiresOutputParameterForReturning_IsFalse_ForEveryoneElse(SupportedDatabase db)
+    {
+        Assert.False(Create(db).RequiresOutputParameterForReturning);
+    }
+
+    // =========================================================================
+    // EmitsAnsiMergeSyntax
+    // Meaningful only when SupportsMerge is true (SQL Server, Oracle, Snowflake, DuckDB 1.4+,
+    // PostgreSQL 15+, Firebird 2+). Firebird satisfies SupportsMerge via UPDATE OR INSERT
+    // MATCHING, not real ANSI MERGE, so it's the sole false. Replaces a hardcoded
+    // `ctx.DataSourceInfo.Product != SupportedDatabase.Firebird` check.
+    // =========================================================================
+
+    [Fact]
+    public void EmitsAnsiMergeSyntax_IsFalse_ForFirebird()
+    {
+        Assert.False(Create(SupportedDatabase.Firebird).EmitsAnsiMergeSyntax);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.Oracle)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void EmitsAnsiMergeSyntax_IsTrue_ForEveryoneElse(SupportedDatabase db)
+    {
+        Assert.True(Create(db).EmitsAnsiMergeSyntax);
+    }
+
+    // =========================================================================
+    // SupportsPureKeyUpsert
+    // Only Firebird's UPDATE OR INSERT MATCHING has no UPDATE/SET-clause requirement, so a
+    // pure-[PrimaryKey]-only entity (no other updateable columns) can still upsert. Replaces a
+    // hardcoded `ctx.DataSourceInfo.Product != SupportedDatabase.Firebird` guard.
+    // =========================================================================
+
+    [Fact]
+    public void SupportsPureKeyUpsert_IsTrue_ForFirebird()
+    {
+        Assert.True(Create(SupportedDatabase.Firebird).SupportsPureKeyUpsert);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.Oracle)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void SupportsPureKeyUpsert_IsFalse_ForEveryoneElse(SupportedDatabase db)
+    {
+        Assert.False(Create(db).SupportsPureKeyUpsert);
+    }
 }

@@ -157,6 +157,11 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsSavepoints => true;
     public override bool SupportsInsertReturning => true;
 
+    // Oracle's RETURNING ... INTO binds the generated value through an ADO.NET OUTPUT
+    // parameter, not a result set — the gateway needs to know this to choose
+    // ExecuteNonQueryAsync + GetParameterValue instead of ExecuteScalarOrNullAsync.
+    public override bool RequiresOutputParameterForReturning => true;
+
     public override GeneratedKeyPlan GetGeneratedKeyPlan()
     {
         return GeneratedKeyPlan.Returning;

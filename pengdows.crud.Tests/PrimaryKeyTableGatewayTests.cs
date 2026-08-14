@@ -84,6 +84,23 @@ public class PrimaryKeyTableGatewayTests
         public int RightId { get; set; }
     }
 
+    /// <summary>Natural-key entity with a [Version] column, used to exercise the MERGE
+    /// version-increment fragment for dialects where MergeUpdateRequiresTargetAlias is false.</summary>
+    [Table("versioned_pk_entity")]
+    public class VersionedPkEntity
+    {
+        [PrimaryKey]
+        [Column("code", DbType.String)]
+        public string Code { get; set; } = string.Empty;
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Int32)]
+        public int Version { get; set; }
+    }
+
     /// <summary>Entity with a [LastUpdatedBy] audit column for P0-2 double-audit test.</summary>
     [Table("audited_pk_entity")]
     public class AuditedPkEntity
@@ -309,6 +326,33 @@ public class PrimaryKeyTableGatewayTests
         // Must reference the PK columns in the conflict / WHEN MATCHED clause
         Assert.Contains("order_id", sql);
         Assert.Contains("line_number", sql);
+    }
+
+    /// <summary>
+    /// Regression test mirroring the same real bug found for TableGateway (see
+    /// BuildUpsertSqlGenerationTests.BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias):
+    /// PrimaryKeyTableGateway.Core.cs's MERGE version-increment fragment had the identical bug —
+    /// for dialects where MergeUpdateRequiresTargetAlias is false (PostgreSQL, DuckDB), it emitted
+    /// an unqualified "version" on both sides of the increment, which PostgreSQL's real MERGE
+    /// parser rejects as ambiguous (t.version vs s.version). The RHS must always be qualified with
+    /// the target alias "t.".
+    /// </summary>
+    [Fact]
+    public void BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias()
+    {
+        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
+        Assert.True(ctx.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated PostgreSQL version satisfies SupportsMerge (>=15).");
+        Assert.False(ctx.GetDialect().MergeUpdateRequiresTargetAlias);
+
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+        var entity = new VersionedPkEntity { Code = "abc", Value = "v", Version = 1 };
+
+        var sc = gw.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var wrapped = ctx.WrapObjectName("version");
+
+        Assert.Contains($"{wrapped} = t.{wrapped} + 1", sql);
+        Assert.DoesNotContain($" {wrapped} = {wrapped} + 1", sql);
     }
 
     [Fact]

@@ -43,9 +43,23 @@ public class TableGatewayUpsertTests
         using var container = helper.BuildUpsert(entity, context);
         var sql = container.Query.ToString();
 
-        Assert.Contains("\"version\" = \"version\" + 1", sql);
+        // fakeDb's emulated PostgreSQL version (15.0) satisfies SupportsMerge, so this hits the
+        // MERGE branch. MERGE's version-increment RHS must stay qualified with the target alias
+        // "t." (always declared via "MERGE INTO ... t") even though PostgreSQL's
+        // MergeUpdateRequiresTargetAlias is false for the LHS — an unqualified RHS reference is
+        // ambiguous between the target and MERGE source on a real PostgreSQL server. See
+        // BuildUpsertSqlGenerationTests.BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias.
         Assert.True(sql.Contains("ON CONFLICT") || sql.Contains("MERGE INTO"),
             "Expected Postgres upsert to use ON CONFLICT or MERGE.");
+        if (sql.Contains("MERGE INTO"))
+        {
+            Assert.Contains("\"version\" = t.\"version\" + 1", sql);
+        }
+        else
+        {
+            Assert.Contains("\"version\" = \"version\" + 1", sql);
+        }
+
         Assert.Equal(1, entity.Version);
     }
 

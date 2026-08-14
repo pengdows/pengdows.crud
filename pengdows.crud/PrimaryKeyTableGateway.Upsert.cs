@@ -44,17 +44,18 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
 
         if (ctx.DataSourceInfo.IsUsingFallbackDialect)
         {
             throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }
 
-        // Firebird uses UPDATE OR INSERT MATCHING which has no UPDATE SET clause — allowed for pure-PK entities.
-        // All other dialects require at least one non-PK updateable column.
-        if (ctx.DataSourceInfo.Product != SupportedDatabase.Firebird)
+        // Dialects with no UPDATE/SET-clause requirement (e.g. Firebird's UPDATE OR INSERT
+        // MATCHING) allow pure-PK-only entities to upsert. Every other dialect's syntax requires
+        // at least one non-PK updateable column.
+        if (!dialect.SupportsPureKeyUpsert)
         {
-            var dialect = GetDialect(ctx);
             var template = GetPkTemplatesForDialect(dialect);
             if (template.UpsertUpdateFragment == null)
             {
@@ -110,7 +111,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 if (_versionColumn != null)
                 {
                     var canDetect = dialect.SupportsOnConflictWhere
-                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                        || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax);
                     if (canDetect)
                     {
                         throw new ConcurrencyConflictException(
@@ -322,12 +323,12 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
     private ISqlContainer BuildPkUpsertMerge(TEntity entity, IDatabaseContext context)
     {
-        if (context.DataSourceInfo.Product == SupportedDatabase.Firebird)
+        var dialect = GetDialect(context);
+        if (!dialect.EmitsAnsiMergeSyntax)
         {
             return BuildPkFirebirdMergeUpsert(entity, context);
         }
 
-        var dialect = GetDialect(context);
         PrepareForPkUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();

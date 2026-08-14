@@ -20,6 +20,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
@@ -255,6 +256,39 @@ internal class PostgreSqlDialect : SqlDialect
     public override string GetVersionQuery()
     {
         return "SELECT version()";
+    }
+
+    /// <summary>
+    /// PostgreSQL's "SELECT version()" banner embeds the compiling toolchain's own dotted version
+    /// number at the end of the string, e.g.
+    /// <c>"PostgreSQL 18.1 (Debian 18.1-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc
+    /// (Debian 14.2.0-19) 14.2.0, 64-bit"</c>. The base <see cref="SqlDialect.ParseVersion"/>
+    /// takes the LAST dotted-number match in the string, which picks up the gcc version
+    /// (14.2.0) instead of the real server version (18.1) on real, gcc-built PostgreSQL servers
+    /// (the default on Linux — i.e. virtually every Docker image). That silently disables every
+    /// <c>IsVersionAtLeast()</c>-gated capability (SupportsMerge, SupportsJsonTypes,
+    /// SupportsSqlJsonConstructors, SupportsJsonTable, SupportsMergeReturning) regardless of the
+    /// server's actual version. Extract the version that immediately follows "PostgreSQL" instead.
+    /// </summary>
+    public override Version? ParseVersion(string versionString)
+    {
+        if (string.IsNullOrWhiteSpace(versionString))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(versionString, @"PostgreSQL\s+(\d+(?:\.\d+)*)", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var raw = match.Groups[1].Value;
+            var normalized = raw.Contains('.', StringComparison.Ordinal) ? raw : raw + ".0";
+            if (Version.TryParse(normalized, out var version))
+            {
+                return version;
+            }
+        }
+
+        return base.ParseVersion(versionString);
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

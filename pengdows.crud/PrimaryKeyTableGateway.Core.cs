@@ -174,8 +174,13 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                     frag.Append(", ");
                     frag.Append(tp);
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                    frag.Append(" = ");
-                    frag.Append(tp);
+                    frag.Append(" = t.");
+                    // RHS always reads the target's current value — must stay qualified with the
+                    // target alias ("t.", always declared via "MERGE INTO ... t") regardless of
+                    // MergeUpdateRequiresTargetAlias, which only controls whether the LHS
+                    // assignment target is aliased. An unqualified reference here is ambiguous on
+                    // real MERGE engines (e.g. PostgreSQL 15+) because both the target table and
+                    // the MERGE source expose this column name.
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" + 1");
                 }

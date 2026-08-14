@@ -176,6 +176,39 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.Contains($"{targetPrefix}{wrappedValue} = s.{wrappedValue}", updateSet);
     }
 
+    /// <summary>
+    /// Regression test for a real bug found while validating <c>EmitsAnsiMergeSyntax</c> against a
+    /// live PostgreSQL 18 Testcontainers instance: for dialects where
+    /// <see cref="ISqlDialect.MergeUpdateRequiresTargetAlias"/> is false (PostgreSQL, DuckDB), the
+    /// version-increment fragment used the same unqualified prefix on BOTH sides of
+    /// <c>"version" = "version" + 1</c>. Postgres's real MERGE parser rejects the bare RHS
+    /// reference with "column reference is ambiguous" because both the target table (t) and the
+    /// MERGE source (s) expose a "version" column — fakeDb never parses SQL, so this was invisible
+    /// to unit tests until it hit a real PostgreSQL server. The RHS must always be qualified with
+    /// the target alias "t." (always declared via "MERGE INTO ... t"), regardless of
+    /// MergeUpdateRequiresTargetAlias, which only governs whether the LHS is aliased.
+    /// </summary>
+    [Fact]
+    public void BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+        Assert.True(context.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated PostgreSQL version satisfies SupportsMerge (>=15).");
+        Assert.False(context.GetDialect().MergeUpdateRequiresTargetAlias);
+
+        TypeMap.Register<TestEntity>();
+        var helper = new TableGateway<TestEntity, int>(context);
+        var entity = new TestEntity { Id = 1, Name = "v" };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var wrapped = context.WrapObjectName("Version");
+
+        // LHS unqualified (Postgres MERGE forbids target alias on the SET target),
+        // RHS qualified with "t." so it unambiguously reads the target's current value.
+        Assert.Contains($"{wrapped} = t.{wrapped} + 1", sql);
+        Assert.DoesNotContain($" {wrapped} = {wrapped} + 1", sql);
+    }
+
     [Fact]
     public void BuildUpsert_Merge_Oracle_UsesSelectFromDual()
     {

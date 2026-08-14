@@ -75,7 +75,7 @@ public partial class TableGateway<TEntity, TRowID>
             if (_versionColumn != null)
             {
                 var canDetect = dialect.SupportsOnConflictWhere
-                    || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                    || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax);
                 if (canDetect)
                 {
                     throw new ConcurrencyConflictException(
@@ -340,12 +340,11 @@ public partial class TableGateway<TEntity, TRowID>
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;
-        if (ctx.DataSourceInfo.Product == SupportedDatabase.Firebird)
+        var dialect = GetDialect(ctx);
+        if (!dialect.EmitsAnsiMergeSyntax)
         {
             return BuildFirebirdMergeUpsert(entity, ctx);
         }
-
-        var dialect = GetDialect(ctx);
 
         PrepareForInsertOrUpsert(entity);
 

@@ -198,6 +198,20 @@ public interface ISqlDialect
     bool SupportsMerge { get; }
 
     /// <summary>
+    /// True when this dialect's merge-family upsert (<see cref="SupportsMerge"/>) emits real
+    /// ANSI <c>MERGE ... WHEN MATCHED</c> syntax, whose row-count-on-mismatch behavior can be
+    /// relied on to signal an optimistic-concurrency conflict. Defaults to true — every dialect
+    /// that currently sets <see cref="SupportsMerge"/> (SQL Server, Oracle, Snowflake, DuckDB
+    /// 1.4+, PostgreSQL 15+) emits standard MERGE syntax, so a new dialect that later enables
+    /// <see cref="SupportsMerge"/> is safely assumed standard unless it overrides this too.
+    /// Firebird is the sole current exception: it satisfies <see cref="SupportsMerge"/> via a
+    /// related-but-different construct (<c>UPDATE OR INSERT MATCHING</c>) that doesn't give the
+    /// same conflict-detection guarantee, so it overrides this to false. Only meaningful when
+    /// <see cref="SupportsMerge"/> is true.
+    /// </summary>
+    bool EmitsAnsiMergeSyntax => true;
+
+    /// <summary>
     /// Indicates native XML type support.
     /// </summary>
     bool SupportsXmlTypes { get; }
@@ -320,6 +334,14 @@ public interface ISqlDialect
     /// Indicates support for ON DUPLICATE KEY syntax.
     /// </summary>
     bool SupportsOnDuplicateKey { get; }
+
+    /// <summary>
+    /// True when this dialect's upsert syntax has no UPDATE/SET-clause requirement, so an entity
+    /// with only <c>[PrimaryKey]</c> columns and no other updateable columns can still upsert
+    /// (Firebird's <c>UPDATE OR INSERT MATCHING</c>). False for every other dialect, whose
+    /// MERGE/ON CONFLICT/ON DUPLICATE KEY syntax requires at least one non-key column to set.
+    /// </summary>
+    bool SupportsPureKeyUpsert => false;
 
     /// <summary>
     /// True when savepoint statements are supported.
@@ -590,6 +612,15 @@ public interface ISqlDialect
     /// Indicates whether the RETURNING/OUTPUT clause must appear before the VALUES keyword.
     /// </summary>
     bool InsertReturningClauseBeforeValues { get; }
+
+    /// <summary>
+    /// True when this dialect's generated-key retrieval binds the value through an ADO.NET
+    /// <see cref="System.Data.ParameterDirection.Output"/> parameter (Oracle's
+    /// <c>RETURNING ... INTO</c>) rather than reading it back from a result set produced by
+    /// <c>ExecuteScalarOrNullAsync</c>. Only meaningful when <see cref="SupportsInsertReturning"/>
+    /// is true.
+    /// </summary>
+    bool RequiresOutputParameterForReturning => false;
 
     /// <summary>
     /// Dialect-specific limit on output/import parameters.

@@ -184,7 +184,7 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
 
             object? generatedId;
-            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            if (dialect.RequiresOutputParameterForReturning)
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
 
@@ -368,7 +368,7 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
 
             object? generatedId;
-            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            if (dialect.RequiresOutputParameterForReturning)
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
@@ -814,16 +814,16 @@ public partial class TableGateway<TEntity, TRowID> :
             var idWrapped = dialect.WrapSimpleName(_idColumn.Name);
             var clause = dialect.RenderInsertReturningClause(idWrapped);
 
-            if (dialect.DatabaseType == SupportedDatabase.SqlServer)
-            {
-                outputClause = clause; // SQL Server: OUTPUT goes before VALUES
-            }
-            else if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            if (dialect.RequiresOutputParameterForReturning)
             {
                 returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
                     StringComparison.Ordinal);
                 sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
                     ParameterDirection.Output);
+            }
+            else if (dialect.InsertReturningClauseBeforeValues)
+            {
+                outputClause = clause; // e.g. SQL Server: OUTPUT goes before VALUES
             }
             else
             {

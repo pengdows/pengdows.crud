@@ -135,6 +135,14 @@ internal class FirebirdDialect : SqlDialect
     }
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
+
+    // Firebird's SupportsMerge above is true because it satisfies the merge-family upsert
+    // dispatch, but the actual syntax is UPDATE OR INSERT MATCHING, not ANSI MERGE — it doesn't
+    // give the same 0-rows-affected-means-conflict guarantee, and it has no UPDATE/SET-clause
+    // requirement (unlike everyone else's merge/on-conflict/on-duplicate-key syntax).
+    public override bool EmitsAnsiMergeSyntax => false;
+    public override bool SupportsPureKeyUpsert => true;
+
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsJsonTypes => false;
