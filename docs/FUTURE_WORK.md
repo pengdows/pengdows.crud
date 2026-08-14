@@ -175,6 +175,22 @@ What's left:
 
 ### P2
 
+- **SQL Server pays a live session-settings SET round trip on every operation, unlike
+  PostgreSQL.** Quantified by `benchmarks/CrudBenchmarks/results/sqlserver-equal-footing-run-2026-08-13.md`:
+  pengdows is consistently ~1.4-2.0x slower than Dapper (and, unusually, slower than EF
+  Core too) against SQL Server, while PostgreSQL and SQLite show parity or better.
+  Root cause traced end to end: `TrackedConnection`'s session-settings callback is gated
+  by a per-*wrapper-instance* flag (`_wasOpened`), not a per-*physical-connection* flag, so
+  in `DbMode.Standard` every logical checkout re-triggers it — regardless of whether the
+  ADO.NET pool handed back a warm connection. PostgreSQL avoids this entirely via
+  `PostgreSqlDialect.PrepareConnectionStringForDataSource`, which bakes the same settings
+  into the Npgsql `NpgsqlDataSource`'s startup `Options` as GUC defaults that `RESET ALL`
+  restores automatically on pool return — `SqlServerDialect` has no equivalent override,
+  so the bake-and-skip path (`_rwSettingsBakedIntoDataSource`) never applies to it. Whether
+  an equivalent bake-in is even possible for SQL Server (TDS/`SqlClient` has no direct
+  analog to Postgres's arbitrary `Options=-c key=value` mechanism) needs its own
+  investigation before deciding whether this is fixable or an inherent SQL Server
+  constraint.
 - **Reader latency doesn't distinguish database time from consumer time.** `ExecuteReaderAsync`
   metrics treat the command as complete once the provider returns the reader; time spent by the
   caller consuming rows isn't separated out. Proposed: execute→first-row, first-row→dispose, and
