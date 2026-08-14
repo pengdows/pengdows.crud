@@ -177,6 +177,70 @@ public abstract partial class BaseTableGateway<TEntity>
     }
 
     /// <summary>
+    /// Snapshot of an entity's audit-column values captured before <see cref="SetAuditFields"/>
+    /// mutates them. <see cref="SetAuditFields"/> runs during Build (before any SQL executes), so
+    /// if the subsequent Execute never succeeds, the entity's audit fields would otherwise claim a
+    /// write that never persisted. Pair <see cref="SnapshotAuditFields"/> with
+    /// <see cref="RestoreAuditFields"/> around Execute to undo that.
+    /// </summary>
+    protected readonly struct AuditFieldSnapshot
+    {
+        private readonly bool _hasSnapshot;
+
+        internal AuditFieldSnapshot(object? lastUpdatedOn, object? lastUpdatedBy, object? createdOn, object? createdBy)
+        {
+            LastUpdatedOn = lastUpdatedOn;
+            LastUpdatedBy = lastUpdatedBy;
+            CreatedOn = createdOn;
+            CreatedBy = createdBy;
+            _hasSnapshot = true;
+        }
+
+        internal bool HasSnapshot => _hasSnapshot;
+        internal object? LastUpdatedOn { get; }
+        internal object? LastUpdatedBy { get; }
+        internal object? CreatedOn { get; }
+        internal object? CreatedBy { get; }
+    }
+
+    /// <summary>
+    /// Captures the entity's current audit-column values before a Build method mutates them via
+    /// <see cref="SetAuditFields"/>. Returns a no-op snapshot (restoring is a no-op) when the
+    /// entity has no audit columns.
+    /// </summary>
+    protected AuditFieldSnapshot SnapshotAuditFields(TEntity obj)
+    {
+        if (obj == null || !_hasAuditColumns)
+        {
+            return default;
+        }
+
+        return new AuditFieldSnapshot(
+            _tableInfo.LastUpdatedOn?.PropertyInfo.GetValue(obj),
+            _tableInfo.LastUpdatedBy?.PropertyInfo.GetValue(obj),
+            _tableInfo.CreatedOn?.PropertyInfo.GetValue(obj),
+            _tableInfo.CreatedBy?.PropertyInfo.GetValue(obj));
+    }
+
+    /// <summary>
+    /// Restores audit-column values captured by <see cref="SnapshotAuditFields"/>. Call from a
+    /// catch block (or before manually raising an error after a 0-rows-affected result) when the
+    /// SQL built with the mutated values never executed successfully.
+    /// </summary>
+    protected void RestoreAuditFields(TEntity obj, in AuditFieldSnapshot snapshot)
+    {
+        if (obj == null || !snapshot.HasSnapshot)
+        {
+            return;
+        }
+
+        _auditLastUpdatedOnSetter?.Invoke(obj, snapshot.LastUpdatedOn);
+        _auditLastUpdatedBySetter?.Invoke(obj, snapshot.LastUpdatedBy);
+        _auditCreatedOnSetter?.Invoke(obj, snapshot.CreatedOn);
+        _auditCreatedBySetter?.Invoke(obj, snapshot.CreatedBy);
+    }
+
+    /// <summary>
     /// Validates audit resolver requirements and resolves audit values once for use
     /// across an entire batch.
     /// </summary>

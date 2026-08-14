@@ -47,6 +47,12 @@ public partial class TableGateway<TEntity, TRowID>
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // BuildUpsert (called below) mutates audit fields as a side effect of building the
+        // statement, before anything executes. Restore them whenever the write doesn't actually
+        // succeed — including the version-conflict/0-rows-affected case below.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
+        {
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
@@ -73,6 +79,12 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     /// <inheritdoc/>

@@ -142,6 +142,12 @@ public partial class TableGateway<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // BuildCreate (called below via every branch) mutates audit fields as a side effect of
+        // building the INSERT, before anything executes. Restore them if the write never
+        // actually succeeds, so a failed Create doesn't leave the entity claiming one did.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
+        {
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
@@ -279,6 +285,12 @@ public partial class TableGateway<TEntity, TRowID> :
 
             return rowsAffected == 1;
         }
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -290,6 +302,10 @@ public partial class TableGateway<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // See the 2-arg CreateAsync overload above for why this exists.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
+        {
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
@@ -413,6 +429,12 @@ public partial class TableGateway<TEntity, TRowID> :
             }
 
             return rowsAffected == 1;
+        }
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
         }
     }
 
@@ -1257,6 +1279,12 @@ public partial class TableGateway<TEntity, TRowID> :
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
+
+        // BuildUpdateAsync mutates audit fields as a side effect of building the UPDATE, before
+        // anything executes. Restore them whenever the write doesn't actually succeed — including
+        // the version-conflict/0-rows-affected case below — so the entity doesn't claim a write
+        // that never persisted.
+        var auditSnapshot = SnapshotAuditFields(objectToUpdate);
         try
         {
             await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
@@ -1272,7 +1300,13 @@ public partial class TableGateway<TEntity, TRowID> :
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
         {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
             return 0;
+        }
+        catch
+        {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
+            throw;
         }
     }
 

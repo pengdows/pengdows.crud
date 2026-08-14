@@ -265,9 +265,20 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        var ctx = context ?? _context;
-        await using var sc = BuildCreate(entity, ctx);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+        // BuildCreate mutates audit fields as a side effect of building the INSERT, before
+        // anything executes. Restore them if the write never actually succeeds.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
+        {
+            var ctx = context ?? _context;
+            await using var sc = BuildCreate(entity, ctx);
+            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     // =========================================================================
