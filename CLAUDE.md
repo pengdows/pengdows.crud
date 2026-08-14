@@ -717,7 +717,7 @@ MySQL/PostgreSQL suites.
   ```
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
 - `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
-- `WrapObjectName` behavior by database: SQL Server `[name]`, PostgreSQL `"name"`, MySQL `` `name` ``, Oracle `"name"`.
+- `WrapObjectName` uses ANSI double-quote `"name"` identifier quoting **uniformly across every dialect** — not a different quoting syntax per database. PostgreSQL and Oracle get this natively (the `SqlDialect` base class default); SQL Server and MySQL/MariaDB each force it via their own dialect-specific session setting (`QUOTED_IDENTIFIER ON` for SQL Server, `ANSI_QUOTES` SQL mode for MySQL/MariaDB) rather than falling back to their native bracket (`[name]`) or backtick (`` `name` ``) syntax. This is a deliberate cross-database consistency choice, enforced session-by-session, not an incidental default.
 
 ## Commit & Pull Request Guidelines
 
