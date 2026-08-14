@@ -47,6 +47,33 @@ public class AuditFieldRestoreOnFailureTests
         public string LastUpdatedBy { get; set; } = string.Empty;
     }
 
+    [Table("audited_items_autoid")]
+    private class AuditedItemAutoId
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+
+        [CreatedOn]
+        [Column("created_on", DbType.DateTime)]
+        public DateTime CreatedOn { get; set; }
+
+        [CreatedBy]
+        [Column("created_by", DbType.String)]
+        public string CreatedBy { get; set; } = string.Empty;
+
+        [LastUpdatedOn]
+        [Column("last_updated_on", DbType.DateTime)]
+        public DateTime LastUpdatedOn { get; set; }
+
+        [LastUpdatedBy]
+        [Column("last_updated_by", DbType.String)]
+        public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
     [Table("audited_versioned_items")]
     private class AuditedVersionedItem
     {
@@ -100,6 +127,43 @@ public class AuditFieldRestoreOnFailureTests
     private static DatabaseContext CreateContext(fakeDbFactory factory)
     {
         return new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
+    }
+
+    /// <summary>
+    /// The prior fix's blanket "restore on any exception" catch is itself wrong once the write
+    /// has already succeeded: SQLite's CompoundStatement create plan executes the INSERT (which
+    /// commits), then reads the generated ID back from the SAME statement's trailing
+    /// "SELECT last_insert_rowid()" — and falls back to a separate query for that ID when the
+    /// combined reader doesn't yield it (a known fakeDb limitation — NextResult() always returns
+    /// false). If THAT fallback query throws, the INSERT already committed with the new audit
+    /// values; restoring them at that point would make the entity claim a rollback that never
+    /// happened.
+    /// </summary>
+    [Fact]
+    public async Task TableGateway_CreateAsync_DoesNotRestoreAuditFieldsWhenInsertSucceededButIdSyncFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        for (var i = 0; i < 8; i++)
+        {
+            var connection = new fakeDbConnection();
+            connection.SetCommandFailure(
+                "SELECT last_insert_rowid()",
+                new InvalidOperationException("simulated post-write ID-sync failure"));
+            factory.Connections.Add(connection);
+        }
+
+        await using var ctx = CreateContext(factory);
+        var gateway = new TableGateway<AuditedItemAutoId, int>(ctx, new StubAuditValueResolver("creator"));
+
+        var entity = new AuditedItemAutoId { Name = "widget" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.CreateAsync(entity, ctx).AsTask());
+
+        // The INSERT itself succeeded — only the follow-up ID-sync query failed. The entity must
+        // still reflect the successful write, not be rolled back to its pre-attempt (default)
+        // audit values.
+        Assert.NotEqual(default, entity.CreatedOn);
+        Assert.Equal("creator", entity.CreatedBy);
     }
 
     // ---------------- TableGateway ----------------

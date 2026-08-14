@@ -459,28 +459,52 @@ Covered by 6 additional tests (13 total in `AuditFieldRestoreOnFailureTests.cs`)
 `ExecuteNonQueryAsync` to return 0 without throwing (`fakeDbFactory.SetNonQueryResult(0)`) across
 all 8 call sites.
 
-**Current status, precisely:**
-```
-Thrown single-write failure               FIXED
-Detected optimistic concurrency failure   FIXED
-Single write returning false/0 (no throw) FIXED (this follow-up round)
-Build-only / inspect-without-execute      STILL OPEN — see below
-Partial batch failure                     OPEN — see below
-```
+**Third round (same day): a post-write failure was restoring PRE-write audit values.** Further
+external review caught that the follow-up round's fix was itself too blunt: the generic
+`catch { RestoreAuditFields(...); throw; }` restores unconditionally, but several of
+`TableGateway.CreateAsync`'s `GeneratedKeyPlan` branches do a post-INSERT step (retrieving a
+server-generated ID via a fallback query) *after* the INSERT has already committed. If that
+fallback step throws — the row already exists with the new audit values; the INSERT itself
+succeeded — restoring at that point makes the entity falsely claim a rollback that never happened,
+which is arguably worse than the original bug (now the entity looks like a failed write when it
+actually succeeded).
 
-**Still open — Build-tier mutation without execution.** `BuildCreate`/`BuildUpdateInternal` still
-call `SetAuditFields` unconditionally, so `var sc = gateway.BuildCreate(entity);` mutates
-`entity`'s audit fields even if `sc` is never executed (or executed much later, or executed
-conditionally) — exactly the dry-run/inspect-first use case `pengdows.crud/CLAUDE.md` describes as
-a supported Tier-1 pattern. Nothing in either fix round touches this; there's no convenience-method
-`catch`/return-check to hook into when the caller owns the container's execution. Closing this
-needs the deeper `resolve → bind → execute → apply-on-success` reordering already named as the
-harder option in this entry's original filing — audit values get bound into the container without
-being written to the entity, and only get applied to the entity from the Tier-3 convenience method
-after a confirmed success. Noted while investigating: `BuildCreate` also initializes writable IDs
-and version values before execution, not just audit fields — if the Tier-1 invariant ever becomes
-"Build must not change externally observable entity state," those belong in the same design pass,
-not treated as a separate problem.
+Fixed by tracking a `writeSucceeded` flag, set the instant each branch's actual persisting
+INSERT is known to have committed (before any post-write fallback step that could itself throw).
+The shared `catch` now only restores when `!writeSucceeded`. (A one-element `bool[]` carries the
+flag into `ExecuteReaderInsertedIdAsync`, a private helper called via `await`, since `ref`/`out`
+parameters aren't allowed on async methods.) The general principle, stated precisely:
+```
+before the write is known to have succeeded: failure → restore the prepared audit mutation
+after the write is known to have succeeded:  failure → do NOT restore; the DB has the new values
+```
+Covered by a dedicated test forcing SQLite's `CompoundStatement` create plan to successfully
+INSERT, then fail on the fallback `SELECT last_insert_rowid()` query specifically (via
+`fakeDbConnection.SetCommandFailure`) — proving the entity keeps its new audit values rather than
+being rolled back to defaults.
+
+**Reframed, not fixed — Build-tier mutation is by design, not a defect.** Working through this
+with the user reset the mental model entirely. There is no general invariant available of "after
+Build (or even after Execute) the entity equals the database row" — even a fully successful write
+can diverge immediately: triggers, computed columns, server-generated defaults, another
+transaction's concurrent write. `[Version]` `rowversion`/`timestamp` columns make this structural,
+not incidental (SQL Server generates the new value itself; nothing short of `OUTPUT`/`RETURNING`
+or a reload can know it without another round trip). Given that, "Build must be side-effect free"
+was the wrong contract to aim for. The right one distinguishes three separate concepts that were
+being conflated:
+```
+1. Prepared entity state    "These are the values we're about to write."      — Build can set this
+2. Write outcome             "Did the database accept the operation?"         — known from Execute
+3. Database-current state    "Does this object exactly match the row now?"    — NOT generally knowable
+```
+`BuildCreate`/`BuildUpdateInternal` populating audit fields (and writable IDs, and initializing an
+app-managed `[Version]` to 1) is concept #1 — legitimate inputs to the SQL being built, not a
+false claim about #2 or #3. `var sc = gateway.BuildCreate(entity);` mutating `entity` before `sc`
+is ever executed is therefore expected: those are the values the *prepared* INSERT would write,
+not an assertion that it happened. Restoring on a **convenience method's** failure still makes
+sense, because that API layer explicitly knows #2 — it attempted execution and knows the DB
+rejected it. Build alone never reaches #2, so it has nothing to restore *from*. No code change
+from this — documenting the contract precisely is the fix.
 
 **Still open — partial batch failure.** `BatchCreateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` on
 both gateway types mutate audit fields for *every* entity in one upfront loop, before any container
@@ -512,7 +536,17 @@ trade-off explicitly per call, rather than the library silently picking one. Wor
 properly (dialect `OUTPUT`/`RETURNING` capability varies) rather than folding into a future bug
 fix — tracked here so the design isn't lost.
 
-Covered by `pengdows.crud.Tests/AuditFieldRestoreOnFailureTests.cs`: 7 tests across both gateway
-types and all three operations (Create/Update/Upsert), including a dedicated test for the
-version-conflict (0-rows-affected) path specifically, since that's a manually-raised exception
-rather than a caught one and needed its own coverage.
+Overall coverage across the three rounds above: 14 tests in
+`pengdows.crud.Tests/AuditFieldRestoreOnFailureTests.cs`, spanning both gateway types, all three
+operations (Create/Update/Upsert), thrown failures, the version-conflict (0-rows-affected,
+manually-raised-exception) path, non-throwing 0-rows results, and the post-write-success failure
+case. Current status:
+```
+Thrown pre-write failure                        FIXED
+Detected optimistic-concurrency failure         FIXED
+0-row non-throwing failure                      FIXED
+Post-write-success failure (must NOT restore)   FIXED
+Build mutates prepared entity state             BY DESIGN — documented above, not a defect
+Partial batch failure                           STILL OPEN — see above
+Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY — see above
+```
