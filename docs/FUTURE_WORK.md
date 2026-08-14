@@ -200,10 +200,22 @@ What's left:
   specifically a property of `DbMode.Standard` under a workload of small, independent
   operations, not a general statement about the SQL Server execution path. Whether an
   equivalent bake-in is even possible for `DbMode.Standard` on SQL Server (TDS/`SqlClient`
-  has no direct analog to Postgres's arbitrary `Options=-c key=value` mechanism) still
-  needs its own investigation before deciding whether the Standard-mode cost is fixable or
-  an inherent constraint — but it's a narrower problem than "SQL Server is broadly
-  slower."
+  has no direct analog to Postgres's arbitrary `Options=-c key=value` mechanism) is a
+  narrower, lower-priority question than "SQL Server is broadly slower" made it look.
+
+  **Decision: not pursuing a default-behavior change here.** Always-reapply exists because
+  a connection from the pool — including one pengdows itself used a moment ago for a
+  different, unrelated operation — can arrive with drifted session state, and the cost of
+  getting this wrong is correctness, not just consistency: `QUOTED_IDENTIFIER ON` is the
+  specific setting that makes the framework's own ANSI double-quote identifier quoting
+  (`WrapObjectName`) parse at all — e.g. `SELECT "col 1" FROM "name space"."table name"`.
+  Without it, that's not subtly different behavior, it's broken SQL (the quotes are read as
+  a string literal, not an identifier delimiter). A few hundred microseconds against that
+  failure mode is not a trade worth taking as the default. If a lower-cost path is ever
+  built (batching was rejected for making SQL Server logs unreadable — see the design
+  conversation this entry is drawn from), it should be an explicit, off-by-default opt-in
+  requiring the caller to assert exclusive ownership of the connection string's pool, never
+  a change to the default correctness-first behavior.
 - **Reader latency doesn't distinguish database time from consumer time.** `ExecuteReaderAsync`
   metrics treat the command as complete once the provider returns the reader; time spent by the
   caller consuming rows isn't separated out. Proposed: execute→first-row, first-row→dispose, and

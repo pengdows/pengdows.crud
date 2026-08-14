@@ -92,6 +92,30 @@ Omitting it is a deliberate and defensible choice. Teams with stored procedure-h
 
 ---
 
+## Performance Trade-off (Reapply-Every-Checkout vs. Speed)
+
+Reapplying the full baseline on every checkout, rather than trusting a pooled connection's
+prior state, has a real, measured cost under `DbMode.Standard`: `SqlServerEqualFootingBenchmarks`
+(`benchmarks/CrudBenchmarks/results/sqlserver-equal-footing-run-2026-08-13.md`) found
+pengdows 1.4–2.0x slower than Dapper on SQL Server specifically, traced to the extra `SET`
+round trip this document describes, re-paid on every single operation. A follow-up
+(`sqlserver-hydration-hotpath-run-2026-08-13.md`) confirmed this is mostly an amortization
+effect — with the session-init cost paid once instead of per operation, the gap shrinks to
+1.18x at 100 rows and 1.025x at 5,000 rows — but `DbMode.Standard` genuinely pays the full
+tax on every checkout by design.
+
+This is a deliberate trade-off, not an oversight, and it isn't being changed: a pooled
+connection can arrive with drifted session state — including from pengdows's own prior,
+unrelated use of that same connection string's pool — and the failure mode if
+`QUOTED_IDENTIFIER` were ever `OFF` isn't subtly different query results, it's broken SQL,
+because the framework's own `WrapObjectName`-generated ANSI double-quote identifiers
+(`"col 1"`, `"name space"."table name"`) would parse as string literals instead of
+identifiers. A few hundred microseconds against that failure mode is not a trade worth
+making by default. See `docs/FUTURE_WORK.md`'s P2 entry for the full investigation and
+why any lower-cost alternative (batching was rejected — it makes SQL Server logs
+unreadable) would have to be an explicit, off-by-default opt-in, never a change to this
+default behavior.
+
 ## Validation in Benchmarks
 
 The `benchmarks/` suite uses `DBCC USEROPTIONS` (`BenchmarkValidation.SqlServer.cs`) to capture the active session state and asserts that all seven settings are in effect before timed iterations begin.
