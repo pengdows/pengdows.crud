@@ -106,14 +106,21 @@ tax on every checkout by design.
 
 This is a deliberate trade-off, not an oversight, and it isn't being changed: a pooled
 connection can arrive with drifted session state — including from pengdows's own prior,
-unrelated use of that same connection string's pool — and the failure mode if
-`QUOTED_IDENTIFIER` were ever `OFF` isn't subtly different query results, it's broken SQL,
-because the framework's own `WrapObjectName`-generated ANSI double-quote identifiers
-(`"col 1"`, `"name space"."table name"`) would parse as string literals instead of
-identifiers. A few hundred microseconds against that failure mode is not a trade worth
-making by default. See `docs/FUTURE_WORK.md`'s P2 entry for the full investigation and
-why any lower-cost alternative (batching was rejected — it makes SQL Server logs
-unreadable) would have to be an explicit, off-by-default opt-in, never a change to this
+unrelated use of that same connection string's pool. This isn't pengdows imposing its own
+opinion about session hygiene: four of these seven settings (`ANSI_NULLS`,
+`ANSI_WARNINGS`, `ARITHABORT`, `QUOTED_IDENTIFIER` — see "Enforced Settings" above) are
+Microsoft's own documented hard requirements for creating and using indexed views and
+indexes on computed columns, not a pengdows preference. Get any of them wrong and indexed
+views can fail to create, fail to be used by the optimizer, or behave incorrectly — a real
+SQL Server feature silently degrading, not a pengdows-specific quirk. On top of that,
+`QUOTED_IDENTIFIER` going `OFF` breaks the framework's own generated SQL directly: the
+`WrapObjectName`-generated ANSI double-quote identifiers (`"col 1"`,
+`"name space"."table name"`) would parse as string literals instead of identifiers — not
+subtly different query results, broken SQL. A few hundred microseconds against either
+failure mode is not a trade worth making by default. See `docs/FUTURE_WORK.md`'s P2 entry
+for the full investigation and why any lower-cost alternative (batching was rejected — it
+makes SQL Server logs unreadable) would have to be an explicit, off-by-default opt-in,
+never a change to this
 default behavior.
 
 ## Validation in Benchmarks
