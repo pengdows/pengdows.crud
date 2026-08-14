@@ -145,7 +145,15 @@ public partial class TableGateway<TEntity, TRowID> :
         // BuildCreate (called below via every branch) mutates audit fields as a side effect of
         // building the INSERT, before anything executes. Restore them if the write never
         // actually succeeds, so a failed Create doesn't leave the entity claiming one did.
+        // writeSucceeded is set the instant the actual persisting INSERT is known to have
+        // committed — some branches then do a follow-up step (retrieving a generated ID) that
+        // can itself throw. Once the write has succeeded, a later failure in that follow-up step
+        // must NOT restore audit fields — the row already exists with the new values; restoring
+        // would make the entity falsely claim a rollback that never happened. A plain local bool
+        // can't be observed from the shared catch below across the ExecuteReaderInsertedIdAsync
+        // branch's async call, hence the one-element array as a simple mutable cell.
         var auditSnapshot = SnapshotAuditFields(entity);
+        var writeSucceeded = new bool[1];
         try
         {
         var ctx = context ?? _context;
@@ -163,8 +171,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
             // Proceed with standard insert since ID is now populated
             await using var sc = BuildCreate(entity, ctx);
-            return RestoreAuditFieldsIfFailed(
-                await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1, entity, auditSnapshot);
+            var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -183,6 +192,10 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write).ConfigureAwait(false);
             }
+
+            // The INSERT above executed without throwing — the write has committed regardless of
+            // whether a generated ID came back inline.
+            writeSucceeded[0] = true;
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -209,6 +222,8 @@ public partial class TableGateway<TEntity, TRowID> :
                 RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
+
+            writeSucceeded[0] = true;
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
@@ -256,6 +271,10 @@ public partial class TableGateway<TEntity, TRowID> :
                 }
             } // reader disposed here — connection released before any fallback query
 
+            // The INSERT above executed without throwing — the write has committed regardless of
+            // whether the trailing SELECT yielded the generated ID inline.
+            writeSucceeded[0] = true;
+
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
@@ -273,24 +292,30 @@ public partial class TableGateway<TEntity, TRowID> :
         // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
         // No multi-statement support required — MySqlConnector deliberately omits it.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect).ConfigureAwait(false);
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
+            var succeeded = rowsAffected == 1;
+            writeSucceeded[0] = succeeded;
 
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
+            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
 
-            return RestoreAuditFieldsIfFailed(rowsAffected == 1, entity, auditSnapshot);
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
         }
         catch
         {
-            RestoreAuditFields(entity, auditSnapshot);
+            if (!writeSucceeded[0])
+            {
+                RestoreAuditFields(entity, auditSnapshot);
+            }
+
             throw;
         }
     }
@@ -304,8 +329,10 @@ public partial class TableGateway<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        // See the 2-arg CreateAsync overload above for why this exists.
+        // See the 2-arg CreateAsync overload above for why this exists (including the
+        // writeSucceeded flag and why it's a one-element array).
         var auditSnapshot = SnapshotAuditFields(entity);
+        var writeSucceeded = new bool[1];
         try
         {
         var ctx = context ?? _context;
@@ -322,9 +349,9 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
             await using var sc = BuildCreate(entity, ctx);
-            return RestoreAuditFieldsIfFailed(
-                await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1,
-                entity, auditSnapshot);
+            var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -346,6 +373,8 @@ public partial class TableGateway<TEntity, TRowID> :
                     .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
             }
+
+            writeSucceeded[0] = true;
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -371,6 +400,8 @@ public partial class TableGateway<TEntity, TRowID> :
                 RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
+
+            writeSucceeded[0] = true;
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
@@ -408,6 +439,8 @@ public partial class TableGateway<TEntity, TRowID> :
                 }
             } // reader disposed here — connection released before any fallback query
 
+            writeSucceeded[0] = true;
+
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
@@ -422,23 +455,30 @@ public partial class TableGateway<TEntity, TRowID> :
         // 4b. ReaderInsertedId plan (MySqlConnector): see ExecuteReaderInsertedIdAsync.
         // No multi-statement support required.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, cancellationToken).ConfigureAwait(false);
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded, cancellationToken).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
+            var succeeded = rowsAffected == 1;
+            writeSucceeded[0] = succeeded;
+
+            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             }
 
-            return RestoreAuditFieldsIfFailed(rowsAffected == 1, entity, auditSnapshot);
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
         }
         catch
         {
-            RestoreAuditFields(entity, auditSnapshot);
+            if (!writeSucceeded[0])
+            {
+                RestoreAuditFields(entity, auditSnapshot);
+            }
+
             throw;
         }
     }
@@ -448,10 +488,16 @@ public partial class TableGateway<TEntity, TRowID> :
     /// from the command's LastInsertedId property (populated from the MySQL OK packet).
     /// Falls back to <see cref="PopulateGeneratedIdAsync"/> when LastInsertedId is absent (e.g. fakeDb).
     /// </summary>
+    /// <param name="writeSucceeded">
+    /// Set to true once the INSERT reader has executed without throwing, before the
+    /// <see cref="PopulateGeneratedIdAsync"/> fallback (which can itself throw) runs — see the
+    /// caller (<c>CreateAsync</c>) for why this must be observable outside this method.
+    /// </param>
     private async ValueTask<bool> ExecuteReaderInsertedIdAsync(
         TEntity entity,
         IDatabaseContext ctx,
         ISqlDialect dialect,
+        bool[] writeSucceeded,
         CancellationToken cancellationToken = default)
     {
         await using var sc = BuildCreate(entity, ctx);
@@ -461,6 +507,9 @@ public partial class TableGateway<TEntity, TRowID> :
             if (reader is IInternalTrackedReader internalReader)
                 generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
         }
+
+        writeSucceeded[0] = true;
+
         if (generatedId is not null && generatedId != DBNull.Value)
             _idColumn!.PropertyInfo.SetValue(entity,
                 TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
