@@ -272,7 +272,9 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         {
             var ctx = context ?? _context;
             await using var sc = BuildCreate(entity, ctx);
-            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            return RestoreAuditFieldsIfFailed(
+                await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1,
+                entity, auditSnapshot);
         }
         catch
         {

@@ -433,16 +433,65 @@ fields and execute in the same method body:
   `UpdateAsync` overloads (`PrimaryKeyTableGateway.Update.cs`), `UpsertAsync`
   (`PrimaryKeyTableGateway.Upsert.cs`)
 
-**Deliberately NOT covered by this fix — batch methods** (`BatchCreateAsync`/`BatchUpdateAsync`/
-`BatchUpsertAsync` on both gateway types): an audit of the batch code paths found they mutate
-audit fields for *every* entity in one upfront loop, before any container is built or executed;
-execution then happens container-by-container (or entity-by-entity for `PrimaryKeyTableGateway`'s
-per-entity batch update) with no surrounding try/catch. A failure partway through leaves earlier
-containers' entities correctly persisted-and-stamped, but every entity in a not-yet-executed
-container already carrying mutated (wrong) audit fields. A correct fix needs a snapshot scoped
-per-container (or per-entity), not one snapshot for the whole batch call — restoring everything on
-any failure would incorrectly roll back audit fields on entities whose row *did* get written.
-That's a different, bigger design than the single-entity fix and wasn't bundled in here.
+**Follow-up round (same day): a `catch` block can't see a plain `return false`.** External review
+of the first push correctly caught that the fix above only restored on a *thrown* exception. Several
+of the 8 methods can signal an unsuccessful write without throwing at all — `ExecuteNonQueryAsync`
+affecting 0 rows and the method just returning `false`/`0` (no exception, so the `catch` block
+never runs):
+- `TableGateway.CreateAsync` (both overloads) — the "default path" `return rowsAffected == 1;`,
+  the PREFETCH branch's equivalent, and the CORRELATION TOKEN branch's explicit `return false;`
+- `PrimaryKeyTableGateway.CreateAsync` — same shape, single branch
+- `TableGateway.UpdateAsync` / `PrimaryKeyTableGateway.UpdateAsync` — 0 rows affected on an
+  *unversioned* entity doesn't throw `ConcurrencyConflictException` (that only fires when
+  `_versionColumn != null`); it just returns `0`, and the audit fields were never restored for
+  that case
+- `TableGateway.UpsertAsync` / `PrimaryKeyTableGateway.UpsertAsync` — same gap for unversioned
+  entities, or versioned entities on a dialect that can't detect the conflict (MySQL/MariaDB
+  `ON DUPLICATE KEY`, Firebird, non-`WHERE` `ON CONFLICT`)
+
+Fixed by adding `RestoreAuditFieldsIfFailed` (`BaseTableGateway.Audit.cs`) — the same restore,
+called explicitly at every point a method observes an unsuccessful result and is about to
+`return` normally, not only from the `catch` blocks. `UpdateAsync`/`UpsertAsync` now restore
+unconditionally on `rowsAffected == 0` before the (still-conditional) `ConcurrencyConflictException`
+throw, rather than only when a version column made that throw happen.
+
+Covered by 6 additional tests (13 total in `AuditFieldRestoreOnFailureTests.cs`) forcing
+`ExecuteNonQueryAsync` to return 0 without throwing (`fakeDbFactory.SetNonQueryResult(0)`) across
+all 8 call sites.
+
+**Current status, precisely:**
+```
+Thrown single-write failure               FIXED
+Detected optimistic concurrency failure   FIXED
+Single write returning false/0 (no throw) FIXED (this follow-up round)
+Build-only / inspect-without-execute      STILL OPEN — see below
+Partial batch failure                     OPEN — see below
+```
+
+**Still open — Build-tier mutation without execution.** `BuildCreate`/`BuildUpdateInternal` still
+call `SetAuditFields` unconditionally, so `var sc = gateway.BuildCreate(entity);` mutates
+`entity`'s audit fields even if `sc` is never executed (or executed much later, or executed
+conditionally) — exactly the dry-run/inspect-first use case `pengdows.crud/CLAUDE.md` describes as
+a supported Tier-1 pattern. Nothing in either fix round touches this; there's no convenience-method
+`catch`/return-check to hook into when the caller owns the container's execution. Closing this
+needs the deeper `resolve → bind → execute → apply-on-success` reordering already named as the
+harder option in this entry's original filing — audit values get bound into the container without
+being written to the entity, and only get applied to the entity from the Tier-3 convenience method
+after a confirmed success. Noted while investigating: `BuildCreate` also initializes writable IDs
+and version values before execution, not just audit fields — if the Tier-1 invariant ever becomes
+"Build must not change externally observable entity state," those belong in the same design pass,
+not treated as a separate problem.
+
+**Still open — partial batch failure.** `BatchCreateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` on
+both gateway types mutate audit fields for *every* entity in one upfront loop, before any container
+is built or executed; execution then happens container-by-container (or entity-by-entity for
+`PrimaryKeyTableGateway`'s per-entity batch update) with no surrounding try/catch. A failure
+partway through leaves earlier containers' entities correctly persisted-and-stamped, but every
+entity in a not-yet-executed container already carrying mutated (wrong) audit fields. A correct fix
+needs a snapshot scoped per-container (or per-entity), not one snapshot for the whole batch call —
+restoring everything on any failure would incorrectly roll back audit fields on entities whose row
+*did* get written. That's a different, bigger design than the single-entity fix and wasn't bundled
+in here.
 
 **Also explicitly out of scope, raised separately during this work — post-execution entity
 freshness on *success*:** even a fully successful `UpdateAsync` never writes the new `[Version]`

@@ -66,15 +66,22 @@ public partial class TableGateway<TEntity, TRowID>
         // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
         // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
         // cannot detect version conflicts — do NOT throw for those dialects.
-        if (rowsAffected == 0 && _versionColumn != null)
+        if (rowsAffected == 0)
         {
-            var canDetect = dialect.SupportsOnConflictWhere
-                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
-            if (canDetect)
+            // 0 rows affected without an exception is a failed write regardless of whether this
+            // entity is versioned or the dialect can detect a conflict — restore unconditionally,
+            // not just on the conditional throw below.
+            RestoreAuditFields(entity, auditSnapshot);
+            if (_versionColumn != null)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
+                var canDetect = dialect.SupportsOnConflictWhere
+                    || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                if (canDetect)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
             }
         }
 

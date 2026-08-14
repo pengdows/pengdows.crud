@@ -163,7 +163,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
             // Proceed with standard insert since ID is now populated
             await using var sc = BuildCreate(entity, ctx);
-            return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+            return RestoreAuditFieldsIfFailed(
+                await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1, entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -205,6 +206,7 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
             {
+                RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
 
@@ -283,7 +285,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
 
-            return rowsAffected == 1;
+            return RestoreAuditFieldsIfFailed(rowsAffected == 1, entity, auditSnapshot);
         }
         }
         catch
@@ -320,7 +322,9 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
             await using var sc = BuildCreate(entity, ctx);
-            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            return RestoreAuditFieldsIfFailed(
+                await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1,
+                entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -364,6 +368,7 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
             {
+                RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
 
@@ -428,7 +433,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             }
 
-            return rowsAffected == 1;
+            return RestoreAuditFieldsIfFailed(rowsAffected == 1, entity, auditSnapshot);
         }
         }
         catch
@@ -1289,11 +1294,19 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-            if (rowsAffected == 0 && _versionColumn != null)
+            if (rowsAffected == 0)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
+                // 0 rows affected without an exception is a failed write regardless of whether
+                // this entity is versioned — restore before the (conditional) throw below, not
+                // just in the generic catch, since a plain "return 0" for an unversioned entity
+                // never reaches that catch at all.
+                RestoreAuditFields(objectToUpdate, auditSnapshot);
+                if (_versionColumn != null)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
             }
 
             return rowsAffected;
