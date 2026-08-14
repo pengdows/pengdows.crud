@@ -145,9 +145,10 @@ public partial class TableGateway<TEntity, TRowID> :
         // BuildCreate (called below via every branch) mutates audit fields as a side effect of
         // building the INSERT, before anything executes. Restore them if the write never
         // actually succeeds, so a failed Create doesn't leave the entity claiming one did.
-        // writeSucceeded is set the instant the actual persisting INSERT is known to have
-        // committed — some branches then do a follow-up step (retrieving a generated ID) that
-        // can itself throw. Once the write has succeeded, a later failure in that follow-up step
+        // writeSucceeded is set the instant the database has accepted the persisting INSERT
+        // (the write command completed without throwing) — some branches then do a follow-up
+        // step (retrieving a generated ID) that can itself throw. Once the write has succeeded, a
+        // later failure in that follow-up step
         // must NOT restore audit fields — the row already exists with the new values; restoring
         // would make the entity falsely claim a rollback that never happened. A plain local bool
         // can't be observed from the shared catch below across the ExecuteReaderInsertedIdAsync
@@ -186,16 +187,20 @@ public partial class TableGateway<TEntity, TRowID> :
             if (dialect.DatabaseType == SupportedDatabase.Oracle)
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
+
+                // The INSERT above executed without throwing — the database accepted the write
+                // regardless of whether reading the OUT parameter below succeeds.
+                writeSucceeded[0] = true;
                 generatedId = sc.GetParameterValue(OracleReturningParameterName);
             }
             else
             {
                 generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write).ConfigureAwait(false);
-            }
 
-            // The INSERT above executed without throwing — the write has committed regardless of
-            // whether a generated ID came back inline.
-            writeSucceeded[0] = true;
+                // The statement above executed without throwing — the database accepted the
+                // write regardless of whether a generated ID came back inline.
+                writeSucceeded[0] = true;
+            }
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -255,6 +260,12 @@ public partial class TableGateway<TEntity, TRowID> :
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
             {
+                // ExecuteReaderAsync above executed without throwing — the INSERT (the compound
+                // statement's first result set) already ran server-side. The database accepted
+                // the write regardless of whether navigating to/reading the trailing SELECT
+                // result set below succeeds.
+                writeSucceeded[0] = true;
+
                 // First result set = INSERT (rows-affected, no data rows).
                 // Advance to the SELECT result set to read the generated ID.
                 // Use IInternalTrackedReader.InnerReader to bypass TrackedReader.NextResult() policy;
@@ -270,10 +281,6 @@ public partial class TableGateway<TEntity, TRowID> :
                     }
                 }
             } // reader disposed here — connection released before any fallback query
-
-            // The INSERT above executed without throwing — the write has committed regardless of
-            // whether the trailing SELECT yielded the generated ID inline.
-            writeSucceeded[0] = true;
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -365,6 +372,10 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                // The INSERT above executed without throwing — the database accepted the write
+                // regardless of whether reading the OUT parameter below succeeds.
+                writeSucceeded[0] = true;
                 generatedId = sc.GetParameterValue(OracleReturningParameterName);
             }
             else
@@ -372,9 +383,11 @@ public partial class TableGateway<TEntity, TRowID> :
                 generatedId = await sc
                     .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
-            }
 
-            writeSucceeded[0] = true;
+                // The statement above executed without throwing — the database accepted the
+                // write regardless of whether a generated ID came back inline.
+                writeSucceeded[0] = true;
+            }
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -428,6 +441,12 @@ public partial class TableGateway<TEntity, TRowID> :
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
             {
+                // ExecuteReaderAsync above executed without throwing — the INSERT (the compound
+                // statement's first result set) already ran server-side. The database accepted
+                // the write regardless of whether navigating to/reading the trailing SELECT
+                // result set below succeeds.
+                writeSucceeded[0] = true;
+
                 if (reader is IInternalTrackedReader internalReader)
                 {
                     var inner = internalReader.InnerReader;
@@ -438,8 +457,6 @@ public partial class TableGateway<TEntity, TRowID> :
                     }
                 }
             } // reader disposed here — connection released before any fallback query
-
-            writeSucceeded[0] = true;
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -504,11 +521,13 @@ public partial class TableGateway<TEntity, TRowID> :
         object? generatedId = null;
         await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
         {
+            // ExecuteReaderAsync above executed without throwing — the database accepted the
+            // write regardless of whether reading LastInsertedId from the command below succeeds.
+            writeSucceeded[0] = true;
+
             if (reader is IInternalTrackedReader internalReader)
                 generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
         }
-
-        writeSucceeded[0] = true;
 
         if (generatedId is not null && generatedId != DBNull.Value)
             _idColumn!.PropertyInfo.SetValue(entity,
