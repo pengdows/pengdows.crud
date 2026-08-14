@@ -32,9 +32,18 @@ internal class TiDbDialect : MySqlDialect
     // but benefits from a "Pessimistic" transaction mode for correctness
     // in complex distributed workloads.
 
-    // Oracle MySql.Data has a bug/incompatibility with TiDB when preparing statements.
-    // MySqlConnector does not have this issue; binary-protocol parameters also avoid
-    // the server-side backslash processing that corrupts string values in text protocol.
+    // Oracle MySql.Data (tested at 9.3.0 — see MySql.Data PackageReference across this repo)
+    // has a bug/incompatibility with TiDB when preparing statements: its text-protocol
+    // prepared-statement path applies MySQL server-side backslash-escaping assumptions that
+    // corrupt string parameter values against TiDB. MySqlConnector's binary-protocol
+    // parameters avoid this entirely.
+    //
+    // This was found empirically via this project's own TiDB integration testing
+    // (testbed/TiDB/), not from a public tracked issue — a search for a matching upstream
+    // bug report in mysql/mysql-connector-net or pingcap/tidb (2026-08-13) did not turn one
+    // up. Re-verify against a newer MySql.Data release before assuming this workaround is
+    // still needed; it may already be fixed upstream without a version bump being noticed
+    // here.
     public override bool PrepareStatements => _isMySqlConnector;
 
     // TiDB's Go AST parser does not implement stored procedure DDL (*ast.ProcedureInfo).

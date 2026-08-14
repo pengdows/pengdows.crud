@@ -248,5 +248,11 @@ What's left:
 - **Documentation lag** — connection-mode semantics (Standard/SingleWriter/SingleConnection/
   KeepAlive), generated/tested capability tables, and the `crud`-naming/positioning problem (the
   name undersells that this is also an execution-policy/runtime layer).
-- **TiDB/MySql.Data prepare workaround** lacks a version number or upstream issue reference in
-  its source comment, making it hard to know when the workaround can safely be removed.
+- ~~**TiDB/MySql.Data prepare workaround** lacks a version number or upstream issue
+  reference in its source comment~~ — fixed 2026-08-13: `TiDbDialect.cs` now names the
+  tested `MySql.Data` version (9.3.0) and the exact mechanism (text-protocol backslash
+  escaping corrupting string parameters). No public upstream issue could be found matching
+  this exact bug despite a targeted search — it was apparently found empirically via this
+  project's own TiDB integration testing, not from a tracked report. The comment now says
+  so explicitly and flags that this should be re-verified against newer `MySql.Data`
+  releases rather than assumed permanent.
