@@ -469,11 +469,11 @@ succeeded — restoring at that point makes the entity falsely claim a rollback 
 which is arguably worse than the original bug (now the entity looks like a failed write when it
 actually succeeded).
 
-Fixed by tracking a `writeSucceeded` flag, set the instant each branch's actual persisting
-INSERT is known to have committed (before any post-write fallback step that could itself throw).
-The shared `catch` now only restores when `!writeSucceeded`. (A one-element `bool[]` carries the
-flag into `ExecuteReaderInsertedIdAsync`, a private helper called via `await`, since `ref`/`out`
-parameters aren't allowed on async methods.) The general principle, stated precisely:
+Fixed by tracking a `writeSucceeded` flag, set once each branch's actual persisting write is known
+to have been accepted by the database (before any post-write fallback step that could itself
+throw). The shared `catch` now only restores when `!writeSucceeded`. (A one-element `bool[]`
+carries the flag into `ExecuteReaderInsertedIdAsync`, a private helper called via `await`, since
+`ref`/`out` parameters aren't allowed on async methods.) The general principle, stated precisely:
 ```
 before the write is known to have succeeded: failure → restore the prepared audit mutation
 after the write is known to have succeeded:  failure → do NOT restore; the DB has the new values
@@ -482,6 +482,32 @@ Covered by a dedicated test forcing SQLite's `CompoundStatement` create plan to 
 INSERT, then fail on the fallback `SELECT last_insert_rowid()` query specifically (via
 `fakeDbConnection.SetCommandFailure`) — proving the entity keeps its new audit values rather than
 being rolled back to defaults.
+
+**Fourth round (same day): the flag itself was set a little too late in three branches.** Further
+review of the third round's placements found the flag was being set *after* a step that could
+still throw before the database had actually accepted anything else, narrowing but not closing the
+gap: the Oracle `RETURNING`/`OutputInserted` branch set it after `GetParameterValue(...)` (reading
+an already-populated OUT parameter, but still a call that could throw before the flag was true);
+the `CompoundStatement` branch and `ExecuteReaderInsertedIdAsync` both set it *after* their entire
+`await using (var reader = ...)` block, including navigating to and reading the trailing
+`SELECT`/`LastInsertedId` result — but the INSERT itself (the compound statement's first result
+set) has already run server-side the moment `ExecuteReaderAsync` returns without throwing, before
+any of that navigation happens. Fixed by moving each assignment to immediately follow the call
+that actually submits the write (right after `ExecuteNonQueryAsync`/`ExecuteScalarOrNullAsync` for
+Oracle, and as the first line inside the `await using (var reader = ...)` block for the other two)
+— the earliest point each branch can truthfully say the database has accepted the write. Also
+reworded the surrounding comments from "committed" to "the database accepted the write" per this
+round's feedback: this layer executes one command and observes whether it threw, which is a
+narrower claim than "committed" implies for a provider participating in an external/ambient
+transaction.
+
+No new tests for this round: forcing `GetParameterValue`/`NextResultAsync`/
+`GetLastInsertedIdFromCommand` specifically to throw *after* their preceding `Execute*Async` call
+already succeeded isn't practically simulable with `fakeDb` today (there's no hook to fail reader
+navigation independently of the initiating execute call). Verified by code inspection against the
+same principle the third round's test already covers, plus the full regression suite (14 tests in
+`AuditFieldRestoreOnFailureTests.cs`, full solution: 6191 tests) — documenting this gap explicitly
+rather than claiming coverage that doesn't exist.
 
 **Reframed, not fixed — Build-tier mutation is by design, not a defect.** Working through this
 with the user reset the mental model entirely. There is no general invariant available of "after
@@ -536,16 +562,17 @@ trade-off explicitly per call, rather than the library silently picking one. Wor
 properly (dialect `OUTPUT`/`RETURNING` capability varies) rather than folding into a future bug
 fix — tracked here so the design isn't lost.
 
-Overall coverage across the three rounds above: 14 tests in
+Overall coverage across the four rounds above: 14 tests in
 `pengdows.crud.Tests/AuditFieldRestoreOnFailureTests.cs`, spanning both gateway types, all three
 operations (Create/Update/Upsert), thrown failures, the version-conflict (0-rows-affected,
 manually-raised-exception) path, non-throwing 0-rows results, and the post-write-success failure
-case. Current status:
+case. The fourth round's precise flag-placement fix has no dedicated new test (see that round's
+entry for why) — verified by code inspection plus the existing suite. Current status:
 ```
 Thrown pre-write failure                        FIXED
 Detected optimistic-concurrency failure         FIXED
 0-row non-throwing failure                      FIXED
-Post-write-success failure (must NOT restore)   FIXED
+Post-write-success failure (must NOT restore)   FIXED, flag placed at the true write boundary
 Build mutates prepared entity state             BY DESIGN — documented above, not a defect
 Partial batch failure                           STILL OPEN — see above
 Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY — see above
