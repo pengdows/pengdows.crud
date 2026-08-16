@@ -45,7 +45,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
         (SupportedDatabase.Firebird, new[] { "firebird" }),
-        (SupportedDatabase.DuckDB, new[] { "duckdb", "duck db" })
+        (SupportedDatabase.DuckDB, new[] { "duckdb", "duck db" }),
+        (SupportedDatabase.Db2, new[] { "db2" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
@@ -60,7 +61,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Firebird, new[] { "firebird" }),
         (SupportedDatabase.DuckDB, new[] { "duckdb" }),
-        (SupportedDatabase.Snowflake, new[] { "snowflake", "net.snowflake" })
+        (SupportedDatabase.Snowflake, new[] { "snowflake", "net.snowflake" }),
+        (SupportedDatabase.Db2, new[] { "db2" })
     };
 
     /// <summary>

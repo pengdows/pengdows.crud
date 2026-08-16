@@ -187,8 +187,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
             catch
             {
-                _transaction.Rollback();
-                _context.CloseAndDisposeConnection(_connection);
+                // Fully tear down (rollback, close connection, dispose locks, finalize metrics) —
+                // mirrors the async CreateAsync failure path (tx.DisposeAsync()). Do NOT dispose
+                // the parent context, which is a singleton that must remain usable.
+                Dispose();
                 throw;
             }
         }

@@ -7,7 +7,7 @@
 // - CreateDialectForType() - Creates dialect for known SupportedDatabase type.
 // - Auto-detection flow: Delegates to DatabaseDetectionService for robust identification.
 // - Supported dialects: SqlServer, PostgreSql, MySql, AuroraMySql, MariaDb, Oracle,
-//   Sqlite, Firebird, DuckDb, CockroachDb, YugabyteDb, TiDb, Snowflake, AuroraPostgreSql.
+//   Sqlite, Firebird, DuckDb, CockroachDb, YugabyteDb, TiDb, Snowflake, AuroraPostgreSql, Db2.
 //   TimescaleDB is detected at runtime and routed to PostgreSqlDialect.
 // - Each dialect is initialized via DetectDatabaseInfoAsync() after creation.
 // =============================================================================
@@ -106,6 +106,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, logger),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, logger),
             SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql),
+            SupportedDatabase.Db2 => new Db2Dialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
         };
     }

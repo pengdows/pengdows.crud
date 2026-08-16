@@ -21,6 +21,7 @@
         <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4"/>
         <PackageReference Include="MySql.Data" Version="9.3.0"/>
+        <PackageReference Include="Net.IBM.Data.Db2-lnx" Version="8.0.0.500"/>
         <PackageReference Include="Npgsql" Version="9.0.3"/>
         <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0"/>
         <PackageReference Include="Snowflake.Data" Version="4.*"/>

@@ -461,6 +461,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             SupportedDatabase.Firebird => "4.0.0",
             SupportedDatabase.CockroachDb => "v23.1.0",
             SupportedDatabase.DuckDB => "DuckDB 0.9.2",
+            SupportedDatabase.Db2 => "DB2 11.05.0800",
             _ => "1.0"
         };
     }

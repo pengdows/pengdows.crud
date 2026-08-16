@@ -1474,6 +1474,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 return ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
                        ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Db2:
+                // Db2 SQLCODE -803 / SQLSTATE 23505
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return MessageIndicatesUniqueViolation(ex.Message);
         }
@@ -1514,6 +1518,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // DuckDB uses SQLSTATE 23503; fall back to message when driver doesn't populate SqlState
                 return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Db2:
+                // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
@@ -1561,6 +1569,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Db2:
+                // Db2 SQLCODE -407 / SQLSTATE 23502
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("not null", StringComparison.OrdinalIgnoreCase);
@@ -1602,6 +1614,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // DuckDB uses SQLSTATE 23514; fall back to message when driver doesn't populate SqlState
                 return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Db2:
+                // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
+                return string.Equals(sqlState, "23513", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
@@ -2103,6 +2119,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return "Firebird";
         }
 
+        if (lower.Contains("db2"))
+        {
+            return "IBM Db2";
+        }
+
         return "Unknown Database (SQL-92 Compatible)";
     }
 
@@ -2168,6 +2189,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         if (combined.Contains("duckdb") || combined.Contains("duck db"))
         {
             return SupportedDatabase.DuckDB;
+        }
+
+        if (combined.Contains("db2"))
+        {
+            return SupportedDatabase.Db2;
         }
 
         return DatabaseType;
@@ -2579,6 +2605,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // ADO.NET OUTPUT parameter rather than a result set.
     public virtual bool RequiresOutputParameterForReturning => false;
 
+    // True only for Db2, whose generated-key retrieval wraps the entire INSERT statement
+    // (SELECT ... FROM FINAL TABLE (INSERT ...)) rather than appending a trailing clause.
+    public virtual bool WrapsInsertStatementForReturning => false;
+
+    /// <summary>
+    /// Renders the text prepended before "INSERT INTO" when <see cref="WrapsInsertStatementForReturning"/>
+    /// is true (e.g. Db2's <c>SELECT "Id" FROM FINAL TABLE (</c>). The caller appends the closing
+    /// parenthesis after the VALUES clause.
+    /// </summary>
+    public virtual string RenderInsertReturningPrefix(string idColumnWrapped)
+    {
+        return string.Empty;
+    }
+
     // Connection pooling properties - safe defaults for SQL-92 compatibility
     /// <summary>
     /// True when the database provider supports external connection pooling.
@@ -2797,6 +2837,25 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
                 break;
+
+            case SupportedDatabase.Db2:
+                // Db2 SQLSTATE 40001 covers both deadlock (SQLCODE -911 reason 2) and lock
+                // timeout (SQLCODE -911 reason 68 / -913) — SQLSTATE alone can't disambiguate;
+                // treated as SerializationFailure here, matching other ANSI-SQLSTATE dialects.
+                // Verify against real DB2Exception shape in Phase 2.
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
         }
 
         category = DbErrorCategory.Unknown;
@@ -2830,16 +2889,37 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     private static string? TryGetProviderSqlState(Exception ex)
     {
-        var sqlStateProperty = ex.GetType().GetProperty("SqlState");
-        if (sqlStateProperty?.PropertyType == typeof(string) &&
-            sqlStateProperty.GetValue(ex) is string sqlState &&
-            !string.IsNullOrWhiteSpace(sqlState))
+        // Case-insensitive, ambiguity-safe lookup: IBM's DB2Exception declares its OWN
+        // "SQLState" (all-caps SQL) property alongside the inherited DbException.SqlState —
+        // a plain GetProperty(name, IgnoreCase) throws AmbiguousMatchException in that shape,
+        // since it matches both the base and derived members. GetProperties() + manual filtering
+        // avoids that and lets us prefer whichever declared member actually has a value.
+        // Confirmed against a live ibmcom/db2 container during Phase 2 testbed validation.
+        foreach (var property in ex.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            return sqlState;
+            if (property.PropertyType == typeof(string) &&
+                string.Equals(property.Name, "SqlState", StringComparison.OrdinalIgnoreCase) &&
+                property.GetValue(ex) is string candidate &&
+                !string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
         }
 
-        return ex is DbException dbEx ? dbEx.SqlState : null;
+        if (ex is DbException dbEx && !string.IsNullOrWhiteSpace(dbEx.SqlState))
+        {
+            return dbEx.SqlState;
+        }
+
+        // Last-resort fallback: some providers (e.g. IBM.Data.Db2) embed "SQLSTATE=23505"
+        // directly in the exception message rather than exposing it as a queryable property.
+        var match = SqlStateFromMessageRegex.Match(ex.Message ?? string.Empty);
+        return match.Success ? match.Groups["state"].Value : null;
     }
+
+    private static readonly Regex SqlStateFromMessageRegex = new(
+        @"SQLSTATE[=:]\s*(?<state>\d{5})",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // These helpers are intentionally private to match historical usage in tests via reflection.
     private static bool TryParseMajorVersion(string? version, out int major)

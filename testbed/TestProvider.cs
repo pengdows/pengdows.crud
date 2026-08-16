@@ -346,6 +346,8 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
+            // Db2 has no DATETIME type — TIMESTAMP is the equivalent.
+            SupportedDatabase.Db2 => "TIMESTAMP",
             _ => "DATETIME"
         };
     }

@@ -210,6 +210,69 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void Create_ReadOnlyEnterFailure_CleansUpConnection()
+    {
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(
+            isReadOnlyContext: true,
+            dialectOverride: dialect);
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            TransactionContext.Create(context, IsolationLevel.Serializable, ExecutionType.Read);
+        });
+
+        Assert.True(context.ConnectionReleased);
+    }
+
+    [Fact]
+    public void Create_ReadOnlyEnterFailure_DoesNotDisposeParentContext()
+    {
+        // Sync mirror of CreateAsync_ReadOnlyEnterFailure_DoesNotDisposeParentContext: the CONNECTION
+        // must be released but the parent CONTEXT (a singleton) must remain alive and usable.
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(
+            isReadOnlyContext: true,
+            dialectOverride: dialect);
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            TransactionContext.Create(context, IsolationLevel.Serializable, ExecutionType.Read);
+        });
+
+        Assert.True(context.ConnectionReleased); // connection released ✓
+        Assert.False(context.IsDisposed); // context must remain usable ✓
+    }
+
+    [Fact]
+    public void Create_ReadOnlyEnterFailure_FinalizesTransactionMetricsAndLocks()
+    {
+        // When TryEnterReadOnlyTransaction (sync) throws during construction, the failed
+        // TransactionContext must be torn down exactly like the async path tears down via
+        // tx.DisposeAsync(): the active-transaction gauge must return to 0, a rollback must
+        // be recorded, and the internal locks must be disposed rather than leaked — the
+        // object is discarded (the constructor throws) so nothing else can ever clean these up.
+        var metricsCollector = new MetricsCollector(MetricsOptions.Default);
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(
+            isReadOnlyContext: true,
+            dialectOverride: dialect,
+            metricsCollector: metricsCollector);
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            TransactionContext.Create(context, IsolationLevel.Serializable, ExecutionType.Read);
+        });
+
+        var snapshot = metricsCollector.CreateSnapshot();
+        Assert.Equal(0, snapshot.TransactionsActive);
+        Assert.Equal(1, snapshot.TransactionsRolledBack);
+    }
+
+    [Fact]
     public void Commit_AfterDispose_Throws()
     {
         var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
@@ -278,7 +341,8 @@ public class TransactionContextTests
         bool throwOnCommit = false,
         bool throwOnRollback = false,
         bool isReadOnlyContext = false,
-        ISqlDialect? dialectOverride = null)
+        ISqlDialect? dialectOverride = null,
+        MetricsCollector? metricsCollector = null)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var connection = new TrackedConnection(
@@ -288,7 +352,7 @@ public class TransactionContextTests
         var dialect = dialectOverride ??
                       new Sql92Dialect(factory, NullLogger<SqlDialect>.Instance);
 
-        return new TestDatabaseContext(connection, dialect, isReadOnlyContext);
+        return new TestDatabaseContext(connection, dialect, isReadOnlyContext, metricsCollector);
     }
 
     private sealed class TestDatabaseContext : IDatabaseContext, IInternalConnectionProvider,
@@ -300,10 +364,12 @@ public class TransactionContextTests
         private readonly TypeMapRegistry _typeMapRegistry = new();
         private readonly DatabaseMetrics _metrics;
         private readonly bool _isReadOnlyContext;
+        private readonly MetricsCollector? _metricsCollector;
         private bool _disposed;
         private EventHandler<DatabaseMetrics>? _metricsUpdated;
 
-        public TestDatabaseContext(ITrackedConnection connection, ISqlDialect dialect, bool isReadOnlyContext)
+        public TestDatabaseContext(ITrackedConnection connection, ISqlDialect dialect, bool isReadOnlyContext,
+            MetricsCollector? metricsCollector = null)
         {
             _connection = connection;
             _dialect = dialect;
@@ -311,6 +377,7 @@ public class TransactionContextTests
             _dataSourceInfo = new DataSourceInformation(_dialect);
             _metrics = BuildEmptyMetrics();
             _isReadOnlyContext = isReadOnlyContext;
+            _metricsCollector = metricsCollector;
         }
 
         public bool ConnectionReleased { get; private set; }
@@ -493,13 +560,13 @@ public class TransactionContextTests
             return GetConnection(executionType, isShared);
         }
 
-        MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => null;
+        MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => _metricsCollector;
 
-        MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => null;
+        MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _metricsCollector;
 
-        MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => null;
+        MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _metricsCollector;
 
-        MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType) => null;
+        MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType) => _metricsCollector;
 
         public ITypeMapRegistry TypeMapRegistry => _typeMapRegistry;
 
@@ -522,6 +589,11 @@ public class TransactionContextTests
         public ThrowingReadOnlySql92Dialect(DbProviderFactory factory, ILogger logger)
             : base(factory, logger)
         {
+        }
+
+        public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+        {
+            throw new InvalidOperationException("Simulated read-only session configuration failure.");
         }
 
         public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,

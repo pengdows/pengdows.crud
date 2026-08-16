@@ -282,6 +282,9 @@ public class fakeDbCommand : DbCommand
             SupportedDatabase.DuckDB when normalizedCommand == "PRAGMA VERSION"
                 => "v0.9.2",
 
+            SupportedDatabase.Db2 when normalizedCommand.Contains("SYSPROC.ENV_GET_INST_INFO")
+                => "11.05.0800",
+
             _ => null
         };
     }

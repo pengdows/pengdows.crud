@@ -87,7 +87,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 `PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) is for entities identified **solely by `[PrimaryKey]` columns** with **no surrogate `[Id]` column**. Use it for junction tables, legacy schemas, and DBA-owned tables with natural keys.
 
-**Throws `SqlGenerationException` at construction** if the entity has no `[PrimaryKey]` columns.
+**Throws `InvalidOperationException` at construction** if the entity has no `[PrimaryKey]` columns.
 
 **Tier 1 — Build methods:**
 ```csharp
@@ -154,7 +154,7 @@ await gateway.BatchDeleteAsync(new[] { item });
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
 - Audit fields via `[CreatedBy]`/`[CreatedOn]`, `[LastUpdatedBy]`/`[LastUpdatedOn]` attributes
-- SQL dialect abstraction supports 15 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, TimescaleDB)
+- SQL dialect abstraction supports 16 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, TimescaleDB, Db2)
 - Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
 - Multi-tenancy via context-per-tenant (not query filtering)
 

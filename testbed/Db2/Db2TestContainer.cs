@@ -1,8 +1,9 @@
 using DotNet.Testcontainers.Builders;
+using IBM.Data.Db2;
 using pengdows.crud;
 using IContainer = DotNet.Testcontainers.Containers.IContainer;
 
-namespace testbed;
+namespace testbed.Db2;
 
 public class Db2TestContainer : TestContainer
 {
@@ -13,13 +14,29 @@ public class Db2TestContainer : TestContainer
     private readonly IContainer _container;
     private string? _connectionString;
 
+    static Db2TestContainer()
+    {
+        // Idempotent — Program.cs already calls this before DbProviderFactoryFinder.FindAllFactories()
+        // touches DB2Factory.Instance, but registering again here is harmless and keeps this type
+        // safe to use standalone (e.g. from pengdows.crud.IntegrationTests via CreateContainerAsync).
+        Db2NativeLibraryBootstrap.Register();
+    }
+
     public Db2TestContainer()
     {
         _container = new ContainerBuilder()
             .WithImage("ibmcom/db2:latest")
+            .WithPrivileged(true)
             .WithEnvironment("LICENSE", "accept")
             .WithEnvironment("DB2INST1_PASSWORD", _password)
             .WithEnvironment("DBNAME", _database)
+            // Default (true) configures archive logging (LOGARCHMETH1=DISK:...), which requires
+            // a full backup before the database will accept sustained connections. Under this
+            // suite's workload (many test classes repeatedly creating/dropping tables against one
+            // shared container) that fills the log fast enough to push the database into
+            // "backup pending" mid-run (SQL1116N/SQL1035N), failing every subsequent test. Circular
+            // logging has no such requirement and is the right choice for an ephemeral test database.
+            .WithEnvironment("ARCHIVE_LOGS", "false")
             .WithExposedPort(_port)
             .WithPortBinding(_port, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(_port))
@@ -34,7 +51,7 @@ public class Db2TestContainer : TestContainer
 
         _connectionString = $"Server=localhost:{hostPort};Database={_database};UID={_username};PWD={_password};";
 
-        await Task.Delay(30000);
+        await WaitForDbToStart(DB2Factory.Instance, _connectionString, _container, 300);
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
@@ -44,7 +61,7 @@ public class Db2TestContainer : TestContainer
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        throw new NotSupportedException("DB2 provider not configured - add IBM.Data.DB2 package and factory");
+        return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, DB2Factory.Instance));
     }
 
     protected override ValueTask DisposeAsyncCore()

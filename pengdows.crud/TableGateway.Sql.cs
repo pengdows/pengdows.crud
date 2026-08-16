@@ -404,6 +404,7 @@ public partial class TableGateway<TEntity, TRowID>
         var sampleEntity = new TEntity();
         var sqlTemplate = GetTemplatesForDialect(dialect);
         var (insertContainer, _) = BuildInsertContainerDirect(sampleEntity, context, dialect, sqlTemplate);
+        insertContainer.Query.Replace(PrefixClausePlaceholder, string.Empty);
         insertContainer.Query.Replace(OutputClausePlaceholder, string.Empty);
         insertContainer.Query.Replace(ReturningClausePlaceholder, string.Empty);
         templates.InsertTemplate = insertContainer;

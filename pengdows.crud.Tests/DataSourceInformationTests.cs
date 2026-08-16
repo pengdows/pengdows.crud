@@ -89,6 +89,7 @@ public static class DataSourceTestData
             SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -97,6 +98,9 @@ public static class DataSourceTestData
         var versionString = db switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => "PostgreSQL 15.0",
+            // Matches fakeDbCommand's canned GetVersionQueryResult() response for Db2, and the
+            // real ibmcom/db2 container version observed during the Phase 1 proof-of-concept.
+            SupportedDatabase.Db2 => "11.05.0800",
             _ => $"{db} v1.2.3"
         };
 
@@ -154,13 +158,16 @@ public class DataSourceInformationTests
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
-        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15 : 1;
+        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15
+            : db == SupportedDatabase.Db2 ? 11
+            : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support
         var canMerge = (db == SupportedDatabase.SqlServer && info.ParsedVersion?.Major >= 10)
                        || db == SupportedDatabase.Oracle
                        || db == SupportedDatabase.Snowflake
+                       || db == SupportedDatabase.Db2
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14);
@@ -206,7 +213,8 @@ public class DataSourceInformationTests
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
-                or SupportedDatabase.TiDb or SupportedDatabase.Snowflake => false,
+                or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
+                or SupportedDatabase.Db2 => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,

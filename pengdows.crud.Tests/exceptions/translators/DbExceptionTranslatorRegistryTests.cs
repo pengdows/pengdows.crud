@@ -113,6 +113,14 @@ public class DbExceptionTranslatorRegistryTests
     }
 
     [Fact]
+    public void Registry_Routes_Db2_To_Db2ExceptionTranslator()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<Db2ExceptionTranslator>(registry.Get(SupportedDatabase.Db2));
+    }
+
+    [Fact]
     public void FallbackTranslator_NonTimeout_Returns_DatabaseOperationException()
     {
         var translator = new FallbackExceptionTranslator();

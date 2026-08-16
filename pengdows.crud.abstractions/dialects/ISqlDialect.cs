@@ -623,6 +623,25 @@ public interface ISqlDialect
     bool RequiresOutputParameterForReturning => false;
 
     /// <summary>
+    /// True when this dialect's generated-key retrieval wraps the entire INSERT statement
+    /// (Db2's <c>SELECT ... FROM FINAL TABLE (INSERT ...)</c>) rather than appending a
+    /// trailing RETURNING/OUTPUT clause. Only meaningful when <see cref="SupportsInsertReturning"/>
+    /// is true.
+    /// </summary>
+    bool WrapsInsertStatementForReturning => false;
+
+    /// <summary>
+    /// Renders the text prepended before <c>INSERT INTO</c> when
+    /// <see cref="WrapsInsertStatementForReturning"/> is true (e.g. Db2's
+    /// <c>SELECT "id" FROM FINAL TABLE (</c>). The caller appends the closing parenthesis
+    /// after the VALUES clause.
+    /// </summary>
+    /// <param name="idColumnWrapped">
+    /// The identity column name already quoted with dialect-specific identifiers.
+    /// </param>
+    string RenderInsertReturningPrefix(string idColumnWrapped) => string.Empty;
+
+    /// <summary>
     /// Dialect-specific limit on output/import parameters.
     /// </summary>
     int MaxOutputParameters { get; }

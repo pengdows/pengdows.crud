@@ -3,6 +3,7 @@ using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using testbed.Cockroach;
+using testbed.Db2;
 using testbed.DuckDb;
 using testbed.Firebird;
 using testbed.mariaDb;
@@ -47,6 +48,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
+            SupportedDatabase.Db2 => new Db2TestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             _ => null
         };
@@ -273,6 +275,13 @@ public class ParallelTestOrchestrator
                 Container = new OracleTestContainer(),
                 TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             },
+            new()
+            {
+                ContainerName = "Db2",
+                DatabaseProvider = "Db2",
+                Container = new Db2TestContainer(),
+                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp)
+            },
             // Add Sybase as needed
         };
 
@@ -289,7 +298,6 @@ public class ParallelTestOrchestrator
         }
 
         // Additional databases can be added here:
-        // - DB2 (ibmcom/db2) - requires IBM.Data.DB2 package
         // - Sybase ASE - requires AdoNetCore.AseClient (already available)
         // - Others as needed
 

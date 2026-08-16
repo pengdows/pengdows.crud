@@ -104,9 +104,29 @@ internal static partial class DbExceptionTranslationSupport
             return dbException.SqlState;
         }
 
-        var property = exception.GetType().GetProperty("SqlState", BindingFlags.Public | BindingFlags.Instance);
-        return property?.GetValue(exception) as string;
+        // Case-insensitive, ambiguity-safe lookup: IBM's DB2Exception declares its OWN
+        // "SQLState" (all-caps SQL) property alongside the inherited DbException.SqlState —
+        // a plain GetProperty(name, IgnoreCase) throws AmbiguousMatchException in that shape.
+        // Confirmed against a live ibmcom/db2 container during Phase 2 testbed validation.
+        foreach (var property in exception.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (property.PropertyType == typeof(string) &&
+                string.Equals(property.Name, "SqlState", StringComparison.OrdinalIgnoreCase) &&
+                property.GetValue(exception) is string candidate &&
+                !string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        // Last-resort fallback: some providers embed "SQLSTATE=23505" directly in the
+        // exception message rather than exposing it as a queryable property.
+        var match = SqlStateFromMessageRegex().Match(exception.Message ?? string.Empty);
+        return match.Success ? match.Groups["state"].Value : null;
     }
+
+    [GeneratedRegex("SQLSTATE[=:]\\s*(?<state>\\d{5})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SqlStateFromMessageRegex();
 
     public static string? TryGetConstraintName(Exception exception)
     {

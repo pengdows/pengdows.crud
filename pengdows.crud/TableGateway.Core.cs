@@ -605,6 +605,8 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     // Placeholders for identity-returning clauses in INSERT statements
+    private const string PrefixClausePlaceholder = "{prefix}"; // Db2: SELECT id FROM FINAL TABLE ( (before INSERT INTO)
+
     private const string OutputClausePlaceholder = "{output}"; // SQL Server: OUTPUT INSERTED.id (before VALUES)
 
     private const string
@@ -701,7 +703,9 @@ public partial class TableGateway<TEntity, TRowID> :
     {
         var sc = ctx.CreateSqlContainer();
 
-        sc.Query.Append("INSERT INTO ")
+        // Insert PREFIX placeholder (for Db2's SELECT ... FROM FINAL TABLE ( wrap) before INSERT INTO
+        sc.Query.Append(PrefixClausePlaceholder)
+            .Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" (");
 
@@ -806,32 +810,44 @@ public partial class TableGateway<TEntity, TRowID> :
     {
         var (sc, dialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
 
+        var prefixClause = string.Empty;
         var outputClause = string.Empty;
         var returningClause = string.Empty;
 
         if (withReturning && _idColumn != null && !_idColumn.IsIdWritable && dialect.SupportsInsertReturning)
         {
             var idWrapped = dialect.WrapSimpleName(_idColumn.Name);
-            var clause = dialect.RenderInsertReturningClause(idWrapped);
 
-            if (dialect.RequiresOutputParameterForReturning)
+            if (dialect.WrapsInsertStatementForReturning)
             {
-                returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
-                    StringComparison.Ordinal);
-                sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
-                    ParameterDirection.Output);
-            }
-            else if (dialect.InsertReturningClauseBeforeValues)
-            {
-                outputClause = clause; // e.g. SQL Server: OUTPUT goes before VALUES
+                // Db2: SELECT "Id" FROM FINAL TABLE ( ... INSERT ... VALUES (...) )
+                prefixClause = dialect.RenderInsertReturningPrefix(idWrapped);
+                returningClause = ")";
             }
             else
             {
-                returningClause = clause; // Others: RETURNING goes after VALUES
+                var clause = dialect.RenderInsertReturningClause(idWrapped);
+
+                if (dialect.RequiresOutputParameterForReturning)
+                {
+                    returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
+                        StringComparison.Ordinal);
+                    sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
+                        ParameterDirection.Output);
+                }
+                else if (dialect.InsertReturningClauseBeforeValues)
+                {
+                    outputClause = clause; // e.g. SQL Server: OUTPUT goes before VALUES
+                }
+                else
+                {
+                    returningClause = clause; // Others: RETURNING goes after VALUES
+                }
             }
         }
 
         // Replace placeholders with actual clauses (or empty strings)
+        sc.Query.Replace(PrefixClausePlaceholder, prefixClause);
         sc.Query.Replace(OutputClausePlaceholder, outputClause);
         sc.Query.Replace(ReturningClausePlaceholder, returningClause);
 

@@ -7,8 +7,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
+using testbed.Db2;
 
 #endregion
+
+// Must run before ANY access to DB2Factory — including the reflection-based discovery in
+// DbProviderFactoryFinder.FindAllFactories() below, which triggers the driver's native
+// initialization merely by reading DB2Factory.Instance.
+Db2NativeLibraryBootstrap.Register();
 
 // Enable Npgsql legacy timestamp behaviour so that "timestamp without time zone" columns
 // can be read as DateTime. Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.

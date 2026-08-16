@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 14 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 15 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -18,6 +18,7 @@ pengdows.crud supports 14 directly supported databases via the `SupportedDatabas
 | `Snowflake=2048` | Snowflake (opt-in; cloud-only, requires credentials) |
 | `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
+| `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -45,6 +46,7 @@ Two thresholds matter for each database:
 | CockroachDB | ~22.x | latest | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
 | YugabyteDB | 2.x | latest | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
 | Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
+| Db2 | 11.1 | 11.1 | Native `BOOLEAN` type requires 11.1.1.1+; tested/confirmed against 11.5.8.0 (`ibmcom/db2:latest`) |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
 > MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
@@ -107,5 +109,6 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | **Snowflake** | No | Yes | No | `ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE` |
 | **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` |
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
+| **Db2** | No | No | No | Not implemented — no session/connection-level read-only enforcement configured yet |
 
 > **Dual Enforcement:** For PostgreSQL, SQLite, and DuckDB, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool.
