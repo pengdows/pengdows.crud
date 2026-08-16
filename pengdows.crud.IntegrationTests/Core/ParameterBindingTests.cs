@@ -104,15 +104,15 @@ public class ParameterBindingTests : DatabaseTestBase
 
             var sql = provider == SupportedDatabase.Firebird
                 ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE"
-                : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
+                : provider == SupportedDatabase.Db2
+                    // Db2 rejects a bare "?" in a SELECT list as an untyped parameter marker
+                    // (SQL0418N) unless it has other type context — same requirement as Firebird.
+                    ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM SYSIBM.SYSDUMMY1"
+                    : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
 
             if (provider == SupportedDatabase.Oracle)
             {
                 sql += " FROM DUAL";
-            }
-            else if (provider == SupportedDatabase.Db2)
-            {
-                sql += " FROM SYSIBM.SYSDUMMY1";
             }
 
             await using var container = context.CreateSqlContainer(sql);

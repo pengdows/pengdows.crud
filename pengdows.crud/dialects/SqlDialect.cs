@@ -1520,8 +1520,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
 
             case SupportedDatabase.Db2:
-                // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503
-                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase);
+                // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
+                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(sqlState, "23504", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
@@ -2911,14 +2912,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return dbEx.SqlState;
         }
 
-        // Last-resort fallback: some providers (e.g. IBM.Data.Db2) embed "SQLSTATE=23505"
-        // directly in the exception message rather than exposing it as a queryable property.
+        // Last-resort fallback: some providers embed the SQLSTATE directly in the exception
+        // message rather than exposing it as a queryable property. IBM.Data.Db2 uses two distinct
+        // formats depending on whether the error originates server-side or in the CLI driver
+        // itself: server-side errors (constraint violations, etc.) lead with "ERROR [23502] ...",
+        // while client-side driver errors (e.g. CLI0114E) trail with "... SQLSTATE=22008".
         var match = SqlStateFromMessageRegex.Match(ex.Message ?? string.Empty);
         return match.Success ? match.Groups["state"].Value : null;
     }
 
     private static readonly Regex SqlStateFromMessageRegex = new(
-        @"SQLSTATE[=:]\s*(?<state>\d{5})",
+        @"(?:SQLSTATE[=:]\s*|ERROR \[)(?<state>\d{5})",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // These helpers are intentionally private to match historical usage in tests via reflection.
