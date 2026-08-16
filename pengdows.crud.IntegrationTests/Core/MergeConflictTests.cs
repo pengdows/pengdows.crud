@@ -141,7 +141,7 @@ public class MergeConflictTests : DatabaseTestBase
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {nameColumn} {stringType} NOT NULL,
     {versionDefinition}
 )";
@@ -162,7 +162,7 @@ CREATE TABLE {table} (
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {keyColumn} {stringType} NOT NULL,
     {valueColumn} {intType} NOT NULL,
     {updatedColumn} {dateType} NOT NULL,

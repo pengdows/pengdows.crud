@@ -89,7 +89,7 @@ public class RoundTripTests : DatabaseTestBase
 
             // DateTimeOffset assertions
             if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird
-                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle)
+                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle or SupportedDatabase.Db2)
             {
                 // Discard offset, check UTC instant within 1ms
                 Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,

@@ -369,7 +369,7 @@ public class CompositeKeyTests : DatabaseTestBase
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {orderIdColumn} {integerType} NOT NULL,
     {productIdColumn} {integerType} NOT NULL,
     {quantityColumn} {integerType} NOT NULL,
@@ -395,7 +395,7 @@ CREATE TABLE {table} (
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {tenantColumn} {integerType} NOT NULL,
     {userColumn} {integerType} NOT NULL,
     {roleColumn} {integerType} NOT NULL,

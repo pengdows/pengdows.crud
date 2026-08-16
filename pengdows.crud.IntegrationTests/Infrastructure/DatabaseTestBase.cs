@@ -274,7 +274,11 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("unknown table")
                || message.Contains("table not found")
                || message.Contains("invalid object name")
-               || message.Contains("ora-00942");
+               || message.Contains("ora-00942")
+               // Db2 SQL0204N: <schema>.<name> is an undefined name (raised on DROP TABLE for a
+               // table that was never created — expected for providers only some tests exercise).
+               || message.Contains("sql0204n")
+               || message.Contains("is an undefined name");
     }
 
     private static string BuildExclusionReason(SupportedDatabase provider)

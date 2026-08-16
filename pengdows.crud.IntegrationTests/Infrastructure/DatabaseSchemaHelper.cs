@@ -178,7 +178,11 @@ internal static class DatabaseSchemaHelper
                || text.Contains("ora-00942")
                || text.Contains("table unknown")
                || text.Contains("table with name")
-               || text.Contains("catalog error");
+               || text.Contains("catalog error")
+               // Db2 SQL0204N: <schema>.<name> is an undefined name (raised on DROP TABLE for a
+               // table that was never created — expected for providers exercised by only some tests).
+               || text.Contains("sql0204n")
+               || text.Contains("is an undefined name");
     }
 
     private static bool IsMetadataLock(string message)

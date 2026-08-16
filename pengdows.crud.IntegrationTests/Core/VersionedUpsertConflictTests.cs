@@ -189,7 +189,7 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {nameColumn} {stringType} NOT NULL,
     {versionDefinition}
 )";

@@ -36,6 +36,7 @@ public class TestTableCreator
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
+            SupportedDatabase.Db2 => CreateDb2TableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -200,6 +201,23 @@ public class TestTableCreator
                     {guidCol} UUID NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
+            // Db2 has no CREATE TABLE IF NOT EXISTS; no TIMESTAMP WITH TIME ZONE in this config
+            // (offset is discarded — RoundTripTests compares UTC instant only for Db2); GUIDs are
+            // client-serialized to VARCHAR(36) strings by Db2Dialect's GuidFormat.
+            SupportedDatabase.Db2 => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} BLOB NOT NULL
+                )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -279,6 +297,13 @@ public class TestTableCreator
                     {selectCol} VARCHAR,
                     {fromCol} VARCHAR,
                     {userCol} VARCHAR
+                )",
+            SupportedDatabase.Db2 => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
                 )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
@@ -372,6 +397,12 @@ public class TestTableCreator
                             )';
                     END IF;
                 END;", qp, qs, table),
+            SupportedDatabase.Db2 => string.Format(@"
+                CREATE TABLE {2} (
+                    {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
+                )", qp, qs, table),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -583,5 +614,25 @@ public class TestTableCreator
                     NOCYCLE';
             END IF;
         END;", qp, qs, table);
+    }
+
+    private string CreateDb2TableSql()
+    {
+        // Db2 has no CREATE TABLE IF NOT EXISTS — the shared reset step already drops
+        // "test_table" before this runs (tolerating SQL0204N if it never existed).
+        // Db2 also requires PRIMARY KEY columns to be explicitly NOT NULL.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE {table} (
+            id BIGINT NOT NULL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value INTEGER NOT NULL,
+            description CLOB,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+            created_by VARCHAR(100),
+            updated_at TIMESTAMP,
+            updated_by VARCHAR(100)
+        )";
     }
 }
