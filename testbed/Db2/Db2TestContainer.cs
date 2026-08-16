@@ -64,6 +64,14 @@ public class Db2TestContainer : TestContainer
         return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, DB2Factory.Instance));
     }
 
+    /// <summary>
+    /// The base connection string for this running container, exposed so callers can build their
+    /// own <see cref="DatabaseContext"/> with additional connection-string parameters (e.g. pool
+    /// sizing for tests that need to force physical-connection reuse).
+    /// </summary>
+    public string ConnectionString =>
+        _connectionString ?? throw new InvalidOperationException("Container not started yet.");
+
     protected override ValueTask DisposeAsyncCore()
     {
         return _container.DisposeAsync();
