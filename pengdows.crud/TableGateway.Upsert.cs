@@ -247,7 +247,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(") DO UPDATE SET ")
-                .Append(template.UpsertUpdateFragment);
+                .Append(template.UpsertUpdateFragmentOnConflict);
 
             if (_versionColumn != null && dialect.SupportsOnConflictWhere)
             {
@@ -325,7 +325,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
-                .Append(template.UpsertUpdateFragment);
+                .Append(template.UpsertUpdateFragmentOnConflict);
 
             sc.AddParameters(parameters);
             return sc;

@@ -336,6 +336,15 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("ON CONFLICT", sql);
         Assert.Contains("DO UPDATE SET", sql);
         Assert.Contains("VALUES", sql);
+
+        // Regression: fakeDb's canned Postgres version (15.0) makes PostgreSqlDialect.SupportsMerge
+        // true. The batch dispatch (TableGateway.Batch.cs) always prefers ON CONFLICT over MERGE for
+        // batches — there is no batch-MERGE implementation — but the cached SET-clause fragment was
+        // built using the SAME precedence as the single-entity dispatch (SupportsMerge first), so it
+        // wrongly used the MERGE convention's "s." incoming-row alias, which doesn't exist in an
+        // ON CONFLICT statement. Must use EXCLUDED.<col>, never "= s.".
+        Assert.Contains("EXCLUDED.", sql);
+        Assert.DoesNotContain(" = s.", sql, StringComparison.Ordinal);
     }
 
     [Fact]

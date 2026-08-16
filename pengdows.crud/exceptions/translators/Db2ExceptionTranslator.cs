@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -22,10 +23,17 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
 {
+    // IBM.Data.Db2's DB2Exception does not populate the inherited DbException.SqlState (nor its
+    // own SQLState) property, and ErrorCode reports the generic COR_E_EXCEPTION HResult, not the
+    // actual SQLCODE — confirmed against a live ibmcom/db2 container. The real SQLSTATE is only
+    // available embedded in the message text, which the driver formats consistently as
+    // "ERROR [sqlstate] [IBM]...": e.g. "ERROR [23502] [IBM][DB2/LINUXX8664] SQL0407N ...".
+    private static readonly Regex s_sqlStateFromMessage = new(@"ERROR \[(\d{5})\]", RegexOptions.Compiled);
+
     public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
     {
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
-        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
+        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception) ?? TryGetSqlStateFromMessage(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
         var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
@@ -71,5 +79,11 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
+    }
+
+    private static string? TryGetSqlStateFromMessage(Exception exception)
+    {
+        var match = s_sqlStateFromMessage.Match(exception.Message);
+        return match.Success ? match.Groups[1].Value : null;
     }
 }

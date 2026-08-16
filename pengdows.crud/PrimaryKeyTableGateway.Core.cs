@@ -51,8 +51,17 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         /// <summary>", version = version + 1" or null when no version column.</summary>
         public string? VersionIncrementClause;
 
-        /// <summary>ON CONFLICT / MERGE / ON DUPLICATE KEY UPDATE fragment, or null when upsert not applicable.</summary>
+        /// <summary>MERGE UPDATE SET fragment ("col = s.col"); null when the dialect doesn't support MERGE.</summary>
         public string? UpsertUpdateFragment;
+
+        /// <summary>
+        /// ON CONFLICT / ON DUPLICATE KEY UPDATE fragment ("col = EXCLUDED.col" / "col = VALUES(col)").
+        /// Used by both the single-entity ON CONFLICT/ON DUPLICATE paths and ALL batch upsert paths —
+        /// batches never use real MERGE. On a dialect that supports MERGE and ON CONFLICT simultaneously
+        /// (e.g. PostgreSQL 15+), UpsertUpdateFragment's "s." alias does not exist in an ON CONFLICT
+        /// statement, so this separate fragment is required. Null when neither capability is supported.
+        /// </summary>
+        public string? UpsertUpdateFragmentOnConflict;
 
         /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when no [Version] column.</summary>
         public string? UpsertMergeVersionCondition;
@@ -116,7 +125,8 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                 $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
         }
 
-        string? upsertUpdateFragment = BuildUpsertUpdateFragment(dialect, updateColumns);
+        string? upsertUpdateFragment = BuildMergeUpsertUpdateFragment(dialect, updateColumns);
+        string? upsertUpdateFragmentOnConflict = BuildOnConflictUpsertUpdateFragment(dialect, updateColumns);
 
         string? upsertMergeVersionCondition = null;
         string? upsertOnConflictVersionWhere = null;
@@ -138,19 +148,77 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             UpdateSqlPrefix = updateSqlPrefix,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpsertMergeVersionCondition = upsertMergeVersionCondition,
             UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
 
-    private string? BuildUpsertUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
+    private string? BuildMergeUpsertUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
     {
+        if (!dialect.SupportsMerge)
+        {
+            return null;
+        }
+
         var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         try
         {
-            if (dialect.SupportsMerge)
+            var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+            foreach (var col in updateColumns)
             {
-                var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+                if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                {
+                    continue;
+                }
+
+                if (frag.Length > 0)
+                {
+                    frag.Append(", ");
+                }
+
+                frag.Append(tp);
+                frag.Append(dialect.WrapSimpleName(col.Name));
+                frag.Append(" = s.");
+                frag.Append(dialect.WrapSimpleName(col.Name));
+            }
+
+            if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+            {
+                frag.Append(", ");
+                frag.Append(tp);
+                frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                frag.Append(" = t.");
+                // RHS always reads the target's current value — must stay qualified with the
+                // target alias ("t.", always declared via "MERGE INTO ... t") regardless of
+                // MergeUpdateRequiresTargetAlias, which only controls whether the LHS
+                // assignment target is aliased. An unqualified reference here is ambiguous on
+                // real MERGE engines (e.g. PostgreSQL 15+) because both the target table and
+                // the MERGE source expose this column name.
+                frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                frag.Append(" + 1");
+            }
+
+            return frag.Length > 0 ? frag.ToString() : null;
+        }
+        finally
+        {
+            frag.Dispose();
+        }
+    }
+
+    private string? BuildOnConflictUpsertUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
+    {
+        if (!dialect.SupportsInsertOnConflict && !dialect.SupportsOnDuplicateKey)
+        {
+            return null;
+        }
+
+        var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
+        {
+            try
+            {
                 foreach (var col in updateColumns)
                 {
                     if (_auditValueResolver == null && col.IsLastUpdatedBy)
@@ -163,62 +231,23 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                         frag.Append(", ");
                     }
 
-                    frag.Append(tp);
                     frag.Append(dialect.WrapSimpleName(col.Name));
-                    frag.Append(" = s.");
-                    frag.Append(dialect.WrapSimpleName(col.Name));
+                    frag.Append(" = ");
+                    frag.Append(dialect.UpsertIncomingColumn(col.Name));
                 }
 
                 if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                 {
                     frag.Append(", ");
-                    frag.Append(tp);
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                    frag.Append(" = t.");
-                    // RHS always reads the target's current value — must stay qualified with the
-                    // target alias ("t.", always declared via "MERGE INTO ... t") regardless of
-                    // MergeUpdateRequiresTargetAlias, which only controls whether the LHS
-                    // assignment target is aliased. An unqualified reference here is ambiguous on
-                    // real MERGE engines (e.g. PostgreSQL 15+) because both the target table and
-                    // the MERGE source expose this column name.
+                    frag.Append(" = ");
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" + 1");
                 }
             }
-            else
+            catch (NotSupportedException)
             {
-                try
-                {
-                    foreach (var col in updateColumns)
-                    {
-                        if (_auditValueResolver == null && col.IsLastUpdatedBy)
-                        {
-                            continue;
-                        }
-
-                        if (frag.Length > 0)
-                        {
-                            frag.Append(", ");
-                        }
-
-                        frag.Append(dialect.WrapSimpleName(col.Name));
-                        frag.Append(" = ");
-                        frag.Append(dialect.UpsertIncomingColumn(col.Name));
-                    }
-
-                    if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-                    {
-                        frag.Append(", ");
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                        frag.Append(" = ");
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                        frag.Append(" + 1");
-                    }
-                }
-                catch (NotSupportedException)
-                {
-                    frag.Clear();
-                }
+                frag.Clear();
             }
 
             return frag.Length > 0 ? frag.ToString() : null;

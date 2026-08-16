@@ -110,6 +110,10 @@ public class ParameterBindingTests : DatabaseTestBase
             {
                 sql += " FROM DUAL";
             }
+            else if (provider == SupportedDatabase.Db2)
+            {
+                sql += " FROM SYSIBM.SYSDUMMY1";
+            }
 
             await using var container = context.CreateSqlContainer(sql);
             container.AddParameterWithValue("pInt", DbType.Int32, 42);

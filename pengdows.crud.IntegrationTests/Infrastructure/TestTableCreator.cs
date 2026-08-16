@@ -621,18 +621,23 @@ public class TestTableCreator
         // Db2 has no CREATE TABLE IF NOT EXISTS — the shared reset step already drops
         // "test_table" before this runs (tolerating SQL0204N if it never existed).
         // Db2 also requires PRIMARY KEY columns to be explicitly NOT NULL.
+        // Columns MUST be quoted: Db2 folds unquoted identifiers to UPPERCASE at creation
+        // time, but every query the library generates references them via WrapObjectName's
+        // quoted-lowercase policy — an unquoted "id" here would create "ID", not "id".
         var table = IntegrationObjectNameHelper.Table(_context, "test_table");
-        return $@"
-        CREATE TABLE {table} (
-            id BIGINT NOT NULL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            value INTEGER NOT NULL,
-            description CLOB,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
-            created_by VARCHAR(100),
-            updated_at TIMESTAMP,
-            updated_by VARCHAR(100)
-        )";
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+        CREATE TABLE {2} (
+            {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+            {0}name{1} VARCHAR(255) NOT NULL,
+            {0}value{1} INTEGER NOT NULL,
+            {0}description{1} CLOB,
+            {0}is_active{1} BOOLEAN NOT NULL DEFAULT TRUE,
+            {0}created_at{1} TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+            {0}created_by{1} VARCHAR(100),
+            {0}updated_at{1} TIMESTAMP,
+            {0}updated_by{1} VARCHAR(100)
+        )", qp, qs, table);
     }
 }

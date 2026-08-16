@@ -17,6 +17,7 @@
 //   against a live ibmcom/db2 Docker container.
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -54,6 +55,31 @@ internal sealed class Db2Dialect : SqlDialect
     // Db2 stores GUIDs as CHAR(36) strings — IDs are generated client-side, so there's
     // no need for Db2's GENERATE_UUID()/GENERATE_UUID_BINARY() server-side functions.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
+    // IBM.Data.Db2's DB2Parameter.DbType setter throws ArgumentException ("No mapping exists
+    // from DbType Guid to a known DB2Type") the instant DbType.Guid is assigned — before
+    // GuidFormat's ApplyGuidFormat conversion ever runs. Remap here (same pattern as Oracle)
+    // so the parameter is created with DbType.String from the start.
+    protected override DbType RemapDbType(DbType type) => type switch
+    {
+        DbType.Guid => DbType.String,
+        _ => type
+    };
+
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // Db2's TIMESTAMP column (this config has no offset-aware type — see
+        // TypeHydrationTableCreator/TestTableCreator's Db2 DDL) rejects a DateTimeOffset value
+        // outright ("CLI0114E Datetime field overflow"). Coerce to a plain UTC DateTime, matching
+        // Firebird/MySQL/Snowflake's handling of the same limitation.
+        if (type == DbType.DateTimeOffset && value is DateTimeOffset dto)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.DateTime,
+                DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified));
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
 
     // Db2 LUW supports ANSI MERGE regardless of detected version — matches Oracle's
     // pattern of not gating this behind MaxSupportedStandard/IsInitialized.

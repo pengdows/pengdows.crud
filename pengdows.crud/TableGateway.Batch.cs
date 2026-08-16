@@ -504,7 +504,7 @@ public partial class TableGateway<TEntity, TRowID>
                 sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
             }
 
-            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragmentOnConflict);
 
             if (template.UpsertOnConflictVersionWhere != null)
             {
@@ -551,7 +551,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             // Append ON DUPLICATE KEY UPDATE clause
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
             result.Add(sc);
         }
 

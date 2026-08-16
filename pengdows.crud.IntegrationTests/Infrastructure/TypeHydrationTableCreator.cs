@@ -62,6 +62,7 @@ public class TypeHydrationTableCreator
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
+            SupportedDatabase.Db2 => CreateDb2Sql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -228,6 +229,39 @@ CREATE TABLE IF NOT EXISTS {table} (
     {w("col_enum_int")}       INTEGER       NOT NULL,
     {w("col_enum_str")}       VARCHAR(50)   NOT NULL
 )";
+    }
+
+    private string CreateDb2Sql()
+    {
+        // Db2 11.1+: native BOOLEAN; TIMESTAMP for both date types (no tz-aware type,
+        // like MySQL/MariaDB — offset is discarded, UTC instant only); VARCHAR(36) for
+        // guid (client-serialized string, matches Db2Dialect's GuidFormat); BLOB for binary.
+        // No CREATE TABLE IF NOT EXISTS — the shared reset step already drops
+        // "type_hydration" before this runs (tolerating SQL0204N if it never existed).
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+CREATE TABLE {2} (
+    {0}id{1}                 BIGINT        NOT NULL PRIMARY KEY,
+    {0}col_string{1}         VARCHAR(500)  NOT NULL,
+    {0}col_string_null{1}    VARCHAR(500),
+    {0}col_short{1}          SMALLINT      NOT NULL,
+    {0}col_int{1}            INTEGER       NOT NULL,
+    {0}col_int_null{1}       INTEGER,
+    {0}col_long{1}           BIGINT        NOT NULL,
+    {0}col_float{1}          REAL          NOT NULL,
+    {0}col_double{1}         DOUBLE        NOT NULL,
+    {0}col_decimal{1}        DECIMAL(18,8) NOT NULL,
+    {0}col_bool{1}           BOOLEAN       NOT NULL,
+    {0}col_bool_null{1}      BOOLEAN,
+    {0}col_datetime{1}       TIMESTAMP     NOT NULL,
+    {0}col_datetimeoffset{1} TIMESTAMP     NOT NULL,
+    {0}col_guid{1}           VARCHAR(36)   NOT NULL,
+    {0}col_binary{1}         BLOB,
+    {0}col_enum_int{1}       INTEGER       NOT NULL,
+    {0}col_enum_str{1}       VARCHAR(50)   NOT NULL
+)", qp, qs, table);
     }
 
     private string CreateOracleSql()

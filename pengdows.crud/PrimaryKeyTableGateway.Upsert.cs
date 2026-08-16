@@ -57,7 +57,10 @@ public partial class PrimaryKeyTableGateway<TEntity>
         if (!dialect.SupportsPureKeyUpsert)
         {
             var template = GetPkTemplatesForDialect(dialect);
-            if (template.UpsertUpdateFragment == null)
+            // Dispatch below prefers MERGE when supported, so the fragment that must exist is
+            // whichever one the chosen branch will actually use.
+            var fragment = dialect.SupportsMerge ? template.UpsertUpdateFragment : template.UpsertUpdateFragmentOnConflict;
+            if (fragment == null)
             {
                 throw new NotSupportedException(
                     $"Upsert requires at least one non-primary-key updateable column. " +
@@ -152,10 +155,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         if (ctx.DataSourceInfo.SupportsInsertOnConflict || ctx.DataSourceInfo.SupportsOnDuplicateKey)
         {
-            // Batch paths require an UPDATE SET fragment; pure-PK entities are not supported.
+            // Batch paths never use real MERGE (no batch-MERGE implementation), so they always
+            // require the ON CONFLICT/ON DUPLICATE fragment; pure-PK entities are not supported.
             var dialect = GetDialect(ctx);
             var template = GetPkTemplatesForDialect(dialect);
-            if (template.UpsertUpdateFragment == null)
+            if (template.UpsertUpdateFragmentOnConflict == null)
             {
                 throw new NotSupportedException(
                     $"Upsert requires at least one non-primary-key updateable column. " +
@@ -287,7 +291,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
         }
 
-        sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+        sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragmentOnConflict);
 
         if (template.UpsertOnConflictVersionWhere != null)
         {
@@ -315,7 +319,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
         }
 
-        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
 
         sc.AddParameters(parameters);
         return sc;
@@ -537,7 +541,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
             }
 
-            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragmentOnConflict);
 
             if (template.UpsertOnConflictVersionWhere != null)
             {
@@ -580,7 +584,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
             }
 
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
             result.Add(sc);
         }
 

@@ -48,9 +48,20 @@ public partial class TableGateway<TEntity, TRowID>
         // Pre-built version increment fragment (", vercol = vercol + 1") or null when not applicable.
         public string? VersionIncrementClause;
 
-        // Pre-built upsert UPDATE SET fragment, e.g. "col = EXCLUDED.col, col2 = EXCLUDED.col2".
-        // Null for dialects that don't support upsert or where it could not be pre-built.
+        // Pre-built upsert UPDATE SET fragment for real MERGE statements, e.g. "col = s.col".
+        // Used ONLY by the single-entity MERGE path (BuildUpsertMerge) — that "s" alias is declared
+        // by MERGE's own "USING (...) AS s" clause and does not exist in any other upsert shape.
+        // Null for dialects that don't support MERGE or where it could not be pre-built.
         public string? UpsertUpdateFragment;
+
+        // Pre-built upsert UPDATE SET fragment for ON CONFLICT / ON DUPLICATE KEY statements, e.g.
+        // "col = EXCLUDED.col" (Postgres) or "col = VALUES(col)" (MySQL). Used by BOTH the
+        // single-entity ON CONFLICT/ON DUPLICATE paths AND all batch upsert paths — batch upserts
+        // never use real MERGE (there is no batch-MERGE implementation), so on a dialect that
+        // supports MERGE AND ON CONFLICT simultaneously (e.g. PostgreSQL 15+), this is the ONLY
+        // fragment safe for a batch statement; UpsertUpdateFragment's "s." alias does not exist there.
+        // Null for dialects that don't support ON CONFLICT/ON DUPLICATE KEY.
+        public string? UpsertUpdateFragmentOnConflict;
 
         public List<IColumnInfo> UpdateColumns = null!;
 
@@ -234,15 +245,24 @@ public partial class TableGateway<TEntity, TRowID>
             ? new HashSet<IColumnInfo>(upsertKeyColumns)
             : null;
 
-        // Pre-build the upsert UPDATE SET fragment (deterministic per dialect+entity+auditResolver config).
-        // Eliminates the per-call SbLite loop in BuildUpsertOnConflict/OnDuplicate/Merge.
+        // Pre-build the upsert UPDATE SET fragments (deterministic per dialect+entity+auditResolver config).
+        // Eliminates the per-call SbLite loop in BuildUpsertOnConflict/OnDuplicate/Merge/batch upserts.
+        //
+        // Two INDEPENDENT fragments are built here, not one dialect.SupportsMerge-gated choice, because
+        // a single dialect can need BOTH conventions at once: PostgreSQL 15+ has SupportsMerge=true
+        // (used by the single-entity MERGE path, BuildUpsertMerge) AND SupportsInsertOnConflict=true
+        // (used by EVERY batch upsert path — there is no batch-MERGE implementation, so batches always
+        // use ON CONFLICT/ON DUPLICATE KEY regardless of MERGE support). These two shapes reference the
+        // incoming row differently ("s.col" — MERGE's own "USING (...) AS s" alias — vs "EXCLUDED.col"),
+        // so a single shared fragment can only ever be correct for one of them.
         string? upsertUpdateFragment = null;
+        string? upsertUpdateFragmentOnConflict = null;
         if (updateColumns != null)
         {
-            var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            try
+            if (dialect.SupportsMerge)
             {
-                if (dialect.SupportsMerge)
+                var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
                 {
                     var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                     foreach (var col in updateColumns)
@@ -281,10 +301,24 @@ public partial class TableGateway<TEntity, TRowID>
                         frag.Append(wrappedVersion);
                         frag.Append(" + 1");
                     }
+
+                    if (frag.Length > 0)
+                    {
+                        upsertUpdateFragment = frag.ToString();
+                    }
                 }
-                else
+                finally
                 {
-                    // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                    frag.Dispose();
+                }
+            }
+
+            if (dialect.SupportsInsertOnConflict || dialect.SupportsOnDuplicateKey)
+            {
+                // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
+                {
                     try
                     {
                         foreach (var col in updateColumns)
@@ -317,19 +351,19 @@ public partial class TableGateway<TEntity, TRowID>
                     }
                     catch (NotSupportedException)
                     {
-                        // Dialect doesn't support upsert (e.g., FakeDb default dialect)
+                        // Dialect doesn't actually support upsert despite the capability flag
                         frag.Clear();
                     }
-                }
 
-                if (frag.Length > 0)
-                {
-                    upsertUpdateFragment = frag.ToString();
+                    if (frag.Length > 0)
+                    {
+                        upsertUpdateFragmentOnConflict = frag.ToString();
+                    }
                 }
-            }
-            finally
-            {
-                frag.Dispose();
+                finally
+                {
+                    frag.Dispose();
+                }
             }
         }
 
@@ -360,6 +394,7 @@ public partial class TableGateway<TEntity, TRowID>
             UpdateSqlSuffix = updateSqlSuffix!,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpdateColumns = updateColumns!,
             UpdateColumnWrappedNames = updateColumnWrappedNames,
             IdEqualityWhereBody = idEqualityWhereBody,
