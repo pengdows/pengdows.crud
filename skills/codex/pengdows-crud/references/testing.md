@@ -1,45 +1,21 @@
-# Testing with fakeDb
+# Testing Architecture: fakeDb & testbed
 
-`pengdows.crud.fakeDb` provides a fake ADO.NET provider for fast unit tests without a real database.
+Testing in `pengdows.crud` is an active evolutionary engine that turns discovered real-world engine failure modes into executable invariants.
 
-## Test Stack
+---
 
-- Framework: xUnit (`[Fact]`, `[Theory]`)
-- Preferred provider for unit tests: `pengdows.crud.fakeDb`
-- Integration verification: `testbed/` and `pengdows.crud.IntegrationTests`
+## 1. `pengdows.crud.fakeDb` (Lifecycle & Failure Laboratory)
 
-## Basic Setup
+`fakeDb` is **not a mock library** — it is a complete, in-memory ADO.NET provider implementation (`fakeDbFactory`, `fakeDbConnection`, `fakeDbCommand`, `fakeDbDataReader`, `FakeDataStore`).
 
-```csharp
-using System.Data;
-using pengdows.crud;
-using pengdows.crud.enums;
-using pengdows.crud.fakeDb;
-using Xunit;
+### Purpose:
+- Deterministically verify state machines, lock transitions, cancellation races, transaction rollbacks, and connection disposal leases in milliseconds without network I/O.
 
-public class BasicFakeDbTests
-{
-    [Fact]
-    public async Task BuildAndExecute_WorksWithFakeProvider()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=test;", factory);
-
-        using var sc = context.CreateSqlContainer("SELECT 1");
-        var value = await sc.ExecuteScalarRequiredAsync<int>();
-
-        Assert.Equal(1, value);
-    }
-}
-```
-
-## Queueing Fake Results
-
-Use `fakeDbConnection` queue APIs for deterministic command results:
+### Deterministic Result Queueing
 
 ```csharp
 [Fact]
-public async Task QueuedScalarAndReaderResults_AreReturnedInOrder()
+public async Task QueuedReaderResults_AreHydratedAccurately()
 {
     var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
     var connection = (fakeDbConnection)factory.CreateConnection();
@@ -47,55 +23,73 @@ public async Task QueuedScalarAndReaderResults_AreReturnedInOrder()
     connection.EnqueueScalarResult(42);
     connection.EnqueueReaderResult(new[]
     {
-        new Dictionary<string, object?> { ["id"] = 1, ["name"] = "A" },
-        new Dictionary<string, object?> { ["id"] = 2, ["name"] = "B" }
+        new Dictionary<string, object?> { ["id"] = 1L, ["name"] = "Alice" },
+        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "Bob" }
     });
 
     factory.Connections.Add(connection);
 
-    var context = new DatabaseContext("test", factory);
-
-    using var scalarSc = context.CreateSqlContainer("SELECT COUNT(*) FROM users");
-    var count = await scalarSc.ExecuteScalarRequiredAsync<int>();
-    Assert.Equal(42, count);
-
-    using var readerSc = context.CreateSqlContainer("SELECT id, name FROM users");
-    await using var reader = await readerSc.ExecuteReaderAsync();
+    var context = new DatabaseContext("Data Source=test;", factory);
+    using var sc = context.CreateSqlContainer("SELECT id, name FROM users");
+    await using var reader = await sc.ExecuteReaderAsync();
 
     Assert.True(await reader.ReadAsync());
-    Assert.Equal(1, reader.GetInt32(reader.GetOrdinal("id")));
+    Assert.Equal("Alice", reader.GetString(reader.GetOrdinal("name")));
 }
 ```
 
-## Simulating Failures
+### Deterministic Failure Simulation
 
 ```csharp
 [Fact]
-public void OpenFailure_IsConfigurable()
+public async Task OpenFailure_SurfacesCleanly()
 {
     var factory = fakeDbFactory.CreateFailingFactory(
-        SupportedDatabase.Sqlite,
+        SupportedDatabase.SqlServer,
         ConnectionFailureMode.FailOnOpen);
 
-    var context = new DatabaseContext("test", factory);
-
+    var context = new DatabaseContext("Data Source=test;", factory);
     using var sc = context.CreateSqlContainer("SELECT 1");
-    Assert.ThrowsAny<Exception>(() => sc.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult());
+
+    await Assert.ThrowsAnyAsync<Exception>(async () => await sc.ExecuteScalarRequiredAsync<int>());
 }
 ```
 
-Additional failure controls are available on `fakeDbConnection`, including:
+Available Failure Hooks:
+- `SetFailOnOpen(...)`
+- `SetFailOnCommand(...)`
+- `SetFailOnBeginTransaction(...)`
+- `SetFailAfterOpenCount(...)`
+- `SetCustomFailureException(...)`
 
-- `SetFailOnOpen(...)` — corresponds to `ConnectionFailureMode.FailOnOpen`
-- `SetFailOnCommand(...)` — corresponds to `ConnectionFailureMode.FailOnCommand`
-- `SetFailOnBeginTransaction(...)` — corresponds to `ConnectionFailureMode.FailOnTransaction`
-- `SetFailAfterOpenCount(...)` — corresponds to `ConnectionFailureMode.FailAfterCount`
-- `SetCustomFailureException(...)` — override the exception thrown on failure
+---
 
-The `ConnectionFailureMode` enum values are: `FailOnOpen`, `FailOnCommand`, `FailOnTransaction`, `FailAfterCount`, `Broken`.
+## 2. `testbed/` (Multi-Engine Conformance)
 
-## Recommended Coverage Pattern
+The `testbed` project coordinates real engine conformance verification against 11+ real database engines in Docker Testcontainers:
+- **Engines Verified**: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, Firebird, DuckDB, SQLite, CockroachDB, YugabyteDB, TiDB, Snowflake, IBM DB2.
+- **Common Conformance Suite**: [`TestProvider.cs`](file:///home/alaricd/prj/pengdows/pengdows.crud/testbed/TestProvider.cs) runs identical behavioral test suites against every database provider container to verify dialect capability parity.
 
-- Use fakeDb for unit tests of SQL generation, parameterization, mapping, and failure handling.
-- Use integration tests for provider-specific behavior and real transaction semantics.
-- If fakeDb lacks a behavior you need, extend `pengdows.crud.fakeDb` rather than introducing new mocking layers.
+---
+
+## 3. Evolutionary Defect Absorption
+
+When multi-engine testing reveals engine-specific nuances, the framework generalizes the behavior into dialect capabilities and locks it down with unit regression tests:
+- **PostgreSQL Version Parsing**: Debian gcc version banners broke standard regex parsing $\to$ generalized parser + unit tests in `PostgreSqlVersionParsingTests.cs`.
+- **PostgreSQL 18 MERGE RHS Qualification**: Disallowed table-alias qualification on `excluded.*` target columns in MERGE $\to$ dialect capability `EmitsAnsiMergeSyntax` + unit tests.
+- **DB2 Generated Keys**: DB2 lacks `SELECT @@IDENTITY` and requires `FINAL TABLE (INSERT ...)` $\to$ `RequiresOutputParameterForReturning` and generated key plans.
+
+---
+
+## 4. Release Gates & Benchmark Validation
+
+- **Coverage Ratchet**: CI strictly enforces that test coverage cannot decrease below previous baseline (minimum 83% floor, targeting 95%).
+- **Benchmark Validation Harness**: BenchmarkDotNet test runs include plan validation harnesses asserting index existence and checking `SET STATISTICS XML` / `SHOWPLAN` to ensure benchmarks measure real database access paths.
+
+---
+
+## 5. Ecosystem Validation & Tooling
+
+- **`pengdows.poco.mint`**: Schema-first POCO generation available as a .NET global CLI tool (`pengdows.poco.mint.cli`) and a Dockerized Svelte WebUI (`pengdows/pengdows.poco.mint`). Consumes `IDatabaseContext`/`ISqlDialect` to generate POCOs with correct `[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`, `[Version]`, `[NonInsertable]`, and audit attributes.
+- **`pengdows.hangfire`**: Universal background job storage provider proving that a single engine built on `pengdows.crud` replaces separate community storage drivers across all 15 database engines.
+

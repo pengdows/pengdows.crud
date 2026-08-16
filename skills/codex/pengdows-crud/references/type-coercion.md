@@ -1,129 +1,63 @@
-# Type Coercion
+# Type Coercion & Coercion Registry
 
-pengdows.crud provides robust type coercion between .NET types and database types through the `TypeCoercionHelper` class. This enables seamless mapping between POCOs and SQL data across different database providers.
+`pengdows.crud` provides a high-performance type coercion pipeline between .NET CLR types and ADO.NET provider types via `TypeCoercionHelper` and `CoercionRegistry`.
 
-## Overview
+---
 
-Type coercion handles the conversion between:
+## Core Capabilities
 
-- Database values → .NET object properties
-- .NET object properties → database parameters
-- Cross-database type compatibility (e.g., Oracle NUMBER to .NET int)
-- String-to-enum conversions with configurable failure modes
+- **Automatic Type Conversion**: Handles conversions between CLR types and database types across engines (e.g. `Oracle NUMBER` to `.NET int`, `PostgreSQL UUID` to `System.Guid`).
+- **UTC Timestamp Normalization**: All timestamps (`DateTime`, `DateTimeOffset`, `TimestampOffset`) are normalized to UTC.
+- **Unified GUID Handling**: Native `UUID` (PostgreSQL), `uniqueidentifier` (SQL Server), `RAW(16)` (Oracle), `BINARY(16)` (Firebird/MySQL), or `TEXT` (SQLite).
+- **JSON Serialization/Deserialization**: Seamless mapping for complex types via `System.Text.Json`. Auto-detected for `JsonDocument`, `JsonElement`, `JsonNode`, `JsonValue`.
 
-## TypeCoercionHelper
+---
 
-The core coercion logic provides:
+## Enum Storage & Parsing
 
-- Safe conversion with null handling
-- Enum parsing from strings or numeric values
-- DateTime UTC conversion and normalization
-- GUID string parsing and formatting
-- JSON serialization/deserialization for complex types
-- Provider-specific type mapping
+### Storage Format
+Enum storage is controlled by `DbType` in the `[Column]` attribute:
+- `DbType.String`: Stored as the enum member name (`"Active"`).
+- `DbType.Int32` (or other numeric): Stored as the underlying integer value (`1`).
+- *Note*: Throws an exception at mapping compilation if `DbType` is neither string nor numeric.
 
-## Enum Parsing
-
-pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
-
-### EnumParseFailureMode.Throw (Default)
-
-- Throws an exception if enum parsing fails
-- Recommended for strict validation scenarios
-- Ensures data integrity by failing fast on invalid values
+### EnumParseFailureMode
+Controls behavior when a database value cannot be parsed into the target enum:
 
 ```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.Throw);
+public enum EnumParseFailureMode
+{
+    Throw,           // Throws exception (default, recommended for production data integrity)
+    SetNullAndLog,   // Sets property to null and logs warning (requires nullable enum)
+    SetDefaultValue  // Sets property to default enum value (0) and logs warning
+}
 ```
 
-### EnumParseFailureMode.SetNullAndLog
-
-- Sets the property to null (for nullable types) and logs a warning on parse failure
-- Useful when you want to tolerate stale/unknown enum values without crashing
-
+Usage:
 ```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+var gateway = new TableGateway<User, long>(
+    context, 
+    enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
 ```
 
-### EnumParseFailureMode.SetDefaultValue
+---
 
-- Returns the enum's default value (typically 0) on parse failure
-- Useful for data migration scenarios
+## Cross-Database Type Mapping Matrix
 
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
-```
+| .NET CLR Type | SQL Server | PostgreSQL | Oracle | MySQL / MariaDB | SQLite |
+|---|---|---|---|---|---|
+| `int` | `INT` | `INTEGER` | `NUMBER(10,0)` | `INT` | `INTEGER` |
+| `long` | `BIGINT` | `BIGINT` | `NUMBER(19,0)` | `BIGINT` | `INTEGER` |
+| `decimal` | `DECIMAL` | `NUMERIC` | `NUMBER` | `DECIMAL` | `REAL` |
+| `string` | `NVARCHAR` | `TEXT` / `VARCHAR` | `VARCHAR2` | `VARCHAR` | `TEXT` |
+| `DateTime` | `DATETIME2` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP` | `DATETIME` | `TEXT` |
+| `bool` | `BIT` | `BOOLEAN` | `NUMBER(1,0)` | `TINYINT(1)` | `INTEGER` |
+| `Guid` | `UNIQUEIDENTIFIER` | `UUID` | `RAW(16)` | `BINARY(16)` | `TEXT` |
+| `byte[]` | `VARBINARY(MAX)` | `BYTEA` | `BLOB` | `LONGBLOB` | `BLOB` |
 
-## Cross-Database Type Mapping
+---
 
-pengdows.crud normalizes types across database providers:
+## Null & DBNull Handling
 
-| .NET Type | SQL Server | PostgreSQL | Oracle | MySQL | SQLite |
-|-----------|------------|------------|--------|-------|--------|
-| `int` | INT | INTEGER | NUMBER(10,0) | INT | INTEGER |
-| `long` | BIGINT | BIGINT | NUMBER(19,0) | BIGINT | INTEGER |
-| `decimal` | DECIMAL | NUMERIC | NUMBER | DECIMAL | REAL |
-| `string` | NVARCHAR | TEXT | VARCHAR2 | VARCHAR | TEXT |
-| `DateTime` | DATETIME2 | TIMESTAMP | DATE | DATETIME | TEXT |
-| `bool` | BIT | BOOLEAN | NUMBER(1,0) | TINYINT(1) | INTEGER |
-| `Guid` | UNIQUEIDENTIFIER | UUID | RAW(16) | BINARY(16) | TEXT |
-
-## DateTime Handling
-
-- All timestamps are normalized to **UTC**
-- Database-specific timezone handling is abstracted away
-- Audit timestamps (`[CreatedOn]`, `[LastUpdatedOn]`) are always UTC
-- Local time conversion is handled at the application layer
-
-## JSON Support
-
-Complex objects can be stored as JSON in supported databases:
-
-```csharp
-[Json]
-[Column("settings", DbType.String)]
-public UserSettings Settings { get; set; }
-```
-
-- Automatically serializes/deserializes complex types
-- Uses `System.Text.Json` by default
-- Supports nullable reference types
-- Works across all supported databases
-
-## Null Handling
-
-- Nullable reference types are properly supported
-- `DBNull.Value` is correctly mapped to `null`
-- Value types use nullable variants (`int?`, `DateTime?`, etc.)
-- Required fields throw exceptions on null values
-
-## Custom Type Converters
-
-pengdows.crud allows custom type conversion logic:
-
-```csharp
-var registry = new AdvancedTypeRegistry();
-registry.RegisterConverter(new CustomTypeConverter());
-
-// Register provider-specific mapping when needed
-registry.RegisterMapping<CustomType>(
-    SupportedDatabase.PostgreSql,
-    new ProviderTypeMapping(DbType.String));
-```
-
-## Best Practices
-
-- Use `EnumParseFailureMode.Throw` in production for data integrity
-- Store complex types as JSON for cross-database portability
-- Always use UTC for timestamp fields
-- Leverage nullable reference types for proper null handling
-- Test type coercion with your specific database providers
-
-## Error Handling
-
-Type coercion failures are logged and can throw exceptions:
-
-- Invalid enum values (when using Throw mode)
-- Incompatible type conversions
-- Malformed JSON for complex types
-- Out-of-range numeric conversions
+- Database `DBNull.Value` is mapped to `null` for nullable value types (`int?`, `DateTime?`, `Guid?`) and reference types.
+- Attempting to map `DBNull.Value` to a non-nullable value type throws an informative `InvalidCastException`.

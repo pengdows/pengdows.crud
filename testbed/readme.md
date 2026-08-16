@@ -7,7 +7,7 @@ with up to 2 databases in parallel.
 ## Running
 
 ```bash
-# All always-on databases (10)
+# All always-on databases (11)
 dotnet run -c Release --project testbed
 
 # Include Oracle (requires license acceptance)
@@ -25,7 +25,7 @@ dotnet run -c Release --project testbed -- --exclude SQLite
 
 ## Always-on Databases
 
-SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB
+SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB, IBM Db2 LUW
 
 ## Opt-in Databases
 
@@ -220,6 +220,7 @@ testbed/
 ├── TestContainer.cs                  Shared container startup / wait-for-ready logic
 ├── Sqlite/                           SQLite — no container (file/memory based)
 ├── DuckDb/
+├── Db2/
 ├── PostgreSql/
 ├── MySql/
 ├── MariaDb/

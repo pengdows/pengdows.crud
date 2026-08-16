@@ -5,75 +5,6 @@ implemented. Items here are not roadmap commitments — they are recorded so the
 is not lost and can be picked up when the need arises.
 
 ---
-
-## Batch Operations
-
-The current batch implementation (`TableGateway.Batch.cs`) handles chunked multi-row INSERT,
-UPDATE, and UPSERT with automatic parameter-limit-aware splitting. The following extensions
-were designed but not built.
-
-### Provider-optimized bulk load
-
-For very large datasets (tens of thousands of rows), native bulk-load protocols are 10–100×
-faster than parameterized multi-row INSERT.
-
-| Database | Mechanism | Notes |
-|----------|-----------|-------|
-| PostgreSQL | `COPY … FROM STDIN` (binary or CSV) | Requires `NpgsqlBinaryImporter` or `COPY` command |
-| SQL Server | `SqlBulkCopy` | ADO.NET class; bypasses row-by-row binding entirely |
-| DuckDB | `COPY … FROM` (CSV/Parquet/Arrow) | Analytical workloads; Arrow appender is fastest |
-| Oracle | Array binding via `OracleCommand` | Set `ArrayBindCount`; avoids per-row round-trips |
-| MySQL/MariaDB | `LOAD DATA INFILE` | Requires `LOCAL INFILE` server permission |
-| Firebird | Batch API (Firebird 4.0+) | `FbBatchCommand`; older versions fall back to multi-row INSERT |
-
-None of these are in scope for the current `BatchCreateAsync` / `BatchUpsertAsync` surface.
-When added, they should sit behind the existing `Build`/`Execute` split so callers are not
-forced to change call sites.
-
-### `ContinueOnError` / partial-batch error handling
-
-Currently, if any `ExecuteNonQueryAsync` call inside a batch loop throws, the exception
-propagates immediately and remaining chunks are not executed. A `ContinueOnError` option
-would collect per-chunk failures and return a structured result instead of throwing.
-
-Sketch of the intended API:
-
-```csharp
-public record BatchError(int ChunkIndex, int StartRow, int EndRow, Exception Exception);
-
-public record BatchResult(int RowsAffected, IReadOnlyList<BatchError> Errors);
-```
-
-The decision on whether to add this depends on whether callers actually need partial success
-semantics. Most transactional use cases do not — a transaction wrapping the whole batch is
-usually the right answer.
-
-### Progress reporting
-
-For long-running batches an `IProgress<BatchProgress>` callback was sketched:
-
-```csharp
-public record BatchProgress(int ChunksCompleted, int TotalChunks, int RowsAffected);
-```
-
-Would be passed as an optional parameter alongside `CancellationToken`. Low priority unless
-a caller actually needs it — the cancellation token already lets the caller abort.
-
-### Resumable / checkpointed batches
-
-The idea: record which chunks completed successfully so a retry can skip them. Requires
-stable chunk boundaries (deterministic ordering) and external state storage. Complex enough
-that it probably belongs outside the library, in application code that calls `BuildBatchCreate`
-and manages the resulting `IReadOnlyList<ISqlContainer>` directly.
-
-### Streaming batch input
-
-Accept `IAsyncEnumerable<TEntity>` instead of `IReadOnlyList<TEntity>` so callers can
-generate entities lazily without materializing the full set first. Chunking would need to
-buffer `N` rows at a time rather than pre-splitting the full list.
-
----
-
 ## Oracle
 
 ### Array binding
@@ -88,15 +19,6 @@ The base `SqlDialect.SupportsBatchUpdate` returns `false` for Oracle, meaning ba
 fall back to one `UPDATE` per entity. PostgreSQL uses `UPDATE FROM VALUES` and SQL Server
 uses `MERGE`; Oracle has no direct equivalent without either a global temporary table or
 PL/SQL. Design work needed before implementation.
-
----
-
-## Metrics integration for batch operations
-
-The existing `MetricsCollector` tracks per-command parameter counts and execution times.
-Batch operations currently show up as N individual command records. A batch-aware metrics
-event (total rows, chunk count, total duration) would make the dashboards more useful for
-diagnosing batch throughput.
 
 ---
 
@@ -726,3 +648,41 @@ WarmupCount=5`, all fakeDb/in-memory, no real I/O). Results:
   it isn't built yet.
 
 Verdict: no statistically meaningful performance regression from any of this session's changes.
+
+---
+
+## RetryContext Subsystem (Governor-Aware Resilient Execution)
+
+### Architectural Problem
+Existing third-party retry libraries (such as Polly or manual retry loops) are unaware of low-level connection pool topology, connection hold times, or admission control. Wrapping raw ADO.NET or TableGateway calls in an external retry policy leads to two critical operational failure modes:
+1. **Connection Holding during Backoff / Sleep**: If a transaction or connection is held while the thread sleeps between retries, connection pools saturate, starving other concurrent requests.
+2. **Thundering Herds & Connection Storms**: When multiple concurrent requests experience transient database errors (e.g. deadlocks, lock timeouts), external retries wake up simultaneously and storm the connection pool and database engine, causing cascaded collapse.
+
+### Design Principles of `RetryContext`
+
+`RetryContext` is a first-class execution coordinator designed specifically to integrate with `DatabaseContext`, `PoolGovernor`, and `IAuditValueResolver`.
+
+#### 1. Dual Retry Modes
+- **Mode 1: Transactional (`ExecuteTransactionalAsync`)**:
+  - Treats the entire operation delegate as an atomic, all-or-nothing unit of work.
+  - On a transient error (`DatabaseException.IsTransient == true`), the current transaction is rolled back and its connection lease is immediately disposed.
+  - In-memory entity modifications (such as audit stamps) are reverted using `RestoreAuditSnapshot` to ensure entity state matches the pre-execution baseline.
+  - The thread releases its `PoolGovernor` slot before waiting with decorrelated exponential jitter.
+  - On wake-up, it acquires a fresh slot from `PoolGovernor.AcquireAsync(ct)` and begins a new transaction lease from Step 1.
+- **Mode 2: Sequential (`ExecuteSequentialAsync`)**:
+  - Processes a stream or queue of independent items in strict sequence.
+  - If a transient failure occurs on item $K$, only item $K$ is retried with backoff.
+  - Items $1 \dots K-1$ remain committed and are not re-executed; once item $K$ succeeds, execution advances to item $K+1$.
+
+#### 2. PoolGovernor Slot Coordination
+- During backoff sleep, **zero connection slots are held**.
+- Re-admission after backoff passes through the fairness turnstile of `PoolGovernor`, eliminating connection storms and preventing starvation of non-retrying traffic.
+
+#### 3. Transient Exception Classification
+- Automatically filters exceptions via `DatabaseException.IsTransient`:
+  - `DeadlockException` (`TransientWriteConflictException`) $\to$ Retryable
+  - `SerializationConflictException` $\to$ Retryable
+  - `CommandTimeoutException` $\to$ Retryable
+  - `UniqueConstraintViolationException` $\to$ Non-transient, fails fast without retry
+  - `ForeignKeyViolationException` $\to$ Non-transient, fails fast without retry
+

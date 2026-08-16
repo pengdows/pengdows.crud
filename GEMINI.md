@@ -20,7 +20,18 @@ The central design principle is to provide **"Prego features"** — expert-level
 
 It is built on a **database-first** philosophy, treating the database schema as a primary, expertly-designed artifact. No LINQ, no tracking, no surprises — explicit SQL control with database-agnostic features.
 
+## Architectural Classification: Why pengdows.crud is NOT in Standard DAL Categories
+
+Traditional classifications place data access tools on a 1D spectrum from **Heavy ORMs** (EF Core, Hibernate) to **Micro-ORMs** (Dapper, sqlx). `pengdows.crud` breaks this spectrum by occupying the **Explicit SQL + High Execution Governance** quadrant:
+
+1. **NOT an ORM / Unit of Work**: No change tracking, no entity state machines, no LINQ-to-SQL translation, no dirty checking.
+2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
+3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
+4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
+5. **Canonical Comparison Reference**: See [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./docs/DAL_TAXONOMY_AND_COMPARISON.md) for full comparisons across .NET, Java, Go, Rust, and Python.
+
 ## Project Structure
+
 
 - `pengdows.crud/` — Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions/` — Interfaces and enums (all public APIs live here)

@@ -1,268 +1,147 @@
-# SqlContainer Detailed Documentation
+# ISqlContainer & Query Building
 
-The `SqlContainer` class in pengdows.crud wraps and simplifies direct SQL execution. It handles connections, parameters, and logging in a consistent, safe, and database-agnostic way.
+`ISqlContainer` is the core execution and parameter binding container in `pengdows.crud`. It provides safe, zero-allocation SQL composition and direct asynchronous command execution.
 
-## Purpose
+---
 
-SqlContainer is responsible for:
+## 1. Core Responsibilities
 
-- Executing raw or generated SQL
-- Managing parameters in a portable way
-- Handling command lifecycle and cleanup
-- Enforcing DbMode/read-write rules (read-only, write-only)
-- Safely invoking stored procedures across supported databases
+- **Zero-Allocation String Composition**: Uses `ISqlQueryBuilder` backed by pooled string builders.
+- **Provider-Aware Quoting**: Wraps table and column identifiers per dialect rules (`WrapObjectName`).
+- **Safe Parameter Binding**: Automatic parameter naming (`MakeParameterName`), type coercion, and deduplication.
+- **Direct Execution**: Returns `ValueTask` across all scalar, reader, and non-query execution methods.
+- **Context Cloning**: Reuses pre-built SQL structures across different transaction or tenant contexts.
 
-## Construction
+---
 
-Instances of SqlContainer are constructed internally by `DatabaseContext` or `TransactionContext`, both implement `IDatabaseContext`.
+## 2. Identifier Quoting & Parameter Formatting
 
-```csharp
-var sc = context.CreateSqlContainer();
-```
-
-You may also optionally pass a pre-existing query string.
-
-## Key Members
-
-### Query
-
-An `ISqlQueryBuilder` used to build the SQL command text. It is a pooled, high-performance builder that replaces `StringBuilder` with zero-allocation `ReadOnlySpan<char>` appends.
-
-- Supports the same `Append`/`AppendLine`/`AppendFormat`/`Replace` API that `StringBuilder` does
-- SQL can be inspected or logged before execution via `.ToString()`
-
-### AddParameter / AddParameters / AddParameterWithValue
-
-Used to bind parameters to the command.
-
-- Automatically supports `@name`, `:name`, or positional `?`
-- Parameters are created using `DbProviderFactory`
-- `AddParameterWithValue` creates and adds parameter in one call
-- Overloads with `ParameterDirection` support output/return parameters
-- `AddParameters(IEnumerable<DbParameter>)` and `AddParameters(IList<DbParameter>)` add multiple parameters at once
+Always use dialect helpers when constructing custom SQL queries:
 
 ```csharp
-// Method 1: Create parameter, then add it
-var p = sc.CreateDbParameter("email", DbType.String, email);
-sc.AddParameter(p);
-sc.Query.Append(sc.MakeParameterName(p));
+using var sc = context.CreateSqlContainer();
 
-// Method 2: Create and add parameter in one call (preferred)
-var param = sc.AddParameterWithValue("email", DbType.String, email);
-sc.Query.Append(sc.MakeParameterName(param));
-
-// Method 3: With explicit direction (for stored procedure output parameters)
-var outParam = sc.AddParameterWithValue("result", DbType.Int32, 0, ParameterDirection.Output);
-```
-
-## Execution Methods
-
-All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads and `ExecutionType` overloads for explicit read/write pool routing.
-
-| Method | Returns | Purpose |
-|--------|---------|---------|
-| `ExecuteNonQueryAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<int>` | Returns affected row count |
-| `ExecuteScalarRequiredAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows or null |
-| `ExecuteScalarOrNullAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
-| `TryExecuteScalarAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
-| `ExecuteReaderAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
-
-## ScalarResult\<T\>
-
-`TryExecuteScalarAsync<T>` returns `ScalarResult<T>` to unambiguously distinguish three outcomes:
-
-| `Status` | Meaning |
-|----------|---------|
-| `ScalarStatus.None` | Query returned no rows |
-| `ScalarStatus.Null` | Row returned but column value was `DBNull` |
-| `ScalarStatus.Value` | Row returned with a non-null value |
-
-```csharp
-var result = await sc.TryExecuteScalarAsync<int>();
-if (result.HasValue)
-{
-    Console.WriteLine(result.Required); // returns Value or throws if not Value
-}
-// or switch on result.Status for full control
-```
-
-Use `ExecuteScalarRequiredAsync<T>` when you expect a value and want an exception on absence.
-Use `ExecuteScalarOrNullAsync<T>` when no-rows and DBNull should both map to `null`.
-Use `TryExecuteScalarAsync<T>` when you need to distinguish no-rows from DBNull.
-
-## Clone for Reuse
-
-SqlContainer supports cloning for reusing SQL structure with different parameter values or contexts:
-
-```csharp
-// Clone with same context - update parameter values for batch operations
-var template = gateway.BuildCreate(entity);
-var clone = template.Clone();
-clone.SetParameterValue("i0", newValue);
-
-// Clone with different context - essential for transactions and multi-tenancy
-var clone = template.Clone(transactionContext);
-```
-
-## Command Preparation
-
-All commands are prepared with proper:
-
-- Parameter limit enforcement
-- CommandType (Text or StoredProcedure)
-- Statement preparation (if supported)
-- Connection open behavior (auto-opened if closed)
-
-## Stored Procedure Support
-
-ADO.NET supports three values for the `CommandType` enumeration:
-
-- `CommandType.Text` – The default; executes the provided SQL string as-is
-- `CommandType.StoredProcedure` – Intended to call a stored procedure
-- `CommandType.TableDirect` – Used to select all rows from a table without SQL (not supported)
-
-### Behavior in This Library
-
-While ADO.NET allows `CommandType.StoredProcedure`, it does not automatically wrap the command in the correct syntax for the underlying database.
-
-This library addresses that limitation:
-
-1. It accepts `CommandType.StoredProcedure`
-2. Internally rewrites the command into valid SQL using appropriate syntax for the target database
-3. Sets the command back to `CommandType.Text` before executing
-
-This ensures stored procedures work across all supported databases without requiring database-specific formatting.
-
-### WrapForStoredProc
-
-```csharp
-string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool captureReturn = false);
-```
-
-Returns the wrapped SQL string. The `captureReturn` parameter enables capturing the stored procedure return value when supported by the dialect.
-
-### Procedure Wrapping Syntax by Database
-
-| Database | Syntax Used |
-|----------|-------------|
-| SQL Server | `EXEC procName` |
-| Oracle | `BEGIN procName; END;` |
-| PostgreSQL | `CALL procName()` or `SELECT * FROM procName()` |
-| MySQL / MariaDB | `CALL procName()` |
-| Firebird | `EXECUTE PROCEDURE procName` |
-
-### Not Supported
-
-`CommandType.TableDirect` is not supported, as it bypasses SQL entirely and is of limited value in cross-database scenarios.
-
-## Reader Behavior
-
-- If in `TransactionContext` or `SingleConnection` mode, connection stays open
-- Otherwise, `CommandBehavior.CloseConnection` is used to auto-close
-- **ITrackedReader is a lease** — it pins the connection for its lifetime. Always use `await using` and dispose promptly.
-
-## Logging
-
-- SQL is logged through `ILogger` at Information level
-- Parameter values are NOT logged unless the consumer does so explicitly
-
-## Disposal and Cleanup
-
-- `Clear()` — resets the query builder and all parameters, reusing the container for a new statement
-- `Dispose()` clears parameters and query buffer
-- Finalizer calls `Dispose(false)` to ensure unmanaged cleanup
-- `Cleanup()` handles connection and command cleanup based on execution mode
-
-## WrapObjectName
-
-Wraps table or column names using the database's quote character. This will split and reassemble a value as well.
-
-```csharp
-var name = sc.WrapObjectName("MyTable");
-// Returns "MyTable" or [MyTable] or `MyTable` or similarly appropriate value
-
-var schemaAndName = sc.WrapObjectName("dbo.mytable");
-// Returns "dbo"."mytable" or [dbo].[mytable] or `dbo`.`mytable`
-
-var aliasedColumn = sc.WrapObjectName("o.total");
-// Returns "o"."total" or [o].[total] or `o`.`total`
-```
-
-**IMPORTANT:** Always use `WrapObjectName()` for all table names, column names, and aliases in custom SQL to ensure proper quoting per database dialect.
-
-## Complete Example
-
-```csharp
-var sc = context.CreateSqlContainer();
-
-// Build SELECT with proper identifier quoting
-sc.Query.Append("SELECT * FROM ");
-sc.Query.Append(sc.WrapObjectName("Users"));
-sc.Query.Append(" WHERE ");
-sc.Query.Append(sc.WrapObjectName("Id"));
-sc.Query.Append(" = ");
-
-// Add parameter
-var param = sc.AddParameterWithValue("userId", DbType.Int32, 42);
-sc.Query.Append(sc.MakeParameterName(param));
-
-// Execute
-await using var reader = await sc.ExecuteReaderAsync();
-while (await reader.ReadAsync())
-{
-    // Process rows
-}
-```
-
-## Custom Query with Multiple Conditions
-
-```csharp
-var sc = gateway.BuildBaseRetrieve("u");
-
-// Add WHERE clause with proper quoting
+sc.Query.Append("SELECT ");
+sc.Query.Append(sc.WrapObjectName("u.id"));
+sc.Query.Append(", ");
+sc.Query.Append(sc.WrapObjectName("u.email"));
+sc.Query.Append(" FROM ");
+sc.Query.Append(sc.WrapObjectName("users"));
+sc.Query.Append(" ");
+sc.Query.Append(sc.WrapObjectName("u"));
 sc.Query.Append(" WHERE ");
 sc.Query.Append(sc.WrapObjectName("u.status"));
 sc.Query.Append(" = ");
-var statusParam = sc.AddParameterWithValue("status", DbType.String, "Active");
-sc.Query.Append(sc.MakeParameterName(statusParam));
 
-sc.Query.Append(" AND ");
-sc.Query.Append(sc.WrapObjectName("u.created_at"));
-sc.Query.Append(" >= ");
-var dateParam = sc.AddParameterWithValue("since", DbType.DateTime, DateTime.UtcNow.AddDays(-30));
-sc.Query.Append(sc.MakeParameterName(dateParam));
+var param = sc.AddParameterWithValue("status", DbType.String, "Active");
+sc.Query.Append(sc.MakeParameterName(param));
 
-sc.Query.Append(" ORDER BY ");
-sc.Query.Append(sc.WrapObjectName("u.created_at"));
-sc.Query.Append(" DESC");
-
-var users = await gateway.LoadListAsync(sc);
+await using var reader = await sc.ExecuteReaderAsync();
 ```
 
-## Streaming Large Result Sets
+> [!TIP]
+> **Roslyn Analyzer PGC008**: `pengdows.crud.analyzers` will produce a compiler error if literal unparameterized values are injected into SQL predicates or join conditions. Always use `AddParameterWithValue`.
 
-For memory-efficient processing of large queries:
+---
+
+## 3. Parameter Naming Convention
+
+| Prefix | Usage | Example |
+|---|---|---|
+| `i{n}` | INSERT values | `i0`, `i1` |
+| `s{n}` | UPDATE SET assignments | `s0`, `s1` |
+| `w{n}` | WHERE IN / filter clauses | `w0`, `w1` |
+| `k{n}` | WHERE key/id lookups | `k0` |
+| `v{n}` | Optimistic lock version predicate | `v0` |
+| `b{n}` | Batch row parameters | `b0_0`, `b0_1` |
+| `j{n}` | JOIN conditions | `j0` |
+
+---
+
+## 4. Execution API (ValueTask)
+
+All execution methods return `ValueTask` for minimal allocation overhead:
 
 ```csharp
-var sc = gateway.BuildBaseRetrieve("u");
-sc.Query.Append(" ORDER BY ");
-sc.Query.Append(sc.WrapObjectName("u.id"));
+// Non-Query (returns affected rows)
+ValueTask<int> ExecuteNonQueryAsync(CommandType type = CommandType.Text, CancellationToken ct = default);
 
-await foreach (var user in gateway.LoadStreamAsync(sc))
-{
-    await ProcessUserAsync(user);
-    // Can break early - reader is disposed automatically
-}
+// Scalar (Required throws if no rows or DBNull)
+ValueTask<T> ExecuteScalarRequiredAsync<T>(CommandType type = CommandType.Text, CancellationToken ct = default);
+
+// Scalar (OrNull returns null if no rows or DBNull)
+ValueTask<T?> ExecuteScalarOrNullAsync<T>(CommandType type = CommandType.Text, CancellationToken ct = default);
+
+// Scalar (Unambiguous None vs Null vs Value)
+ValueTask<ScalarResult<T>> TryExecuteScalarAsync<T>(CommandType type = CommandType.Text, CancellationToken ct = default);
+
+// Tracked Reader (pins connection lease until disposed)
+ValueTask<ITrackedReader> ExecuteReaderAsync(CommandType type = CommandType.Text, CancellationToken ct = default);
 ```
 
-## Stored Procedure Example
+---
+
+## 5. Cloning Containers for Reuse
+
+A pre-built container can be cloned to update parameters or switch execution context without re-generating SQL:
 
 ```csharp
-var sc = context.CreateSqlContainer();
-sc.Query.Append("GetUsersByRole");
+var template = gateway.BuildBaseRetrieve("o");
+template.Query.Append(" WHERE ");
+template.Query.Append(template.WrapObjectName("o.customer_id"));
+template.Query.Append(" = ");
+var p = template.AddParameterWithValue("cid", DbType.Int64, 0L);
+template.Query.Append(template.MakeParameterName(p));
 
-var roleParam = sc.AddParameterWithValue("role", DbType.String, "Admin");
+// Clone for another customer
+var clone = template.Clone();
+clone.SetParameterValue(p.ParameterName, 42L);
+var orders = await gateway.LoadListAsync(clone);
 
-// Execute as stored procedure - library handles syntax per database
-await using var reader = await sc.ExecuteReaderAsync(CommandType.StoredProcedure);
+// Clone into a transaction context
+await using var tx = await context.BeginTransactionAsync();
+var txClone = template.Clone(tx);
+txClone.SetParameterValue(p.ParameterName, 99L);
+var txOrders = await gateway.LoadListAsync(txClone);
 ```
+
+---
+
+## 6. Stored Procedure Normalization (`ProcWrappingStyle`)
+
+When invoking `CommandType.StoredProcedure`, `ISqlContainer` uses the dialect's `IProcWrappingStrategy` to format the call automatically:
+
+| Strategy | Engine | Syntax Generated |
+|---|---|---|
+| `ExecProcWrapping` | SQL Server | `EXEC [proc_name] @p0, @p1` |
+| `CallProcWrapping` | MySQL, MariaDB, DB2, Snowflake | `CALL `proc_name`(@p0, @p1)` |
+| `PostgresProcWrapping` | PostgreSQL, CockroachDB, Yugabyte | Read: `SELECT * FROM "func"(@p0)` <br> Write: `CALL "proc"(@p0)` |
+| `OracleProcWrapping` | Oracle | `BEGIN "PROC"(:p0); END;` |
+| `ExecuteProcedureWrapping` | Firebird | `EXECUTE PROCEDURE "PROC"(@p0)` |
+| `UnsupportedProcWrapping` | SQLite, TiDB | Throws clear exception that procs are unsupported |
+
+---
+
+## 7. Homogenized Exception Hierarchy
+
+All native provider errors are normalized into a unified exception model:
+
+```
+DatabaseException (IsTransient, SqlState, ErrorCode, Database)
+  ├── Transient (IsTransient == true) — Safe to retry via Polly / backoff
+  │     ├── DeadlockException
+  │     ├── SerializationConflictException
+  │     ├── CommandTimeoutException
+  │     ├── ConnectionFailedException
+  │     └── PoolSaturatedException
+  └── Permanent (IsTransient == false) — Do not retry without changing data
+        ├── UniqueConstraintViolationException
+        ├── ForeignKeyViolationException
+        ├── NotNullViolationException
+        ├── CheckConstraintViolationException
+        └── ConcurrencyConflictException
+```
+
+> [!NOTE]
+> `OperationCanceledException` is **never wrapped**—it always propagates directly to support cooperative cancellation tokens.
+

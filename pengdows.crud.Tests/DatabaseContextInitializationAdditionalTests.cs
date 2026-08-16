@@ -120,7 +120,32 @@ public class DatabaseContextInitializationAdditionalTests
         }
     }
 
+    [Fact]
+    public void Constructor_PrecomputesSessionSettings_WithApplicationName()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;Application Name=MyApp;",
+            DbMode = DbMode.Standard
+        };
+        using var ctx = new DatabaseContext(config, factory);
+
+        var rwField = typeof(DatabaseContext).GetField("_cachedReadWriteSessionSettings", BindingFlags.NonPublic | BindingFlags.Instance);
+        var roField = typeof(DatabaseContext).GetField("_cachedReadOnlySessionSettings", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(rwField);
+        Assert.NotNull(roField);
+
+        var rwVal = (string?)rwField.GetValue(ctx);
+        var roVal = (string?)roField.GetValue(ctx);
+
+        Assert.NotNull(rwVal);
+        Assert.NotNull(roVal);
+    }
+
     private sealed class ThrowingDataSourceFactory : DbProviderFactory
+
     {
         public override DbConnection CreateConnection()
         {

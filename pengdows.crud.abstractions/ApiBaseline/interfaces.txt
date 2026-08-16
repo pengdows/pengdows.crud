@@ -239,6 +239,7 @@ method pengdows.crud.dialects.ISqlDialect::MakeParameterName(string) -> string
 method pengdows.crud.dialects.ISqlDialect::ParameterMarkerAt(int) -> string
 method pengdows.crud.dialects.ISqlDialect::PrepareParameterValue(object, System.Data.DbType) -> object
 method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningClause(string) -> string
+method pengdows.crud.dialects.ISqlDialect::RenderInsertReturningPrefix(string) -> string
 method pengdows.crud.dialects.ISqlDialect::RenderMergeOnClause(string) -> string
 method pengdows.crud.dialects.ISqlDialect::ReplaceNeutralTokens(string) -> string
 method pengdows.crud.dialects.ISqlDialect::UpsertIncomingColumn(string) -> string
@@ -435,6 +436,7 @@ property pengdows.crud.dialects.ISqlDialect::SupportsUserDefinedTypes : bool { g
 property pengdows.crud.dialects.ISqlDialect::SupportsWindowFunctions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsXmlTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::UpsertIncomingAlias : string { get; }
+property pengdows.crud.dialects.ISqlDialect::WrapsInsertStatementForReturning : bool { get; }
 property pengdows.crud.infrastructure.ISafeAsyncDisposableBase::IsDisposed : bool { get; }
 property pengdows.crud.metrics.IMetricsOptions::EnableApproxPercentiles : bool { get; }
 property pengdows.crud.metrics.IMetricsOptions::LongConnectionThreshold : System.TimeSpan { get; }

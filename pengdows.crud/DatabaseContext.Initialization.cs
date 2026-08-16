@@ -360,8 +360,8 @@ public partial class DatabaseContext
             var roAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
                 ? null
                 : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
-            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false, rwAppName);
-            _cachedReadOnlySessionSettings  = _dialect.GetFinalSessionSettings(readOnly: true,  roAppName);
+            _cachedReadWriteSessionSettings = _dialect?.GetFinalSessionSettings(readOnly: false, rwAppName) ?? string.Empty;
+            _cachedReadOnlySessionSettings  = _dialect?.GetFinalSessionSettings(readOnly: true,  roAppName) ?? string.Empty;
 
             // Validate read-only connection if an explicit RO connection string was provided
             if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&

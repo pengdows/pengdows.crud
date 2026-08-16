@@ -1,49 +1,51 @@
-# Metrics & Observability
+# Telemetry & Performance Metrics
 
-`pengdows.crud` provides 36 real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
+`pengdows.crud` provides deep, built-in operational observability by tracking 36 granular metrics directly inside the execution pipeline.
 
-## Categories & Key Metrics
+---
 
-| Category | Metrics Tracked |
-|----------|-----------------|
-| **Connections** | Current/Peak, Opened/Closed, Hold Time, Avg Duration, long-lived count. |
-| **Commands** | Total Executed/Failed/TimedOut/Cancelled, Avg Duration, P95/P99 latency. |
-| **Rows** | Total rows read/affected across operations. |
-| **Prepared Statements** | Total cached/evicted statements. |
-| **Transactions** | Active/Max Concurrent, Committed/RolledBack, Avg/P95/P99 Duration. |
-| **Errors** | Deadlocks, SerializationFailures, ConstraintViolations. |
-| **Sessions** | Session init count, Avg session init time. |
-| **Pool Governor** | In-use/Peak Slots, Queued Requests, Timeouts, Cancellations. |
+## 1. Internal Metrics Architecture
 
-Metrics are split into **read vs write roles** via `DatabaseRoleMetrics Read` and `DatabaseRoleMetrics Write` on the `DatabaseMetrics` record.
+Metrics are captured with thread-safe atomic operations and coordinated by `DatabaseContext`:
+- **Connection Lifecycle**: Tracks connection open/close counts, lifetimes, and peak concurrent connections.
+- **PoolGovernor Telemetry**: Tracks reader/writer slot acquisition wait durations, slot hold times, contention spikes, and turnstile fairness stats.
+- **Command Timings**: Tracks execution latency across scalars, readers, and non-query statements.
+- **Transaction Metrics**: Tracks active transactions, commit/rollback counts, savepoint counts, and open transaction durations.
+- **Error Attribution**: Categorizes database failures (`DeadlockException`, `UniqueConstraintViolationException`, `ConcurrencyConflictException`, etc.) to isolate environmental vs application issues.
 
-## Event-Based Updates
+---
 
-Subscribe to `MetricsUpdated` to receive real-time updates without polling.
+## 2. Accessing Metrics Snapshots
+
+```csharp
+DatabaseMetrics snapshot = context.Metrics;
+
+long activeConns = snapshot.ActiveConnections;
+long peakConns   = snapshot.PeakConnections;
+long totalCmds   = snapshot.TotalCommandsExecuted;
+TimeSpan avgWait = snapshot.AveragePoolWaitDuration;
+```
+
+---
+
+## 3. Subscribing to Live Updates
+
+`DatabaseContext` raises `MetricsUpdated` whenever new metrics observations are recorded:
 
 ```csharp
 context.MetricsUpdated += (sender, metrics) =>
 {
-    _logger.LogInformation("Deadlocks: {n}, P99: {ms}ms",
-        metrics.ErrorDeadlocks, metrics.P99CommandMs);
+    logger.LogInformation("Active Connections: {Active}, Commands/sec: {Rate}",
+        metrics.ActiveConnections,
+        metrics.CommandsPerSecond);
 };
 ```
 
-**Rule:** Handlers must never re-enter `DatabaseContext` (avoid deadlocks).
+> [!WARNING]
+> **Event Handler Rule**: Handlers subscribed to `MetricsUpdated` must NEVER call back into the `DatabaseContext` (no queries, no transactions) and must be unsubscribed when the listener is disposed to avoid memory leaks on singleton contexts.
 
-## On-Demand Polling
+---
 
-Retrieve current snapshots at any time via the `Metrics` property.
+## 4. OpenTelemetry Integration
 
-```csharp
-var snapshot = context.Metrics;
-var openConns = context.NumberOfOpenConnections;
-var peakConns = context.PeakOpenConnections;
-```
-
-## Performance Hot Paths
-
-- **ValueTask:** Used on ISqlContainer execution methods to reduce GC allocations.
-- **Compiled Accessors:** Caches property setters/getters as delegates (~5.7x faster than reflection).
-- **SQL Template Caching:** Caches generated SQL templates for reuse.
-- **Bounded LRU Caches:** Prevents unbounded memory growth for plans and statements.
+`pengdows.crud` metrics can be exported directly to standard OpenTelemetry meters (`pengdows.crud`) for integration with Prometheus, Datadog, or Grafana dashboards.

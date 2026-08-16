@@ -449,3 +449,6 @@ The individual capabilities in pengdows.crud are not necessarily unique. What is
 that they share one model of database identity, execution intent, resource ownership, and
 lifetime. Or shorter: you can assemble the parts yourself; the hard part is making them agree
 on what is happening. pengdows.crud already does.
+
+For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./DAL_TAXONOMY_AND_COMPARISON.md).
+
