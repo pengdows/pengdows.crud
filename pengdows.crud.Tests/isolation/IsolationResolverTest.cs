@@ -151,6 +151,39 @@ public class IsolationResolverTests
     }
 
     [Fact]
+    public void Resolve_Db2_Mappings()
+    {
+        // Regression: IsolationResolver had NO case for SupportedDatabase.Db2 at all when Db2
+        // support was added — it silently fell through to the generic default, giving Db2 no
+        // ReadUncommitted (even though Db2's real "UR" isolation level is a standard, commonly
+        // used feature) and mapping FastWithRisks to the same ReadCommitted as SafeNonBlockingReads
+        // (a no-op profile). Db2's isolation levels map to standard ADO.NET IsolationLevel as:
+        // UR -> ReadUncommitted, CS (default) -> ReadCommitted, RS -> RepeatableRead, RR -> Serializable.
+        var resolver = new IsolationResolver(SupportedDatabase.Db2, false, false);
+
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadUncommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void GetSupportedLevels_Db2()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.Db2, false, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+        var expected = new[]
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        }.OrderBy(level => level).ToArray();
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
     public void GetSupportedLevels_DuckDb()
     {
         var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false, false);

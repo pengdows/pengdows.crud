@@ -74,6 +74,40 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
     }
 
+    [Fact]
+    public void CoerceMode_Db2_TreatedAsFullServerDatabase()
+    {
+        // Regression: Db2 was missing from the explicit "full server databases" case list,
+        // silently falling to the `default` branch. The RESULT was already correct (Standard),
+        // but the default branch's LogModeOverride message says "Unknown provider" — misleading
+        // for a fully-supported database. Db2 now shares the explicit case with the other
+        // client-server databases.
+        var context = CreateContext("Server=localhost;Database=test");
+        var coerce = GetInstanceMethod("CoerceMode");
+
+        var bestDb2 = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.Db2, false, false })!;
+        Assert.Equal(DbMode.Standard, bestDb2);
+
+        var explicitMode = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false, false })!;
+        Assert.Equal(DbMode.SingleWriter, explicitMode);
+    }
+
+    [Fact]
+    public void IsClientServerDatabase_Db2_ReturnsTrue()
+    {
+        // Regression: IsClientServerDatabase had no Db2 case, so a misconfigured
+        // SingleConnection/SingleWriter mode against Db2 silently got no diagnostic warning
+        // that every other client-server database gets.
+        var context = CreateContext("Server=localhost;Database=test");
+        var method = GetInstanceMethod("IsClientServerDatabase");
+
+        var result = (bool)method.Invoke(context, new object?[] { SupportedDatabase.Db2 })!;
+
+        Assert.True(result);
+    }
+
     private static DatabaseContext CreateContext(string connectionString)
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));

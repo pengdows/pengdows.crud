@@ -212,6 +212,17 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.ReadCommitted
                 // Note: Snowflake only supports READ COMMITTED. Other levels are not available.
             },
+            SupportedDatabase.Db2 => new HashSet<IsolationLevel>
+            {
+                // Db2's four isolation levels map directly to ADO.NET's IsolationLevel:
+                // UR (Uncommitted Read) -> ReadUncommitted, CS (Cursor Stability, the default)
+                // -> ReadCommitted, RS (Read Stability) -> RepeatableRead, RR (Repeatable Read)
+                // -> Serializable.
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -300,6 +311,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+            },
+            SupportedDatabase.Db2 => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // CS, Db2's default
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

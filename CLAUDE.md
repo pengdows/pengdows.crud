@@ -18,7 +18,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 No LINQ, no tracking, no surprises — explicit SQL control with database-agnostic features.
 
+## Architectural Classification: Why pengdows.crud is NOT in Standard DAL Categories
+
+Traditional classifications place data access tools on a 1D spectrum from **Heavy ORMs** (EF Core, Hibernate) to **Micro-ORMs** (Dapper, sqlx). `pengdows.crud` breaks this spectrum by occupying the **Explicit SQL + High Execution Governance** quadrant:
+
+1. **NOT an ORM / Unit of Work**: No change tracking, no entity state machines, no LINQ-to-SQL translation, no dirty checking.
+2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
+3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
+4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
+5. **Canonical Comparison Reference**: See [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./docs/DAL_TAXONOMY_AND_COMPARISON.md) for full comparisons across .NET, Java, Go, Rust, and Python.
+
 ## Project Overview
+
 
 pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8. The project consists of multiple components:
 
@@ -678,6 +689,18 @@ var results = await helper.LoadListAsync(sc);
 4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` (override `CreateTable()`; override `TestUpsertCapability()` etc. only when the database has a documented limitation)
 5. **Always-on registration** — add to the `configurations` list in `ParallelTestOrchestrator.GetTestConfigurations()` (not in an opt-in block)
 6. **Unit tests** — add dialect-level unit tests in `pengdows.crud.Tests/dialects/`
+
+### Easy-to-miss spots (found the hard way with Db2 — check these every time)
+
+These are places outside the dialect file itself that switch or pattern-match on `SupportedDatabase` explicitly. A new database silently falls through to a `default`/catch-all branch here instead of erroring, so nothing fails loudly — only manual review catches it.
+
+7. **`pengdows.crud/isolation/IsolationResolver.cs`** — add the new database's native isolation-level mapping in both `BuildSupportedIsolationLevels` and `BuildProfileMapping`. Missing this silently gives the database whatever `IsolationLevel` the `default` case falls back to, which is wrong for any database with non-standard isolation semantics.
+8. **`DatabaseContext.Initialization.cs` → `IsClientServerDatabase()`** — add the new database if it's a real client/server RDBMS (not embedded/in-process). Missing this suppresses the diagnostic warning that's supposed to fire when someone misconfigures `SingleConnection`/`SingleWriter` mode against it.
+9. **`DatabaseContext.Initialization.cs` → `CoerceMode()`** — add the new database to the explicit "full server databases" case list. If it falls to `default` instead, the *behavior* is often still correct (defaults to `Standard`), but the logged mode-override message will misleadingly say "unknown provider" for a fully-supported database.
+10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
+11. **Exception classification (two independent systems, both need entries)** — `IDbExceptionTranslator`/`DbExceptionTranslatorRegistry` (produces the typed `DatabaseException` subclass) and `SqlDialect.TryClassifyProviderException`/`IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` (produces `DbErrorCategory`) are maintained separately and can disagree if only one is updated.
+
+**Next candidate: SAP HANA.** Flag its isolation-level set (HANA's default is effectively snapshot-based, not lock-based like most of the above) and its pagination syntax (`LIMIT`/`OFFSET` are supported directly, unlike Db2 — don't assume it needs a Db2-style special case, but don't assume it matches SQL Server either) for explicit research rather than copying an existing dialect's assumptions.
 
 ### Opt-in exceptions (require env var)
 
