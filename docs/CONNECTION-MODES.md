@@ -85,9 +85,23 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 4. Session Settings & Read-Only
 
-- SessionSettingsPreamble is applied once per physical connection, at open.
-  - Not reapplied when a connection is reused from pool or pinned.
-- Session settings are enforced at physical connection open. Do not mutate session-scoped settings mid-connection when using pooling.
+- SessionSettingsPreamble is applied once per *logical* connection open (each `TrackedConnection`
+  wrapper's first `Open`/`OpenAsync`), not once per *physical* connection. Whether that means
+  "once ever" or "every checkout" depends entirely on the mode's wrapper lifetime:
+  - **Persistent modes** (KeepAlive's pinned connection, SingleConnection): one `TrackedConnection`
+    wrapper lives for the whole context lifetime, so the preamble genuinely executes exactly once.
+  - **Ephemeral modes** (Standard, SingleWriter): a fresh `TrackedConnection` wrapper is created
+    per operation/checkout, so the preamble **is reapplied on every single checkout** — even when
+    the underlying ADO.NET provider pool hands back an already-open physical connection. This is
+    deliberate, not a missed optimization: a connection previously used for an unrelated operation
+    could have drifted session state (e.g. a stale isolation override, or — for SQL Server —
+    `QUOTED_IDENTIFIER`, which this framework's own ANSI double-quote identifier quoting depends on
+    to parse at all), so trusting "the pool gave me a connection, it must still be clean" is a
+    correctness risk, not just a consistency one. Quantified cost tradeoff (SQL Server pays this
+    every operation under `DbMode.Standard`, PostgreSQL bakes settings into the data source's
+    startup options instead): see `docs/FUTURE_WORK.md`'s SQL Server session-settings entry.
+- Session settings are enforced at logical connection open (per the wrapper-lifetime rules above).
+  Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
   - `SqlContainer` pre-guards every write in code: it throws `NotSupportedException` for
     `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is

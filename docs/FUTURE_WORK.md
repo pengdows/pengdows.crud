@@ -209,9 +209,21 @@ What's left:
 - **Benchmark process issues** (misleading `Fails=0` reporting under contention, correctness
   sidecar files not surviving BenchmarkDotNet artifact cleanup) — lives in `benchmarks/`,
   separate from the core library, not touched by this review.
-- **Documentation lag** — connection-mode semantics (Standard/SingleWriter/SingleConnection/
-  KeepAlive), generated/tested capability tables, and the `crud`-naming/positioning problem (the
-  name undersells that this is also an execution-policy/runtime layer).
+- **Documentation lag** — partially resolved 2026-08-16:
+  - Connection-mode semantics: `docs/CONNECTION-MODES.md` §4 had a concrete factual error, found
+    while re-reading it against `TrackedConnection`'s actual behavior — it claimed session settings
+    are "not reapplied when a connection is reused from pool," which is backwards for `Standard`/
+    `SingleWriter` modes. `TrackedConnection._wasOpened` is a per-*wrapper*-instance flag, not a
+    per-*physical*-connection one; ephemeral modes create a fresh wrapper per checkout, so the
+    preamble genuinely reapplies every single time, even when the ADO.NET pool hands back an
+    already-open physical connection (deliberately — see this file's SQL Server session-settings
+    entry for why trusting pooled connection state is a correctness risk, not just a consistency
+    one). Only persistent modes (KeepAlive's pinned connection, SingleConnection) apply it exactly
+    once. Fixed the doc to state the per-mode rule explicitly instead of one blanket (wrong) claim.
+  - Generated/tested capability tables: already comprehensive — `docs/supported-databases.md` has
+    a 114-line enum/version-floor/feature-threshold matrix across all 16 databases. Nothing to add.
+  - `crud`-naming/positioning problem: still open — this is a product-positioning question
+    (`docs/PRODUCT_THESIS.md` territory), not a documentation-accuracy bug; no doc edit resolves it.
 - ~~**TiDB/MySql.Data prepare workaround** lacks a version number or upstream issue
   reference in its source comment~~ — fixed 2026-08-13: `TiDbDialect.cs` now names the
   tested `MySql.Data` version (9.3.0) and the exact mechanism (text-protocol backslash
