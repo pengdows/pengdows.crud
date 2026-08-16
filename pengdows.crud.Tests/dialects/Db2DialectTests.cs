@@ -44,6 +44,24 @@ public class Db2DialectTests
     }
 
     [Fact]
+    public void GetBaseSessionSettings_ResetsIsolationAndTemporalRegisters()
+    {
+        // Db2's CURRENT ISOLATION, CURRENT TEMPORAL SYSTEM_TIME, and CURRENT TEMPORAL
+        // BUSINESS_TIME special registers are session-level state that survives transaction
+        // rollback (their SET statements are not transaction-controlled) and can silently change
+        // the meaning of subsequent SQL for whichever caller borrows a pooled connection next:
+        // a non-null CURRENT ISOLATION overrides the package/dynamic-SQL isolation level, and a
+        // non-null temporal register implicitly rewrites SELECT/UPDATE/DELETE against temporal
+        // tables to an as-of-time view. Verified live against Db2 LUW 11.5.8.0 that all three
+        // (and the batched multi-statement form) execute successfully via ExecuteNonQuery.
+        var sql = CreateDialect().GetBaseSessionSettings();
+
+        Assert.Contains("SET CURRENT ISOLATION RESET", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SET CURRENT TEMPORAL SYSTEM_TIME = NULL", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SET CURRENT TEMPORAL BUSINESS_TIME = NULL", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void QuotePrefix_And_Suffix_AreAnsiDoubleQuotes()
     {
         var d = CreateDialect();

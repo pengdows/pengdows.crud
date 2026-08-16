@@ -95,6 +95,24 @@ internal sealed class Db2Dialect : SqlDialect
         return $"SAVEPOINT {WrapObjectName(name)} ON ROLLBACK RETAIN CURSORS";
     }
 
+    // These three special registers are session-level state that survives transaction rollback
+    // (their SET statements are not transaction-controlled) and can silently change the meaning
+    // of subsequent SQL for whichever caller borrows a pooled connection next:
+    //   - CURRENT ISOLATION: overrides the package/dynamic-SQL isolation level a prior borrower
+    //     may have set via SET CURRENT ISOLATION (independent of IsolationResolver's own
+    //     transaction-level mapping — this resets the connection-level override, not the mapping).
+    //   - CURRENT TEMPORAL SYSTEM_TIME / BUSINESS_TIME: a non-null value implicitly rewrites
+    //     SELECT (and, for BUSINESS_TIME, UPDATE/DELETE) against temporal tables to an as-of-time
+    //     view. Default is NULL; a prior borrower could have left either set.
+    // Verified live against Db2 LUW 11.5.8.0 that all three execute successfully via
+    // ExecuteNonQuery, both individually and batched as one semicolon-separated statement.
+    public override string GetBaseSessionSettings()
+    {
+        return "SET CURRENT ISOLATION RESET; " +
+               "SET CURRENT TEMPORAL SYSTEM_TIME = NULL; " +
+               "SET CURRENT TEMPORAL BUSINESS_TIME = NULL;";
+    }
+
     public override bool SupportsIdentityColumns => true;
     public override bool SupportsInsertReturning => true;
 
