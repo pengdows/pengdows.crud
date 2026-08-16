@@ -147,6 +147,21 @@ public class SqlDialectHelperTests
         Assert.Contains("AND ROWNUM = 1", sql, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void GetNaturalKeyLookupQuery_UsesFetchFirstForDb2()
+    {
+        // Regression: this fallback appended "LIMIT 1" for every non-SqlServer/non-Oracle
+        // database, including Db2 — which doesn't support LIMIT syntax at all (needs
+        // "FETCH FIRST n ROWS ONLY"). Currently dead code in practice (Db2Dialect.
+        // GetGeneratedKeyPlan() always returns Returning, so this path is never reached for
+        // Db2 today), but fixed defensively so it isn't a live trap if that ever changes.
+        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Db2, true);
+        var sql = dialect.GetNaturalKeyLookupQuery("items", "id", new[] { "sku" }, new[] { ":sku" });
+
+        Assert.Contains("FETCH FIRST 1 ROWS ONLY", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LIMIT 1", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string InvokeBuildSessionSettingsScript(
         IReadOnlyDictionary<string, string> expected,
         IReadOnlyDictionary<string, string> current,

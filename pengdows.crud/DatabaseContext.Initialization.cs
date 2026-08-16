@@ -1831,7 +1831,8 @@ public partial class DatabaseContext
                 or SupportedDatabase.MariaDb
                 or SupportedDatabase.Oracle
                 or SupportedDatabase.Firebird
-                or SupportedDatabase.SqlServer:
+                or SupportedDatabase.SqlServer
+                or SupportedDatabase.Db2:
                 {
                     // Full server databases: all modes are SAFE
                     // Most functional: Standard
@@ -1943,6 +1944,7 @@ public partial class DatabaseContext
             SupportedDatabase.MariaDb => true,
             SupportedDatabase.Oracle => true,
             SupportedDatabase.Firebird => true, // Usually client-server; embedded is rare
+            SupportedDatabase.Db2 => true,
             _ => false
         };
     }

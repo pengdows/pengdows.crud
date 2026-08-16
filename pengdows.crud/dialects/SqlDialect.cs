@@ -2561,10 +2561,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
             query += $" ORDER BY {WrapObjectName(idColumnName)} DESC";
         }
 
-        // Add LIMIT clause for non-SQL Server databases
+        // Add a "first row only" clause using whichever syntax the database understands.
         if (DatabaseType == SupportedDatabase.Oracle)
         {
             query += " AND ROWNUM = 1";
+        }
+        else if (DatabaseType == SupportedDatabase.Db2)
+        {
+            // Db2 has no LIMIT syntax; the ANSI equivalent is FETCH FIRST n ROWS ONLY.
+            query += " FETCH FIRST 1 ROWS ONLY";
         }
         else if (DatabaseType != SupportedDatabase.SqlServer)
         {
