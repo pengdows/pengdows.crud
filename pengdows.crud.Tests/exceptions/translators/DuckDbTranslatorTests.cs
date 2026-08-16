@@ -211,4 +211,20 @@ public class DuckDbTranslatorTests
 
         Assert.IsType<ConnectionException>(result);
     }
+
+    // ── Serialization conflict ────────────────────────────────────────────────
+
+    [Fact]
+    public void ConflictOnUpdateMessage_Maps_SerializationConflictException()
+    {
+        // Regression: confirmed against a real DuckDBException from two concurrent transactions
+        // conflicting on the same row — ErrorType reports "Transaction" (not "Serialization",
+        // despite that enum member's name), message is "TransactionContext Error: Conflict on
+        // update!". Message text is the reliable trigger here, not ErrorType.
+        var raw = new SqliteMessageDbException("TransactionContext Error: Conflict on update!");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
 }

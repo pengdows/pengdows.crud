@@ -40,6 +40,44 @@ public class DbExceptionTranslationSupportTests
         public ConstraintPropertyException(string msg) : base(msg) { }
     }
 
+    private sealed class WrappedDbException : System.Data.Common.DbException
+    {
+        public WrappedDbException(string message, Exception inner) : base(message, inner) { }
+    }
+
+    // -------------------------------------------------------------------------
+    // LooksLikeTimeout — must walk the InnerException chain
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void LooksLikeTimeout_InnerExceptionIsTimeoutException_ReturnsTrue()
+    {
+        // Regression: confirmed against a live Postgres container with CommandTimeout=1 —
+        // Npgsql wraps a real client-side read timeout as
+        // NpgsqlException("Exception while reading from stream") with InnerException
+        // TimeoutException("Timeout during reading attempt"). The outer message contains no
+        // "timeout" wording at all and the outer type name doesn't contain "Timeout" either, so
+        // none of LooksLikeTimeout's three existing checks fire on the outer exception alone —
+        // it must walk the InnerException chain.
+        var inner = new TimeoutException("Timeout during reading attempt");
+        var outer = new WrappedDbException("Exception while reading from stream", inner);
+
+        var result = DbExceptionTranslationSupport.LooksLikeTimeout(outer);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void LooksLikeTimeout_NoTimeoutAnywhereInChain_ReturnsFalse()
+    {
+        var inner = new InvalidOperationException("some unrelated failure");
+        var outer = new WrappedDbException("wrapping failure", inner);
+
+        var result = DbExceptionTranslationSupport.LooksLikeTimeout(outer);
+
+        Assert.False(result);
+    }
+
     // -------------------------------------------------------------------------
     // TryGetErrorCode — short Number property (line 60)
     // -------------------------------------------------------------------------

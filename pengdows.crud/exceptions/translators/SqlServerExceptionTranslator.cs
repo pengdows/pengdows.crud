@@ -55,6 +55,12 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
             1205 => new DeadlockException(
                 $"{operationKind} deadlocked on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),
+            // 3960: snapshot isolation transaction aborted due to update conflict — another
+            // transaction modified/deleted the row since this transaction's snapshot was taken.
+            // Only reachable under SNAPSHOT or READ_COMMITTED_SNAPSHOT isolation.
+            3960 => new SerializationConflictException(
+                $"{operationKind} encountered a serialization conflict on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
             _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
         };
     }

@@ -170,4 +170,36 @@ public class FirebirdTranslatorTests
 
         Assert.IsType<ConnectionException>(result);
     }
+
+    // ── Serialization/deadlock conflict ──────────────────────────────────────
+
+    [Fact]
+    public void UpdateConflict_SqlState40001_MapsTo_SerializationConflictException()
+    {
+        // Regression: confirmed against a live container that Firebird CANNOT distinguish a true
+        // lock-cycle deadlock from an optimistic update conflict — a reversed-lock-order
+        // two-connection scenario produced the IDENTICAL signature to a snapshot-conflict
+        // scenario: SQLSTATE 40001, ISC code 335544336, message "deadlock\nupdate conflicts with
+        // concurrent update\nconcurrent transaction number is N". Classified as
+        // SerializationConflictException (not DeadlockException) since there is no reliable way
+        // to tell the two apart, matching the same ambiguous-40001 precedent used for Db2.
+        var raw = new SqlStateDbException("40001",
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 21");
+
+        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
+
+    [Fact]
+    public void UpdateConflict_MessageOnly_NoSqlState_MapsTo_SerializationConflictException()
+    {
+        // Message-based fallback for drivers/wrappers that don't populate SQLSTATE.
+        var raw = new SqliteMessageDbException(
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 9");
+
+        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
 }

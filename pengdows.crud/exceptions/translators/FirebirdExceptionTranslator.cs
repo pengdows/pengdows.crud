@@ -6,14 +6,24 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates Firebird-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: connection (SQLSTATE class 08) → unique/PK constraint → FK → NOT NULL →
-/// CHECK → timeout → fallback.
+/// Detection order: connection (SQLSTATE class 08) → serialization/deadlock conflict (SQLSTATE
+/// 40001) → unique/PK constraint → FK → NOT NULL → CHECK → timeout → fallback.
 /// Message-based detection is used for constraint violations because Firebird wraps ISC codes
 /// inside FbException.Errors; extracting them via reflection is fragile across provider
 /// versions. The violation message text is stable across Firebird 3–5. Connection failures are
 /// SQLSTATE-based instead: FbException exposes a real (all-caps) "SQLSTATE" property — confirmed
 /// against a live container, a closed-port connect attempt reports SQLSTATE "08006" (ANSI
 /// connection-exception class) with message "Unable to complete network request to host ...".
+/// <para>
+/// Serialization/deadlock: confirmed against a live container that Firebird CANNOT distinguish
+/// a true lock-cycle deadlock from an optimistic update conflict — BOTH a reversed-lock-order
+/// two-connection scenario and a snapshot-read-then-conflicting-write scenario produced the
+/// IDENTICAL signature: SQLSTATE "40001", ISC error code 335544336, and message
+/// "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is N".
+/// Since there is no reliable signal to tell them apart, both are classified as
+/// SerializationConflictException here — matching the same "SQLSTATE 40001 can't disambiguate"
+/// precedent already used for Db2 (see Db2ExceptionTranslator/SqlDialect.TryClassifyProviderException).
+/// </para>
 /// </remarks>
 internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
 {
@@ -29,6 +39,14 @@ internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
         if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SerializationConflictException(
+                $"{operationKind} encountered a serialization conflict on {database}: {message}",
+                database, exception, errorCode: errorCode);
         }
 
         // Check constraint violations BEFORE LooksLikeTimeout: Firebird embeds the failed

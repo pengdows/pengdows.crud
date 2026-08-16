@@ -65,10 +65,23 @@ internal static partial class DbExceptionTranslationSupport
 
     public static bool LooksLikeTimeout(Exception exception)
     {
-        return exception is TimeoutException ||
-               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-               (exception is DbException &&
-                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase));
+        // Some providers (e.g. Npgsql on a client-side CommandTimeout) wrap the real
+        // TimeoutException inside an outer DbException whose own type name and message contain
+        // no "timeout" wording at all (e.g. NpgsqlException("Exception while reading from
+        // stream") wrapping TimeoutException("Timeout during reading attempt")) — walk the
+        // InnerException chain rather than inspecting only the outermost exception.
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            if (current is TimeoutException ||
+                current.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+                (current is DbException &&
+                 current.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static int? TryGetErrorCode(Exception exception)

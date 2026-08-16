@@ -35,6 +35,18 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
+        // Confirmed against a real concurrent-write conflict: two connections each open a
+        // transaction, both read row X, one commits an update, then the other's update on the
+        // same row throws with message "TransactionContext Error: Conflict on update!" and
+        // ErrorType == Transaction (NOT the "Serialization" enum member the name might suggest —
+        // verified empirically rather than assumed).
+        if (message.Contains("Conflict on update", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SerializationConflictException(
+                $"{operationKind} encountered a serialization conflict on {database}: {message}",
+                database, exception, errorCode: errorCode);
+        }
+
         // SQLSTATE-first: DuckDB uses standard ANSI SQL class-23 codes (same as PostgreSQL)
         if (!string.IsNullOrWhiteSpace(sqlState))
         {

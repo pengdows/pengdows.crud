@@ -151,5 +151,4 @@ public class TransientErrorTests : DatabaseTestBase
         // directly via regex.
         return Regex.Replace(connectionString, @"(?i)PORT=\d+", "PORT=1");
     }
-
 }

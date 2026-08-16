@@ -145,4 +145,25 @@ public class SqlServerTranslatorTests
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
+
+    // ── Serialization conflict ────────────────────────────────────────────────
+
+    [Fact]
+    public void SnapshotUpdateConflict_ErrorCode3960_MapsTo_SerializationConflictException()
+    {
+        // SQL Server error 3960: snapshot isolation transaction aborted due to update conflict —
+        // only reachable under SNAPSHOT/READ_COMMITTED_SNAPSHOT isolation. SqlDialect's
+        // TryClassifyProviderException already classified this correctly; the translator
+        // (which produces the actual typed exception callers catch) did not.
+        var raw = new NumberedDbException(3960,
+            "Snapshot isolation transaction aborted due to update conflict. You cannot use " +
+            "snapshot isolation to access table 'dbo.Jobs' directly or indirectly in database " +
+            "'AppDb' to update, delete, or insert the row that has been modified or deleted by " +
+            "another transaction. Retry the transaction or change the isolation level.");
+
+        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.True(result.IsTransient);
+    }
 }

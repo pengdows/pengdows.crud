@@ -191,6 +191,35 @@ public class DuckDbConstraintViolationTests
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
 
+    // ── Serialization conflict ───────────────────────────────────────────────
+
+    [Fact]
+    public void AnalyzeException_DuckDB_ConflictOnUpdateMessage_ClassifiesAsSerializationFailure()
+    {
+        // Regression: confirmed against a real DuckDBException from two concurrent transactions
+        // conflicting on the same row — ErrorType reports "Transaction" (not "Serialization",
+        // despite that enum member's name), message is "TransactionContext Error: Conflict on
+        // update!". Message text is the reliable trigger here, not ErrorType.
+        using var ctx = CreateContext();
+        var ex = new PlainDbException("TransactionContext Error: Conflict on update!");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.SerializationFailure, info.Category);
+    }
+
+    [Fact]
+    public void AnalyzeException_Firebird_UpdateConflictMessage_ClassifiesAsSerializationFailure()
+    {
+        // Regression: confirmed against a live container that Firebird cannot distinguish a true
+        // lock-cycle deadlock from an optimistic update conflict — both produce this identical
+        // signature. Classified as SerializationFailure (not Deadlock), matching Db2's precedent
+        // for its own ambiguous SQLSTATE 40001.
+        using var ctx = CreateFirebirdContext();
+        var ex = new SqlStateDbException("40001",
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 21");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.SerializationFailure, info.Category);
+    }
+
     // ── Helper types ─────────────────────────────────────────────────────────
 
     private sealed class PlainDbException : DbException
