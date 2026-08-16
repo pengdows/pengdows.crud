@@ -182,9 +182,22 @@ What's left:
   Oracle providers, etc.) is not.
 - **More mutation/fuzz/state-machine testing**, particularly around parameter rendering,
   connection lifecycle, transactions, cancellation, and mapping/coercion.
-- **SingleWriter fairness torture test.** The turnstile activation bug is fixed and covered by a
-  unit test (`SingleWriterTurnstileActivationTests.cs`), but there's no long-running stress test
-  proving writers don't starve under continuous concurrent readers against a real SQLite file.
+- ~~**SingleWriter fairness torture test.**~~ — fixed 2026-08-16:
+  `SingleWriterFairnessTortureTests.cs` (`pengdows.crud.Tests`) proves writers don't starve under
+  sustained concurrent readers against a real, file-backed SQLite `DatabaseContext` in
+  `DbMode.SingleWriter`. 16 continuously-looping readers (each holding an `ITrackedReader` open
+  briefly per iteration, a fresh admission attempt every loop) run for a 2-second contention
+  window alongside 40 concurrent writers; asserts every write lands (no silent starvation), no
+  writer's latency approaches the governor's acquire timeout, and readers keep making real
+  progress throughout. This is deliberately an integration-level liveness net, not a re-proof of
+  the gating mechanism itself — that's already covered deterministically at the bare
+  `PoolGovernor` level (`PoolGovernorFairnessTests.WriterWithTurnstile_BlocksNewReaders` asserts a
+  gated reader literally throws `OperationCanceledException` until the writer releases). An
+  earlier attempt to make this test discriminate fairness on/off via wall-clock latency comparison
+  was abandoned after empirical A/B testing showed the workload was too light (sub-millisecond
+  local SQLite ops) to produce a measurable difference either way at realistic scale — a real
+  finding, not a shortcut: precise timing-based fairness proof isn't a reliable lever here: the
+  unit-level deterministic test already owns that job.
 - **Broader transaction concurrency stress testing.** The specific reader-lock-lifetime gap is
   now covered (`TransactionReaderLockLifetimeTests.cs`), but general multi-threaded torture
   testing of the no-op/real/reusable locker architecture doesn't exist yet.
