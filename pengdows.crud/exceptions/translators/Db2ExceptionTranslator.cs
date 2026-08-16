@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -21,27 +20,29 @@ namespace pengdows.crud.exceptions.translators;
 ///   40001 / -911, -913  deadlock or lock timeout (SQLSTATE 40001 cannot by itself
 ///     distinguish the two on Db2 — treated as SerializationConflictException here,
 ///     matching the classification used in SqlDialect.TryClassifyProviderException).
+///   08xxx  connection exception class (e.g. 08001 SQLCODE -30081 "communication error") —
+///     confirmed against a live ibmcom/db2 container: a closed-port connect attempt reports
+///     "ERROR [08001] [IBM] SQL30081N ... SQLSTATE=08001".
 /// </remarks>
 internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
 {
     // IBM.Data.Db2's DB2Exception does not populate the inherited DbException.SqlState (nor its
     // own SQLState) property, and ErrorCode reports the generic COR_E_EXCEPTION HResult, not the
     // actual SQLCODE — confirmed against a live ibmcom/db2 container. The real SQLSTATE is only
-    // available embedded in the message text, in one of two formats depending on whether the
-    // error originates server-side or in the CLI driver itself: server-side errors (constraint
-    // violations, etc.) lead with "ERROR [23502] [IBM][DB2/LINUXX8664] SQL0407N ...", while
-    // client-side driver errors (e.g. CLI0114E) trail with "... SQLSTATE=22008".
-    private static readonly Regex s_sqlStateFromMessage = new(
-        @"(?:SQLSTATE[=:]\s*|ERROR \[)(\d{5})",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
+    // available embedded in the message text (leading "ERROR [nnnnn]" or trailing
+    // "SQLSTATE=nnnnn" — DbExceptionTranslationSupport.TryGetSqlState handles both forms).
     public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
     {
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
-        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception) ?? TryGetSqlStateFromMessage(exception);
+        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
         var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
+
+        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
+        {
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
 
         if (string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) || code == 803)
         {
@@ -86,11 +87,5 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
-    }
-
-    private static string? TryGetSqlStateFromMessage(Exception exception)
-    {
-        var match = s_sqlStateFromMessage.Match(exception.Message);
-        return match.Success ? match.Groups[1].Value : null;
     }
 }

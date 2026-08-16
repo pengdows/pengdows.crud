@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
@@ -118,6 +119,42 @@ public class DbExceptionTranslatorRegistryTests
         var registry = new DbExceptionTranslatorRegistry();
 
         Assert.IsType<Db2ExceptionTranslator>(registry.Get(SupportedDatabase.Db2));
+    }
+
+    // Databases that intentionally have no dedicated translator and fall back to the generic
+    // FallbackExceptionTranslator. Adding a SupportedDatabase value here is a REVIEWABLE decision,
+    // not a silent default — see Registry_HasExplicitRoutingDecision_ForEveryDatabase below.
+    //   - Unknown: not a real database, never a live connection target.
+    //   - Snowflake: does not enforce constraints (EnforcesConstraints = false), so there is no
+    //     provider-specific SQLSTATE/error-code mapping worth maintaining.
+    private static readonly HashSet<SupportedDatabase> IntentionalFallbackDatabases = new()
+    {
+        SupportedDatabase.Unknown,
+        SupportedDatabase.Snowflake
+    };
+
+    [Fact]
+    public void Registry_HasExplicitRoutingDecision_ForEveryDatabase()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        foreach (var database in Enum.GetValues<SupportedDatabase>())
+        {
+            var translator = registry.Get(database);
+
+            if (IntentionalFallbackDatabases.Contains(database))
+            {
+                Assert.IsType<FallbackExceptionTranslator>(translator);
+            }
+            else
+            {
+                Assert.False(translator is FallbackExceptionTranslator,
+                    $"{database} routes to FallbackExceptionTranslator but is not on the " +
+                    $"documented intentional-fallback allowlist. Either add a dedicated " +
+                    $"IDbExceptionTranslator for {database} in DbExceptionTranslatorRegistry, " +
+                    $"or add it to {nameof(IntentionalFallbackDatabases)} with a documented reason.");
+            }
+        }
     }
 
     [Fact]

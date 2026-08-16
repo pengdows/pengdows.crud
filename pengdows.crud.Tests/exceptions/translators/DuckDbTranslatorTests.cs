@@ -195,4 +195,20 @@ public class DuckDbTranslatorTests
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.IsNotType<CommandTimeoutException>(result);
     }
+
+    // ── Connection failure (file-open failure — DuckDB is embedded, no TCP concept) ─────────
+
+    [Fact]
+    public void ConnectionFailure_CannotOpenFileMessage_Maps_ConnectionException()
+    {
+        // Regression: confirmed against a real DuckDBException opening a nonexistent database
+        // path. DuckDBException.ErrorType reports the generic "Invalid" value here (NOT a more
+        // specific "Io"/"Connection" enum member), so message text is the only reliable trigger.
+        var raw = new SqliteMessageDbException(
+            "DuckDBOpen failed: IO Error: Cannot open file \"/nonexistent_dir/db.duckdb\": No such file or directory");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }

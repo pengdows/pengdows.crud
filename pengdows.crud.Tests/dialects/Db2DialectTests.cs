@@ -203,6 +203,17 @@ public class Db2DialectTests
     }
 
     [Fact]
+    public void IsForeignKeyViolation_Db2_SqlState23504_ReturnsTrue()
+    {
+        // Regression: confirmed against a live ibmcom/db2 container — deleting a parent row
+        // blocked by a RESTRICT foreign key reports SQLSTATE 23504, NOT 23503 (which is only
+        // used for insert/update FK violations).
+        using var ctx = CreateContext();
+        var ex = new SqlStateDbException("23504", "Parent row cannot be deleted");
+        Assert.True(ctx.GetDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
     public void IsNotNullViolation_Db2_SqlState23502_ReturnsTrue()
     {
         using var ctx = CreateContext();
@@ -250,6 +261,31 @@ public class Db2DialectTests
         var ex = new PlainMessageDbException(
             "ERROR [23505] [IBM][DB2/LINUXX8664] SQL0803N  duplicate key.  SQLSTATE=23505");
         Assert.True(ctx.GetDialect().IsUniqueViolation(ex));
+    }
+
+    [Fact]
+    public void IsNotNullViolation_Db2_SqlStateOnlyInMessageText_LeadingBracketFormOnly_ReturnsTrue()
+    {
+        // Server-side errors use ONLY the leading "ERROR [nnnnn]" form — no trailing
+        // "SQLSTATE=nnnnn" fragment, unlike client-side CLI driver errors. Confirmed against a
+        // live ibmcom/db2 container: a real NOT NULL violation's message is exactly this shape.
+        using var ctx = CreateContext();
+        var ex = new PlainMessageDbException(
+            "ERROR [23502] [IBM][DB2/LINUXX8664] SQL0407N  Assignment of a NULL value to a " +
+            "NOT NULL column \"TBSPACEID=2, TABLEID=4, COLNO=1\" is not allowed.");
+        Assert.True(ctx.GetDialect().IsNotNullViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_Db2_SqlStateOnlyInMessageText_TrailingEqualsFormOnly_ReturnsTrue()
+    {
+        // Client-side CLI driver errors use ONLY the trailing "SQLSTATE=nnnnn" form — this
+        // message deliberately has no leading "ERROR [nnnnn]" bracket, proving the trailing-form
+        // regex branch works standalone rather than only when both forms co-occur.
+        using var ctx = CreateContext();
+        var ex = new PlainMessageDbException(
+            "CLI0125E  Some wrapping driver message with no bracket form. SQLSTATE=23503");
+        Assert.True(ctx.GetDialect().IsForeignKeyViolation(ex));
     }
 
     private sealed class SqlStateDbException : DbException

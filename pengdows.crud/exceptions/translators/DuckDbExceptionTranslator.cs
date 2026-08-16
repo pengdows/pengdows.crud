@@ -6,12 +6,20 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates DuckDB-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: SQLSTATE (23505/23503/23502/23514/25006) → message patterns
-/// (constraint violations, then read-only) → timeout → fallback.
+/// Detection order: connection (message-based) → SQLSTATE (23505/23503/23502/23514/25006) →
+/// message patterns (constraint violations, then read-only) → timeout → fallback.
 /// SQLSTATE and message patterns are checked first because DuckDB error messages include
 /// the violating row values, which may contain user data such as "timeout" and would
 /// otherwise trigger a false-positive timeout classification.
 /// Message-pattern fallback covers drivers that do not populate SqlState.
+/// DuckDB is an embedded, file-based engine with no TCP connection concept — its closest
+/// analog to a "connection failure" is a file-open failure (bad path, permissions, corrupt
+/// file), matching how SqliteExceptionTranslator treats SQLITE_CANTOPEN/SQLITE_NOTADB.
+/// Confirmed against a real DuckDBException: opening a nonexistent path reports
+/// DuckDBException.ErrorType == Invalid (NOT a more specific "Io"/"Connection" value — the
+/// driver's ErrorType enum is not a reliable signal for this specific failure mode), with
+/// message "DuckDBOpen failed: IO Error: Cannot open file "..." ...". Message text is the
+/// only reliable trigger here.
 /// </remarks>
 internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
 {
@@ -20,6 +28,12 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var message = exception.Message;
+
+        if (message.Contains("Cannot open file", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Cannot open database", StringComparison.OrdinalIgnoreCase))
+        {
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
 
         // SQLSTATE-first: DuckDB uses standard ANSI SQL class-23 codes (same as PostgreSQL)
         if (!string.IsNullOrWhiteSpace(sqlState))

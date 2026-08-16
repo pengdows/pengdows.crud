@@ -34,6 +34,20 @@ public class Db2TranslatorTests
     }
 
     [Fact]
+    public void SqlState23504_MapsTo_ForeignKeyViolationException()
+    {
+        // Regression: confirmed against a live ibmcom/db2 container — deleting a parent row
+        // blocked by a RESTRICT foreign key reports SQLSTATE 23504, NOT 23503 (which is only
+        // used for insert/update FK violations). Both are still SQLCODE -532.
+        var raw = new SqlStateDbException("23504",
+            "a parent row cannot be deleted because the relationship restricts the deletion");
+
+        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Delete);
+
+        Assert.IsType<ForeignKeyViolationException>(result);
+    }
+
+    [Fact]
     public void SqlState23502_MapsTo_NotNullViolationException()
     {
         var raw = new SqlStateDbException("23502", "null value violates not-null constraint");
@@ -62,6 +76,31 @@ public class Db2TranslatorTests
         var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
+    }
+
+    [Fact]
+    public void SqlState08001_MapsTo_ConnectionException()
+    {
+        // Regression: confirmed against a live IBM.Data.Db2 connect attempt to a closed TCP
+        // port — message "ERROR [08001] [IBM] SQL30081N ... SQLSTATE=08001" (ANSI
+        // connection-exception class 08).
+        var raw = new SqlStateDbException("08001", "A communication error has been detected.");
+
+        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
+
+    [Fact]
+    public void SqlStateOnlyInMessageText_08001_MapsTo_ConnectionException()
+    {
+        var raw = new PlainMessageDbException(
+            "ERROR [08001] [IBM] SQL30081N  A communication error has been detected. " +
+            "Communication protocol being used: \"TCP/IP\".  SQLSTATE=08001");
+
+        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
     }
 
     [Fact]
@@ -114,6 +153,37 @@ public class Db2TranslatorTests
         var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void SqlStateOnlyInMessageText_LeadingBracketFormOnly_MapsTo_NotNullViolationException()
+    {
+        // Server-side errors (constraint violations, etc.) use ONLY the leading "ERROR [nnnnn]"
+        // form — there is no trailing "SQLSTATE=nnnnn" fragment, unlike client-side CLI driver
+        // errors (e.g. CLI0114E). Confirmed against a live ibmcom/db2 container: a real NOT NULL
+        // violation's message is exactly this shape, with nothing after "is not allowed."
+        var raw = new PlainMessageDbException(
+            "ERROR [23502] [IBM][DB2/LINUXX8664] SQL0407N  Assignment of a NULL value to a " +
+            "NOT NULL column \"TBSPACEID=2, TABLEID=4, COLNO=1\" is not allowed.");
+
+        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+
+        Assert.IsType<NotNullViolationException>(result);
+    }
+
+    [Fact]
+    public void SqlStateOnlyInMessageText_TrailingEqualsFormOnly_MapsTo_ForeignKeyViolationException()
+    {
+        // Client-side CLI driver errors (e.g. CLI0114E) use ONLY the trailing "SQLSTATE=nnnnn"
+        // form — no leading "ERROR [nnnnn]" bracket. This message deliberately has NO bracket
+        // form at all, so a correct classification here proves the trailing-form regex branch
+        // works standalone, not just when both forms happen to co-occur in the same message.
+        var raw = new PlainMessageDbException(
+            "CLI0125E  Some wrapping driver message with no bracket form. SQLSTATE=23503");
+
+        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+
+        Assert.IsType<ForeignKeyViolationException>(result);
     }
 
     private sealed class AllCapsSqlStateDbException : DbException

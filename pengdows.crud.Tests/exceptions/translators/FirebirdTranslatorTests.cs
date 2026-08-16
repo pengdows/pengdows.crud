@@ -142,4 +142,32 @@ public class FirebirdTranslatorTests
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
     }
+
+    // ── Connection failure ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ConnectionFailure_SqlState08006_Maps_ConnectionException()
+    {
+        // Regression: confirmed against a live FbConnection.OpenAsync() attempt to a closed TCP
+        // port — FbException exposes SQLSTATE "08006" (ANSI connection-exception class) with
+        // message "Unable to complete network request to host \"localhost\".".
+        var raw = new SqlStateDbException("08006", "Unable to complete network request to host \"localhost\".");
+
+        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
+
+    [Fact]
+    public void ConnectionFailure_TimeoutWordingInMessage_StillClassifiesAsConnectionNotTimeout()
+    {
+        // A blackholed/unreachable host (as opposed to a closed port) could produce an OS-level
+        // "connection timed out" message; SQLSTATE class 08 must still win over the timeout
+        // heuristic since this is fundamentally a connection failure, not a slow query.
+        var raw = new SqlStateDbException("08006", "Unable to complete network request: connection timed out.");
+
+        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }

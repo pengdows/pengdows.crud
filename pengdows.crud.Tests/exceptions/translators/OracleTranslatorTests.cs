@@ -141,4 +141,20 @@ public class OracleTranslatorTests
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
+
+    // ── Connection failure ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ConnectionFailure_ORA50201_Maps_ConnectionException()
+    {
+        // Regression: confirmed against a live ODP.NET connect attempt to a closed TCP port —
+        // OracleException.Number == 50201, message "ORA-50201: Oracle Communication: Failed to
+        // connect to server or failed to parse connect string".
+        var raw = new NumberedDbException(50201,
+            "ORA-50201: Oracle Communication: Failed to connect to server or failed to parse connect string");
+
+        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }

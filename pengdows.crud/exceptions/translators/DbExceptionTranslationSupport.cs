@@ -119,13 +119,16 @@ internal static partial class DbExceptionTranslationSupport
             }
         }
 
-        // Last-resort fallback: some providers embed "SQLSTATE=23505" directly in the
-        // exception message rather than exposing it as a queryable property.
+        // Last-resort fallback: some providers embed the SQLSTATE directly in the exception
+        // message rather than exposing it as a queryable property, in one of two formats:
+        // trailing "... SQLSTATE=23505" (e.g. client-side CLI driver errors), or leading
+        // "ERROR [23505] ..." (e.g. IBM.Data.Db2's server-side error messages).
         var match = SqlStateFromMessageRegex().Match(exception.Message ?? string.Empty);
         return match.Success ? match.Groups["state"].Value : null;
     }
 
-    [GeneratedRegex("SQLSTATE[=:]\\s*(?<state>\\d{5})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("(?:SQLSTATE[=:]\\s*|ERROR \\[)(?<state>\\d{5})",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SqlStateFromMessageRegex();
 
     public static string? TryGetConstraintName(Exception exception)

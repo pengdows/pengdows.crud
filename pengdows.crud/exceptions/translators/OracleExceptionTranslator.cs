@@ -18,6 +18,8 @@ namespace pengdows.crud.exceptions.translators;
 ///   ORA-02292  integrity constraint violated - child record found (FK delete)
 ///   ORA-00060  deadlock detected
 ///   ORA-08177  can't serialize access for this transaction
+///   ORA-50201  Oracle Communication: failed to connect to server (confirmed against a live
+///     ODP.NET connect attempt to a closed port — reports OracleException.Number == 50201).
 /// </remarks>
 internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
 {
@@ -30,6 +32,8 @@ internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
 
         switch (errorCode)
         {
+            case 50201:
+                return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
             case 1:
                 return new UniqueConstraintViolationException(
                     $"{operationKind} violated a unique constraint on {database}: {message}",
