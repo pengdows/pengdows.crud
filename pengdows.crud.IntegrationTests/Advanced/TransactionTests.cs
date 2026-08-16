@@ -407,6 +407,52 @@ public class TransactionTests : DatabaseTestBase
         });
     }
 
+    [SkippableFact]
+    public async Task Transaction_IsolationProfile_StrictConsistency_Works()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 1300);
+
+            // Act - Use IsolationProfile instead of IsolationLevel
+            await using var transaction = context.BeginTransaction(
+                IsolationProfile.StrictConsistency,
+                ExecutionType.Write);
+
+            var helper = CreateTableGateway(context);
+            await helper.CreateAsync(entity, transaction);
+            transaction.Commit();
+
+            // Assert
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+        });
+    }
+
+    [SkippableFact]
+    public async Task Transaction_IsolationProfile_FastWithRisks_Works()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 1400);
+
+            // Act - Use IsolationProfile instead of IsolationLevel
+            await using var transaction = context.BeginTransaction(
+                IsolationProfile.FastWithRisks,
+                ExecutionType.Write);
+
+            var helper = CreateTableGateway(context);
+            await helper.CreateAsync(entity, transaction);
+            transaction.Commit();
+
+            // Assert
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+        });
+    }
+
     private TableGateway<TestTable, long> CreateTableGateway(IDatabaseContext context)
     {
         return _gatewayCache.GetValue(context, ctx =>

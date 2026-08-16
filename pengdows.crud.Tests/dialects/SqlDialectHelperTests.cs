@@ -152,9 +152,10 @@ public class SqlDialectHelperTests
     {
         // Regression: this fallback appended "LIMIT 1" for every non-SqlServer/non-Oracle
         // database, including Db2 — which doesn't support LIMIT syntax at all (needs
-        // "FETCH FIRST n ROWS ONLY"). Currently dead code in practice (Db2Dialect.
-        // GetGeneratedKeyPlan() always returns Returning, so this path is never reached for
-        // Db2 today), but fixed defensively so it isn't a live trap if that ever changes.
+        // "FETCH FIRST n ROWS ONLY"). No internal caller currently reaches this path for Db2
+        // (Db2Dialect.GetGeneratedKeyPlan() always returns Returning), but GetNaturalKeyLookupQuery
+        // is a public virtual member of ISqlDialect — any external consumer calling it directly
+        // would already hit the bug today, not just in some hypothetical future.
         var dialect = CreateNaturalKeyDialect(SupportedDatabase.Db2, true);
         var sql = dialect.GetNaturalKeyLookupQuery("items", "id", new[] { "sku" }, new[] { ":sku" });
 
