@@ -18,6 +18,12 @@ abandoning the ergonomics (and, for pooling, the performance) those APIs provide
 **This package gates the same way, at the point EF Core actually opens connections — without
 requiring you to hand-manage connection objects.**
 
+## Compatibility
+
+- .NET 8: EF Core 8.0.11 through EF Core 9.x
+- .NET 10: EF Core 10.0.8 through EF Core 10.x
+
+
 ## How It Works
 
 `StormGateConnectionInterceptor` implements `DbConnectionInterceptor`, EF Core's official
