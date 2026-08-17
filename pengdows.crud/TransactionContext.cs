@@ -99,6 +99,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     private int _committed; // 0 = no, 1 = yes
     private int _rolledBack; // 0 = no, 1 = yes
     private int _completedState;
+    private readonly ILockerAsync _singleConnectionTransactionGate;
 
     /// <inheritdoc/>
     public Guid RootId { get; }
@@ -141,7 +142,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDbTransaction transaction,
         IsolationLevel isolationLevel,
         ExecutionType executionType,
-        ILogger<TransactionContext>? logger)
+        ILogger<TransactionContext>? logger,
+        ILockerAsync singleConnectionTransactionGate)
     {
         _logger = logger ?? new NullLogger<TransactionContext>();
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -164,6 +166,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         _userLock = new SemaphoreSlim(1, 1);
         _reusableLocker = new ReusableAsyncLocker(_userLock);
         _completionLock = new SemaphoreSlim(1, 1);
+
+        // Already acquired (or NoOpAsyncLocker.Instance if not applicable) by the static creation
+        // path before this constructor ran — this instance owns releasing it on completion.
+        _singleConnectionTransactionGate = singleConnectionTransactionGate;
     }
 
     private TransactionContext(
@@ -173,11 +179,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         ILogger<TransactionContext>? logger = null)
         : this(context,
             CreateConnectionAndTransaction(context, ref isolationLevel, ref executionType,
-                out var transaction),
+                out var transaction, out var singleConnectionTransactionGate),
             transaction,
             isolationLevel,
             executionType!.Value,
-            logger)
+            logger,
+            singleConnectionTransactionGate)
     {
         if (_isReadOnly)
         {
@@ -204,7 +211,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDatabaseContext context,
         ref IsolationLevel isolationLevel,
         ref ExecutionType? executionType,
-        out IDbTransaction transaction)
+        out IDbTransaction transaction,
+        out ILockerAsync singleConnectionTransactionGate)
     {
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
             ResolveCreationParameters(context, isolationLevel, executionType);
@@ -217,6 +225,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
         OpenConnectionWithOptionalLock(context, connection);
 
+        var gate = AcquireSingleConnectionTransactionGate(context);
+
         // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
         // but preserve the resolved isolation level for reporting and logic.
         try
@@ -227,13 +237,48 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         catch (Exception ex)
         {
+            gate.Dispose();
             context.CloseAndDisposeConnection(connection);
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
                 context.Product, ex);
         }
 
+        singleConnectionTransactionGate = gate;
         return connection;
+    }
+
+    /// <summary>
+    /// DbMode.SingleConnection shares one physical connection across the entire context. Acquires
+    /// the dedicated single-connection transaction gate (see
+    /// <c>DatabaseContext.GetSingleConnectionTransactionGate()</c>) so this transaction has
+    /// exclusive use of the connection until it completes — every other caller (another
+    /// transaction attempt, or an ordinary non-transactional command) correctly waits its turn.
+    /// Bounded by <c>ModeLockTimeout</c>; a no-op for every other mode.
+    /// </summary>
+    private static ILockerAsync AcquireSingleConnectionTransactionGate(IDatabaseContext context)
+    {
+        if (context is not DatabaseContext dbContext)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        var gate = dbContext.GetSingleConnectionTransactionGate();
+        gate.Lock();
+        return gate;
+    }
+
+    private static async ValueTask<ILockerAsync> AcquireSingleConnectionTransactionGateAsync(
+        IDatabaseContext context, CancellationToken cancellationToken)
+    {
+        if (context is not DatabaseContext dbContext)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        var gate = dbContext.GetSingleConnectionTransactionGate();
+        await gate.LockAsync(cancellationToken).ConfigureAwait(false);
+        return gate;
     }
 
     private static void OpenConnectionWithOptionalLock(IDatabaseContext context, ITrackedConnection connection)
@@ -721,6 +766,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             TryResetReadOnlySession();
             _context.CloseAndDisposeConnection(_connection);
+            _singleConnectionTransactionGate.Dispose();
             CompleteTransactionMetrics();
         }
     }
@@ -757,6 +803,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             await TryResetReadOnlySessionAsync().ConfigureAwait(false);
             await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+            await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
             CompleteTransactionMetrics();
         }
     }
@@ -939,6 +986,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
         await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
 
+        var gate = await AcquireSingleConnectionTransactionGateAsync(context, cancellationToken).ConfigureAwait(false);
+
         IDbTransaction transaction;
         try
         {
@@ -948,13 +997,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         catch (Exception ex)
         {
+            await gate.DisposeAsync().ConfigureAwait(false);
             await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
                 context.Product, ex);
         }
 
-        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger);
+        var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger, gate);
 
         if (tx.IsReadOnlyConnection)
         {

@@ -108,6 +108,28 @@ public partial class DatabaseContext
         return _connectionOpenLocker ?? (ILockerAsync)new RealAsyncLocker(_connectionOpenGate);
     }
 
+    /// <summary>
+    /// DbMode.SingleConnection shares one physical connection across the entire context. This gate
+    /// serializes exclusive use of that connection for a transaction's entire span (Begin through
+    /// Commit/Rollback/Dispose) against every other caller — another transaction attempt, or an
+    /// ordinary non-transactional command. Bounded by <see cref="ModeLockTimeout"/> (the same
+    /// timeout already used elsewhere for mode-related lock waits), so a caller blocks but does not
+    /// wait forever; exceeding it throws <see cref="pengdows.crud.exceptions.ModeContentionException"/>.
+    /// Separate from the connection's own per-command lock (<c>TrackedConnection.GetLock()</c>) so a
+    /// transaction holding this gate never deadlocks against its own commands, which still acquire
+    /// that other lock as normal.
+    /// </summary>
+    internal ILockerAsync GetSingleConnectionTransactionGate()
+    {
+        ThrowIfDisposed();
+        if (_singleConnectionTransactionGate == null)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        return new RealAsyncLocker(_singleConnectionTransactionGate, _modeContentionStats, ConnectionMode, _modeLockTimeout);
+    }
+
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
         bool isShared = false)
     {

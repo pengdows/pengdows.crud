@@ -125,6 +125,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private ITrackedConnection? _connection = null;
     private SemaphoreSlim? _connectionOpenGate;
     private ReusableAsyncLocker? _connectionOpenLocker;
+    // Only allocated for DbMode.SingleConnection. A transaction holds this for its whole
+    // lifetime; ordinary non-transactional operations acquire it briefly per-command. See
+    // GetSingleConnectionTransactionGate() for details.
+    private SemaphoreSlim? _singleConnectionTransactionGate;
 
     private long _connectionCount;
     private string _connectionString = string.Empty;

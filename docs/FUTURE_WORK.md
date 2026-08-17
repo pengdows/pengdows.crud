@@ -198,9 +198,55 @@ What's left:
   local SQLite ops) to produce a measurable difference either way at realistic scale — a real
   finding, not a shortcut: precise timing-based fairness proof isn't a reliable lever here: the
   unit-level deterministic test already owns that job.
-- **Broader transaction concurrency stress testing.** The specific reader-lock-lifetime gap is
-  now covered (`TransactionReaderLockLifetimeTests.cs`), but general multi-threaded torture
-  testing of the no-op/real/reusable locker architecture doesn't exist yet.
+- ~~**Broader transaction concurrency stress testing.**~~ — fixed 2026-08-16:
+  `SingleConnectionConcurrencyTortureTests.cs` runs mixed concurrent reads, writes, and
+  transactions (8 of each) against a real, file-backed SQLite `DatabaseContext` in
+  `DbMode.SingleConnection` for a sustained window, asserting no lost/corrupted writes and no
+  deadlock (bounded overall timeout).
+
+  This test found two real, previously-unknown bugs on first runs, both now fixed:
+  1. Concurrent `BeginTransaction()` calls could race directly on the provider's own transaction
+     state (confirmed live: a raw `Microsoft.Data.Sqlite` "nested transactions" exception) — no
+     lock was held around the `BeginTransaction()` call itself, for any provider.
+  2. More seriously: an ordinary (non-transactional) **write** executing while another task's
+     transaction was still open on the same shared connection could be silently absorbed into
+     that transaction's uncommitted scope and rolled back with it — confirmed via a real
+     268-vs-252 row-count mismatch under concurrent load. Reads are not at risk the same way (no
+     side effect to lose), and — critically — an existing, intentional test
+     (`TransactionStreamingTests.LoadStreamAsync_TransactionContext_PassedExplicitly_UsesCorrectConnection`)
+     deliberately reads via the plain context while a transaction is open on the same connection,
+     so any fix had to leave reads unblocked.
+
+  **Fix:** `DbMode.SingleConnection` is already fully serialized by design (every operation, once
+  it reaches the connection, is exclusive) — a transaction is now treated as a longer-held
+  instance of that same serialization rather than a special case. A dedicated gate
+  (`DatabaseContext.GetSingleConnectionTransactionGate()`, `RealAsyncLocker`-backed, reusing the
+  existing `ModeLockTimeout` — default 30s — as its bound) is acquired by `BeginTransaction()`/
+  `BeginTransactionAsync()` for the transaction's whole lifetime, and briefly by ordinary
+  non-transactional **writes** only (`SqlContainer.ExecuteNonQueryAsync`) before executing. It is
+  a separate semaphore from the connection's existing per-command lock (`TrackedConnection
+  .GetLock()`), so a transaction holding it for its whole span never deadlocks against its own
+  commands, which still acquire that other lock as normal per-command.
+
+  **A genuine deadlock was found and fixed during this work, not just a design risk:**
+  `ExecuteNonQueryAsync` and `ExecuteReaderAsyncInternal` originally acquired the new gate and the
+  existing connection lock in *opposite orders* — a textbook circular-wait deadlock between a
+  concurrent reader and writer, reproduced as a consistent (not intermittent) full-suite timeout.
+  Resolved by removing the gate from the read path entirely (see reasoning above) rather than
+  just reordering, since reads don't need it at all.
+
+  Also found and fixed: calling the *synchronous* `BeginTransaction()` from inside an async
+  `Task.Run` continuation under real contention risked starving the thread pool of the threads
+  needed to run the continuations that would release the same gate — fixed by using
+  `BeginTransactionAsync()` in the torture test's transaction workload, matching how async
+  application code should call it under load in this mode.
+
+  Covered by `SingleConnectionConcurrentTransactionGuardTests.cs` (block-then-succeed once the
+  holder completes, timeout-after-`ModeLockTimeout` via `ModeContentionException`, and the
+  specific ordinary-write-blocks-behind-active-transaction case) and the torture test itself.
+  Full suite green across multiple repeated runs (6335 tests) after each fix, including the
+  pre-existing `TransactionStreamingTests` suite that exercises the intentional
+  read-while-transaction-is-open pattern this fix had to preserve.
 
 ### P3
 
