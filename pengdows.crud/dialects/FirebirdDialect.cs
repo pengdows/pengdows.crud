@@ -107,6 +107,15 @@ internal class FirebirdDialect : SqlDialect
     public FirebirdGuidStorageMode GuidStorageMode { get; init; } = FirebirdGuidStorageMode.Binary;
 
     /// <summary>
+    /// Folds <see cref="GuidStorageMode"/> into the base <see cref="SqlDialect.CacheFingerprint"/>.
+    /// The base fingerprint is only <c>DatabaseType|ParsedVersion</c>, which is not enough to
+    /// distinguish two Firebird tenants on the identical server version but different
+    /// <see cref="GuidStorageMode"/> — a real per-instance setting that changes GUID wire format.
+    /// Any future cache keyed by fingerprint instead of dialect instance must not collide those.
+    /// </summary>
+    public override string CacheFingerprint => $"{base.CacheFingerprint}|{GuidStorageMode}";
+
+    /// <summary>
     /// Routes Guid serialization through the centralized <see cref="SqlDialect.GuidFormat"/> path,
     /// computed from <see cref="GuidStorageMode"/> so a single property controls both the
     /// dialect-level wire format and the legacy public API.

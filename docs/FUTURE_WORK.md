@@ -173,8 +173,6 @@ What's left:
   total reader lease as three distinct timings.
 - **Metric cardinality policy for dynamic multi-tenancy.** No deliberate policy yet for
   context/tenant-derived tags (e.g. `db.name`) that could become high-cardinality.
-- **No multi-result-set support.** `TrackedReader.NextResult()` throws `NotSupportedException`
-  by design; a real feature gap relative to some competitors, not a correctness bug.
 - **Stored-procedure multi-result/OUT parameter handling** is less complete than the best
   specialized competitors.
 - **Provider driver-version compatibility matrix.** Database-engine coverage is strong; testing
@@ -369,16 +367,25 @@ cleanly in two:
      surface can verify "same driver package" even in principle.
 
   These four caches are **still identity-keyed** (`ConditionalWeakTable<ISqlDialect, ...>`,
-  unchanged from the first fix) rather than fingerprint-keyed, deliberately: extending the
-  fingerprint to cover them safely needs (a) folding `GuidStorageMode` into
-  `FirebirdDialect.CacheFingerprint` (mechanically straightforward, not yet done since nothing
-  exercises it while these caches stay instance-keyed) and (b) a deliberate decision about the
-  `DbProviderFactory`-identity gap — either accept it as a documented assumption ("tenants sharing
-  a fingerprint are assumed to use the same driver package for that engine," realistic in
-  practice — nobody mixes two different ADO.NET providers for one engine across tenants in the
-  same app) or add a way to source a stable factory identity onto `ISqlDialect`. Pick this up with
-  its own dedicated TDD pass (a Firebird `GuidStorageMode`-collision red test, mirroring
-  `TableGatewayMultiTenantDialectCacheTests`) before converting these four.
+  unchanged from the first fix) rather than fingerprint-keyed — no live bug exists today, since
+  distinct dialect instances never collide regardless of `GuidStorageMode` while they stay
+  identity-keyed. Converting them to fingerprint-keying is not planned/decided.
+
+  **Precondition (a) satisfied 2026-08-17, as groundwork only, ahead of any decision to
+  convert:** `FirebirdDialect.CacheFingerprint` now folds in `GuidStorageMode`
+  (`$"{base.CacheFingerprint}|{GuidStorageMode}"`), so two Firebird tenants on the identical
+  server version but different `GuidStorageMode` no longer collapse onto one fingerprint if/when
+  something does start keying on it. Covered by `FirebirdCacheFingerprintTests.cs`
+  (`pengdows.crud.Tests/dialects/`): differing `GuidStorageMode` values produce different
+  fingerprints; matching values still share one. Full suite green (6337 tests) after the change.
+
+  Precondition (b) — the `DbProviderFactory`-identity gap — remains open and undecided: either
+  accept it as a documented assumption ("tenants sharing a fingerprint are assumed to use the same
+  driver package for that engine," realistic in practice — nobody mixes two different ADO.NET
+  providers for one engine across tenants in the same app) or add a way to source a stable factory
+  identity onto `ISqlDialect`. Still needed before actually converting `_containersByDialect`/
+  `_insertBinders`/`_upsertBinders`/`_updateBinders` to fingerprint-keying — which itself remains
+  undecided/not scheduled.
 
 ---
 
