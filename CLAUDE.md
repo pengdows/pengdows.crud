@@ -451,11 +451,13 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 | Mode | Value | Use Case |
 |------|-------|----------|
-| `Standard` | 0 | **Production default** — pool per operation |
+| `Standard` | 0 | **Production-supported** — pool per operation, client-server databases |
 | `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
+| `SingleWriter` | 2 | **Production-supported** — file-based SQLite/DuckDB, serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
+
+**Standard and SingleWriter are both production-supported modes** — Standard for client-server databases (SQL Server, PostgreSQL, MySQL, Oracle, CockroachDB, etc.), SingleWriter for file-based SQLite/DuckDB. SingleWriter's turnstile-governed write serialization is purpose-built to prevent the file-locking errors those engines are otherwise prone to under concurrent writers, while still allowing fully concurrent reads — a level of write-contention governance most comparable libraries don't provide at all. `KeepAlive` and `SingleConnection` remain scoped to their documented embedded/testing use cases, not general production workloads.
 
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.

@@ -37,6 +37,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
 - Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
+- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). The turnstile-governed write serialization is purpose-built to eliminate the file-locking errors those engines are otherwise prone to under concurrent writers, while reads still execute fully concurrently on ephemeral connections — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 
 ### Best
 
