@@ -208,6 +208,104 @@ public class Uuid7OptimizedTests
         Assert.Equal(1, updated.Counter);
     }
 
+    [Fact]
+    public void NewUuid7_ThrowsWhenCounterExhausted_AndFailFastOnBurstIsTrue()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.SingleInstance, FailFastOnBurst: true));
+
+        Uuid7Optimized.NewUuid7();
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => Uuid7Optimized.NewUuid7());
+            Assert.Contains("FailFastOnBurst", ex.Message);
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+        }
+    }
+
+    [Fact]
+    public void NewUuid7RfcBytes_ThrowsWhenCounterExhausted_AndFailFastOnBurstIsTrue()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.SingleInstance, FailFastOnBurst: true));
+
+        Span<byte> warmup = stackalloc byte[16];
+        Uuid7Optimized.NewUuid7RfcBytes(warmup);
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs);
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                Span<byte> local = stackalloc byte[16];
+                Uuid7Optimized.NewUuid7RfcBytes(local);
+            });
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+        }
+    }
+
+    // Regression guard: the default (FailFastOnBurst=false) must keep blocking, not throwing.
+    [Fact]
+    public void NewUuid7_StillBlocksOnExhaustion_WhenFailFastOnBurstIsFalse()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
+
+        Uuid7Optimized.NewUuid7();
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs);
+
+            var ex = Record.Exception(() => Uuid7Optimized.NewUuid7());
+            Assert.Null(ex);
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+        }
+    }
+
     #region Configuration Tests (TDD - Tests Written First)
 
     [Fact]
