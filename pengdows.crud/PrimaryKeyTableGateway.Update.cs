@@ -55,6 +55,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
             await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            if (rowsAffected != 0)
+            {
+                WriteBackIncrementedVersion(objectToUpdate);
+            }
+
             return rowsAffected;
         }
         catch
@@ -77,6 +82,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            if (rowsAffected != 0)
+            {
+                WriteBackIncrementedVersion(objectToUpdate);
+            }
+
             return rowsAffected;
         }
         catch

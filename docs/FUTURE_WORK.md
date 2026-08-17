@@ -494,9 +494,18 @@ in here.
 freshness on *success*:** even a fully successful `UpdateAsync` never writes the new `[Version]`
 value back into the caller's entity today. This splits into two cases with very different
 fixability:
-- **App-managed integer/counter version** (`SET version = version + 1`) — pengdows computed that
-  increment itself and knows the exact new value with certainty. Free fix (no round trip): write
-  it back to the entity on success. Not yet done.
+- ~~**App-managed integer/counter version**~~ — fixed 2026-08-16: `BaseTableGateway.Version.cs`'s
+  new `WriteBackIncrementedVersion(entity)` computes `current + 1` and writes it back after a
+  successful `UpdateAsync` (`rowsAffected > 0`), for both `TableGateway<TEntity,TRowID>` and
+  `PrimaryKeyTableGateway<TEntity>`. No round trip needed: the entity's version property is never
+  mutated while building the UPDATE (the WHERE clause reads it as-is for the optimistic-concurrency
+  check), so a successful write's WHERE-match guarantees the new value is deterministically
+  "current + 1". Skipped for `byte[]` rowversion/timestamp columns (see below — no free fix exists
+  for those). Covered by `TableGatewayVersionWriteBackTests.cs` (success write-back for both
+  gateway types, and a conflict case proving a *failed* write does not fabricate a new value) plus
+  a new byte[]-exclusion regression test in `TableGatewayByteArrayVersionTests.cs`. Full suite:
+  6328 tests, one pre-existing flaky test unrelated to this change
+  (`SqlContainerActivityContextIdTests`, confirmed by rerunning it alone).
 - **DB-managed `rowversion`/`timestamp`** (`byte[]`, already correctly excluded from the SET
   clause — see `TableGateway.Sql.cs`'s "DB handles increment" comment) — the new value is
   generated server-side. There's no free fix; closing this needs either `OUTPUT`/`RETURNING`

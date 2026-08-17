@@ -50,4 +50,22 @@ public class TableGatewayByteArrayVersionTests : SqlLiteContextTestBase
         var sql = sc.Query.ToString();
         Assert.DoesNotContain("Version = Version + 1", sql);
     }
+
+    [Fact]
+    public async Task UpdateAsync_WithByteArrayVersion_SucceedsAndDoesNotMutateVersion()
+    {
+        // Regression: WriteBackIncrementedVersion runs unconditionally after every successful
+        // UpdateAsync now — must be a no-op for byte[] rowversion/timestamp columns (DB-generated,
+        // not a fixed "+1"), not crash or fabricate a value.
+        var helper = new TableGateway<ByteVerEntity, int>(Context, AuditValueResolver);
+        var original = new byte[] { 1, 2, 3 };
+        var e = new ByteVerEntity { Name = "x", Version = original };
+        await helper.CreateAsync(e, Context);
+        e.Name = "y";
+
+        var rowsAffected = await helper.UpdateAsync(e, false, Context);
+
+        Assert.Equal(1, rowsAffected);
+        Assert.Same(original, e.Version);
+    }
 }

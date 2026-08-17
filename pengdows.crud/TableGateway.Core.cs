@@ -1392,6 +1392,10 @@ public partial class TableGateway<TEntity, TRowID> :
                         ctx.Product);
                 }
             }
+            else
+            {
+                WriteBackIncrementedVersion(objectToUpdate);
+            }
 
             return rowsAffected;
         }
