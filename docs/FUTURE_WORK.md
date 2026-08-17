@@ -126,47 +126,25 @@ What's left:
 
 ### P2
 
-- **SQL Server pays a live session-settings SET round trip on every operation under
-  `DbMode.Standard`, unlike PostgreSQL.** Quantified by
-  `benchmarks/CrudBenchmarks/results/sqlserver-equal-footing-run-2026-08-13.md`: under
-  `DbMode.Standard` (a fresh ephemeral connection per operation), pengdows is consistently
-  ~1.4-2.0x slower than Dapper (and, unusually, slower than EF Core too) against SQL
-  Server, while PostgreSQL and SQLite show parity or better. Root cause traced end to end:
-  `TrackedConnection`'s session-settings callback is gated by a per-*wrapper-instance* flag
-  (`_wasOpened`), not a per-*physical-connection* flag, so in `DbMode.Standard` every
-  logical checkout re-triggers it — regardless of whether the ADO.NET pool handed back a
-  warm connection. PostgreSQL avoids this entirely via
-  `PostgreSqlDialect.PrepareConnectionStringForDataSource`, which bakes the same settings
-  into the Npgsql `NpgsqlDataSource`'s startup `Options` as GUC defaults that `RESET ALL`
-  restores automatically on pool return — `SqlServerDialect` has no equivalent override,
-  so the bake-and-skip path (`_rwSettingsBakedIntoDataSource`) never applies to it.
+- **SQL Server UUIDv7 index-locality strategy.** RFC 9562 UUIDv7 places its Unix-millisecond
+  timestamp in the most-significant 48 bits in network byte order, which makes canonical UUIDv7
+  values naturally time ordered for providers that compare UUID bytes in that order. SQL Server's
+  `uniqueidentifier` ordering is different: its comparison semantics do not compare the UUID bit
+  pattern directly and give the final six bytes special significance. Therefore the existing,
+  correct default — bind a `Guid` as `DbType.Guid` — preserves canonical UUIDv7 identity and
+  portability but does not provide UUIDv7's expected clustered-index locality on SQL Server.
 
-  **Important scoping, confirmed by a follow-up benchmark**
-  (`sqlserver-hydration-hotpath-run-2026-08-13.md`): the 1.4-2.0x figure is close to a
-  worst case for amortization — many small, independent, ephemeral-connection operations,
-  each re-paying the full tax. With the session-init cost paid once instead of per
-  operation (`DbMode.SingleConnection`, mirroring `HydrationHotPathBenchmarks.cs`'s
-  SQLite normalization), the gap drops to 1.18x at 100 rows and **1.025x at 5,000 rows** —
-  pengdows's actual row-materialization work is close to Dapper's; the large multiplier is
-  specifically a property of `DbMode.Standard` under a workload of small, independent
-  operations, not a general statement about the SQL Server execution path. Whether an
-  equivalent bake-in is even possible for `DbMode.Standard` on SQL Server (TDS/`SqlClient`
-  has no direct analog to Postgres's arbitrary `Options=-c key=value` mechanism) is a
-  narrower, lower-priority question than "SQL Server is broadly slower" made it look.
+  Do **not** add an implicit `SqlServerDialect` byte conversion. A reversible byte permutation
+  would preserve collision resistance, but the raw stored value would no longer be a canonical
+  UUIDv7 and would be misleading to direct SQL consumers, replication/export tools, and tenants
+  using another provider. It also cannot be selected unconditionally in generated tenant-shared
+  code because a tenant may use PostgreSQL, Db2, SQLite, or another provider.
 
-  **Decision: not pursuing a default-behavior change here.** Always-reapply exists because
-  a connection from the pool — including one pengdows itself used a moment ago for a
-  different, unrelated operation — can arrive with drifted session state, and the cost of
-  getting this wrong is correctness, not just consistency: `QUOTED_IDENTIFIER ON` is the
-  specific setting that makes the framework's own ANSI double-quote identifier quoting
-  (`WrapObjectName`) parse at all — e.g. `SELECT "col 1" FROM "name space"."table name"`.
-  Without it, that's not subtly different behavior, it's broken SQL (the quotes are read as
-  a string literal, not an identifier delimiter). A few hundred microseconds against that
-  failure mode is not a trade worth taking as the default. If a lower-cost path is ever
-  built (batching was rejected for making SQL Server logs unreadable — see the design
-  conversation this entry is drawn from), it should be an explicit, off-by-default opt-in
-  requiring the caller to assert exclusive ownership of the connection string's pool, never
-  a change to the default correctness-first behavior.
+  Revisit only as an explicit, SQL-Server-only storage strategy, resolved from the tenant's
+  `DatabaseContext`/dialect rather than remembered by application code. It must define migration
+  rules and prohibit mixing canonical and transformed values in one column. First establish a
+  live SQL Server regression test demonstrating the actual ordering behavior; then, if the
+  feature is justified, add fakeDb ordering emulation and provider-specific integration tests.
 - **Reader latency doesn't distinguish database time from consumer time.** `ExecuteReaderAsync`
   metrics treat the command as complete once the provider returns the reader; time spent by the
   caller consuming rows isn't separated out. Proposed: execute→first-row, first-row→dispose, and
