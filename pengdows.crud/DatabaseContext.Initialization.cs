@@ -322,6 +322,20 @@ public partial class DatabaseContext
                 _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
             }
 
+            if (ConnectionMode == DbMode.SingleConnection)
+            {
+                // DbMode.SingleConnection shares one physical connection across the entire
+                // context. A transaction acquires this gate for its whole lifetime (Begin through
+                // Commit/Rollback/Dispose) so every other operation — another transaction attempt,
+                // or an ordinary non-transactional command — correctly waits its turn instead of
+                // racing directly against the connection or silently executing while a transaction
+                // is mid-flight (risking absorption into that transaction's uncommitted scope).
+                // Separate from the connection's own per-command RealAsyncLocker (TrackedConnection
+                // .GetLock()) so a transaction holding this gate never deadlocks against its own
+                // commands, which still acquire that other lock as normal.
+                _singleConnectionTransactionGate = new SemaphoreSlim(1, 1);
+            }
+
             // Apply pooling defaults now that we have the final mode and dialect
             var builder = GetFactoryConnectionStringBuilder(_connectionString);
             _connectionString = ConnectionPoolingConfiguration.ApplyPoolingDefaults(

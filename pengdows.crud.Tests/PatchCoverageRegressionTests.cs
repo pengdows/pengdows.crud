@@ -11,6 +11,7 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
+using pengdows.crud.threading;
 using pengdows.crud.types;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -301,7 +302,8 @@ public sealed class PatchCoverageRegressionTests
                 typeof(IDbTransaction),
                 typeof(IsolationLevel),
                 typeof(ExecutionType),
-                typeof(ILogger<TransactionContext>)
+                typeof(ILogger<TransactionContext>),
+                typeof(ILockerAsync)
             },
             null);
         Assert.NotNull(ctor);
@@ -316,7 +318,8 @@ public sealed class PatchCoverageRegressionTests
             transaction,
             IsolationLevel.ReadCommitted,
             ExecutionType.Write,
-            NullLogger<TransactionContext>.Instance
+            NullLogger<TransactionContext>.Instance,
+            NoOpAsyncLocker.Instance
         });
     }
 
