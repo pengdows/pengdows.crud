@@ -476,16 +476,18 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
             public override void Prepare() => Inner.Prepare();
 
+            public override Task PrepareAsync(CancellationToken cancellationToken = default) =>
+                Inner.PrepareAsync(cancellationToken);
+
             protected override DbParameter CreateDbParameter() => Inner.CreateParameter();
 
             protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) =>
                 Inner.ExecuteReader(behavior);
 
-            // See ExecuteNonQueryAsync override above — same thread-pool-blocking fallback risk.
             protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
                 CommandBehavior behavior,
-                CancellationToken cancellationToken) =>
-                Inner.ExecuteReaderAsync(behavior, cancellationToken);
+                CancellationToken cancellationToken) => Inner.ExecuteReaderAsync(behavior, cancellationToken);
+
 
             protected override void Dispose(bool disposing)
             {
@@ -500,6 +502,17 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                 }
 
                 base.Dispose(disposing);
+            }
+
+            public override async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                {
+                    return;
+                }
+
+                await Inner.DisposeAsync().ConfigureAwait(false);
+                await base.DisposeAsync().ConfigureAwait(false);
             }
         }
 

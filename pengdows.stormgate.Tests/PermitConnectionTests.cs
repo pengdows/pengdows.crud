@@ -538,6 +538,143 @@ public class PermitConnectionTests
     }
 
     [Fact]
+    public async Task CreatedCommand_DisposeAsync_UsesInnerAsyncDisposalOnlyOnce()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var mockCmd = new Mock<DbCommand>();
+        var disposeAsyncCount = 0;
+        mockCmd.Setup(c => c.DisposeAsync())
+            .Callback(() => disposeAsyncCount++)
+            .Returns(ValueTask.CompletedTask);
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(mockCmd.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var conn = await gate.OpenAsync();
+        var cmd = conn.CreateCommand();
+
+        await cmd.DisposeAsync();
+        await cmd.DisposeAsync();
+
+        Assert.Equal(1, disposeAsyncCount);
+    }
+
+    [Fact]
+    public async Task CreatedCommand_MapsItsTransactionToTheInnerTransaction()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var innerTransaction = new Mock<DbTransaction>();
+        var innerCommand = new Mock<DbCommand>();
+        _mockInner.Protected()
+            .Setup<DbTransaction>("BeginDbTransaction", IsolationLevel.Unspecified)
+            .Returns(innerTransaction.Object);
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(innerCommand.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var conn = await gate.OpenAsync();
+        await using var tx = conn.BeginTransaction();
+        await using var cmd = conn.CreateCommand();
+
+        cmd.Transaction = tx;
+
+        innerCommand.VerifySet(c => c.Transaction = innerTransaction.Object, Times.Once);
+        Assert.Same(tx, cmd.Transaction);
+    }
+
+    [Fact]
+    public async Task CreatedCommand_RejectsConnectionOrTransactionFromAnotherSource()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(new Mock<DbCommand>().Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var conn = await gate.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+
+        Assert.Throws<InvalidOperationException>(() => cmd.Connection = new Mock<DbConnection>().Object);
+        Assert.Throws<InvalidOperationException>(() => cmd.Transaction = new Mock<DbTransaction>().Object);
+    }
+
+    [Fact]
+    public async Task CreatedCommand_ForwardsSynchronousMembersAndConfiguration()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var innerCommand = new Mock<DbCommand>();
+        var parameter = new Mock<DbParameter>().Object;
+        var parameters = new Mock<DbParameterCollection>().Object;
+        var reader = new Mock<DbDataReader>().Object;
+        innerCommand.SetupGet(c => c.CommandText).Returns("select 1");
+        innerCommand.SetupGet(c => c.CommandTimeout).Returns(30);
+        innerCommand.SetupGet(c => c.CommandType).Returns(CommandType.Text);
+        innerCommand.SetupGet(c => c.DesignTimeVisible).Returns(false);
+        innerCommand.SetupGet(c => c.UpdatedRowSource).Returns(UpdateRowSource.None);
+        innerCommand.Protected().SetupGet<DbParameterCollection>("DbParameterCollection").Returns(parameters);
+        innerCommand.Protected().Setup<DbParameter>("CreateDbParameter").Returns(parameter);
+        innerCommand.Setup(c => c.ExecuteNonQuery()).Returns(4);
+        innerCommand.Setup(c => c.ExecuteScalar()).Returns("answer");
+        innerCommand.Protected().Setup<DbDataReader>("ExecuteDbDataReader", CommandBehavior.SchemaOnly).Returns(reader);
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(innerCommand.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var conn = await gate.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+
+        Assert.Equal("select 1", cmd.CommandText);
+        cmd.CommandText = "select 2";
+        Assert.Equal(30, cmd.CommandTimeout);
+        cmd.CommandTimeout = 31;
+        Assert.Equal(CommandType.Text, cmd.CommandType);
+        cmd.CommandType = CommandType.StoredProcedure;
+        Assert.False(cmd.DesignTimeVisible);
+        cmd.DesignTimeVisible = true;
+        Assert.Equal(UpdateRowSource.None, cmd.UpdatedRowSource);
+        cmd.UpdatedRowSource = UpdateRowSource.OutputParameters;
+        Assert.Same(conn, cmd.Connection);
+        cmd.Connection = conn;
+        Assert.Same(parameters, cmd.Parameters);
+        Assert.Same(parameter, cmd.CreateParameter());
+        cmd.Cancel();
+        cmd.Prepare();
+        Assert.Equal(4, cmd.ExecuteNonQuery());
+        Assert.Equal("answer", cmd.ExecuteScalar());
+        Assert.Same(reader, cmd.ExecuteReader(CommandBehavior.SchemaOnly));
+
+        innerCommand.VerifySet(c => c.CommandText = "select 2", Times.Once);
+        innerCommand.VerifySet(c => c.CommandTimeout = 31, Times.Once);
+        innerCommand.VerifySet(c => c.CommandType = CommandType.StoredProcedure, Times.Once);
+        innerCommand.VerifySet(c => c.DesignTimeVisible = true, Times.Once);
+        innerCommand.VerifySet(c => c.UpdatedRowSource = UpdateRowSource.OutputParameters, Times.Once);
+        innerCommand.Verify(c => c.Cancel(), Times.Once);
+        innerCommand.Verify(c => c.Prepare(), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreatedTransaction_ForwardsSynchronousAndAsynchronousMembers()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var innerTransaction = new Mock<DbTransaction>();
+        innerTransaction.SetupGet(t => t.IsolationLevel).Returns(IsolationLevel.Serializable);
+        _mockInner.Protected()
+            .Setup<DbTransaction>("BeginDbTransaction", IsolationLevel.Unspecified)
+            .Returns(innerTransaction.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var conn = await gate.OpenAsync();
+        await using var tx = conn.BeginTransaction();
+
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
+        Assert.Same(conn, tx.Connection);
+        tx.Commit();
+        tx.Rollback();
+        await tx.CommitAsync();
+        await tx.RollbackAsync();
+
+        innerTransaction.Verify(t => t.Commit(), Times.Once);
+        innerTransaction.Verify(t => t.Rollback(), Times.Once);
+        innerTransaction.Verify(t => t.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        innerTransaction.Verify(t => t.RollbackAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task CreatedTransaction_Dispose_OnlyDisposesInnerOnce()
     {
         _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
@@ -581,5 +718,35 @@ public class PermitConnectionTests
         await tx.DisposeAsync();
 
         Assert.Equal(1, disposeCount);
+    }
+
+    [Fact]
+    public async Task CreateCommand_ForwardsProviderNativeAsyncOperations()
+    {
+        _mockInner.SetupGet(c => c.State).Returns(ConnectionState.Open);
+        var innerCommand = new Mock<DbCommand>();
+        var reader = new Mock<DbDataReader>();
+        _mockInner.Protected().Setup<DbCommand>("CreateDbCommand").Returns(innerCommand.Object);
+        innerCommand.Setup(c => c.ExecuteNonQueryAsync(It.IsAny<CancellationToken>())).ReturnsAsync(3);
+        innerCommand.Setup(c => c.ExecuteScalarAsync(It.IsAny<CancellationToken>())).ReturnsAsync(7);
+        innerCommand.Setup(c => c.PrepareAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        innerCommand.Protected()
+            .Setup<Task<DbDataReader>>("ExecuteDbDataReaderAsync", CommandBehavior.Default, ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(reader.Object);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        await using var connection = await gate.OpenAsync();
+        await using var command = connection.CreateCommand();
+
+        Assert.Equal(3, await command.ExecuteNonQueryAsync());
+        Assert.Equal(7, await command.ExecuteScalarAsync());
+        await command.PrepareAsync();
+        Assert.Same(reader.Object, await command.ExecuteReaderAsync());
+
+        innerCommand.Verify(c => c.ExecuteNonQueryAsync(It.IsAny<CancellationToken>()), Times.Once);
+        innerCommand.Verify(c => c.ExecuteScalarAsync(It.IsAny<CancellationToken>()), Times.Once);
+        innerCommand.Verify(c => c.PrepareAsync(It.IsAny<CancellationToken>()), Times.Once);
+        innerCommand.Protected().Verify("ExecuteDbDataReaderAsync", Times.Once(), CommandBehavior.Default,
+            ItExpr.IsAny<CancellationToken>());
     }
 }
