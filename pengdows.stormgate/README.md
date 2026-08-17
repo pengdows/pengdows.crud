@@ -18,6 +18,23 @@ The standard ADO.NET pool is excellent at managing idle connections, but it isn'
 
 ---
 
+## What StormGate Does *Not* Fix
+
+StormGate gates how many connections may be *opening* at once. That's the right lever for a
+real client-server database (SQL Server, PostgreSQL, MySQL, Oracle, etc.) whose server enforces
+a connection limit and gets overwhelmed by a thundering herd of simultaneous opens.
+
+It is **not** a fix for SQLite's (or any single-writer, file-based database's) write-locking
+behavior. SQLite allows only one writer at a time against the file regardless of how many
+connections are already open and idle — that's a write-serialization problem at the transaction
+level, not a connection-admission problem. Gating opens does nothing for connections that are
+already open and contending to write. If you're hitting `SQLITE_BUSY`/"database is locked"
+errors, you need [**pengdows.crud**](https://github.com/pengdows/pengdows.crud)'s
+`DbMode.SingleWriter` — a turnstile governor purpose-built to serialize write *tasks* against a
+file-based SQLite/DuckDB database while still allowing fully concurrent reads.
+
+---
+
 ## How It Works
 
 StormGate places a `SemaphoreSlim` gate in front of your connection opens.
@@ -98,6 +115,53 @@ services.AddSingleton<IConnectionFactory>(_ =>
         maxConcurrentOpens: 32,
         acquireTimeout: TimeSpan.FromSeconds(1)));
 ```
+
+## Entity Framework Core
+
+StormGate governs a connection lease, so open the connection through the gate and give that
+already-open connection to EF Core. Set `contextOwnsConnection: false`: the caller must dispose
+the gated connection after the `DbContext` so the StormGate permit is returned.
+
+This SQL Server example requires `Microsoft.EntityFrameworkCore.SqlServer`, `Microsoft.Data.SqlClient`,
+and `pengdows.stormgate`:
+
+```csharp
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using pengdows.stormgate;
+
+var gate = StormGate.Create(
+    SqlClientFactory.Instance,
+    connectionString,
+    maxConcurrentOpens: 32,
+    acquireTimeout: TimeSpan.FromSeconds(1));
+
+// Scope both objects to the database operation. Dispose the context first.
+await using var connection = await gate.OpenAsync(cancellationToken);
+
+var options = new DbContextOptionsBuilder<AppDbContext>()
+    .UseSqlServer(connection, contextOwnsConnection: false)
+    .Options;
+
+await using var db = new AppDbContext(options);
+var customers = await db.Customers
+    .Where(customer => customer.IsActive)
+    .ToListAsync(cancellationToken);
+```
+
+`contextOwnsConnection: false` is essential here. With it, EF Core may close the supplied
+connection as part of normal operation, but it does not dispose the wrapper; the outer
+`await using` owns that disposal and releases the StormGate permit. Do not configure a shared
+`AddDbContext` registration with a single gated connection — acquire one per unit of work instead.
+
+For PostgreSQL, MySQL, or another provider, create the gate with that provider's
+`DbProviderFactory` and replace `UseSqlServer` with its corresponding EF Core provider method.
+
+**Using `AddDbContext`, `AddDbContextPool`, or `IDbContextFactory` instead of manual
+per-operation connections?** See
+[`pengdows.stormgate.EntityFrameworkCore`](../pengdows.stormgate.EntityFrameworkCore/README.md) —
+it gates the same way via a `DbConnectionInterceptor`, composing with EF Core's own connection
+management instead of requiring you to open and pass in connections by hand.
 
 ---
 
