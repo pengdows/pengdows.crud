@@ -274,7 +274,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
         {
             ThrowIfInnerClosed();
-            return _inner.BeginTransaction(isolationLevel);
+            return new PermitTransaction(_inner.BeginTransaction(isolationLevel), this);
         }
 
         // Minor: override the async path to use the inner connection's native async transaction
@@ -285,14 +285,15 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             CancellationToken cancellationToken)
         {
             ThrowIfInnerClosed();
-            return await _inner.BeginTransactionAsync(isolationLevel, cancellationToken)
+            var transaction = await _inner.BeginTransactionAsync(isolationLevel, cancellationToken)
                 .ConfigureAwait(false);
+            return new PermitTransaction(transaction, this);
         }
 
         protected override DbCommand CreateDbCommand()
         {
             ThrowIfInnerClosed();
-            return _inner.CreateCommand();
+            return new PermitCommand(_inner.CreateCommand(), this);
         }
 
         // Check _disposed first so methods throw ObjectDisposedException when appropriate.
@@ -386,6 +387,165 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
                     ReleasePermitOnce();
                     await base.DisposeAsync().ConfigureAwait(false);
                 }
+            }
+        }
+
+        private sealed class PermitCommand(DbCommand inner, PermitConnection connection) : DbCommand
+        {
+            private DbTransaction? _transaction;
+            private int _disposed;
+
+            private DbCommand Inner { get; } = inner ?? throw new ArgumentNullException(nameof(inner));
+
+            [AllowNull]
+            public override string CommandText
+            {
+                get => Inner.CommandText;
+                set => Inner.CommandText = value;
+            }
+
+            public override int CommandTimeout
+            {
+                get => Inner.CommandTimeout;
+                set => Inner.CommandTimeout = value;
+            }
+
+            public override CommandType CommandType
+            {
+                get => Inner.CommandType;
+                set => Inner.CommandType = value;
+            }
+
+            public override bool DesignTimeVisible
+            {
+                get => Inner.DesignTimeVisible;
+                set => Inner.DesignTimeVisible = value;
+            }
+
+            public override UpdateRowSource UpdatedRowSource
+            {
+                get => Inner.UpdatedRowSource;
+                set => Inner.UpdatedRowSource = value;
+            }
+
+            [AllowNull]
+            protected override DbConnection DbConnection
+            {
+                get => connection;
+                set
+                {
+                    if (value is not null && !ReferenceEquals(value, connection))
+                    {
+                        throw new InvalidOperationException("Commands created by a gated connection cannot be reassigned.");
+                    }
+                }
+            }
+
+            protected override DbParameterCollection DbParameterCollection => Inner.Parameters;
+
+            [AllowNull]
+            protected override DbTransaction DbTransaction
+            {
+                get => _transaction!;
+                set
+                {
+                    _transaction = value;
+                    Inner.Transaction = value is null
+                        ? null
+                        : value is PermitTransaction transaction && ReferenceEquals(transaction.Connection, connection)
+                            ? transaction.Inner
+                            : throw new InvalidOperationException("The transaction must come from the same gated connection.");
+                }
+            }
+
+            public override void Cancel() => Inner.Cancel();
+
+            public override int ExecuteNonQuery() => Inner.ExecuteNonQuery();
+
+            // Without this override, DbCommand's default ExecuteNonQueryAsync runs the
+            // synchronous ExecuteNonQuery() on a thread-pool thread instead of using the
+            // provider's real async I/O (e.g. SqlCommand/NpgsqlCommand/SqliteCommand).
+            public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) =>
+                Inner.ExecuteNonQueryAsync(cancellationToken);
+
+            public override object? ExecuteScalar() => Inner.ExecuteScalar();
+
+            // See ExecuteNonQueryAsync override above — same thread-pool-blocking fallback risk.
+            public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken) =>
+                Inner.ExecuteScalarAsync(cancellationToken);
+
+            public override void Prepare() => Inner.Prepare();
+
+            protected override DbParameter CreateDbParameter() => Inner.CreateParameter();
+
+            protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) =>
+                Inner.ExecuteReader(behavior);
+
+            // See ExecuteNonQueryAsync override above — same thread-pool-blocking fallback risk.
+            protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
+                CommandBehavior behavior,
+                CancellationToken cancellationToken) =>
+                Inner.ExecuteReaderAsync(behavior, cancellationToken);
+
+            protected override void Dispose(bool disposing)
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                {
+                    return;
+                }
+
+                if (disposing)
+                {
+                    Inner.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
+
+        private sealed class PermitTransaction(DbTransaction inner, PermitConnection connection) : DbTransaction
+        {
+            internal DbTransaction Inner { get; } = inner ?? throw new ArgumentNullException(nameof(inner));
+            private int _disposed;
+
+            public override IsolationLevel IsolationLevel => Inner.IsolationLevel;
+
+            protected override DbConnection DbConnection => connection;
+
+            public override void Commit() => Inner.Commit();
+
+            public override Task CommitAsync(CancellationToken cancellationToken = default) =>
+                Inner.CommitAsync(cancellationToken);
+
+            public override void Rollback() => Inner.Rollback();
+
+            public override Task RollbackAsync(CancellationToken cancellationToken = default) =>
+                Inner.RollbackAsync(cancellationToken);
+
+            protected override void Dispose(bool disposing)
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                {
+                    return;
+                }
+
+                if (disposing)
+                {
+                    Inner.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+
+            public override async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                {
+                    return;
+                }
+
+                await Inner.DisposeAsync().ConfigureAwait(false);
+                await base.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
