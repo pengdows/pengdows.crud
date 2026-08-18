@@ -392,6 +392,9 @@ jobs:
           dotnet pack pengdows.stormgate/pengdows.stormgate.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
+          dotnet pack pengdows.stormgate.EntityFrameworkCore/pengdows.stormgate.EntityFrameworkCore.csproj -c Release \
+            --no-build \
+            -p:PackageVersion=${{ steps.version.outputs.version }}
       - name: Debug API Key
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
@@ -418,6 +421,8 @@ jobs:
             "https://api.nuget.org/v3-flatcontainer/pengdows.crud.fakedb/${VERSION}/${VERSION}.nupkg")
           status_stormgate=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg")
+          status_stormgate_efcore=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate.entityframeworkcore/${VERSION}/${VERSION}.nupkg")
 
           echo "NuGet status for v$VERSION:"
           echo "  pengdows.crud.analyzers: $status_analyzers"
@@ -425,9 +430,10 @@ jobs:
           echo "  pengdows.crud.abstractions: $status_abstractions"
           echo "  pengdows.crud.fakedb: $status_fakedb"
           echo "  pengdows.stormgate: $status_stormgate"
+          echo "  pengdows.stormgate.EntityFrameworkCore: $status_stormgate_efcore"
 
           all_published=true
-          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate" "$status_stormgate_efcore"; do
             if [[ "$status" != "200" ]]; then
               all_published=false
               break
@@ -435,7 +441,7 @@ jobs:
           done
 
           any_published=false
-          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate"; do
+          for status in "$status_analyzers" "$status_crud" "$status_abstractions" "$status_fakedb" "$status_stormgate" "$status_stormgate_efcore"; do
             if [[ "$status" == "200" ]]; then
               any_published=true
               break
@@ -474,6 +480,10 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
           dotnet nuget push pengdows.stormgate/bin/Release/pengdows.stormgate.${{ steps.version.outputs.version }}.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
+          dotnet nuget push pengdows.stormgate.EntityFrameworkCore/bin/Release/pengdows.stormgate.EntityFrameworkCore.${{ steps.version.outputs.version }}.nupkg \
             --source https://api.nuget.org/v3/index.json \
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -32,6 +33,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     // attempts that got one, instead of unconditionally over-releasing on every failure.
     private readonly ConditionalWeakTable<DbConnection, object> _heldPermits = new();
     private static readonly object PermitMarker = new();
+    private readonly object _permitLock = new();
 
     public StormGateConnectionInterceptor(
         int maxConcurrentOpens,
@@ -58,15 +60,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         ConnectionEventData eventData,
         InterceptionResult result)
     {
-        if (!_semaphore.Wait(_acquireTimeout))
-        {
-            _logger.LogWarning(
-                "StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.",
-                _acquireTimeout.TotalMilliseconds);
-            throw new TimeoutException("Database is saturated (storm gate).");
-        }
-
-        _heldPermits.AddOrUpdate(connection, PermitMarker);
+        AcquirePermit(connection);
         return result;
     }
 
@@ -76,15 +70,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         InterceptionResult result,
         CancellationToken cancellationToken = default)
     {
-        if (!await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
-        {
-            _logger.LogWarning(
-                "StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.",
-                _acquireTimeout.TotalMilliseconds);
-            throw new TimeoutException("Database is saturated (storm gate).");
-        }
-
-        _heldPermits.AddOrUpdate(connection, PermitMarker);
+        await AcquirePermitAsync(connection, cancellationToken).ConfigureAwait(false);
         return result;
     }
 
@@ -94,10 +80,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     // see the _heldPermits comment above for why that check is required.
     public override void ConnectionFailed(DbConnection connection, ConnectionErrorEventData eventData)
     {
-        if (_heldPermits.Remove(connection))
-        {
-            _semaphore.Release();
-        }
+        ReleasePermit(connection);
     }
 
     public override Task ConnectionFailedAsync(
@@ -105,29 +88,118 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         ConnectionErrorEventData eventData,
         CancellationToken cancellationToken = default)
     {
-        if (_heldPermits.Remove(connection))
-        {
-            _semaphore.Release();
-        }
+        ReleasePermit(connection);
 
         return Task.CompletedTask;
     }
 
     public override void ConnectionClosed(DbConnection connection, ConnectionEndEventData eventData)
     {
-        if (_heldPermits.Remove(connection))
-        {
-            _semaphore.Release();
-        }
+        ReleasePermit(connection);
     }
 
     public override Task ConnectionClosedAsync(DbConnection connection, ConnectionEndEventData eventData)
     {
-        if (_heldPermits.Remove(connection))
-        {
-            _semaphore.Release();
-        }
+        ReleasePermit(connection);
 
         return Task.CompletedTask;
+    }
+
+    public override void ConnectionDisposed(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        ReleasePermit(connection);
+    }
+
+    public override Task ConnectionDisposedAsync(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        ReleasePermit(connection);
+        return Task.CompletedTask;
+    }
+
+#if NET10_0_OR_GREATER
+    public override void ConnectionCanceled(DbConnection connection, ConnectionEndEventData eventData)
+    {
+        ReleasePermit(connection);
+    }
+
+    public override Task ConnectionCanceledAsync(
+        DbConnection connection,
+        ConnectionEndEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        ReleasePermit(connection);
+        return Task.CompletedTask;
+    }
+#endif
+
+    private void AcquirePermit(DbConnection connection)
+    {
+        ReleaseStalePermit(connection);
+
+        if (!_semaphore.Wait(_acquireTimeout))
+        {
+            LogSaturation();
+            throw new TimeoutException("Database is saturated (storm gate).");
+        }
+
+        MarkPermitHeld(connection);
+    }
+
+    private async ValueTask AcquirePermitAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        ReleaseStalePermit(connection);
+
+        if (!await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
+        {
+            LogSaturation();
+            throw new TimeoutException("Database is saturated (storm gate).");
+        }
+
+        MarkPermitHeld(connection);
+    }
+
+    private void MarkPermitHeld(DbConnection connection)
+    {
+        lock (_permitLock)
+        {
+            connection.StateChange += OnConnectionStateChange;
+            _heldPermits.AddOrUpdate(connection, PermitMarker);
+        }
+    }
+
+    private void ReleasePermit(DbConnection connection)
+    {
+        lock (_permitLock)
+        {
+            if (_heldPermits.Remove(connection))
+            {
+                connection.StateChange -= OnConnectionStateChange;
+                _semaphore.Release();
+            }
+        }
+    }
+
+    private void ReleaseStalePermit(DbConnection connection)
+    {
+        if ((connection.State is ConnectionState.Closed) || (connection.State is ConnectionState.Broken))
+        {
+            ReleasePermit(connection);
+        }
+    }
+
+    private void OnConnectionStateChange(object? sender, StateChangeEventArgs eventArgs)
+    {
+        if ((sender is DbConnection connection)
+            && ((eventArgs.CurrentState is ConnectionState.Closed) || (eventArgs.CurrentState is ConnectionState.Broken)))
+        {
+            ReleasePermit(connection);
+        }
+    }
+
+    private void LogSaturation()
+    {
+        _logger.LogWarning(
+            "StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.",
+            _acquireTimeout.TotalMilliseconds);
     }
 }

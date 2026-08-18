@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace pengdows.stormgate.EntityFrameworkCore.Tests;
 
@@ -192,6 +193,65 @@ public sealed class StormGateConnectionInterceptorTests
                 await context.Database.OpenConnectionAsync();
                 await context.Database.CloseConnectionAsync();
             }
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task PermitIsReleased_WhenExplicitlyOpenContextIsDisposed()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            var interceptor = new StormGateConnectionInterceptor(
+                maxConcurrentOpens: 1,
+                acquireTimeout: TimeSpan.FromMilliseconds(150));
+
+            await using (var context = CreateContext(dbPath, interceptor))
+            {
+                await context.Database.OpenConnectionAsync();
+            }
+
+            await using var nextContext = CreateContext(dbPath, interceptor);
+            await nextContext.Database.OpenConnectionAsync();
+            await nextContext.Database.CloseConnectionAsync();
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task PooledContexts_ReleasePermitsWhenExplicitlyOpenedConnectionsAreReset()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            var interceptor = new StormGateConnectionInterceptor(
+                maxConcurrentOpens: 1,
+                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            var services = new ServiceCollection();
+
+            services.AddDbContextPool<TestDbContext>(options =>
+                options.UseSqlite("Data Source=" + dbPath).UseStormGate(interceptor));
+
+            await using var provider = services.BuildServiceProvider();
+
+            for (var i = 0; i < 100; i++)
+            {
+                await using var scope = provider.CreateAsyncScope();
+                var context = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+                await context.Database.OpenConnectionAsync();
+            }
+
+            await using var finalScope = provider.CreateAsyncScope();
+            var finalContext = finalScope.ServiceProvider.GetRequiredService<TestDbContext>();
+            await finalContext.Database.OpenConnectionAsync();
+            await finalContext.Database.CloseConnectionAsync();
         }
         finally
         {

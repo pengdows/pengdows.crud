@@ -62,6 +62,66 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         await context.Database.CloseConnectionAsync();
     }
 
+    [Fact]
+    public async Task PermitIsReleased_WhenOpenConnectionBecomesBroken()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var interceptor = new StormGateConnectionInterceptor(
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
+            .UseStormGate(interceptor)
+            .Options;
+
+        await using (var context = new TestDbContext(options))
+        {
+            await context.Database.OpenConnectionAsync();
+            connection.BreakConnection();
+        }
+
+        await using var nextContext = CreateContext(factory, interceptor);
+        await nextContext.Database.OpenConnectionAsync();
+        await nextContext.Database.CloseConnectionAsync();
+    }
+
+#if NET10_0_OR_GREATER
+    [Fact]
+    public async Task PermitIsReleased_WhenOpenIsCanceledAfterAcquisition()
+    {
+        var interceptor = new StormGateConnectionInterceptor(
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var canceledConnection = new CancelOnOpenConnection();
+
+        var canceledOptions = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(canceledConnection, contextOwnsConnection: false)
+            .UseStormGate(interceptor)
+            .Options;
+
+        await using (var canceledContext = new TestDbContext(canceledOptions))
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => canceledContext.Database.OpenConnectionAsync());
+        }
+
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var nextContext = CreateContext(factory, interceptor);
+        await nextContext.Database.OpenConnectionAsync();
+        await nextContext.Database.CloseConnectionAsync();
+    }
+
+    private sealed class CancelOnOpenConnection : fakeDbConnection
+    {
+        public override Task OpenAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromCanceled(new CancellationToken(canceled: true));
+        }
+    }
+#endif
+
     private static TestDbContext CreateContext(fakeDbFactory factory, StormGateConnectionInterceptor interceptor)
     {
         var connection = factory.CreateConnection()!;
