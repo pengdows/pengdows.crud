@@ -109,6 +109,36 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
+    public async Task ExecuteReaderAsync_ExposesReaderLatencyComponents()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connection = new fakeDbConnection();
+        factory.Connections.Add(connection);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+        connection.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { { "value", 1 } }
+        });
+
+        await using var reader = await context.CreateSqlContainer("SELECT value FROM data").ExecuteReaderAsync();
+        await Task.Delay(10);
+        Assert.True(await reader.ReadAsync());
+        await Task.Delay(10);
+        await reader.DisposeAsync();
+
+        var metrics = context.Metrics;
+        Assert.True(metrics.AvgReaderTimeToFirstRowMs > 0d);
+        Assert.True(metrics.AvgReaderConsumptionMs > 0d);
+        Assert.True(metrics.AvgReaderLeaseMs > 0d);
+        Assert.True(metrics.Read.AvgReaderLeaseMs > 0d);
+    }
+
+    [Fact]
     public async Task ExecuteReaderAsync_UsesReadRoleMetrics()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

@@ -3,6 +3,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 using pengdows.crud.@internal;
 using pengdows.crud.metrics;
 using pengdows.crud.fakeDb;
@@ -79,6 +80,29 @@ public class TrackedWrapperTests
 
         var snapshot = metrics.CreateSnapshot();
         Assert.Equal(1, snapshot.RowsReadTotal);
+    }
+
+    [Fact]
+    public void TrackedReader_FirstReadAndDispose_RecordSeparateReaderLatencyComponents()
+    {
+        var metrics = new MetricsCollector(MetricsOptions.Default);
+        using var connection = new TrackedConnection(new fakeDbConnection(), metricsCollector: metrics);
+        using var reader = new TrackedReader(
+            new fakeDbDataReader(new[] { new Dictionary<string, object> { ["value"] = 42 } }),
+            connection,
+            NoOpAsyncLocker.Instance,
+            false,
+            metricsCollector: metrics);
+
+        Thread.Sleep(10);
+        Assert.True(reader.Read());
+        Thread.Sleep(10);
+        reader.Dispose();
+
+        var snapshot = metrics.CreateSnapshot();
+        Assert.True(snapshot.AvgReaderTimeToFirstRowMs > 0d);
+        Assert.True(snapshot.AvgReaderConsumptionMs > 0d);
+        Assert.True(snapshot.AvgReaderLeaseMs > 0d);
     }
 
     [Fact]

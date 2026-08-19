@@ -39,6 +39,9 @@ internal sealed class MetricsCollector
     private readonly Ewma _connectionOpenDuration = new(64);
     private readonly Ewma _connectionCloseDuration = new(64);
     private readonly Ewma _transactionDuration = new(32);
+    private readonly Ewma _readerTimeToFirstRow = new(64);
+    private readonly Ewma _readerConsumption = new(64);
+    private readonly Ewma _readerLease = new(64);
     private readonly PercentileRing? _percentileRing;
     private readonly PercentileRing? _transactionPercentileRing;
     private Action? _metricsChanged;
@@ -237,6 +240,35 @@ internal sealed class MetricsCollector
         NotifyUpdated();
     }
 
+    internal void RecordReaderDurations(long leaseStartTimestamp, long firstRowTimestamp)
+    {
+        _parent?.RecordReaderDurations(leaseStartTimestamp, firstRowTimestamp);
+        var completedTimestamp = Stopwatch.GetTimestamp();
+        var leaseMs = ToMilliseconds(completedTimestamp - leaseStartTimestamp);
+        if (leaseMs <= 0d)
+        {
+            return;
+        }
+
+        _readerLease.AddSample(leaseMs);
+        if (firstRowTimestamp > leaseStartTimestamp)
+        {
+            var firstRowMs = ToMilliseconds(firstRowTimestamp - leaseStartTimestamp);
+            if (firstRowMs > 0d)
+            {
+                _readerTimeToFirstRow.AddSample(firstRowMs);
+            }
+
+            var consumptionMs = ToMilliseconds(completedTimestamp - firstRowTimestamp);
+            if (consumptionMs > 0d)
+            {
+                _readerConsumption.AddSample(consumptionMs);
+            }
+        }
+
+        NotifyUpdated();
+    }
+
     internal void RecordRowsAffected(long count)
     {
         _parent?.RecordRowsAffected(count);
@@ -362,7 +394,10 @@ internal sealed class MetricsCollector
             Interlocked.Read(ref _errorSerializationFailures),
             Interlocked.Read(ref _errorConstraintViolations),
             Interlocked.Read(ref _sessionInitCount),
-            _sessionInitDuration.GetValue());
+            _sessionInitDuration.GetValue(),
+            _readerTimeToFirstRow.GetValue(),
+            _readerConsumption.GetValue(),
+            _readerLease.GetValue());
     }
 
     private static void AddHandler(ref Action? field, Action handler)
@@ -497,7 +532,10 @@ internal sealed class MetricsCollector
         long ErrorSerializationFailures,
         long ErrorConstraintViolations,
         long SessionInitCount,
-        double AvgSessionInitMs)
+        double AvgSessionInitMs,
+        double AvgReaderTimeToFirstRowMs,
+        double AvgReaderConsumptionMs,
+        double AvgReaderLeaseMs)
     {
         public int ConnectionsCurrent { get; } = ConnectionsCurrent;
         public int PeakOpenConnections { get; } = PeakOpenConnections;
@@ -534,6 +572,9 @@ internal sealed class MetricsCollector
         public long ErrorConstraintViolations { get; } = ErrorConstraintViolations;
         public long SessionInitCount { get; } = SessionInitCount;
         public double AvgSessionInitMs { get; } = AvgSessionInitMs;
+        public double AvgReaderTimeToFirstRowMs { get; } = AvgReaderTimeToFirstRowMs;
+        public double AvgReaderConsumptionMs { get; } = AvgReaderConsumptionMs;
+        public double AvgReaderLeaseMs { get; } = AvgReaderLeaseMs;
     }
 
     private sealed class Ewma

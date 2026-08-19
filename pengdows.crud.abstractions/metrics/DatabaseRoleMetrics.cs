@@ -45,6 +45,9 @@ namespace pengdows.crud.metrics;
 /// <param name="AvgFailedCommandMs">Exponential weighted moving average of failed command duration in milliseconds.
 /// Tracks cancelled, timed-out, and error-failed commands independently from <see cref="AvgCommandMs"/>
 /// so that the success-path latency distribution (Avg / P95 / P99) remains internally consistent.</param>
+/// <param name="AvgReaderTimeToFirstRowMs">Exponential weighted moving average from reader acquisition until its first row.</param>
+/// <param name="AvgReaderConsumptionMs">Exponential weighted moving average from the first row until reader disposal.</param>
+/// <param name="AvgReaderLeaseMs">Exponential weighted moving average for the complete reader lease lifetime.</param>
 public sealed record DatabaseRoleMetrics(
     int ConnectionsCurrent,
     int PeakOpenConnections,
@@ -78,7 +81,10 @@ public sealed record DatabaseRoleMetrics(
     long ErrorDeadlocks,
     long ErrorSerializationFailures,
     long ErrorConstraintViolations,
-    double AvgFailedCommandMs = 0d)
+    double AvgFailedCommandMs = 0d,
+    double AvgReaderTimeToFirstRowMs = 0d,
+    double AvgReaderConsumptionMs = 0d,
+    double AvgReaderLeaseMs = 0d)
 {
     /// <summary>
     /// Represents an empty role metrics snapshot (no role-specific tracking active).

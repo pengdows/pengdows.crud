@@ -25,6 +25,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -42,6 +43,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     private readonly MetricsCollector? _metricsCollector;
     private readonly IReaderLifetimeListener? _lifetimeListener;
     private long _rowsRead;
+    private readonly long _leaseStartTimestamp = Stopwatch.GetTimestamp();
+    private long _firstRowTimestamp;
     private int _metricsRecorded;
 
     internal TrackedReader(
@@ -111,6 +114,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         if (_reader.Read())
         {
+            Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
             Interlocked.Increment(ref _rowsRead);
             return true;
         }
@@ -350,6 +354,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
             Interlocked.Increment(ref _rowsRead);
             return true;
         }
@@ -451,6 +456,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             _metricsCollector.RecordRowsRead(_rowsRead);
         }
+
+        _metricsCollector.RecordReaderDurations(_leaseStartTimestamp, Volatile.Read(ref _firstRowTimestamp));
 
         var affected = _reader.RecordsAffected;
         if (affected > 0)

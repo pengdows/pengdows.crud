@@ -147,10 +147,13 @@ What's left:
   `DatabaseContext`/dialect rather than remembered by application code. It must define migration
   rules and prohibit mixing canonical and transformed values in one column. If the feature is
   justified, add fakeDb ordering emulation and provider-specific integration tests.
-- **Reader latency doesn't distinguish database time from consumer time.** `ExecuteReaderAsync`
-  metrics treat the command as complete once the provider returns the reader; time spent by the
-  caller consuming rows isn't separated out. Proposed: execute→first-row, first-row→dispose, and
-  total reader lease as three distinct timings.
+- ~~**Reader latency doesn't distinguish database time from consumer time.**~~ — fixed 2026-08-19:
+  `ExecuteReaderAsync` continues to complete its command metric when the provider returns the
+  reader. `TrackedReader` now separately records reader-acquisition→first-row,
+  first-row→dispose, and total reader-lease duration. The aggregate `DatabaseMetrics` and
+  role-scoped `DatabaseRoleMetrics` expose the three EWMAs as `AvgReaderTimeToFirstRowMs`,
+  `AvgReaderConsumptionMs`, and `AvgReaderLeaseMs`. Unit coverage proves synchronous and async
+  row reads feed the lifecycle metrics without conflating consumer time with command execution.
 - **Metric cardinality policy for dynamic multi-tenancy.** No deliberate policy yet for
   context/tenant-derived tags (e.g. `db.name`) that could become high-cardinality.
 - **Stored-procedure multi-result/OUT parameter handling** is less complete than the best
