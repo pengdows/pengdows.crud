@@ -14,6 +14,26 @@ public sealed class SqlServerTestProvider : TestProvider
     protected override async Task RunAdditionalTestsAsync()
     {
         await TestIdentityReturningWithTriggerAsync();
+        await TestPagingRequiresOrderByAsync();
+    }
+
+    private Task TestPagingRequiresOrderByAsync()
+    {
+        using var container = _context.CreateSqlContainer();
+        container.Query.Append("SELECT 1");
+
+        try
+        {
+            _context.GetDialect().AppendPaging(container.Query, offset: 0, limit: 1);
+            throw new Exception("SQL Server paging without ORDER BY was not rejected");
+        }
+        catch (InvalidOperationException exception)
+            when (exception.Message.Contains("ORDER BY", StringComparison.Ordinal))
+        {
+            CheckOk("SQL Server paging without ORDER BY: rejected before execution");
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task TestIdentityReturningWithTriggerAsync()
