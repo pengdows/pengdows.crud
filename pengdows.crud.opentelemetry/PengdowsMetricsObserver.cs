@@ -53,6 +53,11 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private readonly ObservableGauge<double> _commandDurationAvg;
     private readonly ObservableGauge<double> _commandFailedDurationAvg;
 
+    // ── Observable gauges — reader lifecycle ─────────────────────────────
+    private readonly ObservableGauge<double> _readerTimeToFirstRowAvg;
+    private readonly ObservableGauge<double> _readerConsumptionDurationAvg;
+    private readonly ObservableGauge<double> _readerLeaseDurationAvg;
+
     // ── Observable gauges — transactions ─────────────────────────────────
     private readonly ObservableGauge<int> _transactionsActive;
     private readonly ObservableGauge<int> _transactionsPeak;
@@ -145,6 +150,15 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
             () => GetGauges(m => m.AvgCommandMs), "ms", "EMA of command duration");
         _commandFailedDurationAvg = _meter.CreateObservableGauge("pengdows.db.client.command.failed_duration.avg",
             () => GetGauges(m => m.AvgFailedCommandMs), "ms", "EMA of failed command duration");
+
+        // Reader command execution ends when the provider returns the cursor. These gauges expose
+        // the caller-visible lifetime separately: acquisition to first row, consumption, and lease.
+        _readerTimeToFirstRowAvg = _meter.CreateObservableGauge("pengdows.db.client.reader.time_to_first_row.avg",
+            () => GetGauges(m => m.AvgReaderTimeToFirstRowMs), "ms", "EMA from reader acquisition to first row");
+        _readerConsumptionDurationAvg = _meter.CreateObservableGauge("pengdows.db.client.reader.consumption_duration.avg",
+            () => GetGauges(m => m.AvgReaderConsumptionMs), "ms", "EMA from first row to reader disposal");
+        _readerLeaseDurationAvg = _meter.CreateObservableGauge("pengdows.db.client.reader.lease_duration.avg",
+            () => GetGauges(m => m.AvgReaderLeaseMs), "ms", "EMA of total reader lease duration");
 
         // Transaction gauges
         _transactionsActive = _meter.CreateObservableGauge("pengdows.db.client.transactions.active",

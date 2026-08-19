@@ -154,6 +154,7 @@ What's left:
   role-scoped `DatabaseRoleMetrics` expose the three EWMAs as `AvgReaderTimeToFirstRowMs`,
   `AvgReaderConsumptionMs`, and `AvgReaderLeaseMs`. Unit coverage proves synchronous and async
   row reads feed the lifecycle metrics without conflating consumer time with command execution.
+  `PengdowsMetricsObserver` exports matching OpenTelemetry gauges for all three values.
 - **Metric cardinality policy for dynamic multi-tenancy.** No deliberate policy yet for
   context/tenant-derived tags (e.g. `db.name`) that could become high-cardinality.
 - **Stored-procedure multi-result/OUT parameter handling** is less complete than the best

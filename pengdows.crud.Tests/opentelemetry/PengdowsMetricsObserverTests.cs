@@ -605,6 +605,9 @@ public class PengdowsMetricsObserverTests
     [InlineData("pengdows.db.client.transactions.duration.p95")]
     [InlineData("pengdows.db.client.transactions.duration.p99")]
     [InlineData("pengdows.db.client.session.init_duration.avg")]
+    [InlineData("pengdows.db.client.reader.time_to_first_row.avg")]
+    [InlineData("pengdows.db.client.reader.consumption_duration.avg")]
+    [InlineData("pengdows.db.client.reader.lease_duration.avg")]
     [InlineData("pengdows.db.client.pool.hold_duration.avg")]
     // New int gauges
     [InlineData("pengdows.db.client.connections.peak")]
@@ -658,6 +661,9 @@ public class PengdowsMetricsObserverTests
     [InlineData("pengdows.db.client.transactions.duration.p95")]
     [InlineData("pengdows.db.client.transactions.duration.p99")]
     [InlineData("pengdows.db.client.session.init_duration.avg")]
+    [InlineData("pengdows.db.client.reader.time_to_first_row.avg")]
+    [InlineData("pengdows.db.client.reader.consumption_duration.avg")]
+    [InlineData("pengdows.db.client.reader.lease_duration.avg")]
     [InlineData("pengdows.db.client.pool.hold_duration.avg")]
     public void NewDoubleGauge_EmitsMeasurementOnPoll(string gaugeName)
     {
