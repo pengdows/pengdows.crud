@@ -827,7 +827,37 @@ public partial class TableGateway<TEntity, TRowID> :
             }
             else
             {
+<<<<<<< HEAD
                 returningClause = clause; // Others: RETURNING goes after VALUES
+=======
+                var clause = dialect.RenderInsertReturningClause(idWrapped);
+
+                if (dialect.RequiresOutputParameterForReturning)
+                {
+                    returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
+                        StringComparison.Ordinal);
+                    sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
+                        ParameterDirection.Output);
+                }
+                else if (dialect.InsertReturningClauseBeforeValues)
+                {
+                    if (dialect is SqlServerDialect)
+                    {
+                        const string outputTable = "@__pengdows_output";
+                        prefixClause = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
+                        outputClause = $"{clause} INTO {outputTable} ({idWrapped})";
+                        returningClause = $"; SELECT {idWrapped} FROM {outputTable}";
+                    }
+                    else
+                    {
+                        outputClause = clause;
+                    }
+                }
+                else
+                {
+                    returningClause = clause; // Others: RETURNING goes after VALUES
+                }
+>>>>>>> 6298e8c (fix: support SQL Server identity output with triggers)
             }
         }
 
