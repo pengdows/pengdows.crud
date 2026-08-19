@@ -82,7 +82,15 @@ public class WeirdTypeAttributesTests
         Assert.NotNull(new ConcurrencyTokenAttribute());
         Assert.NotNull(new CaseInsensitiveAttribute());
         Assert.NotNull(new AsStringAttribute());
-        Assert.NotNull(new AllowZeroDateAttribute());
         Assert.NotNull(new CaseFoldOnReadAttribute());
+    }
+
+    [Fact]
+    public void LegacyAllowZeroDateAttribute_IsNotExposed()
+    {
+        var legacyType = typeof(DbEnumAttribute).Assembly.GetType(
+            "pengdows.crud.types.attributes.AllowZeroDateAttribute");
+
+        Assert.Null(legacyType);
     }
 }

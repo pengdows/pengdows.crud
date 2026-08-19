@@ -13,7 +13,6 @@
 // - CaseInsensitiveAttribute: Documents case-insensitive text behavior.
 // - AsStringAttribute: Forces numeric to string when precision exceeds .NET limits.
 // - MaxLengthForInlineAttribute: Controls binary data memory allocation strategy.
-// - AllowZeroDateAttribute: Allows MySQL '0000-00-00' zero dates.
 // - CaseFoldOnReadAttribute: Applies case folding when reading text values.
 // - SpatialTypeAttribute: Configures spatial SRID enforcement and conversion.
 // - CurrencyAttribute: Configures ISO currency code for money types.
@@ -133,14 +132,6 @@ public class MaxLengthForInlineAttribute : Attribute
 
         MaxLength = maxLength;
     }
-}
-
-/// <summary>
-/// Allows MySQL zero dates ('0000-00-00') to be read instead of throwing.
-/// </summary>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
-public class AllowZeroDateAttribute : Attribute
-{
 }
 
 /// <summary>
