@@ -411,7 +411,12 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 .Append(insertColSb.AsSpan())
                 .Append(") VALUES (")
                 .Append(insertValSb.AsSpan())
-                .Append(");");
+                .Append(")");
+
+            if (dialect.DatabaseType != SupportedDatabase.Oracle)
+            {
+                sc.Query.Append(';');
+            }
 
             sc.AddParameters(parameters);
             return sc;
