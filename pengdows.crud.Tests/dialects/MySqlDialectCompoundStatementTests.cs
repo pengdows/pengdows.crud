@@ -42,12 +42,12 @@ public class MySqlDialectCompoundStatementTests
     }
 
     [Fact]
-    public void MariaDb_OracleProvider_GetGeneratedKeyPlan_Returns_CompoundStatement()
+    public void MariaDb_OracleProvider_GetGeneratedKeyPlan_Returns_ReaderInsertedId()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
         var dialect = new MariaDbDialect(factory, NullLogger<MariaDbDialect>.Instance);
 
-        Assert.Equal(GeneratedKeyPlan.CompoundStatement, dialect.GetGeneratedKeyPlan());
+        Assert.Equal(GeneratedKeyPlan.ReaderInsertedId, dialect.GetGeneratedKeyPlan());
     }
 
     [Fact]
