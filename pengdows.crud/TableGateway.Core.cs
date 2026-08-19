@@ -837,7 +837,17 @@ public partial class TableGateway<TEntity, TRowID> :
                 }
                 else if (dialect.InsertReturningClauseBeforeValues)
                 {
-                    outputClause = clause; // e.g. SQL Server: OUTPUT goes before VALUES
+                    if (dialect is SqlServerDialect)
+                    {
+                        const string outputTable = "@__pengdows_output";
+                        prefixClause = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
+                        outputClause = $"{clause} INTO {outputTable} ({idWrapped})";
+                        returningClause = $"; SELECT {idWrapped} FROM {outputTable}";
+                    }
+                    else
+                    {
+                        outputClause = clause;
+                    }
                 }
                 else
                 {

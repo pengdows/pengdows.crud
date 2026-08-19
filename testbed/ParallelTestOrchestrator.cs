@@ -238,7 +238,7 @@ public class ParallelTestOrchestrator
                 ContainerName = "SQL Server",
                 DatabaseProvider = "SQL Server",
                 Container = new SqlServerTestContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new SqlServerTestProvider(db, sp)
             },
             new()
             {

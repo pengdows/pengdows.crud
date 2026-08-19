@@ -100,7 +100,8 @@ public class SqlServerIdentityOutputClauseTests
 
         // Verify the id column is NOT in the insert columns (since it's [Id(false)])
         // The column list is between "(" and ")" before VALUES
-        var firstParenIndex = sql.IndexOf('(');
+        var insertIndex = sql.IndexOf("INSERT INTO", StringComparison.Ordinal);
+        var firstParenIndex = sql.IndexOf('(', insertIndex);
         var closingParenBeforeValues = sql.IndexOf(')', firstParenIndex);
         var columnList = sql.Substring(firstParenIndex + 1, closingParenBeforeValues - firstParenIndex - 1);
 
@@ -109,6 +110,21 @@ public class SqlServerIdentityOutputClauseTests
 
         // user_id column SHOULD be in the column list
         Assert.Contains("\"user_id\"", columnList);
+    }
+
+    [Fact]
+    public void BuildCreateWithReturning_SqlServer_UsesOutputIntoTableVariable()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory, _typeMap);
+        var gateway = new TableGateway<UserInfoEntity, int>(context);
+
+        using var container = gateway.BuildCreateWithReturning(new UserInfoEntity { Username = "trigger-test" }, true);
+        var sql = container.Query.ToString();
+
+        Assert.Contains("DECLARE @__pengdows_output TABLE", sql, StringComparison.Ordinal);
+        Assert.Contains("OUTPUT INSERTED.\"id\" INTO @__pengdows_output", sql, StringComparison.Ordinal);
+        Assert.Contains("SELECT \"id\" FROM @__pengdows_output", sql, StringComparison.Ordinal);
     }
 
     [Fact]
