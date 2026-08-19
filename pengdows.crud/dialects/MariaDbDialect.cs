@@ -89,6 +89,14 @@ internal class MariaDbDialect : MySqlDialect
         return GeneratedKeyPlan.ReaderInsertedId;
     }
 
+    public override object? GetLastInsertedIdFromCommand(DbCommand? command)
+    {
+        var value = base.GetLastInsertedIdFromCommand(command);
+        return value is long signedValue && signedValue < 0
+            ? unchecked((ulong)signedValue)
+            : value;
+    }
+
     public override bool SupportsIdentityColumns => true; // AUTO_INCREMENT
 
     // MariaDB does not provide a native JSON type; JSON is mapped to LONGTEXT

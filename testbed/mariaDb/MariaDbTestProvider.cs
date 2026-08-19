@@ -13,11 +13,17 @@ public sealed class MariaDbTestProvider : TestProvider
 
     protected override async Task RunAdditionalTestsAsync()
     {
-        await TestUnsignedIdentityAsync<UIntIdentityRow, uint>("mariadb_uint_identity_test", "INT UNSIGNED");
-        await TestUnsignedIdentityAsync<ULongIdentityRow, ulong>("mariadb_ulong_identity_test", "BIGINT UNSIGNED");
+        await TestUnsignedIdentityAsync<UIntIdentityRow, uint>(
+            "mariadb_uint_identity_test",
+            "INT UNSIGNED",
+            2_147_483_648UL);
+        await TestUnsignedIdentityAsync<ULongIdentityRow, ulong>(
+            "mariadb_ulong_identity_test",
+            "BIGINT UNSIGNED",
+            9_223_372_036_854_775_808UL);
     }
 
-    private async Task TestUnsignedIdentityAsync<TEntity, TId>(string table, string idType)
+    private async Task TestUnsignedIdentityAsync<TEntity, TId>(string table, string idType, ulong firstIdentity)
         where TEntity : class, new()
     {
         var tableName = _context.WrapObjectName(table);
@@ -28,7 +34,10 @@ public sealed class MariaDbTestProvider : TestProvider
         try
         {
             container.Clear();
-            container.Query.Append($"CREATE TABLE {tableName} ({_context.WrapObjectName("id")} {idType} AUTO_INCREMENT PRIMARY KEY, {_context.WrapObjectName("value")} VARCHAR(100) NOT NULL)");
+            container.Query.Append($"CREATE TABLE {tableName} (");
+            container.Query.Append($"{_context.WrapObjectName("id")} {idType} AUTO_INCREMENT PRIMARY KEY, ");
+            container.Query.Append($"{_context.WrapObjectName("value")} VARCHAR(100) NOT NULL) ");
+            container.Query.Append($"AUTO_INCREMENT={firstIdentity}");
             await container.ExecuteNonQueryAsync();
 
             var gateway = new TableGateway<TEntity, TId>(_context);
@@ -36,7 +45,7 @@ public sealed class MariaDbTestProvider : TestProvider
             typeof(TEntity).GetProperty("Value")!.SetValue(row, "unsigned identity");
             var created = await gateway.CreateAsync(row);
             var id = (TId)typeof(TEntity).GetProperty("Id")!.GetValue(row)!;
-            if (!created || EqualityComparer<TId>.Default.Equals(id, default!))
+            if (!created || Convert.ToUInt64(id) < firstIdentity)
             {
                 throw new Exception($"MariaDB {idType} identity was not returned as {typeof(TId).Name}");
             }
