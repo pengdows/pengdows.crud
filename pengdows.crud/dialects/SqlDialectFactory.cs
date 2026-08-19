@@ -31,13 +31,16 @@ internal static class SqlDialectFactory
     internal static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         loggerFactory ??= NullLoggerFactory.Instance;
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
         // Use centralized detection service
-        var inferredType = await DatabaseDetectionService.DetectProductAsync(connection, factory).ConfigureAwait(false);
+        var inferredType = await DatabaseDetectionService.DetectProductAsync(connection, factory, cancellationToken)
+            .ConfigureAwait(false);
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
         if (dialect is not IInternalSqlDialect internalDialect)

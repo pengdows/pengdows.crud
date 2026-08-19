@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
@@ -11,6 +14,28 @@ namespace pengdows.crud.Tests;
 
 public class DataSourceInformationAsyncTests
 {
+    [Fact]
+    public async Task CreateAsync_PreCanceledToken_DoesNotOpenOrProbeConnection()
+    {
+        var (tracked, factory) = DataSourceInformationTestHelper.CreateTestConnection(
+            SupportedDatabase.PostgreSql, "PostgreSQL", "15.2",
+            "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
+        await using (tracked)
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => DataSourceInformation.CreateAsync(
+                    tracked,
+                    factory,
+                    NullLoggerFactory.Instance,
+                    cancellation.Token));
+
+            Assert.Equal(ConnectionState.Closed, tracked.State);
+        }
+    }
+
     [Fact]
     public async Task CreateAsync_ReturnsInformation()
     {

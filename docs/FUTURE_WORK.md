@@ -110,13 +110,12 @@ What's left:
     identification probe): `CreateDialect(...)` must still resolve Aurora MySQL using only the sync
     probe, proving the sync entry point never starts depending on the async overload.
 
-    Known gap, deliberately not addressed here: neither `SqlDialectFactory.CreateDialectAsync` nor
-    `DataSourceInformation.CreateAsync` accept a `CancellationToken`, even though the
-    `DetectProductAsync` primitives they now call support one. Phase 1 built genuinely
-    asynchronous, cancellation-capable detection; this call chain doesn't yet expose that
-    cancellation to callers. Threading a token through both signatures is straightforward but was
-    left out to avoid scope creep into more call sites right before release — revisit alongside
-    Phase 3.
+    `SqlDialectFactory.CreateDialectAsync` and `DataSourceInformation.CreateAsync` now both accept
+    an optional `CancellationToken`; it is checked before opening/probing, passed to
+    `ITrackedConnection.OpenAsync`, and propagated to `DetectProductAsync`. The focused
+    `DataSourceInformationAsyncTests.CreateAsync_PreCanceledToken_DoesNotOpenOrProbeConnection`
+    regression test proves a pre-cancelled request stops before any connection I/O. This is a
+    direct-call capability only: ordinary `DatabaseContext` construction is still synchronous.
   - Phase 3 (not started, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
     Requires rewriting the ~400-line private constructor into a shared async core the sync
     constructor also routes through, making the full test suite the regression gate for that
@@ -750,4 +749,3 @@ Existing third-party retry libraries (such as Polly or manual retry loops) are u
   - `CommandTimeoutException` $\to$ Retryable
   - `UniqueConstraintViolationException` $\to$ Non-transient, fails fast without retry
   - `ForeignKeyViolationException` $\to$ Non-transient, fails fast without retry
-
