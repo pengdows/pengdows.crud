@@ -311,6 +311,25 @@ public class PengdowsMetricsObserverTests
         Assert.Equal(2, seen.Count); // exactly one measurement per tracked context
     }
 
+    [Fact]
+    public void Track_TenantNamedContextsOnSameProvider_UsesOneBoundedDatabaseNameTag()
+    {
+        var meterName = "test.cardinality." + Guid.NewGuid().ToString("N");
+        using var meter = new Meter(meterName, "1.0");
+        using var first = new DatabaseContext(MakeConfig("tenant-a"), new fakeDbFactory(SupportedDatabase.Sqlite));
+        using var second = new DatabaseContext(MakeConfig("tenant-b"), new fakeDbFactory(SupportedDatabase.Sqlite));
+        using var observer = new PengdowsMetricsObserver(meter);
+        observer.Track(first);
+        observer.Track(second);
+
+        var seen = new List<string>();
+        using var listener = MakeGaugeListener(meterName, seen);
+        listener.RecordObservableInstruments();
+
+        Assert.Equal(2, seen.Count);
+        Assert.All(seen, tag => Assert.Equal("SQLite", tag, ignoreCase: true));
+    }
+
     // ── Default meter uses assembly version, not a hardcoded string ───────
     // RED: constructor hardcodes "2.0.1" — mismatch with assembly version.
     [Fact]

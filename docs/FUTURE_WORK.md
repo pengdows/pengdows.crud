@@ -116,7 +116,7 @@ What's left:
     `DataSourceInformationAsyncTests.CreateAsync_PreCanceledToken_DoesNotOpenOrProbeConnection`
     regression test proves a pre-cancelled request stops before any connection I/O. This is a
     direct-call capability only: ordinary `DatabaseContext` construction is still synchronous.
-  - Phase 3 (not started, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
+  - Phase 3 (**explicitly deferred / ignore for the current release**, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
     Requires rewriting the ~400-line private constructor into a shared async core the sync
     constructor also routes through, making the full test suite the regression gate for that
     rewrite. `IConnectionStrategy.HandleDialectDetectionAsync` (an async twin of
@@ -125,7 +125,7 @@ What's left:
 
 ### P2
 
-- **SQL Server UUIDv7 index-locality strategy.** RFC 9562 UUIDv7 places its Unix-millisecond
+- **SQL Server UUIDv7 index-locality strategy — explicitly deferred / ignore for the current release.** RFC 9562 UUIDv7 places its Unix-millisecond
   timestamp in the most-significant 48 bits in network byte order, which makes canonical UUIDv7
   values naturally time ordered for providers that compare UUID bytes in that order. SQL Server's
   `uniqueidentifier` ordering is different: its comparison semantics do not compare the UUID bit
@@ -155,8 +155,13 @@ What's left:
   `AvgReaderConsumptionMs`, and `AvgReaderLeaseMs`. Unit coverage proves synchronous and async
   row reads feed the lifecycle metrics without conflating consumer time with command execution.
   `PengdowsMetricsObserver` exports matching OpenTelemetry gauges for all three values.
-- **Metric cardinality policy for dynamic multi-tenancy.** No deliberate policy yet for
-  context/tenant-derived tags (e.g. `db.name`) that could become high-cardinality.
+- ~~**Metric cardinality policy for dynamic multi-tenancy.**~~ — closed 2026-08-19 as a
+  non-issue after source and listener-level verification. `PengdowsMetricsObserver` does **not**
+  tag metrics with a tenant ID, connection string, or configured application name: its `db.name`
+  value is `IDatabaseContext.Name`, which is the detected database product (for example `SQLite`
+  or `PostgreSql`). The resulting value domain is bounded by `SupportedDatabase`, even when many
+  tenant-named contexts are tracked. `Track_TenantNamedContextsOnSameProvider_UsesOneBoundedDatabaseNameTag`
+  locks that contract down.
 - **Stored-procedure multi-result/OUT parameter handling** is less complete than the best
   specialized competitors.
 - **Provider driver-version compatibility matrix.** Database-engine coverage is strong; testing
