@@ -115,6 +115,17 @@ internal class SqlServerDialect : SqlDialect
     public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";
 
+    public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    {
+        var sql = query.ToString();
+        if ((sql.Length > 0) && !sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("SQL Server OFFSET/FETCH paging requires ORDER BY.");
+        }
+
+        base.AppendPaging(query, offset, limit);
+    }
+
     // DO NOT override QuotePrefix / QuoteSuffix here.
     // We enforce SET QUOTED_IDENTIFIER ON (see SessionSettingsDef) on every
     // connection, so identifiers are quoted with ANSI double-quotes ("name").

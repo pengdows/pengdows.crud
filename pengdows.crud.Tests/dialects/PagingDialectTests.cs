@@ -207,6 +207,19 @@ public class PagingDialectTests
     }
 
     [Fact]
+    public void SqlServer_AppendPaging_WithoutOrderBy_ThrowsClearException()
+    {
+        using var context = new DatabaseContext("fake", new fakeDbFactory(SupportedDatabase.SqlServer));
+        using var container = context.CreateSqlContainer();
+        container.Query.Append("SELECT id FROM orders");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => SqlServer().AppendPaging(container.Query, offset: 0, limit: 10));
+
+        Assert.Contains("ORDER BY", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Oracle_AppendPaging_UsesOffsetFetch()
     {
         var sql = Paging(Oracle(), offset: 10, limit: 5);
