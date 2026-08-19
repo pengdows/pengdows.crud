@@ -1558,6 +1558,7 @@ INSERT INTO {table} (
                 or SupportedDatabase.DuckDB => IsolationLevel.ReadCommitted,
             SupportedDatabase.TiDb => IsolationLevel.Serializable,
             SupportedDatabase.Snowflake => IsolationLevel.RepeatableRead,
+            SupportedDatabase.Db2 => IsolationLevel.Snapshot,
             _ => null
         };
 
