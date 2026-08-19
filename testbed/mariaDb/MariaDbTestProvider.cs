@@ -16,14 +16,23 @@ public sealed class MariaDbTestProvider : TestProvider
         await TestUnsignedIdentityAsync<UIntIdentityRow, uint>(
             "mariadb_uint_identity_test",
             "INT UNSIGNED",
-            2_147_483_648UL);
+            2_147_483_648UL,
+            () => new UIntIdentityRow { Value = "unsigned identity" },
+            row => row.Id);
         await TestUnsignedIdentityAsync<ULongIdentityRow, ulong>(
             "mariadb_ulong_identity_test",
             "BIGINT UNSIGNED",
-            9_223_372_036_854_775_808UL);
+            9_223_372_036_854_775_808UL,
+            () => new ULongIdentityRow { Value = "unsigned identity" },
+            row => row.Id);
     }
 
-    private async Task TestUnsignedIdentityAsync<TEntity, TId>(string table, string idType, ulong firstIdentity)
+    private async Task TestUnsignedIdentityAsync<TEntity, TId>(
+        string table,
+        string idType,
+        ulong firstIdentity,
+        Func<TEntity> createRow,
+        Func<TEntity, TId> getId)
         where TEntity : class, new()
     {
         var tableName = _context.WrapObjectName(table);
@@ -41,10 +50,9 @@ public sealed class MariaDbTestProvider : TestProvider
             await container.ExecuteNonQueryAsync();
 
             var gateway = new TableGateway<TEntity, TId>(_context);
-            var row = new TEntity();
-            typeof(TEntity).GetProperty("Value")!.SetValue(row, "unsigned identity");
+            var row = createRow();
             var created = await gateway.CreateAsync(row);
-            var id = (TId)typeof(TEntity).GetProperty("Id")!.GetValue(row)!;
+            var id = getId(row);
             if (!created || Convert.ToUInt64(id) < firstIdentity)
             {
                 throw new Exception($"MariaDB {idType} identity was not returned as {typeof(TId).Name}");
