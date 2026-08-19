@@ -330,24 +330,6 @@ public class DatabaseContextConstructorTests
     }
 
     [Fact]
-    public void Constructor_With_Null_LoggerFactory_Should_Use_NullLogger()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=oracle;"
-        };
-
-        // Act
-        var context = new DatabaseContext(config, factory);
-
-        // Assert
-        Assert.NotNull(context);
-        // Should not throw and should handle null logger gracefully
-    }
-
-    [Fact]
     public void Constructor_Should_Set_Context_Properties_Correctly()
     {
         // Arrange
@@ -367,26 +349,6 @@ public class DatabaseContextConstructorTests
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
         Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadOnly, context.ReadWriteMode);
-    }
-
-    [Fact]
-    public void Constructor_Should_Handle_Complex_Connection_Strings()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var complexConnectionString =
-            "Host=localhost;Port=5432;Database=testdb;Username=user;Password=pass;Pooling=true;MinPoolSize=5;MaxPoolSize=100;";
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = complexConnectionString
-        };
-
-        // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-
-        // Assert
-        Assert.NotNull(context);
-        // Should handle complex connection strings without throwing
     }
 
     [Fact]

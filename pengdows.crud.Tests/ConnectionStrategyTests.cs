@@ -363,13 +363,15 @@ public class ConnectionStrategyTests
     // Additional tests for KeepAliveConnectionStrategy methods
 
     [Fact]
-    public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw when releasing null connection
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
@@ -405,21 +407,6 @@ public class ConnectionStrategyTests
         // Release it - should dispose and decrease count
         await ctx.CloseAndDisposeConnectionAsync(separateConnection);
         Assert.True(ctx.NumberOfOpenConnections < beforeCount);
-    }
-
-    [Fact]
-    public void KeepAlive_PostInitialize_NullConnection_SetsNullPersistent()
-    {
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
-            DbMode = DbMode.KeepAlive,
-            ReadWriteMode = ReadWriteMode.ReadWrite
-        };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
-
-        // PostInitialize is called during construction, we're just verifying it doesn't crash with null
-        Assert.NotNull(ctx); // Context created successfully
     }
 
     // Additional tests for Standard/Single/SingleWriter connection strategies - edge cases
@@ -473,48 +460,39 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public async Task SingleWriter_WriteConnections_Serializable()
-    {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-
-        var write1 = ctx.GetConnection(ExecutionType.Write);
-        ctx.CloseAndDisposeConnection(write1);
-
-        var write2 = ctx.GetConnection(ExecutionType.Write);
-        ctx.CloseAndDisposeConnection(write2);
-
-        Assert.NotNull(write1);
-        Assert.NotNull(write2);
-    }
-
-    [Fact]
-    public async Task Standard_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task Standard_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
-    public async Task SingleConnection_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task SingleConnection_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
-    public async Task SingleWriter_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task SingleWriter_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     // Additional coverage tests for StandardConnectionStrategy

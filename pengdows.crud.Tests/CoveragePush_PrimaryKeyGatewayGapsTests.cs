@@ -138,25 +138,31 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
     // =========================================================================
 
     [Fact]
-    public async Task UpdateAsync_WithLoadOriginalTrue_ExecutesAndReturnsNonNegative()
+    public async Task UpdateAsync_WithLoadOriginalTrue_AffectsOneRow()
     {
         using var ctx = MakeContext();
         var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
         var entity = new GapOrderLine { OrderId = 3, LineNumber = 1, ProductCode = "Z", Quantity = 2 };
 
+        Assert.True(await gw.CreateAsync(entity));
+        entity.Quantity = 3;
+
         var rows = await gw.UpdateAsync(entity, loadOriginal: true);
-        Assert.True(rows >= 0);
+        Assert.Equal(1, rows);
     }
 
     [Fact]
-    public async Task UpdateAsync_WithLoadOriginalFalse_ExecutesAndReturnsNonNegative()
+    public async Task UpdateAsync_WithLoadOriginalFalse_AffectsOneRow()
     {
         using var ctx = MakeContext();
         var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
         var entity = new GapOrderLine { OrderId = 4, LineNumber = 2, ProductCode = "W", Quantity = 1 };
 
+        Assert.True(await gw.CreateAsync(entity));
+        entity.Quantity = 4;
+
         var rows = await gw.UpdateAsync(entity, loadOriginal: false);
-        Assert.True(rows >= 0);
+        Assert.Equal(1, rows);
     }
 
     // =========================================================================
@@ -607,7 +613,7 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.MySql)]
     [InlineData(SupportedDatabase.SqlServer)]
-    public void BuildUpsert_VersionedEntity_ContainsVersionColumn(SupportedDatabase db)
+    public void BuildUpsert_VersionedEntity_ContainsVersionAndDialectConflictClause(SupportedDatabase db)
     {
         using var ctx = MakeContext(db);
         var gw = new PrimaryKeyTableGateway<GapVersionedPkEntity>(ctx);
@@ -616,7 +622,12 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
         var sc = gw.BuildUpsert(entity);
         var sql = sc.Query.ToString();
 
-        Assert.NotNull(sql);
+        Assert.Contains("row_version", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            sql.Contains("ON CONFLICT", StringComparison.OrdinalIgnoreCase)
+            || sql.Contains("ON DUPLICATE KEY", StringComparison.OrdinalIgnoreCase)
+            || sql.Contains("MERGE INTO", StringComparison.OrdinalIgnoreCase),
+            $"Expected an upsert conflict clause but got: {sql}");
     }
 
     // =========================================================================

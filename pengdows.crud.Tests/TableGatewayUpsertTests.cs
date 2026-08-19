@@ -106,6 +106,28 @@ public class TableGatewayUpsertTests
         Assert.Contains("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task BuildUpsert_CockroachDb_WithWritableId_DoesNotUsePostgreSqlOnlyIdentitySyntax()
+    {
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=CockroachDb",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(
+            configuration,
+            new fakeDbFactory(SupportedDatabase.CockroachDb));
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var container = gateway.BuildUpsert(
+            new ExplicitIdentityEntity { Id = 42, Value = "explicit identity" },
+            context);
+
+        Assert.DoesNotContain("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {

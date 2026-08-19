@@ -1,3 +1,4 @@
+using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
@@ -89,6 +90,27 @@ public class DatabaseDetectionServiceTests
         Assert.Equal(SupportedDatabase.Unknown, result);
     }
 
+    [Theory]
+    [InlineData("IBM Db2 11.5", SupportedDatabase.Db2)]
+    [InlineData("DuckDB 1.1", SupportedDatabase.DuckDB)]
+    [InlineData("Firebird 5.0", SupportedDatabase.Firebird)]
+    public void DetectFromName_UsesSchemaTokensForProductsWithoutAProviderFactory(
+        string productName,
+        SupportedDatabase expected)
+    {
+        var result = DatabaseDetectionService.DetectFromName(productName);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void DetectFromFactory_TypeNameFallback_MatchesDb2AfterInspectingAllKnownFactoryTokens()
+    {
+        var result = DatabaseDetectionService.DetectFromFactory(new TokenOnlyDb2Factory());
+
+        Assert.Equal(SupportedDatabase.Db2, result);
+    }
+
     #endregion
 
     #region Detection from Connection
@@ -118,6 +140,28 @@ public class DatabaseDetectionServiceTests
         using var connection = factory.CreateConnection();
         var result = DatabaseDetectionService.DetectFromConnection(connection);
         Assert.Equal(SupportedDatabase.MySql, result);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.Oracle)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Db2)]
+    public void DetectFromConnection_SchemaProductTokens_ResolveEverySupportedProvider(
+        SupportedDatabase expected)
+    {
+        var factory = new fakeDbFactory(expected);
+        using var connection = factory.CreateConnection();
+
+        var result = DatabaseDetectionService.DetectFromConnection(connection);
+
+        Assert.Equal(expected, result);
     }
 
     [Fact]
@@ -277,4 +321,6 @@ public class DatabaseDetectionServiceTests
     }
 
     #endregion
+
+    private sealed class TokenOnlyDb2Factory : DbProviderFactory;
 }

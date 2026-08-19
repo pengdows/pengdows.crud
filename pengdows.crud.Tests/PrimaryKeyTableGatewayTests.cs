@@ -157,6 +157,7 @@ public class PrimaryKeyTableGatewayTests
             SupportedDatabase.PostgreSql => "Host=localhost;EmulatedProduct=PostgreSql",
             SupportedDatabase.MySql => "Server=localhost;EmulatedProduct=MySql",
             SupportedDatabase.SqlServer => "Server=localhost;EmulatedProduct=SqlServer",
+            SupportedDatabase.Oracle => "Data Source=oracle;EmulatedProduct=Oracle",
             _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
         return new DatabaseContext(cs, factory);
@@ -353,6 +354,25 @@ public class PrimaryKeyTableGatewayTests
 
         Assert.Contains($"{wrapped} = t.{wrapped} + 1", sql);
         Assert.DoesNotContain($" {wrapped} = {wrapped} + 1", sql);
+    }
+
+    [Fact]
+    public void BuildUpsert_OracleMerge_DoesNotAppendStatementTerminator()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Oracle);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+
+        using var container = gw.BuildUpsert(new OrderLine
+        {
+            OrderId = 1,
+            LineNumber = 1,
+            ProductCode = "oracle-safe",
+            Quantity = 1
+        });
+
+        var sql = container.Query.ToString().TrimEnd();
+        Assert.StartsWith("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.False(sql.EndsWith(";", StringComparison.Ordinal));
     }
 
     [Fact]
