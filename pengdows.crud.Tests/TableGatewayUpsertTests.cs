@@ -84,6 +84,28 @@ public class TableGatewayUpsertTests
         Assert.Throws<NotSupportedException>(() => helper.BuildUpsert(entity, context));
     }
 
+    [Fact]
+    public async Task BuildUpsert_PostgreSql_WithWritableId_OverridesSystemIdentityValue()
+    {
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=PostgreSql",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(
+            configuration,
+            new fakeDbFactory(SupportedDatabase.PostgreSql));
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var container = gateway.BuildUpsert(
+            new ExplicitIdentityEntity { Id = 42, Value = "explicit identity" },
+            context);
+
+        Assert.Contains("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {
@@ -108,6 +130,17 @@ public class TableGatewayUpsertTests
         [Id(false)]
         [Column("id", DbType.Int64)]
         public long Id { get; set; }
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
+    }
+
+    [Table("explicit_identity_entities")]
+    private class ExplicitIdentityEntity
+    {
+        [Id]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
 
         [Column("value", DbType.String)]
         public string Value { get; set; } = string.Empty;

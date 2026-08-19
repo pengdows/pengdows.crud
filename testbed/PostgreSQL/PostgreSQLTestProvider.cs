@@ -1,6 +1,8 @@
 #region
 
+using System.Data;
 using pengdows.crud;
+using pengdows.crud.attributes;
 
 #endregion
 
@@ -65,5 +67,59 @@ CREATE TABLE {0} (
         {
             Console.WriteLine(e.Message + "\n --- Continuing anyways");
         }
+    }
+
+    protected override async Task RunAdditionalTestsAsync()
+    {
+        await TestExplicitIdentityUpsertAsync();
+    }
+
+    private async Task TestExplicitIdentityUpsertAsync()
+    {
+        var tableName = context.WrapObjectName("postgres_explicit_identity_upsert");
+        await using var container = context.CreateSqlContainer();
+
+        container.Query.Append($"DROP TABLE IF EXISTS {tableName}");
+        await container.ExecuteNonQueryAsync();
+
+        try
+        {
+            container.Clear();
+            container.Query.Append($"CREATE TABLE {tableName} (");
+            container.Query.Append($"{context.WrapObjectName("id")} INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, ");
+            container.Query.Append($"{context.WrapObjectName("value")} VARCHAR(100) NOT NULL)");
+            await container.ExecuteNonQueryAsync();
+
+            var gateway = new TableGateway<ExplicitIdentityUpsertRow, int>(context);
+            var row = new ExplicitIdentityUpsertRow { Id = 42, Value = "before" };
+            await gateway.UpsertAsync(row);
+            row.Value = "after";
+            await gateway.UpsertAsync(row);
+
+            var loaded = await gateway.RetrieveOneAsync(42);
+            if (loaded?.Value != "after")
+            {
+                throw new Exception("PostgreSQL explicit identity upsert did not persist the updated value");
+            }
+
+            CheckOk("PostgreSQL explicit GENERATED ALWAYS identity upsert: OK");
+        }
+        finally
+        {
+            container.Clear();
+            container.Query.Append($"DROP TABLE IF EXISTS {tableName}");
+            await container.ExecuteNonQueryAsync();
+        }
+    }
+
+    [Table("postgres_explicit_identity_upsert")]
+    private class ExplicitIdentityUpsertRow
+    {
+        [Id]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
     }
 }

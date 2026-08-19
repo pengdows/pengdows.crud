@@ -227,13 +227,21 @@ public partial class TableGateway<TEntity, TRowID>
             binder(entity, parameters);
 
             var conflictCols = ResolveUpsertKey();
+            var overridesSystemIdentity = (dialect is PostgreSqlDialect) && (_idColumn?.IsIdWritable == true);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
                 .Append(BuildWrappedTableName(dialect))
                 .Append(" (")
                 .Append(colSb.AsSpan())
-                .Append(") VALUES (")
+                .Append(")");
+
+            if (overridesSystemIdentity)
+            {
+                sc.Query.Append(" OVERRIDING SYSTEM VALUE");
+            }
+
+            sc.Query.Append(" VALUES (")
                 .Append(valSb.AsSpan())
                 .Append(") ON CONFLICT (");
 
@@ -408,6 +416,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             var onClause = dialect.RenderMergeOnClause(join.ToString());
+            var overridesSystemIdentity = (dialect is PostgreSqlDialect) && (_idColumn?.IsIdWritable == true);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("MERGE INTO ")
@@ -420,7 +429,14 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(template.UpsertUpdateFragment)
                 .Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
-                .Append(") VALUES (")
+                .Append(")");
+
+            if (overridesSystemIdentity)
+            {
+                sc.Query.Append(" OVERRIDING SYSTEM VALUE");
+            }
+
+            sc.Query.Append(" VALUES (")
                 .Append(insertValSb.AsSpan())
                 .Append(");");
 
