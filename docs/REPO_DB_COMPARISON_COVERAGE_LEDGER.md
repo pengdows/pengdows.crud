@@ -16,7 +16,7 @@ This is a coverage ledger, not a claim that every listed issue is a current defe
 | SQL Server | Paging | OFFSET/FETCH SQL generation and live paging | Missing-`ORDER BY` fail-fast behavior. |
 | Oracle | MERGE/upsert | Live generic upsert passes in the provider testbed | Focused terminator assertion/reproduction. Existing live coverage means a semicolon issue must be reproduced before it is treated as a defect. |
 | MariaDB | Upsert/paging | Generic upsert and paging coverage | `uint`/`ulong` identity-return conversion. |
-| SQLite | Mapping and paging | Decimal, GUID, DateTime, paging, and value-dependent decimal reader-type coverage | Provider disposal timing. |
+| SQLite | Mapping and paging | Decimal, GUID, DateTime, paging, value-dependent decimal reader-type coverage, and Microsoft.Data.Sqlite command/reader lifetime coverage | System.Data.SQLite disposal-timing harness. |
 
 ## Required regression coverage
 
@@ -26,7 +26,7 @@ This is a coverage ledger, not a claim that every listed issue is a current defe
 4. **SQL Server — paging order:** unit and integration coverage for paging without `ORDER BY`, with the intended fail-fast contract defined by the test.
 5. **Oracle — MERGE terminator:** unit assertion of generated MERGE text and live execution against ODP.NET.
 6. **MariaDB — unsigned identities:** live `uint` and `ulong` identity round trips.
-7. **SQLite — disposal timing:** provider-specific command/reader lifetime test, requiring a System.Data.SQLite harness in addition to Microsoft.Data.Sqlite.
+7. **SQLite — System.Data.SQLite disposal timing:** add a provider-specific command/reader lifetime test if System.Data.SQLite becomes a supported/tested provider. Microsoft.Data.Sqlite is covered.
 
 ## Deferred until a corresponding feature exists
 
