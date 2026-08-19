@@ -139,11 +139,14 @@ What's left:
   using another provider. It also cannot be selected unconditionally in generated tenant-shared
   code because a tenant may use PostgreSQL, Db2, SQLite, or another provider.
 
+  `SqlServerUuid7OrderingTests.CanonicalUuid7Values_DoNotSortChronologicallyAsUniqueIdentifiers`
+  now establishes the actual ordering behavior against a live SQL Server: two valid UUIDv7 values
+  whose timestamps increase sort in the opposite order when stored as `uniqueidentifier`.
+
   Revisit only as an explicit, SQL-Server-only storage strategy, resolved from the tenant's
   `DatabaseContext`/dialect rather than remembered by application code. It must define migration
-  rules and prohibit mixing canonical and transformed values in one column. First establish a
-  live SQL Server regression test demonstrating the actual ordering behavior; then, if the
-  feature is justified, add fakeDb ordering emulation and provider-specific integration tests.
+  rules and prohibit mixing canonical and transformed values in one column. If the feature is
+  justified, add fakeDb ordering emulation and provider-specific integration tests.
 - **Reader latency doesn't distinguish database time from consumer time.** `ExecuteReaderAsync`
   metrics treat the command as complete once the provider returns the reader; time spent by the
   caller consuming rows isn't separated out. Proposed: execute→first-row, first-row→dispose, and
