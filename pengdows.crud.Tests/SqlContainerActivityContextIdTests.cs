@@ -22,19 +22,27 @@ public class SqlContainerActivityContextIdTests
     {
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         string? seenContextId = null;
+        var expectedContextId = ctx.RootId.ToString();
 
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "pengdows.crud",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => seenContextId = activity.GetTagItem("pengdows.context_id") as string
+            ActivityStopped = activity =>
+            {
+                var contextId = activity.GetTagItem("pengdows.context_id") as string;
+                if (contextId == expectedContextId)
+                {
+                    seenContextId = contextId;
+                }
+            }
         };
         ActivitySource.AddActivityListener(listener);
 
         var container = ctx.CreateSqlContainer("SELECT 1");
         await container.ExecuteNonQueryAsync();
 
-        Assert.Equal(ctx.RootId.ToString(), seenContextId);
+        Assert.Equal(expectedContextId, seenContextId);
     }
 
     [Fact]
@@ -42,19 +50,27 @@ public class SqlContainerActivityContextIdTests
     {
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
         string? seenContextId = null;
+        var expectedContextId = ctx.RootId.ToString();
 
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "pengdows.crud",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => seenContextId = activity.GetTagItem("pengdows.context_id") as string
+            ActivityStopped = activity =>
+            {
+                var contextId = activity.GetTagItem("pengdows.context_id") as string;
+                if (contextId == expectedContextId)
+                {
+                    seenContextId = contextId;
+                }
+            }
         };
         ActivitySource.AddActivityListener(listener);
 
         var container = ctx.CreateSqlContainer("SELECT 1");
         await using var reader = await container.ExecuteReaderAsync();
 
-        Assert.Equal(ctx.RootId.ToString(), seenContextId);
+        Assert.Equal(expectedContextId, seenContextId);
     }
 
     private static DatabaseContext CreateContext(SupportedDatabase db)
