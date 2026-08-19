@@ -224,6 +224,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.Contains("USING (SELECT", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("FROM DUAL", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("USING (VALUES", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.False(sql.EndsWith(";", StringComparison.Ordinal));
     }
 
     private static string BuildInsertColumns(IDatabaseContext context)

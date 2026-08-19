@@ -438,7 +438,12 @@ public partial class TableGateway<TEntity, TRowID>
 
             sc.Query.Append(" VALUES (")
                 .Append(insertValSb.AsSpan())
-                .Append(");");
+                .Append(")");
+
+            if (dialect.DatabaseType != SupportedDatabase.Oracle)
+            {
+                sc.Query.Append(';');
+            }
 
             sc.AddParameters(parameters);
             return sc;
