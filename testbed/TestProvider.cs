@@ -464,6 +464,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => true,
             SupportedDatabase.Oracle => true,
             SupportedDatabase.Firebird => true,
+            SupportedDatabase.Db2 => true,
             _ => false
         };
     }
@@ -478,6 +479,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.YugabyteDb => true,
             SupportedDatabase.DuckDB => true,
             SupportedDatabase.Oracle => true,
+            SupportedDatabase.Db2 => true,
             _ => false
         };
     }
@@ -498,6 +500,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
             SupportedDatabase.Oracle => "VARCHAR2(36)",
+            SupportedDatabase.Db2 => "CHAR(36)",
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             _ => "UUID"
@@ -519,6 +522,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.YugabyteDb => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.DuckDB => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.Oracle => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.Db2 => "TIMESTAMP",
             _ => "TIMESTAMP WITH TIME ZONE"
         };
     }

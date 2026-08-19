@@ -227,7 +227,9 @@ public class Uuid7OptimizedTests
         try
         {
             counterField.SetValue(state, 4096);
-            lastMsField.SetValue(state, originalLastMs);
+            // Keep the logical millisecond pinned so generation reaches overflow
+            // instead of resetting the counter when wall-clock time advances.
+            lastMsField.SetValue(state, long.MaxValue);
 
             var ex = Assert.Throws<InvalidOperationException>(() => Uuid7Optimized.NewUuid7());
             Assert.Contains("FailFastOnBurst", ex.Message);
@@ -259,7 +261,9 @@ public class Uuid7OptimizedTests
         try
         {
             counterField.SetValue(state, 4096);
-            lastMsField.SetValue(state, originalLastMs);
+            // Keep the logical millisecond pinned so generation reaches overflow
+            // instead of resetting the counter when wall-clock time advances.
+            lastMsField.SetValue(state, long.MaxValue);
 
             Assert.Throws<InvalidOperationException>(() =>
             {
