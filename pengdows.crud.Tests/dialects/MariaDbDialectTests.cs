@@ -59,6 +59,12 @@ public class MariaDbDialectTests
     }
 
     [Fact]
+    public void GeneratedKeyPlan_UsesReaderInsertedId()
+    {
+        Assert.Equal(GeneratedKeyPlan.ReaderInsertedId, CreateDialect().GetGeneratedKeyPlan());
+    }
+
+    [Fact]
     public void FeatureGates_Depends_On_Version()
     {
         var d = CreateDialect();

@@ -229,7 +229,7 @@ public class ParallelTestOrchestrator
                 ContainerName = "MariaDB",
                 DatabaseProvider = "MariaDB",
                 Container = new MariaDbContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new MariaDbTestProvider(db, sp)
             },
             new()
             {
