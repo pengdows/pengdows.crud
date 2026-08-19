@@ -207,13 +207,12 @@ What's left:
     identification probe): `CreateDialect(...)` must still resolve Aurora MySQL using only the sync
     probe, proving the sync entry point never starts depending on the async overload.
 
-    Known gap, deliberately not addressed here: neither `SqlDialectFactory.CreateDialectAsync` nor
-    `DataSourceInformation.CreateAsync` accept a `CancellationToken`, even though the
-    `DetectProductAsync` primitives they now call support one. Phase 1 built genuinely
-    asynchronous, cancellation-capable detection; this call chain doesn't yet expose that
-    cancellation to callers. Threading a token through both signatures is straightforward but was
-    left out to avoid scope creep into more call sites right before release — revisit alongside
-    Phase 3.
+    `SqlDialectFactory.CreateDialectAsync` and `DataSourceInformation.CreateAsync` now both accept
+    an optional `CancellationToken`; it is checked before opening/probing, passed to
+    `ITrackedConnection.OpenAsync`, and propagated to `DetectProductAsync`. The focused
+    `DataSourceInformationAsyncTests.CreateAsync_PreCanceledToken_DoesNotOpenOrProbeConnection`
+    regression test proves a pre-cancelled request stops before any connection I/O. This is a
+    direct-call capability only: ordinary `DatabaseContext` construction is still synchronous.
   - Phase 3 (not started, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
     Requires rewriting the ~400-line private constructor into a shared async core the sync
     constructor also routes through, making the full test suite the regression gate for that
@@ -669,3 +668,190 @@ Build mutates prepared entity state             BY DESIGN — documented above, 
 Partial batch failure                           STILL OPEN — see above
 Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY — see above
 ```
+
+
+---
+
+## Fixed: hardcoded per-database checks removed from the gateway layer (2026-08-14)
+
+**What was wrong:** while working the `writeSucceeded` precision fix above, the user raised a
+standing architectural principle this codebase is supposed to follow — database independence.
+Any database-specific behavior belongs behind an `ISqlDialect` capability the gateway asks about
+generically; the generic gateway classes (`TableGateway`, `PrimaryKeyTableGateway`,
+`BaseTableGateway`) should never name a specific `SupportedDatabase` value themselves. An audit
+found 5 places (9 call sites, all confined to `TableGateway.Core.cs`, `TableGateway.Upsert.cs`,
+`PrimaryKeyTableGateway.Upsert.cs` — zero elsewhere) where the gateway violated this:
+
+1. `TableGateway.Core.cs` — `dialect.DatabaseType == SupportedDatabase.Oracle` (two overloads)
+   picked `ExecuteNonQueryAsync`+`GetParameterValue` vs `ExecuteScalarOrNullAsync` for
+   generated-key retrieval after a `Returning`/`OutputInserted` INSERT.
+2. `TableGateway.Core.cs`'s `BuildCreateWithReturning` — `== SupportedDatabase.SqlServer` picked
+   OUTPUT-before-VALUES clause placement, sitting right next to an *already-existing, already-
+   correct, completely unused* capability (`ISqlDialect.InsertReturningClauseBeforeValues`,
+   `SqlServerDialect.cs:265`) that did the exact same job — the generic mechanism had already
+   been built and just never wired in. The same block also had `== SupportedDatabase.Oracle` for
+   the OUT-parameter/clause-rewriting sub-case.
+3. `TableGateway.Upsert.cs` / `PrimaryKeyTableGateway.Upsert.cs` — `dialect.SupportsMerge &&
+   ctx.DataSourceInfo.Product != SupportedDatabase.Firebird` decided whether a 0-rows-affected
+   UPSERT could be trusted as a version conflict.
+4. Same two files — `ctx.DataSourceInfo.Product == SupportedDatabase.Firebird` routed to
+   `BuildFirebirdMergeUpsert`/`BuildPkFirebirdMergeUpsert` instead of standard MERGE, both gated
+   by the same `SupportsMerge` flag.
+5. `PrimaryKeyTableGateway.Upsert.cs` — `ctx.DataSourceInfo.Product != SupportedDatabase.Firebird`
+   guarded whether a pure-`[PrimaryKey]`-only entity (no updateable columns) could upsert at all.
+
+Root cause of #3/#4: `SupportsMerge` is overloaded to mean both "in the merge-syntax family" and
+"emits literal `MERGE ... WHEN MATCHED`" — Firebird is `true` for the first sense (it's
+version-gated SQL:2003-level support) but needs `false` for the second everywhere it's consumed,
+so every consumer had bolted on its own `!= Firebird` patch instead of asking a single capability.
+
+**Fix:** three new `ISqlDialect` capabilities, following the exact pattern the codebase already
+uses successfully for `GeneratedKeyPlan` and `InsertReturningClauseBeforeValues` — declared as
+C# 8 default-interface-method properties (so only dialects that differ from the default need to
+override), with a matching `public virtual` declaration on the `SqlDialect` base class (required
+for subclasses to `override` a default-interface member):
+
+- `bool RequiresOutputParameterForReturning` (default `false`; Oracle `true`) — replaces the
+  three Oracle checks (#1 both overloads, #2's Oracle half).
+- `bool EmitsAnsiMergeSyntax` (default **`true`**; Firebird `false`) — replaces #3/#4's four
+  `!= Firebird`/`== Firebird` checks. Defaulting to `true` (not `false`) was a deliberate,
+  verified choice: `SupportsMerge` is currently `true` for SQL Server, Oracle, Snowflake, DuckDB
+  1.4+, and PostgreSQL 15+ — defaulting the new property to `false` and only overriding the first
+  three would have silently broken conflict detection for DuckDB/PostgreSQL, which the *old*
+  `!= Firebird` check happened to get right by accident. Verified each `SupportsMerge` override
+  directly (`grep`'d every dialect) before picking the default, specifically to avoid that trap.
+- `bool SupportsPureKeyUpsert` (default `false`; Firebird `true`) — replaces #5, opposite polarity
+  from the merge property since Firebird is the sole *positive* exception here, not the sole
+  negative one.
+
+`#2`'s SqlServer half was fixed by simply wiring in the pre-existing
+`InsertReturningClauseBeforeValues` — no new API needed for that part.
+
+**Deliberately not done:** the audit's own suggestion was a full `GetUpsertSyntaxStyle()` enum
+(mirroring `GeneratedKeyPlan`) to replace the top-level upsert dispatch entirely. Declined: the
+top-level dispatch (`SupportsMerge`/`SupportsInsertOnConflict`/`SupportsOnDuplicateKey`) was
+already clean and database-agnostic — the actual problem was narrower (distinguishing Firebird's
+merge-*like* syntax from true ANSI MERGE *within* the already-correct `SupportsMerge` bucket).
+Replacing working, already-generic dispatch with a parallel enum to fix a problem one boolean
+already solves would have been a larger diff for no correctness gain.
+
+Covered by 26 new tests in `pengdows.crud.Tests/dialects/DialectCapabilityTests.cs` (one dialect
+per `SupportedDatabase` value per property, both the lone exception and the "everyone else"
+case) — a deliberate deviation from strict TDD ordering (properties were written before tests,
+given they're simple additive facts, not complex logic) was caught and corrected: verified each
+test is actually meaningful by temporarily breaking `FirebirdDialect.SupportsPureKeyUpsert` and
+confirming the corresponding test failed, before restoring it. Zero remaining
+`SupportedDatabase.X` comparisons in `TableGateway.*.cs`/`PrimaryKeyTableGateway.*.cs`/
+`BaseTableGateway.*.cs` (confirmed by grep). Full regression suite (6233 tests) passes unchanged,
+confirming the refactor preserved existing Oracle/SqlServer/Firebird behavior rather than just
+compiling.
+
+**Integration validation — done.** The capability refactor above, plus the multitenancy
+dialect-cache fix and all four audit-field-restoration rounds, have now been validated against
+real database instances via `pengdows.crud.IntegrationTests` (Testcontainers) and the full
+`testbed/` suite, not just `fakeDb`. Running against real engines surfaced two genuine bugs that
+`fakeDb` is structurally incapable of catching, since it never parses or executes real SQL and
+never returns a real server version banner:
+
+1. **`SqlDialect.ParseVersion` picked up the C compiler's version instead of the server's.**
+   The base implementation (`SqlDialect.cs`) matched the *last* dotted-number sequence in a
+   version string. Real PostgreSQL's `SELECT version()` banner ends with the gcc version it was
+   compiled with (e.g. `"PostgreSQL 18.1 ..., compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"`),
+   so on virtually every gcc-built PostgreSQL server — i.e. every Linux/Docker image — this
+   silently returned `14.2.0` instead of `18.1`, disabling every `IsVersionAtLeast()`-gated
+   capability (`SupportsMerge`, `SupportsJsonTypes`, `SupportsSqlJsonConstructors`,
+   `SupportsJsonTable`, `SupportsMergeReturning`) regardless of the real server version. Fixed
+   with a `PostgreSqlDialect.ParseVersion` override matching `PostgreSQL\s+(\d+(?:\.\d+)*)`
+   specifically, ignoring anything after. Covered by
+   `pengdows.crud.Tests/PostgreSqlVersionParsingTests.cs` using real captured banners from two
+   different PostgreSQL builds.
+2. **MERGE version-increment fragment produced an ambiguous column reference on real Postgres.**
+   The `"version" = "version" + 1` fragment (`TableGateway.Sql.cs`,
+   `PrimaryKeyTableGateway.Core.cs`) reused the same alias-prefix variable on both sides, which is
+   empty for dialects where `MergeUpdateRequiresTargetAlias == false`. Both the MERGE target and
+   source expose a `version` column, so the unqualified RHS is genuinely ambiguous — PostgreSQL's
+   real MERGE parser rejects it (`42702: column reference "version" is ambiguous`); `fakeDb` never
+   parses the SQL so never caught it. Fixed by hardcoding the RHS to the target alias (`t.`)
+   regardless of `MergeUpdateRequiresTargetAlias`. Covered by new regression tests in
+   `BuildUpsertSqlGenerationTests.cs` and `PrimaryKeyTableGatewayTests.cs` asserting the qualified
+   form, plus real end-to-end coverage against live PostgreSQL 18 and Firebird in
+   `pengdows.crud.IntegrationTests/Core/VersionedUpsertConflictTests.cs`.
+
+Both fixes independently verified (not just trusted from the validation pass): read and confirmed
+the root cause in the actual source for each, rebuilt the full solution clean, ran the full unit
+suite (6240/6240), ran the new/modified integration tests directly against real Docker/
+Testcontainers (11/11 passed: Firebird pure-key upsert, real-unique-constraint audit-restoration,
+real-PostgreSQL-18/Firebird MERGE conflict-detection), ran
+`MultiTenantDialectVersionTests.cs` (two real MySQL 8.0.19/8.0.33 containers sharing one
+`TableGateway`, proving version-specific SQL is generated correctly for each) directly, and ran
+the full `testbed/` suite directly: 11/11 databases, 207/207 checks, 0 failures, 23 pre-existing
+skips.
+
+**Benchmark validation — done.** Two new fakeDb-only BenchmarkDotNet benchmarks were added since
+none of the existing suite exercised `CreateAsync` execution or `BuildUpsert`'s MERGE-capability
+branches:
+
+- `benchmarks/CrudBenchmarks/Internal/CreateAsyncAuditOverheadBenchmarks.cs` — `CreateAsync` with
+  vs. without audit columns, isolating the CPU cost of the `writeSucceeded`/audit snapshot-restore
+  bookkeeping.
+- `benchmarks/CrudBenchmarks/Internal/UpsertCapabilityBenchmarks.cs` — `BuildUpsert` on SQL Server
+  (`EmitsAnsiMergeSyntax == true` branch) vs. Firebird (`== false` branch).
+
+Compared a read-only worktree at the pre-session commit, HEAD with the capability refactor
+reverted, and HEAD with the refactor applied (`InvocationCount=8192, IterationCount=20,
+WarmupCount=5`, all fakeDb/in-memory, no real I/O). Results:
+
+- **Audit snapshot/restore overhead:** ~8-13% cost difference between audited and non-audited
+  entities, but that gap is present even in the pre-session baseline (it's the pre-existing cost
+  of `SetAuditFields` reflection, not the new snapshot/restore bookkeeping) and does not increase
+  monotonically across pre-fix → refactor-reverted → current; all three land within each other's
+  StdDev. No measurable regression.
+- **Dialect capability property reads:** SQL Server ANSI-MERGE and Firebird MATCHING-MERGE builds
+  differ by ~1% between baseline and current, fully inside noise — consistent with a virtual
+  property read costing the same as the enum comparison it replaced.
+- **Fingerprint caching (multitenancy fix):** not independently isolated in a per-call benchmark —
+  it's already committed on `2.0.6` HEAD (not part of this session's uncommitted diff), and
+  architecturally it's a one-time-per-dialect-fingerprint cost (`Lazy`-cached template building via
+  `ConcurrentDictionary<string, T>`), so a per-call `CreateAsync`/`BuildUpsert` benchmark wouldn't
+  show it regardless. Allocated bytes were flat across all three benchmarked states, consistent
+  with no added steady-state cost. If a dedicated cache-hit-rate/warm-up benchmark is wanted later,
+  it isn't built yet.
+
+Verdict: no statistically meaningful performance regression from any of this session's changes.
+
+---
+
+## RetryContext Subsystem (Governor-Aware Resilient Execution)
+
+### Architectural Problem
+Existing third-party retry libraries (such as Polly or manual retry loops) are unaware of low-level connection pool topology, connection hold times, or admission control. Wrapping raw ADO.NET or TableGateway calls in an external retry policy leads to two critical operational failure modes:
+1. **Connection Holding during Backoff / Sleep**: If a transaction or connection is held while the thread sleeps between retries, connection pools saturate, starving other concurrent requests.
+2. **Thundering Herds & Connection Storms**: When multiple concurrent requests experience transient database errors (e.g. deadlocks, lock timeouts), external retries wake up simultaneously and storm the connection pool and database engine, causing cascaded collapse.
+
+### Design Principles of `RetryContext`
+
+`RetryContext` is a first-class execution coordinator designed specifically to integrate with `DatabaseContext`, `PoolGovernor`, and `IAuditValueResolver`.
+
+#### 1. Dual Retry Modes
+- **Mode 1: Transactional (`ExecuteTransactionalAsync`)**:
+  - Treats the entire operation delegate as an atomic, all-or-nothing unit of work.
+  - On a transient error (`DatabaseException.IsTransient == true`), the current transaction is rolled back and its connection lease is immediately disposed.
+  - In-memory entity modifications (such as audit stamps) are reverted using `RestoreAuditSnapshot` to ensure entity state matches the pre-execution baseline.
+  - The thread releases its `PoolGovernor` slot before waiting with decorrelated exponential jitter.
+  - On wake-up, it acquires a fresh slot from `PoolGovernor.AcquireAsync(ct)` and begins a new transaction lease from Step 1.
+- **Mode 2: Sequential (`ExecuteSequentialAsync`)**:
+  - Processes a stream or queue of independent items in strict sequence.
+  - If a transient failure occurs on item $K$, only item $K$ is retried with backoff.
+  - Items $1 \dots K-1$ remain committed and are not re-executed; once item $K$ succeeds, execution advances to item $K+1$.
+
+#### 2. PoolGovernor Slot Coordination
+- During backoff sleep, **zero connection slots are held**.
+- Re-admission after backoff passes through the fairness turnstile of `PoolGovernor`, eliminating connection storms and preventing starvation of non-retrying traffic.
+
+#### 3. Transient Exception Classification
+- Automatically filters exceptions via `DatabaseException.IsTransient`:
+  - `DeadlockException` (`TransientWriteConflictException`) $\to$ Retryable
+  - `SerializationConflictException` $\to$ Retryable
+  - `CommandTimeoutException` $\to$ Retryable
+  - `UniqueConstraintViolationException` $\to$ Non-transient, fails fast without retry
+  - `ForeignKeyViolationException` $\to$ Non-transient, fails fast without retry
