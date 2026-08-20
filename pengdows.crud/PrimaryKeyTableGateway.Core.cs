@@ -7,6 +7,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -35,6 +36,11 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // SQL text/metadata (no DbParameter construction), so unlike the binder/container caches this
     // is safe to fingerprint-key.
     private readonly ConcurrentDictionary<string, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
+
+    // Batch SQL can group multiple entities into a single container. Keep the ownership metadata
+    // weakly attached to that container so a partial batch failure restores audit fields only for
+    // containers that never completed, without extending the container's lifetime.
+    private readonly ConditionalWeakTable<ISqlContainer, IReadOnlyList<TEntity>> _batchContainerEntities = new();
 
     /// <summary>Cached SQL fragments specific to PK-based operations.</summary>
     private sealed class PkTemplates
