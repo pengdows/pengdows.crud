@@ -84,6 +84,14 @@ public class ParallelTestOrchestrator
                 .ToList();
         }
 
+        // Dispatch order matters even though only 2 run at a time: this is a FIFO queue drained by
+        // a 2-slot semaphore, so whichever slot frees first immediately grabs the NEXT item in
+        // list order. Sorting the slowest-starting containers (e.g. Db2, Oracle) to the front means
+        // both slots start on heavy work at t=0 instead of Db2 sitting queued behind 9 other
+        // configurations and not even beginning its own slow image pull until they've all cycled
+        // through — which previously made a single Db2 run dominate total wall-clock time.
+        testConfigurations = OrderByStartupWeightDescending(testConfigurations);
+
         Console.WriteLine($"Starting {testConfigurations.Count} test containers (max 2 parallel)...");
 
         // Limit parallelism to 2 to prevent host saturation
@@ -192,9 +200,19 @@ public class ParallelTestOrchestrator
     }
 
     // POLICY: Every new SupportedDatabase value requires an entry in this list.
+    /// <summary>
+    /// Sorts by descending <see cref="TestConfiguration.StartupWeightSeconds"/>, stable for ties.
+    /// Pure and side-effect-free — used both by <see cref="RunAllTestsAsync"/> and directly by
+    /// tests, since it never touches a container or Docker.
+    /// </summary>
+    public static List<TestConfiguration> OrderByStartupWeightDescending(IEnumerable<TestConfiguration> configs)
+    {
+        return configs.OrderByDescending(c => c.StartupWeightSeconds).ToList();
+    }
+
     // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
     // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
-    private List<TestConfiguration> GetTestConfigurations()
+    public List<TestConfiguration> GetTestConfigurations()
     {
         var configurations = new List<TestConfiguration>
         {
@@ -203,84 +221,98 @@ public class ParallelTestOrchestrator
                 ContainerName = "SQLite",
                 DatabaseProvider = "SQLite",
                 Container = new SqliteTestContainer(), // We'll need to create this
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new TestProvider(db, sp),
+                StartupWeightSeconds = 1 // no real container — file/in-memory
             },
             new()
             {
                 ContainerName = "DuckDB",
                 DatabaseProvider = "DuckDB",
                 Container = new DuckDbTestContainer(),
-                TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp),
+                StartupWeightSeconds = 1 // no real container — file/in-memory
             },
             new()
             {
                 ContainerName = "PostgreSQL",
                 DatabaseProvider = "PostgreSQL",
                 Container = new PostgreSqlTestContainer(),
-                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp),
+                StartupWeightSeconds = 5 // small, fast-starting official image
             },
             new()
             {
                 ContainerName = "MySQL",
                 DatabaseProvider = "MySQL",
                 Container = new MySqlTestContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new TestProvider(db, sp),
+                StartupWeightSeconds = 8
             },
             new()
             {
                 ContainerName = "MariaDB",
                 DatabaseProvider = "MariaDB",
                 Container = new MariaDbContainer(),
-                TestProviderFactory = (db, sp) => new MariaDbTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new MariaDbTestProvider(db, sp),
+                StartupWeightSeconds = 8
             },
             new()
             {
                 ContainerName = "SQL Server",
                 DatabaseProvider = "SQL Server",
                 Container = new SqlServerTestContainer(),
-                TestProviderFactory = (db, sp) => new SqlServerTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new SqlServerTestProvider(db, sp),
+                StartupWeightSeconds = 25 // larger image, slower to accept connections
             },
             new()
             {
                 ContainerName = "CockroachDB",
                 DatabaseProvider = "CockroachDB",
                 Container = new CockroachDbTestContainer(),
-                TestProviderFactory = (db, sp) => new CockroachDbTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new CockroachDbTestProvider(db, sp),
+                StartupWeightSeconds = 12
             },
             new()
             {
                 ContainerName = "Firebird",
                 DatabaseProvider = "Firebird",
                 Container = new FirebirdSqlTestContainer(),
-                TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp),
+                StartupWeightSeconds = 8
             },
             new()
             {
                 ContainerName = "TiDB",
                 DatabaseProvider = "TiDB",
                 Container = new TiDBTestContainer(),
-                TestProviderFactory = (db, sp) => new TiDBTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new TiDBTestProvider(db, sp),
+                StartupWeightSeconds = 20 // multi-component distributed SQL cluster
             },
             new()
             {
                 ContainerName = "YugabyteDB",
                 DatabaseProvider = "YugabyteDB",
                 Container = new YugabyteTestContainer(),
-                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp),
+                StartupWeightSeconds = 20 // distributed, multi-process
             },
             new()
             {
                 ContainerName = "Oracle",
                 DatabaseProvider = "Oracle",
                 Container = new OracleTestContainer(),
-                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp),
+                StartupWeightSeconds = 45 // large image, historically slow to become healthy
             },
             new()
             {
                 ContainerName = "Db2",
                 DatabaseProvider = "Db2",
                 Container = new Db2TestContainer(),
-                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp),
+                // Directly observed in this project's own live testbed runs: 45-70s to reach
+                // "ready" — the slowest of any always-on database by a wide margin.
+                StartupWeightSeconds = 60
             },
             // Add Sybase as needed
         };
@@ -293,7 +325,8 @@ public class ParallelTestOrchestrator
                 ContainerName = "Snowflake",
                 DatabaseProvider = "Snowflake",
                 Container = new SnowflakeTestContainer(),
-                TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp),
+                StartupWeightSeconds = 5 // no local container — real cloud round-trip instead
             });
         }
 
@@ -368,6 +401,14 @@ public class TestConfiguration
     public required string DatabaseProvider { get; set; }
     public required ITestContainer Container { get; set; }
     public required Func<IDatabaseContext, IServiceProvider, TestProvider> TestProviderFactory { get; set; }
+
+    /// <summary>
+    /// Best-effort relative ranking of how long this database's container takes to become ready
+    /// (image pull + startup + first-connection wait) — used only to pick <see cref="ParallelTestOrchestrator"/>'s
+    /// dispatch order, not a measured guarantee. Higher runs first. Revisit using real
+    /// <see cref="TestResult.ContainerStartTime"/> data from live runs as it accumulates.
+    /// </summary>
+    public int StartupWeightSeconds { get; set; }
 }
 
 public class TestResult
