@@ -7,7 +7,7 @@ using pengdows.crud.configuration;
 
 #endregion
 
-namespace pengdows.crud;
+namespace pengdows.crud.tenant;
 
 internal sealed class DefaultDatabaseContextFactory : IDatabaseContextFactory
 {

@@ -12,6 +12,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
 using pengdows.crud.metrics;
+using pengdows.crud.tenant;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 using Xunit;
