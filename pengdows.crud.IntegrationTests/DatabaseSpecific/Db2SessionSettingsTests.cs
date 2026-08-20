@@ -3,7 +3,7 @@ using pengdows.crud;
 using testbed.Db2;
 using Xunit;
 
-namespace pengdows.crud.IntegrationTests;
+namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 
 /// <summary>
 /// Live regression coverage for <see cref="pengdows.crud.dialects.Db2Dialect.GetBaseSessionSettings"/>,

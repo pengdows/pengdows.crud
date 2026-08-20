@@ -3,7 +3,7 @@ using pengdows.crud;
 using testbed;
 using Xunit;
 
-namespace pengdows.crud.IntegrationTests;
+namespace pengdows.crud.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Verifies dispatch ordering for <see cref="ParallelTestOrchestrator"/>'s fixed

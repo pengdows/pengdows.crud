@@ -9,7 +9,7 @@ using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
+namespace pengdows.crud.IntegrationTests.Core;
 
 /// <summary>
 /// Feasibility probe (Priority 3 of the dialect-capability-refactor validation task, see
