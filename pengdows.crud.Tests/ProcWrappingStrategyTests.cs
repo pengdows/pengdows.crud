@@ -44,6 +44,20 @@ public class ProcWrappingStrategyTests
     }
 
     [Fact]
+    public void ExecStyle_AppendsOutputForOutputAndInputOutputParameters()
+    {
+        using var ctx = CreateContextWithStyle(ProcWrappingStyle.Exec);
+        using var sc = ctx.CreateSqlContainer("dbo.Sqltest") as SqlContainer;
+        sc!.AddParameterWithValue("input", DbType.Int32, 1);
+        sc.AddParameterWithValue("output", DbType.Int32, 0, ParameterDirection.Output);
+        sc.AddParameterWithValue("inputOutput", DbType.Int32, 2, ParameterDirection.InputOutput);
+
+        var sql = sc.WrapForStoredProc(ExecutionType.Write, true);
+
+        Assert.Equal("EXEC \"dbo\".\"Sqltest\" @input, @output OUTPUT, @inputOutput OUTPUT", sql);
+    }
+
+    [Fact]
     public void CallStyle_Wraps()
     {
         using var ctx = CreateContextWithStyle(ProcWrappingStyle.Call);

@@ -162,8 +162,13 @@ What's left:
   or `PostgreSql`). The resulting value domain is bounded by `SupportedDatabase`, even when many
   tenant-named contexts are tracked. `Track_TenantNamedContextsOnSameProvider_UsesOneBoundedDatabaseNameTag`
   locks that contract down.
-- **Stored-procedure multi-result/OUT parameter handling** is less complete than the best
-  specialized competitors.
+- **Stored-procedure multi-result handling** remains deliberately unsupported: `ITrackedReader`
+  rejects `NextResult()` so callers cannot hold an unbounded connection lease across arbitrary,
+  caller-driven result traversal. Supporting it would require a new, explicitly bounded API and
+  lifecycle contract. ~~SQL Server OUT/INOUT parameters~~ were fixed 2026-08-19: the `EXEC`
+  wrapper now emits the required `OUTPUT` marker for `Output` and `InputOutput` parameters.
+  `StoredProc_OutputParameter_WorksOnSqlServer` proves the behavior against a real SQL Server;
+  `ExecStyle_AppendsOutputForOutputAndInputOutputParameters` locks the generated SQL down.
 - **Provider driver-version compatibility matrix.** Database-engine coverage is strong; testing
   across multiple meaningful driver releases (Npgsql, SqlClient, MySqlConnector/MySql.Data,
   Oracle providers, etc.) is not.
