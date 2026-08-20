@@ -677,6 +677,40 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.Db2:
+                {
+                    var db2ProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // Db2 LUW: CALL "proc_name"() — result set is returned via a cursor declared
+                    // WITH RETURN TO CALLER inside the procedure body; DYNAMIC RESULT SETS 1
+                    // declares how many such cursors the procedure returns.
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {db2ProcName}()\n" +
+                        "DYNAMIC RESULT SETS 1\n" +
+                        "LANGUAGE SQL\n" +
+                        "BEGIN\n" +
+                        "  DECLARE c1 CURSOR WITH RETURN TO CALLER FOR SELECT 42 FROM SYSIBM.SYSDUMMY1;\n" +
+                        "  OPEN c1;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    // CALL "sp_pengdows_test"() — result set contains one row with value 42.
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var db2Wrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(db2Wrapped);
+                    var db2Result = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (db2Result != 42)
+                    {
+                        throw new Exception($"[Db2 proc] Expected 42 but got {db2Result}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {db2ProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             case SupportedDatabase.PostgreSql:
             case SupportedDatabase.AuroraPostgreSql:
             case SupportedDatabase.CockroachDb:
@@ -709,6 +743,39 @@ CREATE TABLE {tableName} (
 
                     sc.Clear();
                     sc.Query.Append($"DROP FUNCTION {pgFunctionName}()");
+                    await sc.ExecuteNonQueryAsync();
+
+                    // Write path: a real PROCEDURE (not a function) invoked via CALL — the branch
+                    // the function test above never exercises. PostgreSQL returns the resulting
+                    // INOUT value as a one-row result set from CALL itself (no provider-level
+                    // output-parameter binding needed, unlike SQL Server's OUTPUT).
+                    var pgProcName = _context.WrapObjectName("sp_pengdows_test_proc");
+                    sc.Clear();
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {pgProcName}(INOUT result INT)\n" +
+                        "LANGUAGE plpgsql\n" +
+                        "AS $$\n" +
+                        "BEGIN\n" +
+                        "  result := 42;\n" +
+                        "END;\n" +
+                        "$$");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test_proc");
+                    sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
+                    var pgProcWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(pgProcWrapped);
+                    sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
+                    var pgProcResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (pgProcResult != 42)
+                    {
+                        throw new Exception($"[PostgreSQL proc] Expected 42 but got {pgProcResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {pgProcName}");
                     await sc.ExecuteNonQueryAsync();
                     break;
                 }

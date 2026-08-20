@@ -87,6 +87,13 @@ internal sealed class Db2Dialect : SqlDialect
 
     public override bool SupportsSavepoints => true;
 
+    // Db2 LUW stored procedures are invoked via SQL-standard CALL syntax — same wrapping style
+    // as MySQL/MariaDB (CallProcWrappingStrategy's own doc comment already names Db2 as an
+    // intended consumer). Result sets are returned via a cursor declared WITH RETURN TO CALLER
+    // inside the procedure body, which the CALL statement's caller consumes like an ordinary
+    // query result set — no special SQL is needed on the calling side for that part.
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;
+
     // Db2 LUW rejects a bare "SAVEPOINT name" (SQL0104N, expects "on rollback retain cursors")
     // — confirmed against a live ibmcom/db2 container during Phase 2 testbed validation.
     // ROLLBACK TO SAVEPOINT does not need the extra clause and matches the base default.

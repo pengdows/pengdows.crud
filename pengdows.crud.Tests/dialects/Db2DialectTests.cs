@@ -1,6 +1,7 @@
 #region
 
 using System;
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -41,6 +42,26 @@ public class Db2DialectTests
     public void SupportsNamedParameters_IsTrue()
     {
         Assert.True(CreateDialect().SupportsNamedParameters);
+    }
+
+    [Fact]
+    public void ProcWrappingStyle_IsCall()
+    {
+        // Db2 stored procedures are invoked via SQL-standard CALL syntax, same as MySQL/MariaDB —
+        // CallProcWrappingStrategy's own doc comment already names Db2 as an intended consumer.
+        Assert.Equal(ProcWrappingStyle.Call, CreateDialect().ProcWrappingStyle);
+    }
+
+    [Fact]
+    public void WrapForStoredProc_UsesCallSyntax()
+    {
+        using var ctx = CreateContext();
+        using var sc = (SqlContainer)ctx.CreateSqlContainer("SP_TEST");
+        sc.AddParameterWithValue("p0", DbType.Int32, 1);
+
+        var wrapped = sc.WrapForStoredProc(ExecutionType.Write);
+
+        Assert.Equal("CALL \"SP_TEST\"(@p0)", wrapped);
     }
 
     [Fact]

@@ -201,7 +201,8 @@ public class DataSourceInformationTests
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake => ProcWrappingStyle.Call,
+                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
+                or SupportedDatabase.Db2 => ProcWrappingStyle.Call,
             SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
