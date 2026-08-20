@@ -180,12 +180,30 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+
+            // A caller can close the real inner connection without ever going through this
+            // wrapper's own Close()/Dispose() — e.g. CommandBehavior.CloseConnection on a reader
+            // closes cmd.Connection directly, which is the inner connection, not this wrapper.
+            // Subscribing to the inner connection's own StateChange event catches every path to
+            // Closed/Broken regardless of what triggered it, mirroring the same fix already used
+            // by StormGateConnectionInterceptor (pengdows.stormgate.EntityFrameworkCore) for the
+            // identical class of problem.
+            _inner.StateChange += OnInnerStateChange;
+        }
+
+        private void OnInnerStateChange(object? sender, StateChangeEventArgs e)
+        {
+            if (e.CurrentState is ConnectionState.Closed or ConnectionState.Broken)
+            {
+                ReleasePermitOnce();
+            }
         }
 
         private void ReleasePermitOnce()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
+                _inner.StateChange -= OnInnerStateChange;
                 _owner.ReleaseLease();
             }
         }
