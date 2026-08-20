@@ -982,6 +982,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     }
 
                     sb.Append(_context.MakeParameterName(param));
+
+                    // SQL Server EXEC requires an explicit OUTPUT marker for output-capable
+                    // parameters. Without it the procedure executes, but the provider leaves
+                    // the DbParameter unchanged. Other wrapping styles encode OUT semantics
+                    // differently (or through provider binding alone), so keep this T-SQL-only.
+                    if (_context.ProcWrappingStyle == ProcWrappingStyle.Exec &&
+                        (param.Direction == ParameterDirection.Output ||
+                         param.Direction == ParameterDirection.InputOutput))
+                    {
+                        sb.Append(" OUTPUT");
+                    }
                 }
 
                 return sb.ToString();

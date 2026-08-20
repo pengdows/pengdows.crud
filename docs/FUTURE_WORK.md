@@ -271,6 +271,37 @@ What's left:
   context/tenant-derived tags (e.g. `db.name`) that could become high-cardinality.
 - **Stored-procedure multi-result/OUT parameter handling** is less complete than the best
   specialized competitors.
+
+  `SqlServerUuid7OrderingTests.CanonicalUuid7Values_DoNotSortChronologicallyAsUniqueIdentifiers`
+  now establishes the actual ordering behavior against a live SQL Server: two valid UUIDv7 values
+  whose timestamps increase sort in the opposite order when stored as `uniqueidentifier`.
+
+  Revisit only as an explicit, SQL-Server-only storage strategy, resolved from the tenant's
+  `DatabaseContext`/dialect rather than remembered by application code. It must define migration
+  rules and prohibit mixing canonical and transformed values in one column. If the feature is
+  justified, add fakeDb ordering emulation and provider-specific integration tests.
+- ~~**Reader latency doesn't distinguish database time from consumer time.**~~ — fixed 2026-08-19:
+  `ExecuteReaderAsync` continues to complete its command metric when the provider returns the
+  reader. `TrackedReader` now separately records reader-acquisition→first-row,
+  first-row→dispose, and total reader-lease duration. The aggregate `DatabaseMetrics` and
+  role-scoped `DatabaseRoleMetrics` expose the three EWMAs as `AvgReaderTimeToFirstRowMs`,
+  `AvgReaderConsumptionMs`, and `AvgReaderLeaseMs`. Unit coverage proves synchronous and async
+  row reads feed the lifecycle metrics without conflating consumer time with command execution.
+  `PengdowsMetricsObserver` exports matching OpenTelemetry gauges for all three values.
+- ~~**Metric cardinality policy for dynamic multi-tenancy.**~~ — closed 2026-08-19 as a
+  non-issue after source and listener-level verification. `PengdowsMetricsObserver` does **not**
+  tag metrics with a tenant ID, connection string, or configured application name: its `db.name`
+  value is `IDatabaseContext.Name`, which is the detected database product (for example `SQLite`
+  or `PostgreSql`). The resulting value domain is bounded by `SupportedDatabase`, even when many
+  tenant-named contexts are tracked. `Track_TenantNamedContextsOnSameProvider_UsesOneBoundedDatabaseNameTag`
+  locks that contract down.
+- **Stored-procedure multi-result handling** remains deliberately unsupported: `ITrackedReader`
+  rejects `NextResult()` so callers cannot hold an unbounded connection lease across arbitrary,
+  caller-driven result traversal. Supporting it would require a new, explicitly bounded API and
+  lifecycle contract. ~~SQL Server OUT/INOUT parameters~~ were fixed 2026-08-19: the `EXEC`
+  wrapper now emits the required `OUTPUT` marker for `Output` and `InputOutput` parameters.
+  `StoredProc_OutputParameter_WorksOnSqlServer` proves the behavior against a real SQL Server;
+  `ExecStyle_AppendsOutputForOutputAndInputOutputParameters` locks the generated SQL down.
 - **Provider driver-version compatibility matrix.** Database-engine coverage is strong; testing
   across multiple meaningful driver releases (Npgsql, SqlClient, MySqlConnector/MySql.Data,
   Oracle providers, etc.) is not.

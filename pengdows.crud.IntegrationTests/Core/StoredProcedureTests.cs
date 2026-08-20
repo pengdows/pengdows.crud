@@ -70,4 +70,41 @@ public class StoredProcedureTests : DatabaseTestBase
             }
         });
     }
+
+    [SkippableFact]
+    public async Task StoredProc_OutputParameter_WorksOnSqlServer()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.SqlServer)
+            {
+                return;
+            }
+
+            const string dropSql =
+                "IF OBJECT_ID('dbo.TestOutputProc', 'P') IS NOT NULL DROP PROCEDURE dbo.TestOutputProc";
+            const string createSql =
+                "CREATE PROCEDURE dbo.TestOutputProc @inputValue INT, @outputValue INT OUTPUT " +
+                "AS BEGIN SET @outputValue = @inputValue + 1; END";
+
+            await context.CreateSqlContainer(dropSql).ExecuteNonQueryAsync();
+            await context.CreateSqlContainer(createSql).ExecuteNonQueryAsync();
+
+            try
+            {
+                await using var container = context.CreateSqlContainer("TestOutputProc");
+                container.AddParameterWithValue("inputValue", DbType.Int32, 41);
+                var output = container.AddParameterWithValue("outputValue", DbType.Int32, 0,
+                    ParameterDirection.Output);
+
+                await container.ExecuteNonQueryAsync(CommandType.StoredProcedure);
+
+                Assert.Equal(42, output.Value);
+            }
+            finally
+            {
+                await context.CreateSqlContainer(dropSql).ExecuteNonQueryAsync();
+            }
+        });
+    }
 }
