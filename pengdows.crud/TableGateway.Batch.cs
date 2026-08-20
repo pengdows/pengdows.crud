@@ -19,6 +19,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 
@@ -29,6 +30,7 @@ namespace pengdows.crud;
 /// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
+    private readonly ConditionalWeakTable<ISqlContainer, IReadOnlyList<TEntity>> _batchContainerEntities = new();
     /// <inheritdoc/>
     public IReadOnlyList<ISqlContainer> BuildBatchCreate(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null)
@@ -52,7 +54,9 @@ public partial class TableGateway<TEntity, TRowID>
             var fallback = new List<ISqlContainer>(entities.Count);
             foreach (var entity in entities)
             {
-                fallback.Add(BuildCreate(entity, ctx));
+                var container = BuildCreate(entity, ctx);
+                TrackBatchContainer(container, [entity]);
+                fallback.Add(container);
             }
 
             return fallback;
@@ -112,15 +116,28 @@ public partial class TableGateway<TEntity, TRowID>
             return success ? 1 : 0;
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchCreate(entities, ctx);
         var totalAffected = 0;
+        var completedContainers = 0;
 
-        foreach (var sc in containers)
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                .ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return totalAffected;
@@ -164,15 +181,28 @@ public partial class TableGateway<TEntity, TRowID>
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpdate(entities, ctx);
         var totalAffected = 0;
+        var completedContainers = 0;
 
-        foreach (var sc in containers)
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                .ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return totalAffected;
@@ -202,7 +232,9 @@ public partial class TableGateway<TEntity, TRowID>
             foreach (var entity in entities)
             {
                 // We assume sequential strategy here for fallback, skip original load (no change tracking)
-                fallback.Add(BuildUpdate(entity, ctx));
+                var container = BuildUpdate(entity, ctx);
+                TrackBatchContainer(container, [entity]);
+                fallback.Add(container);
             }
 
             return fallback;
@@ -285,6 +317,7 @@ public partial class TableGateway<TEntity, TRowID>
                 }
             }
 
+            TrackBatchContainer(sc, chunk);
             result.Add(sc);
         }
 
@@ -345,7 +378,9 @@ public partial class TableGateway<TEntity, TRowID>
         var result = new List<ISqlContainer>(entities.Count);
         foreach (var entity in entities)
         {
-            result.Add(BuildUpsert(entity, ctx));
+            var container = BuildUpsert(entity, ctx);
+            TrackBatchContainer(container, [entity]);
+            result.Add(container);
         }
 
         return result;
@@ -375,15 +410,32 @@ public partial class TableGateway<TEntity, TRowID>
             return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        // MERGE-family dialects use one container per entity. Preserve successful entities'
+        // prepared audit state while restoring only the first container that did not execute and
+        // every container after it if execution aborts partway through the batch.
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpsert(entities, ctx);
         var totalAffected = 0;
+        var completedContainers = 0;
 
-        foreach (var sc in containers)
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                .ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+
+            throw;
         }
 
         return totalAffected;
@@ -460,6 +512,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
         }
 
+        TrackBatchContainer(sc, chunk);
         return sc;
     }
 
@@ -556,5 +609,43 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         return result;
+    }
+
+    private void TrackBatchContainer(ISqlContainer container, IReadOnlyList<TEntity> entities)
+    {
+        _batchContainerEntities.Remove(container);
+        _batchContainerEntities.Add(container, entities);
+    }
+
+    private void RestoreBatchAuditFields(
+        IReadOnlyList<ISqlContainer> containers,
+        int firstUnexecutedContainer,
+        IReadOnlyList<TEntity> entities,
+        IReadOnlyList<AuditFieldSnapshot> snapshots)
+    {
+        if (!_hasAuditColumns)
+        {
+            return;
+        }
+
+        for (var containerIndex = firstUnexecutedContainer; containerIndex < containers.Count; containerIndex++)
+        {
+            if (!_batchContainerEntities.TryGetValue(containers[containerIndex], out var chunk))
+            {
+                continue;
+            }
+
+            foreach (var entity in chunk)
+            {
+                for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
+                {
+                    if (ReferenceEquals(entities[entityIndex], entity))
+                    {
+                        RestoreAuditFields(entity, snapshots[entityIndex]);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

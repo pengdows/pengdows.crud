@@ -521,16 +521,11 @@ sense, because that API layer explicitly knows #2 — it attempted execution and
 rejected it. Build alone never reaches #2, so it has nothing to restore *from*. No code change
 from this — documenting the contract precisely is the fix.
 
-**Still open — partial batch failure.** `BatchCreateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` on
-both gateway types mutate audit fields for *every* entity in one upfront loop, before any container
-is built or executed; execution then happens container-by-container (or entity-by-entity for
-`PrimaryKeyTableGateway`'s per-entity batch update) with no surrounding try/catch. A failure
-partway through leaves earlier containers' entities correctly persisted-and-stamped, but every
-entity in a not-yet-executed container already carrying mutated (wrong) audit fields. A correct fix
-needs a snapshot scoped per-container (or per-entity), not one snapshot for the whole batch call —
-restoring everything on any failure would incorrectly roll back audit fields on entities whose row
-*did* get written. That's a different, bigger design than the single-entity fix and wasn't bundled
-in here.
+**Implemented — partial batch failure.** Both gateway types now weakly associate each generated
+batch container with its entity slice and restore audit fields only for failed or unexecuted
+containers. This covers chunked multi-row SQL and one-entity fallback containers for create,
+update, and upsert. Deterministic success-then-failure regressions prove that persisted entities
+retain their audit stamps while unpersisted entities are restored.
 
 **Also explicitly out of scope, raised separately during this work — post-execution entity
 freshness on *success*:** even a fully successful `UpdateAsync` never writes the new `[Version]`

@@ -129,7 +129,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 SetAuditFields(entity, true, auditValues);
             }
 
-            result.Add(BuildUpdateByPk(entity, ctx, dialect, auditAlreadySet: true));
+            var container = BuildUpdateByPk(entity, ctx, dialect, auditAlreadySet: true);
+            TrackBatchContainer(container, [entity]);
+            result.Add(container);
         }
 
         return result;
@@ -157,13 +159,26 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpdate(entities, ctx);
         var total = 0;
-        foreach (var sc in containers)
+        var completedContainers = 0;
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return total;

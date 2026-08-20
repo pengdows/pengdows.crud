@@ -15,8 +15,8 @@ namespace pengdows.crud.Tests;
 /// rows), the entity's audit fields would otherwise claim a write that never persisted. These
 /// tests prove the convenience methods (Create/Update/Upsert, single-entity, on both
 /// TableGateway and PrimaryKeyTableGateway) restore the pre-attempt audit values whenever the
-/// write doesn't actually succeed. Batch variants are explicitly out of scope — see
-/// docs/FUTURE_WORK.md for why (partial-batch-failure semantics need a different design).
+/// write doesn't actually succeed. Batch variants retain successfully-written entities' audit
+/// values while restoring only the containers not successfully executed.
 /// </summary>
 public class AuditFieldRestoreOnFailureTests
 {
@@ -255,6 +255,152 @@ public class AuditFieldRestoreOnFailureTests
         Assert.Equal(string.Empty, entity.CreatedBy);
         Assert.Equal(default, entity.LastUpdatedOn);
         Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task TableGateway_BatchUpsertAsync_RestoresOnlyEntityWhoseContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("batch-upserter"));
+        var persisted = new AuditedItem { Id = 1, Name = "persisted" };
+        var unpersisted = new AuditedItem { Id = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchUpsertAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.CreatedOn);
+        Assert.Equal("batch-upserter", persisted.CreatedBy);
+        Assert.Equal(default, unpersisted.CreatedOn);
+        Assert.Equal(string.Empty, unpersisted.CreatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task TableGateway_BatchCreateAsync_RestoresOnlyEntityWhoseFallbackContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("batch-creator"));
+        var persisted = new AuditedItem { Id = 1, Name = "persisted" };
+        var unpersisted = new AuditedItem { Id = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchCreateAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.CreatedOn);
+        Assert.Equal("batch-creator", persisted.CreatedBy);
+        Assert.Equal(default, unpersisted.CreatedOn);
+        Assert.Equal(string.Empty, unpersisted.CreatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task TableGateway_BatchUpdateAsync_RestoresOnlyEntityWhoseFallbackContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new TableGateway<AuditedItem, int>(ctx, new StubAuditValueResolver("batch-updater"));
+        var persisted = new AuditedItem { Id = 1, Name = "persisted" };
+        var unpersisted = new AuditedItem { Id = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchUpdateAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.LastUpdatedOn);
+        Assert.Equal("batch-updater", persisted.LastUpdatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_BatchUpsertAsync_RestoresOnlyEntityWhoseContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("pk-batch-upserter"));
+        var persisted = new AuditedPkItem { Key = 1, Name = "persisted" };
+        var unpersisted = new AuditedPkItem { Key = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchUpsertAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.CreatedOn);
+        Assert.Equal("pk-batch-upserter", persisted.CreatedBy);
+        Assert.Equal(default, unpersisted.CreatedOn);
+        Assert.Equal(string.Empty, unpersisted.CreatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_BatchCreateAsync_RestoresOnlyEntityWhoseFallbackContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("pk-batch-creator"));
+        var persisted = new AuditedPkItem { Key = 1, Name = "persisted" };
+        var unpersisted = new AuditedPkItem { Key = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchCreateAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.CreatedOn);
+        Assert.Equal("pk-batch-creator", persisted.CreatedBy);
+        Assert.Equal(default, unpersisted.CreatedOn);
+        Assert.Equal(string.Empty, unpersisted.CreatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task PrimaryKeyTableGateway_BatchUpdateAsync_RestoresOnlyEntityWhoseFallbackContainerFailed()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("pk-batch-updater"));
+        var persisted = new AuditedPkItem { Key = 1, Name = "persisted" };
+        var unpersisted = new AuditedPkItem { Key = 2, Name = "unpersisted" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchUpdateAsync([persisted, unpersisted], ctx).AsTask());
+
+        Assert.NotEqual(default, persisted.LastUpdatedOn);
+        Assert.Equal("pk-batch-updater", persisted.LastUpdatedBy);
+        Assert.Equal(default, unpersisted.LastUpdatedOn);
+        Assert.Equal(string.Empty, unpersisted.LastUpdatedBy);
     }
 
     [Fact]
