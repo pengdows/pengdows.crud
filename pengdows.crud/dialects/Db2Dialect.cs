@@ -11,10 +11,9 @@
 //   * Generated keys via SELECT ... FROM FINAL TABLE (INSERT ...) — single round trip
 //   * Paging via OFFSET n ROWS FETCH NEXT m ROWS ONLY (base SupportsOffsetFetch default)
 // - GUIDs stored as CHAR(36) strings (client-generated, no need for GENERATE_UUID()).
-// - Phase 1 implementation: SQL-generation correctness only, validated via fakeDb.
-//   Real-driver specifics (exact FINAL TABLE/MERGE acceptance, DB2Exception SQLCODE/
-//   SQLSTATE property shape, isolation level enum mapping) are verified in Phase 2
-//   against a live ibmcom/db2 Docker container.
+// - Validated against a live ibmcom/db2 Docker container (Phase 2 testbed validation),
+//   not just fakeDb: FINAL TABLE/MERGE acceptance, DB2Exception SQLCODE/SQLSTATE property
+//   shape, and isolation level enum mapping are all confirmed against the real driver.
 // =============================================================================
 
 using System.Data;

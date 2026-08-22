@@ -254,9 +254,10 @@ What's left:
     `SingleWriter` modes. `TrackedConnection._wasOpened` is a per-*wrapper*-instance flag, not a
     per-*physical*-connection one; ephemeral modes create a fresh wrapper per checkout, so the
     preamble genuinely reapplies every single time, even when the ADO.NET pool hands back an
-    already-open physical connection (deliberately — see this file's SQL Server session-settings
-    entry for why trusting pooled connection state is a correctness risk, not just a consistency
-    one). Only persistent modes (KeepAlive's pinned connection, SingleConnection) apply it exactly
+    already-open physical connection (deliberately — see `docs/sql-server-session-settings.md`'s
+    "Performance Trade-off" section for why trusting pooled connection state is a correctness
+    risk, not just a consistency one). Only persistent modes (KeepAlive's pinned connection,
+    SingleConnection) apply it exactly
     once. Fixed the doc to state the per-mode rule explicitly instead of one blanket (wrong) claim.
   - Generated/tested capability tables: already comprehensive — `docs/supported-databases.md` has
     a 114-line enum/version-floor/feature-threshold matrix across all 16 databases. Nothing to add.
@@ -415,8 +416,8 @@ the entity's audit-column values immediately before `SetAuditFields` mutates the
 in a catch block (or before manually raising `ConcurrencyConflictException` on a 0-rows-affected
 result) whenever the write doesn't actually succeed. Zero added round trips — pure in-memory
 bookkeeping, consistent with this project's stance against paying round-trip costs for
-correctness that don't need them (see the SQL Server session-settings entry above for the same
-stance applied elsewhere).
+correctness that don't need them (see `docs/sql-server-session-settings.md`'s "Performance
+Trade-off" section for the same stance applied elsewhere).
 
 **Scope: single-entity convenience methods only.** Wired into all 8 call sites that mutate audit
 fields and execute in the same method body:

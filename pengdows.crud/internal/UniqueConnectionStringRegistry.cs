@@ -16,19 +16,24 @@
 //   another context, every key this call already claimed is rolled back
 //   before throwing, so a failed construction never permanently blocks a
 //   connection string for anyone else.
-// - Opt-in only: contexts that don't enable EnforceUniqueConnectionString never
-//   call this type at all, so default behavior (and every existing test) is
-//   completely unaffected.
+// - Opt-in only: enabling/disabling EnforceUniqueConnectionString never changes whether
+//   a duplicate is *rejected* — that stays gated by the flag via ClaimAll/Claims below.
+//   RegisterAllForWarning/Registrations is a separate, always-on, non-throwing table used
+//   only to log a diagnostic warning so the misconfiguration isn't silent by default; it
+//   never blocks construction and default behavior (and every existing enforcement test)
+//   is unaffected.
 // =============================================================================
 
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 
 namespace pengdows.crud.@internal;
 
 internal static class UniqueConnectionStringRegistry
 {
     private static readonly ConcurrentDictionary<string, DatabaseContext> Claims = new();
+    private static readonly ConcurrentDictionary<string, DatabaseContext> Registrations = new();
 
     /// <summary>
     /// Atomically claims every key in <paramref name="keys"/> for <paramref name="owner"/>.
@@ -74,6 +79,51 @@ internal static class UniqueConnectionStringRegistry
         foreach (var key in keys)
         {
             Claims.TryRemove(new KeyValuePair<string, DatabaseContext>(key, owner));
+        }
+    }
+
+    /// <summary>
+    /// Records <paramref name="owner"/> as the last-known user of every key in <paramref name="keys"/>,
+    /// logging a warning via <paramref name="logger"/> for any key already recorded under a
+    /// different, still-registered owner. Never throws and never blocks construction — this is a
+    /// diagnostic aid for the default (non-enforcing) path, independent of <see cref="Claims"/>.
+    /// </summary>
+    internal static IReadOnlyList<string> RegisterAllForWarning(DatabaseContext owner, IReadOnlyList<string> keys,
+        ILogger? logger)
+    {
+        foreach (var key in keys)
+        {
+            if (Registrations.TryGetValue(key, out var existingOwner) && !ReferenceEquals(existingOwner, owner))
+            {
+                logger?.LogWarning(
+                    "Another live DatabaseContext in this process is already using this connection string. " +
+                    "DatabaseContext is meant to be a singleton per connection string — dispose the existing " +
+                    "context first, share a single DatabaseContext instance, or use a distinct connection " +
+                    "string. Set EnforceUniqueConnectionString to true to turn this into a hard failure.");
+            }
+
+            Registrations[key] = owner;
+        }
+
+        return keys;
+    }
+
+    /// <summary>
+    /// Removes <paramref name="owner"/>'s registration for every key in <paramref name="keys"/>,
+    /// but only where <paramref name="owner"/> is still the recorded owner — a key already
+    /// overwritten by a newer registrant is left untouched. Safe to call with an empty or null
+    /// list, and safe to call even if nothing was ever registered.
+    /// </summary>
+    internal static void UnregisterAllForWarning(DatabaseContext owner, IReadOnlyList<string>? keys)
+    {
+        if (keys == null)
+        {
+            return;
+        }
+
+        foreach (var key in keys)
+        {
+            Registrations.TryRemove(new KeyValuePair<string, DatabaseContext>(key, owner));
         }
     }
 }

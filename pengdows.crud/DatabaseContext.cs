@@ -183,6 +183,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _maxQueuedWrites;
     private int? _maxQueuedReads;
     private IReadOnlyList<string>? _uniqueConnectionStringClaims;
+    private IReadOnlyList<string>? _uniqueConnectionStringWarnRegistrations;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
@@ -483,6 +484,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         DisposeOwnedDataSources();
         UniqueConnectionStringRegistry.ReleaseAll(this, _uniqueConnectionStringClaims);
         _uniqueConnectionStringClaims = null;
+        UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
+        _uniqueConnectionStringWarnRegistrations = null;
 
         base.DisposeManaged();
     }
@@ -529,6 +532,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
         UniqueConnectionStringRegistry.ReleaseAll(this, _uniqueConnectionStringClaims);
         _uniqueConnectionStringClaims = null;
+        UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
+        _uniqueConnectionStringWarnRegistrations = null;
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }

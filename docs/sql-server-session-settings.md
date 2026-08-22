@@ -117,11 +117,9 @@ SQL Server feature silently degrading, not a pengdows-specific quirk. On top of 
 `WrapObjectName`-generated ANSI double-quote identifiers (`"col 1"`,
 `"name space"."table name"`) would parse as string literals instead of identifiers — not
 subtly different query results, broken SQL. A few hundred microseconds against either
-failure mode is not a trade worth making by default. See `docs/FUTURE_WORK.md`'s P2 entry
-for the full investigation and why any lower-cost alternative (batching was rejected — it
-makes SQL Server logs unreadable) would have to be an explicit, off-by-default opt-in,
-never a change to this
-default behavior.
+failure mode is not a trade worth making by default. Any lower-cost alternative (batching
+was rejected — it makes SQL Server logs unreadable) would have to be an explicit,
+off-by-default opt-in, never a change to this default behavior.
 
 ## Validation in Benchmarks
 

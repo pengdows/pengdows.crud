@@ -420,6 +420,8 @@ public partial class DatabaseContext
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
 
+            _uniqueConnectionStringWarnRegistrations = RegisterConnectionStringsForDuplicateWarning(configuration);
+
             if (configuration.EnforceUniqueConnectionString)
             {
                 try
@@ -448,6 +450,11 @@ public partial class DatabaseContext
         }
         catch (Exception e)
         {
+            // A rejected/failed construction never returns an object for the caller to Dispose,
+            // so anything already registered above must be unwound here — otherwise a dead
+            // context's connection string(s) would stay "in use" in the warning registry forever.
+            UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
+            _uniqueConnectionStringWarnRegistrations = null;
             _logger?.LogError(e, "DatabaseContext construction failed.");
             throw;
         }
@@ -1684,7 +1691,7 @@ public partial class DatabaseContext
     /// Claims the raw, caller-supplied connection string(s) — not the internally-decorated
     /// reader/writer variants — for <see cref="IDatabaseContextConfiguration.EnforceUniqueConnectionString"/>.
     /// </summary>
-    private IReadOnlyList<string> ClaimUniqueConnectionStrings(IDatabaseContextConfiguration configuration)
+    private List<string> ComputeConnectionStringKeys(IDatabaseContextConfiguration configuration)
     {
         var keys = new List<string>(2) { ComputePoolKeyHash(configuration.ConnectionString) };
 
@@ -1695,7 +1702,19 @@ public partial class DatabaseContext
             keys.Add(ComputePoolKeyHash(configuration.ReadOnlyConnectionString));
         }
 
-        return UniqueConnectionStringRegistry.ClaimAll(this, keys);
+        return keys;
+    }
+
+    private IReadOnlyList<string> ClaimUniqueConnectionStrings(IDatabaseContextConfiguration configuration)
+    {
+        return UniqueConnectionStringRegistry.ClaimAll(this, ComputeConnectionStringKeys(configuration));
+    }
+
+    private IReadOnlyList<string> RegisterConnectionStringsForDuplicateWarning(
+        IDatabaseContextConfiguration configuration)
+    {
+        return UniqueConnectionStringRegistry.RegisterAllForWarning(this, ComputeConnectionStringKeys(configuration),
+            _logger);
     }
 
     private string BuildReadOnlyConnectionStringFromBase(string baseConnectionString)

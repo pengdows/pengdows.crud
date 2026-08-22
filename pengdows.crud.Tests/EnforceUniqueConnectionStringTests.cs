@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -155,5 +158,148 @@ public class EnforceUniqueConnectionStringTests
         // The second (rejected) context's persistent connection must have been disposed, not leaked.
         var secondContextConnection = factory.CreatedConnections[^1];
         Assert.True(secondContextConnection.DisposeCount > 0);
+    }
+
+    // EnforceUniqueConnectionString defaults to false, and the misconfiguration it guards
+    // against (two DatabaseContexts double-admitting connections against one pool) is silent
+    // when off — nothing is logged today. These tests cover a default, always-on warning
+    // (never a throw, never a behavior change) so the misconfiguration is at least visible
+    // without requiring the opt-in flag.
+
+    [Fact]
+    public void DuplicateConnectionString_NotEnforced_LogsWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=warn-test-1;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var loggerFactory = new RecordingLoggerFactory();
+
+        using var first = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory, loggerFactory);
+        using var second = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory, loggerFactory);
+
+        Assert.Contains(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
+    [Fact]
+    public void DistinctConnectionStrings_NotEnforced_DoesNotLogWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var loggerFactory = new RecordingLoggerFactory();
+
+        using var first = new DatabaseContext(
+            BuildConfig($"Data Source=warn-test-2a;EmulatedProduct={SupportedDatabase.Sqlite}", enforce: false),
+            factory, loggerFactory);
+        using var second = new DatabaseContext(
+            BuildConfig($"Data Source=warn-test-2b;EmulatedProduct={SupportedDatabase.Sqlite}", enforce: false),
+            factory, loggerFactory);
+
+        Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
+    [Fact]
+    public void DuplicateConnectionString_AfterFirstDisposed_NotEnforced_DoesNotLogWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=warn-test-3;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var loggerFactory = new RecordingLoggerFactory();
+
+        var first = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory, loggerFactory);
+        first.Dispose();
+
+        loggerFactory.Entries.Clear();
+
+        using var second = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory, loggerFactory);
+
+        Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
+    [Fact]
+    public void FailedEnforcedConstruction_DoesNotLeakWarnRegistration()
+    {
+        // Mirrors ConstructionFailure_AfterPartialClaim_DoesNotLeakClaim, but for the
+        // always-on warning registration rather than the opt-in enforcement claim: a
+        // rejected construction must not leave its connection string(s) permanently
+        // marked as "in use" by a context that never finished constructing.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var collidingReadOnlyConnectionString =
+            $"Data Source=warn-test-4-ro;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var writeConnectionStringForFailedAttempt =
+            $"Data Source=warn-test-4-write-attempt;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var loggerFactory = new RecordingLoggerFactory();
+
+        using var readOnlyOwner = new DatabaseContext(
+            BuildConfig($"Data Source=warn-test-4a;EmulatedProduct={SupportedDatabase.Sqlite}", enforce: true,
+                collidingReadOnlyConnectionString),
+            factory, loggerFactory);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(
+                BuildConfig(writeConnectionStringForFailedAttempt, enforce: true, collidingReadOnlyConnectionString),
+                factory, loggerFactory));
+
+        loggerFactory.Entries.Clear();
+
+        using var retry = new DatabaseContext(
+            BuildConfig(writeConnectionStringForFailedAttempt, enforce: false), factory, loggerFactory);
+
+        Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
+    private static bool IsDuplicateConnectionStringWarning((LogLevel Level, string Message) entry)
+    {
+        return entry.Level == LogLevel.Warning &&
+               entry.Message.Contains("already using this connection string", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class RecordingLoggerFactory : ILoggerFactory
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new RecordingLogger(Entries);
+        }
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class RecordingLogger : ILogger
+        {
+            private readonly List<(LogLevel Level, string Message)> _entries;
+
+            public RecordingLogger(List<(LogLevel Level, string Message)> entries)
+            {
+                _entries = entries;
+            }
+
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull
+            {
+                return NoopDisposable.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                _entries.Add((logLevel, formatter(state, exception)));
+            }
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public static readonly NoopDisposable Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
     }
 }
