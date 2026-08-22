@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -79,5 +80,50 @@ public class SessionInitializationFailureModeTests
         {
             conn.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task BeginTransaction_FailClosed_SessionSettingsFailure_DoesNotLeakPoolSlot()
+    {
+        // Regression: OpenConnectionWithOptionalLock (TransactionContext.cs) calls connection.Open()
+        // with no surrounding try/catch. Under FailClosed, ExecuteSessionSettings throws
+        // ConnectionException from inside Open() *before* BeginTransaction's own
+        // try { transaction = connection.BeginTransaction(); } catch { gate.Dispose();
+        // context.CloseAndDisposeConnection(connection); } block ever starts — leaking the
+        // connection's already-acquired PoolGovernor write slot. Standard mode's write governor
+        // has exactly one slot, so a leaked slot makes every subsequent write hang until
+        // PoolAcquireTimeout, then throw PoolSaturatedException, instead of succeeding immediately.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var initConnection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
+
+        var firstOpConnection = new fakeDbConnection();
+        firstOpConnection.SetFailOnCommand();
+        factory.Connections.Add(firstOpConnection);
+
+        var secondOpConnection = new fakeDbConnection();
+        factory.Connections.Add(secondOpConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
+            PoolAcquireTimeout = TimeSpan.FromMilliseconds(500)
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+
+        await Assert.ThrowsAsync<ConnectionException>(async () =>
+        {
+            using var tx = context.BeginTransaction();
+        });
+
+        // If the write slot leaked above, this call blocks for PoolAcquireTimeout and throws
+        // PoolSaturatedException instead of succeeding immediately.
+        using var second = context.BeginTransaction();
+        second.Commit();
     }
 }

@@ -771,6 +771,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
+        public bool IsOpaqueVersionColumn => PropertyInfo.PropertyType == typeof(byte[]) || PropertyInfo.PropertyType == typeof(pengdows.crud.types.valueobjects.RowVersion);
         public bool IsCreatedBy { get; set; }
         public bool IsCreatedOn { get; set; }
         public bool IsLastUpdatedBy { get; set; }

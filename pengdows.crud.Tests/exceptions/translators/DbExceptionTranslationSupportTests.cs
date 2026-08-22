@@ -180,4 +180,40 @@ public class DbExceptionTranslationSupportTests
 
         Assert.Equal("uq_my_table_col", result.ConstraintName);
     }
+
+    // -------------------------------------------------------------------------
+    // TryGetSqlState — message fallback regex must accept alphanumeric SQLSTATEs
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void TryGetSqlState_MessageFallback_AllDigitState_TrailingSqlStateFormat_ReturnsState()
+    {
+        var ex = new InvalidOperationException("CLI0114E Datetime field overflow. SQLSTATE=22008");
+
+        var result = DbExceptionTranslationSupport.TryGetSqlState(ex);
+
+        Assert.Equal("22008", result);
+    }
+
+    [Fact]
+    public void TryGetSqlState_MessageFallback_AlphanumericState_TrailingSqlStateFormat_ReturnsState()
+    {
+        // Regression: the regex previously required all-digit \d{5}, but real SQLSTATEs are
+        // alphanumeric (e.g. "42S02" - table not found, "HY000" - general error).
+        var ex = new InvalidOperationException("Some driver error. SQLSTATE=42S02");
+
+        var result = DbExceptionTranslationSupport.TryGetSqlState(ex);
+
+        Assert.Equal("42S02", result);
+    }
+
+    [Fact]
+    public void TryGetSqlState_MessageFallback_AlphanumericState_LeadingErrorBracketFormat_ReturnsState()
+    {
+        var ex = new InvalidOperationException("ERROR [HY000] General driver error occurred");
+
+        var result = DbExceptionTranslationSupport.TryGetSqlState(ex);
+
+        Assert.Equal("HY000", result);
+    }
 }

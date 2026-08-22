@@ -553,6 +553,23 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             public override Task RollbackAsync(CancellationToken cancellationToken = default) =>
                 Inner.RollbackAsync(cancellationToken);
 
+            public override bool SupportsSavepoints => Inner.SupportsSavepoints;
+
+            public override void Save(string savepointName) => Inner.Save(savepointName);
+
+            public override void Rollback(string savepointName) => Inner.Rollback(savepointName);
+
+            public override void Release(string savepointName) => Inner.Release(savepointName);
+
+            public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default) =>
+                Inner.SaveAsync(savepointName, cancellationToken);
+
+            public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default) =>
+                Inner.RollbackAsync(savepointName, cancellationToken);
+
+            public override Task ReleaseAsync(string savepointName, CancellationToken cancellationToken = default) =>
+                Inner.ReleaseAsync(savepointName, cancellationToken);
+
             protected override void Dispose(bool disposing)
             {
                 if (Interlocked.Exchange(ref _disposed, 1) != 0)

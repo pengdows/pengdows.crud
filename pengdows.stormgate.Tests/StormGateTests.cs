@@ -252,4 +252,104 @@ public class StormGateTests
         public override DbConnection CreateConnection() => new Mock<DbConnection>().Object;
         public override DbConnectionStringBuilder CreateConnectionStringBuilder() => new DbConnectionStringBuilder();
     }
+
+    // ── PermitTransaction savepoint delegation ──────────────────────────────
+
+    [Fact]
+    public async Task PermitTransaction_Savepoints_DelegateToInnerTransaction()
+    {
+        // Regression: PermitTransaction only overrode Commit/Rollback/IsolationLevel/Dispose —
+        // Save(string)/Rollback(string)/Release(string)/SupportsSavepoints were never forwarded to
+        // Inner, so callers using a StormGate-gated connection's transaction got DbTransaction's
+        // base (unsupported) behavior instead of the wrapped provider transaction's real savepoint
+        // support.
+        var innerConnection = new SavepointCapableFakeConnection();
+        innerConnection.Open();
+        _mockDataSource.Protected()
+            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(innerConnection);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var permitConnection = await gate.OpenAsync();
+        using var tx = permitConnection.BeginTransaction();
+
+        Assert.True(tx.SupportsSavepoints);
+
+        tx.Save("sp1");
+        tx.Rollback("sp2");
+        tx.Release("sp3");
+        await tx.SaveAsync("sp4");
+        await tx.RollbackAsync("sp5");
+        await tx.ReleaseAsync("sp6");
+
+        var innerTx = innerConnection.LastTransaction;
+        Assert.NotNull(innerTx);
+        Assert.Equal("sp1", innerTx!.SavedSavepointName);
+        Assert.Equal("sp2", innerTx.RolledBackSavepointName);
+        Assert.Equal("sp3", innerTx.ReleasedSavepointName);
+        Assert.Equal("sp4", innerTx.SavedSavepointNameAsync);
+        Assert.Equal("sp5", innerTx.RolledBackSavepointNameAsync);
+        Assert.Equal("sp6", innerTx.ReleasedSavepointNameAsync);
+    }
+
+    private sealed class SavepointCapableFakeConnection : fakeDbConnection
+    {
+        public SavepointTrackingTransaction? LastTransaction { get; private set; }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            LastTransaction = new SavepointTrackingTransaction(this);
+            return LastTransaction;
+        }
+    }
+
+    private sealed class SavepointTrackingTransaction : DbTransaction
+    {
+        private readonly DbConnection _connection;
+
+        public SavepointTrackingTransaction(DbConnection connection)
+        {
+            _connection = connection;
+        }
+
+        protected override DbConnection DbConnection => _connection;
+        public override IsolationLevel IsolationLevel => IsolationLevel.Unspecified;
+        public override bool SupportsSavepoints => true;
+        public string? SavedSavepointName { get; private set; }
+        public string? RolledBackSavepointName { get; private set; }
+        public string? ReleasedSavepointName { get; private set; }
+        public string? SavedSavepointNameAsync { get; private set; }
+        public string? RolledBackSavepointNameAsync { get; private set; }
+        public string? ReleasedSavepointNameAsync { get; private set; }
+
+        public override void Commit()
+        {
+        }
+
+        public override void Rollback()
+        {
+        }
+
+        public override void Save(string savepointName) => SavedSavepointName = savepointName;
+        public override void Rollback(string savepointName) => RolledBackSavepointName = savepointName;
+        public override void Release(string savepointName) => ReleasedSavepointName = savepointName;
+
+        public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            SavedSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
+
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            RolledBackSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
+
+        public override Task ReleaseAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            ReleasedSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
+    }
 }

@@ -28,6 +28,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.attributes;
+using pengdows.crud.types.valueobjects;
 
 #endregion
 
@@ -260,6 +261,11 @@ internal class ColumnInfo : IColumnInfo
     /// included in WHERE clause for concurrency checking.
     /// </remarks>
     public bool IsVersion { get; set; }
+
+    /// <inheritdoc/>
+    public bool IsOpaqueVersionColumn =>
+        PropertyInfo.PropertyType == typeof(byte[]) ||
+        PropertyInfo.PropertyType == typeof(RowVersion);
 
     /// <summary>
     /// Gets or sets whether this is a CreatedBy audit column.

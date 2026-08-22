@@ -71,11 +71,15 @@ internal sealed class Db2Dialect : SqlDialect
         // Db2's TIMESTAMP column (this config has no offset-aware type — see
         // TypeHydrationTableCreator/TestTableCreator's Db2 DDL) rejects a DateTimeOffset value
         // outright ("CLI0114E Datetime field overflow"). Coerce to a plain UTC DateTime, matching
-        // Firebird/MySQL/Snowflake's handling of the same limitation.
-        if (type == DbType.DateTimeOffset && value is DateTimeOffset dto)
+        // Firebird/MySQL/Snowflake's handling of the same limitation. This applies regardless of
+        // whether the value is null — Db2's driver rejects DbType.DateTimeOffset unconditionally,
+        // so a null nullable DateTimeOffset must be remapped too, not just a populated one.
+        if (type == DbType.DateTimeOffset)
         {
-            return base.CreateDbParameter<object?>(name, DbType.DateTime,
-                DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified));
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
         }
 
         return base.CreateDbParameter(name, type, value);

@@ -128,4 +128,32 @@ public class EnforceUniqueConnectionStringTests
         using var retry = new DatabaseContext(
             BuildConfig(writeConnectionStringForFailedAttempt, enforce: true), factory);
     }
+
+    [Fact]
+    public void SecondContext_SameConnectionString_SingleConnectionMode_Enforced_DoesNotLeakOpenedConnection()
+    {
+        // Regression: DbMode.SingleConnection opens+session-inits its persistent connection before
+        // ClaimUniqueConnectionStrings can throw for a duplicate connection string
+        // (DatabaseContext.Initialization.cs). The constructor's catch only logs+rethrows — the
+        // second (rejected) context's already-opened connection was never disposed, a real leak on
+        // every rejected duplicate construction under SingleConnection mode.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=enforce-test-7;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnforceUniqueConnectionString = true
+        };
+
+        using var first = new DatabaseContext(config, factory);
+
+        Assert.Throws<InvalidOperationException>(() => new DatabaseContext(config, factory));
+
+        // The second (rejected) context's persistent connection must have been disposed, not leaked.
+        var secondContextConnection = factory.CreatedConnections[^1];
+        Assert.True(secondContextConnection.DisposeCount > 0);
+    }
 }

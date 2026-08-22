@@ -97,6 +97,14 @@ internal interface IColumnInfo
     bool IsVersion { get; }
 
     /// <summary>
+    /// True when this <see cref="IsVersion"/> column's value is DB-generated and opaque
+    /// (<see cref="byte[]"/> or <see cref="pengdows.crud.types.valueobjects.RowVersion"/>) rather
+    /// than an app-managed integer counter — no "+1" SET-clause increment or in-memory write-back
+    /// applies to these; the database owns the new value entirely.
+    /// </summary>
+    bool IsOpaqueVersionColumn { get; }
+
+    /// <summary>
     /// True when the column captures the creator identifier.
     /// </summary>
     bool IsCreatedBy { get; }

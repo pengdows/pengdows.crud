@@ -247,7 +247,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             SetAuditFields(entity, false);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn)
         {
             return;
         }
@@ -268,7 +268,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             SetAuditFields(entity, false, cachedAuditValues);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn)
         {
             return;
         }

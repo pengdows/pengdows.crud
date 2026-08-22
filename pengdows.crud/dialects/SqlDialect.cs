@@ -36,6 +36,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.types;
+using pengdows.crud.types.valueobjects;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -1053,6 +1054,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // RowVersion is a portable 8-byte opaque version token (see IColumnInfo.IsOpaqueVersionColumn) —
+        // convert to its raw bytes and re-dispatch (virtually, so per-dialect byte[] handling still
+        // applies) instead of registering a CLR-type mapping per provider in AdvancedTypeRegistry.
+        // This is the same DbType.Binary payload every provider already accepts for byte[] [Version]
+        // columns; no provider-specific wiring is needed beyond this one conversion.
+        if (value is RowVersion rowVersion)
+        {
+            return CreateDbParameter(name, type, rowVersion.ToArray());
+        }
+
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
         var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
         var parameter = GetPooledParameter(out var pooled);
@@ -2945,7 +2956,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     private static readonly Regex SqlStateFromMessageRegex = new(
-        @"(?:SQLSTATE[=:]\s*|ERROR \[)(?<state>\d{5})",
+        @"(?:SQLSTATE[=:]\s*|ERROR \[)(?<state>[0-9A-Za-z]{5})",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // These helpers are intentionally private to match historical usage in tests via reflection.

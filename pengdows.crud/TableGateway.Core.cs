@@ -1446,7 +1446,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         // Append version increment if needed
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             setClause += GetVersionIncrementClause(dialect);
         }

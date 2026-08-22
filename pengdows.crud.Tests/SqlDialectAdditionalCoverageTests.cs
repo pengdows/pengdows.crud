@@ -53,6 +53,51 @@ public class SqlDialectAdditionalCoverageTests
     }
 
     [Fact]
+    public void AnalyzeException_MessageFallback_AllDigitSqlState_IsExtracted()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+        var ex = new TestDbException("CLI0114E Datetime field overflow. SQLSTATE=22008");
+
+        var info = dialect.AnalyzeException(ex);
+
+        Assert.Equal("22008", info.SqlState);
+    }
+
+    [Fact]
+    public void AnalyzeException_MessageFallback_AlphanumericSqlState_TrailingFormat_IsExtracted()
+    {
+        // Regression: the fallback regex previously required all-digit \d{5}, but real
+        // SQLSTATEs are alphanumeric (e.g. "42S02" - table not found).
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+        var ex = new TestDbException("Some driver error. SQLSTATE=42S02");
+
+        var info = dialect.AnalyzeException(ex);
+
+        Assert.Equal("42S02", info.SqlState);
+    }
+
+    [Fact]
+    public void AnalyzeException_MessageFallback_AlphanumericSqlState_LeadingErrorBracketFormat_IsExtracted()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+        var ex = new TestDbException("ERROR [HY000] General driver error occurred");
+
+        var info = dialect.AnalyzeException(ex);
+
+        Assert.Equal("HY000", info.SqlState);
+    }
+
+    private sealed class TestDbException : DbException
+    {
+        public TestDbException(string message) : base(message)
+        {
+        }
+    }
+
+    [Fact]
     public void CreateDbParameter_StringValue_SetsSize()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

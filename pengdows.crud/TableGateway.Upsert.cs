@@ -151,7 +151,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn)
         {
             return;
         }
@@ -175,7 +175,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false, cachedAuditValues);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn)
         {
             return;
         }
@@ -370,7 +370,7 @@ public partial class TableGateway<TEntity, TRowID>
         // → INSERT fails with PK violation (row already exists). Correct: WHEN MATCHED AND t.ver=s.ver
         // leaves the row untouched → 0 rows → detectable conflict via ConcurrencyConflictException.
         var whenMatchedClause = " WHEN MATCHED THEN UPDATE SET ";
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             var v = dialect.WrapSimpleName(_versionColumn.Name);
             whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";

@@ -422,7 +422,26 @@ public partial class DatabaseContext
 
             if (configuration.EnforceUniqueConnectionString)
             {
-                _uniqueConnectionStringClaims = ClaimUniqueConnectionStrings(configuration);
+                try
+                {
+                    _uniqueConnectionStringClaims = ClaimUniqueConnectionStrings(configuration);
+                }
+                catch
+                {
+                    // By this point InitializePoolGovernors() has already allocated the write/read
+                    // governors (each wrapping a SemaphoreSlim), and — for DbMode.SingleConnection —
+                    // an actual physical connection is already open and session-initialized. Since
+                    // this object never escapes the failed constructor, none of that gets disposed
+                    // otherwise: a real leak on every rejected duplicate-connection-string
+                    // construction.
+                    _writerGovernor?.Dispose();
+                    _writerGovernor = null;
+                    _readerGovernor?.Dispose();
+                    _readerGovernor = null;
+                    PersistentConnection?.Dispose();
+                    SetPersistentConnection(null);
+                    throw;
+                }
             }
 
             // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory

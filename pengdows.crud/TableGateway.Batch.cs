@@ -21,6 +21,7 @@ using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -194,8 +195,35 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                // Unlike single-entity UpdateAsync (TableGateway.Core.cs), this loop only ever
+                // accumulated totalAffected — a stale-[Version] conflict on one entity in a chunk
+                // (fewer rows affected than entities in that container) was invisible. An UPDATE's
+                // WHERE clause deterministically matches or doesn't per row (no MySQL-style
+                // no-op-update ambiguity), so this check is safe for every dialect/chunk shape.
+                if (_versionColumn != null && _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
+                {
+                    if (affected < chunkEntities.Count)
+                    {
+                        throw new ConcurrencyConflictException(
+                            $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) affected but {affected} succeeded — version mismatch or row(s) deleted.",
+                            ctx.Product);
+                    }
+
+                    // Matches single-entity UpdateAsync: a successful write (checked above) means
+                    // the SET clause's "version = version + 1" took effect for every entity in this
+                    // container — write the new value back into each entity so it doesn't keep
+                    // showing the pre-update value. No-ops for opaque (byte[]/RowVersion) version
+                    // columns via WriteBackIncrementedVersion's own guard.
+                    foreach (var entity in chunkEntities)
+                    {
+                        WriteBackIncrementedVersion(entity);
+                    }
+                }
+
+                totalAffected += affected;
                 completedContainers++;
             }
         }
@@ -419,6 +447,22 @@ public partial class TableGateway<TEntity, TRowID>
         var containers = BuildBatchUpsert(entities, ctx);
         var totalAffected = 0;
         var completedContainers = 0;
+        var dialect = GetDialect(ctx);
+
+        // Whether a rows-affected shortfall reliably means "version conflict" depends on which of
+        // BuildBatchUpsert's three SQL shapes is in play:
+        //  - Per-entity MERGE fallback (SQL Server/Oracle/Firebird): guard always present, same as
+        //    single-entity UpsertAsync's already-correct check.
+        //  - Chunked ON CONFLICT (PostgreSQL/CockroachDB): guard only present when the dialect
+        //    supports a WHERE predicate on DO UPDATE; without it (SQLite/DuckDB) every row always
+        //    succeeds unconditionally, so this never spuriously fires for them either way.
+        //  - Chunked ON DUPLICATE KEY (MySQL/MariaDB): deliberately EXCLUDED — no version guard
+        //    exists there, and the driver reports 0-affected for a row whose values didn't change
+        //    (an ordinary no-op upsert, not a conflict). Treating that as a conflict would be a
+        //    false positive this fix must not introduce.
+        var versionConflictDetectionApplies = _versionColumn != null &&
+            (!ctx.DataSourceInfo.SupportsInsertOnConflict && !ctx.DataSourceInfo.SupportsOnDuplicateKey
+             || dialect.SupportsOnConflictWhere);
 
         try
         {
@@ -426,8 +470,19 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                if (versionConflictDetectionApplies &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
+                    affected < chunkEntities.Count)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) affected but {affected} succeeded — version mismatch or row(s) deleted.",
+                        ctx.Product);
+                }
+
+                totalAffected += affected;
                 completedContainers++;
             }
         }

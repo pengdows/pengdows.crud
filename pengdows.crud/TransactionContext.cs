@@ -223,7 +223,19 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         // on this pinned connection. A second lock on the connection itself would be redundant
         // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
-        OpenConnectionWithOptionalLock(context, connection);
+        try
+        {
+            OpenConnectionWithOptionalLock(context, connection);
+        }
+        catch
+        {
+            // Open() can throw (e.g. ConnectionException from ExecuteSessionSettings under
+            // SessionInitializationFailureMode.FailClosed) before the transaction-begin try/catch
+            // below ever starts — without this, the connection's already-acquired PoolGovernor slot
+            // is never released, leaking one slot per failure.
+            context.CloseAndDisposeConnection(connection);
+            throw;
+        }
 
         var gate = AcquireSingleConnectionTransactionGate(context);
 
@@ -984,7 +996,20 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             ResolveCreationParameters(context, isolationLevel, executionType);
 
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
-        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Mirrors the sync path in CreateConnectionAndTransaction: Open()/OpenAsync() can throw
+            // (e.g. ConnectionException from ExecuteSessionSettingsAsync under
+            // SessionInitializationFailureMode.FailClosed) before the transaction-begin try/catch
+            // below ever starts — without this, the connection's already-acquired PoolGovernor slot
+            // is never released, leaking one slot per failure.
+            await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            throw;
+        }
 
         var gate = await AcquireSingleConnectionTransactionGateAsync(context, cancellationToken).ConfigureAwait(false);
 

@@ -1439,6 +1439,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
         ILockerAsync? contextLocker = null;
+        ILockerAsync? singleConnectionTxGate = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         using var activity = StartActivity("ExecuteReader");
@@ -1454,6 +1455,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
+
+            // Reads deliberately do NOT wait on the single-connection transaction gate (see below),
+            // but a Write execution issued through this reader path — e.g. TableGateway.Core.cs's
+            // compound-statement CreateAsync, which runs "INSERT; SELECT ..." via
+            // ExecuteReaderAsync(ExecutionType.Write) — carries the exact same absorption/rollback
+            // risk under DbMode.SingleConnection that ExecuteNonQueryAsync guards against. Acquire
+            // the identical gate here for that case.
+            if (executionType == ExecutionType.Write)
+            {
+                singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
+                if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
+                {
+                    await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
@@ -1582,6 +1599,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            // The single-connection transaction gate protects only the moment the write statement
+            // executes (see acquisition above) — never transferred to TrackedReader, always
+            // released here regardless of success or failure.
+            if (singleConnectionTxGate != null)
+            {
+                try
+                {
+                    await singleConnectionTxGate.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore disposal errors in finally block
+                }
+            }
+
             // If lock wasn't transferred to TrackedReader, release it here
             if (!lockTransferred && connectionLocker != null)
             {

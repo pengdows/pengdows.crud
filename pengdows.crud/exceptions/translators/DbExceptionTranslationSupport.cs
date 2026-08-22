@@ -140,7 +140,7 @@ internal static partial class DbExceptionTranslationSupport
         return match.Success ? match.Groups["state"].Value : null;
     }
 
-    [GeneratedRegex("(?:SQLSTATE[=:]\\s*|ERROR \\[)(?<state>\\d{5})",
+    [GeneratedRegex("(?:SQLSTATE[=:]\\s*|ERROR \\[)(?<state>[0-9A-Za-z]{5})",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SqlStateFromMessageRegex();
 

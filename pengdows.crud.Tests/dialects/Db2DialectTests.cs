@@ -172,6 +172,29 @@ public class Db2DialectTests
         Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
     }
 
+    [Fact]
+    public void CreateDbParameter_NonNullDateTimeOffset_CoercesToDbTypeDateTime()
+    {
+        var d = CreateDialect();
+        var dto = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero);
+        var param = d.CreateDbParameter<DateTimeOffset?>("p", System.Data.DbType.DateTimeOffset, dto);
+        Assert.Equal(System.Data.DbType.DateTime, param.DbType);
+        Assert.Equal(dto.UtcDateTime, param.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_NullDateTimeOffset_CoercesToDbTypeDateTimeWithDbNull()
+    {
+        // Regression: `value is DateTimeOffset dto` is false for null, so a null nullable
+        // DateTimeOffset previously fell through to base.CreateDbParameter with DbType.DateTimeOffset
+        // still set — which Db2's driver rejects outright ("CLI0114E Datetime field overflow")
+        // regardless of the null value, crashing a write of null into a nullable column.
+        var d = CreateDialect();
+        var param = d.CreateDbParameter<DateTimeOffset?>("p", System.Data.DbType.DateTimeOffset, null);
+        Assert.Equal(System.Data.DbType.DateTime, param.DbType);
+        Assert.Equal(DBNull.Value, param.Value);
+    }
+
     // ── Upsert (MERGE) SQL generation via TableGateway ──────────────────────
 
     [Fact]
