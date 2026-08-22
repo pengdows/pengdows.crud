@@ -155,8 +155,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _totalConnectionTimeoutFailures;
     private readonly CommandPrepareMode _prepareMode;
     private readonly int? _readerPlanCacheSize;
-    private bool? _rcsiPrefetch;
-    private bool? _snapshotIsolationPrefetch;
+    // Non-nullable: InitializeInternals always assigns a concrete value (default false) before
+    // returning, for every product/mode — there is no code path that reaches the outer
+    // constructor with these still unset. A `bool?` here previously implied a real "not yet
+    // known" state that could fall through to a live IsReadCommittedSnapshotOn/
+    // IsSnapshotIsolationOn re-query; that fallback was dead code (see DatabaseContext.Initialization.cs).
+    private bool _rcsiPrefetch;
+    private bool _snapshotIsolationPrefetch;
     private bool _sessionSettingsDetectionCompleted;
     private string? _cachedReadOnlySessionSettings;
     private string? _cachedReadWriteSessionSettings;

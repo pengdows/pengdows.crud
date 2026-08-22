@@ -208,8 +208,7 @@ public partial class TableGateway<TEntity, TRowID>
                     if (affected < chunkEntities.Count)
                     {
                         throw new ConcurrencyConflictException(
-                            $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) affected but {affected} succeeded — version mismatch or row(s) deleted.",
-                            ctx.Product);
+                            BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
                     }
 
                     // Matches single-entity UpdateAsync: a successful write (checked above) means
@@ -234,6 +233,49 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         return totalAffected;
+    }
+
+    /// <summary>
+    /// Builds the message for a batch-update version conflict. When the chunk contains exactly
+    /// one entity (always true for dialects without SupportsBatchUpdate, which fall back to one
+    /// BuildUpdate container per entity — SQLite, MySQL, MariaDB, Oracle, Firebird), the conflict
+    /// is unambiguous and named directly. For a real multi-row chunk (Postgres/SqlServer/
+    /// Snowflake), no RETURNING/OUTPUT is used for batch operations (by design, for cross-dialect
+    /// portability), so the specific conflicting entity/entities genuinely cannot be identified
+    /// from the affected-row count alone — the message says so honestly instead of implying an
+    /// attribution it can't make, and warns that no entity in the chunk was written back.
+    /// </summary>
+    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
+    {
+        if (chunkEntities.Count == 1)
+        {
+            return $"Concurrency conflict on {typeof(TEntity).Name} " +
+                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
+        }
+
+        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
+               $"affected but {affected} succeeded. Which specific entity/entities conflicted cannot be " +
+               "individually identified from this batch SQL shape — no RETURNING/OUTPUT is used for batch " +
+               "operations, by design, for cross-dialect portability. No entity in this chunk's in-memory " +
+               "Version was written back — not written back even for entities that may have succeeded " +
+               "server-side. Re-read every entity in this batch from the database before retrying; do not " +
+               "assume only some are stale.";
+    }
+
+    private string DescribeEntityKeyForConflictMessage(TEntity entity)
+    {
+        if (_idColumn != null)
+        {
+            return $"{_idColumn.Name}={_idColumn.MakeParameterValueFromField(entity)}";
+        }
+
+        if (_tableInfo.PrimaryKeys.Count > 0)
+        {
+            return string.Join(", ",
+                _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
+        }
+
+        return "key unknown";
     }
 
     /// <inheritdoc/>
@@ -507,8 +549,7 @@ public partial class TableGateway<TEntity, TRowID>
                     affected < chunkEntities.Count)
                 {
                     throw new ConcurrencyConflictException(
-                        $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) affected but {affected} succeeded — version mismatch or row(s) deleted.",
-                        ctx.Product);
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
                 }
 
                 totalAffected += affected;

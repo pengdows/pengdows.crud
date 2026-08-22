@@ -386,17 +386,14 @@ public partial class DatabaseContext
 
             InitializePoolGovernors();
 
-            if (initialConnection != null)
-            {
-                RCSIEnabled = _rcsiPrefetch ?? _dialect!.IsReadCommittedSnapshotOn(initialConnection);
-                SnapshotIsolationEnabled =
-                    _snapshotIsolationPrefetch ?? _dialect!.IsSnapshotIsolationOn(initialConnection);
-            }
-            else
-            {
-                RCSIEnabled = false;
-                SnapshotIsolationEnabled = false;
-            }
+            // InitializeInternals above always assigns _rcsiPrefetch/_snapshotIsolationPrefetch a
+            // concrete value (default false when not applicable/attempted) before returning, for
+            // every product and mode — a live IsReadCommittedSnapshotOn/IsSnapshotIsolationOn
+            // re-query here was dead code (proven via targeted fakeDb command-failure injection;
+            // it never executed under any construction path), so it's been removed rather than
+            // kept as unreachable defensive code.
+            RCSIEnabled = _rcsiPrefetch;
+            SnapshotIsolationEnabled = _snapshotIsolationPrefetch;
 
             // Special case: SingleConnection's pinned connection opened before detection.
             // KeepAlive sentinel doesn't need settings — it's never used for work.

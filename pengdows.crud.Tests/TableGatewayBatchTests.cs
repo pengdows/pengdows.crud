@@ -844,10 +844,48 @@ public class TableGatewayBatchTests : IAsyncLifetime
         b.Version = 999; // Stale/wrong version — WHERE clause won't match, 0 rows affected for b.
         var bLastUpdatedByBeforeCall = b.LastUpdatedBy;
 
-        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+        var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(
             () => helper.BatchUpdateAsync(new[] { a, b }, context).AsTask());
 
         Assert.Equal(bLastUpdatedByBeforeCall, b.LastUpdatedBy);
+
+        // SQLite falls back to one BuildUpdate container per entity (SupportsBatchUpdate=false),
+        // so this chunk contains exactly one entity — the conflict is unambiguously b's, and the
+        // exception should say so by id rather than leaving the caller to guess which of the two
+        // entities in the batch actually failed.
+        Assert.Contains($"id={b.Id}", ex.Message);
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_MultiRowChunk_PartialConflict_MessageIsHonestAboutAttribution()
+    {
+        // On a real batched dialect (Postgres/SqlServer/Snowflake), a single UPDATE/MERGE
+        // statement covers the whole chunk — if 3 of 5 rows match and 2 don't, there is no
+        // RETURNING/OUTPUT used for batch operations (by design, for cross-dialect portability;
+        // see this file's own header), so the failed row(s) genuinely cannot be individually
+        // identified from the affected-row count alone. The exception must say so honestly
+        // rather than implying an attribution it can't make, and must warn that entities in
+        // this chunk — including any that succeeded server-side — were not written back.
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        factory.SetNonQueryResult(3); // 3 of 5 "succeed" regardless of actual SQL/WHERE content.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Host=localhost;EmulatedProduct=PostgreSql",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var context = new DatabaseContext(config, factory);
+        var helper = new TableGateway<VersionedBatchEntity, int>(context, _audit);
+        var entities = Enumerable.Range(1, 5)
+            .Select(i => new VersionedBatchEntity { Id = i, Name = $"n{i}", Version = 1 })
+            .ToList();
+
+        var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => helper.BatchUpdateAsync(entities, context).AsTask());
+
+        Assert.DoesNotContain("id=", ex.Message);
+        Assert.Contains("cannot be individually identified", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not written back", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
