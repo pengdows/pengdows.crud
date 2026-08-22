@@ -12,6 +12,13 @@ namespace pengdows.crud.fakeDb;
 /// In-memory data store for FakeDb that provides automatic data persistence
 /// Simulates database behavior by storing INSERT data and returning it on SELECT
 /// </summary>
+/// <remarks>
+/// This is a regex/prefix-based SQL parser, not a real SQL engine — it recognizes only the
+/// handful of statement shapes pengdows.crud itself generates. A passing test against
+/// <see cref="FakeDataStore"/> proves that SQL was shaped the way this parser expects; it is
+/// NOT evidence that a real database would accept or execute that SQL correctly. Use
+/// <c>testbed</c>/integration tests against real database containers for correctness evidence.
+/// </remarks>
 public class FakeDataStore
 {
     // Table_name -> List of rows (each row is a Dictionary of column->value)

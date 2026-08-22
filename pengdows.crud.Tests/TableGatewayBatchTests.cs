@@ -407,6 +407,104 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
     }
 
+    // Regression: BuildBatchUpdateSql's optimized (non-fallback) path for PostgreSQL, SQL Server,
+    // and Snowflake generated a WHERE clause matching only on the key column(s) — never on
+    // [Version] — and copied the client's PRE-update version value straight into SET instead of
+    // incrementing it server-side. BatchUpdateAsync then wrote an INCREMENTED version back into
+    // the in-memory entity regardless (see WriteBackIncrementedVersion), even though the database
+    // row's version never actually changed. Net effect: the DB row's version silently never moves,
+    // while the entity's in-memory Version races ahead — the very next single-entity UpdateAsync on
+    // that entity builds its WHERE clause against the now-wrong in-memory version and throws a
+    // spurious ConcurrencyConflictException with zero real concurrent writers involved. The existing
+    // regression test for this scenario (BatchUpdateAsync_OneEntityHasStaleVersion...) runs only
+    // against SQLite, which has SupportsBatchUpdate=false and silently falls back to the correct
+    // single-entity BuildUpdate path per entity — so it never actually exercised this SQL shape.
+    [Fact]
+    public void BuildBatchUpdate_PostgreSql_VersionColumn_IncrementsSetAndAppendsWherePredicate()
+    {
+        var helper = new TableGateway<VersionedBatchEntity, int>(_pgContext, _audit);
+        var entities = new List<VersionedBatchEntity>
+        {
+            new() { Id = 1, Name = "a", Version = 5 },
+            new() { Id = 2, Name = "b", Version = 7 }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(0, sql.IndexOf(" FROM (VALUES", StringComparison.Ordinal));
+
+        // SET must increment server-side, not copy the client's stale value.
+        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
+        // WHERE must compare against each row's pre-update version — otherwise a stale-version
+        // update is indistinguishable from a fresh one at the SQL level.
+        Assert.Contains("t.\"version\" = s.\"version\"", sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_SqlServer_VersionColumn_IncrementsSetAndAppendsOnPredicate()
+    {
+        var helper = new TableGateway<VersionedBatchEntity, int>(_sqlServerContext, _audit);
+        var entities = new List<VersionedBatchEntity>
+        {
+            new() { Id = 1, Name = "a", Version = 5 },
+            new() { Id = 2, Name = "b", Version = 7 }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(sql.IndexOf("UPDATE SET ", StringComparison.Ordinal));
+
+        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
+        Assert.Contains("t.\"version\" = s.\"version\"", sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_Snowflake_VersionColumn_IncrementsSetAndAppendsWherePredicate()
+    {
+        var helper = new TableGateway<VersionedBatchEntity, int>(_snowflakeContext, _audit);
+        var entities = new List<VersionedBatchEntity>
+        {
+            new() { Id = 1, Name = "a", Version = 5 },
+            new() { Id = 2, Name = "b", Version = 7 }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("\"version\" = \"version\" + 1", sql);
+        // Snowflake's UPDATE target has no "t" alias (unlike Postgres/SqlServer) — the WHERE
+        // predicate qualifies with the wrapped table name instead, so check the WHERE clause
+        // specifically rather than the SET clause for the version comparison.
+        var whereClause = sql.Substring(sql.IndexOf("WHERE", StringComparison.Ordinal));
+        Assert.DoesNotContain("\"version\" = s.\"version\"", sql.Substring(0, sql.IndexOf("WHERE", StringComparison.Ordinal)));
+        Assert.Contains(".\"version\" = s.\"version\"", whereClause);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_SqlServer_OpaqueVersionColumn_AppendsPredicateButDoesNotIncrementInSet()
+    {
+        // Opaque (byte[]/RowVersion) version columns are server-generated on every write — the
+        // database bumps them automatically, so unlike a numeric [Version] column, batch SQL must
+        // NOT try to increment them in SET (there's nothing meaningful to add 1 to), but the
+        // WHERE/ON predicate must still compare against the row's pre-update value to catch a
+        // stale write.
+        var helper = new TableGateway<OpaqueVersionedBatchEntity, int>(_sqlServerContext);
+        var entities = new List<OpaqueVersionedBatchEntity>
+        {
+            new() { Id = 1, Name = "a", Version = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 } },
+            new() { Id = 2, Name = "b", Version = new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 } }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(sql.IndexOf("UPDATE SET ", StringComparison.Ordinal));
+
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", setClause);
+        Assert.Contains("t.\"version\" = s.\"version\"", sql);
+    }
+
     [Fact]
     public void BuildBatchUpsert_MySql_OnDuplicateKey()
     {
@@ -1010,6 +1108,20 @@ public class TableGatewayBatchTests : IAsyncLifetime
         [LastUpdatedBy]
         [Column("last_updated_by", DbType.String)]
         public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
+    [Table("opaque_versioned_batch")]
+    public class OpaqueVersionedBatchEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Binary)]
+        public byte[] Version { get; set; } = Array.Empty<byte>();
     }
 
     [Table("versioned_upsert_batch")]

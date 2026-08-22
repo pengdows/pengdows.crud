@@ -92,7 +92,8 @@ internal class PostgreSqlDialect : SqlDialect
 
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
-        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        string? versionColumnName = null, bool versionColumnIsOpaque = false)
     {
         if (rowCount <= 0)
         {
@@ -100,9 +101,9 @@ internal class PostgreSqlDialect : SqlDialect
         }
 
         // PostgreSQL UPDATE FROM VALUES pattern:
-        // UPDATE target SET col1 = s.col1, ...
-        // FROM (VALUES (@b0, @b1), (@b2, @b3)) AS s(pk, col1)
-        // WHERE target.pk = s.pk
+        // UPDATE target SET col1 = s.col1, ..., version = version + 1
+        // FROM (VALUES (@b0, @b1, @b2), (@b3, @b4, @b5)) AS s(pk, col1, version)
+        // WHERE target.pk = s.pk AND target.version = s.version
 
         query.Append("UPDATE ");
         query.Append(tableName);
@@ -120,10 +121,27 @@ internal class PostgreSqlDialect : SqlDialect
             query.Append(columnNames[i]);
         }
 
+        if (versionColumnName != null && !versionColumnIsOpaque)
+        {
+            if (columnNames.Count > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(versionColumnName);
+            query.Append(" = ");
+            query.Append(versionColumnName);
+            query.Append(" + 1");
+        }
+
         query.Append(" FROM (VALUES ");
 
         var allCols = new List<string>(keyColumns);
         allCols.AddRange(columnNames);
+        if (versionColumnName != null)
+        {
+            allCols.Add(versionColumnName);
+        }
 
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
@@ -178,6 +196,14 @@ internal class PostgreSqlDialect : SqlDialect
             query.Append(keyColumns[i]);
             query.Append(" = s.");
             query.Append(keyColumns[i]);
+        }
+
+        if (versionColumnName != null)
+        {
+            query.Append(" AND t.");
+            query.Append(versionColumnName);
+            query.Append(" = s.");
+            query.Append(versionColumnName);
         }
     }
 

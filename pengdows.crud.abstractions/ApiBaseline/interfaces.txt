@@ -211,7 +211,7 @@ method pengdows.crud.dialects.ISqlDialect::AnalyzeException(System.Exception) ->
 method pengdows.crud.dialects.ISqlDialect::AppendPaging(pengdows.crud.ISqlQueryBuilder, int, int) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
-method pengdows.crud.dialects.ISqlDialect::BuildBatchUpdateSql(string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
+method pengdows.crud.dialects.ISqlDialect::BuildBatchUpdateSql(string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>, string, bool) -> void
 method pengdows.crud.dialects.ISqlDialect::ClassifyException(System.Exception) -> pengdows.crud.enums.DbErrorCategory
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter

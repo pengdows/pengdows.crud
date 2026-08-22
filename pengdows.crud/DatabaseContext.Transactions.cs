@@ -48,7 +48,7 @@ public partial class DatabaseContext
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write)
     {
-        var level = _isolationResolver.ResolveForTransaction(isolationProfile);
+        var level = ResolveIsolationProfileForTransaction(isolationProfile);
         return BeginTransaction(level, executionType);
     }
 
@@ -69,9 +69,31 @@ public partial class DatabaseContext
         ExecutionType executionType = ExecutionType.Write,
         CancellationToken cancellationToken = default)
     {
-        var level = _isolationResolver.ResolveForTransaction(isolationProfile);
+        var level = ResolveIsolationProfileForTransaction(isolationProfile);
         return await BeginTransactionAsync(level, executionType, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> for
+    /// <see cref="BeginTransaction(IsolationProfile,ExecutionType)"/>/<see cref="BeginTransactionAsync(IsolationProfile,ExecutionType,CancellationToken)"/>,
+    /// logging a warning when the engine can't honor the requested profile's guarantee (e.g.
+    /// StrictConsistency resolving to something weaker than Serializable on TiDB/Snowflake) —
+    /// otherwise that downgrade would be entirely silent to the caller.
+    /// </summary>
+    private IsolationLevel ResolveIsolationProfileForTransaction(IsolationProfile isolationProfile)
+    {
+        var resolution = _isolationResolver.ResolveForTransactionWithDetail(isolationProfile);
+        if (resolution.Degraded)
+        {
+            _logger.LogWarning(
+                "Isolation profile {Profile} degraded to {Level} for {Product}; the requested profile's guarantee is not fully honored by this database.",
+                resolution.Profile,
+                resolution.Level,
+                Product);
+        }
+
+        return resolution.Level;
     }
 
     /// <summary>

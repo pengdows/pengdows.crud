@@ -223,7 +223,7 @@ What "Supported Database" means in `pengdows.crud` is defined by four empirical 
 2. **`pengdows.crud.fakeDb` (In-Memory ADO.NET Provider)**: A full in-memory ADO.NET provider powering **6,322 deterministic unit tests in ~40 seconds** with **94.9% line coverage**, testing failure injection, connection breaking, and lifecycle state machines without network latency.
 3. **`InterfaceApiCheck` (Public Contract Governance)**: 444 frozen interface signatures checked against a byte-exact baseline in CI to guarantee 0 accidental breaking changes.
 4. **Hostile Concurrency & Hot-Path Benchmarks**:
-   - **Hydration Hot Path**: 36–39% faster than Dapper across 100–5,000 rows with ~50% lower allocations.
+   - **Hydration Hot Path (SQLite, hydration-only, excludes connection acquisition)**: ~35–36% faster than Dapper across 100–5,000 rows with ~50% lower allocations ([results](./benchmarks/CrudBenchmarks/results/hydration-hotpath-run-2026-08-13.md)). SQL Server shows the inverse under `DbMode.Standard`'s per-checkout session-settings enforcement — see [docs/sql-server-session-settings.md](./docs/sql-server-session-settings.md).
    - **Contention Storm Survival**: Survives 100 concurrent writers under aggressive `busy_timeout=10ms` with **0 lock exceptions** and ~100 ms completion, where Dapper and EF Core take 1,055+ ms with 250–350 `SQLITE_BUSY` exceptions.
 
 ## Documentation

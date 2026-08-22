@@ -1,0 +1,22 @@
+name: Skill Tree Drift Check
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'skills/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'skills/**'
+
+jobs:
+  check-drift:
+    name: Check skill tree drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Verify skills/claude, skills/codex, and skills/gemini are in sync
+        run: bash tools/check-skill-drift.sh

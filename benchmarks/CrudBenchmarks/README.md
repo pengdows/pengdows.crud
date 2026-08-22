@@ -128,7 +128,7 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 
 ## Notable Benchmarks
 
-- **HydrationHotPathBenchmarks**: Pure row hydration throughput (36–39% faster than Dapper, ~50% lower allocations)
+- **HydrationHotPathBenchmarks**: Pure row hydration throughput on SQLite, excluding connection acquisition (~35–36% faster than Dapper, ~50% lower allocations — see [results/hydration-hotpath-run-2026-08-13.md](./results/hydration-hotpath-run-2026-08-13.md); does not generalize to SQL Server, see [results/sqlserver-hydration-hotpath-run-2026-08-13.md](./results/sqlserver-hydration-hotpath-run-2026-08-13.md))
 - **SQLiteWriteContentionBenchmarks**: 100-writer lock contention resilience (0 lock exceptions under SingleWriter turnstile vs 268 in Dapper and 348 in EF Core)
 - **PagilaBenchmarks**: Basic CRUD operations vs Dapper/EF using PostgreSQL
 - **IndexedViewBenchmarks**: Demonstrates pengdows.crud's indexed view advantages over EF

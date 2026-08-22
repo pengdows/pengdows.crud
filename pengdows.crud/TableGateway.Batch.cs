@@ -287,8 +287,17 @@ public partial class TableGateway<TEntity, TRowID>
             // Version column increment is usually handled in the SET clause SQL
         }
 
-        // Chunking calculation: keyCols + updateableCols
-        var totalParamsPerRow = keyColumns.Count + updateableColumns.Count;
+        // A [Version] column isn't in updateableColumns (excluded above) — it needs its own
+        // WHERE/ON predicate (comparing the row's pre-update value) plus, for non-opaque columns,
+        // a server-side increment in SET. Both are handled inside BuildBatchUpdateSql via these
+        // parameters; here we just need to (a) size chunking for the extra bound value per row
+        // and (b) bind that value at the same column index BuildBatchUpdateSql's getValue expects.
+        var wrappedVersionColumnName = _versionColumn != null ? dialect.WrapSimpleName(_versionColumn.Name) : null;
+        var versionColumnIsOpaque = _versionColumn?.IsOpaqueVersionColumn ?? false;
+
+        // Chunking calculation: keyCols + updateableCols (+1 for the version column's pre-update
+        // value, bound purely for the WHERE/ON comparison — see above).
+        var totalParamsPerRow = keyColumns.Count + updateableColumns.Count + (_versionColumn != null ? 1 : 0);
         var chunks = ChunkList(entities, totalParamsPerRow, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
@@ -311,19 +320,25 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         colInfo = keyColumns[col];
                     }
-                    else
+                    else if (col < keyColumns.Count + updateableColumns.Count)
                     {
                         colInfo = updateableColumns[col - keyColumns.Count];
                     }
+                    else
+                    {
+                        colInfo = _versionColumn!;
+                    }
 
                     return colInfo.MakeParameterValueFromField(entity);
-                });
+                },
+                wrappedVersionColumnName, versionColumnIsOpaque);
 
             // Value binding
             for (var row = 0; row < chunk.Count; row++)
             {
                 var entity = chunk[row];
-                // Bind Keys first, then Updateable columns (matching the getValue order above)
+                // Bind Keys, then Updateable columns, then the version column's pre-update value
+                // (matching the getValue order above).
                 foreach (var col in keyColumns)
                 {
                     var val = col.MakeParameterValueFromField(entity);
@@ -342,6 +357,15 @@ public partial class TableGateway<TEntity, TRowID>
                         continue;
                     }
                     sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
+                }
+
+                if (_versionColumn != null)
+                {
+                    var val = _versionColumn.MakeParameterValueFromField(entity);
+                    if (val != null && val != DBNull.Value)
+                    {
+                        sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), _versionColumn.DbType, val));
+                    }
                 }
             }
 
@@ -362,7 +386,12 @@ public partial class TableGateway<TEntity, TRowID>
         var updateable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
         foreach (var c in _tableInfo.OrderedColumns)
         {
-            if (!c.IsNonUpdateable && !c.IsId && !_tableInfo.PrimaryKeys.Contains(c))
+            // [Version] is excluded here the same way TableGateway.Sql.cs's single-entity path
+            // excludes it (line ~198) — it needs dialect-specific SET/WHERE handling (increment
+            // server-side, compare pre-update value), not a generic "copy the client's value" SET,
+            // so BuildBatchUpdate below threads it through BuildBatchUpdateSql's dedicated
+            // versionColumnName/versionColumnIsOpaque parameters instead of this list.
+            if (!c.IsNonUpdateable && !c.IsId && !c.IsVersion && !_tableInfo.PrimaryKeys.Contains(c))
             {
                 updateable.Add(c);
             }

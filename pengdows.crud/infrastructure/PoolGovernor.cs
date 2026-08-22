@@ -667,9 +667,19 @@ internal sealed class PoolGovernor : IDisposable
 
             if (signal.Task.IsCompleted)
             {
-                // Signal already set — re-check _inUse before returning.
-                // A concurrent Acquire() may have bumped it back up.
-                break;
+                // Signal already set — but it may be a STALE completed signal: a concurrent
+                // Acquire()'s Interlocked.Increment(ref _inUse) can land before its own
+                // ResetDrainSignalIfNeeded() takes _drainLock, so GetCurrentDrainSignal() above
+                // can still observe the old (already-completed) instance even though _inUse is
+                // genuinely back above zero. Actually re-check _inUse — the comment here
+                // previously promised this but `break` skipped straight past it — rather than
+                // trusting a signal snapshot that may already be behind current reality.
+                if (Interlocked.Read(ref _inUse) == 0)
+                {
+                    break;
+                }
+
+                continue;
             }
 
             try

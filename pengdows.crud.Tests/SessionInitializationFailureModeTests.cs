@@ -126,4 +126,65 @@ public class SessionInitializationFailureModeTests
         using var second = context.BeginTransaction();
         second.Commit();
     }
+
+    [Fact]
+    public void Constructor_SingleConnection_FailClosed_SessionSettingsFailure_DisposesPersistentConnection()
+    {
+        // Regression: unlike Standard/SingleWriter, DbMode.SingleConnection applies session
+        // settings synchronously INSIDE the constructor (DatabaseContext.Initialization.cs),
+        // against the same physical connection that becomes PersistentConnection — there is no
+        // separate "detection connection" vs "operation connection" split like Standard mode has.
+        // Under FailClosed, that call throws ConnectionException from inside the constructor, but
+        // the constructor's outer catch block only unregistered the (unrelated) duplicate-
+        // connection-string warning registration — it never disposed PersistentConnection, which
+        // was already open. Since a failed constructor never returns an object for the caller to
+        // Dispose, that connection leaked on every SingleConnection + FailClosed session-settings
+        // failure.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        // Phase 1: learn how many commands a normal, successful SingleConnection construction
+        // creates on its one physical connection, so phase 2 can fail on exactly the last one
+        // (the session-settings SET) without hardcoding an internal command count that could
+        // shift if construction internals change.
+        var probeConnection = new fakeDbConnection();
+        factory.Connections.Add(probeConnection);
+        var successfulCommandCount = 0;
+        probeConnection.SetCustomCommandBehavior(() => successfulCommandCount++);
+        var probeConfig = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        using (new DatabaseContext(probeConfig, factory))
+        {
+        }
+
+        Assert.True(successfulCommandCount > 0);
+
+        // Phase 2: same construction, but the LAST command (session-settings application) fails.
+        var failingConnection = new fakeDbConnection();
+        factory.Connections.Add(failingConnection);
+        var commandCount = 0;
+        failingConnection.SetCustomCommandBehavior(() =>
+        {
+            commandCount++;
+            if (commandCount == successfulCommandCount)
+            {
+                throw new InvalidOperationException("Simulated session-settings command failure");
+            }
+        });
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed
+        };
+
+        Assert.Throws<ConnectionException>(() => new DatabaseContext(config, factory));
+
+        Assert.True(failingConnection.DisposeCount > 0);
+    }
 }

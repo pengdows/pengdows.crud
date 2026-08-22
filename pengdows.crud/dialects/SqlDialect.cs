@@ -250,7 +250,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <inheritdoc />
     public virtual void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
-        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        string? versionColumnName = null, bool versionColumnIsOpaque = false)
     {
         throw new NotSupportedException($"{DatabaseType} does not support optimized batch updates.");
     }

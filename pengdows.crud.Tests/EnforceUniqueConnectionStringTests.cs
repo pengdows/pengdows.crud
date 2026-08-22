@@ -244,6 +244,128 @@ public class EnforceUniqueConnectionStringTests
         Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
     }
 
+    // Regression: ComputePoolKeyHash redacts sensitive connection-string values (User Id,
+    // Password, etc.) down to the literal constant "REDACTED" before hashing for the pool-key
+    // used by both EnforceUniqueConnectionString's throw path and the always-on warning path.
+    // Two different tenants sharing the same server+database but DIFFERENT credentials therefore
+    // hash to the SAME pool key — with enforcement on, the second tenant's construction wrongly
+    // throws even though they are genuinely different connection pools (different credentials
+    // legitimately mean different pools in ADO.NET's own provider-level pooling).
+    [Fact]
+    public void DifferentCredentials_SameServerAndDatabase_Enforced_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var tenantAConnectionString =
+            $"Data Source=shared-db;User Id=tenantA;Password=secretA;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var tenantBConnectionString =
+            $"Data Source=shared-db;User Id=tenantB;Password=secretB;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        using var tenantA = new DatabaseContext(BuildConfig(tenantAConnectionString, enforce: true), factory);
+        using var tenantB = new DatabaseContext(BuildConfig(tenantBConnectionString, enforce: true), factory);
+    }
+
+    [Fact]
+    public void DifferentCredentials_SameServerAndDatabase_NotEnforced_DoesNotLogWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var tenantAConnectionString =
+            $"Data Source=shared-db-2;User Id=tenantA;Password=secretA;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var tenantBConnectionString =
+            $"Data Source=shared-db-2;User Id=tenantB;Password=secretB;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var loggerFactory = new RecordingLoggerFactory();
+
+        using var tenantA = new DatabaseContext(BuildConfig(tenantAConnectionString, enforce: false), factory,
+            loggerFactory);
+        using var tenantB = new DatabaseContext(BuildConfig(tenantBConnectionString, enforce: false), factory,
+            loggerFactory);
+
+        Assert.DoesNotContain(loggerFactory.Entries, IsDuplicateConnectionStringWarning);
+    }
+
+    [Fact]
+    public void IdenticalCredentials_SameServerAndDatabase_Enforced_StillThrows()
+    {
+        // Regression guard for the fix above: making credentials distinguishing must not weaken
+        // detection of a genuinely identical connection string (same credentials too).
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString =
+            $"Data Source=shared-db-3;User Id=tenantA;Password=secretA;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        using var first = new DatabaseContext(BuildConfig(connectionString, enforce: true), factory);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(BuildConfig(connectionString, enforce: true), factory));
+    }
+
+    // Regression: RegisterAllForWarning's per-key loop logs via the caller's ILogger, which the
+    // codebase already treats elsewhere as a potentially-broken sink (see the async first-open
+    // handlers' own comment on this exact concern). If LogWarning itself throws mid-loop, the
+    // field assignment in the constructor never completes, so the constructor's failure-path
+    // cleanup (which unregisters via that same field) never runs either — the already-registered
+    // key(s) would leak in the static registry until overwritten by a later registrant. The fix
+    // makes RegisterAllForWarning swallow a logging failure internally instead, matching this
+    // type's own "never throws" documented contract.
+    [Fact]
+    public void DuplicateConnectionString_NotEnforced_LoggerThrows_ConstructionStillSucceeds()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=warn-throwing-logger;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        using var first = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory);
+
+        using var second = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory,
+            new ThrowingLoggerFactory());
+    }
+
+    private sealed class ThrowingLoggerFactory : ILoggerFactory
+    {
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new ThrowingLogger();
+        }
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class ThrowingLogger : ILogger
+        {
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull
+            {
+                return NoopDisposable.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (logLevel == LogLevel.Warning &&
+                    formatter(state, exception).Contains("already using this connection string",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Simulated broken logging sink");
+                }
+            }
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public static readonly NoopDisposable Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
+    }
+
     private static bool IsDuplicateConnectionStringWarning((LogLevel Level, string Message) entry)
     {
         return entry.Level == LogLevel.Warning &&

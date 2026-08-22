@@ -405,7 +405,24 @@ public partial class DatabaseContext
                 var target = initialConnection ?? PersistentConnection;
                 if (target != null)
                 {
-                    ExecuteSessionSettings(target, IsReadOnlyConnection);
+                    try
+                    {
+                        ExecuteSessionSettings(target, IsReadOnlyConnection);
+                    }
+                    catch
+                    {
+                        // A rejected/failed construction never returns an object for the caller
+                        // to Dispose. For SingleConnection mode `target` is typically the
+                        // already-open, already-owned PersistentConnection — undisposed, that's a
+                        // real connection leak on every FailClosed session-settings failure.
+                        target.Dispose();
+                        if (ReferenceEquals(target, PersistentConnection))
+                        {
+                            SetPersistentConnection(null);
+                        }
+
+                        throw;
+                    }
                 }
             }
 
@@ -1679,12 +1696,50 @@ public partial class DatabaseContext
     private string ComputePoolKeyHash(string connectionString)
     {
         var provider = _factory?.GetType().FullName ?? "unknown";
-        var redacted = RedactConnectionString(connectionString);
+        // Deliberately NOT RedactConnectionString here: that method collapses every sensitive
+        // value to the same literal "REDACTED" for display/logging, which is correct for logs but
+        // wrong for a pool-identity key — two tenants sharing a server+database with DIFFERENT
+        // credentials (a real, distinct connection pool each) would hash identically and either
+        // wrongly throw (EnforceUniqueConnectionString) or wrongly warn (the always-on duplicate
+        // check). HashSensitiveConnectionStringValues preserves distinctness between different
+        // secret values while still never retaining the plaintext secret in the hashed input.
+        var redacted = HashSensitiveConnectionStringValues(connectionString);
         var input = $"{provider}|{redacted}";
 
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string HashSensitiveConnectionStringValues(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            var keys = builder.Keys.Cast<object>().Select(k => k.ToString() ?? string.Empty).ToArray();
+            foreach (var key in keys)
+            {
+                var lower = key.ToLowerInvariant();
+                if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
+                    lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+                {
+                    var value = builder[key]?.ToString() ?? string.Empty;
+                    var valueBytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+                    builder[key] = Convert.ToHexString(valueBytes)[..16].ToLowerInvariant();
+                }
+            }
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return "UNPARSEABLE_CONNECTION_STRING";
+        }
     }
 
     /// <summary>

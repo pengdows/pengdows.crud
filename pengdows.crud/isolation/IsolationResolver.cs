@@ -63,6 +63,18 @@ internal sealed class IsolationResolver : IIsolationResolver
     /// </summary>
     internal IsolationLevel ResolveForTransaction(IsolationProfile profile)
     {
+        return ResolveForTransactionWithDetail(profile).Level;
+    }
+
+    /// <summary>
+    /// Same as <see cref="ResolveForTransaction"/> but returns the full <see cref="IsolationResolution"/>
+    /// (including <see cref="IsolationResolution.Degraded"/>) so callers can surface a silent
+    /// profile downgrade — e.g. <see cref="IsolationProfile.StrictConsistency"/> resolving to
+    /// something weaker than Serializable on an engine that can't honor it — instead of discarding
+    /// that information the way a bare <see cref="IsolationLevel"/> return would.
+    /// </summary>
+    internal IsolationResolution ResolveForTransactionWithDetail(IsolationProfile profile)
+    {
         if (profile == IsolationProfile.SafeNonBlockingReads
             && _product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
         {
@@ -70,7 +82,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                 "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
         }
 
-        return Resolve(profile);
+        return ResolveWithDetail(profile);
     }
 
     public IsolationResolution ResolveWithDetail(IsolationProfile profile)

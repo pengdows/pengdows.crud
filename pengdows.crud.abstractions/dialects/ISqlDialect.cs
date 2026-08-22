@@ -101,12 +101,27 @@ public interface ISqlDialect
     /// Builds an optimized batch UPDATE statement structure for the dialect.
     /// </summary>
     /// <param name="tableName">Wrapped table name.</param>
-    /// <param name="columnNames">List of wrapped column names (all columns to update).</param>
+    /// <param name="columnNames">List of wrapped column names (all columns to update, excluding any <see cref="versionColumnName"/>).</param>
     /// <param name="keyColumns">List of wrapped primary key column names.</param>
     /// <param name="rowCount">Number of rows in the batch.</param>
     /// <param name="query">Target query builder to write the SQL structure into.</param>
-    /// <param name="getValue">Function to get the value for a specific row and column index.</param>
-    void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue);
+    /// <param name="getValue">Function to get the value for a specific row and column index. Column
+    /// indices are: key columns, then <paramref name="columnNames"/>, then the version column (if
+    /// <paramref name="versionColumnName"/> is non-null) — the version slot always carries the
+    /// row's pre-update (client-held) value, used for the WHERE/ON predicate.</param>
+    /// <param name="versionColumnName">Wrapped name of the entity's <c>[Version]</c> column, or
+    /// <c>null</c> if the entity has none. When non-null, implementations must (1) append a WHERE/ON
+    /// predicate comparing the target's current value against the row's pre-update value, so a stale
+    /// version is indistinguishable from zero rows matched, and (2) when
+    /// <paramref name="versionColumnIsOpaque"/> is false, increment the column server-side in SET
+    /// (e.g. <c>version = version + 1</c>) rather than copying the client's stale value.</param>
+    /// <param name="versionColumnIsOpaque">True when the version column is an opaque
+    /// server-generated value (e.g. SQL Server <c>rowversion</c>/<c>timestamp</c>) that the database
+    /// updates automatically on any row write — implementations must still add the WHERE/ON
+    /// predicate but must not attempt to increment it in SET.</param>
+    void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns,
+        int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        string? versionColumnName = null, bool versionColumnIsOpaque = false);
 
     /// <summary>
     /// Maximum permitted length for parameter names.

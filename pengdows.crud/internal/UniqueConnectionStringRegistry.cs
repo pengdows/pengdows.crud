@@ -95,11 +95,23 @@ internal static class UniqueConnectionStringRegistry
         {
             if (Registrations.TryGetValue(key, out var existingOwner) && !ReferenceEquals(existingOwner, owner))
             {
-                logger?.LogWarning(
-                    "Another live DatabaseContext in this process is already using this connection string. " +
-                    "DatabaseContext is meant to be a singleton per connection string — dispose the existing " +
-                    "context first, share a single DatabaseContext instance, or use a distinct connection " +
-                    "string. Set EnforceUniqueConnectionString to true to turn this into a hard failure.");
+                try
+                {
+                    logger?.LogWarning(
+                        "Another live DatabaseContext in this process is already using this connection string. " +
+                        "DatabaseContext is meant to be a singleton per connection string — dispose the existing " +
+                        "context first, share a single DatabaseContext instance, or use a distinct connection " +
+                        "string. Set EnforceUniqueConnectionString to true to turn this into a hard failure.");
+                }
+                catch
+                {
+                    // This method is purely a best-effort diagnostic aid (see class remarks) — a
+                    // broken logging sink must not prevent registration from completing for the
+                    // remaining keys, nor propagate out of DatabaseContext construction. Without
+                    // this guard, a throw here would leave this key registered (Registrations[key]
+                    // below never runs) while also aborting before any later key in the same call
+                    // gets registered — a genuine registry-state leak, not just a lost log line.
+                }
             }
 
             Registrations[key] = owner;
