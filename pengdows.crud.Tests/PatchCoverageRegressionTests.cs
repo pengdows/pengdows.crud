@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
 using pengdows.crud.threading;
@@ -252,6 +253,30 @@ public sealed class PatchCoverageRegressionTests
     }
 
     [Fact]
+    public async Task FirstOpenHandlerAsyncRo_WhenSessionSettingsFailAndFailClosed_PropagatesConnectionException()
+    {
+        await using var context = CreateContext();
+        ForceSessionSettings(context, "SET rw", "SET ro");
+        SetField(context, "_sessionInitializationFailureMode", SessionInitializationFailureMode.FailClosed);
+
+        using var tracked = new TrackedConnection(new AsyncBehaviorConnection(new InvalidOperationException("boom")));
+        var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRo")!;
+
+        await Assert.ThrowsAsync<ConnectionException>(() => handler(tracked, CancellationToken.None));
+    }
+
+    [Fact]
+    public void HashSensitiveConnectionStringValues_Empty_ReturnsEmpty()
+    {
+        var method = typeof(DatabaseContext).GetMethod("HashSensitiveConnectionStringValues", AnyInstance | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var result = method!.Invoke(null, new object[] { string.Empty });
+
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
     public void AdvancedTypeRegistry_SqliteDecimalMapping_HandlesDecimalAndConvertibleValues()
     {
         var registry = AdvancedTypeRegistry.Shared;
@@ -260,7 +285,7 @@ public sealed class PatchCoverageRegressionTests
 
         Assert.NotNull(mapping!.ConfigureParameter);
 
-        var decimalParameter = new TestDbParameter();
+        var decimalParameter = new fakeDbParameter();
         mapping.ConfigureParameter!(decimalParameter, 12.34m);
 
         Assert.Equal(DbType.Double, decimalParameter.DbType);
@@ -268,7 +293,7 @@ public sealed class PatchCoverageRegressionTests
         Assert.True(decimalParameter.Precision >= 18);
         Assert.Equal(2, decimalParameter.Scale);
 
-        var convertibleParameter = new TestDbParameter();
+        var convertibleParameter = new fakeDbParameter();
         Assert.NotNull(mapping.ConfigureParameter);
         mapping.ConfigureParameter!(convertibleParameter, "56.78");
 
@@ -518,39 +543,4 @@ public sealed class PatchCoverageRegressionTests
         }
     }
 
-    private sealed class TestDbParameter : DbParameter
-    {
-        private string _parameterName = string.Empty;
-        private string _sourceColumn = string.Empty;
-
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-
-        [AllowNull]
-        public override string ParameterName
-        {
-            get => _parameterName;
-            set => _parameterName = value ?? string.Empty;
-        }
-
-        public override int Size { get; set; }
-        public override byte Precision { get; set; }
-        public override byte Scale { get; set; }
-
-        [AllowNull]
-        public override string SourceColumn
-        {
-            get => _sourceColumn;
-            set => _sourceColumn = value ?? string.Empty;
-        }
-
-        public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull] public override object Value { get; set; } = DBNull.Value;
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
 }

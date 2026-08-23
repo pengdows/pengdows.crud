@@ -17,6 +17,26 @@ public class fakeDbCommand : DbCommand
     public bool WasDisposed { get; private set; }
 
     /// <summary>
+    /// When true, the synchronous ExecuteNonQuery/ExecuteScalar/ExecuteReader entry points throw
+    /// instead of running — while their ...Async counterparts still run normally, with their own
+    /// call counts. Lets a test prove production code went through the genuinely async path
+    /// (rather than a sync-wrapped-in-Task.FromResult one) without hand-rolling a DbConnection.
+    /// </summary>
+    public bool BlockSynchronousExecution { get; set; }
+
+    public int SyncExecuteCount { get; private set; }
+    public int AsyncExecuteCount { get; private set; }
+
+    private void EnforceAsyncOnly(string operation)
+    {
+        if (BlockSynchronousExecution)
+        {
+            throw new InvalidOperationException(
+                $"Synchronous {operation}() is blocked on this fakeDbCommand — use the async overload.");
+        }
+    }
+
+    /// <summary>
     /// Simulates MySqlCommand.LastInsertedId populated from the MySQL OK packet.
     /// When set, MySqlDialect.GetLastInsertedIdFromCommand returns this value via reflection.
     /// Default null triggers the fallback path (SELECT LAST_INSERT_ID()).
@@ -77,6 +97,13 @@ public class fakeDbCommand : DbCommand
 
     public override int ExecuteNonQuery()
     {
+        EnforceAsyncOnly(nameof(ExecuteNonQuery));
+        SyncExecuteCount++;
+        return ExecuteNonQueryCore();
+    }
+
+    private int ExecuteNonQueryCore()
+    {
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
@@ -134,6 +161,13 @@ public class fakeDbCommand : DbCommand
     }
 
     public override object? ExecuteScalar()
+    {
+        EnforceAsyncOnly(nameof(ExecuteScalar));
+        SyncExecuteCount++;
+        return ExecuteScalarCore();
+    }
+
+    private object? ExecuteScalarCore()
     {
         ThrowIfShouldFail(nameof(ExecuteScalar));
 
@@ -289,7 +323,14 @@ public class fakeDbCommand : DbCommand
         };
     }
 
-    protected override DbDataReader ExecuteDbDataReader(CommandBehavior _)
+    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+    {
+        EnforceAsyncOnly(nameof(ExecuteDbDataReader));
+        SyncExecuteCount++;
+        return ExecuteDbDataReaderCore(behavior);
+    }
+
+    private DbDataReader ExecuteDbDataReaderCore(CommandBehavior _)
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
@@ -339,20 +380,36 @@ public class fakeDbCommand : DbCommand
     }
 
     // **Async overrides**
+    //
+    // BlockSynchronousExecution == false (the default, used by every pre-existing caller):
+    // delegate to the *virtual* sync method exactly as before this class gained
+    // BlockSynchronousExecution/*Core split, so a subclass overriding ExecuteNonQuery()/
+    // ExecuteScalar()/ExecuteDbDataReader() (e.g. to record command text) still gets invoked
+    // through the async path, unchanged.
+    //
+    // BlockSynchronousExecution == true (opt-in): the virtual sync method throws by design, so
+    // call the private *Core method directly instead — this is the path that lets a test prove
+    // production code used the genuinely async overload.
     public override Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
-        return Task.FromResult(ExecuteNonQuery());
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
-        return Task.FromResult(ExecuteScalar());
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar());
     }
 
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
         CommandBehavior behavior, CancellationToken ct)
     {
-        return Task.FromResult<DbDataReader>(ExecuteDbDataReader(behavior));
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
     }
 
     public override Task PrepareAsync(CancellationToken ct)

@@ -18,10 +18,13 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
@@ -71,6 +74,41 @@ public class CoveragePush_PrimaryKeyGatewayGapsTests
             _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
         return new DatabaseContext(cs, factory);
+    }
+
+    /// <summary>
+    /// ON-CONFLICT-capable, non-MERGE dialect whose UpsertIncomingColumn is unsupported — exercises
+    /// the NotSupportedException catch in BuildOnConflictUpsertUpdateFragment (Core.cs 254-257),
+    /// which clears the fragment down to null rather than letting the exception escape.
+    /// </summary>
+    private sealed class ThrowingIncomingColumnDialect : SqlDialect
+    {
+        public ThrowingIncomingColumnDialect(DbProviderFactory factory)
+            : base(factory, NullLogger.Instance)
+        {
+        }
+
+        public override SupportedDatabase DatabaseType => SupportedDatabase.PostgreSql;
+        public override bool SupportsMerge => false;
+        public override bool SupportsInsertOnConflict => true;
+
+        public override string UpsertIncomingColumn(string columnName) =>
+            throw new NotSupportedException("Test dialect does not support incoming-column upsert syntax.");
+    }
+
+    [Fact]
+    public void BuildUpsert_OnConflictDialectRejectsIncomingColumn_ThrowsPureKeyUpsertMessage()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new ThrowingIncomingColumnDialect(factory);
+        using var ctx = new DatabaseContext("Host=localhost;EmulatedProduct=PostgreSql", factory,
+            new TypeMapRegistry(), dialect);
+        var gw = new PrimaryKeyTableGateway<GapOrderLine>(ctx);
+        var entity = new GapOrderLine { OrderId = 1, LineNumber = 1, ProductCode = "X", Quantity = 3 };
+
+        var ex = Assert.Throws<NotSupportedException>(() => gw.BuildUpsert(entity));
+
+        Assert.Contains("non-primary-key updateable column", ex.Message);
     }
 
     // =========================================================================

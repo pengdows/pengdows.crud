@@ -124,6 +124,40 @@ public class AuditFieldRestoreOnFailureTests
         public string LastUpdatedBy { get; set; } = string.Empty;
     }
 
+    [Table("audited_versioned_pk_items")]
+    private class AuditedVersionedPkItem
+    {
+        [PrimaryKey(1)]
+        [Column("key", DbType.Int32)]
+        public int Key { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Int32)]
+        public int Version { get; set; }
+
+        [LastUpdatedOn]
+        [Column("last_updated_on", DbType.DateTime)]
+        public DateTime LastUpdatedOn { get; set; }
+
+        [LastUpdatedBy]
+        [Column("last_updated_by", DbType.String)]
+        public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
+    [Table("plain_pk_items")]
+    private class PlainPkItem
+    {
+        [PrimaryKey(1)]
+        [Column("key", DbType.Int32)]
+        public int Key { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     private static DatabaseContext CreateContext(fakeDbFactory factory)
     {
         return new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory);
@@ -602,5 +636,89 @@ public class AuditFieldRestoreOnFailureTests
         Assert.Equal(string.Empty, entity.CreatedBy);
         Assert.Equal(default, entity.LastUpdatedOn);
         Assert.Equal(string.Empty, entity.LastUpdatedBy);
+    }
+
+    /// <summary>
+    /// PrimaryKeyTableGateway.UpsertAsync only detects a version conflict from 0-rows-affected
+    /// when the dialect can express a conflict-aware upsert (ON CONFLICT ... WHERE or an ANSI
+    /// MERGE) — PostgreSQL's SupportsOnConflictWhere is unconditionally true, so it exercises the
+    /// canDetect branch without needing to fake a specific server version.
+    /// </summary>
+    [Fact]
+    public async Task PrimaryKeyTableGateway_UpsertAsync_ZeroRowsWithVersionColumn_OnConflictWhereDialect_ThrowsConcurrencyConflict()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        await using var ctx = new DatabaseContext("Host=localhost;EmulatedProduct=PostgreSql", factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedVersionedPkItem>(ctx, new StubAuditValueResolver("upserter"));
+
+        var originalLastUpdatedOn = new DateTime(2026, 6, 1);
+        var entity = new AuditedVersionedPkItem
+        {
+            Key = 1,
+            Name = "widget",
+            Version = 3,
+            LastUpdatedOn = originalLastUpdatedOn,
+            LastUpdatedBy = "original-updater"
+        };
+
+        factory.SetNonQueryResult(0);
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gateway.UpsertAsync(entity, ctx).AsTask());
+
+        Assert.Equal(originalLastUpdatedOn, entity.LastUpdatedOn);
+        Assert.Equal("original-updater", entity.LastUpdatedBy);
+    }
+
+    /// <summary>
+    /// RestoreBatchAuditFields short-circuits immediately when the entity has no audit columns —
+    /// this proves that early return doesn't get in the way of the batch failure still
+    /// propagating for a non-audited entity.
+    /// </summary>
+    [Fact]
+    public async Task PrimaryKeyTableGateway_BatchUpsertAsync_NonAuditedEntity_FailureSkipsAuditRestore()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var gateway = new PrimaryKeyTableGateway<PlainPkItem>(ctx);
+        var first = new PlainPkItem { Key = 1, Name = "first" };
+        var second = new PlainPkItem { Key = 2, Name = "second" };
+
+        factory.Connections.Add(new fakeDbConnection());
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
+        factory.Connections.Add(failingConnection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.BatchUpsertAsync(new[] { first, second }, ctx).AsTask());
+    }
+
+    /// <summary>
+    /// The loadOriginal-overload of UpdateAsync has its own try/catch (independent of the default
+    /// overload's), so its restore-on-exception path needs its own coverage.
+    /// </summary>
+    [Fact]
+    public async Task PrimaryKeyTableGateway_UpdateAsync_LoadOriginalOverload_ExecutionFailure_RestoresAuditAndRethrows()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var gateway = new PrimaryKeyTableGateway<AuditedPkItem>(ctx, new StubAuditValueResolver("updater"));
+
+        var originalLastUpdatedOn = new DateTime(2026, 6, 1);
+        var entity = new AuditedPkItem
+        {
+            Key = 1,
+            Name = "widget",
+            LastUpdatedOn = originalLastUpdatedOn,
+            LastUpdatedBy = "original-updater"
+        };
+
+        factory.SetNonQueryException(new InvalidOperationException("simulated failure"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => gateway.UpdateAsync(entity, loadOriginal: true, context: ctx).AsTask());
+
+        Assert.Equal(originalLastUpdatedOn, entity.LastUpdatedOn);
+        Assert.Equal("original-updater", entity.LastUpdatedBy);
     }
 }

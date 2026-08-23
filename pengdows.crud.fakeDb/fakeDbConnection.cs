@@ -60,6 +60,14 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public object? NextCommandLastInsertedId { get; set; }
 
     /// <summary>
+    /// When set, every command created by this connection has its
+    /// <see cref="fakeDbCommand.BlockSynchronousExecution"/> pre-set to this value — lets a test
+    /// prove production code used the async execution path without knowing in advance which
+    /// command instance will be created.
+    /// </summary>
+    public bool BlockSynchronousCommandExecution { get; set; }
+
+    /// <summary>
     /// Queue of output parameter values to apply after command execution.
     /// Each dictionary maps parameter name to its output value.
     /// </summary>
@@ -745,6 +753,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             command.LastInsertedId = NextCommandLastInsertedId;
         }
+
+        command.BlockSynchronousExecution = BlockSynchronousCommandExecution;
 
         CreatedCommands.Add(command);
         LastCreatedCommand = command;

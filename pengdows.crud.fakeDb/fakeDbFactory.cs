@@ -28,6 +28,15 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private Exception? _globalTransactionRollbackException;
     public bool EnableDataPersistence { get; set; } = false;
 
+    /// <summary>
+    /// When true, <see cref="CreateDataSource"/> returns a <see cref="FakeDbDataSource"/> wrapping
+    /// this factory instead of throwing <see cref="NotSupportedException"/> — opt-in so tests that
+    /// specifically need to exercise DatabaseContext's provider-native-DataSource path don't have
+    /// to hand-roll their own DbProviderFactory/DbDataSource pair. Defaults to false so every
+    /// existing caller keeps falling back to GenericDbDataSource, unchanged.
+    /// </summary>
+    public bool SupportsNativeDataSource { get; set; } = false;
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
@@ -197,6 +206,23 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public override DbParameter CreateParameter()
     {
         return new fakeDbParameter();
+    }
+
+    public override DbDataSource CreateDataSource(string connectionString)
+    {
+        if (!SupportsNativeDataSource)
+        {
+            // DbProviderFactory's own base implementation does NOT throw (it returns a
+            // DefaultDataSource) — but DatabaseContext's reflection-based provider-native probe
+            // (TryCreateProviderDataSource) treats a caught NotSupportedException as "provider
+            // explicitly opts out" and falls back to GenericDbDataSource. Throwing here, rather
+            // than delegating to base, is what actually preserves the pre-existing fallback
+            // behavior for every caller that hasn't opted into SupportsNativeDataSource.
+            throw new NotSupportedException(
+                $"{nameof(fakeDbFactory)} does not support {nameof(CreateDataSource)} unless {nameof(SupportsNativeDataSource)} is set to true.");
+        }
+
+        return new FakeDbDataSource(connectionString, this);
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 using pengdows.crud.types.converters;
@@ -89,7 +90,7 @@ public class AdvancedTypeRegistryTests
         registry.RegisterConverter(converter);
 
         // Create a mock parameter
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var success = registry.TryConfigureParameter(parameter, typeof(Inet), inet, SupportedDatabase.PostgreSql);
 
         Assert.True(success);
@@ -108,7 +109,7 @@ public class AdvancedTypeRegistryTests
         };
         registry.RegisterMapping<string>(SupportedDatabase.SqlServer, mapping);
 
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var success = registry.TryConfigureParameter(parameter, typeof(string), null, SupportedDatabase.SqlServer);
 
         Assert.True(success);
@@ -120,7 +121,7 @@ public class AdvancedTypeRegistryTests
     public void TryConfigureParameter_ShouldFailForUnregisteredType()
     {
         var registry = new AdvancedTypeRegistry();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success =
             registry.TryConfigureParameter(parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.SqlServer);
@@ -212,7 +213,7 @@ public class AdvancedTypeRegistryTests
 
         Assert.NotNull(mapping);
 
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var dto = new DateTimeOffset(2026, 2, 22, 12, 34, 56, TimeSpan.FromHours(-5));
 
         var success =
@@ -243,38 +244,4 @@ public class AdvancedTypeRegistryTests
         Assert.NotNull(registry.GetConverter(typeof(JsonDocument)));
     }
 
-    // Mock parameter class for testing
-    private class TestDbParameter : DbParameter
-    {
-        private string _parameterName = string.Empty;
-        private string _sourceColumn = string.Empty;
-
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-
-        [AllowNull]
-        public override string ParameterName
-        {
-            get => _parameterName;
-            set => _parameterName = value ?? string.Empty;
-        }
-
-        public override int Size { get; set; }
-
-        [AllowNull]
-        public override string SourceColumn
-        {
-            get => _sourceColumn;
-            set => _sourceColumn = value ?? string.Empty;
-        }
-
-        public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull] public override object Value { get; set; } = DBNull.Value;
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
 }

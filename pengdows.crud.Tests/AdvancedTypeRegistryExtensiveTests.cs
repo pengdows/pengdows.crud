@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 using pengdows.crud.types.converters;
@@ -27,8 +28,8 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = new ProviderTypeMapping { DbType = DbType.String };
         registry.RegisterMapping<string>(SupportedDatabase.SqlServer, mapping);
 
-        var param1 = new TestDbParameter();
-        var param2 = new TestDbParameter();
+        var param1 = new fakeDbParameter();
+        var param2 = new fakeDbParameter();
 
         // First call - should cache
         var result1 = registry.TryConfigureParameter(param1, typeof(string), "test1", SupportedDatabase.SqlServer);
@@ -48,8 +49,8 @@ public class AdvancedTypeRegistryExtensiveTests
     public void TryConfigureParameter_CachesNegativeResults()
     {
         var registry = new AdvancedTypeRegistry();
-        var param1 = new TestDbParameter();
-        var param2 = new TestDbParameter();
+        var param1 = new fakeDbParameter();
+        var param2 = new fakeDbParameter();
 
         // First call - should cache negative result
         var result1 = registry.TryConfigureParameter(param1, typeof(int), 42, SupportedDatabase.SqlServer);
@@ -65,7 +66,7 @@ public class AdvancedTypeRegistryExtensiveTests
     public void RegisterMapping_ClearsCacheForType()
     {
         var registry = new AdvancedTypeRegistry();
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
 
         // First try - should fail and cache negative result
         var result1 =
@@ -92,7 +93,7 @@ public class AdvancedTypeRegistryExtensiveTests
         registry.RegisterMapping<Inet>(SupportedDatabase.PostgreSql,
             new ProviderTypeMapping { DbType = DbType.String });
 
-        var param1 = new TestDbParameter();
+        var param1 = new fakeDbParameter();
         var inet = new Inet(IPAddress.Parse("192.168.1.1"));
 
         // First call - no converter, should work but not convert
@@ -103,7 +104,7 @@ public class AdvancedTypeRegistryExtensiveTests
         // Register converter - should clear cache
         registry.RegisterConverter(new InetConverter());
 
-        var param2 = new TestDbParameter();
+        var param2 = new fakeDbParameter();
         var result2 = registry.TryConfigureParameter(param2, typeof(Inet), inet, SupportedDatabase.PostgreSql);
         Assert.True(result2);
         Assert.Equal("192.168.1.1", param2.Value); // Converted by InetConverter
@@ -117,7 +118,7 @@ public class AdvancedTypeRegistryExtensiveTests
     public void TryConfigureParameterEnhanced_FallsBackToProviderParameterFactory()
     {
         var registry = new AdvancedTypeRegistry();
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
 
         // Try with a type that isn't registered in AdvancedTypeRegistry
         // but might be handled by ProviderParameterFactory
@@ -133,7 +134,7 @@ public class AdvancedTypeRegistryExtensiveTests
     public void TryConfigureParameterEnhanced_FallsBackToParameterBindingRules()
     {
         var registry = new AdvancedTypeRegistry();
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
 
         // Try with a simple type that should be handled by binding rules
         var result = registry.TryConfigureParameterEnhanced(param, typeof(string), "test", SupportedDatabase.SqlServer);
@@ -200,7 +201,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.String, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
         mapping.ConfigureParameter(param, null);
 
         Assert.Equal(DbType.String, param.DbType);
@@ -257,7 +258,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.Binary, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
         // Use null to test the configuration path - the actual value doesn't matter for parameter setup
         mapping.ConfigureParameter(param, null);
 
@@ -453,7 +454,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.DateTimeOffset, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
 
         // Should work with proper DateTimeOffset
         var offset = new DateTimeOffset(DateTime.UtcNow);
@@ -475,7 +476,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.Binary, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
         using var stream = new MemoryStream();
         mapping.ConfigureParameter(param, stream);
 
@@ -493,7 +494,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.String, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
         using var reader = new StringReader("test");
         mapping.ConfigureParameter(param, reader);
 
@@ -511,7 +512,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(DbType.Binary, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
         using var stream = new MemoryStream();
         mapping.ConfigureParameter(param, stream);
 
@@ -681,7 +682,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var inet = new Inet(IPAddress.Parse("10.0.0.1"));
 
         // First configure - no converter, caches with initial version
-        var param1 = new TestDbParameter();
+        var param1 = new fakeDbParameter();
         var result1 = registry.TryConfigureParameter(param1, typeof(Inet), inet, SupportedDatabase.PostgreSql);
         Assert.True(result1);
         Assert.Equal(inet, param1.Value);
@@ -690,7 +691,7 @@ public class AdvancedTypeRegistryExtensiveTests
         registry.RegisterConverter(new InetConverter());
 
         // Second configure - should detect version mismatch and use new converter
-        var param2 = new TestDbParameter();
+        var param2 = new fakeDbParameter();
         var result2 = registry.TryConfigureParameter(param2, typeof(Inet), inet, SupportedDatabase.PostgreSql);
         Assert.True(result2);
         Assert.Equal("10.0.0.1", param2.Value);
@@ -699,7 +700,7 @@ public class AdvancedTypeRegistryExtensiveTests
         registry.RegisterConverter(new InetConverter());
 
         // Third configure - should still work correctly
-        var param3 = new TestDbParameter();
+        var param3 = new fakeDbParameter();
         var result3 = registry.TryConfigureParameter(param3, typeof(Inet), inet, SupportedDatabase.PostgreSql);
         Assert.True(result3);
         Assert.Equal("10.0.0.1", param3.Value);
@@ -709,28 +710,7 @@ public class AdvancedTypeRegistryExtensiveTests
 
     #region Mock Parameter Classes for Testing
 
-    private class TestDbParameter : DbParameter
-    {
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member
-        public override string ParameterName { get; set; } = string.Empty;
-#pragma warning restore CS8765
-        public override int Size { get; set; }
-#pragma warning disable CS8765 // Nullability of type of parameter doesn't match overridden member  
-        public override string SourceColumn { get; set; } = string.Empty;
-#pragma warning restore CS8765
-        public override bool SourceColumnNullMapping { get; set; }
-        public override object? Value { get; set; }
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
-
-    private class PostgreSqlLikeParameter : TestDbParameter
+    private class PostgreSqlLikeParameter : fakeDbParameter
     {
         public string? DataTypeName { get; set; }
         public MockNpgsqlDbType? NpgsqlDbType { get; set; }
@@ -754,18 +734,18 @@ public class AdvancedTypeRegistryExtensiveTests
         JSON = 2048
     }
 
-    private class MySqlLikeParameter : TestDbParameter
+    private class MySqlLikeParameter : fakeDbParameter
     {
         public MockMySqlDbType? MySqlDbType { get; set; }
     }
 
-    private class SqlServerLikeParameter : TestDbParameter
+    private class SqlServerLikeParameter : fakeDbParameter
     {
         public MockSqlDbType? SqlDbType { get; set; }
         public string? UdtTypeName { get; set; }
     }
 
-    private class OracleLikeParameter : TestDbParameter
+    private class OracleLikeParameter : fakeDbParameter
     {
         public MockOracleDbType? OracleDbType { get; set; }
     }
