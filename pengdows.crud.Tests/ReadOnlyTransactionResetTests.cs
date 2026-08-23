@@ -16,53 +16,12 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class ReadOnlyTransactionResetTests
 {
-    private sealed class RecordingConnection : fakeDbConnection
-    {
-        public List<string> Commands { get; } = new();
-
-        protected override DbCommand CreateDbCommand()
-        {
-            return new RecordingCommand(this, Commands);
-        }
-    }
-
-    private sealed class RecordingCommand : fakeDbCommand
-    {
-        private readonly List<string> _commands;
-
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
-        {
-            _commands = commands;
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            _commands.Add(CommandText);
-            return base.ExecuteNonQuery();
-        }
-    }
-
-    private sealed class RecordingFactory : DbProviderFactory
-    {
-        public List<RecordingConnection> Connections { get; } = new();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new RecordingConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-
-        public override DbCommand CreateCommand() => new fakeDbCommand();
-        public override DbParameter CreateParameter() => new fakeDbParameter();
-    }
-
-    private static List<string> CollectCommands(RecordingFactory factory)
+    private static List<string> CollectCommands(fakeDbFactory factory)
     {
         var all = new List<string>();
-        foreach (var conn in factory.Connections)
+        foreach (var conn in factory.CreatedConnections)
         {
-            all.AddRange(conn.Commands);
+            all.AddRange(conn.ExecutedNonQueryTexts);
         }
 
         return all;
@@ -73,7 +32,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task Oracle_ReadOnlyTransaction_Commit_DoesNotNeedReset()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=Oracle",
@@ -99,7 +58,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task Oracle_ReadOnlyTransaction_Rollback_DoesNotNeedReset()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=Oracle",
@@ -124,7 +83,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task MySql_ReadOnlyTransaction_Commit_ResetsSession()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=MySql",
@@ -149,7 +108,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task MySql_ReadOnlyTransaction_Rollback_ResetsSession()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=MySql",
@@ -173,7 +132,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task MariaDb_ReadOnlyTransaction_Commit_ResetsSession()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=MariaDb",
@@ -198,7 +157,7 @@ public class ReadOnlyTransactionResetTests
     [Fact]
     public async Task MariaDb_ReadOnlyTransaction_Rollback_ResetsSession()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=MariaDb",

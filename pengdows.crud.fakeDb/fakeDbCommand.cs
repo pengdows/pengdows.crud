@@ -107,6 +107,19 @@ public class fakeDbCommand : DbCommand
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
+
+        // An exact-command-text failure (SetCommandFailure) names a specific SQL string, so it
+        // must win even when that string happens to be a SET/PRAGMA session-setting command — the
+        // test chose that exact text on purpose. This does NOT apply to the single-shot
+        // NonQueryExecuteException below: that primes "the next non-query call" generically, and
+        // session-setting commands routinely run before the real DML the test is actually
+        // targeting, so checking it here would let an incidental SET statement consume the
+        // one-shot exception before the intended call ever runs.
+        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
+        {
+            throw exNonQuery!;
+        }
+
         // Treat session-setting commands as no-op and do not consume queued NonQueryResults,
         // so tests that seed rows-affected for subsequent DML remain stable.
         if (!string.IsNullOrWhiteSpace(CommandText))
@@ -129,11 +142,6 @@ public class fakeDbCommand : DbCommand
             var ex = conn.NonQueryExecuteException;
             conn.SetNonQueryExecuteException(null);
             throw ex;
-        }
-
-        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
-        {
-            throw exNonQuery!;
         }
 
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
@@ -190,6 +198,14 @@ public class fakeDbCommand : DbCommand
             if (TryGetCommandFailure(conn, CommandText, out var exScalar))
             {
                 throw exScalar!;
+            }
+
+            // A resolver takes full, exclusive control over every scalar response by command
+            // text — including throwing for a command the test didn't expect — which is exactly
+            // what version/flavor-detection tests need instead of the canned defaults below.
+            if (conn.ScalarResolver != null)
+            {
+                return conn.ScalarResolver(CommandText);
             }
 
             // Apply output parameter values if queued
@@ -401,6 +417,12 @@ public class fakeDbCommand : DbCommand
     {
         ct.ThrowIfCancellationRequested();
         AsyncExecuteCount++;
+
+        if (FakeConnection != null && FakeConnection.TryGetAsyncOnlyScalarFailure(CommandText, out var asyncOnlyEx))
+        {
+            return Task.FromException<object?>(asyncOnlyEx);
+        }
+
         return Task.FromResult(BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar());
     }
 

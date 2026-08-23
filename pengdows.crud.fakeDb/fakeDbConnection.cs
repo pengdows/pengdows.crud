@@ -17,6 +17,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
     private string _serverVersion = "1.0";
+
+    /// <summary>
+    /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
+    /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
+    /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
+    /// real emulated product.
+    /// </summary>
+    public DataTable? SchemaTable
+    {
+        get => _schemaTable;
+        set => _schemaTable = value;
+    }
     private int? _maxParameterLimit;
     private bool _shouldFailOnOpen;
     private bool _shouldFailOnCommand;
@@ -66,6 +78,42 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// command instance will be created.
     /// </summary>
     public bool BlockSynchronousCommandExecution { get; set; }
+
+    /// <summary>
+    /// When set, every ExecuteScalar/ExecuteScalarAsync call on this connection's commands is
+    /// answered exclusively by invoking this resolver with the command text — bypassing every
+    /// other canned/default scalar response below. Letting the resolver throw for an unexpected
+    /// command text is intentional: it catches production code probing something a test didn't
+    /// anticipate, which a fixed dictionary of responses can't express.
+    /// </summary>
+    public Func<string, object?>? ScalarResolver { get; set; }
+
+    private readonly Dictionary<string, Exception> _asyncOnlyScalarFailures = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Configures ExecuteScalarAsync (and only ExecuteScalarAsync — the synchronous ExecuteScalar
+    /// for the same command text is unaffected) to throw <paramref name="exception"/> when a
+    /// command's text exactly matches <paramref name="commandText"/>. Lets a test prove a sync
+    /// entry point never accidentally routes through the async overload for a specific probe,
+    /// while every other command (sync or async) keeps working normally.
+    /// </summary>
+    public void SetAsyncOnlyScalarFailure(string commandText, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+        ArgumentNullException.ThrowIfNull(exception);
+        _asyncOnlyScalarFailures[commandText] = exception;
+    }
+
+    internal bool TryGetAsyncOnlyScalarFailure(string commandText, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (string.IsNullOrEmpty(commandText))
+        {
+            exception = null;
+            return false;
+        }
+
+        return _asyncOnlyScalarFailures.TryGetValue(commandText, out exception);
+    }
 
     /// <summary>
     /// Queue of output parameter values to apply after command execution.
@@ -490,11 +538,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
+    /// <summary>
+    /// Every value ever assigned to <see cref="ConnectionString"/>, in order — lets a test verify
+    /// what connection string(s) production code actually built and assigned (e.g. a read-only
+    /// variant with extra parameters) without needing its own recording DbConnection subclass.
+    /// </summary>
+    public List<string> ConnectionStringHistory { get; } = new();
+
     [AllowNull]
     public override string ConnectionString
     {
         get => _connectionString ?? string.Empty;
-        set => _connectionString = value;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            ConnectionStringHistory.Add(normalized);
+            _connectionString = normalized;
+        }
     }
 
     public override int ConnectionTimeout => 0;

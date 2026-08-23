@@ -26,11 +26,11 @@ public class SqlDialectFactoryAsyncDetectionTests
     public async Task CreateDialectAsync_AuroraMySql_ResolvesViaAsyncFlavorProbe()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var inner = (fakeDbConnection)factory.CreateConnection();
-        inner.ConnectionString = "EmulatedProduct=MySql";
-        inner.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = "EmulatedProduct=MySql";
+        conn.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        conn.BlockSynchronousCommandExecution = true;
 
-        await using var conn = new SyncScalarBlockedConnection(inner);
         await conn.OpenAsync();
         var tracked = new TrackedConnection(conn);
 
@@ -54,11 +54,11 @@ public class SqlDialectFactoryAsyncDetectionTests
     public async Task DetectDatabaseInfoAsync_AuroraMySqlFallback_UsesAsyncFlavorProbe()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var inner = (fakeDbConnection)factory.CreateConnection();
-        inner.ConnectionString = "EmulatedProduct=MySql";
-        inner.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = "EmulatedProduct=MySql";
+        conn.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        conn.BlockSynchronousCommandExecution = true;
 
-        await using var conn = new SyncScalarBlockedConnection(inner);
         await conn.OpenAsync();
         var tracked = new TrackedConnection(conn);
 
@@ -84,11 +84,13 @@ public class SqlDialectFactoryAsyncDetectionTests
     public void CreateDialect_AuroraMySql_ResolvesViaSyncProbe_WithoutTouchingAsyncOverload()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var inner = (fakeDbConnection)factory.CreateConnection();
-        inner.ConnectionString = "EmulatedProduct=MySql";
-        inner.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = "EmulatedProduct=MySql";
+        conn.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        conn.SetAsyncOnlyScalarFailure("SELECT @@aurora_version", new InvalidOperationException(
+            "ExecuteScalarAsync() was called for the identification probe — the synchronous " +
+            "CreateDialect() entry point must use the sync ExecuteScalar() overload instead."));
 
-        using var conn = new AsyncAuroraProbeBlockedConnection(inner);
         conn.Open();
         var tracked = new TrackedConnection(conn);
 
@@ -97,270 +99,4 @@ public class SqlDialectFactoryAsyncDetectionTests
         Assert.Equal(SupportedDatabase.AuroraMySql, dialect.DatabaseType);
     }
 
-    /// <summary>
-    /// Minimal DbConnection decorator wrapping a real <see cref="fakeDbConnection"/> so schema
-    /// lookups and version detection behave normally, except that any command's synchronous
-    /// <see cref="DbCommand.ExecuteScalar"/> throws — forcing detection code to route through
-    /// <see cref="DbCommand.ExecuteScalarAsync(CancellationToken)"/> to succeed.
-    /// </summary>
-    private sealed class SyncScalarBlockedConnection : DbConnection
-    {
-        private readonly fakeDbConnection _inner;
-
-        public SyncScalarBlockedConnection(fakeDbConnection inner)
-        {
-            _inner = inner;
-        }
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => _inner.ConnectionString;
-            set => _inner.ConnectionString = value;
-        }
-
-        public override string Database => _inner.Database;
-        public override string DataSource => _inner.DataSource;
-        public override string ServerVersion => _inner.ServerVersion;
-        public override ConnectionState State => _inner.State;
-
-        public override void ChangeDatabase(string databaseName) => _inner.ChangeDatabase(databaseName);
-        public override void Close() => _inner.Close();
-        public override void Open() => _inner.Open();
-        public override Task OpenAsync(CancellationToken cancellationToken) => _inner.OpenAsync(cancellationToken);
-        public override DataTable GetSchema() => _inner.GetSchema();
-        public override DataTable GetSchema(string collectionName) => _inner.GetSchema(collectionName);
-
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
-            => _inner.BeginTransaction(isolationLevel);
-
-        protected override DbCommand CreateDbCommand() => new SyncScalarBlockedCommand((DbCommand)_inner.CreateCommand());
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-    }
-
-    private sealed class SyncScalarBlockedCommand : DbCommand
-    {
-        private readonly DbCommand _inner;
-
-        public SyncScalarBlockedCommand(DbCommand inner)
-        {
-            _inner = inner;
-        }
-
-        [AllowNull]
-        public override string CommandText
-        {
-            get => _inner.CommandText;
-            set => _inner.CommandText = value;
-        }
-
-        public override int CommandTimeout
-        {
-            get => _inner.CommandTimeout;
-            set => _inner.CommandTimeout = value;
-        }
-
-        public override CommandType CommandType
-        {
-            get => _inner.CommandType;
-            set => _inner.CommandType = value;
-        }
-
-        public override bool DesignTimeVisible
-        {
-            get => _inner.DesignTimeVisible;
-            set => _inner.DesignTimeVisible = value;
-        }
-
-        protected override DbConnection? DbConnection
-        {
-            get => _inner.Connection;
-            set { }
-        }
-
-        protected override DbParameterCollection DbParameterCollection => _inner.Parameters;
-
-        protected override DbTransaction? DbTransaction
-        {
-            get => _inner.Transaction;
-            set => _inner.Transaction = value;
-        }
-
-        public override UpdateRowSource UpdatedRowSource
-        {
-            get => _inner.UpdatedRowSource;
-            set => _inner.UpdatedRowSource = value;
-        }
-
-        public override void Cancel() => _inner.Cancel();
-        protected override DbParameter CreateDbParameter() => _inner.CreateParameter();
-        public override int ExecuteNonQuery() => _inner.ExecuteNonQuery();
-        public override void Prepare() => _inner.Prepare();
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-            => _inner.ExecuteReader(behavior);
-
-        public override object? ExecuteScalar()
-            => throw new InvalidOperationException(
-                "Sync ExecuteScalar() was called — async detection must use ExecuteScalarAsync().");
-
-        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
-            => _inner.ExecuteScalarAsync(cancellationToken);
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-    }
-
-    /// <summary>
-    /// Inverse of <see cref="SyncScalarBlockedConnection"/>: every call behaves normally except
-    /// that <c>ExecuteScalarAsync</c> throws specifically for the Aurora-MySQL identification
-    /// probe's command text. Used to prove a sync caller never needs (and doesn't accidentally
-    /// start using) the async overload for that probe.
-    /// </summary>
-    private sealed class AsyncAuroraProbeBlockedConnection : DbConnection
-    {
-        private readonly fakeDbConnection _inner;
-
-        public AsyncAuroraProbeBlockedConnection(fakeDbConnection inner)
-        {
-            _inner = inner;
-        }
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => _inner.ConnectionString;
-            set => _inner.ConnectionString = value;
-        }
-
-        public override string Database => _inner.Database;
-        public override string DataSource => _inner.DataSource;
-        public override string ServerVersion => _inner.ServerVersion;
-        public override ConnectionState State => _inner.State;
-
-        public override void ChangeDatabase(string databaseName) => _inner.ChangeDatabase(databaseName);
-        public override void Close() => _inner.Close();
-        public override void Open() => _inner.Open();
-        public override Task OpenAsync(CancellationToken cancellationToken) => _inner.OpenAsync(cancellationToken);
-        public override DataTable GetSchema() => _inner.GetSchema();
-        public override DataTable GetSchema(string collectionName) => _inner.GetSchema(collectionName);
-
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
-            => _inner.BeginTransaction(isolationLevel);
-
-        protected override DbCommand CreateDbCommand()
-            => new AsyncAuroraProbeBlockedCommand((DbCommand)_inner.CreateCommand());
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-    }
-
-    private sealed class AsyncAuroraProbeBlockedCommand : DbCommand
-    {
-        private readonly DbCommand _inner;
-
-        public AsyncAuroraProbeBlockedCommand(DbCommand inner)
-        {
-            _inner = inner;
-        }
-
-        [AllowNull]
-        public override string CommandText
-        {
-            get => _inner.CommandText;
-            set => _inner.CommandText = value;
-        }
-
-        public override int CommandTimeout
-        {
-            get => _inner.CommandTimeout;
-            set => _inner.CommandTimeout = value;
-        }
-
-        public override CommandType CommandType
-        {
-            get => _inner.CommandType;
-            set => _inner.CommandType = value;
-        }
-
-        public override bool DesignTimeVisible
-        {
-            get => _inner.DesignTimeVisible;
-            set => _inner.DesignTimeVisible = value;
-        }
-
-        protected override DbConnection? DbConnection
-        {
-            get => _inner.Connection;
-            set { }
-        }
-
-        protected override DbParameterCollection DbParameterCollection => _inner.Parameters;
-
-        protected override DbTransaction? DbTransaction
-        {
-            get => _inner.Transaction;
-            set => _inner.Transaction = value;
-        }
-
-        public override UpdateRowSource UpdatedRowSource
-        {
-            get => _inner.UpdatedRowSource;
-            set => _inner.UpdatedRowSource = value;
-        }
-
-        public override void Cancel() => _inner.Cancel();
-        protected override DbParameter CreateDbParameter() => _inner.CreateParameter();
-        public override int ExecuteNonQuery() => _inner.ExecuteNonQuery();
-        public override void Prepare() => _inner.Prepare();
-        public override object? ExecuteScalar() => _inner.ExecuteScalar();
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-            => _inner.ExecuteReader(behavior);
-
-        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
-        {
-            if (_inner.CommandText == "SELECT @@aurora_version")
-            {
-                throw new InvalidOperationException(
-                    "ExecuteScalarAsync() was called for the identification probe — the synchronous " +
-                    "CreateDialect() entry point must use the sync ExecuteScalar() overload instead.");
-            }
-
-            return _inner.ExecuteScalarAsync(cancellationToken);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-    }
 }

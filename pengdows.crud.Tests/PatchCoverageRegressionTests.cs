@@ -198,7 +198,7 @@ public sealed class PatchCoverageRegressionTests
         await using var context = CreateContext();
         ForceSessionSettings(context, "SET rw", "SET ro");
 
-        using var tracked = new TrackedConnection(new AsyncBehaviorConnection());
+        using var tracked = new TrackedConnection(new fakeDbConnection());
         var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRw")!;
 
         using var cts = new CancellationTokenSource();
@@ -213,7 +213,7 @@ public sealed class PatchCoverageRegressionTests
         await using var context = CreateContext();
         ForceSessionSettings(context, "SET rw", "SET ro");
 
-        using var tracked = new TrackedConnection(new AsyncBehaviorConnection());
+        using var tracked = new TrackedConnection(new fakeDbConnection());
         var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRo")!;
 
         using var cts = new CancellationTokenSource();
@@ -229,7 +229,9 @@ public sealed class PatchCoverageRegressionTests
         ForceSessionSettings(context, "SET rw", "SET ro");
         SetField(context, "_logger", new ThrowOnceLogger<IDatabaseContext>());
 
-        using var tracked = new TrackedConnection(new AsyncBehaviorConnection(new InvalidOperationException("boom")));
+        var connection = new fakeDbConnection();
+        connection.SetCommandFailure("SET rw", new InvalidOperationException("boom"));
+        using var tracked = new TrackedConnection(connection);
         var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRw")!;
 
         await handler(tracked, CancellationToken.None);
@@ -244,7 +246,9 @@ public sealed class PatchCoverageRegressionTests
         ForceSessionSettings(context, "SET rw", "SET ro");
         SetField(context, "_logger", new ThrowOnceLogger<IDatabaseContext>());
 
-        using var tracked = new TrackedConnection(new AsyncBehaviorConnection(new InvalidOperationException("boom")));
+        var connection = new fakeDbConnection();
+        connection.SetCommandFailure("SET ro", new InvalidOperationException("boom"));
+        using var tracked = new TrackedConnection(connection);
         var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRo")!;
 
         await handler(tracked, CancellationToken.None);
@@ -259,7 +263,9 @@ public sealed class PatchCoverageRegressionTests
         ForceSessionSettings(context, "SET rw", "SET ro");
         SetField(context, "_sessionInitializationFailureMode", SessionInitializationFailureMode.FailClosed);
 
-        using var tracked = new TrackedConnection(new AsyncBehaviorConnection(new InvalidOperationException("boom")));
+        var connection = new fakeDbConnection();
+        connection.SetCommandFailure("SET ro", new InvalidOperationException("boom"));
+        using var tracked = new TrackedConnection(connection);
         var handler = (Func<ITrackedConnection, CancellationToken, Task>)GetField(context, "_firstOpenHandlerAsyncRo")!;
 
         await Assert.ThrowsAsync<ConnectionException>(() => handler(tracked, CancellationToken.None));
@@ -393,117 +399,6 @@ public sealed class PatchCoverageRegressionTests
         public void Rollback()
         {
             RollbackAction?.Invoke();
-        }
-    }
-
-    private sealed class AsyncBehaviorConnection : DbConnection
-    {
-        private readonly Exception? _exception;
-        private string _connectionString = string.Empty;
-
-        public AsyncBehaviorConnection(Exception? exception = null)
-        {
-            _exception = exception;
-        }
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => _connectionString;
-            set => _connectionString = value ?? string.Empty;
-        }
-
-        public override int ConnectionTimeout => 30;
-        public override string Database => "patch";
-        public override string DataSource => "patch";
-        public override string ServerVersion => "1.0";
-        public override ConnectionState State => ConnectionState.Open;
-
-        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
-        {
-            throw new NotSupportedException();
-        }
-
-        public override void ChangeDatabase(string databaseName)
-        {
-        }
-
-        public override void Close()
-        {
-        }
-
-        public override void Open()
-        {
-        }
-
-        protected override DbCommand CreateDbCommand()
-        {
-            return new AsyncBehaviorCommand(_exception);
-        }
-    }
-
-    private sealed class AsyncBehaviorCommand : DbCommand
-    {
-        private readonly Exception? _exception;
-        private string _commandText = string.Empty;
-
-        public AsyncBehaviorCommand(Exception? exception)
-        {
-            _exception = exception;
-        }
-
-        [AllowNull]
-        public override string CommandText
-        {
-            get => _commandText;
-            set => _commandText = value ?? string.Empty;
-        }
-
-        public override int CommandTimeout { get; set; }
-        public override CommandType CommandType { get; set; } = CommandType.Text;
-        public override bool DesignTimeVisible { get; set; }
-        protected override DbConnection? DbConnection { get; set; }
-        protected override DbParameterCollection DbParameterCollection => throw new NotSupportedException();
-        protected override DbTransaction? DbTransaction { get; set; }
-        public override UpdateRowSource UpdatedRowSource { get; set; }
-
-        public override void Cancel()
-        {
-        }
-
-        protected override DbParameter CreateDbParameter()
-        {
-            throw new NotSupportedException();
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            throw new NotSupportedException();
-        }
-
-        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_exception != null)
-            {
-                return Task.FromException<int>(_exception);
-            }
-
-            return Task.FromResult(0);
-        }
-
-        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-        {
-            throw new NotSupportedException();
-        }
-
-        public override object? ExecuteScalar()
-        {
-            throw new NotSupportedException();
-        }
-
-        public override void Prepare()
-        {
         }
     }
 

@@ -18,82 +18,7 @@ namespace pengdows.crud.Tests;
 
 public class SingleWriterReadOnlyEnhancedTests
 {
-    private sealed class RecordingConnection : fakeDbConnection
-    {
-        public List<string> Commands { get; } = new();
-        public List<string> ConnectionStrings { get; } = new();
-
-        /// <summary>
-        /// Returns true if this connection has been disposed (DisposeCount > 0 from fakeDbConnection).
-        /// Used for leak detection: every opened connection must eventually be disposed.
-        /// </summary>
-        public bool IsDisposed => DisposeCount > 0;
-
-        protected override DbCommand CreateDbCommand()
-        {
-            return new RecordingCommand(this, Commands);
-        }
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => base.ConnectionString;
-            set
-            {
-                var normalized = value ?? string.Empty;
-                ConnectionStrings.Add(normalized);
-                base.ConnectionString = normalized;
-            }
-        }
-    }
-
-    private sealed class RecordingCommand : fakeDbCommand
-    {
-        private readonly List<string> _commands;
-
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
-        {
-            _commands = commands;
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            _commands.Add(CommandText);
-            return base.ExecuteNonQuery();
-        }
-    }
-
-    private sealed class RecordingFactory : DbProviderFactory
-    {
-        public List<RecordingConnection> Connections { get; } = new();
-
-        /// <summary>
-        /// Connections that have been disposed. Used for leak detection:
-        /// Assert.Equal(Connections.Count, DisposedConnections.Count) after full disposal
-        /// verifies that every opened connection was properly cleaned up.
-        /// </summary>
-        public IReadOnlyList<RecordingConnection> DisposedConnections =>
-            Connections.Where(c => c.IsDisposed).ToList();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new RecordingConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-
-        public override DbCommand CreateCommand()
-        {
-            return new fakeDbCommand();
-        }
-
-        public override DbParameter CreateParameter()
-        {
-            return new fakeDbParameter();
-        }
-    }
-
-    private static DatabaseContext CreateContext(RecordingFactory factory,
+    private static DatabaseContext CreateContext(fakeDbFactory factory,
         SupportedDatabase database = SupportedDatabase.Sqlite, string? connectionString = null)
     {
         var config = new DatabaseContextConfiguration
@@ -115,34 +40,34 @@ public class SingleWriterReadOnlyEnhancedTests
     [InlineData(SupportedDatabase.SqlServer)]
     public async Task ReadOnlyTransaction_AppliesCorrectSessionSettingsByDialect(SupportedDatabase database)
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory, database))
         {
             try
             {
                 await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
-                Assert.True(factory.Connections.Count >= 1);
+                Assert.True(factory.CreatedConnections.Count >= 1);
 
                 // Verify that read-only enforcement was applied to the connection
-                var readOnlyConnection = factory.Connections.Last();
+                var readOnlyConnection = factory.CreatedConnections.Last();
 
                 // Database-specific session setting verification
                 switch (database)
                 {
                     case SupportedDatabase.Sqlite:
                         // SQLite read-only is enforced via Mode=ReadOnly in the connection string
-                        Assert.Contains(readOnlyConnection.ConnectionStrings,
+                        Assert.Contains(readOnlyConnection.ConnectionStringHistory,
                             cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
                         break;
                     case SupportedDatabase.MySql:
-                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("transaction_read_only = 1"));
+                        Assert.Contains(readOnlyConnection.ExecutedNonQueryTexts, c => c.Contains("transaction_read_only = 1"));
                         break;
                     case SupportedDatabase.MariaDb:
-                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("tx_read_only = 1"));
+                        Assert.Contains(readOnlyConnection.ExecutedNonQueryTexts, c => c.Contains("tx_read_only = 1"));
                         break;
                     case SupportedDatabase.Oracle:
-                        Assert.Contains(readOnlyConnection.Commands, c => c.Contains("READ ONLY"));
+                        Assert.Contains(readOnlyConnection.ExecutedNonQueryTexts, c => c.Contains("READ ONLY"));
                         break;
                     case SupportedDatabase.DuckDB:
                         // DuckDB in ReadWriteMode.ReadWrite: access_mode=READ_ONLY is NOT applied
@@ -150,7 +75,7 @@ public class SingleWriterReadOnlyEnhancedTests
                         // to prevent locking out concurrent writers. Read-only enforcement is at the
                         // application level (TransactionContext._isReadOnly write guard). No session SQL
                         // is emitted either (removed: access_mode cannot be changed after connection open).
-                        Assert.DoesNotContain(readOnlyConnection.Commands,
+                        Assert.DoesNotContain(readOnlyConnection.ExecutedNonQueryTexts,
                             c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
                         break;
                     case SupportedDatabase.SqlServer:
@@ -167,84 +92,84 @@ public class SingleWriterReadOnlyEnhancedTests
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task ReadOnlyTransaction_CreatesExpectedConnections()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory))
         {
             await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
             // Verify that a separate read-only connection was created
-            Assert.True(factory.Connections.Count >= 1);
+            Assert.True(factory.CreatedConnections.Count >= 1);
 
             // Verify that connection strings were set (even if specific read-only hints aren't applied)
-            var readOnlyConnection = factory.Connections.Last();
-            Assert.NotEmpty(readOnlyConnection.ConnectionStrings);
+            var readOnlyConnection = factory.CreatedConnections.Last();
+            Assert.NotEmpty(readOnlyConnection.ConnectionStringHistory);
 
             // Just verify that a connection string was applied - the specific content
             // may vary based on dialect implementation
-            var readOnlyConnectionString = readOnlyConnection.ConnectionStrings[0];
+            var readOnlyConnectionString = readOnlyConnection.ConnectionStringHistory[0];
             Assert.False(string.IsNullOrEmpty(readOnlyConnectionString));
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Theory]
     [InlineData("Data Source=file:memdb1?mode=memory&cache=shared;EmulatedProduct=Sqlite")]
     public async Task ReadOnlyTransaction_SkipsReadOnlyFlagsForInMemoryDatabases(string connectionString)
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory, SupportedDatabase.Sqlite, connectionString))
         {
             await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
-            Assert.True(factory.Connections.Count >= 1);
+            Assert.True(factory.CreatedConnections.Count >= 1);
 
-            var readOnlyConnection = factory.Connections.Last();
+            var readOnlyConnection = factory.CreatedConnections.Last();
 
             // For in-memory databases, connection-level read-only flags should be skipped
             // but session-level settings should still be applied for logical read-only behavior
             if (connectionString.Contains("Sqlite"))
             {
                 // In-memory SQLite: no Mode=ReadOnly in connection string, and no PRAGMA query_only SQL
-                Assert.DoesNotContain(readOnlyConnection.ConnectionStrings, cs => cs.Contains("Mode=ReadOnly"));
-                Assert.DoesNotContain(readOnlyConnection.Commands, c => c.Contains("query_only"));
+                Assert.DoesNotContain(readOnlyConnection.ConnectionStringHistory, cs => cs.Contains("Mode=ReadOnly"));
+                Assert.DoesNotContain(readOnlyConnection.ExecutedNonQueryTexts, c => c.Contains("query_only"));
             }
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task ReadOnlyTransaction_InMemoryEphemeral_BehaviorCheck()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory, SupportedDatabase.Sqlite,
             "Data Source=:memory:;EmulatedProduct=Sqlite"))
         {
             await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
 
-            Assert.True(factory.Connections.Count >= 1);
-            var readOnlyConnection = factory.Connections.Last();
-            Assert.DoesNotContain(readOnlyConnection.ConnectionStrings, cs => cs.Contains("Mode=ReadOnly"));
-            Assert.NotEmpty(readOnlyConnection.Commands);
+            Assert.True(factory.CreatedConnections.Count >= 1);
+            var readOnlyConnection = factory.CreatedConnections.Last();
+            Assert.DoesNotContain(readOnlyConnection.ConnectionStringHistory, cs => cs.Contains("Mode=ReadOnly"));
+            Assert.NotEmpty(readOnlyConnection.ExecutedNonQueryTexts);
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task ReadOnlyTransaction_WriteGuardPreventsWriteOperations()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using var ctx = CreateContext(factory);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
@@ -256,7 +181,7 @@ public class SingleWriterReadOnlyEnhancedTests
     [Fact]
     public async Task ReadOnlyTransaction_AllowsReadOperations()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using var ctx = CreateContext(factory);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
@@ -278,65 +203,65 @@ public class SingleWriterReadOnlyEnhancedTests
     [Fact]
     public async Task ReadWriteTransaction_UsesWritableConnection()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory))
         {
             await using var tx = ctx.BeginTransaction();
 
-            Assert.True(factory.Connections.Count >= 1, "At least one connection should be recorded.");
+            Assert.True(factory.CreatedConnections.Count >= 1, "At least one connection should be recorded.");
 
-            var writableConnection = factory.Connections.Last();
+            var writableConnection = factory.CreatedConnections.Last();
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task ReadConnection_RoutesThroughDedicatedReadOnlyConnection()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory))
         {
             var conn = ctx.GetConnection(ExecutionType.Read);
             await conn.OpenAsync();
             ctx.CloseAndDisposeConnection(conn);
 
-            Assert.True(factory.Connections.Count >= 1, "At least one read-only connection should be created.");
+            Assert.True(factory.CreatedConnections.Count >= 1, "At least one read-only connection should be created.");
 
-            var readOnlyConnection = factory.Connections.Last();
+            var readOnlyConnection = factory.CreatedConnections.Last();
             // SQLite read-only is enforced via Mode=ReadOnly in the connection string
-            Assert.Contains(readOnlyConnection.ConnectionStrings,
+            Assert.Contains(readOnlyConnection.ConnectionStringHistory,
                 cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task WriteConnection_IsWritable()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory))
         {
             var conn = ctx.GetConnection(ExecutionType.Write);
             await conn.OpenAsync();
             ctx.CloseAndDisposeConnection(conn);
 
-            Assert.True(factory.Connections.Count >= 1, "At least one write connection should be recorded.");
+            Assert.True(factory.CreatedConnections.Count >= 1, "At least one write connection should be recorded.");
 
-            var writerConnection = factory.Connections.Last();
+            var writerConnection = factory.CreatedConnections.Last();
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 
     [Fact]
     public async Task SingleWriterWriteGuard_PreventsWritesOnNonWriterConnection()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using var ctx = CreateContext(factory);
 
         // Get a read connection first to establish the pattern
@@ -356,24 +281,24 @@ public class SingleWriterReadOnlyEnhancedTests
     [InlineData(ExecutionType.Write, false)]
     public async Task GetConnection_CreatesCorrectConnectionType(ExecutionType executionType, bool shouldBeReadOnly)
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         await using (var ctx = CreateContext(factory))
         {
             var conn = ctx.GetConnection(executionType);
             await conn.OpenAsync();
             ctx.CloseAndDisposeConnection(conn);
 
-            Assert.True(factory.Connections.Count >= 1, "Connection should have been recorded.");
-            var currentConnection = factory.Connections.Last();
+            Assert.True(factory.CreatedConnections.Count >= 1, "Connection should have been recorded.");
+            var currentConnection = factory.CreatedConnections.Last();
             if (shouldBeReadOnly)
             {
                 // SQLite read-only is enforced via Mode=ReadOnly in the connection string
-                Assert.Contains(currentConnection.ConnectionStrings,
+                Assert.Contains(currentConnection.ConnectionStringHistory,
                     cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
             }
         }
 
         // Leak detection: every connection opened during this test must have been disposed
-        Assert.Equal(factory.Connections.Count, factory.DisposedConnections.Count);
+        Assert.Equal(factory.CreatedConnections.Count, factory.CreatedConnections.Count(c => c.DisposeCount > 0));
     }
 }
