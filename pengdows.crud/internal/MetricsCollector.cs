@@ -630,10 +630,27 @@ internal sealed class MetricsCollector
 
     private sealed class PercentileRing
     {
+        // DatabaseContext.OnMetricsCollectorUpdated calls MetricsCollector.CreateSnapshot() (and
+        // therefore this type's CreateSnapshot()) synchronously on every metrics-changing event —
+        // connection opened/closed, command recorded, etc. — whenever a consumer is subscribed to
+        // the public MetricsUpdated event, which pengdows.crud.opentelemetry's
+        // PengdowsMetricsObserver does by design (to catch cumulative counter deltas as they
+        // happen). Sorting the full window (below) on every one of those calls would mean sorting
+        // on every single database operation for a P95/P99 value that OTel's own collector only
+        // actually reads once per export interval, seconds to minutes later — almost all of that
+        // work would be thrown away unread. Recomputing only every RecomputeInterval-th call
+        // amortizes the O(n log n) sort by that factor; the bounded staleness this introduces
+        // (at most RecomputeInterval-1 calls old) is negligible next to the sliding window's own
+        // inherent staleness (up to `size` samples old).
+        private const long RecomputeInterval = 32;
+
         private readonly double[] _buffer;
         private readonly int _mask;
+        private readonly object _snapshotLock = new();
         private long _index;
         private long _count;
+        private long _snapshotCallCount;
+        private PercentileSnapshot _cachedSnapshot = PercentileSnapshot.Empty;
 
         internal PercentileRing(int size)
         {
@@ -663,6 +680,26 @@ internal sealed class MetricsCollector
         }
 
         internal PercentileSnapshot CreateSnapshot()
+        {
+            var call = Interlocked.Increment(ref _snapshotCallCount);
+            if (call % RecomputeInterval != 1)
+            {
+                lock (_snapshotLock)
+                {
+                    return _cachedSnapshot;
+                }
+            }
+
+            var computed = ComputeSnapshot();
+            lock (_snapshotLock)
+            {
+                _cachedSnapshot = computed;
+            }
+
+            return computed;
+        }
+
+        private PercentileSnapshot ComputeSnapshot()
         {
             var count = (int)Math.Min(Volatile.Read(ref _count), _buffer.Length);
             if (count == 0)

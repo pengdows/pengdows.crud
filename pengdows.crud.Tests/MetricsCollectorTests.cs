@@ -88,6 +88,67 @@ public class MetricsCollectorTests
         Assert.True(snapshot.P99CommandMs >= snapshot.P95CommandMs);
     }
 
+    // Regression: DatabaseContext.OnMetricsCollectorUpdated calls CreateSnapshot() synchronously
+    // on EVERY metrics-changing event (connection opened/closed, command recorded, etc.) whenever
+    // a consumer is subscribed to the public MetricsUpdated event — which the first-party
+    // pengdows.crud.opentelemetry package's PengdowsMetricsObserver does, by design, to catch
+    // cumulative counter deltas as they happen. Before this fix, every one of those calls sorted
+    // the full percentile window (Array.Sort, O(n log n)) even though the resulting P95/P99 is
+    // only actually read once per OTel collection interval (seconds to minutes later) — i.e.
+    // enabling percentile tracking plus wiring up the recommended OTel integration meant sorting
+    // on every single database operation for a value almost never read before being overwritten.
+    [Fact]
+    public void PercentileSnapshot_RapidRepeatedCalls_ReturnsMemoizedValueInstantly()
+    {
+        var collector = new MetricsCollector(new MetricsOptions
+        {
+            EnableApproxPercentiles = true,
+            PercentileWindowSize = 8
+        });
+
+        collector.CommandSucceeded(CreateStartTimestamp(10d), 0);
+        var first = collector.CreateSnapshot();
+
+        // A wildly different duration — if CreateSnapshot recomputed fresh every call, P95
+        // would jump immediately. It must stay at the memoized value across the next several
+        // calls instead of re-sorting on every single one.
+        collector.CommandSucceeded(CreateStartTimestamp(10_000d), 0);
+        var second = collector.CreateSnapshot();
+        var third = collector.CreateSnapshot();
+
+        Assert.Equal(first.P95CommandMs, second.P95CommandMs);
+        Assert.Equal(first.P95CommandMs, third.P95CommandMs);
+    }
+
+    [Fact]
+    public void PercentileSnapshot_EventuallyRecomputesAfterEnoughCalls()
+    {
+        // The memoization must bound staleness, not make it permanent — after enough calls it
+        // has to reflect newly recorded data, not freeze on the first-ever computed value forever.
+        var collector = new MetricsCollector(new MetricsOptions
+        {
+            EnableApproxPercentiles = true,
+            PercentileWindowSize = 8
+        });
+
+        collector.CommandSucceeded(CreateStartTimestamp(10d), 0);
+        var baseline = collector.CreateSnapshot();
+
+        collector.CommandSucceeded(CreateStartTimestamp(10_000d), 0);
+
+        var recomputed = false;
+        for (var i = 0; i < 64; i++)
+        {
+            if (collector.CreateSnapshot().P95CommandMs > baseline.P95CommandMs)
+            {
+                recomputed = true;
+                break;
+            }
+        }
+
+        Assert.True(recomputed, "Percentile snapshot never reflected newly recorded data within 64 calls.");
+    }
+
     [Fact]
     public void TransactionCommitted_IncrementsCommittedCounter()
     {
