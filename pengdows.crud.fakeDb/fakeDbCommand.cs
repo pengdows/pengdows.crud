@@ -110,11 +110,11 @@ public class fakeDbCommand : DbCommand
 
         // An exact-command-text failure (SetCommandFailure) names a specific SQL string, so it
         // must win even when that string happens to be a SET/PRAGMA session-setting command — the
-        // test chose that exact text on purpose. This does NOT apply to the single-shot
-        // NonQueryExecuteException below: that primes "the next non-query call" generically, and
-        // session-setting commands routinely run before the real DML the test is actually
-        // targeting, so checking it here would let an incidental SET statement consume the
-        // one-shot exception before the intended call ever runs.
+        // test chose that exact text on purpose. This does NOT apply to the queued
+        // NonQueryExecuteException dequeue below: that primes "the next non-query call(s)"
+        // generically, and session-setting commands routinely run before the real DML the test is
+        // actually targeting, so checking it here would let an incidental SET statement consume a
+        // queued exception before the intended call ever runs.
         if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
         {
             throw exNonQuery!;
@@ -138,11 +138,9 @@ public class fakeDbCommand : DbCommand
             }
         }
 
-        if (conn != null && conn.NonQueryExecuteException != null)
+        if (conn != null && conn.TryDequeueNonQueryExecuteException(out var exTransient))
         {
-            var ex = conn.NonQueryExecuteException;
-            conn.SetNonQueryExecuteException(null);
-            throw ex;
+            throw exTransient;
         }
 
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))

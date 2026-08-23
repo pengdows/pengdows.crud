@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -127,5 +128,57 @@ public class fakeDbAdvancedCapabilitiesTests
         await openTask;
 
         Assert.Equal(ConnectionState.Open, conn.State);
+    }
+
+    [Fact]
+    public async Task Reader_HonorsRealCancellationToken_PassedIntoReadAsync()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        using var cts = new CancellationTokenSource();
+        conn.EnqueueReaderResult(
+            new[]
+            {
+                new System.Collections.Generic.Dictionary<string, object?> { ["Id"] = 1 },
+                new System.Collections.Generic.Dictionary<string, object?> { ["Id"] = 2 }
+            },
+            cancelAfterRowCount: 1,
+            cts);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT \"Id\" FROM \"Customers\"";
+        await using var reader = await cmd.ExecuteReaderAsync(cts.Token);
+
+        Assert.True(await reader.ReadAsync(cts.Token));
+        Assert.False(cts.IsCancellationRequested);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reader.ReadAsync(cts.Token));
+        Assert.True(cts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_RetriesThroughQueuedTransientFailures_ThenSucceeds()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        var failure1 = new InvalidOperationException("transient #1");
+        var failure2 = new InvalidOperationException("transient #2");
+        conn.EnqueueTransientNonQueryFailures(failure1, failure2);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE \"Customers\" SET \"Name\" = 'Ada'";
+
+        var firstAttempt = await Assert.ThrowsAsync<InvalidOperationException>(() => cmd.ExecuteNonQueryAsync());
+        Assert.Same(failure1, firstAttempt);
+
+        var secondAttempt = await Assert.ThrowsAsync<InvalidOperationException>(() => cmd.ExecuteNonQueryAsync());
+        Assert.Same(failure2, secondAttempt);
+
+        var thirdAttempt = await cmd.ExecuteNonQueryAsync();
+        Assert.Equal(1, thirdAttempt);
     }
 }

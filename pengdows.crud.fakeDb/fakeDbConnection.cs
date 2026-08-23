@@ -54,7 +54,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
-    internal Exception? NonQueryExecuteException { get; private set; }
+    private readonly Queue<Exception> _nonQueryExecuteExceptions = new();
     internal Exception? ScalarExecuteException { get; private set; }
     internal Exception? PersistentScalarException { get; private set; }
     internal object? DefaultScalarResultOnce { get; private set; }
@@ -175,6 +175,25 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// Enqueues a reader that returns <paramref name="rows"/> successfully up to
+    /// <paramref name="cancelAfterRowCount"/> rows, then cancels <paramref name="cancellationTokenSource"/>
+    /// on the next read attempt and honors that cancellation — simulating a caller cancelling the
+    /// real, ambient <see cref="CancellationToken"/> mid-stream rather than a canned failure.
+    /// </summary>
+    public void EnqueueReaderResult(
+        IEnumerable<Dictionary<string, object?>> rows,
+        int cancelAfterRowCount,
+        CancellationTokenSource cancellationTokenSource)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows))
+        {
+            CancelAfterReadCount = cancelAfterRowCount,
+            CancelSource = cancellationTokenSource
+        };
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
     /// Enqueues a reader with multiple result sets, allowing <see cref="fakeDbDataReader.NextResult"/>
     /// to advance to subsequent sets. Used to test compound batch queries such as
     /// INSERT followed by SELECT LAST_INSERT_ID().
@@ -225,7 +244,38 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public void SetNonQueryExecuteException(Exception? exception)
     {
-        NonQueryExecuteException = exception;
+        _nonQueryExecuteExceptions.Clear();
+        if (exception != null)
+        {
+            _nonQueryExecuteExceptions.Enqueue(exception);
+        }
+    }
+
+    /// <summary>
+    /// Queues exceptions to throw on the next N ExecuteNonQuery(Async) calls, one per call and in
+    /// order, after which execution proceeds normally. Lets a test prove a real EF Core execution
+    /// strategy (e.g. a custom retrying <c>ExecutionStrategy</c>) actually retries a transient
+    /// failure through StormGate-gated fakeDb connections, rather than surfacing on the first
+    /// attempt — unlike <see cref="SetNonQueryExecuteException"/>, which only primes a single call.
+    /// </summary>
+    public void EnqueueTransientNonQueryFailures(params Exception[] exceptions)
+    {
+        foreach (var exception in exceptions)
+        {
+            _nonQueryExecuteExceptions.Enqueue(exception);
+        }
+    }
+
+    internal bool TryDequeueNonQueryExecuteException([NotNullWhen(true)] out Exception? exception)
+    {
+        if (_nonQueryExecuteExceptions.Count > 0)
+        {
+            exception = _nonQueryExecuteExceptions.Dequeue();
+            return true;
+        }
+
+        exception = null;
+        return false;
     }
 
     public void SetScalarExecuteException(Exception? exception)

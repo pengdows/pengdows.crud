@@ -101,6 +101,20 @@ public class fakeDbDataReader : DbDataReader
     /// <summary>See <see cref="FailAfterReadCount"/>. Cleared after throwing once.</summary>
     public Exception? FailException { get; set; }
 
+    /// <summary>
+    /// When set together with <see cref="CancelSource"/>, the read that would advance past this
+    /// many successfully-returned rows cancels that source first — simulating a caller
+    /// cancelling the ambient token mid-stream. Requires the real, ambient
+    /// <see cref="CancellationToken"/> passed to <see cref="ReadAsync"/> to actually be
+    /// <see cref="CancelSource"/>'s token (or a token derived from it), since only that token's
+    /// cancellation is honored — a canned/injected exception like <see cref="FailException"/>
+    /// would prove nothing about whether real cancellation-token propagation works.
+    /// </summary>
+    public int? CancelAfterReadCount { get; set; }
+
+    /// <summary>See <see cref="CancelAfterReadCount"/>.</summary>
+    public CancellationTokenSource? CancelSource { get; set; }
+
     public override bool Read()
     {
         if (FailException != null && FailAfterReadCount.HasValue && _index + 1 >= FailAfterReadCount.Value)
@@ -113,8 +127,21 @@ public class fakeDbDataReader : DbDataReader
         return ++_index < CurrentRows.Count;
     }
 
-    public override Task<bool> ReadAsync(CancellationToken _)
+    public override Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
+        if (CancelSource != null
+            && CancelAfterReadCount.HasValue
+            && _index + 1 >= CancelAfterReadCount.Value
+            && !CancelSource.IsCancellationRequested)
+        {
+            CancelSource.Cancel();
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<bool>(cancellationToken);
+        }
+
         try
         {
             return Task.FromResult(Read());
