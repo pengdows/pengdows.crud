@@ -131,6 +131,7 @@ public class fakeDbCommand : DbCommand
                 if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
                 {
                     conn.ExecutedNonQueryTexts.Add(CommandText);
+                    conn.ExecutedNonQueryCommands.Add(CaptureCommand());
                 }
 
                 return 0;
@@ -147,6 +148,7 @@ public class fakeDbCommand : DbCommand
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
+            conn.ExecutedNonQueryCommands.Add(CaptureCommand());
         }
 
         // Apply output parameter values if queued
@@ -366,6 +368,7 @@ public class fakeDbCommand : DbCommand
         if (conn != null)
         {
             conn.ExecutedReaderTexts.Add(CommandText);
+            conn.ExecutedReaderCommands.Add(CaptureCommand());
         }
 
         // Apply output parameter values if queued
@@ -449,6 +452,21 @@ public class fakeDbCommand : DbCommand
     {
         WasDisposed = true;
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Snapshots command text and bound parameter values right now, before disposal (or a later
+    /// mutation of this same command instance) can erase them.
+    /// </summary>
+    private CapturedCommand CaptureCommand()
+    {
+        var parameters = new List<CapturedParameter>(_parameterCollection.Count);
+        foreach (DbParameter parameter in _parameterCollection)
+        {
+            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value));
+        }
+
+        return new CapturedCommand(CommandText, parameters);
     }
 
     private static bool TryGetCommandFailure(fakeDbConnection? conn, string? commandText, out Exception? failure)

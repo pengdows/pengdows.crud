@@ -85,10 +85,50 @@ public sealed class EntityFrameworkCoreFakeDbSqlCaptureTests
 
         // "@__name_0" appearing as a named token — rather than the literal 'Ada' — is what a
         // real parameter binder produces; a translator doing plain string interpolation could
-        // never emit this. (EF Core disposes each DbCommand — clearing its Parameters
-        // collection — before ToListAsync returns, so the bound value itself isn't inspectable
-        // from here; the SQL text is the evidence that survives disposal.)
+        // never emit this. (See RealEntityFrameworkCoreSql_BindsActualParameterValue_NotJustTheNameToken
+        // below for proof of the actual bound value, captured before EF Core's post-execution
+        // command disposal clears it.)
         Assert.Contains("WHERE \"c\".\"IsActive\" AND \"c\".\"Name\" = @__name_0", selectSql);
+    }
+
+    // The prior test could only assert on the "@__name_0" name token surviving in the captured
+    // SQL text, because EF Core disposes each DbCommand (clearing its Parameters) before
+    // ToListAsync returns. fakeDb now snapshots parameter name/value pairs at execution time,
+    // before that disposal — so this closes that gap: proof that EF Core's real parameter binder
+    // bound the literal runtime value "Ada", not just proof that a named-parameter token exists.
+    [Fact]
+    public async Task RealEntityFrameworkCoreSql_BindsActualParameterValue_NotJustTheNameToken()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        await using var gate = StormGate.Create(
+            factory,
+            "Data Source=not-a-real-database.db",
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(100));
+        await using var connection = await gate.OpenAsync();
+
+        var fake = factory.CreatedConnections[^1];
+        fake.EnqueueReaderResult(
+        [
+            new Dictionary<string, object?> { ["Id"] = 1, ["IsActive"] = true, ["Name"] = "Ada" }
+        ]);
+
+        var options = new DbContextOptionsBuilder<CustomerContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
+            .Options;
+        await using var db = new CustomerContext(options);
+
+        var name = "Ada";
+        var results = await db.Customers.Where(c => c.IsActive && c.Name == name).ToListAsync();
+
+        Assert.Single(results);
+
+        var executed = Assert.Single(
+            fake.ExecutedReaderCommands,
+            c => c.CommandText.Contains("FROM \"Customers\" AS \"c\""));
+        var bound = Assert.Single(executed.Parameters, p => p.Name == "@__name_0");
+        Assert.Equal("Ada", bound.Value);
     }
 
     private sealed class CustomerContext(DbContextOptions<CustomerContext> options) : DbContext(options)

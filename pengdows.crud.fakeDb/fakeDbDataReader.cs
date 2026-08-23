@@ -90,14 +90,39 @@ public class fakeDbDataReader : DbDataReader
         return Task.FromResult((T)Convert.ChangeType(value, typeof(T)));
     }
 
+    /// <summary>
+    /// When set together with <see cref="FailException"/>, the read that would advance past this
+    /// many successfully-returned rows throws instead — simulating a reader that fails partway
+    /// through enumeration (e.g. a dropped connection mid-stream) rather than one that fails to
+    /// open at all.
+    /// </summary>
+    public int? FailAfterReadCount { get; set; }
+
+    /// <summary>See <see cref="FailAfterReadCount"/>. Cleared after throwing once.</summary>
+    public Exception? FailException { get; set; }
+
     public override bool Read()
     {
+        if (FailException != null && FailAfterReadCount.HasValue && _index + 1 >= FailAfterReadCount.Value)
+        {
+            var ex = FailException;
+            FailException = null;
+            throw ex;
+        }
+
         return ++_index < CurrentRows.Count;
     }
 
     public override Task<bool> ReadAsync(CancellationToken _)
     {
-        return Task.FromResult(Read());
+        try
+        {
+            return Task.FromResult(Read());
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<bool>(ex);
+        }
     }
 
     public override object GetValue(int i)

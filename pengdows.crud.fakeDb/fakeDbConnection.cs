@@ -61,6 +61,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
     public readonly List<string> ExecutedReaderTexts = new();
+
+    /// <summary>
+    /// Command text paired with the exact parameter names/values bound at execution time,
+    /// captured before the command is disposed. EF Core (and other callers) dispose the
+    /// DbCommand — clearing its Parameters collection — before an await on the executing
+    /// call returns, so this is the only place a test can observe the real bound value rather
+    /// than just the parameter's name token in the captured SQL text.
+    /// </summary>
+    public readonly List<CapturedCommand> ExecutedNonQueryCommands = new();
+
+    /// <summary>See <see cref="ExecutedNonQueryCommands"/> — the reader-execution equivalent.</summary>
+    public readonly List<CapturedCommand> ExecutedReaderCommands = new();
     public readonly List<fakeDbCommand> CreatedCommands = new();
     public fakeDbCommand? LastCreatedCommand { get; private set; }
 
@@ -142,6 +154,24 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {
         ReaderResults.Enqueue(new fakeDbDataReader(ConvertRows(rows)));
+    }
+
+    /// <summary>
+    /// Enqueues a reader that returns <paramref name="rows"/> successfully up to
+    /// <paramref name="failAfterRowCount"/> rows, then throws <paramref name="exception"/> on the
+    /// next read attempt — simulating a stream that fails partway through enumeration.
+    /// </summary>
+    public void EnqueueReaderResult(
+        IEnumerable<Dictionary<string, object?>> rows,
+        int failAfterRowCount,
+        Exception exception)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows))
+        {
+            FailAfterReadCount = failAfterRowCount,
+            FailException = exception
+        };
+        ReaderResults.Enqueue(reader);
     }
 
     /// <summary>
@@ -704,6 +734,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         return Task.CompletedTask;
     }
 
+    private TaskCompletionSource<bool>? _openGate;
+
+    /// <summary>
+    /// Makes OpenAsync await a test-controlled gate before performing the physical open, instead
+    /// of completing immediately. Lets a test hold a connection's open "in flight" indefinitely
+    /// and release it deterministically by completing the returned TaskCompletionSource — used to
+    /// prove genuine concurrent-open behavior (e.g. an admission-control semaphore actually
+    /// permitting N simultaneous opens, not serializing them) against real overlapping async
+    /// calls, without relying on a fixed delay.
+    /// </summary>
+    public TaskCompletionSource<bool> SetOpenGate()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _openGate = tcs;
+        return tcs;
+    }
+
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -713,15 +760,27 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
         OpenAsyncCount++;
 
-        try
+        var gate = _openGate;
+        if (gate == null)
         {
-            Open();
-            return Task.CompletedTask;
+            try
+            {
+                Open();
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
         }
-        catch (Exception ex)
-        {
-            return Task.FromException(ex);
-        }
+
+        return OpenAsyncWithGate(gate, cancellationToken);
+    }
+
+    private async Task OpenAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken cancellationToken)
+    {
+        await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Open();
     }
 
     private SupportedDatabase ParseEmulatedProduct(string? connStr)

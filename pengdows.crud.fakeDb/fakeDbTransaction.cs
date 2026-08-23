@@ -23,8 +23,15 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
     /// <summary>When set, Rollback() throws this exception.</summary>
     public Exception? RollbackException { get; set; }
 
+    /// <summary>Number of times <see cref="Commit"/> was invoked, whether or not it then threw.</summary>
+    public int CommitCallCount { get; private set; }
+
+    /// <summary>Number of times <see cref="Rollback"/> was invoked, whether or not it then threw.</summary>
+    public int RollbackCallCount { get; private set; }
+
     public override void Commit()
     {
+        CommitCallCount++;
         if (CommitException != null)
         {
             throw CommitException;
@@ -33,6 +40,7 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override void Rollback()
     {
+        RollbackCallCount++;
         if (RollbackException != null)
         {
             throw RollbackException;
