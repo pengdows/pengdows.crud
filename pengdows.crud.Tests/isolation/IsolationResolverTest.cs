@@ -15,15 +15,40 @@ namespace pengdows.crud.Tests.isolation;
 public class IsolationResolverTests
 {
     [Fact]
-    public void Constructor_UnsupportedDatabase_Throws()
+    public void Constructor_NullDialect_Throws()
     {
-        Assert.Throws<NotSupportedException>(() => new IsolationResolver((SupportedDatabase)999, false, false));
+        // The enum-validation this used to cover ((SupportedDatabase)999 -> NotSupportedException)
+        // no longer applies: IsolationResolver takes a real SqlDialect instance now, not a raw
+        // enum, and an out-of-range SupportedDatabase value resolves via SqlDialectFactory's own
+        // pre-existing silent fallback to Sql92Dialect (see
+        // Constructor_UnrecognizedDatabase_FallsBackToGenericAnsiIsolationSet below) rather than
+        // ever reaching this constructor with something invalid. What this constructor can
+        // actually reject is a null dialect.
+        Assert.Throws<ArgumentNullException>(() => new IsolationResolver(null!, false, false));
+    }
+
+    [Fact]
+    public void Constructor_UnrecognizedDatabase_FallsBackToGenericAnsiIsolationSet()
+    {
+        // SqlDialectFactory.CreateDialectForType falls back to Sql92Dialect for any
+        // SupportedDatabase value it doesn't recognize — an existing, intentional pattern, not
+        // something this refactor introduces. Sql92Dialect inherits SqlDialect's base
+        // GetSupportedIsolationLevels/GetIsolationProfileMapping unchanged, i.e. the same generic
+        // ANSI fallback (ReadCommitted/RepeatableRead/Serializable) the old switch's own
+        // catch-all `_ =>` branch used to return directly.
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create((SupportedDatabase)999), false, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+        var expected = new[] { IsolationLevel.ReadCommitted, IsolationLevel.RepeatableRead, IsolationLevel.Serializable }
+            .OrderBy(level => level)
+            .ToArray();
+        Assert.Equal(expected, levels);
     }
 
     [Fact]
     public void GetSupportedLevels_SqlServer_WithSnapshotIsolation()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, true, true);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, true);
 
         var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
         var expected = new[]
@@ -41,7 +66,7 @@ public class IsolationResolverTests
     [Fact]
     public void GetSupportedLevels_SqlServer_WithoutSnapshotIsolation()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), false, false);
 
         var levels = resolver.GetSupportedLevels();
 
@@ -52,7 +77,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveWithDetail_SqlServer_DegradesWhenSnapshotAndRcsiDisabled()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), false, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
@@ -64,7 +89,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveWithDetail_SqlServer_RcsiEnabledSignalsSnapshotFallback()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, true, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
@@ -75,7 +100,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveWithDetail_SqlServer_SnapshotIsolationAllowed()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, false, true);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), false, true);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
@@ -86,7 +111,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_PostgreSql_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql), false, false);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -97,7 +122,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_CockroachDb_UnsupportedProfile()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.CockroachDb, true, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.CockroachDb), true, false);
 
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.FastWithRisks));
@@ -107,7 +132,7 @@ public class IsolationResolverTests
     [Fact]
     public void GetSupportedLevels_Firebird()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Firebird, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Firebird), false, false);
 
         var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
         var expected = new[]
@@ -123,7 +148,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_MySql_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.MySql, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.MySql), false, false);
 
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -133,7 +158,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_MariaDb_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.MariaDb, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.MariaDb), false, false);
 
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -143,7 +168,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_Oracle_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Oracle, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Oracle), false, false);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -159,7 +184,7 @@ public class IsolationResolverTests
         // used feature) and mapping FastWithRisks to the same ReadCommitted as SafeNonBlockingReads
         // (a no-op profile). Db2's isolation levels map to standard ADO.NET IsolationLevel as:
         // UR -> ReadUncommitted, CS (default) -> ReadCommitted, RS -> RepeatableRead, RR -> Serializable.
-        var resolver = new IsolationResolver(SupportedDatabase.Db2, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Db2), false, false);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -169,7 +194,7 @@ public class IsolationResolverTests
     [Fact]
     public void GetSupportedLevels_Db2()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Db2, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Db2), false, false);
 
         var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
         var expected = new[]
@@ -186,7 +211,7 @@ public class IsolationResolverTests
     [Fact]
     public void GetSupportedLevels_DuckDb()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.DuckDB), false, false);
 
         var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
         Assert.Equal(new[] { IsolationLevel.Serializable }, levels);
@@ -195,7 +220,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_DuckDb_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.DuckDB, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.DuckDB), false, false);
 
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -205,7 +230,7 @@ public class IsolationResolverTests
     [Fact]
     public void GetSupportedLevels_Sqlite()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Sqlite, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Sqlite), false, false);
 
         var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
         var expected = new[] { IsolationLevel.ReadCommitted, IsolationLevel.Serializable }
@@ -218,7 +243,7 @@ public class IsolationResolverTests
     [Fact]
     public void Resolve_Sqlite_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Sqlite, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Sqlite), false, false);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
@@ -231,7 +256,7 @@ public class IsolationResolverTests
     public void ResolveWithDetail_StrictConsistency_FlagsDegradedWhenBelowSerializable(
         SupportedDatabase product, IsolationLevel expectedLevel)
     {
-        var resolver = new IsolationResolver(product, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), false, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
 
@@ -242,7 +267,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveWithDetail_StrictConsistency_PostgreSql_NotDegraded()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql), false, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
 
@@ -255,7 +280,7 @@ public class IsolationResolverTests
     [InlineData(SupportedDatabase.YugabyteDb)]
     public void ResolveForTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
     {
-        var resolver = new IsolationResolver(product, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), false, false);
 
         Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
             resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
@@ -264,7 +289,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveForTransaction_SqlServer_SafeNonBlockingReads_ReturnsResolvedLevel()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SqlServer, true, true);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, true);
 
         Assert.Equal(IsolationLevel.Snapshot,
             resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
@@ -273,7 +298,7 @@ public class IsolationResolverTests
     [Fact]
     public void ResolveForTransaction_StrictConsistency_NeverThrowsForPostgresCompatibleDatabases()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql), false, false);
 
         Assert.Equal(IsolationLevel.Serializable,
             resolver.ResolveForTransaction(IsolationProfile.StrictConsistency));

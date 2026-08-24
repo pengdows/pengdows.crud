@@ -302,7 +302,8 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
-        var expected = new IsolationResolver(product, context.RCSIEnabled, context.SnapshotIsolationEnabled)
+        var expected = new IsolationResolver(
+                (pengdows.crud.dialects.SqlDialect)context.Dialect, context.RCSIEnabled, context.SnapshotIsolationEnabled)
             .Resolve(IsolationProfile.SafeNonBlockingReads);
         Assert.Equal(expected, tx.IsolationLevel);
     }
@@ -313,10 +314,16 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(null);
 
+        // Query text must match SqlServerDialect.RcsiQuery/SnapshotIsolationQuery exactly — the
+        // prefetch now goes through SqlServerDialect.DetectSessionCapabilities (which reuses
+        // IsReadCommittedSnapshotOn/IsSnapshotIsolationOn) instead of a separate, slightly
+        // different hand-rolled query that used to live directly in
+        // DatabaseContext.Initialization.cs (that duplicate wrapped the RCSI column in a
+        // redundant CAST(... AS int) — is_read_committed_snapshot_on is already a bit column).
         foreach (var connection in factory.Connections)
         {
             connection.ScalarResultsByCommand[
-                "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 1;
         }
@@ -336,7 +343,7 @@ public class DatabaseContextTests
         foreach (var connection in factory.Connections)
         {
             connection.ScalarResultsByCommand[
-                "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
         }

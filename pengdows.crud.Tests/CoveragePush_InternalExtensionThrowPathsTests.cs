@@ -140,8 +140,9 @@ public class CoveragePush_InternalExtensionThrowPathsTests
         var dialect = GetRealDialect();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
+        // SQLite :memory: auto-coerces to DbMode.SingleConnection, whose GetConnection returns
+        // the already-open persistent connection.
         await using var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
 
         // ITrackedConnection extends IDbConnection — pass it directly to the extension
         var record = Record.Exception(
@@ -176,8 +177,9 @@ public class CoveragePush_InternalExtensionThrowPathsTests
         var dialect = GetRealDialect();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
+        // SQLite :memory: auto-coerces to DbMode.SingleConnection, whose GetConnection returns
+        // the already-open persistent connection.
         await using var conn = ctx.GetConnection(ExecutionType.Read);
-        await conn.OpenAsync();
 
         var table = dialect.GetDataSourceInformationSchema(conn);
         // The result may be null or empty for fakeDb, but must not throw

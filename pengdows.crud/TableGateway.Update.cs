@@ -22,6 +22,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -67,6 +68,19 @@ public partial class TableGateway<TEntity, TRowID>
             original = await LoadOriginalAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             if (original == null)
             {
+                // Matches the 0-rows-affected concurrency check in TableGateway.Core.cs's
+                // UpdateAsync: a versioned entity whose row was deleted by another process before
+                // this load ran is a concurrency conflict, not a generic failure — callers must be
+                // able to catch ConcurrencyConflictException for both cases uniformly. A
+                // non-versioned entity has no concurrency semantics to report here, so it keeps
+                // the original generic exception.
+                if (_versionColumn != null)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
+
                 throw new InvalidOperationException("Original record not found for update.");
             }
         }

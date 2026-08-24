@@ -393,7 +393,11 @@ property pengdows.crud.dialects.ISqlDialect::ProductInfo : pengdows.crud.dialect
 property pengdows.crud.dialects.ISqlDialect::QuotePrefix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::QuoteSuffix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::ReadCommittedCompatibleIsolationLevel : System.Data.IsolationLevel { get; }
+property pengdows.crud.dialects.ISqlDialect::ReadOnlyConnectionsCanBlockConcurrentWriters : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::RejectsExplicitIsolationLevelOnBeginTransaction : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::RequiresMergeStatementTerminator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresOutputParameterForReturning : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::RequiresSerializedConnectionOpen : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchInsert : bool { get; }
@@ -418,6 +422,7 @@ property pengdows.crud.dialects.ISqlDialect::SupportsOffsetFetch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOnConflictWhere : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOnDuplicateKey : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOuterJoins : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsOverridingSystemValue : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPropertyGraphQueries : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPureKeyUpsert : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsReadOnlyTransactions : bool { get; }

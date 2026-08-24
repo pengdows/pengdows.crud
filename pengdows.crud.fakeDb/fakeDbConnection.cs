@@ -695,7 +695,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     {
         if (_state == ConnectionState.Open)
         {
-            return; // Already open, don't change state again
+            // Matches real ADO.NET providers (SqlConnection, NpgsqlConnection, SqliteConnection):
+            // calling Open() while already Open throws InvalidOperationException, it does not
+            // silently no-op. A fakeDb that silently allowed this let a real double-open bug in
+            // application code pass every fakeDb-based unit test and only surface against a real
+            // provider in production.
+            throw new InvalidOperationException(
+                "Connection is already open. The connection's current state is open.");
         }
 
         if (_isBroken)

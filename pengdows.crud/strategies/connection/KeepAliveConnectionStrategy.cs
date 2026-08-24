@@ -137,8 +137,32 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
             var replacement = _context.FactoryCreateConnection(_context.RawConnectionString, true);
             replacement.Open();
+
+            // Dispose() can complete concurrently while replacement.Open() above was in flight —
+            // it does not coordinate with this lock at all. Re-check before mutating context
+            // state: don't reassign a live connection onto an already-disposed context (nothing
+            // would ever dispose it — a leak), and don't let AttachPinnedSlotIfNeeded throw
+            // ObjectDisposedException from a governor Dispose() already tore down.
+            if (_context.IsDisposed)
+            {
+                replacement.Dispose();
+                return;
+            }
+
             _context.SetPersistentConnection(replacement);
-            _context.AttachPinnedSlotIfNeeded();
+
+            try
+            {
+                _context.AttachPinnedSlotIfNeeded();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Narrower residual window: Dispose() completed between the check above and this
+                // call. The replacement is already installed as PersistentConnection at this
+                // point, so disposing it here also correctly tears down what
+                // SetPersistentConnection just set — nothing left dangling.
+                replacement.Dispose();
+            }
         }
     }
 

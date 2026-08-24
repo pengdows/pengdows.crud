@@ -53,6 +53,19 @@ internal class SnowflakeDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Snowflake;
 
+    // Snowflake only supports READ COMMITTED. Other levels are not available.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
     // Snowflake.Data uses colon-prefixed named parameters
     public override string ParameterMarker => ":";
     public override bool SupportsNamedParameters => true;

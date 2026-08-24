@@ -227,6 +227,15 @@ public interface ISqlDialect
     bool EmitsAnsiMergeSyntax => true;
 
     /// <summary>
+    /// True when a MERGE statement in this dialect must end with a trailing semicolon. Only
+    /// meaningful when <see cref="SupportsMerge"/> is true. Defaults to true (the ANSI-standard
+    /// terminator every other MERGE-capable dialect expects); Oracle overrides this to false
+    /// because ODP.NET executes a single MERGE as one bare SQL statement (not inside a PL/SQL
+    /// block), and a trailing semicolon there is rejected as an invalid character.
+    /// </summary>
+    bool RequiresMergeStatementTerminator => true;
+
+    /// <summary>
     /// Indicates native XML type support.
     /// </summary>
     bool SupportsXmlTypes { get; }
@@ -236,6 +245,35 @@ public interface ISqlDialect
     /// and can be safely tested with read-only transaction tests.
     /// </summary>
     bool SupportsReadOnlyTransactions { get; }
+
+    /// <summary>
+    /// True when a read-only connection to this database can block a concurrent writer sharing
+    /// the same underlying file — an embedded, single-writer-file-lock quirk, not a general
+    /// relational-database concern. False for every client/server database (a read-only session
+    /// there never blocks writers at the file level); DuckDB overrides this to true. When true,
+    /// <see cref="IDatabaseContext"/> must not honor an explicit read-only connection string for
+    /// read-intent operations, because doing so risks locking out a concurrent writer on the same
+    /// file — the file-locking behavior does not change just because the caller asked for a
+    /// read-only connection string.
+    /// </summary>
+    bool ReadOnlyConnectionsCanBlockConcurrentWriters => false;
+
+    /// <summary>
+    /// True when this database's ADO.NET provider requires connection opens to be serialized
+    /// (never more than one concurrently in flight) at the process/context level, independent of
+    /// any write-serialization the provider's own locking already does. DuckDB overrides this to
+    /// true. False for every client/server database, whose connection-open handshake is safe to
+    /// run concurrently.
+    /// </summary>
+    bool RequiresSerializedConnectionOpen => false;
+
+    /// <summary>
+    /// True when this database's ADO.NET provider rejects an explicit <see cref="System.Data.IsolationLevel"/>
+    /// passed to <c>BeginTransaction</c>/<c>BeginTransactionAsync</c>, requiring the provider's own
+    /// default instead. DuckDB overrides this to true. False for every other currently supported
+    /// provider, whose <c>BeginTransaction(IsolationLevel)</c> overload works normally.
+    /// </summary>
+    bool RejectsExplicitIsolationLevelOnBeginTransaction => false;
 
     /// <summary>
     /// The lowest isolation level that is semantically equivalent to READ COMMITTED for this database.
@@ -337,6 +375,17 @@ public interface ISqlDialect
     /// True when INSERT ... ON CONFLICT syntax is available.
     /// </summary>
     bool SupportsInsertOnConflict { get; }
+
+    /// <summary>
+    /// True when the SQL-standard <c>OVERRIDING SYSTEM VALUE</c> clause is available to let an
+    /// INSERT supply an explicit value for a <c>GENERATED ALWAYS AS IDENTITY</c> column
+    /// (PostgreSQL, YugabyteDB). False for every other dialect, including CockroachDB: despite
+    /// being PostgreSQL-wire-compatible and supporting <c>GENERATED ALWAYS AS IDENTITY</c> at the
+    /// DDL level, CockroachDB does not implement the accompanying <c>OVERRIDING SYSTEM VALUE</c>
+    /// INSERT syntax (confirmed via cockroachdb/cockroach#68201, open as of 2026) — emitting it
+    /// there is a SQL syntax error, not a fallback no-op.
+    /// </summary>
+    bool SupportsOverridingSystemValue { get; }
 
     /// <summary>
     /// True when the ON CONFLICT DO UPDATE clause supports a WHERE predicate for optimistic

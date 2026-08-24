@@ -51,6 +51,24 @@ internal sealed class Db2Dialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 
+    // Db2's four isolation levels map directly to ADO.NET's IsolationLevel: UR (Uncommitted
+    // Read) -> ReadUncommitted, CS (Cursor Stability, the default) -> ReadCommitted, RS (Read
+    // Stability) -> RepeatableRead, RR (Repeatable Read) -> Serializable.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadUncommitted,
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // CS, Db2's default
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
+    };
+
     // Db2 stores GUIDs as CHAR(36) strings — IDs are generated client-side, so there's
     // no need for Db2's GENERATE_UUID()/GENERATE_UUID_BINARY() server-side functions.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;

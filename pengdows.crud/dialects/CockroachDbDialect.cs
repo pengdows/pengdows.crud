@@ -35,9 +35,31 @@ internal class CockroachDbDialect : PostgreSqlDialect
     // CockroachDB only supports SERIALIZABLE isolation; READ COMMITTED is not available.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+    };
+
     // CockroachDB supports native UPSERT which is more efficient than ON CONFLICT
     // in some distributed scenarios, though it also fully supports ON CONFLICT.
 
+    // KNOWN GAP: this SET lock_timeout='30s' is a per-checkout session statement, not a
+    // key-based merge — unlike GetAdditionalStartupOptions' baked-Options value (which
+    // PostgreSqlDialect.MergeStartupOptions now correctly defers to a caller-supplied
+    // lock_timeout instead of overwriting it), this text always applies verbatim with no way to
+    // detect or honor a caller's own choice. It only actually runs when the baked-Options skip
+    // flag hasn't kicked in yet (first checkout / GenericDbDataSource fallback, not native
+    // NpgsqlDataSource), so in the common, documented production path (native DataSource) the
+    // caller's baked value wins and this line never executes redundantly. Fully closing this gap
+    // would require plumbing caller intent into session-SET text generation, not just the
+    // Options-baking path — out of scope for the fix that made MergeStartupOptions honor it.
     public override string GetBaseSessionSettings()
     {
         return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";

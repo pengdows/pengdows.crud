@@ -9,6 +9,7 @@
 // - Identifies itself via the "TiDB" string in the version information.
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -27,6 +28,22 @@ internal class TiDbDialect : MySqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.TiDb;
+
+    // TiDB accepts SERIALIZABLE syntax but silently treats it as REPEATABLE READ — omitting it
+    // prevents callers from relying on semantics that are never enforced. No ReadUncommitted
+    // either, unlike the MySqlDialect base this class inherits from.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
 
     // TiDB supports most MySQL features (MySQL 5.7/8.0 wire-compatible)
     // but benefits from a "Pessimistic" transaction mode for correctness

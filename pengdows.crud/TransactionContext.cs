@@ -120,11 +120,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             throw new NotSupportedException("DatabaseContext is read-only");
         }
-        if (context.Product == SupportedDatabase.CockroachDb)
-        {
-            isolationLevel = IsolationLevel.Serializable;
-        }
-
         if (context is not IInternalConnectionProvider connectionProvider)
         {
             throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
@@ -239,11 +234,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         var gate = AcquireSingleConnectionTransactionGate(context);
 
-        // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
-        // but preserve the resolved isolation level for reporting and logic.
+        // Some providers (DuckDB) reject an explicit IsolationLevel value. Use the provider
+        // default there, but preserve the resolved isolation level for reporting and logic.
         try
         {
-            transaction = context.Product == SupportedDatabase.DuckDB
+            transaction = context.Dialect.RejectsExplicitIsolationLevelOnBeginTransaction
                 ? connection.BeginTransaction()
                 : connection.BeginTransaction(resolvedIsolation);
         }
@@ -1027,7 +1022,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         IDbTransaction transaction;
         try
         {
-            transaction = context.Product == SupportedDatabase.DuckDB
+            transaction = context.Dialect.RejectsExplicitIsolationLevelOnBeginTransaction
                 ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
                 : await connection.BeginTransactionAsync(resolvedIsolation, cancellationToken).ConfigureAwait(false);
         }

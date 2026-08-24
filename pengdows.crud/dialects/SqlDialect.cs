@@ -97,6 +97,54 @@ internal enum GuidStorageFormat
 /// <seealso cref="SqlDialectFactory"/>
 internal abstract class SqlDialect : IInternalSqlDialect
 {
+    /// <summary>
+    /// Result of an early, best-effort, provider-specific session-capability prefetch performed
+    /// against a raw connection before full dialect/DataSourceInformation initialization has run.
+    /// Currently only meaningful for SQL Server (Read Committed Snapshot Isolation / snapshot
+    /// isolation database options); every other dialect's default implementation never queries
+    /// anything and returns <c>default</c> (both false).
+    /// </summary>
+    internal readonly record struct SessionCapabilityPrefetch(bool Rcsi, bool SnapshotIsolation);
+
+    /// <summary>
+    /// Best-effort prefetch of provider-specific session capabilities from a raw, already-open
+    /// connection. Runs before this dialect instance is otherwise initialized, so implementations
+    /// must not depend on any other detection having happened yet. Must never throw — prefetch
+    /// failures are expected to be silently ignored by the base no-op implementation and by every
+    /// override, matching the pre-existing behavior this replaces.
+    /// </summary>
+    internal virtual SessionCapabilityPrefetch DetectSessionCapabilities(ITrackedConnection connection) => default;
+
+    /// <summary>
+    /// The set of ADO.NET <see cref="IsolationLevel"/> values this database genuinely enforces.
+    /// Used exclusively by <see cref="pengdows.crud.isolation.IsolationResolver"/> — the
+    /// authoritative source for "which isolation levels does this database support" lives here,
+    /// on the dialect, not as a separate per-database switch. <paramref name="allowSnapshotIsolation"/>
+    /// is a per-context runtime setting (only SQL Server's override consults it — whether the
+    /// target database actually has snapshot isolation enabled — every other dialect ignores it).
+    /// The base implementation is the historical generic fallback (ANSI ReadCommitted/
+    /// RepeatableRead/Serializable) for any dialect that doesn't override this.
+    /// </summary>
+    internal virtual HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    /// <summary>
+    /// Maps each portable <see cref="IsolationProfile"/> to the concrete <see cref="IsolationLevel"/>
+    /// this database should actually use for it. Same rationale and <paramref name="allowSnapshotIsolation"/>
+    /// contract as <see cref="GetSupportedIsolationLevels"/>. The base implementation is the
+    /// historical generic fallback for any dialect that doesn't override this.
+    /// </summary>
+    internal virtual Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
@@ -411,6 +459,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual bool SupportsMerge => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
     public virtual bool SupportsXmlTypes => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
     public virtual bool SupportsReadOnlyTransactions => false;
+
+    // See ISqlDialect docs for the full rationale on each — all three are DuckDB-only overrides.
+    public virtual bool ReadOnlyConnectionsCanBlockConcurrentWriters => false;
+    public virtual bool RequiresSerializedConnectionOpen => false;
+    public virtual bool RejectsExplicitIsolationLevelOnBeginTransaction => false;
     public virtual IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.ReadCommitted;
     public virtual bool EnforcesConstraints => true;
     public virtual bool EnforcesForeignKeyConstraints => true;
@@ -445,6 +498,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Database-specific extensions (override as needed)
     public virtual bool SupportsMergeReturning => false;
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
+    public virtual bool SupportsOverridingSystemValue => false; // PostgreSQL, YugabyteDB only — see ISqlDialect doc
     public virtual bool SupportsOnConflictWhere => false; // PostgreSQL/CockroachDB only
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
@@ -455,6 +509,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // ANSI MERGE — Firebird is the sole exception (UPDATE OR INSERT MATCHING), so it overrides
     // this to false. See ISqlDialect.EmitsAnsiMergeSyntax for the full rationale.
     public virtual bool EmitsAnsiMergeSyntax => true;
+
+    // See ISqlDialect.RequiresMergeStatementTerminator for the full rationale — Oracle overrides
+    // this to false.
+    public virtual bool RequiresMergeStatementTerminator => true;
 
     // True only for dialects whose upsert syntax has no UPDATE/SET-clause requirement (Firebird).
     public virtual bool SupportsPureKeyUpsert => false;

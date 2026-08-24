@@ -147,8 +147,23 @@ internal sealed class DataSourceResolver
                 builder.Keys.Cast<string>(),
                 StringComparer.OrdinalIgnoreCase);
 
+            // A key missing from sanitizedKeys by NAME isn't necessarily dropped — the provider's
+            // builder may have canonicalized it to a different key name while preserving the
+            // value (e.g. Npgsql's Server -> Host). Comparing by value across every sanitized key
+            // catches that rename case; only a key whose value doesn't survive under ANY
+            // sanitized key is a genuine drop worth warning about.
+            var sanitizedValues = builder.Keys.Cast<string>()
+                .Select(k => builder[k]?.ToString())
+                .Where(v => !string.IsNullOrEmpty(v))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var removedKeys = rawBuilder.Keys.Cast<string>()
                 .Where(k => !sanitizedKeys.Contains(k))
+                .Where(k =>
+                {
+                    var rawValue = rawBuilder[k]?.ToString();
+                    return string.IsNullOrEmpty(rawValue) || !sanitizedValues.Contains(rawValue);
+                })
                 .ToList();
 
             if (removedKeys.Count > 0)

@@ -324,6 +324,15 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     public void Open()
     {
+        // Idempotent by design: a caller that already holds an open TrackedConnection (e.g. one
+        // handed out pre-opened by a connection strategy) may legitimately call Open() again
+        // without checking state first. Real ADO.NET providers throw InvalidOperationException on
+        // a genuine double-open, so this guard — not provider leniency — is what makes that safe.
+        if (_connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
         var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
         var shouldTime = debugEnabled || _metricsCollector != null;
         Stopwatch? stopwatch = null;
@@ -440,6 +449,12 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     public async ValueTask OpenAsync(CancellationToken cancellationToken = default)
     {
+        // See the sync Open() guard above for the full rationale — same idempotency contract.
+        if (_connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
         var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
         var shouldTime = debugEnabled || _metricsCollector != null;
         Stopwatch? stopwatch = null;

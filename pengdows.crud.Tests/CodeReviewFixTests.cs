@@ -138,7 +138,7 @@ public class CodeReviewFixTests
     [Fact]
     public void IsolationResolver_CockroachDb_FastWithRisks_Should_Not_Throw()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.CockroachDb, false, false);
+        var resolver = new IsolationResolver(CreateDialect(SupportedDatabase.CockroachDb), false, false);
 
         // Should resolve without throwing NotSupportedException
         var result = resolver.ResolveWithDetail(IsolationProfile.FastWithRisks);
@@ -154,12 +154,19 @@ public class CodeReviewFixTests
     [InlineData(SupportedDatabase.DuckDB)]
     public void IsolationResolver_AllDatabases_Should_Map_FastWithRisks(SupportedDatabase product)
     {
-        var resolver = new IsolationResolver(product, false, false);
+        var resolver = new IsolationResolver(CreateDialect(product), false, false);
 
         // All databases should handle FastWithRisks without throwing
         var result = resolver.ResolveWithDetail(IsolationProfile.FastWithRisks);
         // Verify it resolved to something valid
         Assert.True(Enum.IsDefined(typeof(IsolationLevel), result.Level));
+    }
+
+    private static SqlDialect CreateDialect(SupportedDatabase product)
+    {
+        var factory = new fakeDbFactory(product);
+        return (SqlDialect)SqlDialectFactory.CreateDialectForType(
+            product, factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
     }
 
     // ================================================================

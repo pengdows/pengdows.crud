@@ -121,8 +121,10 @@ public class ConnectionStrategyTests
         // keep-alive opens a persistent connection during initialization
         Assert.True(ctx.NumberOfOpenConnections >= 1);
 
+        // KeepAliveConnectionStrategy.GetConnection opens the connection itself before
+        // returning it (deliberate fail-fast design — open-time failures surface at acquisition,
+        // not on a later, separate Open() call), so it is already open here.
         var c = ctx.GetConnection(ExecutionType.Read);
-        await c.OpenAsync();
         var openNow = ctx.NumberOfOpenConnections;
         Assert.True(openNow >= 2);
 
@@ -399,9 +401,9 @@ public class ConnectionStrategyTests
         // Use SQL Server to avoid automatic mode coercion that happens with SQLite
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
 
-        // Create a separate connection that's not the persistent one
+        // Create a separate connection that's not the persistent one. KeepAliveConnectionStrategy
+        // .GetConnection opens it before returning, so it is already open here.
         var separateConnection = ctx.GetConnection(ExecutionType.Read, false);
-        await separateConnection.OpenAsync();
         var beforeCount = ctx.NumberOfOpenConnections;
 
         // Release it - should dispose and decrease count
@@ -639,7 +641,13 @@ public class ConnectionStrategyTests
         };
         using var separateCtx = new DatabaseContext(cfg, factory);
         var separateConnection = separateCtx.GetConnection(ExecutionType.Read);
-        await separateConnection.OpenAsync();
+        // RecordingFactory.CreateConnection() returns one singleton RecordingConnection instance
+        // for every call, including the context's own internal init-connection detection use —
+        // so this may already be open by the time GetConnection returns it.
+        if (separateConnection.State != ConnectionState.Open)
+        {
+            await separateConnection.OpenAsync();
+        }
 
         // Since this is not the persistent connection from our SingleConnection context, it should be disposed
         Assert.Equal(ConnectionState.Open, separateConnection.State);
@@ -724,8 +732,8 @@ public class ConnectionStrategyTests
         {
             for (var i = 0; i < roundsPerThread; i++)
             {
+                // KeepAliveConnectionStrategy.GetConnection opens it before returning.
                 var conn = ctx.GetConnection(ExecutionType.Read);
-                await conn.OpenAsync();
                 await ctx.CloseAndDisposeConnectionAsync(conn);
             }
         })).ToArray();

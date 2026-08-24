@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using pengdows.stormgate;
 
+[assembly: InternalsVisibleTo("pengdows.stormgate.EntityFrameworkCore.Tests")]
+
 namespace pengdows.stormgate.EntityFrameworkCore;
 
 /// <summary>
@@ -125,7 +127,12 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     }
 #endif
 
-    private void AcquirePermit(DbConnection connection)
+    // internal (not private) so StormGateConnectionInterceptorFakeDbTests can drive the exact
+    // ConnectionOpening-fires-twice-for-an-already-tracked-connection sequence directly — going
+    // through a real DbContext can't reproduce it deterministically, since EF Core's own
+    // RelationalConnection checks the connection's ADO.NET State before deciding whether to
+    // physically reopen it at all, short-circuiting before ConnectionOpening fires a second time.
+    internal void AcquirePermit(DbConnection connection)
     {
         ReleaseStalePermit(connection);
 
@@ -147,7 +154,33 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     {
         lock (_permitLock)
         {
-            connection.StateChange += OnConnectionStateChange;
+            // ConnectionOpening can fire again for a connection already tracked as holding a
+            // permit — e.g. a redundant Open() call while the connection's ADO.NET state hasn't
+            // yet transitioned to Closed/Broken, so ReleaseStalePermit above was a no-op. Without
+            // this, AddOrUpdate would silently overwrite the tracked PermitBox, orphaning the
+            // permit it replaces with nothing left to dispose it — a permanent, one-slot leak
+            // from the shared admission budget per occurrence. Release what's being replaced
+            // first, and only subscribe StateChange once (a second subscription would double-fire
+            // OnConnectionStateChange, calling ReleasePermit twice — harmless since it no-ops
+            // once the entry is gone, but pointless).
+            // ConnectionOpening can fire again for a connection already tracked as holding a
+            // permit — e.g. a redundant Open() call while the connection's ADO.NET state hasn't
+            // yet transitioned to Closed/Broken, so ReleaseStalePermit above was a no-op. Without
+            // this, AddOrUpdate would silently overwrite the tracked PermitBox, orphaning the
+            // permit it replaces with nothing left to dispose it — a permanent, one-slot leak
+            // from the shared admission budget per occurrence. Release what's being replaced
+            // first, and only subscribe StateChange once (a second subscription would double-fire
+            // OnConnectionStateChange, calling ReleasePermit twice — harmless since it no-ops
+            // once the entry is gone, but pointless).
+            if (_heldPermits.TryGetValue(connection, out var existing))
+            {
+                existing.Permit.Dispose();
+            }
+            else
+            {
+                connection.StateChange += OnConnectionStateChange;
+            }
+
             _heldPermits.AddOrUpdate(connection, new PermitBox(permit));
         }
     }

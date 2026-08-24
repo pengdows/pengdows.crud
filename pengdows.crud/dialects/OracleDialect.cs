@@ -48,6 +48,20 @@ internal class OracleDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Oracle;
+
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
     public override string ParameterMarker => ":";
 
     public override bool SupportsNamedParameters => true;
@@ -149,6 +163,10 @@ internal class OracleDialect : SqlDialect
     }
 
     public override bool SupportsMerge => true;
+
+    // ODP.NET executes a single MERGE as one bare SQL statement, not inside a PL/SQL block — a
+    // trailing semicolon there is rejected as an invalid character (ORA-00911).
+    public override bool RequiresMergeStatementTerminator => false;
 
     // Oracle does not support DROP TABLE IF EXISTS — requires PL/SQL exception handling.
     public override bool SupportsDropTableIfExists => false;

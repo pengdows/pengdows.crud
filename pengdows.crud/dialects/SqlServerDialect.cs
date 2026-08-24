@@ -283,6 +283,33 @@ internal class SqlServerDialect : SqlDialect
         query.Append(';');
     }
 
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        allowSnapshotIsolation
+            ? new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable,
+                IsolationLevel.Snapshot
+            }
+            : new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = allowSnapshotIsolation
+            ? IsolationLevel.Snapshot
+            : IsolationLevel.ReadCommitted,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+    };
+
     // Version-specific overrides
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
@@ -367,6 +394,36 @@ internal class SqlServerDialect : SqlDialect
             ? i
             : Convert.ToInt32(value ?? 0, CultureInfo.InvariantCulture);
         return state == 1;
+    }
+
+    // Early, best-effort prefetch performed during DatabaseContext initialization, before this
+    // dialect instance is otherwise set up — reuses the same queries as IsReadCommittedSnapshotOn/
+    // IsSnapshotIsolationOn above rather than duplicating the SQL text a second time. Each query
+    // is independently best-effort: a failure in one must not prevent the other from running.
+    internal override SessionCapabilityPrefetch DetectSessionCapabilities(ITrackedConnection connection)
+    {
+        var rcsi = false;
+        var snapshotIsolation = false;
+
+        try
+        {
+            rcsi = IsReadCommittedSnapshotOn(connection);
+        }
+        catch
+        {
+            /* ignore prefetch failures */
+        }
+
+        try
+        {
+            snapshotIsolation = IsSnapshotIsolationOn(connection);
+        }
+        catch
+        {
+            /* ignore prefetch failures */
+        }
+
+        return new SessionCapabilityPrefetch(rcsi, snapshotIsolation);
     }
 
     // SQL Server uses base class ApplyConnectionSettings implementation

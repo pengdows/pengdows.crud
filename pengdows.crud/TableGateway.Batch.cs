@@ -603,7 +603,8 @@ public partial class TableGateway<TEntity, TRowID>
         IReadOnlyList<TEntity> chunk,
         IReadOnlyList<IColumnInfo> insertableColumns,
         IDatabaseContext ctx,
-        ISqlDialect dialect)
+        ISqlDialect dialect,
+        bool overridesSystemIdentity = false)
     {
         var sc = ctx.CreateSqlContainer();
         var counters = new ClauseCounters();
@@ -618,6 +619,16 @@ public partial class TableGateway<TEntity, TRowID>
         // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
             (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
+
+        if (overridesSystemIdentity)
+        {
+            // BuildBatchInsertSql's ANSI shape (the only shape reachable here — the only
+            // dialects that can ever set overridesSystemIdentity are the Postgres family, none
+            // of which override BuildBatchInsertSql) always emits ") VALUES " exactly once,
+            // immediately after the column list. Matches the single-row upsert path's identical
+            // OVERRIDING SYSTEM VALUE placement in TableGateway.Upsert.cs.
+            sc.Query.Replace(") VALUES ", ") OVERRIDING SYSTEM VALUE VALUES ");
+        }
 
         // Value binding for each entity
         for (var row = 0; row < chunk.Count; row++)
@@ -672,12 +683,16 @@ public partial class TableGateway<TEntity, TRowID>
         // Resolve conflict key once for all chunks.
         var conflictCols = ResolveUpsertKey();
 
+        // Same condition as the single-row ON CONFLICT/MERGE upsert paths in
+        // TableGateway.Upsert.cs — batch upsert must match single-row upsert behavior.
+        var overridesSystemIdentity = dialect.SupportsOverridingSystemValue && (_idColumn?.IsIdWritable == true);
+
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
         {
-            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
+            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect, overridesSystemIdentity);
 
             // Append ON CONFLICT clause
             sc.Query.Append(" ON CONFLICT (");

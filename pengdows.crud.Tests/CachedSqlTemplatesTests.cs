@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -118,11 +119,14 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
     [Fact]
     public async Task BuildUpdateAsync_WhenLoadOriginalTrue_ThrowsIfTableMissing()
     {
+        // TestEntity has a [Version] column, so "original not found" (table missing resolves the
+        // same way as row missing here) is a concurrency conflict per the documented contract,
+        // not a generic InvalidOperationException.
         TypeMap.Register<TestEntity>();
         var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "one" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
     }
 }

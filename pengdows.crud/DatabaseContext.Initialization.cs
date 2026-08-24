@@ -315,7 +315,7 @@ public partial class DatabaseContext
 
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
-            if (Product == SupportedDatabase.DuckDB)
+            if (_dialect.RequiresSerializedConnectionOpen)
             {
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
@@ -432,7 +432,7 @@ public partial class DatabaseContext
                 Interlocked.Exchange(ref _peakOpenConnections, 0);
             }
 
-            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
+            _isolationResolver = new IsolationResolver(_dialect!, RCSIEnabled, SnapshotIsolationEnabled);
 
             _uniqueConnectionStringWarnRegistrations = RegisterConnectionStringsForDuplicateWarning(configuration);
 
@@ -563,54 +563,19 @@ public partial class DatabaseContext
             var isLocalDb = topology.IsLocalDb;
             var isFirebirdEmbedded = topology.IsEmbedded;
 
-            // Optional: RCSI prefetch (SQL Server only)
-            var rcsi = false;
-            var snapshotIsolation = false;
-            if (initConn != null && product == SupportedDatabase.SqlServer)
+            // Best-effort, provider-specific session-capability prefetch (currently only
+            // meaningful for SQL Server's RCSI/snapshot isolation database options) — delegated
+            // to the dialect rather than special-cased here. Every non-SQL-Server dialect's base
+            // implementation is a true no-op (no connection round-trip), so this is free for
+            // every other product.
+            if (initConn != null)
             {
-                try
-                {
-                    using var cmd = initConn.CreateCommand();
-                    cmd.CommandText =
-                        "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
-                    var v = cmd.ExecuteScalar();
-                    rcsi = v switch
-                    {
-                        bool b => b,
-                        byte by => by != 0,
-                        short s => s != 0,
-                        int i => i != 0,
-                        _ => Convert.ToInt32(v ?? 0) != 0
-                    };
-                }
-                catch
-                {
-                    /* ignore prefetch failures */
-                }
-
-                try
-                {
-                    using var cmd = initConn.CreateCommand();
-                    cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
-                    var value = cmd.ExecuteScalar();
-                    var state = value switch
-                    {
-                        bool b => b ? 1 : 0,
-                        byte by => by,
-                        short s => s,
-                        int i => i,
-                        _ => Convert.ToInt32(value ?? 0)
-                    };
-                    snapshotIsolation = state == 1;
-                }
-                catch
-                {
-                    /* ignore prefetch failures */
-                }
+                var prefetchLogger = _loggerFactory.CreateLogger<SqlDialect>();
+                var prefetchDialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, _factory, prefetchLogger);
+                var prefetch = prefetchDialect.DetectSessionCapabilities(initConn);
+                _rcsiPrefetch = prefetch.Rcsi;
+                _snapshotIsolationPrefetch = prefetch.SnapshotIsolation;
             }
-
-            _rcsiPrefetch = rcsi;
-            _snapshotIsolationPrefetch = snapshotIsolation;
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {

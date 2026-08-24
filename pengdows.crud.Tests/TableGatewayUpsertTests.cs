@@ -128,6 +128,63 @@ public class TableGatewayUpsertTests
         Assert.DoesNotContain("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task BuildUpsert_YugabyteDb_WithWritableId_OverridesSystemIdentityValue()
+    {
+        // Unlike CockroachDB, YugabyteDB's YSQL layer genuinely supports OVERRIDING SYSTEM VALUE
+        // (confirmed against YugabyteDB's own docs) — it should behave like PostgreSQL here, not
+        // like CockroachDB.
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=YugabyteDb",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(
+            configuration,
+            new fakeDbFactory(SupportedDatabase.YugabyteDb));
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var container = gateway.BuildUpsert(
+            new ExplicitIdentityEntity { Id = 42, Value = "explicit identity" },
+            context);
+
+        Assert.Contains("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildBatchUpsert_PostgreSql_WithWritableId_OverridesSystemIdentityValue()
+    {
+        // BatchUpsertAsync must match the single-row UpsertAsync contract
+        // (BuildUpsert_PostgreSql_WithWritableId_OverridesSystemIdentityValue above) — the batch
+        // INSERT path previously never emitted OVERRIDING SYSTEM VALUE at all, even on plain
+        // PostgreSQL, so a batch upsert of >=2 entities failed with "cannot insert into column
+        // defined as GENERATED ALWAYS AS IDENTITY" where the identical single-row upsert worked.
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=PostgreSql",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(
+            configuration,
+            new fakeDbFactory(SupportedDatabase.PostgreSql));
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        var entities = new[]
+        {
+            new ExplicitIdentityEntity { Id = 42, Value = "explicit identity 1" },
+            new ExplicitIdentityEntity { Id = 43, Value = "explicit identity 2" }
+        };
+
+        var containers = gateway.BuildBatchUpsert(entities, context);
+
+        Assert.All(containers, c =>
+            Assert.Contains("OVERRIDING SYSTEM VALUE", c.Query.ToString(), StringComparison.Ordinal));
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {

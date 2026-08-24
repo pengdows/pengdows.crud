@@ -458,7 +458,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 .Append(insertValSb.AsSpan())
                 .Append(")");
 
-            if (dialect.DatabaseType != SupportedDatabase.Oracle)
+            if (dialect.RequiresMergeStatementTerminator)
             {
                 sc.Query.Append(';');
             }

@@ -30,9 +30,13 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
     [Fact]
     public async Task BuildUpdateAsync_LoadOriginal_NotFound_Throws()
     {
+        // TestEntity has a [Version] column, so a missing original row is a concurrency conflict
+        // per the documented contract ("version mismatch or row deleted"), not a generic
+        // InvalidOperationException — see TableGatewayVersionWriteBackTests for the equivalent
+        // via the higher-level UpdateAsync(entity) path.
         await BuildTestTable();
         var entity = new TestEntity { Id = 123, Name = "missing" };
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
     }
 

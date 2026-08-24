@@ -201,6 +201,52 @@ public class DataSourceResolverTests
             It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
     }
 
+    // Full-codebase review finding: the "silently dropped key" detector compares raw-parsed keys
+    // against the provider-typed builder's canonicalized keys, which cannot distinguish a
+    // renamed alias (e.g. Npgsql's Server -> Host) from an actually-removed key — a real key
+    // rename would be flagged identically to a genuine Encrypt/SslMode drop, training operators
+    // to ignore the warning and masking the next real one.
+    [Fact]
+    public void SanitizeConnectionString_DoesNotWarn_WhenKeyIsOnlyRenamedToAnAlias_NotGenuinelyDropped()
+    {
+        var factory = new FactoryWithAliasingBuilder();
+
+        _resolver.CreateDataSource(factory, "Server=localhost");
+
+        // "Server" is renamed to "host" by the provider's builder with its value preserved —
+        // this must not be reported as a dropped key.
+        _mockLogger.Verify(l => l.Log(
+            LogLevel.Warning,
+            It.IsAny<EventId>(),
+            It.IsAny<It.IsAnyType>(),
+            It.IsAny<Exception>(),
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Never);
+    }
+
+    private class FactoryWithAliasingBuilder : MockFactory
+    {
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+            => new AliasingBuilder();
+
+        // Mirrors Npgsql's real alias normalization: "server" is canonicalized to "host", value
+        // preserved — not dropped, just renamed.
+        private sealed class AliasingBuilder : DbConnectionStringBuilder
+        {
+            [System.Diagnostics.CodeAnalysis.AllowNull]
+            public override object this[string keyword]
+            {
+                get => base[keyword];
+                set
+                {
+                    var canonical = string.Equals(keyword, "server", StringComparison.OrdinalIgnoreCase)
+                        ? "host"
+                        : keyword;
+                    base[canonical] = value;
+                }
+            }
+        }
+    }
+
     private class FactoryWithKeyFilteringBuilder : MockFactory
     {
         public override DbConnectionStringBuilder CreateConnectionStringBuilder()

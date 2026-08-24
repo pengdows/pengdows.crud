@@ -77,6 +77,21 @@ internal class FirebirdDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
+
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.Snapshot,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

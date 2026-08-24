@@ -228,7 +228,31 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool SupportsNamespaces => true;
 
     public override bool SupportsInsertOnConflict => true;
+
+    // CockroachDB is PostgreSQL-wire-compatible and supports GENERATED ALWAYS AS IDENTITY at the
+    // DDL level, but does not implement the accompanying OVERRIDING SYSTEM VALUE INSERT syntax —
+    // confirmed via cockroachdb/cockroach#68201 (open as of 2026). Emitting it there is a SQL
+    // syntax error, not a harmless no-op, so it must stay excluded here the same way SupportsMerge
+    // excludes CockroachDb below. YugabyteDB's own YSQL docs confirm it does support the clause,
+    // so it correctly inherits true.
+    public override bool SupportsOverridingSystemValue => DatabaseType != SupportedDatabase.CockroachDb;
     public override bool SupportsOnConflictWhere => true; // Supports WHERE predicate on DO UPDATE (9.5+)
+
+    // Shared by plain PostgreSQL, AuroraPostgreSql, and (inherited, identical) YugabyteDb.
+    // CockroachDb overrides both of these to Serializable-only.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
     public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
@@ -498,8 +522,13 @@ internal class PostgreSqlDialect : SqlDialect
     /// <summary>
     /// Merges the required GUC session settings into the existing PostgreSQL
     /// <c>options</c> startup string.  Format: <c>-c key=value -c key=value …</c>.
-    /// User-supplied options for other keys are preserved; our keys are
-    /// always overridden to ensure deterministic startup state.
+    /// User-supplied options for other keys are preserved. The three base required keys
+    /// (standard_conforming_strings, client_min_messages, default_transaction_read_only) are
+    /// pooled-connection-hygiene invariants and are always overridden to ensure deterministic
+    /// startup state. Keys from <see cref="GetAdditionalStartupOptions"/> (dialect-specific safety
+    /// defaults, e.g. CockroachDB/YugabyteDB's lock_timeout) are different in kind — application
+    /// policy the caller owns per CLAUDE.md's dialect-baseline policy — so those only fill in when
+    /// the caller hasn't already set that key; an explicit caller value always wins.
     /// </summary>
     /// <remarks>
     /// SECURITY: <paramref name="existing"/> must come from a trusted source (the
@@ -557,16 +586,17 @@ internal class PostgreSqlDialect : SqlDialect
             tokens.Add((key, value));
         }
 
-        // Apply required settings (overriding any existing values for these keys)
-        var allKeys = new List<(string Key, string Value)>
+        // Required settings: pooled-connection-hygiene invariants pengdows.crud must enforce for
+        // correctness (see CLAUDE.md's dialect-baseline policy) — these always win over anything
+        // the caller supplied for the same key.
+        var requiredKeys = new List<(string Key, string Value)>
         {
             (StandardConformingStringsSetting, "on"),
             (ClientMinMessagesSetting, "warning"),
             (ReadOnlyTransactionSetting, readOnly ? "on" : "off")
         };
-        allKeys.AddRange(GetAdditionalStartupOptions(readOnly));
 
-        foreach (var (ourKey, ourValue) in allKeys)
+        foreach (var (ourKey, ourValue) in requiredKeys)
         {
             var found = false;
             for (var i = 0; i < tokens.Count; i++)
@@ -579,6 +609,28 @@ internal class PostgreSqlDialect : SqlDialect
                 }
             }
             if (!found)
+            {
+                tokens.Add((ourKey, ourValue));
+            }
+        }
+
+        // Dialect-specific additional options (e.g. CockroachDB/YugabyteDB's lock_timeout) are
+        // safety DEFAULTS, not hygiene invariants — CLAUDE.md's policy is explicit that
+        // lock-timeout tuning belongs to the caller's own configuration. Only fill these in when
+        // the caller hasn't already set that key themselves; never overwrite an explicit value.
+        foreach (var (ourKey, ourValue) in GetAdditionalStartupOptions(readOnly))
+        {
+            var alreadyPresent = false;
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                if (string.Equals(tokens[i].Key, ourKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+
+            if (!alreadyPresent)
             {
                 tokens.Add((ourKey, ourValue));
             }

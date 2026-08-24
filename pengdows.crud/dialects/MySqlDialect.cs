@@ -119,6 +119,24 @@ internal class MySqlDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => _flavor;
+
+    // Shared by MySQL, AuroraMySql, and (inherited, identical) MariaDb. TiDbDialect overrides
+    // both of these — TiDB has neither ReadUncommitted nor genuine Serializable.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadUncommitted,
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+    };
+
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";

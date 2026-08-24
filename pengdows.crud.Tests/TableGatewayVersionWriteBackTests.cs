@@ -106,6 +106,33 @@ public class TableGatewayVersionWriteBackTests : SqlLiteContextTestBase
     }
 
     [Fact]
+    public async Task TableGateway_UpdateAsync_RowDeletedByAnotherProcess_ThrowsConcurrencyConflictException()
+    {
+        // A versioned entity's single-arg UpdateAsync(entity) auto-forces loadOriginal=true
+        // (TableGateway.Core.cs UpdateAsync(entity, ctx) -> UpdateAsync(entity, _versionColumn !=
+        // null, ...)), which loads the current row before building the UPDATE. If another process
+        // deleted the row first, that load finds nothing — this must surface as the documented
+        // ConcurrencyConflictException ("version mismatch or row deleted"), not a generic
+        // InvalidOperationException that a `catch (ConcurrencyConflictException)` handler can't
+        // catch.
+        var helper = new TableGateway<VerWriteBackEntity, int>(Context, AuditValueResolver);
+        var entity = new VerWriteBackEntity { Name = "original" };
+        await helper.CreateAsync(entity, Context);
+
+        var qp = Context.QuotePrefix;
+        var qs = Context.QuoteSuffix;
+        await using (var deleteContainer = Context.CreateSqlContainer(
+                         $"DELETE FROM {qp}VerWriteBack{qs} WHERE {qp}Id{qs} = @id"))
+        {
+            deleteContainer.AddParameterWithValue("id", DbType.Int32, entity.Id);
+            await deleteContainer.ExecuteNonQueryAsync();
+        }
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => helper.UpdateAsync(entity, Context).AsTask());
+    }
+
+    [Fact]
     public async Task PrimaryKeyTableGateway_UpdateAsync_Success_WritesIncrementedVersionBackToEntity()
     {
         var helper = new PrimaryKeyTableGateway<PkVerWriteBackEntity>(Context);

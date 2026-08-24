@@ -23,7 +23,7 @@ public class IsolationLevelSupportTests
         bool allowSnapshotIsolation,
         IsolationLevel[] expected)
     {
-        var resolver = new IsolationResolver(database, rcsiEnabled, allowSnapshotIsolation);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(database), rcsiEnabled, allowSnapshotIsolation);
         var actual = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
 
         Assert.Equal(expected.OrderBy(level => level).ToArray(), actual);
@@ -33,13 +33,13 @@ public class IsolationLevelSupportTests
     public void Validate_UnsupportedLevel_Throws()
     {
         var sqlResolver = new IsolationResolver(
-            SupportedDatabase.SqlServer,
+            IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer),
             true,
             true);
         Assert.Throws<InvalidOperationException>(() => sqlResolver.Validate(IsolationLevel.Chaos));
 
         var pgResolver = new IsolationResolver(
-            SupportedDatabase.PostgreSql,
+            IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql),
             false,
             false);
         Assert.Throws<InvalidOperationException>(() => pgResolver.Validate(IsolationLevel.ReadUncommitted));
@@ -131,7 +131,7 @@ public class IsolationLevelSupportTests
         IsolationProfile profile,
         IsolationLevel expectedLevel)
     {
-        var resolver = new IsolationResolver(database, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(database), false, false);
         Assert.Equal(expectedLevel, resolver.Resolve(profile));
     }
 
@@ -151,14 +151,14 @@ public class IsolationLevelSupportTests
     [Fact]
     public void Validate_Snowflake_RejectsSerializable()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Snowflake, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.Snowflake), false, false);
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Serializable));
     }
 
     [Fact]
     public void Validate_TiDb_RejectsSerializable()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.TiDb, false, false);
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.TiDb), false, false);
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Serializable));
     }
 }

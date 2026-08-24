@@ -37,7 +37,11 @@ public class KeepAliveSentinelReconnectTests
         {
             ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
             DbMode = DbMode.KeepAlive,
-            ReadWriteMode = ReadWriteMode.ReadWrite
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            // TrackedConnection.OpenTimingHook (used by the disposed-during-repair race test
+            // below) only fires when shouldTime is true (debug logging or a metrics collector) —
+            // EnableMetrics makes that reliable without needing debug-level logging everywhere.
+            EnableMetrics = true
         };
         return new DatabaseContext(cfg, factory);
     }
@@ -108,5 +112,55 @@ public class KeepAliveSentinelReconnectTests
         {
             ctx.CloseAndDisposeConnection(conn);
         }
+    }
+
+    // EnsureSentinelHealthy's repair sequence (dispose the dead sentinel, open a replacement,
+    // install it, attach its pool-governor slot) does not coordinate with a concurrent
+    // DatabaseContext.Dispose() in any way — Dispose() can run its full teardown while the repair
+    // is mid-flight. TrackedConnection.OpenTimingHook fires synchronously from inside
+    // TrackedConnection.Open(), which lets this reproduce "Dispose() completes while the
+    // replacement connection's Open() is in flight" deterministically, without any real
+    // threading/timing race.
+    [Fact]
+    public void GetConnection_ContextDisposedWhileSentinelRepairIsInFlight_DoesNotLeakTheReplacementConnection()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var ctx = CreateKeepAliveContext(factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+
+        TrackedConnection.OpenTimingHook = () =>
+        {
+            TrackedConnection.OpenTimingHook = null; // avoid re-entrancy if Dispose() itself opens anything
+            ctx.Dispose();
+        };
+
+        ITrackedConnection? opConnection = null;
+        try
+        {
+            // The context is legitimately disposed underneath this call — some exception
+            // surfacing is expected and fine. What must not happen: an unhandled
+            // ObjectDisposedException escaping from mid-repair with the replacement connection
+            // left open and never disposed (PersistentConnection reassigned to a live connection
+            // on an already-disposed context, with nothing left to ever dispose it). If
+            // GetConnection happens to still succeed despite the disposed context (a separate,
+            // pre-existing question outside this specific race's scope), the caller — this test,
+            // like every other caller in this suite — is responsible for disposing what it got.
+            opConnection = ctx.GetConnection(ExecutionType.Read);
+        }
+        catch
+        {
+            // Expected in the common case — the context is disposed underneath this call.
+        }
+        finally
+        {
+            TrackedConnection.OpenTimingHook = null;
+            opConnection?.Dispose();
+        }
+
+        // Every fakeDbConnection this test created (original sentinel + the replacement the
+        // repair opened) must end up disposed — none left open and orphaned.
+        Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
     }
 }

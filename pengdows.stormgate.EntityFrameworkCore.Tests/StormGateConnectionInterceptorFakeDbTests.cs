@@ -403,6 +403,51 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         await nextContext.Database.CloseConnectionAsync();
     }
 
+    // Item from the full-codebase review: MarkPermitHeld's _heldPermits.AddOrUpdate used to
+    // silently overwrite any existing PermitBox entry for a connection without disposing the
+    // permit it replaced — a permanent, one-slot leak from the shared admission budget whenever
+    // ConnectionOpening fired twice for the same connection while its ADO.NET state hadn't yet
+    // transitioned to Closed/Broken (so ReleaseStalePermit's guard was a no-op), e.g. a redundant
+    // Open() call.
+    //
+    // Driving this through a real DbContext (two contexts wrapping the same connection, both
+    // calling Database.OpenConnectionAsync()) can't reproduce it deterministically: EF Core's own
+    // RelationalConnection checks the connection's ADO.NET State before deciding whether to
+    // physically reopen it, so the second context's open silently no-ops instead of ever firing
+    // ConnectionOpening a second time — confirmed by trying exactly that shape first. Calling the
+    // interceptor's own AcquirePermit (internal, exposed to this test project) directly is what
+    // actually reproduces the sequence ConnectionOpening would trigger, without EF's own
+    // short-circuit getting in the way.
+    [Fact]
+    public void RedundantAcquirePermit_ForAConnectionAlreadyTrackedAsHoldingAPermit_DoesNotLeakThatPermit()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 2, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
+
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+        connection.Open();
+
+        // First acquisition: consumes permit #1, tracks it against `connection`.
+        interceptor.AcquirePermit(connection);
+
+        // Second acquisition for the SAME, still-open connection — exactly what ConnectionOpening
+        // firing again while ReleaseStalePermit's guard is a no-op would trigger. Without the fix,
+        // this silently overwrites the tracking entry and orphans permit #1's slot forever.
+        interceptor.AcquirePermit(connection);
+
+        connection.Close();
+
+        // Full budget must be restored: two MORE separate connections must both be admittable —
+        // proof that neither slot from the original budget of 2 was permanently lost. Without the
+        // fix, only one of these two AcquirePermit calls would succeed (the other would throw
+        // TimeoutException against an already-exhausted budget).
+        var conn2 = (fakeDbConnection)factory.CreateConnection()!;
+        var conn3 = (fakeDbConnection)factory.CreateConnection()!;
+        interceptor.AcquirePermit(conn2);
+        interceptor.AcquirePermit(conn3);
+    }
+
     private static TestDbContext CreateContext(fakeDbFactory factory, StormGateConnectionInterceptor interceptor)
     {
         return CreateContext(factory.CreateConnection()!, interceptor);

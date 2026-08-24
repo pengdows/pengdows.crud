@@ -142,12 +142,15 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpdateAsync_WithLoadOriginal_OriginalNotFound_ThrowsInvalidOperationException()
+    public async Task UpdateAsync_WithLoadOriginal_OriginalNotFound_ThrowsConcurrencyConflictException()
     {
+        // TestEntity has a [Version] column, so a missing original row is a concurrency conflict
+        // per the documented contract ("version mismatch or row deleted"), not a generic
+        // InvalidOperationException.
         var helper = new TableGateway<TestEntity, long>(Context);
         var entity = new TestEntity { Id = 999, Name = "NonExistent" };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => helper.UpdateAsync(entity, true).AsTask());
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() => helper.UpdateAsync(entity, true).AsTask());
     }
 
     [Fact]

@@ -69,6 +69,27 @@ internal class DuckDbDialect : SqlDialect
     // DuckDB only supports SERIALIZABLE isolation.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+    };
+
+    // DuckDB read-only connections can lock out concurrent writers when sharing the same file.
+    public override bool ReadOnlyConnectionsCanBlockConcurrentWriters => true;
+
+    // DuckDB's ADO.NET provider requires connection opens to be serialized at the context level.
+    public override bool RequiresSerializedConnectionOpen => true;
+
+    // DuckDB's ADO.NET provider rejects an explicit IsolationLevel passed to BeginTransaction.
+    public override bool RejectsExplicitIsolationLevelOnBeginTransaction => true;
+
     // DuckDB does not enforce unique or check constraints in the same way OLTP databases do.
     public override bool SupportsUniqueConstraints => false;
     public override bool SupportsCheckConstraints => false;

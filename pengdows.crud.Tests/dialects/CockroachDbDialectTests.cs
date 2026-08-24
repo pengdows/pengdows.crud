@@ -52,6 +52,24 @@ public class CockroachDbDialectTests
     }
 
     [Fact]
+    public void PrepareConnectionStringForDataSource_CallerSuppliedLockTimeout_IsPreservedNotOverwritten()
+    {
+        // lock_timeout=30s is a safety DEFAULT (see the dialect's own comment: "long-held locks
+        // in a data-access layer indicate a bug"), not a pooled-connection-hygiene invariant like
+        // standard_conforming_strings/client_min_messages/default_transaction_read_only above —
+        // per CLAUDE.md's own dialect-baseline policy, lock-timeout tuning belongs to the
+        // caller's own configuration. A caller who explicitly configured a longer timeout for a
+        // known long-running batch job must not have it silently clobbered.
+        var dialect = CreateDialect();
+        var cs = Cs + "Options=-c lock_timeout=120s;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("lock_timeout=120s", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lock_timeout=30s", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void PrepareConnectionStringForDataSource_ReadOnly_BakesReadOnlyFlag()
     {
         var dialect = CreateDialect();
