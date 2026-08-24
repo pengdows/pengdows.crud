@@ -159,22 +159,48 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     /// </summary>
     public readonly struct StormGatePermit : IDisposable, IAsyncDisposable
     {
-        private readonly StormGate? _owner;
+        // A struct value can be copied (assignment, pass-by-value) and each copy disposed
+        // independently, and a single copy can itself have Dispose() called more than once.
+        // Both are indistinguishable from a caller double-releasing the same slot, which would
+        // otherwise call StormGate.ReleaseLease() an extra time — either throwing
+        // SemaphoreFullException (gate otherwise fully available) or silently handing out a slot
+        // beyond the configured concurrency limit. Routing release through a shared, reference-typed
+        // state object lets every copy see the same "already released" flag.
+        private readonly ReleaseState? _state;
 
         internal StormGatePermit(StormGate owner)
         {
-            _owner = owner;
+            _state = new ReleaseState(owner);
         }
 
         // A default-initialized StormGatePermit (e.g. default(StormGatePermit), never returned by
-        // AcquirePermit/AcquirePermitAsync) has no owner to release — disposing it is a safe no-op
+        // AcquirePermit/AcquirePermitAsync) has no state to release — disposing it is a safe no-op
         // rather than a NullReferenceException.
-        public void Dispose() => _owner?.ReleaseLease();
+        public void Dispose() => _state?.ReleaseOnce();
 
         public ValueTask DisposeAsync()
         {
-            _owner?.ReleaseLease();
+            _state?.ReleaseOnce();
             return ValueTask.CompletedTask;
+        }
+
+        private sealed class ReleaseState
+        {
+            private readonly StormGate _owner;
+            private int _released;
+
+            public ReleaseState(StormGate owner)
+            {
+                _owner = owner;
+            }
+
+            public void ReleaseOnce()
+            {
+                if (Interlocked.Exchange(ref _released, 1) == 0)
+                {
+                    _owner.ReleaseLease();
+                }
+            }
         }
     }
 

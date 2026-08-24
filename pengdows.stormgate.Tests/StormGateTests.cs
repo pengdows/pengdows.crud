@@ -277,6 +277,51 @@ public class StormGateTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
     }
 
+    // Regression: StormGatePermit.Dispose() called _owner?.ReleaseLease() unconditionally, with
+    // no idempotence guard. A second Dispose() call on the same permit released the underlying
+    // semaphore slot a second time, which either throws SemaphoreFullException (when the gate is
+    // otherwise fully available, as here) or — with other permits outstanding — silently hands
+    // out an extra slot beyond the configured concurrency limit.
+    [Fact]
+    public async Task StormGatePermit_Dispose_CalledTwice_ReleasesOnlyOneSlot()
+    {
+        var ds = new TestDataSource();
+        using var gate = new StormGate(ds, 1, _timeout);
+
+        var permit = await gate.AcquirePermitAsync();
+        permit.Dispose();
+
+        var ex = Record.Exception(() => permit.Dispose());
+        Assert.Null(ex);
+
+        // Only one slot was ever genuinely released — a concurrent second acquire must still
+        // time out, proving the redundant Dispose() didn't hand out an extra slot.
+        var held = await gate.AcquirePermitAsync();
+        await Assert.ThrowsAsync<TimeoutException>(() => gate.AcquirePermitAsync());
+        held.Dispose();
+    }
+
+    // Regression: StormGatePermit is a struct. Copying it (assignment, passing by value) yields a
+    // second independent value sharing the same owner reference, so disposing both copies is
+    // indistinguishable from calling Dispose() twice on the original — same corruption as above.
+    [Fact]
+    public async Task StormGatePermit_CopiedStruct_DisposingBothCopies_ReleasesOnlyOnce()
+    {
+        var ds = new TestDataSource();
+        using var gate = new StormGate(ds, 1, _timeout);
+
+        var permit = await gate.AcquirePermitAsync();
+        var copy = permit;
+
+        permit.Dispose();
+        var ex = Record.Exception(() => copy.Dispose());
+        Assert.Null(ex);
+
+        var held = await gate.AcquirePermitAsync();
+        await Assert.ThrowsAsync<TimeoutException>(() => gate.AcquirePermitAsync());
+        held.Dispose();
+    }
+
     [Fact]
     public async Task OpenAsync_WhenProviderOpenIsCanceled_DoesNotLogError()
     {
