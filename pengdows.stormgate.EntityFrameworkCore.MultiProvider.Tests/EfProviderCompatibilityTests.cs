@@ -1,15 +1,18 @@
 namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 
-// Answers the question that started this project directly, per provider: does UseXxx(connection,
+// Tier 1 of the two-tier compatibility model documented on EfProviders: does UseXxx(connection,
 // contextOwnsConnection: false) accept an arbitrary fakeDbConnection at all (rather than requiring
 // its own concrete connection type), and does StormGate's DbConnectionInterceptor-based admission
 // control — which fires on EF Core's own connection lifecycle events, not on anything
 // provider-specific — work identically regardless of which provider is driving the connection?
-// No real database engine of any kind is involved for any provider tested here.
+// No real database engine of any kind is involved for any provider tested here. This is the
+// production-relevant tier: every database here is safe to use with
+// pengdows.stormgate.EntityFrameworkCore against a real server, whether or not it also happens to
+// be deep-testable via fakeDb (see EfProviderDeepTests for that stronger, separate claim).
 public sealed class EfProviderCompatibilityTests
 {
     [Theory]
-    [MemberData(nameof(EfProviders.All), MemberType = typeof(EfProviders))]
+    [MemberData(nameof(EfProviders.ConnectionControlCapable), MemberType = typeof(EfProviders))]
     public async Task AcceptsExternallySuppliedFakeDbConnection_AndStormGateAdmissionControlWorks(
         SupportedDatabase database)
     {
