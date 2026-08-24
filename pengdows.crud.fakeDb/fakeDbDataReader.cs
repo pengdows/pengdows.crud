@@ -64,7 +64,18 @@ public class fakeDbDataReader : DbDataReader
 
     // Stubs for unused members
     public override int Depth => 0;
-    public override int RecordsAffected => 0;
+
+    /// <summary>
+    /// Defaults to 0 (ADO.NET's convention for a reader with no applicable affected-row count,
+    /// e.g. a SELECT). Some EF Core providers' modification-command-batch implementations read
+    /// this directly to determine SaveChanges rows-affected (e.g. Snowflake's
+    /// SnowflakeModificationCommandBatch.ConsumeResultSetWithRowsAffectedOnlyAsync reads
+    /// reader.DbDataReader.RecordsAffected), rather than reading a row/column value the way
+    /// SQLite's/SQL Server's provider-generated "SELECT changes()" pattern does.
+    /// </summary>
+    public int RecordsAffectedOverride { get; set; }
+
+    public override int RecordsAffected => RecordsAffectedOverride;
 
     public override object this[int i] => GetValue(i);
 

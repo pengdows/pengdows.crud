@@ -181,4 +181,26 @@ public class fakeDbAdvancedCapabilitiesTests
         var thirdAttempt = await cmd.ExecuteNonQueryAsync();
         Assert.Equal(1, thirdAttempt);
     }
+
+    [Fact]
+    public async Task Reader_ReportsOverriddenRecordsAffected()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        // Some EF Core providers (e.g. Snowflake's SnowflakeModificationCommandBatch) determine
+        // SaveChanges rows-affected by reading DbDataReader.RecordsAffected directly, rather than
+        // reading a row/column value the way SQLite's/SQL Server's provider-generated
+        // "SELECT changes()" pattern does. RecordsAffected otherwise defaults to 0 (ADO.NET's
+        // convention for a reader with no applicable affected-row count), which made every such
+        // provider see "0 rows affected" regardless of what was queued via the rows-only overload.
+        conn.EnqueueReaderResult(Array.Empty<System.Collections.Generic.Dictionary<string, object?>>(), recordsAffected: 1);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE \"Customers\" SET \"Name\" = 'Ada'";
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        Assert.Equal(1, reader.RecordsAffected);
+    }
 }

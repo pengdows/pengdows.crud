@@ -151,6 +151,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         DataStore = sharedDataStore ?? new FakeDataStore();
     }
 
+    /// <summary>
+    /// Enqueues a reader whose <see cref="fakeDbDataReader.RecordsAffected"/> reports
+    /// <paramref name="recordsAffected"/> instead of the default 0 — needed for providers whose
+    /// modification-command-batch implementation reads that property directly rather than a
+    /// row/column value (see <see cref="fakeDbDataReader.RecordsAffectedOverride"/>).
+    /// </summary>
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows, int recordsAffected)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows)) { RecordsAffectedOverride = recordsAffected };
+        ReaderResults.Enqueue(reader);
+    }
+
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {
         ReaderResults.Enqueue(new fakeDbDataReader(ConvertRows(rows)));
