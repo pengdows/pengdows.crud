@@ -43,6 +43,7 @@ public sealed class EntityFrameworkCoreFakeDbErrorTranslationTests
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => db.SaveChangesAsync());
 
         Assert.Empty(fake.ExecutedNonQueryCommands);
+        Assert.Contains(fake.ExecutedReaderTexts, sql => sql.Contains("UPDATE") && sql.Contains("Customers"));
     }
 
     [Fact]
@@ -77,6 +78,7 @@ public sealed class EntityFrameworkCoreFakeDbErrorTranslationTests
         var thrown = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Same(providerFailure, thrown.InnerException);
         Assert.Empty(fake.ExecutedNonQueryCommands);
+        Assert.Contains(fake.ExecutedReaderTexts, sql => sql.Contains("UPDATE") && sql.Contains("Customers"));
     }
 
     private sealed class CustomerContext(DbContextOptions<CustomerContext> options) : DbContext(options)

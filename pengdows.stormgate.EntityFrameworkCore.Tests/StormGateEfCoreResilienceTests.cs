@@ -92,6 +92,12 @@ public sealed class StormGateEfCoreResilienceTests
         // proof the third attempt actually ran the real statement rather than short-circuiting.
         Assert.Equal(1, affected);
 
+        // Makes the "two failures were consumed before success" inference explicit: exactly 3
+        // commands were created on this connection (a failing attempt still creates its DbCommand
+        // before throwing — it just never reaches the ExecutedNonQueryCommands recording step,
+        // which only runs on success), one per execution-strategy attempt.
+        Assert.Equal(3, connection.CreatedCommands.Count);
+
         // Would time out if a retried attempt's connection open/close cycle leaked a permit.
         await using var nextContext = CreateProbeContext(factory, interceptor);
         await nextContext.Database.OpenConnectionAsync();

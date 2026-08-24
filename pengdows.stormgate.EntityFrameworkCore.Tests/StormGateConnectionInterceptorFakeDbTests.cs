@@ -194,6 +194,124 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         await nextContext.Database.CloseConnectionAsync();
     }
 
+    // The two tests above only prove the success path. A commit/rollback that itself throws is a
+    // different code path through EF's transaction disposal — worth proving separately that it
+    // doesn't leave the connection open (and the permit held) forever.
+    [Fact]
+    public async Task Transaction_CommitFailure_StillReleasesPermit_NoRealDatabaseEngine()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var interceptor = new StormGateConnectionInterceptor(
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(150));
+
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+        var commitFailure = new InvalidOperationException("simulated commit failure");
+        connection.SetTransactionCommitException(commitFailure);
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
+            .UseStormGate(interceptor)
+            .Options;
+
+        await using (var context = new TestDbContext(options))
+        {
+            await using var txn = await context.Database.BeginTransactionAsync();
+            var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
+
+            var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => txn.CommitAsync());
+            Assert.Same(commitFailure, thrown);
+            Assert.Equal(1, fakeTxn.CommitCallCount);
+        }
+
+        // Would time out if the failed commit's connection never closed, leaking its permit.
+        await using var nextContext = CreateContext(factory, interceptor);
+        await nextContext.Database.OpenConnectionAsync();
+        await nextContext.Database.CloseConnectionAsync();
+    }
+
+    [Fact]
+    public async Task Transaction_RollbackFailure_StillReleasesPermit_NoRealDatabaseEngine()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var interceptor = new StormGateConnectionInterceptor(
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(150));
+
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+        var rollbackFailure = new InvalidOperationException("simulated rollback failure");
+        connection.SetTransactionRollbackException(rollbackFailure);
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
+            .UseStormGate(interceptor)
+            .Options;
+
+        await using (var context = new TestDbContext(options))
+        {
+            await using var txn = await context.Database.BeginTransactionAsync();
+            var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
+
+            var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => txn.RollbackAsync());
+            Assert.Same(rollbackFailure, thrown);
+            Assert.Equal(1, fakeTxn.RollbackCallCount);
+        }
+
+        await using var nextContext = CreateContext(factory, interceptor);
+        await nextContext.Database.OpenConnectionAsync();
+        await nextContext.Database.CloseConnectionAsync();
+    }
+
+    // Distinguishes connection lifetime from command lifetime: PermitIsReleased_WhenReaderFails...
+    // and StormGateEfCoreResilienceTests' cancellation test both rely on EF's IMPLICIT
+    // connection management auto-closing a connection it opened for a single operation. Here the
+    // caller explicitly opens the connection first, so EF will NOT auto-close it just because one
+    // query against it was canceled — the permit must remain held until the caller explicitly
+    // closes the connection, regardless of what happens to any individual command run on it.
+    [Fact]
+    public async Task Permit_RemainsHeld_WhenOnlyTheQueryIsCanceled_OnAnExplicitlyOpenedConnection_NoRealDatabaseEngine()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var interceptor = new StormGateConnectionInterceptor(
+            maxConcurrentOpens: 1,
+            acquireTimeout: TimeSpan.FromMilliseconds(150));
+
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+        using var cts = new CancellationTokenSource();
+        connection.EnqueueReaderResult(
+            new[]
+            {
+                new Dictionary<string, object?> { ["Id"] = 1, ["Name"] = "Ada" },
+                new Dictionary<string, object?> { ["Id"] = 2, ["Name"] = "Grace" }
+            },
+            cancelAfterRowCount: 1,
+            cts);
+
+        var options = new DbContextOptionsBuilder<BlogContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
+            .UseStormGate(interceptor)
+            .Options;
+
+        await using var context = new BlogContext(options);
+
+        await context.Database.OpenConnectionAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => context.Blogs.ToListAsync(cts.Token));
+
+        Assert.Equal(ConnectionState.Open, connection.State);
+
+        // The permit is intentionally still held: the caller-opened connection is still open
+        // regardless of the canceled query, so a concurrent open attempt must still saturate.
+        await using var probe = CreateContext(factory, interceptor);
+        await Assert.ThrowsAsync<TimeoutException>(() => probe.Database.OpenConnectionAsync());
+
+        // Only explicitly closing the connection releases the permit.
+        await context.Database.CloseConnectionAsync();
+        await probe.Database.OpenConnectionAsync();
+        await probe.Database.CloseConnectionAsync();
+    }
+
     // The genuinely new proof over the sequential tests above: two opens are launched
     // concurrently and both are held paused mid-open (via SetOpenGate) before either completes.
     // If the semaphore secretly serialized opens instead of permitting maxConcurrentOpens at
@@ -243,40 +361,57 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         await context2.Database.CloseConnectionAsync();
     }
 
-#if NET10_0_OR_GREATER
+    // An earlier version of this test used a connection whose OpenAsync returned an
+    // already-canceled task, and was compiled only under NET10_0_OR_GREATER on the assumption
+    // that verifying permit release on cancellation needed the .NET 10-only
+    // ConnectionCanceled(Async) interceptor hooks. Running that exact scenario unguarded on
+    // net8.0 revealed it passes there too — EF Core routes a canceled open through
+    // ConnectionFailed(Async) ("EF Core fires ConnectionFailed(Async) for ANY exception during an
+    // open attempt", per the comment on that override above), which this interceptor already
+    // handled correctly before .NET 10 existed. But an already-canceled token also risks never
+    // proving a permit was acquired at all — if EF short-circuited before ever calling
+    // ConnectionOpeningAsync, "no leak" would be true only because nothing was ever admitted in
+    // the first place. This version uses the deterministic open gate (see
+    // MaxConcurrentOpens_PermitsGenuinelyConcurrentOpens... above) to prove the permit is
+    // genuinely acquired and the physical open is genuinely paused mid-flight — observed via
+    // openTask.IsCompleted being false — before a real, separately-triggered cancellation reaches
+    // it, on both target frameworks.
     [Fact]
-    public async Task PermitIsReleased_WhenOpenIsCanceledAfterAcquisition()
+    public async Task PermitIsReleased_WhenOpenIsCanceled_AfterGenuinelyAcquiringThePermit_NoRealDatabaseEngine()
     {
         var interceptor = new StormGateConnectionInterceptor(
             maxConcurrentOpens: 1,
             acquireTimeout: TimeSpan.FromMilliseconds(150));
-        var canceledConnection = new CancelOnOpenConnection();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
 
-        var canceledOptions = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlite(canceledConnection, contextOwnsConnection: false)
+        var connection = (fakeDbConnection)factory.CreateConnection()!;
+        connection.SetOpenGate(); // never released — the open is canceled instead of completing
+
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite(connection, contextOwnsConnection: false)
             .UseStormGate(interceptor)
             .Options;
 
-        await using (var canceledContext = new TestDbContext(canceledOptions))
+        using var cts = new CancellationTokenSource();
+
+        await using (var context = new TestDbContext(options))
         {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => canceledContext.Database.OpenConnectionAsync());
+            var openTask = context.Database.OpenConnectionAsync(cts.Token);
+
+            // Proves the permit really was acquired and the physical open is genuinely paused —
+            // not that cancellation short-circuited before any admission happened.
+            Assert.False(openTask.IsCompleted);
+
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => openTask);
         }
 
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        // Would time out if the canceled open leaked its permit.
         await using var nextContext = CreateContext(factory, interceptor);
         await nextContext.Database.OpenConnectionAsync();
         await nextContext.Database.CloseConnectionAsync();
     }
-
-    private sealed class CancelOnOpenConnection : fakeDbConnection
-    {
-        public override Task OpenAsync(CancellationToken cancellationToken)
-        {
-            return Task.FromCanceled(new CancellationToken(canceled: true));
-        }
-    }
-#endif
 
     private static TestDbContext CreateContext(fakeDbFactory factory, StormGateConnectionInterceptor interceptor)
     {

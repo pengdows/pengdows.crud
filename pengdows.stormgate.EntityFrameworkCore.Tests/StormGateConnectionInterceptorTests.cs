@@ -259,6 +259,59 @@ public sealed class StormGateConnectionInterceptorTests
         }
     }
 
+    // Complements StormGateEfCoreResilienceTests' fakeDb pooled-factory test, which discovered
+    // (and documents) that a pooled options delegate embedding an explicit DbConnection instance
+    // reuses that SAME connection object across every pooled instance — making genuine
+    // per-instance concurrent connections impossible to prove that way. This configuration uses a
+    // real connection STRING instead, so EF Core's SQLite provider constructs an actual, distinct
+    // SqliteConnection for each pooled instance the factory builds — the one setup where "two
+    // concurrently open, genuinely distinct pooled connections" can actually be proven end to end.
+    [Fact]
+    public async Task PooledContexts_AdmissionControlAppliesAcrossGenuinelyDistinctConcurrentConnections()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            var interceptor = new StormGateConnectionInterceptor(
+                maxConcurrentOpens: 2,
+                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            var services = new ServiceCollection();
+
+            services.AddDbContextPool<TestDbContext>(options =>
+                options.UseSqlite("Data Source=" + dbPath).UseStormGate(interceptor));
+
+            await using var provider = services.BuildServiceProvider();
+
+            // None of the three scopes is disposed before the next is created, so the pool must
+            // construct three genuinely distinct pooled instances, each with its own real
+            // SqliteConnection.
+            await using var scope1 = provider.CreateAsyncScope();
+            var context1 = scope1.ServiceProvider.GetRequiredService<TestDbContext>();
+            await using var scope2 = provider.CreateAsyncScope();
+            var context2 = scope2.ServiceProvider.GetRequiredService<TestDbContext>();
+            await using var scope3 = provider.CreateAsyncScope();
+            var context3 = scope3.ServiceProvider.GetRequiredService<TestDbContext>();
+
+            await context1.Database.OpenConnectionAsync();
+            await context2.Database.OpenConnectionAsync();
+
+            // Both permits are held by two genuinely distinct, concurrently open real connections.
+            await Assert.ThrowsAsync<TimeoutException>(() => context3.Database.OpenConnectionAsync());
+
+            await context1.Database.CloseConnectionAsync();
+
+            // The permit context1 released is now available to context3.
+            await context3.Database.OpenConnectionAsync();
+            await context3.Database.CloseConnectionAsync();
+
+            await context2.Database.CloseConnectionAsync();
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

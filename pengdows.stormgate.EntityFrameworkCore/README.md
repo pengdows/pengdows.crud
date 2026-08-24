@@ -31,6 +31,12 @@ extension point for connection lifecycle events. It fires on every real physical
 `Open`/`Close`/failed-open, regardless of how the owning `DbContext` was created or pooled —
 so it composes with `AddDbContext`, `AddDbContextPool`, and `IDbContextFactory` alike.
 
+A permit is acquired when a connection opens and held until it closes, fails to open, is
+disposed, or transitions to `Broken` — not released the instant `Open()` returns. So this bounds
+**concurrently open/in-use connection leases**, not merely simultaneous open attempts: a
+connection an application holds open for a long-running unit of work occupies its permit for
+that entire duration, the same as if it were still in the middle of opening.
+
 ```csharp
 using pengdows.stormgate.EntityFrameworkCore;
 
@@ -109,8 +115,9 @@ for the full pattern, including simulating a physical open failure via
 - **A `TimeoutException` is only a fix if something handles it.** Left unhandled, an
   admission-control failure just moves the storm from the database to your application. Pair
   this with retry/backoff or a circuit breaker at the call site.
-- **Not a substitute for the provider's own pool sizing.** This throttles *open attempts*; it
-  doesn't replace `Max Pool Size` or other provider-level connection pool configuration.
+- **Not a substitute for the provider's own pool sizing.** This bounds concurrently open/in-use
+  connection leases at the application level; it doesn't replace `Max Pool Size` or other
+  provider-level connection pool configuration.
 - **Not a fix for SQLite (or any single-writer file database) locking.** This is the right tool
   for a client-server database whose server enforces a connection limit; it does nothing for
   `SQLITE_BUSY`/"database is locked" errors, which come from write contention on connections
