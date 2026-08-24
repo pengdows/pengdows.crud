@@ -152,6 +152,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// Enqueues an already-constructed, fully-configured reader as-is — an escape hatch for
+    /// combining multiple fakeDbDataReader settings (e.g. both <see cref="fakeDbDataReader.FailException"/>
+    /// and <see cref="fakeDbDataReader.RecordsAffectedException"/> on one instance) that the
+    /// narrower convenience overloads below don't compose, without proliferating further
+    /// parameter combinations here.
+    /// </summary>
+    public void EnqueueReaderResult(fakeDbDataReader reader)
+    {
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
     /// Enqueues a reader whose <see cref="fakeDbDataReader.RecordsAffected"/> reports
     /// <paramref name="recordsAffected"/> instead of the default 0 — needed for providers whose
     /// modification-command-batch implementation reads that property directly rather than a
@@ -160,6 +172,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows, int recordsAffected)
     {
         var reader = new fakeDbDataReader(ConvertRows(rows)) { RecordsAffectedOverride = recordsAffected };
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
+    /// Enqueues a reader whose <see cref="fakeDbDataReader.RecordsAffected"/> access throws
+    /// <paramref name="recordsAffectedException"/> — simulates a raw provider failure for a
+    /// provider whose rows-affected check reads that property directly and never calls
+    /// Read()/ReadAsync() at all (see <see cref="fakeDbDataReader.RecordsAffectedException"/>).
+    /// </summary>
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows, Exception recordsAffectedException)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows)) { RecordsAffectedException = recordsAffectedException };
         ReaderResults.Enqueue(reader);
     }
 

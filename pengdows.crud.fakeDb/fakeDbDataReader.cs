@@ -75,7 +75,30 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public int RecordsAffectedOverride { get; set; }
 
-    public override int RecordsAffected => RecordsAffectedOverride;
+    /// <summary>
+    /// When set, accessing <see cref="RecordsAffected"/> throws this exception instead of
+    /// returning <see cref="RecordsAffectedOverride"/> — cleared after throwing once. Needed to
+    /// simulate a raw provider failure for a provider whose rows-affected check reads
+    /// <c>DbDataReader.RecordsAffected</c> directly and never calls <see cref="Read"/>/
+    /// <see cref="ReadAsync"/> at all, so <see cref="FailException"/> (which only fires from
+    /// those) can never reach it.
+    /// </summary>
+    public Exception? RecordsAffectedException { get; set; }
+
+    public override int RecordsAffected
+    {
+        get
+        {
+            if (RecordsAffectedException != null)
+            {
+                var ex = RecordsAffectedException;
+                RecordsAffectedException = null;
+                throw ex;
+            }
+
+            return RecordsAffectedOverride;
+        }
+    }
 
     public override object this[int i] => GetValue(i);
 

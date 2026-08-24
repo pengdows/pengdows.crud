@@ -203,4 +203,56 @@ public class fakeDbAdvancedCapabilitiesTests
 
         Assert.Equal(1, reader.RecordsAffected);
     }
+
+    [Fact]
+    public async Task Reader_RecordsAffectedAccess_ThrowsConfiguredException()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        // A provider whose rows-affected check reads DbDataReader.RecordsAffected directly (see
+        // Reader_ReportsOverriddenRecordsAffected above) never calls Read()/ReadAsync() at all —
+        // so a canned exception on FailAfterReadCount/FailException (which only fires from
+        // Read()) can never reach it. Simulating "the provider itself threw" for such a provider
+        // requires the RecordsAffected property getter itself to be able to throw.
+        var failure = new InvalidOperationException("simulated provider failure");
+        conn.EnqueueReaderResult(Array.Empty<System.Collections.Generic.Dictionary<string, object?>>(), failure);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE \"Customers\" SET \"Name\" = 'Ada'";
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => reader.RecordsAffected);
+        Assert.Same(failure, thrown);
+    }
+
+    [Fact]
+    public async Task EnqueueReaderResult_AcceptsAPreconfiguredReader_CombiningBothFailureMechanisms()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        // A single reader that fails whether the caller reads a row (FailException, e.g.
+        // SQLite's/SQL Server's "SELECT changes()" pattern) or reads RecordsAffected directly
+        // (RecordsAffectedException, e.g. Snowflake) — lets a test inject one provider failure
+        // that's genuinely path-agnostic across every confirmed rows-affected mechanism, without
+        // needing to know in advance which one a given provider actually uses.
+        var failure = new InvalidOperationException("simulated provider failure");
+        var reader = new fakeDbDataReader(Array.Empty<System.Collections.Generic.Dictionary<string, object>>())
+        {
+            FailAfterReadCount = 0,
+            FailException = failure,
+            RecordsAffectedException = failure
+        };
+        conn.EnqueueReaderResult(reader);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE \"Customers\" SET \"Name\" = 'Ada'";
+        await using var executedReader = await cmd.ExecuteReaderAsync();
+
+        var thrownFromRecordsAffected = Assert.Throws<InvalidOperationException>(() => executedReader.RecordsAffected);
+        Assert.Same(failure, thrownFromRecordsAffected);
+    }
 }
