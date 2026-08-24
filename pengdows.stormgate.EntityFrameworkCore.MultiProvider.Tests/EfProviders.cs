@@ -1,4 +1,5 @@
 using System.Data.Common;
+using IBM.EntityFrameworkCore;
 
 namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 
@@ -15,9 +16,18 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 /// InvalidOperationException — see EfProviderCompatibilityTests for how the shared test accounts
 /// for that without weakening what it proves for every other provider.
 ///
-/// DuckDB and Db2 are deliberately absent, not silently skipped: DuckDB's EF Core providers are
-/// either very new/unproven or read-only-only as of 2026, and IBM's Db2 provider has documented
-/// compatibility breaks with EF Core 9+.
+/// Db2 was initially assumed to be a gap too, based on a community report that
+/// IBM.EntityFrameworkCore doesn't support EF Core 9 — but that report is about EF Core 9
+/// specifically, and this project targets EF Core 8. Trying it anyway (rather than trusting the
+/// secondhand report to generalize) found version 8.0.0.400 targets EF Core 8 correctly and does
+/// expose a UseDb2(DbContextOptionsBuilder, DbConnection, Action&lt;...&gt;) overload — it works.
+///
+/// DuckDB remains a genuine, confirmed gap, not an assumed one: reflected over both viable
+/// packages before writing any test code. EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2 (the
+/// only one with a net8.0 build) has no overload accepting an arbitrary DbConnection at all —
+/// only a DuckDbConnectionOptions object or a file-path-based Parquet configuration — so fakeDb
+/// cannot plug into it the way it does every other provider here. The other DuckDB EF Core
+/// provider (DuckDB.EFCore) only targets net10.0, which this project deliberately doesn't.
 /// </summary>
 public static class EfProviders
 {
@@ -31,6 +41,7 @@ public static class EfProviders
         yield return new object[] { SupportedDatabase.Oracle };
         yield return new object[] { SupportedDatabase.Firebird };
         yield return new object[] { SupportedDatabase.Snowflake };
+        yield return new object[] { SupportedDatabase.Db2 };
     }
 
     public static void Configure(SupportedDatabase database, DbContextOptionsBuilder builder, DbConnection connection)
@@ -60,6 +71,10 @@ public static class EfProviders
 
             case SupportedDatabase.Snowflake:
                 builder.UseSnowflake(connection, contextOwnsConnection: false);
+                break;
+
+            case SupportedDatabase.Db2:
+                builder.UseDb2(connection, _ => { });
                 break;
 
             default:

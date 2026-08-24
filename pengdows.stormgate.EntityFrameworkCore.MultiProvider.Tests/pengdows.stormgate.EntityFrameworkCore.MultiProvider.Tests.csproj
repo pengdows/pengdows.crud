@@ -34,10 +34,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- One EF Core provider package per pengdows.crud-supported-database family that has a
-       viable EF Core provider. DuckDB and Db2 are deliberately excluded here (not silently
-       skipped elsewhere): DuckDB's providers are either very new/unproven or read-only-only,
-       and IBM's Db2 provider has documented compatibility breaks with EF Core 9+. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
@@ -49,6 +45,20 @@
          the first version depending on [8.0.4, ) and the first to target net8.0. -->
     <PackageReference Include="FirebirdSql.EntityFrameworkCore.Firebird" Version="11.0.0" />
     <PackageReference Include="EFCore.Snowflake" Version="8.0.8" />
+    <!-- Db2: IBM's older 8.0.0.300 has a reported EF Core 9 break, but 8.0.0.400 targets
+         Microsoft.EntityFrameworkCore.Relational [8.0.12, ) on net8.0 specifically (verified via
+         the NuGet registration API) and does expose a UseDb2(DbContextOptionsBuilder,
+         DbConnection, Action<Db2DbContextOptionsBuilder>) overload — worth actually trying
+         against EF Core 8 rather than assuming the community report generalizes to every
+         version — it does work at EF Core 8, confirmed by EfProviderCompatibilityTests.
+         DuckDB is NOT referenced here, and this is a confirmed finding, not an assumption:
+         reflected over both viable net8.0-capable packages before writing any test code.
+         EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb only accepts a
+         DuckDbConnectionOptions object or a file-path-based Parquet configuration — it has no
+         overload accepting an arbitrary DbConnection at all, so fakeDb cannot plug into it the
+         way it does every other provider here. The other DuckDB EF Core provider
+         (DuckDB.EFCore) only targets net10.0, which this project deliberately doesn't. -->
+    <PackageReference Include="IBM.EntityFrameworkCore" Version="8.0.0.400" />
   </ItemGroup>
 
   <ItemGroup>

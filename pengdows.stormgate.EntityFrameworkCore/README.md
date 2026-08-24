@@ -60,7 +60,7 @@ is failing fast instead of contributing to the storm.
 it in its own `InvalidOperationException` (suggesting `EnableRetryOnFailure`) rather than letting
 it propagate raw — confirmed by running this interceptor against every EF Core provider this
 package has been tested with (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, Firebird,
-Snowflake). If you catch by exact type, catch `TimeoutException` *or* check
+Snowflake, Db2). If you catch by exact type, catch `TimeoutException` *or* check
 `ex.InnerException`/`ex.Message` for one whose message contains "storm gate" — don't assume the
 saturation exception always propagates unwrapped.
 
