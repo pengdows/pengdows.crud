@@ -20,6 +20,17 @@ public class Program
         var includeOptInBenchmarks = IsOptInBenchmarkEnabled(args);
         var switcherArgs = RemoveOptInFlag(args);
 
+        // BenchmarkDotNet's out-of-process toolchain runs each benchmark's [GlobalSetup]/
+        // [GlobalCleanup] in a separately compiled child process whose current directory is a
+        // generated, per-run directory that gets deleted by BDN's own artifact cleanup. Resolve
+        // and export an absolute, stable results path now, in this (parent) process, before
+        // BenchmarkSwitcher launches anything — child processes inherit environment variables,
+        // so BenchmarkCorrectnessArtifacts and the tx-latency sidecar writer can read this
+        // instead of writing to a path relative to whatever directory they happen to run from.
+        var resultsDir = Path.Combine(Directory.GetCurrentDirectory(), "BenchmarkDotNet.Artifacts", "results");
+        Directory.CreateDirectory(resultsDir);
+        Environment.SetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR", resultsDir);
+
         IConfig config = ShouldUseInProcess()
             ? new InProcessConfig()
             : new BenchmarkConfig();
@@ -221,7 +232,10 @@ public class Program
             var count = BenchmarkCorrectnessArtifacts.CountFailures(
                 summary.Title, paramKey, scenario, framework);
 
-            return count.ToString();
+            // null means the correctness artifact was missing/unreadable — distinct from a
+            // verified 0. Rendering both as "0" is exactly the bug that let a stale report claim
+            // "Fails: 0" for a run whose artifact never survived BenchmarkDotNet's own cleanup.
+            return count.HasValue ? count.Value.ToString() : "N/A";
         }
 
         public override string ToString() => ColumnName;

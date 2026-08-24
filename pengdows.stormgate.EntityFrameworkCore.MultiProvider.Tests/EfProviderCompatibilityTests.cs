@@ -17,9 +17,8 @@ public sealed class EfProviderCompatibilityTests
         SupportedDatabase database)
     {
         var factory = new fakeDbFactory(database);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         await using var context1 = CreateContext(database, factory, interceptor);
         await using var context2 = CreateContext(database, factory, interceptor);

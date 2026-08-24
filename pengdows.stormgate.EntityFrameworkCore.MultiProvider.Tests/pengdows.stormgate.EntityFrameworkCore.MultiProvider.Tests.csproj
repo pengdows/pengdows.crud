@@ -52,15 +52,26 @@
          the NuGet registration API) and does expose a UseDb2(DbContextOptionsBuilder,
          DbConnection, Action<Db2DbContextOptionsBuilder>) overload — worth actually trying
          against EF Core 8 rather than assuming the community report generalizes to every
-         version — it does work at EF Core 8, confirmed by EfProviderCompatibilityTests.
-         DuckDB is NOT referenced here, and this is a confirmed finding, not an assumption:
-         reflected over both viable net8.0-capable packages before writing any test code.
-         EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb only accepts a
-         DuckDbConnectionOptions object or a file-path-based Parquet configuration — it has no
-         overload accepting an arbitrary DbConnection at all, so fakeDb cannot plug into it the
-         way it does every other provider here. The other DuckDB EF Core provider
-         (DuckDB.EFCore) only targets net10.0, which this project deliberately doesn't. -->
+         version — it does work at EF Core 8, confirmed by EfProviderCompatibilityTests. -->
     <PackageReference Include="IBM.EntityFrameworkCore" Version="8.0.0.400" />
+    <!-- DuckDB: EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb has no overload
+         accepting an arbitrary DbConnection — only a DuckDbConnectionOptions/connection-string
+         object — so fakeDb cannot plug into it the way it does every other provider here, and it
+         is absent from EfProviders' fakeDb-driven MemberData lists for that reason alone. That is
+         NOT evidence StormGateConnectionInterceptor is incompatible with DuckDB: reflection over
+         this package shows UseDuckDb is a thin layer over Microsoft.EntityFrameworkCore.Sqlite —
+         the DbConnection object EF Core actually opens/closes is a real
+         Microsoft.Data.Sqlite.SqliteConnection (confirmed by inspecting
+         DbContext.Database.GetDbConnection().GetType() against a real in-memory DuckDB), with
+         DuckDB's own engine substituted in only via its native SQLite-ABI-compatible library.
+         DbConnectionInterceptor fires on that same SqliteConnection's real Open/Close exactly as
+         it does for the already-fully-proven SQLite provider — confirmed directly, not assumed,
+         by DuckDbInterceptorRealProviderTests, which uses a real embedded DuckDB engine (no
+         Docker, no fakeDb) and proves saturation actually blocks a second concurrent open. See
+         that file's header comment for the full "fakeDb-injectable vs. StormGate-compatible are
+         two different questions" reasoning. -->
+    <PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="1.0.2" />
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.4.1" />
   </ItemGroup>
 
   <ItemGroup>

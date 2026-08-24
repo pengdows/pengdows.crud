@@ -58,7 +58,7 @@ satisfying the second, and only the first matters for production use of this pac
 | Firebird | ✅ | ❌ | any string-valued parameter crashes — FirebirdSql's own `FbStringTypeMapping.ConfigureParameter` casts to concrete `FbParameter` |
 | Oracle | ✅ | ❌ | any command at all crashes — Oracle's own `OracleRelationalCommand.CreateDbCommand` casts to concrete `OracleCommand` |
 | Db2 | ✅ | ❌ | any command at all crashes — IBM's own `Db2RelationalCommand.CreateDbCommand` casts to concrete `DB2Command` |
-| DuckDB | ❌ | ❌ | no viable net8.0 DuckDB EF Core package exposes a `DbConnection`-accepting overload at all — fails Tier 1, so Tier 2 is unreachable |
+| DuckDB | ✅ | not fakeDb-testable | `EnergyExemplar.EntityFrameworkCore.DuckDb`'s `UseDuckDb` has no `DbConnection`-accepting overload, so this package's fakeDb-driven Tier 2 tests can't reach it at all — that's a testing-method limitation, not a StormGate incompatibility. Its `UseDuckDb` is a thin layer over `Microsoft.EntityFrameworkCore.Sqlite`: the object EF Core actually opens/closes is a real `Microsoft.Data.Sqlite.SqliteConnection`, the same connection type already proven fully Tier 1 and Tier 2 above. Confirmed directly against a real embedded DuckDB engine (no Docker, no fakeDb) — see `DuckDbInterceptorRealProviderTests`. |
 
 See `pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests/EfProviders.cs` for how each row
 was verified (direct reproduction against the real provider package, not assumed) and the exact
@@ -78,16 +78,22 @@ connection an application holds open for a long-running unit of work occupies it
 that entire duration, the same as if it were still in the middle of opening.
 
 ```csharp
+using pengdows.stormgate;
 using pengdows.stormgate.EntityFrameworkCore;
 
-// One shared instance — see "Critical: Share One Instance" below.
-var gate = new StormGateConnectionInterceptor(
+// The StormGate — not the interceptor — holds the admission budget. See
+// "Critical: Share One StormGate" below.
+var stormGate = StormGate.Create(
+    SqlClientFactory.Instance,
+    connectionString,
     maxConcurrentOpens: 32,
     acquireTimeout: TimeSpan.FromSeconds(1));
 
+var interceptor = new StormGateConnectionInterceptor(stormGate);
+
 services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
-    .UseStormGate(gate));
+    .UseStormGate(interceptor));
 ```
 
 When the gate is saturated, `OpenAsync()`/`Open()` throws `TimeoutException` instead of
@@ -104,33 +110,59 @@ Snowflake, Db2). If you catch by exact type, catch `TimeoutException` *or* check
 `ex.InnerException`/`ex.Message` for one whose message contains "storm gate" — don't assume the
 saturation exception always propagates unwrapped.
 
-## Critical: Share One Instance
+**If you've opted into `EnableRetryOnFailure`, it will retry into a saturated gate, not fail
+fast.** EF Core's built-in retrying execution strategies (confirmed for SQL Server's
+`SqlServerRetryingExecutionStrategy`) classify a raw `TimeoutException` as transient and retry
+the *entire operation* — including re-acquiring a StormGate permit — up to `maxRetryCount` times
+before giving up and throwing `Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException`.
+Against a gate that stays saturated, every one of those retries hits the same wall: each one
+waits out `acquireTimeout` again, logs its own saturation warning, and gets nothing for it. This
+isn't a bug in StormGate — it's exactly how EF classifies `TimeoutException` — but it means
+fail-fast and `EnableRetryOnFailure` are in tension: the gate's whole purpose is to reject excess
+load immediately rather than let it queue, and a retry policy re-introduces queuing behavior on
+top of that rejection. If you use both together, size `maxRetryCount`/`maxRetryDelay`
+deliberately (a real transient network blip and a saturated gate look identical to the retry
+strategy), and remember worst-case latency for one call is now roughly
+`(maxRetryCount + 1) × acquireTimeout` plus the retry delays. See
+`EfRetryStrategyTests.SqlServerRetryingExecutionStrategy_TreatsSaturationTimeoutAsTransient_AndRetriesUntilExhausted`
+for the confirmed reproduction.
 
-`StormGateConnectionInterceptor` holds the semaphore that does the actual throttling. If a
-fresh instance is constructed for every `DbContext`, each gets its own semaphore and nothing is
-throttled across instances:
+## Critical: Share One StormGate
+
+The admission budget — the semaphore that does the actual throttling — lives on the
+`StormGate` instance, not on `StormGateConnectionInterceptor`. The interceptor is a thin
+adapter: constructing a fresh one is cheap and harmless as long as every interceptor
+consumes permits from the **same** `StormGate`. What must never happen is constructing a
+fresh `StormGate` per `DbContext` — that gives each one its own independent budget and
+throttles nothing across instances:
 
 ```csharp
 // WRONG — options callback re-runs per request-scoped DbContext with plain AddDbContext,
-// so every request gets its own interceptor and its own semaphore. No cross-request throttling.
+// so every request builds its own StormGate and its own budget. No cross-request throttling.
 services.AddDbContext<AppDbContext>(options => options
     .UseSqlServer(connectionString)
-    .UseStormGate(maxConcurrentOpens: 32, acquireTimeout: TimeSpan.FromSeconds(1)));
+    .UseStormGate(new StormGateConnectionInterceptor(
+        StormGate.Create(SqlClientFactory.Instance, connectionString, 32, TimeSpan.FromSeconds(1)))));
 ```
 
 ```csharp
-// RIGHT — one interceptor instance, shared across every DbContext it gates.
-services.AddSingleton(new StormGateConnectionInterceptor(32, TimeSpan.FromSeconds(1)));
+// RIGHT — one StormGate (and, for convenience, one interceptor built from it), shared across
+// every DbContext it gates. Register the StormGate as a singleton so it, and its budget,
+// outlive any individual request/DbContext.
+services.AddSingleton(_ => StormGate.Create(
+    SqlClientFactory.Instance, connectionString, maxConcurrentOpens: 32, acquireTimeout: TimeSpan.FromSeconds(1)));
+services.AddSingleton(provider =>
+    new StormGateConnectionInterceptor(provider.GetRequiredService<StormGate>()));
 
 services.AddDbContext<AppDbContext>((provider, options) => options
     .UseSqlServer(connectionString)
     .UseStormGate(provider.GetRequiredService<StormGateConnectionInterceptor>()));
 ```
 
-The convenience `UseStormGate(maxConcurrentOpens, acquireTimeout, logger?)` overload that
-constructs an interceptor inline is only safe when the options-configuration delegate itself
-runs once and is reused for every gated instance — e.g. `AddDbContextPool`'s shared options
-template, or a process with exactly one long-lived `DbContext`.
+**This is also what lets EF Core and raw ADO.NET (e.g. Dapper) share one admission budget
+against the same database**: register the same `StormGate` singleton, use it directly for
+raw `StormGate.OpenAsync()` calls, and pass it to `StormGateConnectionInterceptor` for EF
+Core — both consume permits from the same underlying gate.
 
 ## Testing Without a Real Database
 
@@ -141,7 +173,8 @@ instead of a real database engine — no real SQLite, no Testcontainers, entirel
 
 ```csharp
 var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-var interceptor = new StormGateConnectionInterceptor(maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+var interceptor = new StormGateConnectionInterceptor(stormGate);
 
 var options = new DbContextOptionsBuilder<AppDbContext>()
     .UseSqlite(factory.CreateConnection()!, contextOwnsConnection: false)
@@ -158,7 +191,7 @@ for the full pattern, including simulating a physical open failure via
 
 ## Limits
 
-- **Per-process, not fleet-wide.** The semaphore caps concurrency within one `StormGateConnectionInterceptor`
+- **Per-process, not fleet-wide.** The semaphore caps concurrency within one `StormGate`
   instance. Across N replicas, the database can still see up to N × `maxConcurrentOpens`
   connections. This bounds your blast radius per instance — it does not coordinate a global cap.
 - **A `TimeoutException` is only a fix if something handles it.** Left unhandled, an
@@ -174,10 +207,21 @@ for the full pattern, including simulating a physical open failure via
   [`pengdows.stormgate`](../pengdows.stormgate/README.md#what-stormgate-does-not-fix) README
   for that distinction and the actual fix (`pengdows.crud`'s `DbMode.SingleWriter`).
 
-## When to Use `pengdows.stormgate` Instead
+## Relationship to `pengdows.stormgate`
 
-If you own the `DbConnection` directly — raw ADO.NET, Dapper, or an EF Core `DbContext`
-constructed from an externally-owned connection via `UseSqlServer(connection, contextOwnsConnection: false)`
-— the base `pengdows.stormgate` package's `StormGate` wrapper works without needing EF Core as
-a dependency at all. Reach for this package specifically when EF Core owns the connection
-lifecycle itself, via `AddDbContext`, `AddDbContextPool`, or `IDbContextFactory`.
+This package depends on the base [`pengdows.stormgate`](../pengdows.stormgate/README.md)
+package — `StormGate` is where the admission budget actually lives;
+`StormGateConnectionInterceptor` is the adapter that lets EF Core's own connection lifecycle
+consume permits from it, since EF Core owns connection creation internally and gives you no
+`DbConnection` to wrap directly the way raw ADO.NET/Dapper access does.
+
+**If EF Core is the only way your process talks to the database**, you still need to
+construct a `StormGate` (it requires a `DbDataSource`/connection string even though this
+package never calls `StormGate.OpenAsync()`), but you'll likely never call any of its other
+members directly — just hand it to `StormGateConnectionInterceptor` and register both as
+singletons, as shown above.
+
+**If your process also talks to the same database via raw ADO.NET or Dapper**, share the
+*same* `StormGate` singleton between that code (calling `StormGate.OpenAsync()` directly) and
+the EF Core interceptor above — that is what makes "one database, one admission budget" true
+across both access paths, rather than each maintaining an independent one.

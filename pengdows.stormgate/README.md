@@ -157,11 +157,34 @@ connection as part of normal operation, but it does not dispose the wrapper; the
 For PostgreSQL, MySQL, or another provider, create the gate with that provider's
 `DbProviderFactory` and replace `UseSqlServer` with its corresponding EF Core provider method.
 
+**Not every EF Core provider tolerates this pattern.** `gate.OpenAsync()` returns a connection
+wrapped in StormGate's own generic `DbConnection`/`DbCommand` types, not the provider's concrete
+ones. Some providers' EF Core implementations cast the `DbCommand`/`DbDataReader`/`DbParameter`
+they're handed back to their own concrete type somewhere in their real pipeline — that cast fails
+against StormGate's wrapper the same way it would against any other non-native `DbConnection`
+wrapper, in production against a real server, not just in tests. Confirmed for:
+
+| Provider | Fails on |
+| :--- | :--- |
+| Oracle | any command at all |
+| Db2 | any command at all |
+| Npgsql (PostgreSQL) | `SaveChanges` (reader cast) |
+| Firebird | any string-valued parameter |
+
+SQLite, SQL Server, MySQL/MariaDB, and Snowflake do not cast to a concrete type and work fine
+through this wrapper. If you're on one of the four providers above, use
+`pengdows.stormgate.EntityFrameworkCore`'s `StormGateConnectionInterceptor` instead (see the link
+below) — it never wraps the command/connection/reader pipeline, so it has no exposure to this
+failure mode for any provider. See
+[`EfProviderRawStormGateTests`](../pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests/EfProviderRawStormGateTests.cs)
+for the reproduction of each row above.
+
 **Using `AddDbContext`, `AddDbContextPool`, or `IDbContextFactory` instead of manual
 per-operation connections?** See
 [`pengdows.stormgate.EntityFrameworkCore`](../pengdows.stormgate.EntityFrameworkCore/README.md) —
 it gates the same way via a `DbConnectionInterceptor`, composing with EF Core's own connection
-management instead of requiring you to open and pass in connections by hand.
+management instead of requiring you to open and pass in connections by hand. It also avoids the
+provider-casting gap described above entirely.
 
 ---
 

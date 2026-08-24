@@ -183,6 +183,81 @@ public class StormGateTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
     }
 
+    // Regression: Dispose()/DisposeAsync() disposed the DbDataSource and (once drained) the
+    // semaphore based solely on already-registered leases, ignoring an acquire attempt that had
+    // already committed to taking a slot (or was still waiting for one) but hadn't finished
+    // registering itself as an active lease yet. A concurrent Dispose() could see "zero active
+    // leases" and tear down shared state while another AcquirePermitAsync/AcquirePermit call was
+    // still in flight — corrupting or crashing that call's use of the now-disposed
+    // DbDataSource/SemaphoreSlim, and potentially masking the caller's real exception with an
+    // unrelated ObjectDisposedException from the cleanup path.
+    //
+    // Deterministic without any Task.Delay/Thread.Sleep: calling (not awaiting) AcquirePermitAsync
+    // runs its body synchronously on the calling thread up to its first genuine await. Since the
+    // semaphore has no available slot here, that first await (on _semaphore.WaitAsync) suspends —
+    // meaning by the time this line returns a (still-pending) Task, every synchronous statement
+    // preceding that await, including the fix's reservation bookkeeping, has already run.
+    [Fact]
+    public async Task Dispose_WhileAnotherAcquireAttemptIsStillOutstanding_DefersDisposalUntilThatAttemptAlsoCompletes()
+    {
+        var ds = new TestDataSource();
+        var gate = new StormGate(ds, 1, _timeout);
+
+        var heldPermit = await gate.AcquirePermitAsync();
+
+        var waitingAcquireTask = gate.AcquirePermitAsync();
+        Assert.False(waitingAcquireTask.IsCompleted);
+
+        gate.Dispose();
+        Assert.False(ds.Disposed);
+
+        heldPermit.Dispose();
+
+        // The critical assertion: releasing the held permit must NOT trigger disposal while the
+        // waiting acquire's own reservation is still outstanding.
+        Assert.False(ds.Disposed);
+
+        var wonPermit = await waitingAcquireTask;
+        Assert.False(ds.Disposed);
+
+        // Only once every outstanding acquire attempt/lease is done does the fully-drained gate
+        // actually dispose.
+        wonPermit.Dispose();
+        Assert.True(ds.Disposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhileAnotherAcquireAttemptIsStillOutstanding_DefersDisposalUntilThatAttemptAlsoCompletes()
+    {
+        var ds = new TestDataSource();
+        var gate = new StormGate(ds, 1, _timeout);
+
+        var heldPermit = await gate.AcquirePermitAsync();
+        var waitingAcquireTask = gate.AcquirePermitAsync();
+        Assert.False(waitingAcquireTask.IsCompleted);
+
+        await gate.DisposeAsync();
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        heldPermit.Dispose();
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        var wonPermit = await waitingAcquireTask;
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        // The deferred drain, whenever it finally happens, always disposes synchronously —
+        // matching the pre-existing precedent for the semaphore's own deferred disposal — because
+        // the release that finally drains _activeLeases to zero can come from either a sync or
+        // async permit release (StormGatePermit.DisposeAsync() itself calls the same sync
+        // ReleaseLease()), so there is no single "was the original Dispose call async" thread to
+        // honor by the time the drain actually happens.
+        wonPermit.Dispose();
+        Assert.True(ds.Disposed);
+    }
+
     [Fact]
     public async Task Dispose_WithActiveLease_DoesNotBreakLeaseDisposal()
     {

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using pengdows.stormgate;
 
 namespace pengdows.stormgate.EntityFrameworkCore.Tests;
 
@@ -14,9 +15,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task SecondContext_TimesOut_WhileFirstConnectionIsStillOpen_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         await using var context1 = CreateContext(factory, interceptor);
         await using var context2 = CreateContext(factory, interceptor);
@@ -40,9 +40,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task PermitIsReleased_WhenPhysicalOpenFails_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var failingConnection = (fakeDbConnection)factory.CreateConnection()!;
         failingConnection.BreakConnection(skipFirst: true);
@@ -67,9 +66,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task PermitIsReleased_WhenOpenConnectionBecomesBroken()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
         var connection = (fakeDbConnection)factory.CreateConnection()!;
 
         var options = new DbContextOptionsBuilder<TestDbContext>()
@@ -98,9 +96,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task PermitIsReleased_WhenReaderFailsMidEnumeration_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection = (fakeDbConnection)factory.CreateConnection()!;
         var failure = new InvalidOperationException("simulated mid-stream I/O failure");
@@ -147,9 +144,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task Transaction_CommitReachesFakeTransaction_AndReleasesPermitExactlyOnce_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         await using (var context = CreateContext(factory, interceptor))
         {
@@ -174,9 +170,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task Transaction_RollbackReachesFakeTransaction_AndReleasesPermit_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         await using (var context = CreateContext(factory, interceptor))
         {
@@ -201,9 +196,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task Transaction_CommitFailure_StillReleasesPermit_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection = (fakeDbConnection)factory.CreateConnection()!;
         var commitFailure = new InvalidOperationException("simulated commit failure");
@@ -234,9 +228,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task Transaction_RollbackFailure_StillReleasesPermit_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection = (fakeDbConnection)factory.CreateConnection()!;
         var rollbackFailure = new InvalidOperationException("simulated rollback failure");
@@ -272,9 +265,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task Permit_RemainsHeld_WhenOnlyTheQueryIsCanceled_OnAnExplicitlyOpenedConnection_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection = (fakeDbConnection)factory.CreateConnection()!;
         using var cts = new CancellationTokenSource();
@@ -323,9 +315,8 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     public async Task MaxConcurrentOpens_PermitsGenuinelyConcurrentOpens_NotSerialized_NoRealDatabaseEngine()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 2,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 2, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection1 = (fakeDbConnection)factory.CreateConnection()!;
         var connection2 = (fakeDbConnection)factory.CreateConnection()!;
@@ -379,10 +370,9 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
     [Fact]
     public async Task PermitIsReleased_WhenOpenIsCanceled_AfterGenuinelyAcquiringThePermit_NoRealDatabaseEngine()
     {
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using var stormGate = StormGate.Create(factory, "Data Source=fake", maxConcurrentOpens: 1, acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var connection = (fakeDbConnection)factory.CreateConnection()!;
         connection.SetOpenGate(); // never released — the open is canceled instead of completing

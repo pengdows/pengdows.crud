@@ -1,3 +1,25 @@
+> **Correction (2026-08-24):** two claims below are not supported and should not be relied on.
+> 1. "Fails = 0" for Dapper/EF is **not verified proof of zero correctness issues.** The
+>    correctness artifact `CountFailures` reads from silently returned `0` whenever the artifact
+>    file itself was missing — indistinguishable from a genuinely verified zero. This run's own
+>    "Note on artifact durability" below confirms the artifact file did not survive
+>    BenchmarkDotNet's cleanup, so "Fails: 0" here means "unknown," not "verified." Fixed in
+>    `BenchmarkCorrectnessArtifacts.CountFailures` (now returns `int?`, `null` for missing/
+>    unreadable artifacts) and the artifacts-directory durability bug that caused the loss (see
+>    `BenchmarkCorrectnessArtifactsTests` and the `CRUD_BENCH_ARTIFACTS_DIR` fix in `Program.cs`).
+> 2. "Dapper and EF each hit hundreds of ... exceptions ... (caught/retried by the benchmark
+>    harness, at real latency cost)" **misdescribes the code.** `WriteStorm_Dapper` and
+>    `WriteStorm_EntityFramework` each catch the exception once, record it via `MarkInvalid`, and
+>    abandon that transaction — there is no retry loop anywhere in this file. A caught exception
+>    means that transaction's 50 writes were never committed, not "eventually applied." A future
+>    run with the fixed, durable artifact plus the new Attempted/Committed transaction counters
+>    (see `WriteLatencySidecar`'s "Attempted vs. Committed Transactions" table) will show the real
+>    Dapper/EF lost-transaction count directly instead of this being inferred from prose.
+>
+> The core thesis result (pengdows's `SingleWriter` governor throws zero exceptions under this
+> workload while Dapper/EF throw hundreds) is unaffected by this correction — only the
+> "everything still got applied anyway" characterization is retracted.
+
 ## SQLite Write Contention Benchmark — 2026-08-13
 
 `SQLiteWriteContentionBenchmarks` proves two thesis points directly:

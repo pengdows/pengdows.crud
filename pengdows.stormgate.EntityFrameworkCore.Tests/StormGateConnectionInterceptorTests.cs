@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using pengdows.stormgate;
 
 namespace pengdows.stormgate.EntityFrameworkCore.Tests;
 
@@ -9,18 +10,17 @@ public sealed class StormGateConnectionInterceptorTests
     // Proves the actual "connection storm" claim end to end: a real EF Core connection held
     // open blocks a second real EF Core connection from opening once the gate is saturated,
     // and the second attempt fails fast with TimeoutException instead of queuing indefinitely
-    // or overwhelming the provider. The interceptor instance is shared across both contexts —
-    // exactly as it must be used in production (see README): a fresh interceptor per DbContext
-    // would give each its own semaphore and throttle nothing.
+    // or overwhelming the provider. The StormGate instance is shared across both contexts —
+    // exactly as it must be used in production (see README): a fresh StormGate per DbContext
+    // would give each instance its own semaphore and throttle nothing.
     [Fact]
     public async Task SecondContext_TimesOut_WhileFirstConnectionIsStillOpen_ThenSucceedsAfterRelease()
     {
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 1,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
 
             await using var context1 = CreateContext(dbPath, interceptor);
             await using var context2 = CreateContext(dbPath, interceptor);
@@ -47,9 +47,9 @@ public sealed class StormGateConnectionInterceptorTests
     [Fact]
     public async Task PermitIsReleased_WhenPhysicalOpenFails()
     {
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var dbPath = TempDbPath();
+        using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var badConnectionString = new SqliteConnectionStringBuilder
         {
@@ -67,7 +67,6 @@ public sealed class StormGateConnectionInterceptorTests
             await Assert.ThrowsAnyAsync<Exception>(() => failingContext.Database.OpenConnectionAsync());
         }
 
-        var dbPath = TempDbPath();
         try
         {
             await using var context = CreateContext(dbPath, interceptor);
@@ -90,9 +89,8 @@ public sealed class StormGateConnectionInterceptorTests
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 1,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
 
             using var context1 = CreateContext(dbPath, interceptor);
             using var context2 = CreateContext(dbPath, interceptor);
@@ -116,9 +114,9 @@ public sealed class StormGateConnectionInterceptorTests
     [Fact]
     public void PermitIsReleased_WhenPhysicalOpenFails_Sync()
     {
-        var interceptor = new StormGateConnectionInterceptor(
-            maxConcurrentOpens: 1,
-            acquireTimeout: TimeSpan.FromMilliseconds(150));
+        var dbPath = TempDbPath();
+        using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         var badConnectionString = new SqliteConnectionStringBuilder
         {
@@ -136,7 +134,6 @@ public sealed class StormGateConnectionInterceptorTests
             Assert.ThrowsAny<Exception>(() => failingContext.Database.OpenConnection());
         }
 
-        var dbPath = TempDbPath();
         try
         {
             using var context = CreateContext(dbPath, interceptor);
@@ -151,18 +148,20 @@ public sealed class StormGateConnectionInterceptorTests
         }
     }
 
-    // Covers the plain (int, TimeSpan, ILogger?) convenience overloads on both the non-generic
-    // and generic-typed UseStormGate extension methods, not just the shared-instance overload
-    // exercised by every other test above.
+    // Covers the generic-typed UseStormGate(StormGateConnectionInterceptor) overload, not just
+    // the non-generic one exercised by every other test above.
     [Fact]
-    public async Task ConvenienceOverload_ConstructsAWorkingInterceptor()
+    public async Task GenericOverload_ConstructsAWorkingInterceptor()
     {
         var dbPath = TempDbPath();
         try
         {
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 2, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
+
             var options = new DbContextOptionsBuilder<TestDbContext>()
                 .UseSqlite($"Data Source={dbPath}")
-                .UseStormGate(maxConcurrentOpens: 2, acquireTimeout: TimeSpan.FromMilliseconds(150))
+                .UseStormGate(interceptor)
                 .Options;
 
             await using var context = new TestDbContext(options);
@@ -183,9 +182,8 @@ public sealed class StormGateConnectionInterceptorTests
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 1,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
 
             for (var i = 0; i < 20; i++)
             {
@@ -206,9 +204,8 @@ public sealed class StormGateConnectionInterceptorTests
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 1,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
 
             await using (var context = CreateContext(dbPath, interceptor))
             {
@@ -231,9 +228,8 @@ public sealed class StormGateConnectionInterceptorTests
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 1,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
             var services = new ServiceCollection();
 
             services.AddDbContextPool<TestDbContext>(options =>
@@ -272,9 +268,8 @@ public sealed class StormGateConnectionInterceptorTests
         var dbPath = TempDbPath();
         try
         {
-            var interceptor = new StormGateConnectionInterceptor(
-                maxConcurrentOpens: 2,
-                acquireTimeout: TimeSpan.FromMilliseconds(150));
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 2, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
             var services = new ServiceCollection();
 
             services.AddDbContextPool<TestDbContext>(options =>
@@ -312,20 +307,42 @@ public sealed class StormGateConnectionInterceptorTests
         }
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Constructor_ThrowsForNonPositiveMaxConcurrentOpens(int maxConcurrentOpens)
+    // Proves the actual architectural fix: raw ADO.NET access through StormGate.OpenAsync() and
+    // EF Core access through the interceptor now draw from the SAME admission budget, not two
+    // independent ones. Before the fix, this scenario was impossible to even express — the
+    // interceptor had no way to consume a StormGate's permits at all.
+    [Fact]
+    public async Task RawAdoNetOpen_AndEfCoreOpen_ShareTheSameAdmissionBudget()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new StormGateConnectionInterceptor(maxConcurrentOpens, TimeSpan.FromSeconds(1)));
+        var dbPath = TempDbPath();
+        try
+        {
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
+
+            // Raw ADO.NET (e.g. Dapper-style) consumer takes the only permit.
+            var rawConnection = await stormGate.OpenAsync();
+
+            // EF Core must now see the gate as saturated — same budget, not an independent one.
+            await using var efContext = CreateContext(dbPath, interceptor);
+            await Assert.ThrowsAsync<TimeoutException>(() => efContext.Database.OpenConnectionAsync());
+
+            await rawConnection.CloseAsync();
+
+            // The permit the raw consumer released is now available to EF Core.
+            await efContext.Database.OpenConnectionAsync();
+            await efContext.Database.CloseConnectionAsync();
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
     }
 
     [Fact]
-    public void Constructor_ThrowsForNegativeAcquireTimeout()
+    public void Constructor_ThrowsForNullStormGate()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new StormGateConnectionInterceptor(1, TimeSpan.FromSeconds(-1)));
+        Assert.Throws<ArgumentNullException>(() => new StormGateConnectionInterceptor(null!));
     }
 
     [Fact]
@@ -340,7 +357,8 @@ public sealed class StormGateConnectionInterceptorTests
     [Fact]
     public void UseStormGate_ThrowsForNullOptionsBuilder()
     {
-        var interceptor = new StormGateConnectionInterceptor(1, TimeSpan.FromSeconds(1));
+        using var stormGate = CreateGate(TempDbPath(), maxConcurrentOpens: 1, TimeSpan.FromSeconds(1));
+        var interceptor = new StormGateConnectionInterceptor(stormGate);
 
         Assert.Throws<ArgumentNullException>(() =>
             StormGateDbContextOptionsBuilderExtensions.UseStormGate(
@@ -349,6 +367,9 @@ public sealed class StormGateConnectionInterceptorTests
 
     private static string TempDbPath() =>
         Path.Combine(Path.GetTempPath(), $"stormgate-efcore-{Guid.NewGuid():N}.db");
+
+    private static StormGate CreateGate(string dbPath, int maxConcurrentOpens, TimeSpan acquireTimeout) =>
+        StormGate.Create(SqliteFactory.Instance, $"Data Source={dbPath}", maxConcurrentOpens, acquireTimeout);
 
     private static TestDbContext CreateContext(string dbPath, StormGateConnectionInterceptor interceptor)
     {

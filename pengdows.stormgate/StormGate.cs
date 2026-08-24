@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging;
 namespace pengdows.stormgate;
 
 /// <summary>
-/// Limits concurrent database connection opens and ties permit release
-/// to connection lifetime.
+/// Limits concurrently held database connection leases and ties permit release to connection
+/// lifetime — see the <c>maxConcurrentOpens</c> remarks below for what "concurrent" actually
+/// bounds here.
 /// </summary>
 public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposable
 {
@@ -18,8 +19,20 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     private readonly object _lifecycleLock = new();
     private int _activeLeases;
     private int _disposed;
-    private int _semaphoreDisposed;
+    private int _resourcesDisposed;
 
+    /// <param name="dataSource">The provider's data source, used to physically open connections.</param>
+    /// <param name="maxConcurrentOpens">
+    /// The size of the admission budget. Despite the name, this does not merely cap simultaneous
+    /// *opening* handshakes — a permit is held for the entire lifetime of an admitted connection
+    /// lease, from acquisition until that connection closes, fails to open, is disposed, or
+    /// transitions to <see cref="ConnectionState.Broken"/>. A long-running unit of work that keeps
+    /// a connection open occupies its permit for that whole duration, the same as if it were still
+    /// mid-open. Read this as "maximum concurrently open/in-use connections," not "maximum
+    /// concurrent open attempts."
+    /// </param>
+    /// <param name="acquireTimeout">How long <see cref="OpenAsync"/>/<see cref="AcquirePermitAsync"/>/<see cref="AcquirePermit"/> wait for a free permit before throwing <see cref="TimeoutException"/>.</param>
+    /// <param name="logger">Optional logger for saturation warnings and open-failure errors.</param>
     public StormGate(
         DbDataSource dataSource,
         int maxConcurrentOpens,
@@ -43,6 +56,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
+    /// <summary>Builds a <see cref="DbDataSource"/> from <paramref name="factory"/>/<paramref name="connectionString"/> and wraps it in a new <see cref="StormGate"/> — see the constructor's <c>maxConcurrentOpens</c> remarks for what the budget actually bounds.</summary>
     public static StormGate Create(
         DbProviderFactory factory,
         string connectionString,
@@ -58,36 +72,122 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
     public async Task<DbConnection> OpenAsync(CancellationToken ct = default)
     {
-        ThrowIfDisposed();
-
-        // Dispose may race with WaitAsync after the disposed check above.
-        // In that case SemaphoreSlim may throw ObjectDisposedException.
-        // That is acceptable: a disposed StormGate cannot open new connections.
-        if (!await _semaphore.WaitAsync(_acquireTimeout, ct).ConfigureAwait(false))
-        {
-            _logger.LogWarning("StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.", _acquireTimeout.TotalMilliseconds);
-            throw new TimeoutException("Database is saturated (storm gate).");
-        }
+        var permit = await AcquirePermitAsync(ct).ConfigureAwait(false);
 
         try
         {
             var inner = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
-            RegisterLease();
-            return new PermitConnection(inner, this);
+            return new PermitConnection(inner, permit);
         }
         catch (OperationCanceledException)
         {
-            _semaphore.Release();
+            permit.Dispose();
             throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open connection after acquiring StormGate permit.");
-            _semaphore.Release();
+            permit.Dispose();
             throw;
         }
     }
 
+    /// <summary>
+    /// Acquires one admission-control permit from this StormGate's shared budget without opening
+    /// a connection. Lets a consumer that manages its own connection lifecycle elsewhere — e.g.
+    /// <c>StormGateConnectionInterceptor</c>, which gates Entity Framework Core's own connection
+    /// open/close events — enforce the exact same admission budget as <see cref="OpenAsync"/>,
+    /// instead of implementing an independent one. Dispose the returned <see cref="StormGatePermit"/>
+    /// exactly once, when the guarded unit of work completes, to release the slot.
+    /// </summary>
+    public async Task<StormGatePermit> AcquirePermitAsync(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        // Reserve BEFORE waiting on the semaphore, not after — see the "outstanding acquire
+        // attempt" remarks on RegisterLease for why this ordering is load-bearing, not cosmetic.
+        RegisterLease();
+        try
+        {
+            // Dispose may race with WaitAsync after the disposed check above.
+            // In that case SemaphoreSlim may throw ObjectDisposedException.
+            // That is acceptable: a disposed StormGate cannot hand out new permits.
+            if (!await _semaphore.WaitAsync(_acquireTimeout, ct).ConfigureAwait(false))
+            {
+                _logger.LogWarning("StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.", _acquireTimeout.TotalMilliseconds);
+                throw new TimeoutException("Database is saturated (storm gate).");
+            }
+        }
+        catch
+        {
+            // The wait itself failed — timed out, canceled, or the semaphore was disposed out
+            // from under us. No slot was ever taken, so undo the reservation without releasing
+            // a semaphore permit that was never acquired.
+            ReleaseReservation();
+            throw;
+        }
+
+        return new StormGatePermit(this);
+    }
+
+    /// <summary>Synchronous counterpart of <see cref="AcquirePermitAsync"/> — see its remarks.</summary>
+    public StormGatePermit AcquirePermit(CancellationToken ct = default)
+    {
+        ThrowIfDisposed();
+
+        RegisterLease();
+        try
+        {
+            if (!_semaphore.Wait(_acquireTimeout, ct))
+            {
+                _logger.LogWarning("StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.", _acquireTimeout.TotalMilliseconds);
+                throw new TimeoutException("Database is saturated (storm gate).");
+            }
+        }
+        catch
+        {
+            ReleaseReservation();
+            throw;
+        }
+
+        return new StormGatePermit(this);
+    }
+
+    /// <summary>
+    /// A held admission-control permit from a <see cref="StormGate"/>'s shared budget. Dispose
+    /// exactly once to release the slot back to the gate.
+    /// </summary>
+    public readonly struct StormGatePermit : IDisposable, IAsyncDisposable
+    {
+        private readonly StormGate? _owner;
+
+        internal StormGatePermit(StormGate owner)
+        {
+            _owner = owner;
+        }
+
+        // A default-initialized StormGatePermit (e.g. default(StormGatePermit), never returned by
+        // AcquirePermit/AcquirePermitAsync) has no owner to release — disposing it is a safe no-op
+        // rather than a NullReferenceException.
+        public void Dispose() => _owner?.ReleaseLease();
+
+        public ValueTask DisposeAsync()
+        {
+            _owner?.ReleaseLease();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Counts an acquire attempt as "outstanding" from the moment it commits to taking a slot —
+    /// BEFORE the semaphore wait even begins, not after it succeeds. This is load-bearing, not
+    /// cosmetic: Dispose()/DisposeAsync() only tear down the shared DbDataSource/SemaphoreSlim
+    /// once <see cref="_activeLeases"/> reaches zero, so an attempt that has taken a slot (or is
+    /// still waiting for one) but hasn't finished becoming a registered lease must still count —
+    /// otherwise a concurrent Dispose() can see "zero active leases" and dispose shared state
+    /// while that attempt is still using it, corrupting or crashing it (and potentially masking
+    /// its real exception with an unrelated ObjectDisposedException from the release path).
+    /// </summary>
     private void RegisterLease()
     {
         lock (_lifecycleLock)
@@ -96,26 +196,42 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         }
     }
 
-    private void ReleaseLease()
+    /// <summary>Releases a genuinely-acquired semaphore slot back to the gate.</summary>
+    private void ReleaseLease() => CompleteLease(releaseSemaphoreSlot: true);
+
+    /// <summary>
+    /// Undoes RegisterLease() for an attempt that never actually took a semaphore slot — the wait
+    /// timed out, was canceled, or the semaphore had already been disposed by a concurrent
+    /// Dispose()/DisposeAsync(). Must NOT call SemaphoreSlim.Release(): doing so would release a
+    /// slot this attempt never held.
+    /// </summary>
+    private void ReleaseReservation() => CompleteLease(releaseSemaphoreSlot: false);
+
+    private void CompleteLease(bool releaseSemaphoreSlot)
     {
-        var disposeSemaphore = false;
+        var shouldDisposeResources = false;
 
         lock (_lifecycleLock)
         {
-            _semaphore.Release();
+            if (releaseSemaphoreSlot)
+            {
+                _semaphore.Release();
+            }
+
             _activeLeases--;
 
             if (_activeLeases == 0 &&
                 Volatile.Read(ref _disposed) != 0 &&
-                _semaphoreDisposed == 0)
+                _resourcesDisposed == 0)
             {
-                _semaphoreDisposed = 1;
-                disposeSemaphore = true;
+                _resourcesDisposed = 1;
+                shouldDisposeResources = true;
             }
         }
 
-        if (disposeSemaphore)
+        if (shouldDisposeResources)
         {
+            _dataSource.Dispose();
             _semaphore.Dispose();
         }
     }
@@ -135,8 +251,15 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             return;
         }
 
-        _dataSource.Dispose();
-        DisposeSemaphoreIfDrained();
+        // Disposing _dataSource/_semaphore here unconditionally — the pre-fix behavior — raced
+        // with any acquire attempt still in flight (see RegisterLease's remarks). Deferring both
+        // until drained, exactly like the semaphore already was, closes that race for the data
+        // source too.
+        if (TryClaimResourceDisposal())
+        {
+            _dataSource.Dispose();
+            _semaphore.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -146,40 +269,45 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             return;
         }
 
-        await _dataSource.DisposeAsync().ConfigureAwait(false);
-        DisposeSemaphoreIfDrained();
+        if (TryClaimResourceDisposal())
+        {
+            await _dataSource.DisposeAsync().ConfigureAwait(false);
+            _semaphore.Dispose();
+        }
     }
 
-    private void DisposeSemaphoreIfDrained()
+    /// <summary>
+    /// Atomically claims the right to actually dispose _dataSource/_semaphore, if — and only
+    /// if — no acquire attempt or lease is currently outstanding. Whichever of Dispose(Async) or
+    /// the last outstanding attempt's CompleteLease() call reaches zero active leases first wins
+    /// this claim; the other is a no-op, so the resources are disposed exactly once regardless of
+    /// which side the drain completes on.
+    /// </summary>
+    private bool TryClaimResourceDisposal()
     {
-        var disposeSemaphore = false;
-
         lock (_lifecycleLock)
         {
-            if (_activeLeases == 0 && _semaphoreDisposed == 0)
+            if (_activeLeases != 0 || _resourcesDisposed != 0)
             {
-                _semaphoreDisposed = 1;
-                disposeSemaphore = true;
+                return false;
             }
-        }
 
-        if (disposeSemaphore)
-        {
-            _semaphore.Dispose();
+            _resourcesDisposed = 1;
+            return true;
         }
     }
 
     private sealed class PermitConnection : DbConnection
     {
         private readonly DbConnection _inner;
-        private readonly StormGate _owner;
+        private readonly StormGatePermit _permit;
         private int _released;
         private int _disposed;
 
-        public PermitConnection(DbConnection inner, StormGate owner)
+        public PermitConnection(DbConnection inner, StormGatePermit permit)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            _permit = permit;
 
             // A caller can close the real inner connection without ever going through this
             // wrapper's own Close()/Dispose() — e.g. CommandBehavior.CloseConnection on a reader
@@ -204,7 +332,7 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
                 _inner.StateChange -= OnInnerStateChange;
-                _owner.ReleaseLease();
+                _permit.Dispose();
             }
         }
 

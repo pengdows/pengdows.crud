@@ -69,13 +69,21 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 ///   fully Tier 2 now.
 /// - SQLite, SQL Server, MySQL, MariaDB (Pomelo): Tier 1 yes, Tier 2 yes, no caveats found.
 ///
-/// DuckDB is the only pengdows.crud-supported database absent from BOTH tiers — a confirmed
-/// architectural gap, not an assumed one: reflected over both viable packages' actual public API
-/// before writing any test code. EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2 (the only one
-/// with a net8.0 build) has no overload accepting an arbitrary DbConnection at all — only a
-/// DuckDbConnectionOptions object or a file-path-based Parquet configuration, so it fails Tier 1
-/// before Tier 2 is even reachable. DuckDB.EFCore (the more actively developed provider) only
-/// targets net10.0, incompatible with this project's deliberate net8.0-only scoping.
+/// DuckDB is absent from both MemberData lists above, but NOT because StormGate is incompatible
+/// with it — it is absent because EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb has
+/// no overload accepting an arbitrary DbConnection at all (only a DuckDbConnectionOptions/
+/// connection-string object), so fakeDb cannot plug into it the way this file's two tiers are
+/// tested. That is a statement about this file's fakeDb-injection testing *method*, not about
+/// whether StormGateConnectionInterceptor can actually govern DuckDB. Reflection over the package
+/// shows UseDuckDb is a thin layer over Microsoft.EntityFrameworkCore.Sqlite — the DbConnection
+/// object EF Core actually opens/closes is a genuine Microsoft.Data.Sqlite.SqliteConnection (with
+/// DuckDB's own engine substituted in via its native SQLite-ABI-compatible library), the exact
+/// same connection type already proven fully Tier 1 and Tier 2 compatible above. Confirmed
+/// directly — not assumed — by <see cref="DuckDbInterceptorRealProviderTests"/>, which drives a
+/// real embedded DuckDB engine (no Docker, no fakeDb) through StormGateConnectionInterceptor and
+/// proves saturation actually blocks a second concurrent open. DuckDB.EFCore (the other DuckDB EF
+/// Core provider) only targets net10.0, incompatible with this project's deliberate net8.0-only
+/// scoping, and was not investigated further once EnergyExemplar's package confirmed the claim.
 /// </summary>
 public static class EfProviders
 {

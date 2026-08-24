@@ -2,7 +2,7 @@ using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Logging;
+using pengdows.stormgate;
 
 namespace pengdows.stormgate.EntityFrameworkCore;
 
@@ -15,44 +15,37 @@ namespace pengdows.stormgate.EntityFrameworkCore;
 /// owning <see cref="Microsoft.EntityFrameworkCore.DbContext"/> instance was created or pooled.
 /// </summary>
 /// <remarks>
-/// A single instance must be shared across every <c>DbContextOptionsBuilder</c> it gates —
-/// see <see cref="StormGateDbContextOptionsBuilderExtensions.UseStormGate(Microsoft.EntityFrameworkCore.DbContextOptionsBuilder, StormGateConnectionInterceptor)"/>.
-/// Constructing a fresh interceptor per <c>DbContext</c> gives each its own semaphore and
-/// throttles nothing across instances.
+/// Consumes admission permits from a shared <see cref="StormGate"/> instance rather than
+/// owning an independent semaphore — this is what makes "one database, one admission budget"
+/// actually true when the same database is accessed through both EF Core and raw ADO.NET
+/// (e.g. Dapper) in the same process: pass the SAME <see cref="StormGate"/> to both. A single
+/// interceptor instance must still be shared across every <c>DbContextOptionsBuilder</c> it
+/// gates — see
+/// <see cref="StormGateDbContextOptionsBuilderExtensions.UseStormGate(Microsoft.EntityFrameworkCore.DbContextOptionsBuilder, StormGateConnectionInterceptor)"/>.
+/// Constructing a fresh interceptor per <c>DbContext</c> is harmless on its own (it still shares
+/// the underlying <see cref="StormGate"/>'s budget), but is pointless allocation — prefer one
+/// shared interceptor instance, e.g. a singleton registered in DI.
 /// </remarks>
 public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
 {
-    private readonly SemaphoreSlim _semaphore;
-    private readonly TimeSpan _acquireTimeout;
-    private readonly ILogger _logger;
+    private readonly StormGate _stormGate;
 
     // EF Core fires ConnectionFailed(Async) for ANY exception during an open attempt —
-    // including a TimeoutException this interceptor itself threw from ConnectionOpening(Async)
+    // including a TimeoutException the shared StormGate itself threw from AcquirePermit(Async)
     // because the gate was saturated, in which case no permit was ever acquired. Tracking which
     // specific DbConnection instances actually hold a permit lets Release only fire for
     // attempts that got one, instead of unconditionally over-releasing on every failure.
-    private readonly ConditionalWeakTable<DbConnection, object> _heldPermits = new();
-    private static readonly object PermitMarker = new();
+    private readonly ConditionalWeakTable<DbConnection, PermitBox> _heldPermits = new();
     private readonly object _permitLock = new();
 
-    public StormGateConnectionInterceptor(
-        int maxConcurrentOpens,
-        TimeSpan acquireTimeout,
-        ILogger? logger = null)
+    public StormGateConnectionInterceptor(StormGate stormGate)
     {
-        if (maxConcurrentOpens <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxConcurrentOpens));
-        }
+        _stormGate = stormGate ?? throw new ArgumentNullException(nameof(stormGate));
+    }
 
-        if (acquireTimeout < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(acquireTimeout));
-        }
-
-        _semaphore = new SemaphoreSlim(maxConcurrentOpens, maxConcurrentOpens);
-        _acquireTimeout = acquireTimeout;
-        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+    private sealed class PermitBox(StormGate.StormGatePermit permit)
+    {
+        public StormGate.StormGatePermit Permit { get; } = permit;
     }
 
     public override InterceptionResult ConnectionOpening(
@@ -136,34 +129,26 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     {
         ReleaseStalePermit(connection);
 
-        if (!_semaphore.Wait(_acquireTimeout))
-        {
-            LogSaturation();
-            throw new TimeoutException("Database is saturated (storm gate).");
-        }
-
-        MarkPermitHeld(connection);
+        // StormGate.AcquirePermit already logs saturation and throws the same TimeoutException
+        // on failure — nothing acquired, nothing to track.
+        var permit = _stormGate.AcquirePermit();
+        MarkPermitHeld(connection, permit);
     }
 
     private async ValueTask AcquirePermitAsync(DbConnection connection, CancellationToken cancellationToken)
     {
         ReleaseStalePermit(connection);
 
-        if (!await _semaphore.WaitAsync(_acquireTimeout, cancellationToken).ConfigureAwait(false))
-        {
-            LogSaturation();
-            throw new TimeoutException("Database is saturated (storm gate).");
-        }
-
-        MarkPermitHeld(connection);
+        var permit = await _stormGate.AcquirePermitAsync(cancellationToken).ConfigureAwait(false);
+        MarkPermitHeld(connection, permit);
     }
 
-    private void MarkPermitHeld(DbConnection connection)
+    private void MarkPermitHeld(DbConnection connection, StormGate.StormGatePermit permit)
     {
         lock (_permitLock)
         {
             connection.StateChange += OnConnectionStateChange;
-            _heldPermits.AddOrUpdate(connection, PermitMarker);
+            _heldPermits.AddOrUpdate(connection, new PermitBox(permit));
         }
     }
 
@@ -171,10 +156,11 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     {
         lock (_permitLock)
         {
-            if (_heldPermits.Remove(connection))
+            if (_heldPermits.TryGetValue(connection, out var box))
             {
+                _heldPermits.Remove(connection);
                 connection.StateChange -= OnConnectionStateChange;
-                _semaphore.Release();
+                box.Permit.Dispose();
             }
         }
     }
@@ -194,12 +180,5 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         {
             ReleasePermit(connection);
         }
-    }
-
-    private void LogSaturation()
-    {
-        _logger.LogWarning(
-            "StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.",
-            _acquireTimeout.TotalMilliseconds);
     }
 }

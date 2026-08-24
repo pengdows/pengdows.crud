@@ -54,6 +54,24 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
     private readonly ConcurrentBag<long> _transactionTicks = new();
 
+    // Item 9 from the independent architecture review: "Fails=0" alone doesn't prove
+    // correctness — it only proves nothing was flagged as invalid, which silently degrades to
+    // "the artifact recording that was unreadable" if the file goes missing (see
+    // BenchmarkCorrectnessArtifactsTests). These counters are the durable postcondition the
+    // review asked for: how many logical write-transactions each framework actually attempted
+    // versus actually committed. A framework that catches an exception mid-transaction and moves
+    // on (which is what all three of WriteStorm_Pengdows/_Dapper/_EntityFramework currently do —
+    // there is no retry loop anywhere in this file) has that transaction's 50 writes genuinely
+    // lost, not "eventually applied" — Attempted - Committed is exactly the count of those.
+    private readonly ConcurrentDictionary<string, int> _attemptedTransactions = new();
+    private readonly ConcurrentDictionary<string, int> _committedTransactions = new();
+
+    private void MarkAttempted(string framework) =>
+        _attemptedTransactions.AddOrUpdate(framework, 1, static (_, count) => count + 1);
+
+    private void MarkCommitted(string framework) =>
+        _committedTransactions.AddOrUpdate(framework, 1, static (_, count) => count + 1);
+
     [GlobalSetup]
     public async Task Setup()
     {
@@ -164,10 +182,31 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         sb.AppendLine($"| Max        | {max:F3} ms |");
         sb.AppendLine();
         sb.AppendLine($"Pengdows failure count: {failureCount} (0 = all transactions committed successfully)");
+        sb.AppendLine();
+        sb.AppendLine("## Attempted vs. Committed Transactions (all frameworks)");
+        sb.AppendLine();
+        sb.AppendLine("No framework in this benchmark retries a failed transaction — a caught");
+        sb.AppendLine("exception aborts that transaction's 50 writes permanently, it is not");
+        sb.AppendLine("retried to completion. `Attempted - Committed` is exactly how many");
+        sb.AppendLine("logical write-transactions were genuinely lost for that framework.");
+        sb.AppendLine();
+        sb.AppendLine("| Framework | Attempted | Committed | Lost (Attempted - Committed) |");
+        sb.AppendLine("|-----------|----------:|----------:|------------------------------:|");
+        foreach (var framework in new[] { FrameworkPengdows, FrameworkDapper, FrameworkEntityFramework })
+        {
+            var attempted = _attemptedTransactions.GetValueOrDefault(framework);
+            var committed = _committedTransactions.GetValueOrDefault(framework);
+            sb.AppendLine($"| {framework} | {attempted} | {committed} | {attempted - committed} |");
+        }
 
         try
         {
-            var dir = Path.Combine("BenchmarkDotNet.Artifacts", "results");
+            // See BenchmarkCorrectnessArtifacts' ArtifactsDir comment: a path relative to the
+            // current directory here lands in BenchmarkDotNet's generated, cleaned-up per-run
+            // directory, not anywhere durable. CRUD_BENCH_ARTIFACTS_DIR (set once in
+            // Program.Main, before BenchmarkSwitcher runs anything) is absolute and survives.
+            var dir = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+                ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, $"{nameof(SQLiteWriteContentionBenchmarks)}-tx-latency.md");
             File.WriteAllText(path, sb.ToString());
@@ -208,6 +247,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
+            MarkAttempted(FrameworkPengdows);
             var sw = Stopwatch.StartNew();
             try
             {
@@ -237,6 +277,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
                 tx.Commit();
                 sw.Stop();
                 _transactionTicks.Add(sw.ElapsedTicks);
+                MarkCommitted(FrameworkPengdows);
             }
             catch (Exception ex)
             {
@@ -255,6 +296,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
+            MarkAttempted(FrameworkDapper);
             try
             {
                 await using var conn = new SqliteConnection(_connectionString);
@@ -278,6 +320,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
                 }
 
                 await tx.CommitAsync();
+                MarkCommitted(FrameworkDapper);
             }
             catch (Exception ex)
             {
@@ -295,6 +338,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     {
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
+            MarkAttempted(FrameworkEntityFramework);
             try
             {
                 await using var context = new EfContentionContext(_efOptions);
@@ -318,6 +362,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
                 }
 
                 await tx.CommitAsync();
+                MarkCommitted(FrameworkEntityFramework);
             }
             catch (Exception ex)
             {

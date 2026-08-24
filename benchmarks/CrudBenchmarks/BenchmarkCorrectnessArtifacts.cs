@@ -1,4 +1,7 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+
+[assembly: InternalsVisibleTo("CrudBenchmarks.Tests")]
 
 namespace CrudBenchmarks;
 
@@ -79,8 +82,18 @@ internal static class BenchmarkCorrectnessArtifacts
         WriteIndented = true
     };
 
-    private static readonly string ArtifactsDir =
-        Path.Combine("BenchmarkDotNet.Artifacts", "results");
+    // BenchmarkDotNet's default out-of-process toolchain runs each benchmark's
+    // [GlobalSetup]/[GlobalCleanup] inside a separately compiled child process, whose current
+    // directory is a generated, per-run project directory under
+    // CrudBenchmarks/bin/<config>/<tfm>/<guid>/ — one BenchmarkDotNet deletes during its own
+    // artifact cleanup after the run. Writing to a path relative to that directory made this
+    // artifact unrecoverable (confirmed: see
+    // benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md's "Note on
+    // artifact durability"). Program.Main sets CRUD_BENCH_ARTIFACTS_DIR to an absolute,
+    // stable path before BenchmarkSwitcher runs anything, and child processes inherit it.
+    private static string ArtifactsDir =>
+        Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+        ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
 
     public static void Write(string benchmarkClassName, IReadOnlyCollection<CorrectnessIssue> issues)
     {
@@ -126,18 +139,25 @@ internal static class BenchmarkCorrectnessArtifacts
         }
     }
 
-    public static int CountFailures(string summaryTitle, string parameterKey, string scenario, string frameworkName)
+    /// <summary>
+    /// Returns the recorded failure count for this benchmark/scenario/framework, or
+    /// <c>null</c> if the correctness artifact itself could not be found or read. Callers MUST
+    /// treat <c>null</c> differently from <c>0</c> — <c>0</c> means the artifact was found and
+    /// genuinely recorded no matching issues; <c>null</c> means correctness was never verified
+    /// for this run and nothing should be inferred from it either way.
+    /// </summary>
+    public static int? CountFailures(string summaryTitle, string parameterKey, string scenario, string frameworkName)
     {
         var path = GetPath(ExtractBenchmarkClassName(summaryTitle));
         if (!File.Exists(path))
-            return 0;
+            return null;
 
         try
         {
             var json = File.ReadAllText(path);
             var payload = JsonSerializer.Deserialize<CorrectnessArtifact>(json, SerializerOptions);
             if (payload?.Issues == null)
-                return 0;
+                return null;
 
             var normalizedParam = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
             return payload.Issues
@@ -147,9 +167,10 @@ internal static class BenchmarkCorrectnessArtifacts
                     string.Equals(issue.Framework, frameworkName, StringComparison.OrdinalIgnoreCase))
                 .Sum(issue => issue.Count);
         }
-        catch
+        catch (Exception ex)
         {
-            return 0;
+            Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Failed to read correctness artifact: {ex.Message}");
+            return null;
         }
     }
 
