@@ -106,6 +106,22 @@ public static class EfProviders
     /// SQL generation, real string-parameter binding, and SaveChanges round-tripping all confirmed
     /// working, with zero provider-specific test code beyond the connection-wiring in
     /// <see cref="Configure"/>. A strict subset of <see cref="ConnectionControlCapable"/>.
+    ///
+    /// Deliberately extended beyond a single string parameter and a single-row insert, per
+    /// external review: a provider's concrete-type casts live inside individual type mappings and
+    /// individual pipeline stages, not centrally, so passing one shallow probe does not establish
+    /// the others. Every database in this list is also confirmed, for every provider, by:
+    /// <see cref="EfProviderTypeMatrixTests"/> (a representative CLR type matrix — long, decimal,
+    /// DateTime, Guid, bool, nullable — each bound as a real parameter via a local-variable
+    /// closure and materialized back, not just the one string case), <see cref="EfProviderTransactionTests"/>
+    /// (an explicit BeginTransactionAsync/CommitAsync/RollbackAsync round-trip, including
+    /// injected commit/rollback failures that must propagate as the real exception rather than an
+    /// InvalidCastException from a provider unwrapping DbTransaction to its own concrete type),
+    /// and <see cref="EfProviderBatchingTests"/> (several entities inserted in one SaveChangesAsync
+    /// call — the exact code path, EF's modification-command batching, inside which the Npgsql
+    /// failure documented below actually lives; a provider passing on one row is not thereby
+    /// proven to pass once batching activates).
+    ///
     /// PostgreSql, Firebird, Oracle, and Db2 are deliberately absent — see the scoped,
     /// individually-labeled regression tests in <see cref="EfProviderDeepTests"/> that lock in
     /// exactly why each one is excluded. Being absent here says nothing about production
