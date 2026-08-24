@@ -1374,7 +1374,7 @@ public partial class DatabaseContext
         return readOnly && HasDedicatedReadConnectionString();
     }
 
-    private void AttachPinnedSlotIfNeeded()
+    internal void AttachPinnedSlotIfNeeded()
     {
         if (!_effectivePoolGovernorEnabled || _writerGovernor == null || _writerGovernor.Forbidden)
         {

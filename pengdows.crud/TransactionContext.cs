@@ -777,6 +777,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         finally
         {
             TryResetReadOnlySession();
+            // Disposing the transaction here — not in DisposeManaged — guarantees it happens
+            // exactly once, on whichever thread actually completed it, regardless of whether a
+            // concurrent Dispose() lost the _completionLock race (see DisposeManaged).
+            _transaction.Dispose();
             _context.CloseAndDisposeConnection(_connection);
             _singleConnectionTransactionGate.Dispose();
             CompleteTransactionMetrics();
@@ -814,6 +818,17 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         finally
         {
             await TryResetReadOnlySessionAsync().ConfigureAwait(false);
+            // See CompleteTransaction's sync counterpart for why disposal happens here rather
+            // than in DisposeManagedAsync.
+            if (_transaction is IAsyncDisposable asyncTx)
+            {
+                await asyncTx.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                _transaction.Dispose();
+            }
+
             await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
             await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
             CompleteTransactionMetrics();
@@ -876,10 +891,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 }
                 else
                 {
-                    // Another thread is completing the transaction and still holds the lock.
-                    // It will close the connection via CompleteTransaction.finally.
-                    // Do NOT dispose _completionLock here — the other thread still holds it
-                    // and its Release() would throw ObjectDisposedException.
+                    // Another thread is completing the transaction and still holds the lock —
+                    // it is potentially still inside _transaction.Commit()/Rollback() right now.
+                    // It will dispose the transaction and close the connection itself via
+                    // CompleteTransaction.finally once it finishes; disposing _transaction here
+                    // would race with that in-flight call. Do NOT dispose _completionLock here
+                    // either — the other thread still holds it and its Release() would throw
+                    // ObjectDisposedException.
                     shouldDisposeLock = false;
                     _logger.LogError("TransactionContext.Dispose could not acquire lock; skipping explicit rollback.");
                 }
@@ -890,7 +908,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
         }
 
-        _transaction.Dispose();
         _userLock.Dispose();
         if (shouldDisposeLock)
         {
@@ -932,10 +949,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 }
                 else
                 {
-                    // Another thread is completing the transaction and still holds the lock.
-                    // It will close the connection via CompleteTransaction.finally.
-                    // Do NOT dispose _completionLock here — the other thread still holds it
-                    // and its Release() would throw ObjectDisposedException.
+                    // Another thread is completing the transaction and still holds the lock —
+                    // it is potentially still inside _transaction.Commit()/Rollback() right now.
+                    // It will dispose the transaction and close the connection itself via
+                    // CompleteTransactionAsync.finally once it finishes; disposing _transaction
+                    // here would race with that in-flight call. Do NOT dispose _completionLock
+                    // here either — the other thread still holds it and its Release() would
+                    // throw ObjectDisposedException.
                     shouldDisposeLock = false;
                     _logger.LogError(
                         "TransactionContext.DisposeAsync could not acquire lock; skipping explicit rollback.");
@@ -945,15 +965,6 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 _logger.LogError(ex, "Rollback failed during DisposeAsync.");
             }
-        }
-
-        if (_transaction is IAsyncDisposable asyncTx)
-        {
-            await asyncTx.DisposeAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            _transaction.Dispose();
         }
 
         _userLock.Dispose();

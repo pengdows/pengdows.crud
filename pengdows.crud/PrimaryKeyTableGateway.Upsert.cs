@@ -211,19 +211,44 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        var dialect = GetDialect(ctx);
         var auditSnapshots = _hasAuditColumns
             ? entities.Select(SnapshotAuditFields).ToArray()
             : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpsert(entities, ctx);
         var total = 0;
         var completedContainers = 0;
+
+        // Whether a rows-affected shortfall reliably means "version conflict" depends on which
+        // batch-upsert SQL shape is in play (mirrors TableGateway<T,TId>.BatchUpsertAsync):
+        //  - Per-entity fallback (MERGE/Firebird/unknown dialects): guard always present, same as
+        //    single-entity UpsertAsync's already-correct check.
+        //  - Chunked ON CONFLICT (PostgreSQL/CockroachDB): guard only present when the dialect
+        //    supports a WHERE predicate on DO UPDATE.
+        //  - Chunked ON DUPLICATE KEY (MySQL/MariaDB): deliberately EXCLUDED — no version guard
+        //    exists there, and the driver reports 0-affected for a row whose values didn't change
+        //    (an ordinary no-op upsert, not a conflict).
+        var versionConflictDetectionApplies = _versionColumn != null &&
+            (!ctx.DataSourceInfo.SupportsInsertOnConflict && !ctx.DataSourceInfo.SupportsOnDuplicateKey
+             || dialect.SupportsOnConflictWhere);
+
         try
         {
             foreach (var sc in containers)
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+                if (versionConflictDetectionApplies &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
+                    affected < chunkEntities.Count)
+                {
+                    throw new ConcurrencyConflictException(
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                total += affected;
                 completedContainers++;
             }
         }

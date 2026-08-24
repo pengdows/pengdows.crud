@@ -505,6 +505,75 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("t.\"version\" = s.\"version\"", sql);
     }
 
+    // Regression: BuildBatchUpdate's native multi-row path never mirrored the single-row
+    // UpdateAsync contract (TableGateway.Sql.cs) — WHERE keyed on [PrimaryKey] preferentially
+    // over [Id], and the SET-clause column filter excluded [PrimaryKey] columns but never
+    // excluded [CreatedBy]/[CreatedOn]. TestEntity has [Id(false)] and [PrimaryKey(1)] on
+    // different columns (Id, Name) plus [CreatedBy]/[CreatedOn] — exactly the shape that
+    // exposes both bugs at once.
+
+    [Fact]
+    public void BuildBatchUpdate_PostgreSql_ExcludesCreatedByAndCreatedOnFromSetClause()
+    {
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var entities = new List<TestEntity>
+        {
+            new() { Id = 1, Name = "a" },
+            new() { Id = 2, Name = "b" }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(0, sql.IndexOf(" FROM (VALUES", StringComparison.Ordinal));
+
+        // CreatedBy/CreatedOn must never be touched by an UPDATE — only set once, on CREATE.
+        Assert.DoesNotContain("\"CreatedBy\"", setClause);
+        Assert.DoesNotContain("\"CreatedOn\"", setClause);
+        // LastUpdatedBy/LastUpdatedOn ARE expected to be set on every UPDATE.
+        Assert.Contains("\"LastUpdatedBy\" = s.\"LastUpdatedBy\"", setClause);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_PostgreSql_KeysOnId_NotPrimaryKey_WhenBothPresent()
+    {
+        // Single-row UpdateAsync always keys WHERE on [Id] and treats [PrimaryKey] columns as
+        // normal, updateable SET columns (TableGateway.Sql.cs ~line 197-198). Batch must match.
+        var helper = new TableGateway<TestEntity, int>(_pgContext, _audit);
+        var entities = new List<TestEntity>
+        {
+            new() { Id = 1, Name = "a" },
+            new() { Id = 2, Name = "b" }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(0, sql.IndexOf(" FROM (VALUES", StringComparison.Ordinal));
+
+        // WHERE/USING must key on Id, not Name (the [PrimaryKey] column).
+        Assert.Contains("t.\"Id\" = s.\"Id\"", sql);
+        Assert.DoesNotContain("t.\"Name\" = s.\"Name\"", sql);
+        // Name (the PK column) remains a normal, updateable SET column.
+        Assert.Contains("\"Name\" = s.\"Name\"", setClause);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_PkOnlyEntityWithNoId_Throws()
+    {
+        // A [PrimaryKey]-only entity (no [Id]) is not a valid TableGateway<T,TId> update target
+        // — single-row UpdateAsync already refuses this (TableGateway.Update.cs: "Single-ID
+        // operations require a designated Id column; use composite-key helpers."). Batch must
+        // refuse it too instead of silently falling back to keying on [PrimaryKey].
+        var helper = new TableGateway<PkOnlyBatchEntity, int>(_pgContext);
+        var entities = new List<PkOnlyBatchEntity>
+        {
+            new() { Code = "a", Name = "one" },
+            new() { Code = "b", Name = "two" }
+        };
+
+        var ex = Assert.Throws<NotSupportedException>(() => helper.BuildBatchUpdate(entities));
+        Assert.Contains("designated Id column", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void BuildBatchUpsert_MySql_OnDuplicateKey()
     {
@@ -1146,6 +1215,16 @@ public class TableGatewayBatchTests : IAsyncLifetime
         [LastUpdatedBy]
         [Column("last_updated_by", DbType.String)]
         public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
+    [Table("pk_only_batch")]
+    public class PkOnlyBatchEntity
+    {
+        [PrimaryKey(1)]
+        [Column("code", DbType.String)]
+        public string Code { get; set; } = string.Empty;
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
     }
 
     [Table("opaque_versioned_batch")]

@@ -6,6 +6,7 @@
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -55,7 +56,16 @@ public partial class PrimaryKeyTableGateway<TEntity>
             await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
-            if (rowsAffected != 0)
+            if (rowsAffected == 0)
+            {
+                if (_versionColumn != null)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
+            }
+            else
             {
                 WriteBackIncrementedVersion(objectToUpdate);
             }
@@ -82,7 +92,16 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
-            if (rowsAffected != 0)
+            if (rowsAffected == 0)
+            {
+                if (_versionColumn != null)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
+            }
+            else
             {
                 WriteBackIncrementedVersion(objectToUpdate);
             }
@@ -171,7 +190,20 @@ public partial class PrimaryKeyTableGateway<TEntity>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+                // BuildBatchUpdate always builds one container per entity for this gateway (no
+                // native multi-row chunking) — an UPDATE's WHERE clause deterministically matches
+                // or doesn't per row, so a 0-affected container is unambiguously a version conflict
+                // (or the row was deleted) on that one entity.
+                if (_versionColumn != null && affected == 0 &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
+                {
+                    throw new ConcurrencyConflictException(
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                total += affected;
                 completedContainers++;
             }
         }
@@ -344,5 +376,34 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         return pVersion;
+    }
+
+    /// <summary>
+    /// Builds the message for a batch-update version conflict. BuildBatchUpdate always builds one
+    /// container per entity for this gateway (no native multi-row chunking), so the conflicting
+    /// entity is always unambiguously identifiable — unlike TableGateway&lt;T,TId&gt;'s native
+    /// multi-row batch path, which can genuinely lose that attribution.
+    /// </summary>
+    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
+    {
+        if (chunkEntities.Count == 1)
+        {
+            return $"Concurrency conflict on {typeof(TEntity).Name} " +
+                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
+        }
+
+        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
+               $"affected but {affected} succeeded.";
+    }
+
+    private string DescribeEntityKeyForConflictMessage(TEntity entity)
+    {
+        if (_tableInfo.PrimaryKeys.Count > 0)
+        {
+            return string.Join(", ",
+                _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
+        }
+
+        return "key unknown";
     }
 }

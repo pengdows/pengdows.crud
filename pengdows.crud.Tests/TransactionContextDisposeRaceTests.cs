@@ -94,4 +94,144 @@ public class TransactionContextDisposeRaceTests
         // After disposal the transaction must report IsCompleted.
         Assert.True(txn.IsCompleted, "Transaction must be completed after disposal.");
     }
+
+    // =========================================================================
+    // Commit/Rollback (sync + async) racing a concurrent Dispose/DisposeAsync.
+    //
+    // Regression: DisposeManaged/DisposeManagedAsync called _transaction.Dispose()
+    // unconditionally, even when _completionLock.Wait(0) failed because another thread was
+    // actively inside _transaction.Commit()/Rollback() — a dispose-while-in-use race. The fix
+    // moves disposal into CompleteTransaction's/CompleteTransactionAsync's finally block
+    // (guaranteed to run exactly once), so whichever thread actually completes the transaction
+    // is the one that disposes it — never a concurrent Dispose() that lost the lock race.
+    //
+    // Each test below proves ordering, not just a final count: the transaction must NOT be
+    // disposed while Commit/Rollback is still blocked mid-flight, and must be disposed exactly
+    // once after it finishes.
+    // =========================================================================
+
+    private static fakeDbTransaction GetFakeTransaction(pengdows.crud.ITransactionContext txn)
+    {
+        return (fakeDbTransaction)((TransactionContext)txn).Transaction;
+    }
+
+    [Fact]
+    public async Task Commit_ConcurrentDispose_TransactionNotDisposedUntilCommitCompletes()
+    {
+        using var ctx = BuildContext();
+        var txn = ctx.BeginTransaction();
+        var fakeTx = GetFakeTransaction(txn);
+        fakeTx.CommitGate = new ManualResetEventSlim(false);
+        fakeTx.CommitStarted = new ManualResetEventSlim(false);
+
+        var commitTask = Task.Run(() => txn.Commit());
+        Assert.True(fakeTx.CommitStarted.Wait(TimeSpan.FromSeconds(5)), "Commit did not start in time.");
+
+        var disposeTask = Task.Run(() => ((IDisposable)txn).Dispose());
+        await Task.Delay(50); // give Dispose a chance to (wrongly) run while Commit is blocked
+
+        Assert.Equal(0, fakeTx.DisposeCallCount);
+
+        fakeTx.CommitGate.Set();
+        await commitTask;
+        await disposeTask;
+
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+        Assert.Equal(1, fakeTx.CommitCallCount);
+    }
+
+    [Fact]
+    public async Task Rollback_ConcurrentDispose_TransactionNotDisposedUntilRollbackCompletes()
+    {
+        using var ctx = BuildContext();
+        var txn = ctx.BeginTransaction();
+        var fakeTx = GetFakeTransaction(txn);
+        fakeTx.RollbackGate = new ManualResetEventSlim(false);
+        fakeTx.RollbackStarted = new ManualResetEventSlim(false);
+
+        var rollbackTask = Task.Run(() => txn.Rollback());
+        Assert.True(fakeTx.RollbackStarted.Wait(TimeSpan.FromSeconds(5)), "Rollback did not start in time.");
+
+        var disposeTask = Task.Run(() => ((IDisposable)txn).Dispose());
+        await Task.Delay(50);
+
+        Assert.Equal(0, fakeTx.DisposeCallCount);
+
+        fakeTx.RollbackGate.Set();
+        await rollbackTask;
+        await disposeTask;
+
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+        Assert.Equal(1, fakeTx.RollbackCallCount);
+    }
+
+    [Fact]
+    public async Task CommitAsync_ConcurrentDisposeAsync_TransactionNotDisposedUntilCommitCompletes()
+    {
+        await using var ctx = BuildContext();
+        var txn = await ctx.BeginTransactionAsync();
+        var fakeTx = GetFakeTransaction(txn);
+        fakeTx.CommitGate = new ManualResetEventSlim(false);
+        fakeTx.CommitStarted = new ManualResetEventSlim(false);
+
+        var commitTask = Task.Run(() => txn.CommitAsync().AsTask());
+        Assert.True(fakeTx.CommitStarted.Wait(TimeSpan.FromSeconds(5)), "CommitAsync did not start in time.");
+
+        var disposeTask = Task.Run(() => txn.DisposeAsync().AsTask());
+        await Task.Delay(50);
+
+        Assert.Equal(0, fakeTx.DisposeCallCount);
+
+        fakeTx.CommitGate.Set();
+        await commitTask;
+        await disposeTask;
+
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+        Assert.Equal(1, fakeTx.CommitCallCount);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_ConcurrentDisposeAsync_TransactionNotDisposedUntilRollbackCompletes()
+    {
+        await using var ctx = BuildContext();
+        var txn = await ctx.BeginTransactionAsync();
+        var fakeTx = GetFakeTransaction(txn);
+        fakeTx.RollbackGate = new ManualResetEventSlim(false);
+        fakeTx.RollbackStarted = new ManualResetEventSlim(false);
+
+        var rollbackTask = Task.Run(() => txn.RollbackAsync().AsTask());
+        Assert.True(fakeTx.RollbackStarted.Wait(TimeSpan.FromSeconds(5)), "RollbackAsync did not start in time.");
+
+        var disposeTask = Task.Run(() => txn.DisposeAsync().AsTask());
+        await Task.Delay(50);
+
+        Assert.Equal(0, fakeTx.DisposeCallCount);
+
+        fakeTx.RollbackGate.Set();
+        await rollbackTask;
+        await disposeTask;
+
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+        Assert.Equal(1, fakeTx.RollbackCallCount);
+    }
+
+    /// <summary>
+    /// Normal (non-racing) commit: the transaction must be disposed exactly once — not once by
+    /// Commit's own completion path and again later when Dispose() runs on an already-completed
+    /// transaction (the pre-fix code disposed unconditionally in Dispose regardless of
+    /// IsCompleted, a redundant double-dispose in the non-racing case too).
+    /// </summary>
+    [Fact]
+    public void Commit_ThenDispose_DisposesTransactionExactlyOnce()
+    {
+        using var ctx = BuildContext();
+        var txn = ctx.BeginTransaction();
+        var fakeTx = GetFakeTransaction(txn);
+
+        txn.Commit();
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+
+        ((IDisposable)txn).Dispose();
+        Assert.Equal(1, fakeTx.DisposeCallCount);
+    }
 }

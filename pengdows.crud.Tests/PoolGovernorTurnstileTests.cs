@@ -478,6 +478,79 @@ public sealed class PoolGovernorTurnstileTests
         Assert.Equal(default, slot);
     }
 
+    // ── Cancellation during TryAcquire/TryAcquireAsync must not leak writer
+    // turnstile interest ────────────────────────────────────────────────────
+    // Wait(0, cancellationToken)/WaitAsync(0, cancellationToken) throw
+    // OperationCanceledException synchronously when the token is already
+    // cancelled, bypassing TryAcquire's manual (non-try/catch-wrapped) cleanup.
+    // If RegisterWriterTurnstileInterest's increment isn't undone, every
+    // future reader is incorrectly routed through the turnstile gate even
+    // though no real writer is active or waiting.
+
+    [Fact]
+    public void TryAcquire_CancelledDuringTurnstileWait_DoesNotLeakWriterInterest()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "leak-w", 1,
+            TimeSpan.FromMilliseconds(50), turnstile: turnstile, holdTurnstile: true);
+
+        using var reader = new PoolGovernor(PoolLabel.Reader, "leak-r", 1,
+            TimeSpan.FromMilliseconds(50), turnstile: turnstile, holdTurnstile: false);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => writer.TryAcquire(out _, cts.Token));
+
+        // Hold the turnstile externally, exactly like
+        // Acquire_ReaderBypassesTurnstile_WhenNoWritersActiveOrWaiting. With no leaked
+        // writer interest, the reader must bypass the (held) turnstile entirely and
+        // succeed immediately instead of waiting on it and timing out.
+        Assert.True(turnstile.Wait(0));
+        try
+        {
+            using var slot = reader.Acquire();
+            Assert.Equal(1, reader.GetSnapshot().InUse);
+            Assert.Equal(0, reader.GetSnapshot().TotalTurnstileTimeouts);
+        }
+        finally
+        {
+            turnstile.Release();
+        }
+    }
+
+    [Fact]
+    public async Task TryAcquireAsync_CancelledDuringTurnstileWait_DoesNotLeakWriterInterest()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+
+        using var writer = new PoolGovernor(PoolLabel.Writer, "leak-wa", 1,
+            TimeSpan.FromMilliseconds(50), turnstile: turnstile, holdTurnstile: true);
+
+        using var reader = new PoolGovernor(PoolLabel.Reader, "leak-ra", 1,
+            TimeSpan.FromMilliseconds(50), turnstile: turnstile, holdTurnstile: false);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => writer.TryAcquireAsync(cts.Token).AsTask());
+
+        Assert.True(turnstile.Wait(0));
+        try
+        {
+            var slot = await reader.AcquireAsync();
+            Assert.Equal(1, reader.GetSnapshot().InUse);
+            Assert.Equal(0, reader.GetSnapshot().TotalTurnstileTimeouts);
+            slot.Dispose();
+        }
+        finally
+        {
+            turnstile.Release();
+        }
+    }
+
     // ── Constructor validation ─────────────────────────────────────────────
 
     [Fact]

@@ -218,6 +218,61 @@ public class DbErrorCategoryTests
             dialect.ClassifyException(new NumberedDbException(1205, "Lock wait timeout exceeded")));
     }
 
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    public void MySqlFamily_IsUniqueViolation_RecognizesErrorCode1169(SupportedDatabase database)
+    {
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={database}",
+            new fakeDbFactory(database));
+        var dialect = ctx.GetDialect();
+
+        // 1169 (ER_DUP_UNIQUE): duplicate entry for a unique index on a MEMORY-engine table.
+        // MySqlExceptionTranslator already classifies this as a unique violation; the dialect's
+        // own IsUniqueViolation must agree.
+        Assert.True(dialect.IsUniqueViolation(new NumberedDbException(1169, "Can't write, because of unique constraint, to table")));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    public void MySqlFamily_IsForeignKeyViolation_RecognizesErrorCode1216(SupportedDatabase database)
+    {
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={database}",
+            new fakeDbFactory(database));
+        var dialect = ctx.GetDialect();
+
+        // 1216 (ER_NO_REFERENCED_ROW): insert/update violates a foreign key constraint.
+        // MySqlExceptionTranslator already classifies this as a foreign-key violation; the
+        // dialect's own IsForeignKeyViolation must agree.
+        Assert.True(dialect.IsForeignKeyViolation(new NumberedDbException(1216, "Cannot add or update a child row: a foreign key constraint fails")));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    public void MySqlFamily_ClassifyException_RecognizesErrorCodes1169And1216(SupportedDatabase database)
+    {
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={database}",
+            new fakeDbFactory(database));
+        var dialect = ctx.GetDialect();
+
+        // Messages deliberately avoid ClassifyException's generic keyword fallback
+        // ("constraint"/"unique "/"foreign key"/"not-null"/"violates") so these prove
+        // TryClassifyProviderException's MySQL-family error-code list actually includes
+        // 1169/1216, rather than passing via the message fallback regardless.
+        Assert.Equal(DbErrorCategory.ConstraintViolation,
+            dialect.ClassifyException(new NumberedDbException(1169, "Duplicate for key 'idx_name'")));
+        Assert.Equal(DbErrorCategory.ConstraintViolation,
+            dialect.ClassifyException(new NumberedDbException(1216, "Cannot add or update a child row (parent not found)")));
+    }
+
     [Fact]
     public void Oracle_ClassifyException_UsesProviderErrorNumber()
     {
@@ -231,6 +286,21 @@ public class DbErrorCategoryTests
             dialect.ClassifyException(new NumberedDbException(8177, "ORA-08177: can't serialize access for this transaction")));
         Assert.Equal(DbErrorCategory.Deadlock,
             dialect.ClassifyException(new NumberedDbException(60, "ORA-00060: deadlock detected while waiting for resource")));
+    }
+
+    [Fact]
+    public void Sqlite_ClassifyException_ReadOnlyErrorCode_ReturnsReadOnlyViolation()
+    {
+        var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
+        var dialect = ctx.GetDialect();
+
+        // SQLITE_READONLY = 8: write attempted on a read-only connection.
+        // SqliteExceptionTranslator already produces ReadOnlyViolationException/
+        // DbErrorCategory.ReadOnlyViolation for this code; TryClassifyProviderException's
+        // Sqlite case must agree instead of falling through to ConstraintViolation/Unknown.
+        Assert.Equal(DbErrorCategory.ReadOnlyViolation,
+            dialect.ClassifyException(new NumberedDbException(8, "attempt to write a readonly database")));
     }
 
     [Fact]

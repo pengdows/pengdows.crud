@@ -125,13 +125,46 @@ public class DbExceptionTranslatorRegistryTests
     // FallbackExceptionTranslator. Adding a SupportedDatabase value here is a REVIEWABLE decision,
     // not a silent default — see Registry_HasExplicitRoutingDecision_ForEveryDatabase below.
     //   - Unknown: not a real database, never a live connection target.
-    //   - Snowflake: does not enforce constraints (EnforcesConstraints = false), so there is no
-    //     provider-specific SQLSTATE/error-code mapping worth maintaining.
     private static readonly HashSet<SupportedDatabase> IntentionalFallbackDatabases = new()
     {
-        SupportedDatabase.Unknown,
-        SupportedDatabase.Snowflake
+        SupportedDatabase.Unknown
     };
+
+    [Fact]
+    public void Registry_Routes_Snowflake_To_SnowflakeExceptionTranslator()
+    {
+        // Snowflake parses UNIQUE/PRIMARY KEY/FOREIGN KEY/CHECK constraint DDL but never enforces
+        // any of them at runtime (SnowflakeDialect.EnforcesConstraints etc. = false) — but NOT
+        // NULL *is* enforced (error 100072, SQLSTATE 23502), so it has a real, narrow,
+        // provider-specific mapping worth maintaining, unlike the rest of the constraint family.
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<SnowflakeExceptionTranslator>(registry.Get(SupportedDatabase.Snowflake));
+    }
+
+    [Fact]
+    public void SnowflakeTranslator_NotNullSqlState_Returns_NotNullViolationException()
+    {
+        var translator = new SnowflakeExceptionTranslator();
+        var inner = new SqlStateDbException("23502", "NULL result in a non-nullable column");
+
+        var result = translator.Translate(SupportedDatabase.Snowflake, inner, DbOperationKind.Insert);
+
+        Assert.IsType<NotNullViolationException>(result);
+    }
+
+    [Fact]
+    public void SnowflakeTranslator_GenericError_Returns_DatabaseOperationException()
+    {
+        // Unique/FK/check constraints are declarative-only for Snowflake, so an exception that
+        // isn't NOT NULL falls to the same generic fallback behavior it always had.
+        var translator = new SnowflakeExceptionTranslator();
+        var inner = new InvalidOperationException("SQL compilation error: syntax error");
+
+        var result = translator.Translate(SupportedDatabase.Snowflake, inner, DbOperationKind.Insert);
+
+        Assert.IsType<DatabaseOperationException>(result);
+    }
 
     [Fact]
     public void Registry_HasExplicitRoutingDecision_ForEveryDatabase()

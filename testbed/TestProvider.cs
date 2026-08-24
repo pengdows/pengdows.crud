@@ -465,6 +465,14 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Oracle => true,
             SupportedDatabase.Firebird => true,
             SupportedDatabase.Db2 => true,
+            // Confirmed against live containers: MySql.Data/MariaDB/TiDB round-trip a Guid
+            // parameter correctly through a CHAR(36) column (matches GuidStorageFormat.PassThrough
+            // in MySqlDialect). Previously marked unsupported only because GetGuidType had no
+            // MySQL-family branch and fell through to the Postgres-only "UUID" type name, which
+            // isn't valid MySQL/MariaDB/TiDB syntax — a testbed gap, not a database limitation.
+            SupportedDatabase.MySql => true,
+            SupportedDatabase.MariaDb => true,
+            SupportedDatabase.TiDb => true,
             _ => false
         };
     }
@@ -480,6 +488,25 @@ CREATE TABLE {tableName} (
             SupportedDatabase.DuckDB => true,
             SupportedDatabase.Oracle => true,
             SupportedDatabase.Db2 => true,
+            // Confirmed against live containers: MySql.Data/MariaDB/TiDB round-trip a
+            // DateTimeOffset parameter correctly through a DATETIME(6) column (no native "WITH
+            // TIME ZONE" type exists in MySQL syntax, but the instant survives a UTC round-trip).
+            // Previously marked unsupported only because GetDateTimeOffsetType had no MySQL-family
+            // branch and fell through to "TIMESTAMP WITH TIME ZONE" — invalid MySQL/MariaDB/TiDB
+            // syntax — a testbed gap, not a database limitation.
+            SupportedDatabase.MySql => true,
+            SupportedDatabase.MariaDb => true,
+            SupportedDatabase.TiDb => true,
+            // Confirmed against a live container: Microsoft.Data.Sqlite round-trips a
+            // DateTimeOffset parameter correctly (SqliteDialect already stores it as an ISO-8601
+            // UTC string). Previously marked unsupported with no corresponding reason — also a
+            // testbed gap, not a database limitation.
+            SupportedDatabase.Sqlite => true,
+            // Firebird: confirmed NOT supported — FirebirdDialect already coerces DateTimeOffset
+            // to UTC DateTime client-side specifically because the driver can't handle it
+            // (FirebirdSql.Data.Common.DbValue.GetTimeZoneId() throws "Incorrect time zone value"
+            // against a live container when a raw offset is sent). This one IS a real, verified
+            // driver limitation — do not flip it without re-verifying against a live container.
             _ => false
         };
     }
@@ -503,6 +530,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Db2 => "CHAR(36)",
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => "CHAR(36)",
             _ => "UUID"
         };
     }
@@ -523,6 +551,8 @@ CREATE TABLE {tableName} (
             SupportedDatabase.DuckDB => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.Oracle => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.Db2 => "TIMESTAMP",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => "DATETIME(6)",
+            SupportedDatabase.Sqlite => "TEXT", // SqliteDialect stores it as an ISO-8601 UTC string
             _ => "TIMESTAMP WITH TIME ZONE"
         };
     }

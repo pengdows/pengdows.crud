@@ -6,11 +6,6 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
 {
     public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
     {
-        if (database == SupportedDatabase.Snowflake)
-        {
-            return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
-        }
-
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);

@@ -10,7 +10,8 @@
 // - PostInitialize() stores the sentinel connection on DatabaseContext.
 // - ReleaseConnection() skips disposal if connection is the sentinel.
 // - HandleDialectDetection() can use sentinel or create throwaway for detection.
-// - Thread-safe: Sentinel is read-only after initialization.
+// - EnsureSentinelHealthy() lazily detects and repairs a sentinel that unexpectedly broke/closed
+//   (not via context disposal), called at the top of every GetConnection request.
 // - Test extensions provide async convenience helpers for GetConnectionAsync/CloseConnectionAsync.
 // =============================================================================
 
@@ -42,7 +43,9 @@ namespace pengdows.crud.strategies.connection;
 /// - Embedded databases that have expensive startup costs
 /// - File-based databases where keeping the engine loaded improves performance
 ///
-/// THREAD SAFETY: Fully thread-safe - sentinel connection is read-only after initialization
+/// THREAD SAFETY: Fully thread-safe. The sentinel connection reference is normally stable after
+/// initialization, but EnsureSentinelHealthy() may lazily replace it (under a lock, with a
+/// re-check) if it unexpectedly transitions to Broken/Closed — see that method's remarks.
 ///
 /// IMPORTANT: The sentinel connection is NEVER used for actual operations - it exists purely
 /// to keep the database engine loaded and prevent costly reload cycles.
@@ -51,6 +54,8 @@ namespace pengdows.crud.strategies.connection;
 /// </summary>
 internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
+    private readonly object _sentinelRepairLock = new();
+
     internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
     {
     }
@@ -67,6 +72,8 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
+        EnsureSentinelHealthy();
+
         // Fail fast on acquisition to match tests that expect factory/open failures
         var conn = base.GetConnection(executionType, isShared);
         try
@@ -85,6 +92,59 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
         }
 
         return conn;
+    }
+
+    /// <summary>
+    /// Detects and repairs a KeepAlive sentinel connection that unexpectedly transitioned to
+    /// Broken/Closed (e.g. a network blip, the embedded engine restarting) rather than via
+    /// intentional context disposal. Called lazily at the top of every GetConnection request —
+    /// KeepAlive guarantees the sentinel is repaired before the next connection-requiring
+    /// operation, not continuously with zero interruption (there is no background monitor).
+    ///
+    /// A cheap unlocked State check handles the overwhelmingly common healthy case; the actual
+    /// repair — disposing the dead connection (which releases its pool-governor slot via
+    /// TrackedConnection.ReleaseSlot) and acquiring a fresh one — runs under a lock with a
+    /// re-check, so concurrent callers (KeepAlive explicitly allows concurrent work) don't race
+    /// to double-repair.
+    /// </summary>
+    private void EnsureSentinelHealthy()
+    {
+        var sentinel = _context.PersistentConnection;
+        if (sentinel == null || IsHealthy(sentinel))
+        {
+            return;
+        }
+
+        lock (_sentinelRepairLock)
+        {
+            var current = _context.PersistentConnection;
+            if (_context.IsDisposed || current == null || IsHealthy(current))
+            {
+                return; // already repaired by another thread, or context is shutting down
+            }
+
+            _context.Logger.LogWarning(
+                "KeepAlive sentinel connection was {State}; reconnecting.", current.State);
+
+            try
+            {
+                current.Dispose();
+            }
+            catch
+            {
+                // Already broken — best-effort cleanup, nothing meaningful to do with a failure here.
+            }
+
+            var replacement = _context.FactoryCreateConnection(_context.RawConnectionString, true);
+            replacement.Open();
+            _context.SetPersistentConnection(replacement);
+            _context.AttachPinnedSlotIfNeeded();
+        }
+    }
+
+    private static bool IsHealthy(ITrackedConnection connection)
+    {
+        return connection.State != ConnectionState.Broken && connection.State != ConnectionState.Closed;
     }
 
     public override void ReleaseConnection(ITrackedConnection? connection)

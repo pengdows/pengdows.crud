@@ -367,44 +367,59 @@ internal sealed class PoolGovernor : IDisposable
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
-        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-        var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
-        if (useTurnstileGate && _turnstile != null)
+        try
         {
-            if (!_turnstile.Wait(0, cancellationToken))
+            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+            if (useTurnstileGate && _turnstile != null)
             {
-                UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-                slot = default;
-                return false;
+                if (!_turnstile.Wait(0, cancellationToken))
+                {
+                    UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+                    slot = default;
+                    return false;
+                }
+
+                turnstileAcquired = true;
+
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
             }
 
-            turnstileAcquired = true;
+            if (_semaphore.Wait(0, cancellationToken))
+            {
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                slot = OnAcquired(waitStart, releaseWriterInterestOnRelease);
+                return true;
+            }
 
-            if (!_holdTurnstile)
+            // Slot miss — release turnstile without recording hold metrics.
+            // Failure duration is not slot hold time.
+            if (turnstileAcquired && _turnstile != null)
             {
                 _turnstile.Release();
-                turnstileAcquired = false;
             }
-        }
 
-        if (_semaphore.Wait(0, cancellationToken))
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            slot = default;
+            return false;
+        }
+        catch
         {
-            var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-            writerTurnstileInterestRegistered = false;
-            slot = OnAcquired(waitStart, releaseWriterInterestOnRelease);
-            return true;
-        }
+            // A cancelled token makes Wait(0, cancellationToken) throw OperationCanceledException
+            // synchronously, bypassing every manual cleanup branch above — clean up here instead.
+            if (turnstileAcquired && _turnstile != null)
+            {
+                _turnstile.Release();
+            }
 
-        // Slot miss — release turnstile without recording hold metrics.
-        // Failure duration is not slot hold time.
-        if (turnstileAcquired && _turnstile != null)
-        {
-            _turnstile.Release();
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            throw;
         }
-
-        UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-        slot = default;
-        return false;
     }
 
     public async ValueTask<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
@@ -598,41 +613,57 @@ internal sealed class PoolGovernor : IDisposable
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
-        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-        var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
-        if (useTurnstileGate && _turnstile != null)
+        try
         {
-            if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+            if (useTurnstileGate && _turnstile != null)
             {
-                UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-                return (false, default);
+                if (!await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+                {
+                    UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+                    return (false, default);
+                }
+
+                turnstileAcquired = true;
+
+                if (!_holdTurnstile)
+                {
+                    _turnstile.Release();
+                    turnstileAcquired = false;
+                }
             }
 
-            turnstileAcquired = true;
+            if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+                writerTurnstileInterestRegistered = false;
+                return (true, OnAcquired(waitStart, releaseWriterInterestOnRelease));
+            }
 
-            if (!_holdTurnstile)
+            // Slot miss — release turnstile without recording hold metrics.
+            // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
+            if (turnstileAcquired && _turnstile != null)
             {
                 _turnstile.Release();
-                turnstileAcquired = false;
             }
-        }
 
-        if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            return (false, default);
+        }
+        catch
         {
-            var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-            writerTurnstileInterestRegistered = false;
-            return (true, OnAcquired(waitStart, releaseWriterInterestOnRelease));
-        }
+            // A cancelled token makes WaitAsync(0, cancellationToken) throw
+            // OperationCanceledException synchronously, bypassing every manual cleanup
+            // branch above — clean up here instead.
+            if (turnstileAcquired && _turnstile != null)
+            {
+                _turnstile.Release();
+            }
 
-        // Slot miss — release turnstile without recording hold metrics.
-        // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
-        if (turnstileAcquired && _turnstile != null)
-        {
-            _turnstile.Release();
+            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            throw;
         }
-
-        UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-        return (false, default);
     }
 
     public Task WaitForDrainAsync(CancellationToken cancellationToken = default)

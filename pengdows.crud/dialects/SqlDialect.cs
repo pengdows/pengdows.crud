@@ -1460,7 +1460,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.MariaDb:
             case SupportedDatabase.TiDb:
             case SupportedDatabase.AuroraMySql:
-                return errorCode == 1062;
+                // 1169 (ER_DUP_UNIQUE): duplicate entry violating a unique index, distinct from
+                // 1062's primary-key/unique-key path — MySqlExceptionTranslator already treats
+                // both as unique violations.
+                return errorCode is 1062 or 1169;
 
             case SupportedDatabase.Oracle:
                 return errorCode == 1;
@@ -1490,6 +1493,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // Db2 SQLCODE -803 / SQLSTATE 23505
                 return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Snowflake:
+                // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at
+                // runtime (SnowflakeDialect.SupportsUniqueConstraints = false) — this exception
+                // category structurally cannot occur, so explicit false instead of falling
+                // through to the generic message-based default.
+                return false;
+
             default:
                 return MessageIndicatesUniqueViolation(ex.Message);
         }
@@ -1517,7 +1527,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.MariaDb:
             case SupportedDatabase.TiDb:
             case SupportedDatabase.AuroraMySql:
-                return errorCode is 1451 or 1452;
+                // 1216 (ER_NO_REFERENCED_ROW): insert/update violates a foreign key constraint,
+                // distinct from 1451/1452's delete/update-on-parent path — MySqlExceptionTranslator
+                // already treats all three as foreign-key violations.
+                return errorCode is 1216 or 1451 or 1452;
 
             case SupportedDatabase.Oracle:
                 return errorCode is 2291 or 2292;
@@ -1535,6 +1548,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
                 return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
                        string.Equals(sqlState, "23504", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Snowflake:
+                // Snowflake parses FOREIGN KEY constraint DDL but never enforces it at runtime
+                // (SnowflakeDialect.EnforcesForeignKeyConstraints = false) — this exception
+                // category structurally cannot occur.
+                return false;
 
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
@@ -1586,6 +1605,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // Db2 SQLCODE -407 / SQLSTATE 23502
                 return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Snowflake:
+                // NOT NULL is the one constraint Snowflake actually enforces at runtime (error
+                // 100072, SQLSTATE 23502). Message wording is "NULL result in a non-nullable
+                // column" — the generic default's "not null"/"not-null" check below does not
+                // match "non-nullable", so this needs its own case.
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
+                       message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase);
+
             default:
                 return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("not null", StringComparison.OrdinalIgnoreCase);
@@ -1631,6 +1658,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.Db2:
                 // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
                 return string.Equals(sqlState, "23513", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Snowflake:
+                // Snowflake parses CHECK constraint DDL but never enforces it at runtime
+                // (SnowflakeDialect.SupportsCheckConstraints = false) — this exception category
+                // structurally cannot occur.
+                return false;
 
             default:
                 return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
@@ -2786,7 +2819,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
 
-                if (errorCode is 1048 or 1062 or 1451 or 1452 or 3819 or 4025)
+                if (errorCode is 1048 or 1062 or 1169 or 1216 or 1451 or 1452 or 3819 or 4025)
                 {
                     category = DbErrorCategory.ConstraintViolation;
                     return true;
@@ -2814,6 +2847,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 break;
 
             case SupportedDatabase.Sqlite:
+                // SQLITE_READONLY = 8: write attempted on a read-only connection.
+                // SqliteExceptionTranslator already classifies this as ReadOnlyViolation.
+                if (errorCode == 8)
+                {
+                    category = DbErrorCategory.ReadOnlyViolation;
+                    return true;
+                }
+
                 if (errorCode == 19 ||
                     errorCode == 1555 ||
                     errorCode == 2067 ||
@@ -2887,6 +2928,23 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
                 // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations
                 if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Snowflake:
+                // NOT NULL (SQLSTATE 23502) is the one constraint Snowflake actually enforces —
+                // see IsUniqueViolation/IsForeignKeyViolation/IsCheckConstraintViolation's
+                // Snowflake cases for why the other ANSI class-23 codes can't occur here.
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+
+                if (ex.Message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase))
                 {
                     category = DbErrorCategory.ConstraintViolation;
                     return true;

@@ -119,6 +119,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private readonly bool _dataSourceProvided;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
+
+    /// <summary>Exposes the context's logger to connection strategies in the same assembly.</summary>
+    internal ILogger Logger => _logger;
     private IConnectionStrategy _connectionStrategy = null!;
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
@@ -241,12 +244,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             return true;
         }
 
-        if (_explicitReadOnlyConnectionString)
-        {
-            return true;
-        }
-
-        // DuckDB read-only connections can lock out concurrent writers when sharing the same file.
+        // DuckDB read-only connections can lock out concurrent writers when sharing the same
+        // file. This safety rule must be evaluated before the explicit-connection-string check
+        // that used to follow it — an explicit ReadOnlyConnectionString does not change DuckDB's
+        // file-locking behavior, so it must not bypass this guard.
         if (_dataSourceInfo?.Product == SupportedDatabase.DuckDB)
         {
             return false;
