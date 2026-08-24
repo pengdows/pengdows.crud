@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net8.0 only, deliberately not multi-targeted like the sibling stormgate test projects:
+    Pomelo.EntityFrameworkCore.MySql does not yet support EF Core 10 (tracked upstream, still
+    open as of Aug 2026), which would make net8.0;net10.0 a dependency dead end for this project.
+    The question this project answers — does provider X accept an externally-supplied fakeDb
+    connection at all — is about EF provider package compatibility, not .NET runtime version, so
+    net8.0 alone is sufficient.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>../TestResults/stormgate-efcore-multiprovider-coverage/</CoverletOutput>
+    <Threshold>0</Threshold>
+    <ThresholdType>line</ThresholdType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="coverlet.msbuild" Version="8.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- One EF Core provider package per pengdows.crud-supported-database family that has a
+       viable EF Core provider. DuckDB and Db2 are deliberately excluded here (not silently
+       skipped elsewhere): DuckDB's providers are either very new/unproven or read-only-only,
+       and IBM's Db2 provider has documented compatibility breaks with EF Core 9+. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
+    <PackageReference Include="Oracle.EntityFrameworkCore" Version="8.23.60" />
+    <!-- FirebirdSql's own package major version does not track EF Core's version number the way
+         other providers' do — verified via the NuGet registration API's dependencyGroups: 10.0.0
+         depends on Microsoft.EntityFrameworkCore.Relational [7.0.10, ), not EF Core 8; 11.0.0 is
+         the first version depending on [8.0.4, ) and the first to target net8.0. -->
+    <PackageReference Include="FirebirdSql.EntityFrameworkCore.Firebird" Version="11.0.0" />
+    <PackageReference Include="EFCore.Snowflake" Version="8.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\pengdows.stormgate.EntityFrameworkCore\pengdows.stormgate.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj" />
+  </ItemGroup>
+
+</Project>

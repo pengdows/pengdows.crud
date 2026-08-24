@@ -55,6 +55,15 @@ queuing indefinitely or letting every caller pile onto the database at once. Cal
 expected to handle that — retry with backoff, return a 503, trip a circuit breaker — the point
 is failing fast instead of contributing to the storm.
 
+**The exact exception type your code sees can depend on the provider.** SQL Server's *default*
+(non-retrying) execution strategy classifies `TimeoutException` as transient-looking and wraps
+it in its own `InvalidOperationException` (suggesting `EnableRetryOnFailure`) rather than letting
+it propagate raw — confirmed by running this interceptor against every EF Core provider this
+package has been tested with (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, Firebird,
+Snowflake). If you catch by exact type, catch `TimeoutException` *or* check
+`ex.InnerException`/`ex.Message` for one whose message contains "storm gate" — don't assume the
+saturation exception always propagates unwrapped.
+
 ## Critical: Share One Instance
 
 `StormGateConnectionInterceptor` holds the semaphore that does the actual throttling. If a
