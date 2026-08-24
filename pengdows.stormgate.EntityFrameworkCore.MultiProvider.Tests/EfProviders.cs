@@ -32,9 +32,12 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 /// provider-agnostic ADO.NET fake. This file merely EXPOSES, through direct reproduction, a
 /// pre-existing fact about how each provider package happens to be written. It also says nothing
 /// about production viability: every Tier-1 provider works fine against a real database
-/// regardless of its Tier-2 result, since a real database engine has no casting problem with
-/// itself — Tier 2 is purely about whether fakeDb can stand in for that provider's own connection
-/// in a unit test.
+/// regardless of its Tier-2 result. In normal production use, the provider's own ADO.NET
+/// implementation is what constructs the concrete command/parameter/reader instances it then
+/// casts back to, so those casts always succeed — the failure mode only exists when something
+/// other than that provider's own driver constructs the object, which fakeDb does deliberately
+/// and a real connection never would. Tier 2 is purely about whether fakeDb can stand in for that
+/// provider's own connection in a unit test.
 ///
 /// Confirmed by direct reproduction for every entry below, not assumed:
 ///

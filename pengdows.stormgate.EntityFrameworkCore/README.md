@@ -41,9 +41,12 @@ satisfying the second, and only the first matters for production use of this pac
   code** — not anything StormGate, pengdows.crud, or fakeDb does. StormGate has no involvement in
   Tier 2 at all; fakeDb is a generic, provider-agnostic ADO.NET fake maintained by pengdows.crud,
   and this table merely *exposes*, through testing, a pre-existing fact about how each provider
-  package happens to be written. It is **not a production concern either way**: a real database
-  engine has no casting problem with itself, so every Tier-1 ✅ below is fully safe to run this
-  package against in production regardless of its Tier 2 result.
+  package happens to be written. It is **not a production concern either way**: in normal
+  production use, the provider's own ADO.NET implementation creates the concrete command,
+  parameter, and reader instances it then casts back to, so those casts always succeed — the
+  failure mode only exists when something other than that provider's own driver constructs the
+  object, which fakeDb does deliberately and a real connection never would. Every Tier-1 ✅ below
+  is fully safe to run this package against in production regardless of its Tier 2 result.
 
 | Provider | Tier 1 (admission control) | Tier 2 (fakeDb unit-testable) | Tier 2 caveat — cast inside that provider's own code |
 |---|---|---|---|
