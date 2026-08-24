@@ -31,11 +31,18 @@ public sealed class EntityFrameworkCoreFakeDbErrorTranslationTests
         db.Attach(customer);
         customer.Name = "Grace";
 
-        // The row EF expects to update is already gone (or was concurrently modified) —
-        // simulated here simply by having the UPDATE report 0 rows affected.
-        fake.EnqueueNonQueryResult(0);
+        // The row EF expects to update is already gone (or was concurrently modified). SQLite's
+        // SaveChanges reads modification results back via ExecuteReaderAsync ("SELECT changes()"),
+        // not ExecuteNonQueryAsync (see the sibling test below) — an empty reader result set is
+        // what actually simulates "0 rows affected" here. An EnqueueNonQueryResult(0) call would
+        // be silently unconsumed dead setup; the assertion below locks that in so a future
+        // EF/SQLite provider change back to the non-query path couldn't silently invalidate what
+        // this test claims to prove without failing loudly instead.
+        fake.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => db.SaveChangesAsync());
+
+        Assert.Empty(fake.ExecutedNonQueryCommands);
     }
 
     [Fact]
@@ -69,6 +76,7 @@ public sealed class EntityFrameworkCoreFakeDbErrorTranslationTests
 
         var thrown = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         Assert.Same(providerFailure, thrown.InnerException);
+        Assert.Empty(fake.ExecutedNonQueryCommands);
     }
 
     private sealed class CustomerContext(DbContextOptions<CustomerContext> options) : DbContext(options)
