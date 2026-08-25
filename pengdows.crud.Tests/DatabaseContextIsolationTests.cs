@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
-using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -22,8 +21,10 @@ public class DatabaseContextIsolationTests
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Snapshot)]
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.FastWithRisks, IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.YugabyteDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.DuckDB, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
@@ -50,39 +51,32 @@ public class DatabaseContextIsolationTests
         Assert.Equal(expected, tx.IsolationLevel);
     }
 
-    /// <summary>
-    /// Documents that SafeNonBlockingReads requires RCSI — a SQL Server-only feature.
-    /// PostgreSQL has no equivalent; snapshot isolation there is serializable, not read-committed snapshot.
-    /// </summary>
-    [Fact]
-    public void BeginTransaction_ProfileRequiresRcsi_Throws()
+    // Regression: BeginTransaction(IsolationProfile.SafeNonBlockingReads) used to hardcode a
+    // `_product is PostgreSql or YugabyteDb` check and throw TransactionModeNotSupportedException,
+    // on the mistaken premise that PostgreSQL has no non-blocking-safe-reads equivalent. PostgreSQL's
+    // REPEATABLE READ is MVCC-snapshot-based, fully non-blocking, and — unlike the ANSI baseline —
+    // also prevents phantom reads for the transaction's lifetime, so it is a correct exact match.
+    // See PostgreSqlDialect.GetIsolationProfileMapping/GetIsolationGuarantees.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public void BeginTransaction_SafeNonBlockingReads_ResolvesForPostgresCompatibleDatabases(SupportedDatabase product)
     {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
-            new fakeDbFactory(SupportedDatabase.PostgreSql.ToString()));
-        Assert.Throws<TransactionModeNotSupportedException>(() =>
-            context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product.ToString()));
+        using var tx = context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Theory]
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.YugabyteDb)]
-    public void BeginTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    public async Task BeginTransactionAsync_SafeNonBlockingReads_ResolvesForPostgresCompatibleDatabases(SupportedDatabase product)
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
             new fakeDbFactory(product.ToString()));
-        Assert.Throws<TransactionModeNotSupportedException>(() =>
-            context.BeginTransaction(IsolationProfile.SafeNonBlockingReads));
-    }
-
-    [Theory]
-    [InlineData(SupportedDatabase.PostgreSql)]
-    [InlineData(SupportedDatabase.YugabyteDb)]
-    public async Task BeginTransactionAsync_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
-    {
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}",
-            new fakeDbFactory(product.ToString()));
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
-            await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Theory]

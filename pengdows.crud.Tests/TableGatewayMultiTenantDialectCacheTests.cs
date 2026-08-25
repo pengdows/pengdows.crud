@@ -227,8 +227,9 @@ public class TableGatewayMultiTenantDialectCacheTests
 
         public ITransactionContext BeginTransaction(
             IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write)
-            => _inner.BeginTransaction(isolationProfile, executionType);
+            ExecutionType executionType = ExecutionType.Write,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
+            => _inner.BeginTransaction(isolationProfile, executionType, policy);
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(
             IsolationLevel? isolationLevel = null,
@@ -239,8 +240,9 @@ public class TableGatewayMultiTenantDialectCacheTests
         public ValueTask<ITransactionContext> BeginTransactionAsync(
             IsolationProfile isolationProfile,
             ExecutionType executionType = ExecutionType.Write,
-            CancellationToken cancellationToken = default)
-            => _inner.BeginTransactionAsync(isolationProfile, executionType, cancellationToken);
+            CancellationToken cancellationToken = default,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
+            => _inner.BeginTransactionAsync(isolationProfile, executionType, cancellationToken, policy);
 
         public string GenerateParameterName() => _inner.GenerateParameterName();
 

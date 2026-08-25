@@ -113,7 +113,13 @@ public class IsolationResolverTests
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql), false, false);
 
-        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        // PostgreSQL's REPEATABLE READ is MVCC-snapshot-based (non-blocking) and, unlike the ANSI
+        // baseline, also prevents phantom reads for the transaction's lifetime — see
+        // https://www.postgresql.org/docs/current/transaction-iso.html#XACT-REPEATABLE-READ. It is
+        // therefore the correct exact match for SafeNonBlockingReads, not ReadCommitted (which
+        // re-snapshots every statement) and not Serializable (which trades non-blocking for
+        // write-skew protection nobody asked for).
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.ReadUncommitted));
@@ -275,32 +281,45 @@ public class IsolationResolverTests
         Assert.False(resolution.Degraded);
     }
 
+    // Regression: IsolationResolver used to hardcode a `_product is PostgreSql or YugabyteDb` check
+    // in a transaction-only resolution path (ResolveForTransactionWithDetail) and throw
+    // TransactionModeNotSupportedException for SafeNonBlockingReads, on the assumption that
+    // PostgreSQL has no non-blocking-safe-reads equivalent. That premise was wrong: PostgreSQL's
+    // REPEATABLE READ takes a transaction-start MVCC snapshot, is fully non-blocking, and (unlike
+    // the ANSI baseline) also prevents phantom reads — see
+    // https://www.postgresql.org/docs/current/transaction-iso.html#XACT-REPEATABLE-READ. There is
+    // no separate "for transaction" resolution path or product switch anymore: PostgreSqlDialect
+    // (inherited by YugabyteDb) now maps SafeNonBlockingReads to RepeatableRead directly, and
+    // resolution flows through the same generic Resolve/ResolveWithDetail every other database uses.
     [Theory]
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.YugabyteDb)]
-    public void ResolveForTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    public void Resolve_SafeNonBlockingReads_PostgresCompatibleDatabases_ResolvesToRepeatableRead(SupportedDatabase product)
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), false, false);
 
-        Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
-            resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
+
+        Assert.Equal(IsolationLevel.RepeatableRead, resolution.Level);
+        Assert.False(resolution.Degraded);
+        Assert.Equal(IsolationResolutionKind.Exact, resolution.Kind);
     }
 
     [Fact]
-    public void ResolveForTransaction_SqlServer_SafeNonBlockingReads_ReturnsResolvedLevel()
+    public void Resolve_SqlServer_SafeNonBlockingReads_ReturnsResolvedLevel()
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, true);
 
         Assert.Equal(IsolationLevel.Snapshot,
-            resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+            resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
     }
 
     [Fact]
-    public void ResolveForTransaction_StrictConsistency_NeverThrowsForPostgresCompatibleDatabases()
+    public void Resolve_StrictConsistency_NeverThrowsForPostgresCompatibleDatabases()
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.PostgreSql), false, false);
 
         Assert.Equal(IsolationLevel.Serializable,
-            resolver.ResolveForTransaction(IsolationProfile.StrictConsistency));
+            resolver.Resolve(IsolationProfile.StrictConsistency));
     }
 }

@@ -253,10 +253,15 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Begins a transaction using a portable IsolationProfile abstraction.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
+    /// <paramref name="policy"/> controls whether a stronger and/or weaker level may be substituted
+    /// when the database's own ideal mapping for <paramref name="isolationProfile"/> isn't directly
+    /// available; the default (<see cref="IsolationResolutionPolicy.AllowHigher"/>) never silently
+    /// weakens isolation.
     /// </summary>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write);
+        ExecutionType executionType = ExecutionType.Write,
+        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher);
 
     /// <summary>
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
@@ -270,11 +275,16 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
+    /// <paramref name="policy"/> controls whether a stronger and/or weaker level may be substituted
+    /// when the database's own ideal mapping for <paramref name="isolationProfile"/> isn't directly
+    /// available; the default (<see cref="IsolationResolutionPolicy.AllowHigher"/>) never silently
+    /// weakens isolation.
     /// </summary>
     ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher);
 
     /// <summary>
     /// Generates a unique parameter name for the current operation (e.g., p1, p2, p42).

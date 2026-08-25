@@ -33,9 +33,9 @@ method pengdows.crud.IDataReaderMapper::LoadAsync<T>(pengdows.crud.wrappers.ITra
 method pengdows.crud.IDataReaderMapper::StreamAsync<T>(pengdows.crud.wrappers.ITrackedReader, pengdows.crud.IMapperOptions, System.Threading.CancellationToken) -> System.Collections.Generic.IAsyncEnumerable`1<T>
 method pengdows.crud.IDataSourceInformation::GetCompatibilityWarning() -> string
 method pengdows.crud.IDatabaseContext::BeginTransaction(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
-method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType) -> pengdows.crud.ITransactionContext
+method pengdows.crud.IDatabaseContext::BeginTransaction(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, pengdows.crud.enums.IsolationResolutionPolicy) -> pengdows.crud.ITransactionContext
 method pengdows.crud.IDatabaseContext::BeginTransactionAsync(System.Nullable`1<System.Data.IsolationLevel>, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
-method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
+method pengdows.crud.IDatabaseContext::BeginTransactionAsync(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.ExecutionType, System.Threading.CancellationToken, pengdows.crud.enums.IsolationResolutionPolicy) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ITransactionContext>
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.IDatabaseContext::CreateDbParameter<T>(string, System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter
@@ -247,7 +247,9 @@ method pengdows.crud.dialects.ISqlDialect::WrapObjectName(string) -> string
 method pengdows.crud.dialects.ISqlDialect::WrapSimpleName(string) -> string
 method pengdows.crud.isolation.IIsolationResolver::GetSupportedLevels() -> System.Collections.Generic.IReadOnlySet`1<System.Data.IsolationLevel>
 method pengdows.crud.isolation.IIsolationResolver::Resolve(pengdows.crud.enums.IsolationProfile) -> System.Data.IsolationLevel
+method pengdows.crud.isolation.IIsolationResolver::Resolve(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.IsolationResolutionPolicy) -> System.Data.IsolationLevel
 method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.crud.enums.IsolationProfile) -> pengdows.crud.isolation.IsolationResolution
+method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.IsolationResolutionPolicy) -> pengdows.crud.isolation.IsolationResolution
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext

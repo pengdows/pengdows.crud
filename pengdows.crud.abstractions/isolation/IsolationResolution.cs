@@ -14,5 +14,23 @@ namespace pengdows.crud.isolation;
 /// <param name="Degraded">
 /// True when the resolver could not honor the requested semantics and fell back to a less
 /// capable isolation level. Consumers can surface a warning or take alternative action.
+/// Equivalent to <c>Kind == IsolationResolutionKind.Lower</c>.
 /// </param>
-public readonly record struct IsolationResolution(IsolationProfile Profile, IsolationLevel Level, bool Degraded);
+/// <param name="Kind">
+/// How <see cref="Level"/> relates to the guarantees <see cref="Profile"/> calls for.
+/// </param>
+public readonly record struct IsolationResolution(
+    IsolationProfile Profile,
+    IsolationLevel Level,
+    bool Degraded,
+    IsolationResolutionKind Kind)
+{
+    /// <summary>
+    /// Constructs a resolution, deriving <see cref="Kind"/> from <paramref name="degraded"/> for
+    /// callers that don't yet distinguish an exact match from a strictly-stronger substitute.
+    /// </summary>
+    public IsolationResolution(IsolationProfile profile, IsolationLevel level, bool degraded)
+        : this(profile, level, degraded, degraded ? IsolationResolutionKind.Lower : IsolationResolutionKind.Exact)
+    {
+    }
+}

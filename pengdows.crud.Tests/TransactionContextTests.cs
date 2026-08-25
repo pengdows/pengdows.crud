@@ -476,7 +476,8 @@ public class TransactionContextTests
             throw new NotSupportedException();
         }
 
-        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType)
+        public ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
         {
             throw new NotSupportedException();
         }
@@ -490,7 +491,8 @@ public class TransactionContextTests
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
         {
             throw new NotSupportedException();
         }

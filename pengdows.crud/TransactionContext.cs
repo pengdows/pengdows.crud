@@ -535,7 +535,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     ProcWrappingStyle IDatabaseContext.ProcWrappingStyle => _context.ProcWrappingStyle;
 
     ITransactionContext IDatabaseContext.BeginTransaction(IsolationProfile isolationProfile,
-        ExecutionType executionType)
+        ExecutionType executionType, IsolationResolutionPolicy policy)
     {
         throw new InvalidOperationException("Cannot begin a nested transaction from TransactionContext.");
     }
@@ -553,7 +553,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     ValueTask<ITransactionContext> IDatabaseContext.BeginTransactionAsync(IsolationProfile isolationProfile,
-        ExecutionType executionType, CancellationToken cancellationToken)
+        ExecutionType executionType, CancellationToken cancellationToken, IsolationResolutionPolicy policy)
     {
         return ValueTask.FromException<ITransactionContext>(
             new InvalidOperationException("Cannot begin a nested transaction from TransactionContext."));

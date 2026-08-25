@@ -377,17 +377,11 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
-            {
-                await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
-                {
-                    await using var _ = context.BeginTransaction(
-                        IsolationProfile.SafeNonBlockingReads,
-                        ExecutionType.Write);
-                    await Task.CompletedTask;
-                });
-                return;
-            }
+            // PostgreSQL/YugabyteDb: REPEATABLE READ is MVCC-snapshot-based (non-blocking) and,
+            // unlike the ANSI baseline, also prevents phantom reads for the transaction's
+            // lifetime — see PostgreSqlDialect.GetIsolationProfileMapping/GetIsolationGuarantees.
+            // It's a correct exact match for SafeNonBlockingReads, so this now runs the same
+            // assertion path as every other provider instead of expecting a throw.
 
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1200);

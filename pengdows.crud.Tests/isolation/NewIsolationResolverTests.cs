@@ -14,7 +14,8 @@ public class NewIsolationResolverTests
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.YugabyteDb), false, false);
 
-        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        // YugabyteDb inherits PostgreSqlDialect's isolation mapping/guarantee data unchanged.
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
 

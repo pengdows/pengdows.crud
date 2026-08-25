@@ -12,7 +12,6 @@ using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
-using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.@internal;
 using Xunit;
@@ -22,18 +21,19 @@ namespace pengdows.crud.Tests;
 public class CoverageRaiseRestQuickWinsTests
 {
     /// <summary>
-    /// Documents that SafeNonBlockingReads requires RCSI — a SQL Server-only feature.
-    /// PostgreSQL has no RCSI equivalent; this async path must also throw.
+    /// PostgreSQL's REPEATABLE READ is a correct, non-blocking exact match for SafeNonBlockingReads
+    /// (MVCC snapshot, no phantom reads within the transaction) — see
+    /// PostgreSqlDialect.GetIsolationProfileMapping/GetIsolationGuarantees. This must not throw.
     /// </summary>
     [Fact]
-    public async Task BeginTransactionAsync_SafeNonBlockingReadsOnPostgreSql_Throws()
+    public async Task BeginTransactionAsync_SafeNonBlockingReadsOnPostgreSql_ResolvesToRepeatableRead()
     {
         await using var context = new DatabaseContext(
             "Host=localhost;Database=test",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(
-            async () => await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Fact]

@@ -5,7 +5,6 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
-using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -99,15 +98,18 @@ public class InvalidTransactionTypeTests
     // Async path mirrors sync path for the same validations
     // -------------------------------------------------------------------------
 
+    // Regression: PostgreSQL's REPEATABLE READ is a correct, non-blocking exact match for
+    // SafeNonBlockingReads (MVCC snapshot, no phantom reads within the transaction) — see
+    // PostgreSqlDialect.GetIsolationProfileMapping/GetIsolationGuarantees. This must not throw.
     [Fact]
-    public async Task BeginTransactionAsync_PostgreSql_SafeNonBlockingReads_ThrowsTransactionModeNotSupportedException()
+    public async Task BeginTransactionAsync_PostgreSql_SafeNonBlockingReads_ResolvesToRepeatableRead()
     {
         var context = new DatabaseContext(
             $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
-            await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Fact]

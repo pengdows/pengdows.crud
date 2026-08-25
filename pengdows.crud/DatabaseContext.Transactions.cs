@@ -46,9 +46,10 @@ public partial class DatabaseContext
     /// <inheritdoc/>
     public ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write)
+        ExecutionType executionType = ExecutionType.Write,
+        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
     {
-        var level = ResolveIsolationProfileForTransaction(isolationProfile);
+        var level = ResolveIsolationProfileForTransaction(isolationProfile, policy);
         return BeginTransaction(level, executionType);
     }
 
@@ -67,23 +68,25 @@ public partial class DatabaseContext
     public async ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
     {
-        var level = ResolveIsolationProfileForTransaction(isolationProfile);
+        var level = ResolveIsolationProfileForTransaction(isolationProfile, policy);
         return await BeginTransactionAsync(level, executionType, cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <summary>
     /// Resolves an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> for
-    /// <see cref="BeginTransaction(IsolationProfile,ExecutionType)"/>/<see cref="BeginTransactionAsync(IsolationProfile,ExecutionType,CancellationToken)"/>,
+    /// <see cref="BeginTransaction(IsolationProfile,ExecutionType,IsolationResolutionPolicy)"/>/
+    /// <see cref="BeginTransactionAsync(IsolationProfile,ExecutionType,CancellationToken,IsolationResolutionPolicy)"/>,
     /// logging a warning when the engine can't honor the requested profile's guarantee (e.g.
     /// StrictConsistency resolving to something weaker than Serializable on TiDB/Snowflake) —
     /// otherwise that downgrade would be entirely silent to the caller.
     /// </summary>
-    private IsolationLevel ResolveIsolationProfileForTransaction(IsolationProfile isolationProfile)
+    private IsolationLevel ResolveIsolationProfileForTransaction(IsolationProfile isolationProfile, IsolationResolutionPolicy policy)
     {
-        var resolution = _isolationResolver.ResolveForTransactionWithDetail(isolationProfile);
+        var resolution = _isolationResolver.ResolveWithDetail(isolationProfile, policy);
         if (resolution.Degraded)
         {
             _logger.LogWarning(

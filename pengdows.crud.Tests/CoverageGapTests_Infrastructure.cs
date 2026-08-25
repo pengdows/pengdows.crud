@@ -161,7 +161,8 @@ public class CoverageGapTests_Infrastructure
             throw new NotImplementedException();
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write) =>
+            ExecutionType executionType = ExecutionType.Write,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher) =>
             throw new NotImplementedException();
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
@@ -170,7 +171,8 @@ public class CoverageGapTests_Infrastructure
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType = ExecutionType.Write,
-            CancellationToken cancellationToken = default) => throw new NotImplementedException();
+            CancellationToken cancellationToken = default,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher) => throw new NotImplementedException();
 
         public string GenerateParameterName() => throw new NotImplementedException();
 

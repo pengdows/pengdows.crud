@@ -34,6 +34,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.isolation;
 using pengdows.crud.@internal;
 using pengdows.crud.types;
 using pengdows.crud.types.valueobjects;
@@ -143,6 +144,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
         [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
         [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
         [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
+    /// <summary>
+    /// The <see cref="IsolationGuarantees"/> a given <see cref="IsolationLevel"/> actually provides
+    /// on this database. Used exclusively by <see cref="pengdows.crud.isolation.IsolationResolver"/>
+    /// to compare levels as a partial order instead of by raw enum value — the authoritative source
+    /// for "what does this level really guarantee here" lives on the dialect, not as a separate
+    /// per-database switch. The base implementation assumes the conservative, lock-based ANSI SQL
+    /// semantics; override it for engines whose MVCC behavior gives a level stronger guarantees
+    /// than the ANSI baseline (e.g. PostgreSQL's snapshot-based RepeatableRead).
+    /// </summary>
+    internal virtual IsolationGuarantees GetIsolationGuarantees(IsolationLevel level) => level switch
+    {
+        IsolationLevel.ReadUncommitted => IsolationGuarantees.None,
+        IsolationLevel.ReadCommitted => IsolationGuarantees.NoDirtyReads,
+        IsolationLevel.RepeatableRead => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NoNonRepeatableReads,
+        IsolationLevel.Serializable => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NoNonRepeatableReads |
+                                        IsolationGuarantees.NoPhantomReads | IsolationGuarantees.NoWriteSkew,
+        IsolationLevel.Snapshot => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NoNonRepeatableReads |
+                                    IsolationGuarantees.NoPhantomReads | IsolationGuarantees.NonBlockingReads,
+        _ => IsolationGuarantees.None
     };
 
     protected readonly DbProviderFactory Factory;

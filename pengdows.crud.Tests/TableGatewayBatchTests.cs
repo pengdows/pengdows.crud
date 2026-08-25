@@ -1367,9 +1367,10 @@ public class TableGatewayBatchTests : IAsyncLifetime
         }
 
         public ITransactionContext BeginTransaction(IsolationProfile isolationProfile,
-            ExecutionType executionType = ExecutionType.Write)
+            ExecutionType executionType = ExecutionType.Write,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
         {
-            return _context.BeginTransaction(isolationProfile, executionType);
+            return _context.BeginTransaction(isolationProfile, executionType, policy);
         }
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? isolationLevel = null,
@@ -1381,9 +1382,10 @@ public class TableGatewayBatchTests : IAsyncLifetime
 
         public ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile,
             ExecutionType executionType = ExecutionType.Write,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher)
         {
-            return _context.BeginTransactionAsync(isolationProfile, executionType, cancellationToken);
+            return _context.BeginTransactionAsync(isolationProfile, executionType, cancellationToken, policy);
         }
 
         public string GenerateParameterName()

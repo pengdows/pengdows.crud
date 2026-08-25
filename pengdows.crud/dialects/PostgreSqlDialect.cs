@@ -25,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.isolation;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -247,11 +248,33 @@ internal class PostgreSqlDialect : SqlDialect
         IsolationLevel.Serializable
     };
 
+    // PostgreSQL's REPEATABLE READ takes a transaction-start snapshot: it is fully non-blocking
+    // (readers never block writers or vice versa) and, unlike the ANSI baseline, also prevents
+    // phantom reads for the lifetime of the transaction — see
+    // https://www.postgresql.org/docs/current/transaction-iso.html#XACT-REPEATABLE-READ. READ
+    // COMMITTED re-snapshots on every statement, so it does not prevent non-repeatable/phantom
+    // reads across statements in the same transaction even though each individual statement is
+    // itself non-blocking. RepeatableRead is therefore the correct exact match for
+    // SafeNonBlockingReads here — Serializable would add write-skew protection nobody asked for
+    // at the cost of the non-blocking guarantee the profile exists to provide (PostgreSQL's
+    // Serializable uses SSI, which aborts conflicting transactions rather than blocking, but is
+    // intentionally not treated as interchangeable with Snapshot/RepeatableRead's guarantees here).
     internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
     {
-        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
         [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
         [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
+
+    // Both ReadCommitted and RepeatableRead are MVCC-snapshot-based here, unlike the lock-based
+    // ANSI baseline SqlDialect assumes. RepeatableRead additionally prevents non-repeatable and
+    // phantom reads for the whole transaction (see comment on GetIsolationProfileMapping above).
+    internal override IsolationGuarantees GetIsolationGuarantees(IsolationLevel level) => level switch
+    {
+        IsolationLevel.ReadCommitted => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NonBlockingReads,
+        IsolationLevel.RepeatableRead => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NoNonRepeatableReads |
+                                          IsolationGuarantees.NoPhantomReads | IsolationGuarantees.NonBlockingReads,
+        _ => base.GetIsolationGuarantees(level)
     };
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
     public override bool SupportsSavepoints => true;
