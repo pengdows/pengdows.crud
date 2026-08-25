@@ -21,7 +21,20 @@ public class DatabaseContextGovernorDisposalTests
             ConnectionString = "Data Source=file.db;EmulatedProduct=Sqlite",
             DbMode = DbMode.Standard,
             ProviderName = "fake",
-            PoolAcquireTimeout = TimeSpan.FromMilliseconds(250)
+            // Also used as WaitForDrainAsync's deadline during disposal (DatabaseContext.
+            // DisposeGovernorAfterDrain(Async)). This test's intent is to prove drain-then-dispose
+            // ordering, not to race a tight timeout — a short value here flaked under CI's shared
+            // runners: connection.Dispose() releases the slot synchronously, but the drain signal's
+            // continuation still has to be scheduled, and heavy parallel-test thread-pool
+            // contention occasionally pushed that scheduling past a tight deadline. When it does,
+            // WaitForDrainAsync's TimeoutException is caught and logged (deliberately, to avoid
+            // disposing the governor's semaphore while a lease might still be genuinely
+            // outstanding — see the ReleaseToken ordering comment in PoolGovernor.cs) rather than
+            // rethrown, so governor.Dispose() is silently skipped and the final
+            // Assert.Throws<ObjectDisposedException> fails with no exception at all. Generous
+            // headroom here costs nothing — the wait still completes almost instantly under normal
+            // conditions since the lease is released moments before DisposeAsync is awaited.
+            PoolAcquireTimeout = TimeSpan.FromSeconds(5)
         };
 
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
