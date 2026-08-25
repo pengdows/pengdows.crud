@@ -7,6 +7,7 @@ using pengdows.crud.@internal;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.strategies.connection;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -161,6 +162,55 @@ public class KeepAliveSentinelReconnectTests
 
         // Every fakeDbConnection this test created (original sentinel + the replacement the
         // repair opened) must end up disposed — none left open and orphaned.
+        Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
+    }
+
+    // Narrower residual case the test above cannot reach: AttachPinnedSlotIfNeeded's early-return
+    // branch (governance disabled/forbidden for this context) has no disposed-context check of its
+    // own — the ObjectDisposedException the repair sequence relies on is purely incidental to the
+    // governed branch's SemaphoreSlim.Wait() throwing on a disposed semaphore. A ReadOnly context
+    // forces the write pool's MaxPoolSize to 0, which InitializePoolGovernors turns into a
+    // Forbidden writer governor — AttachPinnedSlotIfNeeded's guard (!_effectivePoolGovernorEnabled
+    // || _writerGovernor == null || _writerGovernor.Forbidden) takes the no-op path, so it returns
+    // cleanly even though Dispose() completed one line above it. PostDisposedCheckHook fires
+    // exactly in that window, deterministically, without needing real thread interleaving.
+    [Fact]
+    public void GetConnection_ContextDisposedBetweenDisposedCheckAndAttachPinnedSlot_UngovernedContext_DoesNotLeakTheReplacementConnection()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            EnableMetrics = true
+        };
+        var ctx = new DatabaseContext(cfg, factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+
+        KeepAliveConnectionStrategy.PostDisposedCheckHook = () =>
+        {
+            KeepAliveConnectionStrategy.PostDisposedCheckHook = null; // avoid re-entrancy
+            ctx.Dispose();
+        };
+
+        ITrackedConnection? opConnection = null;
+        try
+        {
+            opConnection = ctx.GetConnection(ExecutionType.Read);
+        }
+        catch
+        {
+            // Expected — the context is disposed underneath this call.
+        }
+        finally
+        {
+            KeepAliveConnectionStrategy.PostDisposedCheckHook = null;
+            opConnection?.Dispose();
+        }
+
         Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
     }
 }

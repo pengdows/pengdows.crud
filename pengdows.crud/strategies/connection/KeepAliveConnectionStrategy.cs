@@ -38,10 +38,16 @@ namespace pengdows.crud.strategies.connection;
 /// - All working connections are disposed immediately when released (like Standard)
 ///
 /// SPECIFIC USE CASES:
-/// - SQLite databases where you want to prevent WAL mode cleanup between operations
-/// - LocalDB instances that might shut down when no connections are active
-/// - Embedded databases that have expensive startup costs
-/// - File-based databases where keeping the engine loaded improves performance
+/// - LocalDB instances that might shut down when no connections are active — the only case
+///   DatabaseContext.CoerceMode actually selects KeepAlive for automatically (LocalDb → KeepAlive,
+///   and Best → KeepAlive for LocalDb).
+/// - Explicitly requested against a full-server database (PostgreSQL, SQL Server non-LocalDB,
+///   etc.) — honored as "safe but less functional," not a recommended default.
+///
+/// NOT a use case: SQLite/DuckDB. CoerceMode always coerces a KeepAlive request against either
+/// of them to SingleWriter instead — a pinned idle connection does nothing for the write-lock
+/// contention those engines need SingleWriter's turnstile for, so this strategy is never actually
+/// reached for them regardless of what's requested.
 ///
 /// THREAD SAFETY: Fully thread-safe. The sentinel connection reference is normally stable after
 /// initialization, but EnsureSentinelHealthy() may lazily replace it (under a lock, with a
@@ -55,6 +61,12 @@ namespace pengdows.crud.strategies.connection;
 internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 {
     private readonly object _sentinelRepairLock = new();
+
+    // Test-only hook: fires synchronously right after the disposed-context re-check inside
+    // EnsureSentinelHealthy, before SetPersistentConnection/AttachPinnedSlotIfNeeded run. Lets a
+    // test deterministically reproduce "Dispose() happens for the first time exactly in this
+    // narrow window" without real threading — mirrors TrackedConnection.OpenTimingHook's pattern.
+    internal static Action? PostDisposedCheckHook;
 
     internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
     {
@@ -149,6 +161,8 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
                 return;
             }
 
+            PostDisposedCheckHook?.Invoke();
+
             _context.SetPersistentConnection(replacement);
 
             try
@@ -161,6 +175,19 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
                 // call. The replacement is already installed as PersistentConnection at this
                 // point, so disposing it here also correctly tears down what
                 // SetPersistentConnection just set — nothing left dangling.
+                replacement.Dispose();
+                return;
+            }
+
+            // AttachPinnedSlotIfNeeded's own early-return guard (governance disabled/forbidden
+            // for this context) has no disposed-context check of its own — the
+            // ObjectDisposedException caught above is purely incidental to the governed branch's
+            // SemaphoreSlim.Wait() throwing on an already-disposed semaphore, not a deliberate
+            // signal. On an ungoverned context, AttachPinnedSlotIfNeeded returns cleanly even if
+            // Dispose() completed one line above it, so re-check explicitly rather than relying
+            // on an exception that only some configurations happen to throw.
+            if (_context.IsDisposed)
+            {
                 replacement.Dispose();
             }
         }
