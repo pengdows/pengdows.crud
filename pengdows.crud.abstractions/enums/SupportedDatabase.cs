@@ -16,9 +16,6 @@ namespace pengdows.crud.enums;
 /// <c>Unknown = 0</c> is the correct zero value for a flags enum and means the database
 /// product has not yet been detected or is not recognised.
 /// </para>
-/// <para>
-/// Values are ordered roughly by SQL standard compliance, from most to least standard-conforming.
-/// </para>
 /// </remarks>
 [Flags]
 public enum SupportedDatabase
