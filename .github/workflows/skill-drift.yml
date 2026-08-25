@@ -10,6 +10,9 @@ on:
     paths:
       - 'skills/**'
 
+permissions:
+  contents: read
+
 jobs:
   check-drift:
     name: Check skill tree drift
