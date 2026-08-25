@@ -18,6 +18,18 @@
     <CoverletOutput>../TestResults/stormgate-efcore-multiprovider-coverage/</CoverletOutput>
     <Threshold>0</Threshold>
     <ThresholdType>line</ThresholdType>
+    <!-- This project's own coverage target is pengdows.stormgate.EntityFrameworkCore (does
+         provider X accept an externally-supplied fakeDb connection at all) — pengdows.stormgate
+         itself is only reached transitively and was never meant to be measured here. Left
+         uninstrumented, coverlet still records it (one extra project-hop away from
+         pengdows.stormgate.Tests), but under a different relative source path for the same
+         StormGate.cs file. ReportGenerator's CI merge keys files by that path string, so the two
+         reports get treated as different files instead of unioned — and the narrower coverage
+         from this project (which only exercises StormGate through the EF interceptor) silently
+         wins over pengdows.stormgate.Tests's real ~96% run, sinking the pengdows.stormgate
+         coverage ratchet even though nothing regressed. Exclude it here instead of chasing path
+         normalization in coverlet/reportgenerator. -->
+    <Exclude>[pengdows.stormgate]*</Exclude>
   </PropertyGroup>
 
   <ItemGroup>

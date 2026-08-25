@@ -146,8 +146,16 @@ jobs:
 
       - name: Generate stormgate coverage report
         run: |
+            # pengdows.stormgate.Tests/pengdows.stormgate.EntityFrameworkCore.Tests are
+            # multi-targeted (net8.0;net10.0), so coverlet.msbuild writes their coverage as
+            # coverage.net8.0.cobertura.xml / coverage.net10.0.cobertura.xml, not the unsuffixed
+            # coverage.cobertura.xml the exact-literal glob below used to require — silently
+            # dropping their ~96% run from this merge and leaving only the incidental, narrower
+            # pengdows.stormgate instrumentation picked up by
+            # pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests (single-targeted, so it
+            # DOES match) to decide the ratchet. coverage*.cobertura.xml catches both forms.
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report-stormgate" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.stormgate;-pengdows.stormgate.Tests" \
