@@ -69,7 +69,12 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     int MaxOutputParameters { get; }
 
     /// <summary>
-    /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
+    /// Current number of open connections. Baseline varies by <see cref="DbMode"/>: 0 for
+    /// <see cref="DbMode.Standard"/> and <see cref="DbMode.SingleWriter"/> (both ephemeral —
+    /// connections open only for the duration of an operation, plus however many operations are
+    /// concurrently in flight), 1 or more for <see cref="DbMode.KeepAlive"/> (the pinned sentinel,
+    /// plus any concurrent ephemeral operation connections), and exactly 1 for
+    /// <see cref="DbMode.SingleConnection"/> (the single persistent connection).
     /// </summary>
     long NumberOfOpenConnections { get; }
 

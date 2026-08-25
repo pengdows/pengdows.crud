@@ -56,7 +56,7 @@ In other frameworks:
 
 ### Pillar 2: "Prego Features" (Expert-Level Built-in Solutions)
 Real-world data access has difficult edge cases that developers assume are handled by their tools, but rarely are. `pengdows.crud` provides built-in solutions:
-- **SingleWriter Mode**: Prevents SQLite/DuckDB disk locking (`SQLITE_BUSY`) by serializing write admission through a governor turnstile while keeping readers concurrent and ephemeral.
+- **SingleWriter Mode**: Prevents SQLite disk locking (`SQLITE_BUSY`) by serializing write admission through a governor turnstile while keeping readers concurrent and ephemeral. Applied to DuckDB too, but there it's a deliberate policy choice for a single cross-engine contract, not a limitation DuckDB's own engine imposes — DuckDB supports concurrent non-conflicting writes natively.
 - **KeepAlive Sentinel**: Keeps 1 idle connection open to prevent LocalDB process teardown or SQLite WAL unmapping, while all queries use standard ephemeral connections.
 - **Audit Field Invariants & Rollback**: Both `CreatedBy/On` and `LastUpdatedBy/On` are set on Create (UTC). If a write fails or is rejected before DB acceptance (e.g. concurrency conflict), in-memory audit mutations are **automatically rolled back**.
 - **Surrogate vs. Natural Key Architecture**: Strict separation between surrogate pseudokeys (`[Id]`) and domain business keys (`[PrimaryKey]`), backed by dedicated gateway interfaces (`TableGateway<T, TId>` vs `PrimaryKeyTableGateway<T>`).

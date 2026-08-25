@@ -38,11 +38,11 @@ public enum DbMode
 #### 2. KeepAlive (`1`)
 - Extends `Standard` by holding **one idle persistent sentinel connection** to prevent the database engine from unloading between operations.
 - **The sentinel connection is NEVER used for queries or commands.** All actual operations use ephemeral connections identical to `Standard`.
-- **Target Use Cases**: SQL Server LocalDB, SQLite WAL mode keeping shared memory mapped, or embedded engines with expensive initialization overhead.
-- *Clarification*: NOT for AWS RDS Proxy or server-side connection keep-alives.
+- **Actual use case: SQL Server LocalDB only.** `CoerceMode` forces LocalDB → KeepAlive automatically. For SQLite/DuckDB, requesting KeepAlive is always coerced to `SingleWriter` instead — it never actually applies there regardless of what's requested. It's honored (not coerced away) if explicitly requested against a full-server database, but that isn't a recommended or automatically-selected use — LocalDB is the only case where KeepAlive is both reachable and needed.
+- *Clarification*: NOT for AWS RDS Proxy or server-side connection keep-alives, and not a substitute for `SingleWriter` on SQLite/DuckDB.
 
 #### 3. SingleWriter (`2`)
-- **For file-based databases** (SQLite, DuckDB) where concurrent writers cause disk locking errors (`SQLITE_BUSY`).
+- **For file-based SQLite**, where concurrent writers cause disk locking errors (`SQLITE_BUSY`). **For file-based DuckDB**, this is a deliberate policy choice, not a limitation of the engine — DuckDB itself supports concurrent non-conflicting writes within one process; pengdows.crud still serializes writes on it for a single, predictable cross-engine contract.
 - Connections are still **ephemeral** (opened late, closed early).
 - Write tasks are serialized by `PoolGovernor` with `MaxConcurrentWrites = 1` and a writer-preference turnstile.
 - Readers remain concurrent and ephemeral.

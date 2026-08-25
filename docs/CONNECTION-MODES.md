@@ -20,7 +20,8 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
 
 - Semantics: Identical to Standard, except a single pinned idle connection is kept open to prevent unload (e.g. SQL Server LocalDb).
 - Pinned connection is never used for commands.
-- Not production-safe. Only for LocalDb.
+- Automatically selected only for LocalDb (`CoerceMode` forces LocalDb → KeepAlive, and `Best` → KeepAlive for LocalDb). For SQLite/DuckDB, a KeepAlive request is always coerced to SingleWriter instead — it is never actually reachable there regardless of what's requested. On full-server databases it is honored if explicitly requested ("safe but less functional," not unsafe), but it is not the recommended or automatically-selected choice for any of them.
+- Not a general production-workload mode the way Standard/SingleWriter are — scoped to the LocalDb sentinel use case specifically.
 
 ### SingleConnection
 
@@ -37,7 +38,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
 - Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
-- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). The turnstile-governed write serialization is purpose-built to eliminate the file-locking errors those engines are otherwise prone to under concurrent writers, while reads still execute fully concurrently on ephemeral connections — a level of write-contention governance most comparable libraries don't provide for these engines at all.
+- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine does not actually have this limitation — it supports concurrent non-conflicting writes within one process — so SingleWriter there is pengdows.crud's own deterministic policy choice, not a limitation DuckDB's engine imposes (see `docs/PRODUCT_THESIS.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 
 ### Best
 
