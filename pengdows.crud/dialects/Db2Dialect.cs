@@ -104,7 +104,7 @@ internal sealed class Db2Dialect : SqlDialect
 
     // Db2 LUW supports ANSI MERGE regardless of detected version — matches Oracle's
     // pattern of not gating this behind MaxSupportedStandard/IsInitialized.
-    public override bool SupportsMerge => true;
+    public override bool SupportsMerge => IsVersionAtLeast(11, 5);
 
     public override bool SupportsSavepoints => true;
 
@@ -141,8 +141,8 @@ internal sealed class Db2Dialect : SqlDialect
                "SET CURRENT TEMPORAL BUSINESS_TIME = NULL;";
     }
 
-    public override bool SupportsIdentityColumns => true;
-    public override bool SupportsInsertReturning => true;
+    public override bool SupportsIdentityColumns => IsVersionAtLeast(11, 5);
+    public override bool SupportsInsertReturning => IsVersionAtLeast(11, 5);
 
     // Db2's generated-key retrieval wraps the ENTIRE insert statement:
     //   SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))

@@ -46,7 +46,7 @@ Two thresholds matter for each database:
 | CockroachDB | ~22.x | latest | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
 | YugabyteDB | 2.x | latest | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
 | Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
-| Db2 | 11.1 | 11.1 | Native `BOOLEAN` type requires 11.1.1.1+; tested/confirmed against 11.5.8.0 (`ibmcom/db2:latest`) |
+| Db2 | 11.5.0 | 11.5.8.0 | Validated against `ibmcom/db2:11.5.8.0`; earlier versions are not supported. |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
 > MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
@@ -77,6 +77,8 @@ What version of each database first enables each major feature:
 The following features have no version gate in the dialect code but require a minimum server version to function. Connecting to an older server will produce SQL errors at runtime rather than a capability flag returning `false`:
 
 - **PostgreSQL `SupportsInsertOnConflict = true` is ungated** — requires PostgreSQL 9.5+. A server running 9.0–9.4 will receive `INSERT ... ON CONFLICT` SQL it cannot parse.
+- **PostgreSQL `CREATE PROCEDURE` / `CALL` requires PostgreSQL 11+** — pre-11 PostgreSQL only supports functions (`CREATE FUNCTION` invoked via `SELECT * FROM func()`). Dialect write-path stored procedure wrapping (`CALL proc()`) and `CREATE PROCEDURE` DDL require PostgreSQL 11+.
+- **PostgreSQL `GENERATED ALWAYS AS IDENTITY` / `OVERRIDING SYSTEM VALUE` requires PostgreSQL 10+** — pre-10 PostgreSQL uses `SERIAL` sequence pseudo-types. `SupportsOverridingSystemValue` is gated to PostgreSQL 10+ servers.
 - **SQLite `SupportsInsertOnConflict = true` is ungated** — requires SQLite 3.24+. A SQLite file opened on 3.23 will fail on upsert SQL.
 - **Oracle `SupportsIdentityColumns = true` is ungated** — identity columns (`GENERATED AS IDENTITY`) require Oracle 12c. Pre-12c servers will fail when inserting entities with `[Id(false)]`.
 - **SQL Server MERGE at `IsVersionAtLeast(10)` is broader than the declared "2012+" header** — SQL Server 2008 (v10) will pass the version check and receive MERGE SQL. The "2012+" comment in the source is a conservative recommendation, not enforced by the gate.

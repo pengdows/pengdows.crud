@@ -18,12 +18,12 @@ public class MySqlTestContainer : TestContainer
     private int _port = 3306;
     private string _username = "root";
 
-    // run --name mysql-container -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=testdb -p 3306:3306 -d mysql:latest
+    // run --name mysql-container -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=testdb -p 3306:3306 -d mysql:8.4.11
 
-    public MySqlTestContainer()
+    public MySqlTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("mysql:latest")
+            .WithImage(image ?? "mysql:8.4.11")
             .WithEnvironment("MYSQL_ROOT_PASSWORD", _password)
             .WithEnvironment("MYSQL_DATABASE", _database)
             .WithEnvironment("MYSQL_SQL_MODE",

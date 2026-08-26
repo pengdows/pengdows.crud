@@ -632,6 +632,38 @@ public class PostgreSqlDialectTests
         Assert.False(newDialect.SupportsSqlJsonConstructors); // Requires v18+
         Assert.False(newDialect.SupportsJsonTable); // Requires v18+
         Assert.False(newDialect.SupportsMergeReturning); // Requires v18+
+        Assert.True(newDialect.SupportsOverridingSystemValue); // True by default (modern PG baseline)
+    }
+
+    [Theory]
+    [InlineData("PostgreSQL 9.5.25", false)]
+    [InlineData("PostgreSQL 9.6.24", false)]
+    [InlineData("PostgreSQL 10.0", true)]
+    [InlineData("PostgreSQL 15.0", true)]
+    public async Task SupportsOverridingSystemValue_Depends_On_Version(string versionString, bool expected)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql.ToString());
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = "Host=localhost;EmulatedProduct=PostgreSql";
+        var versionSql = "SELECT version()";
+        var scalars = new Dictionary<string, object>
+        {
+            { versionSql, versionString }
+        };
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "PostgreSQL",
+            "9.5",
+            "@p[0-9]+",
+            "@{0}",
+            63,
+            @"@\\w+",
+            @"@\\w+",
+            true);
+        var tracked = new FakeTrackedConnection(conn, schema, scalars);
+        var info = DataSourceInformation.Create(tracked, factory, NullLoggerFactory.Instance);
+        var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, NullLogger<PostgreSqlDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(tracked);
+        Assert.Equal(expected, dialect.SupportsOverridingSystemValue);
     }
 
     [Fact]

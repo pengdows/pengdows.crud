@@ -13,6 +13,12 @@ public class CockroachDbTestContainer : TestContainer
 {
     private IContainer? _container;
     private int _sqlPort = 26257;
+    private readonly string _image;
+
+    public CockroachDbTestContainer(string image = "cockroachdb/cockroach:v25.1.0")
+    {
+        _image = image;
+    }
 
     public override async Task StartAsync()
     {
@@ -25,7 +31,7 @@ public class CockroachDbTestContainer : TestContainer
         var uniqueSuffix = $"{runId}-{Guid.NewGuid():N}";
 
         _container = new ContainerBuilder()
-            .WithImage("cockroachdb/cockroach:v25.1.0")
+            .WithImage(_image)
             .WithName($"test-cockroach-{uniqueSuffix}")
             .WithHostname("cockroach")
             .WithPortBinding(26257, true)

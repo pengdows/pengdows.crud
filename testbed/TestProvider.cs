@@ -779,34 +779,44 @@ CREATE TABLE {tableName} (
                     // the function test above never exercises. PostgreSQL returns the resulting
                     // INOUT value as a one-row result set from CALL itself (no provider-level
                     // output-parameter binding needed, unlike SQL Server's OUTPUT).
-                    var pgProcName = _context.WrapObjectName("sp_pengdows_test_proc");
-                    sc.Clear();
-                    sc.Query.Append(
-                        $"CREATE OR REPLACE PROCEDURE {pgProcName}(INOUT result INT)\n" +
-                        "LANGUAGE plpgsql\n" +
-                        "AS $$\n" +
-                        "BEGIN\n" +
-                        "  result := 42;\n" +
-                        "END;\n" +
-                        "$$");
-                    await sc.ExecuteNonQueryAsync();
-
-                    sc.Clear();
-                    sc.Query.Append("sp_pengdows_test_proc");
-                    sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
-                    var pgProcWrapped = sc.WrapForStoredProc(ExecutionType.Write);
-                    sc.Clear();
-                    sc.Query.Append(pgProcWrapped);
-                    sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
-                    var pgProcResult = await sc.ExecuteScalarOrNullAsync<int>();
-                    if (pgProcResult != 42)
+                    // CREATE PROCEDURE was introduced in PostgreSQL 11 (pre-11 only supports functions).
+                    var isPostgreSql = _context.Product is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql;
+                    var supportsRealProcedure = !isPostgreSql || _context.DataSourceInfo.ParsedVersion == null || _context.DataSourceInfo.ParsedVersion.Major >= 11;
+                    if (supportsRealProcedure)
                     {
-                        throw new Exception($"[PostgreSQL proc] Expected 42 but got {pgProcResult}");
-                    }
+                        var pgProcName = _context.WrapObjectName("sp_pengdows_test_proc");
+                        sc.Clear();
+                        sc.Query.Append(
+                            $"CREATE OR REPLACE PROCEDURE {pgProcName}(INOUT result INT)\n" +
+                            "LANGUAGE plpgsql\n" +
+                            "AS $$\n" +
+                            "BEGIN\n" +
+                            "  result := 42;\n" +
+                            "END;\n" +
+                            "$$");
+                        await sc.ExecuteNonQueryAsync();
 
-                    sc.Clear();
-                    sc.Query.Append($"DROP PROCEDURE {pgProcName}");
-                    await sc.ExecuteNonQueryAsync();
+                        sc.Clear();
+                        sc.Query.Append("sp_pengdows_test_proc");
+                        sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
+                        var pgProcWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                        sc.Clear();
+                        sc.Query.Append(pgProcWrapped);
+                        sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
+                        var pgProcResult = await sc.ExecuteScalarOrNullAsync<int>();
+                        if (pgProcResult != 42)
+                        {
+                            throw new Exception($"[PostgreSQL proc] Expected 42 but got {pgProcResult}");
+                        }
+
+                        sc.Clear();
+                        sc.Query.Append($"DROP PROCEDURE {pgProcName}");
+                        await sc.ExecuteNonQueryAsync();
+                    }
+                    else
+                    {
+                        CheckSkip($"  [StoredProc] Skipped PostgreSQL real PROCEDURE test on {_context.DataSourceInfo.DatabaseProductVersion} (CREATE PROCEDURE requires PostgreSQL 11+)");
+                    }
                     break;
                 }
 

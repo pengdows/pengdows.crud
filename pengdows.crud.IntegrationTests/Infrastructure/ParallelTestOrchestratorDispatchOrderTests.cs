@@ -72,7 +72,56 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
 
         var ordered = ParallelTestOrchestrator.OrderByStartupWeightDescending(configs);
 
-        Assert.Equal("Db2", ordered[0].ContainerName);
+        Assert.StartsWith("Db2 [", ordered[0].ContainerName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetTestConfigurations_HasTwoVersionsForDockerEngines()
+    {
+        var orchestrator = new ParallelTestOrchestrator(NullServiceProvider.Instance);
+
+        var configs = orchestrator.GetTestConfigurations();
+
+        Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
+        Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "Db2"));
+        Assert.All(configs.Where(c => c.DatabaseProvider == "PostgreSQL"), c =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(c.DatabaseVersion));
+            Assert.False(string.IsNullOrWhiteSpace(c.Image));
+        });
+    }
+
+    [Fact]
+    public void ImageMatrix_UsesPerEngineExactImageOverride()
+    {
+        const string variable = "TESTBED_POSTGRESQL_IMAGES";
+        var original = Environment.GetEnvironmentVariable(variable);
+        try
+        {
+            Environment.SetEnvironmentVariable(variable, "postgres:9.5,postgres:16.4");
+
+            var versions = TestbedImageMatrix.Get("PostgreSQL");
+
+            Assert.Equal(new[] { "postgres:9.5", "postgres:16.4" }, versions.Select(v => v.Image));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, original);
+        }
+    }
+
+    [Fact]
+    public void FilterConfigurations_ByProviderKeepsBothVersions()
+    {
+        var orchestrator = new ParallelTestOrchestrator(NullServiceProvider.Instance);
+
+        var configs = orchestrator.GetTestConfigurations(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "PostgreSQL"
+        });
+
+        Assert.Equal(2, configs.Count);
+        Assert.All(configs, c => Assert.Equal("PostgreSQL", c.DatabaseProvider));
     }
 
     private sealed class NeverStartedTestContainer : ITestContainer

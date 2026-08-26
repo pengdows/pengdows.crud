@@ -236,7 +236,10 @@ internal class PostgreSqlDialect : SqlDialect
     // syntax error, not a harmless no-op, so it must stay excluded here the same way SupportsMerge
     // excludes CockroachDb below. YugabyteDB's own YSQL docs confirm it does support the clause,
     // so it correctly inherits true.
-    public override bool SupportsOverridingSystemValue => DatabaseType != SupportedDatabase.CockroachDb;
+    // Identity columns and OVERRIDING SYSTEM VALUE were introduced in PostgreSQL 10.
+    public override bool SupportsOverridingSystemValue =>
+        DatabaseType != SupportedDatabase.CockroachDb &&
+        (!IsInitialized || ProductInfo.ParsedVersion == null || IsVersionAtLeast(10));
     public override bool SupportsOnConflictWhere => true; // Supports WHERE predicate on DO UPDATE (9.5+)
 
     // Shared by plain PostgreSQL, AuroraPostgreSql, and (inherited, identical) YugabyteDb.

@@ -22,10 +22,10 @@ public class Db2TestContainer : TestContainer
         Db2NativeLibraryBootstrap.Register();
     }
 
-    public Db2TestContainer()
+    public Db2TestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("ibmcom/db2:latest")
+            .WithImage(image ?? "ibmcom/db2:11.5.8.0")
             .WithPrivileged(true)
             .WithEnvironment("LICENSE", "accept")
             .WithEnvironment("DB2INST1_PASSWORD", _password)

@@ -17,10 +17,10 @@ public class YugabyteTestContainer : TestContainer
     private const int _port = 5433;
     private const string _username = "yugabyte";
 
-    public YugabyteTestContainer()
+    public YugabyteTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("yugabytedb/yugabyte:latest")
+            .WithImage(image ?? "yugabytedb/yugabyte:2025.2.5.2-b5")
             .WithPortBinding(_port, true)
             .WithPortBinding(7000, true)
             .WithPortBinding(9000, true)

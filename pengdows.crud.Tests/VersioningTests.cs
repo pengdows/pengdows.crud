@@ -8,7 +8,7 @@ namespace pengdows.crud.Tests;
 public sealed class VersioningTests
 {
     private static readonly Regex SemVerRegex = new(
-        "^2\\.0\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+        "^3\\.0\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     [Fact]

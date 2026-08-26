@@ -17,10 +17,10 @@ public class TiDBTestContainer : TestContainer
     private const int _port = 4000;
     private const string _username = "root";
 
-    public TiDBTestContainer()
+    public TiDBTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("pingcap/tidb:latest")
+            .WithImage(image ?? "pingcap/tidb:v8.5.7")
             .WithPortBinding(_port, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(_port))
             .Build();

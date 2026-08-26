@@ -18,7 +18,7 @@ public class OracleTestContainer : TestContainer
     private string? _connectionString;
     private readonly string _sid;
 
-    public OracleTestContainer()
+    public OracleTestContainer(string? requestedImage = null)
     {
         var imageType = Environment.GetEnvironmentVariable("ORACLE_IMAGE_TYPE")?.ToLower() ?? "free";
         string image;
@@ -32,8 +32,8 @@ public class OracleTestContainer : TestContainer
         }
         else
         {
-            // Default: gvenzl/oracle-free:slim — smaller, faster startup than oracle/database:18.4.0-xe
-            image = Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:slim";
+            // Default: gvenzl/oracle-free:23.26.2-slim-faststart — smaller, faster startup than oracle/database:18.4.0-xe
+            image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-slim-faststart";
             _sid = "FREEPDB1";
             passwordEnvVar = "ORACLE_PASSWORD";
         }
@@ -62,7 +62,7 @@ public class OracleTestContainer : TestContainer
 
         // Wait for Oracle to be truly ready for connections
         await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container,
-            300); // 300s safety margin; gvenzl/oracle-free:slim typically starts in ~30s
+            300); // 300s safety margin; gvenzl/oracle-free:23.26.2-slim-faststart typically starts in ~30s
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

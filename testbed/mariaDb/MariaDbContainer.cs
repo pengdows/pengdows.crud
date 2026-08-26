@@ -19,13 +19,13 @@ public class MariaDbContainer : TestContainer
     private string _username = "root";
 
     // $ docker run --detach --name some-mariadb --env MARIADB_USER=example-user --env MARIADB_PASSWORD=my_cool_secret
-    // --env MARIADB_DATABASE=exmple-database --env MARIADB_ROOT_PASSWORD=my-secret-pw  mariadb:latest
+    // --env MARIADB_DATABASE=exmple-database --env MARIADB_ROOT_PASSWORD=my-secret-pw  mariadb:11.4.12
     // 
 
-    public MariaDbContainer()
+    public MariaDbContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("mariadb:latest")
+            .WithImage(image ?? "mariadb:11.4.12")
             .WithEnvironment("MARIADB_ROOT_PASSWORD", _password)
             .WithEnvironment("MARIADB_DATABASE", _database)
             .WithEnvironment("MYSQL_SQL_MODE",

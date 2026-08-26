@@ -71,7 +71,15 @@ CREATE TABLE {0} (
 
     protected override async Task RunAdditionalTestsAsync()
     {
-        await TestExplicitIdentityUpsertAsync();
+        // GENERATED ALWAYS AS IDENTITY was introduced in PostgreSQL 10
+        if (context.DataSourceInfo.ParsedVersion == null || context.DataSourceInfo.ParsedVersion.Major >= 10)
+        {
+            await TestExplicitIdentityUpsertAsync();
+        }
+        else
+        {
+            CheckSkip($"  [IdentityUpsert] Skipped GENERATED ALWAYS AS IDENTITY test on PostgreSQL {context.DataSourceInfo.DatabaseProductVersion} (requires PostgreSQL 10+)");
+        }
     }
 
     private async Task TestExplicitIdentityUpsertAsync()

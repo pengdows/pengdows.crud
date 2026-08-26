@@ -73,6 +73,7 @@ string? GetArg(string name)
 
 var only = ParseList(GetArg("only") ?? Environment.GetEnvironmentVariable("TESTBED_ONLY"));
 var exclude = ParseList(GetArg("exclude") ?? Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
+var versions = ParseList(GetArg("versions") ?? Environment.GetEnvironmentVariable("TESTBED_VERSIONS"));
 
 if (only.Count > 0)
 {
@@ -84,7 +85,12 @@ if (exclude.Count > 0)
     Console.WriteLine($"Filter: exclude => {string.Join(",", exclude)}");
 }
 
-var results = await orchestrator.RunAllTestsAsync(only, exclude);
+if (versions.Count > 0)
+{
+    Console.WriteLine($"Filter: versions => {string.Join(",", versions)}");
+}
+
+var results = await orchestrator.RunAllTestsAsync(only, exclude, versions);
 
 // Optional: Export results for CI/CD
 var successCount  = results.Count(r => r.Success);

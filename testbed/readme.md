@@ -17,10 +17,18 @@ INCLUDE_ORACLE=true dotnet run -c Release --project testbed
 INCLUDE_SNOWFLAKE=true dotnet run -c Release --project testbed
 
 # Run only specific databases
-dotnet run -c Release --project testbed -- --only PostgreSQL,MySQL
+dotnet run -c Release --project testbed -- --only PostgreSQL
+
+# Run selected configured versions
+dotnet run -c Release --project testbed -- --only PostgreSQL --versions 16.4,15.0
+
+# Override with any exact image references, including older tags
+TESTBED_POSTGRESQL_IMAGES=postgres:9.5,postgres:16.4 dotnet run -c Release --project testbed -- --only PostgreSQL
 
 # Exclude specific databases
 dotnet run -c Release --project testbed -- --exclude SQLite
+
+Per-engine overrides use `TESTBED_<ENGINE>_IMAGES` with two comma-separated image references. The `--versions` filter accepts configured labels or exact image references. Results are named `Engine [version]`.
 ```
 
 ## Always-on Databases

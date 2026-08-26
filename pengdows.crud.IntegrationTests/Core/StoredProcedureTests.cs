@@ -182,6 +182,13 @@ public class StoredProcedureTests : DatabaseTestBase
                 return;
             }
 
+            if (provider == SupportedDatabase.PostgreSql && context.DataSourceInfo.ParsedVersion != null &&
+                context.DataSourceInfo.ParsedVersion.Major < 11)
+            {
+                Output.WriteLine($"Skipping real PROCEDURE test on PostgreSQL {context.DataSourceInfo.ParsedVersion}: CREATE PROCEDURE requires PostgreSQL 11+");
+                return;
+            }
+
             var procName = context.WrapObjectName("sp_pengdows_family_test_proc");
             var createSql =
                 $"CREATE OR REPLACE PROCEDURE {procName}(INOUT result INT)\n" +

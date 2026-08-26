@@ -18,10 +18,10 @@ public class PostgreSqlTestContainer : TestContainer
     private int _port = 5432;
     private string _username = "postgres";
 
-    public PostgreSqlTestContainer()
+    public PostgreSqlTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("postgres:latest")
+            .WithImage(image ?? "postgres:16.4")
             .WithEnvironment("POSTGRES_PASSWORD", _password)
             .WithEnvironment("POSTGRES_USER", _username)
             .WithEnvironment("POSTGRES_DB", _database)

@@ -21,10 +21,10 @@ public class SqlServerTestContainer : TestContainer
 
     // var sqlConnectionString =
     //     "Server=localhost;uid=sa;pwd=YourPassword123;Initial Catalog=testdb;TrustServerCertificate=true";
-    public SqlServerTestContainer()
+    public SqlServerTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server")
+            .WithImage(image ?? "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04")
             .WithEnvironment("MSSQL_SA_PASSWORD", _password)
             .WithEnvironment("ACCEPT_EULA", "Y")
             .WithPortBinding(1433, true)

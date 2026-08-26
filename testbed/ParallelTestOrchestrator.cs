@@ -63,26 +63,10 @@ public class ParallelTestOrchestrator
 
     public async Task<IReadOnlyCollection<TestResult>> RunAllTestsAsync(
         ISet<string>? only = null,
-        ISet<string>? exclude = null)
+        ISet<string>? exclude = null,
+        ISet<string>? versions = null)
     {
-        var testConfigurations = GetTestConfigurations();
-
-        // Apply filtering if provided
-        if (only is { Count: > 0 })
-        {
-            testConfigurations = testConfigurations
-                .Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) ||
-                            only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-        }
-
-        if (exclude is { Count: > 0 })
-        {
-            testConfigurations = testConfigurations
-                .Where(c => !exclude.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) &&
-                            !exclude.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-        }
+        var testConfigurations = GetTestConfigurations(only, exclude, versions);
 
         // Dispatch order matters even though only 2 run at a time: this is a FIFO queue drained by
         // a 2-slot semaphore, so whichever slot frees first immediately grabs the NEXT item in
@@ -212,127 +196,59 @@ public class ParallelTestOrchestrator
 
     // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
     // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
-    public List<TestConfiguration> GetTestConfigurations()
+    public List<TestConfiguration> GetTestConfigurations(
+        ISet<string>? only = null,
+        ISet<string>? exclude = null,
+        ISet<string>? versions = null)
     {
-        var configurations = new List<TestConfiguration>
-        {
-            new()
-            {
-                ContainerName = "SQLite",
-                DatabaseProvider = "SQLite",
-                Container = new SqliteTestContainer(), // We'll need to create this
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp),
-                StartupWeightSeconds = 1 // no real container — file/in-memory
-            },
-            new()
-            {
-                ContainerName = "DuckDB",
-                DatabaseProvider = "DuckDB",
-                Container = new DuckDbTestContainer(),
-                TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp),
-                StartupWeightSeconds = 1 // no real container — file/in-memory
-            },
-            new()
-            {
-                ContainerName = "PostgreSQL",
-                DatabaseProvider = "PostgreSQL",
-                Container = new PostgreSqlTestContainer(),
-                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp),
-                StartupWeightSeconds = 5 // small, fast-starting official image
-            },
-            new()
-            {
-                ContainerName = "MySQL",
-                DatabaseProvider = "MySQL",
-                Container = new MySqlTestContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp),
-                StartupWeightSeconds = 8
-            },
-            new()
-            {
-                ContainerName = "MariaDB",
-                DatabaseProvider = "MariaDB",
-                Container = new MariaDbContainer(),
-                TestProviderFactory = (db, sp) => new MariaDbTestProvider(db, sp),
-                StartupWeightSeconds = 8
-            },
-            new()
-            {
-                ContainerName = "SQL Server",
-                DatabaseProvider = "SQL Server",
-                Container = new SqlServerTestContainer(),
-                TestProviderFactory = (db, sp) => new SqlServerTestProvider(db, sp),
-                StartupWeightSeconds = 25 // larger image, slower to accept connections
-            },
-            new()
-            {
-                ContainerName = "CockroachDB",
-                DatabaseProvider = "CockroachDB",
-                Container = new CockroachDbTestContainer(),
-                TestProviderFactory = (db, sp) => new CockroachDbTestProvider(db, sp),
-                StartupWeightSeconds = 12
-            },
-            new()
-            {
-                ContainerName = "Firebird",
-                DatabaseProvider = "Firebird",
-                Container = new FirebirdSqlTestContainer(),
-                TestProviderFactory = (db, sp) => new FirebirdTestProvider(db, sp),
-                StartupWeightSeconds = 8
-            },
-            new()
-            {
-                ContainerName = "TiDB",
-                DatabaseProvider = "TiDB",
-                Container = new TiDBTestContainer(),
-                TestProviderFactory = (db, sp) => new TiDBTestProvider(db, sp),
-                StartupWeightSeconds = 20 // multi-component distributed SQL cluster
-            },
-            new()
-            {
-                ContainerName = "YugabyteDB",
-                DatabaseProvider = "YugabyteDB",
-                Container = new YugabyteTestContainer(),
-                TestProviderFactory = (db, sp) => new YugabyteTestProvider(db, sp),
-                StartupWeightSeconds = 20 // distributed, multi-process
-            },
-            new()
-            {
-                ContainerName = "Oracle",
-                DatabaseProvider = "Oracle",
-                Container = new OracleTestContainer(),
-                TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp),
-                StartupWeightSeconds = 45 // large image, historically slow to become healthy
-            },
-            new()
-            {
-                ContainerName = "Db2",
-                DatabaseProvider = "Db2",
-                Container = new Db2TestContainer(),
-                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp),
-                // Directly observed in this project's own live testbed runs: 45-70s to reach
-                // "ready" — the slowest of any always-on database by a wide margin.
-                StartupWeightSeconds = 60
-            },
-            // Add Sybase as needed
-        };
+        var configurations = new List<TestConfiguration>();
 
-        // Snowflake — requires cloud credentials; no Docker image; opt-in via INCLUDE_SNOWFLAKE=true
-        if (_includeSnowflake)
+        void AddLocal(string provider, ITestContainer container, Func<IDatabaseContext, IServiceProvider, TestProvider> factory, int weight)
         {
             configurations.Add(new TestConfiguration
             {
-                ContainerName = "Snowflake",
-                DatabaseProvider = "Snowflake",
-                Container = new SnowflakeTestContainer(),
-                TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp),
-                StartupWeightSeconds = 5 // no local container — real cloud round-trip instead
+                ContainerName = provider, DatabaseProvider = provider, DatabaseVersion = "local", Image = null,
+                Container = container, TestProviderFactory = factory, StartupWeightSeconds = weight
             });
         }
 
-        // Additional databases can be added here:
-        // - Sybase ASE - requires AdoNetCore.AseClient (already available)
-        // - Others as needed
+        void AddDocker(string provider, int weight, Func<string, ITestContainer> containerFactory, Func<IDatabaseContext, IServiceProvider, TestProvider> factory)
+        {
+            foreach (var version in TestbedImageMatrix.Get(provider))
+            {
+                if (versions is { Count: > 0 } && !versions.Contains(version.Label) && !versions.Contains(version.Image))
+                    continue;
+
+                configurations.Add(new TestConfiguration
+                {
+                    ContainerName = $"{provider} [{version.Label}]", DatabaseProvider = provider,
+                    DatabaseVersion = version.Label, Image = version.Image,
+                    Container = containerFactory(version.Image), TestProviderFactory = factory,
+                    StartupWeightSeconds = weight
+                });
+            }
+        }
+
+        AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new TestProvider(db, sp), 1);
+        AddLocal("DuckDB", new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
+        AddDocker("PostgreSQL", 5, image => new PostgreSqlTestContainer(image), (db, sp) => new PostgreSQLTestProvider(db, sp));
+        AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
+        AddDocker("MariaDB", 8, image => new MariaDbContainer(image), (db, sp) => new MariaDbTestProvider(db, sp));
+        AddDocker("SQL Server", 25, image => new SqlServerTestContainer(image), (db, sp) => new SqlServerTestProvider(db, sp));
+        AddDocker("CockroachDB", 12, image => new CockroachDbTestContainer(image), (db, sp) => new CockroachDbTestProvider(db, sp));
+        AddDocker("Firebird", 8, image => new FirebirdSqlTestContainer(image), (db, sp) => new FirebirdTestProvider(db, sp));
+        AddDocker("TiDB", 20, image => new TiDBTestContainer(image), (db, sp) => new TiDBTestProvider(db, sp));
+        AddDocker("YugabyteDB", 20, image => new YugabyteTestContainer(image), (db, sp) => new YugabyteTestProvider(db, sp));
+        AddDocker("Oracle", 45, image => new OracleTestContainer(image), (db, sp) => new OracleTestProvider(db, sp));
+        AddDocker("Db2", 60, image => new Db2TestContainer(image), (db, sp) => new Db2TestProvider(db, sp));
+
+        if (_includeSnowflake)
+            AddLocal("Snowflake", new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);
+
+        if (only is { Count: > 0 })
+            configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (exclude is { Count: > 0 })
+            configurations = configurations.Where(c => !exclude.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) && !exclude.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();
 
         return configurations;
     }
@@ -409,6 +325,40 @@ public class TestConfiguration
     /// <see cref="TestResult.ContainerStartTime"/> data from live runs as it accumulates.
     /// </summary>
     public int StartupWeightSeconds { get; set; }
+    public string DatabaseVersion { get; set; } = "unknown";
+    public string? Image { get; set; }
+}
+
+public sealed record ImageVersion(string Label, string Image);
+
+public static class TestbedImageMatrix
+{
+    private static readonly IReadOnlyDictionary<string, ImageVersion[]> Defaults = new Dictionary<string, ImageVersion[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["PostgreSQL"] = [new("16.4", "postgres:16.4"), new("15.0", "postgres:15.0")],
+        ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36")],
+        ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11")],
+        ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2022-CU23", "mcr.microsoft.com/mssql/server:2022-CU23-ubuntu-22.04")],
+        ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0")],
+        ["Firebird"] = [new("3.0.9", "firebirdsql/firebird:3.0.9"), new("2.5.9", "firebirdsql/firebird:2.5.9")],
+        ["TiDB"] = [new("v8.5.7", "pingcap/tidb:v8.5.7"), new("v7.5.7", "pingcap/tidb:v7.5.7")],
+        ["YugabyteDB"] = [new("2025.2.5.2-b5", "yugabytedb/yugabyte:2025.2.5.2-b5"), new("2.25.2.0-b359", "yugabytedb/yugabyte:2.25.2.0-b359")],
+        ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-slim-faststart"), new("23.8.0", "gvenzl/oracle-free:23.8.0-slim-faststart")],
+        ["Db2"] = [new("11.5.8.0", "ibmcom/db2:11.5.8.0"), new("11.5.0.0", "ibmcom/db2:11.5.0.0")]
+    };
+
+    public static IReadOnlyList<ImageVersion> Get(string provider)
+    {
+        var key = provider.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
+        var overrideValue = Environment.GetEnvironmentVariable($"TESTBED_{key}_IMAGES");
+        if (!string.IsNullOrWhiteSpace(overrideValue))
+        {
+            var images = overrideValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return images.Select((image, index) => new ImageVersion($"custom-{index + 1}", image)).ToArray();
+        }
+
+        return Defaults.TryGetValue(provider, out var versions) ? versions : Array.Empty<ImageVersion>();
+    }
 }
 
 public class TestResult

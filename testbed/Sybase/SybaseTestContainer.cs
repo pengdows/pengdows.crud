@@ -20,7 +20,7 @@ public class SybaseTestContainer : TestContainer, ITestContainer
     public SybaseTestContainer()
     {
         _container = new ContainerBuilder()
-            .WithImage("nguoianphu/docker-sybase")
+            .WithImage("nguoianphu/docker-sybase@sha256:0fe38c4dafdb43dc5e5d0c1554006bc57efa7ed1a705aaef820ddbabf024c538")
             .WithEnvironment("SA_PASSWORD", Password)
             .WithPortBinding(5000, true)
             .WithPortBinding(5001, true)
