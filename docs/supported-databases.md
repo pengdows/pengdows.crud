@@ -26,32 +26,34 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
-## Minimum Server Versions
+## Minimum Server Versions & Driver Matrix
 
-Two thresholds matter for each database:
+Database support is a joint capability over **(database engine, client driver)**. The table distinguishes between:
 
-- **Floor** — the oldest version where basic CRUD (connect, parameterized SELECT/INSERT/UPDATE/DELETE) works without errors. Below this, the library will crash or silently misbehave.
-- **Recommended minimum** — the oldest version where all commonly-needed features (upsert, savepoints, session-level read-only enforcement, auto-generated IDs) are fully operational.
+- **Floor** — the oldest engine version where core CRUD and required syntax work according to engine feature specifications.
+- **Recommended** — the oldest version where modern features (upsert/merge, savepoints, session read-only enforcement, auto-generated IDs) are fully operational.
+- **Verified at** — the exact container version validated by the automated testbed suite.
+- **Driver used** — the specific ADO.NET driver package and version tested.
 
-| Database | Floor | Recommended Min | Key reason for recommended floor |
-|----------|-------|-----------------|-----------------------------------|
-| SQL Server | 2008 (v10) | 2016 (v13) | JSON support (`JSON_VALUE`) requires v13; MERGE available from v10 |
-| PostgreSQL | 9.5 | 15 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
-| Oracle | 12c | 19c | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c |
-| MySQL | 5.7.20 | 8.0 | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
-| MariaDB | 10.2 | 10.4 | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
-| SQLite | 3.24 | 3.35 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
-| Firebird | 2.5 | 3.0 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 |
-| DuckDB | 0.8.0 | 1.0.0 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
-| CockroachDB | ~22.x | latest | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
-| YugabyteDB | 2.x | latest | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
-| Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
-| Db2 | 11.5.0 | 11.5.8.0 | Validated against `ibmcom/db2:11.5.8.0`; earlier versions are not supported. |
+| Database | Floor | Recommended | Verified at | Driver used | Key reason for recommended floor |
+|----------|-------|-------------|-------------|-------------|-----------------------------------|
+| SQL Server | 2008 (v10) | 2016 (v13) | 2022-CU25 | Microsoft.Data.SqlClient 6.0.2 | JSON support (`JSON_VALUE`) requires v13; MERGE available from v10 |
+| PostgreSQL | 9.5 | 15 | 16.4 | Npgsql 9.0.3 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
+| Oracle | 12c | 19c | 23.4-slim | Oracle.ManagedDataAccess.Core 23.8.0 | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c |
+| MySQL | 5.7.20 | 8.0 | 8.4.11 | MySql.Data 9.3.0 / MySqlConnector 2.x | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
+| MariaDB | 10.2 | 10.4 | 11.4.12 | MySqlConnector 2.x / MySql.Data 9.3.0 | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
+| SQLite | 3.24 | 3.35 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
+| Firebird | 2.5 | 3.0 | 5.0.0 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 |
+| DuckDB | 0.8.0 | 1.0.0 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
+| CockroachDB | ~22.x | latest | v25.1.0 | Npgsql 9.0.3 | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
+| YugabyteDB | 2.x | latest | 2024.2.1 | Npgsql 9.0.3 | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
+| Snowflake | service | service | Cloud service | Snowflake.Data 5.6.0 | Cloud service — version managed by Snowflake; no minimum to configure |
+| Db2 | 11.5.0 | 11.5.8.0 | 11.5.8.0 | Net.IBM.Data.Db2-lnx 8.0.0.500 | Validated against `ibmcom/db2:11.5.8.0` / `icr.io/db2_community/db2` |
 
-> **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
-> MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
-> Earlier versions only support `SET SESSION TRANSACTION READ ONLY`
-> which applies to the next transaction only, not the session persistently.
+> **Driver Constraints & Handshake Caveats:**
+> - **MariaDB & Connector/NET:** MariaDB versions prior to 11.0 report a `5.5.5-10.x.x-MariaDB` handshake prefix (MDEV-28910). Oracle's `MySql.Data` >= 8.0.22 rejects this prefix as "Versions of MySQL prior to 5.6 are not currently supported." Use `MySqlConnector` when connecting to MariaDB 10.x.
+> - **PostgreSQL & Npgsql Support Policy:** Npgsql actively tests and supports PostgreSQL versions within their community support window (~5 years back). Connecting to legacy releases like 9.5 functions over the wire for core SQL, but is outside the driver vendor's support window.
+> - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` requires MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` (10.1+). Earlier versions only support transaction-scoped `SET SESSION TRANSACTION READ ONLY`.
 
 ### Feature Version Thresholds
 
@@ -82,6 +84,14 @@ The following features have no version gate in the dialect code but require a mi
 - **SQLite `SupportsInsertOnConflict = true` is ungated** — requires SQLite 3.24+. A SQLite file opened on 3.23 will fail on upsert SQL.
 - **Oracle `SupportsIdentityColumns = true` is ungated** — identity columns (`GENERATED AS IDENTITY`) require Oracle 12c. Pre-12c servers will fail when inserting entities with `[Id(false)]`.
 - **SQL Server MERGE at `IsVersionAtLeast(10)` is broader than the declared "2012+" header** — SQL Server 2008 (v10) will pass the version check and receive MERGE SQL. The "2012+" comment in the source is a conservative recommendation, not enforced by the gate.
+
+### Sweep Methodology & Outcome Classification
+
+Empirical testing across container images serves as a **falsifier** of documented floors, not a replacement for vendor feature specifications:
+
+- **`IMAGE_UNAVAILABLE`**: Container image/tag does not exist or was pruned from registry (e.g. `ibmcom/db2` vs `icr.io/db2_community/db2`).
+- **`CONNECT_FAILED`**: Driver, protocol, TLS, or authentication incompatibility (e.g., Connector/NET MariaDB `5.5.5-` prefix rejection, or missing `TrustServerCertificate=True`).
+- **`CHECKS_FAILED`**: Genuine engine/dialect behavior failure on a connected instance (falsifies documented capability floor).
 
 ## Default Pool Sizes (Provider vs Practical)
 
