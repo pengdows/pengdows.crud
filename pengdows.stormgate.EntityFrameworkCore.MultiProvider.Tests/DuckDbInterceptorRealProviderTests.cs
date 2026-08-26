@@ -45,7 +45,7 @@ public sealed class DuckDbInterceptorRealProviderTests
             context1.Database.GetDbConnection().GetType().FullName);
 
         var thrown = await Assert.ThrowsAnyAsync<Exception>(() => context2.Database.OpenConnectionAsync());
-        var saturation = FindStormGateSaturationTimeout(thrown);
+        var saturation = StormGateSaturationTestHelpers.FindStormGateSaturationTimeout(thrown);
         Assert.NotNull(saturation);
 
         await context1.Database.CloseConnectionAsync();
@@ -54,22 +54,6 @@ public sealed class DuckDbInterceptorRealProviderTests
         // governing this connection's lifecycle, not merely failing to interfere with it.
         await context2.Database.OpenConnectionAsync();
         await context2.Database.CloseConnectionAsync();
-    }
-
-    private static TimeoutException? FindStormGateSaturationTimeout(Exception? exception)
-    {
-        while (exception != null)
-        {
-            if (exception is TimeoutException { Message: var message } timeout
-                && message.Contains("storm gate", StringComparison.OrdinalIgnoreCase))
-            {
-                return timeout;
-            }
-
-            exception = exception.InnerException;
-        }
-
-        return null;
     }
 
     private static DuckDbProbeContext CreateDuckDbContext(StormGateConnectionInterceptor interceptor)

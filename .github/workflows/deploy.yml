@@ -67,9 +67,10 @@ jobs:
 
       - name: Setup .NET SDKs
         # 8.0.x: primary target framework for all projects in this solution.
-        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
-        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
-        #         ready to ship a net10.0 TFM.
+        # 10.0.x: several projects (pengdows.crud, .abstractions, .fakeDb, .opentelemetry,
+        #         .Tests, stormgate*) are now multi-targeted net8.0;net10.0 — see the
+        #         "coverage*.cobertura.xml" glob comments below for the multi-targeting
+        #         trap this creates for coverage report generation.
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
@@ -137,8 +138,13 @@ jobs:
 
       - name: Generate coverage report
         run: |
+            # pengdows.crud.Tests is now multi-targeted (net8.0;net10.0), so coverlet.msbuild
+            # writes its coverage as coverage.net8.0.cobertura.xml / coverage.net10.0.cobertura.xml,
+            # not the unsuffixed coverage.cobertura.xml an exact-literal glob would require —
+            # the same trap already hit (and fixed) for pengdows.stormgate below.
+            # coverage*.cobertura.xml catches both forms.
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
@@ -146,14 +152,15 @@ jobs:
 
       - name: Generate stormgate coverage report
         run: |
-            # pengdows.stormgate.Tests/pengdows.stormgate.EntityFrameworkCore.Tests are
-            # multi-targeted (net8.0;net10.0), so coverlet.msbuild writes their coverage as
+            # pengdows.stormgate.Tests, pengdows.stormgate.EntityFrameworkCore.Tests, and (as of
+            # its own multi-targeting) pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests
+            # are all multi-targeted (net8.0;net10.0), so coverlet.msbuild writes their coverage as
             # coverage.net8.0.cobertura.xml / coverage.net10.0.cobertura.xml, not the unsuffixed
-            # coverage.cobertura.xml the exact-literal glob below used to require — silently
-            # dropping their ~96% run from this merge and leaving only the incidental, narrower
-            # pengdows.stormgate instrumentation picked up by
-            # pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests (single-targeted, so it
-            # DOES match) to decide the ratchet. coverage*.cobertura.xml catches both forms.
+            # coverage.cobertura.xml an exact-literal glob would require — that used to silently
+            # drop the *.Tests projects' ~96% run from this merge, leaving only the narrower
+            # MultiProvider.Tests instrumentation (back when it alone was still single-targeted) to
+            # decide the ratchet. coverage*.cobertura.xml catches both forms, for all three
+            # projects now.
             reportgenerator \
               -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report-stormgate" \
@@ -163,8 +170,11 @@ jobs:
 
       - name: Generate opentelemetry coverage report
         run: |
+            # All opentelemetry coverage comes from tests inside pengdows.crud.Tests (there is
+            # no separate pengdows.crud.opentelemetry.Tests project), which is multi-targeted —
+            # same coverage*.cobertura.xml trap as the main coverage report above.
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report-opentelemetry" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.crud.opentelemetry" \
@@ -347,7 +357,12 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: TestResults/**/coverage.cobertura.xml
+          # pengdows.crud.Tests and pengdows.stormgate*.Tests are multi-targeted
+          # (net8.0;net10.0), so coverlet.msbuild writes their coverage as
+          # coverage.net8.0.cobertura.xml / coverage.net10.0.cobertura.xml, not the
+          # unsuffixed coverage.cobertura.xml an exact-literal glob would require —
+          # the same trap already hit (and fixed) for the reportgenerator steps above.
+          files: TestResults/**/coverage*.cobertura.xml
           # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
           # so we suppress errors rather than blocking community contributions.
           fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -387,9 +402,10 @@ jobs:
 
       - name: Setup .NET SDKs
         # 8.0.x: primary target framework for all projects in this solution.
-        # 10.0.x: included for improved Roslyn analyzers and nullability checking;
-        #         the SDK can build net8.0 TFMs. Add net10.0 to csproj files when
-        #         ready to ship a net10.0 TFM.
+        # 10.0.x: several projects (pengdows.crud, .abstractions, .fakeDb, .opentelemetry,
+        #         .Tests, stormgate*) are now multi-targeted net8.0;net10.0 — see the
+        #         "coverage*.cobertura.xml" glob comments below for the multi-targeting
+        #         trap this creates for coverage report generation.
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |

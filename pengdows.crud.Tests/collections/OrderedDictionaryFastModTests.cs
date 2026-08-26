@@ -13,7 +13,7 @@ public class OrderedDictionaryFastModTests
     [MemberData(nameof(GetDivisors))]
     public void FastMod_MatchesRemainder_ForRandomizedValues(int divisor)
     {
-        var multiplier = OrderedDictionary<int, int>.GetFastModMultiplier((uint)divisor);
+        var multiplier = pengdows.crud.collections.OrderedDictionary<int, int>.GetFastModMultiplier((uint)divisor);
         var rng = new Random(divisor);
 
         var samplingRange = Math.Max((long)divisor * 256, 1024L);
@@ -22,7 +22,7 @@ public class OrderedDictionaryFastModTests
         {
             var value = (uint)rng.NextInt64(0, samplingRange);
             var expected = value % (uint)divisor;
-            var actual = OrderedDictionary<int, int>.FastMod(value, (uint)divisor, multiplier);
+            var actual = pengdows.crud.collections.OrderedDictionary<int, int>.FastMod(value, (uint)divisor, multiplier);
 
             Assert.Equal(expected, actual);
         }
@@ -32,8 +32,8 @@ public class OrderedDictionaryFastModTests
     [MemberData(nameof(GetBoundaryValues))]
     public void FastMod_BoundaryValues_StayWithinBounds(int divisor, uint value)
     {
-        var multiplier = OrderedDictionary<int, int>.GetFastModMultiplier((uint)divisor);
-        var actual = OrderedDictionary<int, int>.FastMod(value, (uint)divisor, multiplier);
+        var multiplier = pengdows.crud.collections.OrderedDictionary<int, int>.GetFastModMultiplier((uint)divisor);
+        var actual = pengdows.crud.collections.OrderedDictionary<int, int>.FastMod(value, (uint)divisor, multiplier);
 
         Assert.InRange(actual, 0u, (uint)divisor - 1);
         Assert.Equal(value % (uint)divisor, actual);

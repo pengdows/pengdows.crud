@@ -17,7 +17,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Constructor_WithDefaultCapacity_CreatesEmptyDictionary()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Empty(dict);
         Assert.False(dict.IsReadOnly);
@@ -26,7 +26,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Constructor_WithCapacity_CreatesEmptyDictionary()
     {
-        var dict = new OrderedDictionary<string, int>(100);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(100);
 
         Assert.Empty(dict);
     }
@@ -34,20 +34,20 @@ public class OrderedDictionaryTests
     [Fact]
     public void Constructor_WithNegativeCapacity_ThrowsArgumentOutOfRangeException()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new OrderedDictionary<string, int>(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new pengdows.crud.collections.OrderedDictionary<string, int>(-1));
     }
 
     [Fact]
     public void Constructor_WithLargeCapacity_CreatesEmptyDictionary()
     {
-        var dict = new OrderedDictionary<string, int>(100_000);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(100_000);
         Assert.Empty(dict);
     }
 
     [Fact]
     public void Add_SingleItem_SuccessfullyAdds()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict.Add("key1", 100);
 
@@ -58,7 +58,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Add_DuplicateKey_ThrowsArgumentException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         Assert.Throws<ArgumentException>(() => dict.Add("key1", 200));
@@ -67,7 +67,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Add_NullKey_ThrowsArgumentNullException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<ArgumentNullException>(() => dict.Add(null!, 100));
     }
@@ -75,7 +75,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Indexer_Get_ReturnsCorrectValue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         Assert.Equal(100, dict["key1"]);
@@ -84,7 +84,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Indexer_Get_NonExistentKey_ThrowsKeyNotFoundException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<KeyNotFoundException>(() => dict["nonexistent"]);
     }
@@ -92,7 +92,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Indexer_Set_UpdatesExistingValue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         dict["key1"] = 200;
@@ -103,7 +103,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Indexer_Set_AddsNewKey()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict["key1"] = 100;
 
@@ -114,7 +114,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ContainsKey_ExistingKey_ReturnsTrue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         Assert.True(dict.ContainsKey("key1"));
@@ -123,7 +123,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ContainsKey_NonExistentKey_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.False(dict.ContainsKey("nonexistent"));
     }
@@ -131,7 +131,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ContainsKey_NullKey_ThrowsArgumentNullException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<ArgumentNullException>(() => dict.ContainsKey(null!));
     }
@@ -139,7 +139,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TryGetValue_ExistingKey_ReturnsTrueWithValue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.TryGetValue("key1", out var value);
@@ -151,7 +151,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TryGetValue_NonExistentKey_ReturnsFalseWithDefault()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         var result = dict.TryGetValue("nonexistent", out var value);
 
@@ -162,7 +162,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TryAdd_NewKey_ReturnsTrueAndAdds()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         var result = dict.TryAdd("key1", 100);
 
@@ -174,7 +174,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TryAdd_ExistingKey_ReturnsFalseAndDoesNotModify()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.TryAdd("key1", 200);
@@ -186,7 +186,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_ExistingKey_ReturnsTrueAndRemoves()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Remove("key1");
@@ -199,7 +199,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_NonExistentKey_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         var result = dict.Remove("nonexistent");
 
@@ -209,7 +209,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_WithOutParameter_ExistingKey_ReturnsTrueWithValue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Remove("key1", out var value);
@@ -222,7 +222,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_WithOutParameter_NonExistentKey_ReturnsFalseWithDefault()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         var result = dict.Remove("nonexistent", out var value);
 
@@ -233,7 +233,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Clear_RemovesAllItems()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
         dict.Add("key2", 200);
 
@@ -247,7 +247,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void InsertionOrder_MaintainedDuringEnumeration()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         var keys = new[] { "third", "first", "second", "fourth" };
         var values = new[] { 3, 1, 2, 4 };
 
@@ -266,7 +266,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void InsertionOrder_MaintainedAfterRemoval()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("first", 1);
         dict.Add("second", 2);
         dict.Add("third", 3);
@@ -283,7 +283,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void InsertionOrder_MaintainedAfterUpdate()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("first", 1);
         dict.Add("second", 2);
         dict.Add("third", 3);
@@ -304,7 +304,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Enumeration_RespectsInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         var expected = new[]
         {
             new KeyValuePair<string, int>("zebra", 26),
@@ -325,7 +325,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Contains_KeyValuePair_ExistingPair_ReturnsTrue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Contains(new KeyValuePair<string, int>("key1", 100));
@@ -336,7 +336,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Contains_KeyValuePair_ExistingKeyDifferentValue_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Contains(new KeyValuePair<string, int>("key1", 200));
@@ -347,7 +347,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Contains_KeyValuePair_NonExistentKey_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         var result = dict.Contains(new KeyValuePair<string, int>("key1", 100));
 
@@ -357,7 +357,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_KeyValuePair_ExistingPair_ReturnsTrueAndRemoves()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Remove(new KeyValuePair<string, int>("key1", 100));
@@ -369,7 +369,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Remove_KeyValuePair_ExistingKeyDifferentValue_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var result = dict.Remove(new KeyValuePair<string, int>("key1", 200));
@@ -382,7 +382,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CopyTo_CopiesInInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("third", 3);
         dict.Add("first", 1);
         dict.Add("second", 2);
@@ -403,7 +403,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CopyTo_WithOffset_CopiesCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
         dict.Add("key2", 2);
 
@@ -419,7 +419,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CopyTo_NullArray_ThrowsArgumentNullException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<ArgumentNullException>(() => dict.CopyTo(null!, 0));
     }
@@ -427,7 +427,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CopyTo_NegativeArrayIndex_ThrowsArgumentOutOfRangeException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         var array = new KeyValuePair<string, int>[1];
 
         Assert.Throws<ArgumentOutOfRangeException>(() => dict.CopyTo(array, -1));
@@ -436,7 +436,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CopyTo_InsufficientSpace_ThrowsArgumentOutOfRangeException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
         dict.Add("key2", 2);
 
@@ -448,7 +448,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void EnsureCapacity_IncreasesCapacity()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict.EnsureCapacity(1000);
 
@@ -463,7 +463,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void EnsureCapacity_NegativeCapacity_ThrowsArgumentOutOfRangeException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<ArgumentOutOfRangeException>(() => dict.EnsureCapacity(-1));
     }
@@ -471,7 +471,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TrimExcess_ReducesCapacityWhenAppropriate()
     {
-        var dict = new OrderedDictionary<string, int>(1000);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(1000);
         dict.Add("key1", 1);
 
         dict.TrimExcess();
@@ -483,7 +483,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void TrimExcess_EmptyDictionary_ResetsToDefault()
     {
-        var dict = new OrderedDictionary<string, int>(1000);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(1000);
 
         dict.TrimExcess();
 
@@ -493,7 +493,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Keys_ReturnsInInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         var expectedKeys = new[] { "zebra", "alpha", "beta" };
 
         foreach (var key in expectedKeys)
@@ -507,7 +507,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Values_ReturnsInInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         var keys = new[] { "zebra", "alpha", "beta" };
         var expectedValues = new[] { 5, 5, 4 };
 
@@ -522,7 +522,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_Contains_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
 
         Assert.True(dict.Keys.Contains("key1"));
@@ -532,7 +532,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_IsReadOnly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.True(dict.Keys.IsReadOnly);
     }
@@ -540,7 +540,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_Contains_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         Assert.True(dict.Values.Contains(100));
@@ -550,7 +550,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_IsReadOnly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.True(dict.Values.IsReadOnly);
     }
@@ -558,7 +558,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void LargeCapacity_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         const int itemCount = 10000;
 
         for (var i = 0; i < itemCount; i++)
@@ -581,7 +581,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void LargeInserts_DoNotThrow_AndMaintainOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         for (var i = 0; i < 70_000; i++)
         {
             dict.Add($"key{i}", i);
@@ -596,7 +596,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void CustomComparer_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         dict.Add("KEY1", 100);
 
         Assert.True(dict.ContainsKey("key1"));
@@ -607,7 +607,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ExplicitInterfaceImplementations_WorkCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
 
         var genericEnumerable = (IEnumerable<KeyValuePair<string, int>>)dict;
@@ -630,7 +630,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void IsPrime_UtilityMethod_WorksCorrectly()
     {
-        var type = typeof(OrderedDictionary<string, int>);
+        var type = typeof(pengdows.crud.collections.OrderedDictionary<string, int>);
         var method = type.GetMethod("IsPrime", BindingFlags.NonPublic | BindingFlags.Static);
 
         if (method != null)
@@ -650,7 +650,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void EnumeratorModification_ThrowsInvalidOperationException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
         dict.Add("key2", 2);
 
@@ -665,7 +665,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeyEnumeratorModification_ThrowsInvalidOperationException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
 
         var enumerator = dict.Keys.GetEnumerator();
@@ -679,7 +679,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValueEnumeratorModification_ThrowsInvalidOperationException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
 
         var enumerator = dict.Values.GetEnumerator();
@@ -693,7 +693,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void StressTest_AddRemoveMultipleItems()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         const int iterations = 1000;
 
         for (var i = 0; i < iterations; i++)
@@ -719,7 +719,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Resize_MaintainsInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>(4);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(4);
         var keys = new[] { "a", "b", "c", "d", "e", "f", "g", "h" };
 
         for (var i = 0; i < keys.Length; i++)
@@ -738,7 +738,7 @@ public class OrderedDictionaryTests
     [InlineData(1000)]
     public void VariousCapacities_WorkCorrectly(int capacity)
     {
-        var dict = new OrderedDictionary<string, int>(capacity);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(capacity);
 
         dict.Add("test", 42);
 
@@ -749,7 +749,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void GenericInterface_IDictionary_WorksCorrectly()
     {
-        IDictionary<string, int> dict = new OrderedDictionary<string, int>();
+        IDictionary<string, int> dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict.Add("key1", 100);
         dict["key2"] = 200;
@@ -762,7 +762,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void GenericInterface_IReadOnlyDictionary_WorksCorrectly()
     {
-        IReadOnlyDictionary<string, int> dict = new OrderedDictionary<string, int>();
+        IReadOnlyDictionary<string, int> dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         ((IDictionary<string, int>)dict).Add("key1", 100);
 
         Assert.Single(dict);
@@ -775,7 +775,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void NonGenericInterface_IEnumerable_WorksCorrectly()
     {
-        IEnumerable dict = new OrderedDictionary<string, int>();
+        IEnumerable dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         ((IDictionary<string, int>)dict).Add("key1", 100);
 
         var items = new List<object>();
@@ -791,7 +791,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_CopyTo_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("first", 1);
         dict.Add("second", 2);
 
@@ -805,7 +805,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_CopyTo_NullArray_ThrowsArgumentNullException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
 
         Assert.Throws<ArgumentNullException>(() => dict.Keys.CopyTo(null!, 0));
@@ -814,7 +814,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_CopyTo_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("first", 100);
         dict.Add("second", 200);
 
@@ -828,7 +828,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_CopyTo_NullArray_ThrowsArgumentNullException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
 
         Assert.Throws<ArgumentNullException>(() => dict.Values.CopyTo(null!, 0));
@@ -837,7 +837,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_Add_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Keys.Add("key"));
     }
@@ -845,7 +845,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_Remove_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Keys.Remove("key"));
     }
@@ -853,7 +853,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeysCollection_Clear_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Keys.Clear());
     }
@@ -861,7 +861,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_Add_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Values.Add(1));
     }
@@ -869,7 +869,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_Remove_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Values.Remove(1));
     }
@@ -877,7 +877,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValuesCollection_Clear_ThrowsNotSupportedException()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         Assert.Throws<NotSupportedException>(() => dict.Values.Clear());
     }
@@ -885,7 +885,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void HashCollisions_HandledCorrectly()
     {
-        var dict = new OrderedDictionary<int, string>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<int, string>();
 
         var keys = new[] { 1, 17, 33, 49 };
 
@@ -906,7 +906,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void FrequentResizing_MaintainsIntegrity()
     {
-        var dict = new OrderedDictionary<string, int>(2);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(2);
         var expectedPairs = new List<KeyValuePair<string, int>>();
 
         for (var i = 0; i < 100; i++)
@@ -922,7 +922,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void FreeListReuse_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict.Add("key1", 1);
         dict.Add("key2", 2);
@@ -939,7 +939,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Enumerator_BasicIteration_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
         dict.Add("key2", 2);
 
@@ -959,7 +959,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void KeyEnumerator_BasicIteration_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 1);
         dict.Add("key2", 2);
 
@@ -979,7 +979,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void ValueEnumerator_BasicIteration_WorksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
         dict.Add("key2", 200);
 
@@ -999,7 +999,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void LargeCapacity_WorksAtHighCounts()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         const int testCount = 5000;
 
         for (var i = 0; i < testCount; i++)
@@ -1015,7 +1015,7 @@ public class OrderedDictionaryTests
     [Fact]
     public void Add_KeyValuePairOverload_AddsEntry()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         dict.Add(new KeyValuePair<string, int>("pair-key", 42));
 

@@ -67,7 +67,9 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 ///   reads reader.DbDataReader.RecordsAffected directly, which fakeDbDataReader hardcoded to 0).
 ///   Fixed by adding fakeDbConnection.EnqueueReaderResult(rows, recordsAffected) — Snowflake is
 ///   fully Tier 2 now.
-/// - SQLite, SQL Server, MySQL, MariaDB (Pomelo): Tier 1 yes, Tier 2 yes, no caveats found.
+/// - SQLite, SQL Server, MySQL, MariaDB (Pomelo): Tier 1 yes, Tier 2 yes, no caveats found. MySQL
+///   and MariaDB are net8.0-only in this project's MemberData lists (see the #if NET8_0 guards
+///   below) because Pomelo.EntityFrameworkCore.MySql has no EF Core 10-compatible release yet.
 ///
 /// DuckDB is absent from both MemberData lists above, but NOT because StormGate is incompatible
 /// with it — it is absent because EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb has
@@ -81,24 +83,62 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 /// same connection type already proven fully Tier 1 and Tier 2 compatible above. Confirmed
 /// directly — not assumed — by <see cref="DuckDbInterceptorRealProviderTests"/>, which drives a
 /// real embedded DuckDB engine (no Docker, no fakeDb) through StormGateConnectionInterceptor and
-/// proves saturation actually blocks a second concurrent open. DuckDB.EFCore (the other DuckDB EF
-/// Core provider) only targets net10.0, incompatible with this project's deliberate net8.0-only
-/// scoping, and was not investigated further once EnergyExemplar's package confirmed the claim.
+/// proves saturation actually blocks a second concurrent open.
+///
+/// - DuckDB.EFCore (github.com/denis-ivanov/DuckDB.EFCore, net10.0-only, a second and independent
+///   DuckDB EF Core provider from EnergyExemplar's above): Tier 1 no — unlike EnergyExemplar's
+///   package, its UseDuckDB DOES accept an arbitrary DbConnection at the API level, so it was
+///   actually tried against fakeDb via ConnectionControlCapable. It failed immediately with
+///   InvalidCastException: DuckDBRelationalConnection.OpenDbConnectionAsync casts the incoming
+///   connection to concrete DuckDB.NET.Data.DuckDBConnection unconditionally, one layer earlier
+///   than the command-creation-time casts documented for Oracle/Firebird/Db2 above, so it doesn't
+///   survive even Tier 1. Same underlying class of problem as those three, though — a hardcoded
+///   concrete-type cast inside the provider's own code, not a StormGate/pengdows.crud gap — and
+///   confirmed directly, not assumed, by <see cref="DuckDBEFCoreInterceptorRealProviderTests"/>,
+///   which proves StormGateConnectionInterceptor governs a genuine DuckDBConnection (no fakeDb, no
+///   Docker) exactly as it does every provider above.
 /// </summary>
 public static class EfProviders
 {
+    // Single source of truth for whether Pomelo.EntityFrameworkCore.MySql (and therefore MySQL
+    // and MariaDB, which both go through it) is referenced on this TFM — see the .csproj comment
+    // on its net8.0-only PackageReference. ConnectionControlCapable/DeepTestCapable both branch on
+    // this instead of each repeating their own #if NET8_0 guard. Configure()'s switch case still
+    // needs its own #if NET8_0 — UseMySql/MySqlServerVersion aren't even resolvable types when
+    // Pomelo isn't referenced, so that one can't become a runtime check on this same field — but
+    // it guards the exact same condition as this field and must be kept in sync with it.
+    // static readonly (not const): a literal-true/false const branch is a compile-time-constant
+    // condition, and the C# compiler flags the unreachable net10.0 branch as CS0162 for that —
+    // readonly still resolves to the same fixed value per TFM without tripping that warning.
+#if NET8_0
+    private static readonly bool IsMySqlProviderAvailable = true;
+#else
+    private static readonly bool IsMySqlProviderAvailable = false;
+#endif
+
+
     /// <summary>Tier 1: the databases verified by <see cref="EfProviderCompatibilityTests"/> (connection accept + StormGate admission control only — this is the production-relevant tier).</summary>
     public static IEnumerable<object[]> ConnectionControlCapable()
     {
         yield return new object[] { SupportedDatabase.Sqlite };
         yield return new object[] { SupportedDatabase.SqlServer };
         yield return new object[] { SupportedDatabase.PostgreSql };
-        yield return new object[] { SupportedDatabase.MySql };
-        yield return new object[] { SupportedDatabase.MariaDb };
+        if (IsMySqlProviderAvailable)
+        {
+            yield return new object[] { SupportedDatabase.MySql };
+            yield return new object[] { SupportedDatabase.MariaDb };
+        }
         yield return new object[] { SupportedDatabase.Oracle };
         yield return new object[] { SupportedDatabase.Firebird };
         yield return new object[] { SupportedDatabase.Snowflake };
         yield return new object[] { SupportedDatabase.Db2 };
+        // SupportedDatabase.DuckDB (via DuckDB.EFCore, net10.0-only) is deliberately absent here —
+        // tried and found to fail even Tier 1: DuckDBRelationalConnection.OpenDbConnectionAsync
+        // casts the incoming connection to concrete DuckDB.NET.Data.DuckDBConnection
+        // unconditionally, so a fakeDbConnection throws InvalidCastException on Open(), before a
+        // command is ever created. See DuckDBEFCoreInterceptorRealProviderTests for the real,
+        // non-fakeDb proof that StormGateConnectionInterceptor governs it against a genuine
+        // DuckDBConnection regardless.
     }
 
     /// <summary>
@@ -131,8 +171,11 @@ public static class EfProviders
     {
         yield return new object[] { SupportedDatabase.Sqlite };
         yield return new object[] { SupportedDatabase.SqlServer };
-        yield return new object[] { SupportedDatabase.MySql };
-        yield return new object[] { SupportedDatabase.MariaDb };
+        if (IsMySqlProviderAvailable)
+        {
+            yield return new object[] { SupportedDatabase.MySql };
+            yield return new object[] { SupportedDatabase.MariaDb };
+        }
         yield return new object[] { SupportedDatabase.Snowflake };
     }
 
@@ -152,10 +195,12 @@ public static class EfProviders
                 builder.UseNpgsql(connection, contextOwnsConnection: false);
                 break;
 
+#if NET8_0
             case SupportedDatabase.MySql:
             case SupportedDatabase.MariaDb:
                 builder.UseMySql(connection, new MySqlServerVersion(new Version(8, 0, 33)));
                 break;
+#endif
 
             case SupportedDatabase.Oracle:
                 builder.UseOracle(connection, contextOwnsConnection: false);
@@ -172,6 +217,13 @@ public static class EfProviders
             case SupportedDatabase.Db2:
                 builder.UseDb2(connection, _ => { });
                 break;
+
+            // SupportedDatabase.DuckDB (DuckDB.EFCore) is deliberately NOT wired up here — it
+            // fails even Tier 1 against fakeDb (see the class doc comment above and
+            // DuckDBEFCoreInterceptorRealProviderTests), so nothing ever calls Configure() with
+            // it, and every caller of Configure() is driven exclusively by MemberData lists or
+            // hardcoded SupportedDatabase literals, neither of which include it. A case here
+            // would be genuinely unreachable dead code.
 
             default:
                 throw new NotSupportedException(
