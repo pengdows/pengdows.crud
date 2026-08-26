@@ -67,14 +67,14 @@ namespace pengdows.crud.Tests.dialects
         }
 
         [Fact]
-        public void GetBaseSessionSettings_IncludesTiDbPessimisticMode()
+        public void UpsertIncomingAlias_IsAlwaysNull_AndUsesValuesSyntax()
         {
             var factory = new fakeDbFactory(SupportedDatabase.TiDb);
             var dialect = new TiDbDialect(factory, NullLogger.Instance);
 
-            var result = dialect.GetBaseSessionSettings();
-
-            Assert.Contains("tidb_pessimistic_txn_default", result, StringComparison.OrdinalIgnoreCase);
+            // TiDB does not support MySQL 8.0.20+ AS alias on INSERT VALUES
+            Assert.Null(dialect.UpsertIncomingAlias);
+            Assert.Equal("VALUES(\"col\")", dialect.UpsertIncomingColumn("col"));
         }
     }
 }

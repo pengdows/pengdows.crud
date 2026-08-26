@@ -47,6 +47,10 @@ internal class CockroachDbDialect : PostgreSqlDialect
         [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
     };
 
+    // CockroachDB does not support stored procedures (CREATE PROCEDURE / CALL).
+    // Stored procedures cannot be created or called on CockroachDB.
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
+
     // CockroachDB supports native UPSERT which is more efficient than ON CONFLICT
     // in some distributed scenarios, though it also fully supports ON CONFLICT.
 

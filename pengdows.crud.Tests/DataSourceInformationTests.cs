@@ -203,9 +203,9 @@ public class DataSourceInformationTests
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
                 or SupportedDatabase.Db2 => ProcWrappingStyle.Call,
-            SupportedDatabase.TiDb => ProcWrappingStyle.None,
+            SupportedDatabase.TiDb or SupportedDatabase.CockroachDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
-                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
+                or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
             SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };

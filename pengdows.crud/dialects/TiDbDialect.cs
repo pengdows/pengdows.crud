@@ -67,6 +67,11 @@ internal class TiDbDialect : MySqlDialect
     // Stored procedures cannot be created or called on TiDB.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
+    // TiDB's MySQL compatibility layer does not support the MySQL 8.0.20+ "AS incoming"
+    // table alias on INSERT ... VALUES. Standard VALUES(column) syntax is required.
+    public override string? UpsertIncomingAlias => null;
+    public override string UpsertIncomingColumn(string columnName) => $"VALUES({WrapObjectName(columnName)})";
+
     // TiDB does not enforce FK constraints by default (compatibility mode).
     // TiDB parses CHECK constraint DDL but does not enforce it at runtime.
     public override bool EnforcesForeignKeyConstraints => false;

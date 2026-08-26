@@ -682,11 +682,7 @@ CREATE TABLE {tableName} (
                     // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
                     // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
                     // error and skip gracefully so TiDB does not fail the run.
-                    sc.Query.Append(
-                        $"CREATE PROCEDURE {mysqlProcName}()\n" +
-                        "BEGIN\n" +
-                        "  SELECT 42;\n" +
-                        "END");
+                    sc.Query.Append($"CREATE PROCEDURE {mysqlProcName}() SELECT 42");
                     await sc.ExecuteNonQueryAsync();
 
                     // CALL `sp_pengdows_test`() — result set contains one row with value 42.
@@ -781,7 +777,7 @@ CREATE TABLE {tableName} (
                     // output-parameter binding needed, unlike SQL Server's OUTPUT).
                     // CREATE PROCEDURE was introduced in PostgreSQL 11 (pre-11 only supports functions).
                     var isPostgreSql = _context.Product is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql;
-                    var supportsRealProcedure = !isPostgreSql || _context.DataSourceInfo.ParsedVersion == null || _context.DataSourceInfo.ParsedVersion.Major >= 11;
+                    var supportsRealProcedure = isPostgreSql && (_context.DataSourceInfo.ParsedVersion == null || _context.DataSourceInfo.ParsedVersion.Major >= 11);
                     if (supportsRealProcedure)
                     {
                         var pgProcName = _context.WrapObjectName("sp_pengdows_test_proc");

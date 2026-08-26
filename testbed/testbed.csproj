@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -21,6 +21,7 @@
         <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4"/>
         <PackageReference Include="MySql.Data" Version="9.3.0"/>
+        <PackageReference Include="MySqlConnector" Version="2.4.0"/>
         <PackageReference Include="SSH.NET" Version="2026.0.0"/>
         <PackageReference Include="log4net" Version="3.4.0"/>
         <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3"/>

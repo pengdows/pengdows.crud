@@ -37,21 +37,27 @@ Database support is a joint capability over **(database engine, client driver)**
 
 | Database | Floor | Recommended | Verified at | Driver used | Key reason for recommended floor |
 |----------|-------|-------------|-------------|-------------|-----------------------------------|
-| SQL Server | 2008 (v10) | 2016 (v13) | 2022-CU25 | Microsoft.Data.SqlClient 6.0.2 | JSON support (`JSON_VALUE`) requires v13; MERGE available from v10 |
-| PostgreSQL | 9.5 | 15 | 16.4 | Npgsql 9.0.3 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
-| Oracle | 12c | 19c | 23.4-slim | Oracle.ManagedDataAccess.Core 23.8.0 | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c |
-| MySQL | 5.7.20 | 8.0 | 8.4.11 | MySql.Data 9.3.0 / MySqlConnector 2.x | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
-| MariaDB | 10.2 | 10.4 | 11.4.12 | MySqlConnector 2.x / MySql.Data 9.3.0 | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
+| SQL Server | 2008 (v10) | 2016 (v13) | 2017, 2019, 2022 | Microsoft.Data.SqlClient 6.0.2 | JSON support (`JSON_VALUE`) requires v13; MERGE available from v10 (2017 is oldest Linux container) |
+| PostgreSQL | 9.5 | 15 | 9.5, 15.0, 16.4 | Npgsql 9.0.3 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
+| Oracle | 12c | 19c | 18.4.0, 21.3.0, 23.8.0 | Oracle.ManagedDataAccess.Core 23.8.0 | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c (18c XE is oldest faststart container) |
+| MySQL | 5.7.20 | 8.0 | 5.7, 8.4.11 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
+| MariaDB | 10.2 | 10.4 | 10.2, 10.4, 10.11, 11.4.12 | MySqlConnector 2.4.0 (recommended) | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
 | SQLite | 3.24 | 3.35 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
-| Firebird | 2.5 | 3.0 | 5.0.0 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 |
+| Firebird | 2.5 | 3.0 | 3.0.9 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 (3.0.9 is oldest available container) |
 | DuckDB | 0.8.0 | 1.0.0 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
-| CockroachDB | ~22.x | latest | v25.1.0 | Npgsql 9.0.3 | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
-| YugabyteDB | 2.x | latest | 2024.2.1 | Npgsql 9.0.3 | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
+| CockroachDB | 23.1 | latest | v23.2.14, v24.3.0, v25.1.0 | Npgsql 9.0.3 | Npgsql connection pool reset requires `pg_advisory_unlock_all` (CockroachDB 23.1+) |
+| YugabyteDB | 2.x | latest | 2.25.2.0, 2025.2.5.2 | Npgsql 9.0.3 | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
+| TiDB | 7.0 | latest | v7.5.7, v8.5.7 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | Distributed MySQL; stored proc DDL unsupported; uses standard VALUES() upsert |
 | Snowflake | service | service | Cloud service | Snowflake.Data 5.6.0 | Cloud service — version managed by Snowflake; no minimum to configure |
-| Db2 | 11.5.0 | 11.5.8.0 | 11.5.8.0 | Net.IBM.Data.Db2-lnx 8.0.0.500 | Validated against `ibmcom/db2:11.5.8.0` / `icr.io/db2_community/db2` |
+| Db2 | 11.5.0 | 11.5.8.0 | 11.5.0.0a, 11.5.8.0 | Net.IBM.Data.Db2-lnx 8.0.0.500 | Validated against `ibmcom/db2` and `icr.io/db2_community/db2` images |
 
 > **Driver Constraints & Handshake Caveats:**
+> - **CockroachDB & Npgsql Pool Reset:** Npgsql 8.x and 9.x issue `SELECT pg_advisory_unlock_all()` on pooled connection reset. CockroachDB added support for advisory lock functions in v23.1. Pre-23.1 versions reject this query with error 42883, making CockroachDB 23.1+ the effective floor when using modern Npgsql.
+> - **Embedded Engines (SQLite & DuckDB):** Unlike client-server databases, SQLite and DuckDB execute in-process. Their engine versions are determined by the underlying native library bundled with their ADO.NET provider:
+>   - **SQLite:** `Microsoft.Data.Sqlite` bundles `SQLitePCLRaw.bundle_e_sqlite3` (embedding SQLite 3.45+). Changing the underlying SQLite version requires switching providers (e.g. `System.Data.SQLite`), loading system `libsqlite3`, or reconfiguring `SQLitePCLRaw`. `SqliteDialect` automatically adapts parameter limits (999 vs 32,766 at 3.32), identity retrieval (`RETURNING` vs `last_insert_rowid()` at 3.35), window functions (3.25), and JSON (3.45) at runtime.
+>   - **DuckDB:** `DuckDB.NET.Data.Full` statically bundles `libduckdb` (currently 1.3.2). `DuckDbDialect` adapts `MERGE` and encryption at 1.4+, falling back to `INSERT ... ON CONFLICT` on pre-1.4 versions.
 > - **MariaDB & Connector/NET:** MariaDB versions prior to 11.0 report a `5.5.5-10.x.x-MariaDB` handshake prefix (MDEV-28910). Oracle's `MySql.Data` >= 8.0.22 rejects this prefix as "Versions of MySQL prior to 5.6 are not currently supported." Use `MySqlConnector` when connecting to MariaDB 10.x.
+> - **MySQL / MariaDB Prepared Statements:** `COM_STMT_PREPARE` in MySQL 5.7 and MariaDB ≤ 10.5 rejects DDL / stored procedure statements with error 1295. `MySqlDialect` automatically detects error 1295 and falls back to text execution protocol seamlessly.
 > - **PostgreSQL & Npgsql Support Policy:** Npgsql actively tests and supports PostgreSQL versions within their community support window (~5 years back). Connecting to legacy releases like 9.5 functions over the wire for core SQL, but is outside the driver vendor's support window.
 > - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` requires MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` (10.1+). Earlier versions only support transaction-scoped `SET SESSION TRANSACTION READ ONLY`.
 

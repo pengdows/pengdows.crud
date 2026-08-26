@@ -82,6 +82,8 @@ internal class MySqlDialect : SqlDialect
 
     private const int MaxPreparedStatementCountErrorCode = 1461;
     private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
+    private const int UnsupportedPreparedStatementErrorCode = 1295;
+    private const string UnsupportedPreparedStatementToken = "not supported in the prepared statement protocol";
     private const string PreferredProviderWarning =
         "MySql.Data is supported, but MySqlConnector is the preferred MySQL provider for pengdows.crud. " +
         "MySqlConnector provides better read/write pool separation support and has shown better behavior under high concurrency.";
@@ -157,7 +159,7 @@ internal class MySqlDialect : SqlDialect
     // prepared statements are safe and correct — and avoid server-side backslash processing
     // that can corrupt string values containing escape sequences when using text protocol.
     // Oracle MySql.Data defaults OFF to avoid max_prepared_stmt_count exhaustion on older servers.
-    // ShouldDisablePrepareOn() guards against error 1461 on either path.
+    // ShouldDisablePrepareOn() guards against error 1461 and 1295 on either path.
     public override bool PrepareStatements => _isMySqlConnector;
     public override bool SupportsReadOnlyTransactions => true;
 
@@ -232,6 +234,11 @@ internal class MySqlDialect : SqlDialect
     public override bool ShouldDisablePrepareOn(Exception ex)
     {
         if (base.ShouldDisablePrepareOn(ex))
+        {
+            return true;
+        }
+
+        if (IsUnsupportedPreparedStatement(ex))
         {
             return true;
         }
@@ -364,6 +371,24 @@ internal class MySqlDialect : SqlDialect
         {
             return connectionString;
         }
+    }
+
+    private static bool IsUnsupportedPreparedStatement(Exception ex)
+    {
+        for (Exception? current = ex; current != null; current = current.InnerException)
+        {
+            if (current.Message.Contains(UnsupportedPreparedStatementToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (TryGetProviderErrorCode(current) == UnsupportedPreparedStatementErrorCode)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsMaxPreparedStatementLimit(Exception ex)

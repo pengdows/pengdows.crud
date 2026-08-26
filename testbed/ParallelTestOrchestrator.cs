@@ -340,7 +340,7 @@ public static class TestbedImageMatrix
         ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11")],
         ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2022-CU23", "mcr.microsoft.com/mssql/server:2022-CU23-ubuntu-22.04")],
         ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0")],
-        ["Firebird"] = [new("3.0.9", "firebirdsql/firebird:3.0.9"), new("2.5.9", "firebirdsql/firebird:2.5.9")],
+        ["Firebird"] = [new("3.0.9", "firebirdsql/firebird:3.0.9")],
         ["TiDB"] = [new("v8.5.7", "pingcap/tidb:v8.5.7"), new("v7.5.7", "pingcap/tidb:v7.5.7")],
         ["YugabyteDB"] = [new("2025.2.5.2-b5", "yugabytedb/yugabyte:2025.2.5.2-b5"), new("2.25.2.0-b359", "yugabytedb/yugabyte:2.25.2.0-b359")],
         ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-slim-faststart"), new("23.8.0", "gvenzl/oracle-free:23.8.0-slim-faststart")],

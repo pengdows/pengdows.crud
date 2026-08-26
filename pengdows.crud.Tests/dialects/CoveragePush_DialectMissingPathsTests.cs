@@ -34,6 +34,25 @@ public class CoveragePush_DialectMissingPathsTests
         Assert.True(dialect.ShouldDisablePrepareOn(new InvalidOperationException("base veto")));
     }
 
+    [Fact]
+    public void MySql_ShouldDisablePrepareOn_UnsupportedPreparedStatement_ReturnsTrue()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
+
+        // Token match
+        Assert.True(dialect.ShouldDisablePrepareOn(new Exception("This command is not supported in the prepared statement protocol yet")));
+
+        // Error code 1295 match via reflection property
+        Assert.True(dialect.ShouldDisablePrepareOn(new MySqlTestExceptionWithNumber(1295, "error 1295")));
+    }
+
+    private sealed class MySqlTestExceptionWithNumber : Exception
+    {
+        public int Number { get; }
+        public MySqlTestExceptionWithNumber(int number, string message) : base(message) => Number = number;
+    }
+
     // =========================================================================
     // MySqlDialect — TryGetProviderErrorCode returns null (line 309)
     // =========================================================================

@@ -116,4 +116,13 @@ public class CockroachDbDialectTests
         Assert.Contains("RETURNING", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"Id\"", result);
     }
+
+    [Fact]
+    public void ProcWrappingStyle_IsNone()
+    {
+        var dialect = CreateDialect();
+
+        // CockroachDB does not support CREATE PROCEDURE / CALL syntax
+        Assert.Equal(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
+    }
 }

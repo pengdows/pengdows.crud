@@ -20,23 +20,10 @@ public class OracleTestContainer : TestContainer
 
     public OracleTestContainer(string? requestedImage = null)
     {
-        var imageType = Environment.GetEnvironmentVariable("ORACLE_IMAGE_TYPE")?.ToLower() ?? "free";
-        string image;
-        string passwordEnvVar;
-
-        if (imageType == "xe")
-        {
-            image = "oracle/database:18.4.0-xe";
-            _sid = "XEPDB1";
-            passwordEnvVar = "ORACLE_PWD";
-        }
-        else
-        {
-            // Default: gvenzl/oracle-free:23.26.2-slim-faststart — smaller, faster startup than oracle/database:18.4.0-xe
-            image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-slim-faststart";
-            _sid = "FREEPDB1";
-            passwordEnvVar = "ORACLE_PASSWORD";
-        }
+        var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-slim-faststart";
+        var isXe = image.Contains("xe", StringComparison.OrdinalIgnoreCase);
+        _sid = isXe ? "XEPDB1" : "FREEPDB1";
+        var passwordEnvVar = image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) ? "ORACLE_PWD" : "ORACLE_PASSWORD";
 
         Console.WriteLine($"[Oracle] Using image: {image} (SID: {_sid})");
 
