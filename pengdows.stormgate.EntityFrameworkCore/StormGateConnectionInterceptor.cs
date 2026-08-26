@@ -48,6 +48,24 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     private sealed class PermitBox(StormGate.StormGatePermit permit)
     {
         public StormGate.StormGatePermit Permit { get; } = permit;
+
+        // A caller that lets a tracked DbConnection become unreachable without ever closing,
+        // disposing, or breaking it — so ConnectionClosed/Failed/Disposed never fires — drops
+        // this box's ConditionalWeakTable entry the moment the connection is collected, with
+        // nothing left to dispose Permit. Without this finalizer that permanently shrinks the
+        // shared StormGate's admission budget by one slot per occurrence. Only Permit is
+        // touched here — never the connection, which this box holds no reference to anyway.
+        ~PermitBox()
+        {
+            try
+            {
+                Permit.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The owning StormGate had already torn down its semaphore; nothing to release.
+            }
+        }
     }
 
     public override InterceptionResult ConnectionOpening(

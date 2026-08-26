@@ -362,6 +362,26 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             }
         }
 
+        // Finalizer-safe permit release: unlike ReleasePermitOnce, this never touches _inner
+        // (not even to unsubscribe the StateChange handler) — see the Dispose(bool) finalizer
+        // branch below for why touching _inner from that path is unsafe. Disposing _permit is
+        // safe because it only reaches the owning StormGate, which this permit itself keeps
+        // reachable and which has no finalizer of its own to race against.
+        private void ReleasePermitOnFinalize()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+            {
+                try
+                {
+                    _permit.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The owning StormGate had already torn down its semaphore; nothing to release.
+                }
+            }
+        }
+
         [AllowNull]
         public override string ConnectionString
         {
@@ -527,6 +547,10 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             {
                 // Finalizer path: do not touch managed objects — they may already be
                 // collected or invalid. An exception from a finalizer crashes the process.
+                // The permit itself is safe to release here (see ReleasePermitOnFinalize) —
+                // without it, a PermitConnection abandoned without Close/Dispose would hold
+                // its StormGate permit forever once finalized.
+                ReleasePermitOnFinalize();
                 base.Dispose(disposing);
             }
         }

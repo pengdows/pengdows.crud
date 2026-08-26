@@ -419,6 +419,33 @@ public class PermitConnectionTests
         _mockInner.Verify(c => c.Close(), Times.Never());
     }
 
+    // Item from review: the finalizer path (Dispose(false)) already avoids touching _inner
+    // (per the comment above it) but never released the StormGate permit either — a
+    // PermitConnection abandoned without an explicit Close/Dispose (dropped, or simply never
+    // disposed by the caller) would hold its permit forever once the GC finalizer ran,
+    // permanently shrinking the shared gate's budget by one slot per occurrence. Reuses the
+    // same Dispose(false)-via-reflection technique as FinalizerPath_Dispose_DoesNotCallClose
+    // above to simulate the finalizer deterministically instead of relying on real GC timing.
+    [Fact]
+    public async Task FinalizerPath_Dispose_StillReleasesPermit()
+    {
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var conn = await gate.OpenAsync();
+
+        var disposeMethod = conn.GetType().GetMethod(
+            "Dispose",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null, new[] { typeof(bool) }, null);
+        Assert.NotNull(disposeMethod);
+
+        var ex = Record.Exception(() => disposeMethod!.Invoke(conn, new object[] { false }));
+        Assert.Null(ex);
+
+        // Permit must be back in the gate — should be able to open a new connection.
+        var conn2 = await gate.OpenAsync();
+        Assert.NotNull(conn2);
+    }
+
     // Minor: BeginDbTransactionAsync must override to call the inner's async path, not fall
     // back to the sync BeginDbTransaction default in DbConnection.
     [Fact]

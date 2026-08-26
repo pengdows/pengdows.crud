@@ -339,6 +339,56 @@ public sealed class StormGateConnectionInterceptorTests
         }
     }
 
+    // Item from review: PermitBox (the ConditionalWeakTable value tracking each connection's
+    // permit) had no finalizer. A caller that lets a tracked DbConnection become unreachable
+    // without ever closing, disposing, or breaking it — so ConnectionClosed/Failed/Disposed
+    // never fires — drops the CWT entry (and the PermitBox with it) the moment the connection
+    // is collected, and nothing was left to dispose the permit inside that box: a permanent,
+    // one-slot leak from the shared StormGate's admission budget per occurrence. Uses a real,
+    // untracked SqliteConnection (not fakeDbFactory, whose CreateConnection() retains every
+    // connection it ever creates in an internal list, which would keep this one artificially
+    // alive and defeat the whole point of this test) so it can genuinely become unreachable.
+    [Fact]
+    public void PermitIsReleased_WhenTrackedConnectionIsGarbageCollectedWithoutBeingReleased()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
+
+            AcquireAndAbandonPermit(interceptor);
+
+            for (var i = 0; i < 5; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            // Would throw TimeoutException if the abandoned connection's permit leaked.
+            using var probe = (SqliteConnection)SqliteFactory.Instance.CreateConnection()!;
+            probe.ConnectionString = $"Data Source={dbPath}";
+            interceptor.AcquirePermit(probe);
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
+    }
+
+    // Isolated into its own non-inlined method so the abandoned connection has no surviving
+    // stack-local root once this method returns — inlining it into the caller could, under a
+    // Debug build's conservative local-variable liveness tracking, keep `connection` reachable
+    // past the point the test actually wants it collectible.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void AcquireAndAbandonPermit(StormGateConnectionInterceptor interceptor)
+    {
+        var connection = (SqliteConnection)SqliteFactory.Instance.CreateConnection()!;
+        interceptor.AcquirePermit(connection);
+        // `connection` is intentionally never Closed/Disposed here — simulating exactly the
+        // caller behavior PermitBox's finalizer exists to cover.
+    }
+
     [Fact]
     public void Constructor_ThrowsForNullStormGate()
     {

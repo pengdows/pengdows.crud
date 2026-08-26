@@ -152,6 +152,12 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
             await using var txn = await context.Database.BeginTransactionAsync();
             var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
 
+            // Proves a permit was genuinely taken for this transaction's connection, not just
+            // that release happens to be a no-op. A no-op interceptor would let this probe open
+            // immediately instead of timing out against the saturated maxConcurrentOpens: 1 gate.
+            await using var probe = CreateContext(factory, interceptor);
+            await Assert.ThrowsAsync<TimeoutException>(() => probe.Database.OpenConnectionAsync());
+
             Assert.Equal(0, fakeTxn.CommitCallCount);
 
             await txn.CommitAsync();
@@ -177,6 +183,12 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         {
             await using var txn = await context.Database.BeginTransactionAsync();
             var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
+
+            // Proves a permit was genuinely taken for this transaction's connection, not just
+            // that release happens to be a no-op. A no-op interceptor would let this probe open
+            // immediately instead of timing out against the saturated maxConcurrentOpens: 1 gate.
+            await using var probe = CreateContext(factory, interceptor);
+            await Assert.ThrowsAsync<TimeoutException>(() => probe.Database.OpenConnectionAsync());
 
             await txn.RollbackAsync();
 
@@ -213,6 +225,12 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
             await using var txn = await context.Database.BeginTransactionAsync();
             var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
 
+            // Proves a permit was genuinely taken for this transaction's connection, not just
+            // that release happens to be a no-op. A no-op interceptor would let this probe open
+            // immediately instead of timing out against the saturated maxConcurrentOpens: 1 gate.
+            await using var probe = CreateContext(factory, interceptor);
+            await Assert.ThrowsAsync<TimeoutException>(() => probe.Database.OpenConnectionAsync());
+
             var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => txn.CommitAsync());
             Assert.Same(commitFailure, thrown);
             Assert.Equal(1, fakeTxn.CommitCallCount);
@@ -244,6 +262,12 @@ public sealed class StormGateConnectionInterceptorFakeDbTests
         {
             await using var txn = await context.Database.BeginTransactionAsync();
             var fakeTxn = (fakeDbTransaction)txn.GetDbTransaction();
+
+            // Proves a permit was genuinely taken for this transaction's connection, not just
+            // that release happens to be a no-op. A no-op interceptor would let this probe open
+            // immediately instead of timing out against the saturated maxConcurrentOpens: 1 gate.
+            await using var probe = CreateContext(factory, interceptor);
+            await Assert.ThrowsAsync<TimeoutException>(() => probe.Database.OpenConnectionAsync());
 
             var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => txn.RollbackAsync());
             Assert.Same(rollbackFailure, thrown);

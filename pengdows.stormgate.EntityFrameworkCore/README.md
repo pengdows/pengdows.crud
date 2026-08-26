@@ -25,30 +25,31 @@ requiring you to hand-manage connection objects.**
 
 ## Provider Compatibility
 
-Two independent questions, two independent tiers — a provider can satisfy the first without
-satisfying the second, and only the first matters for production use of this package:
+Two independent questions — a provider can satisfy the first without satisfying the second, and
+only the first matters for production use of this package:
 
-- **Tier 1 — connection admission control (production-relevant).** Does the provider accept an
+- **Production (connection admission control).** Does the provider accept an
   externally-supplied `DbConnection`, and does `StormGateConnectionInterceptor` correctly gate its
   open/close lifecycle? `DbConnectionInterceptor` fires on ADO.NET connection events only — a
   layer no provider's command/parameter/reader handling can interfere with — so every provider
-  that accepts an external connection at all satisfies this tier.
-- **Tier 2 — unit-testable via `pengdows.crud.fakeDb` (testing-only, not a production concern).**
+  that accepts an external connection at all satisfies this column.
+- **fakeDb-testable (testing-only, not a production concern).**
   Does the provider's real SQL generation, parameter binding, and `SaveChanges` pipeline also run
   correctly against a `fakeDb`-backed connection, with zero real database engine? This is a much
-  stronger requirement than Tier 1, and every ❌ in the Tier 2 column below is a hardcoded
+  stronger requirement than the Production column, and every ❌ below is a hardcoded
   `(ConcreteProviderType)genericDbObject` cast **inside that provider's own EF Core implementation
   code** — not anything StormGate, pengdows.crud, or fakeDb does. StormGate has no involvement in
-  Tier 2 at all; fakeDb is a generic, provider-agnostic ADO.NET fake maintained by pengdows.crud,
-  and this table merely *exposes*, through testing, a pre-existing fact about how each provider
-  package happens to be written. It is **not a production concern either way**: in normal
-  production use, the provider's own ADO.NET implementation creates the concrete command,
+  fakeDb-testability at all; fakeDb is a generic, provider-agnostic ADO.NET fake maintained by
+  pengdows.crud, and this table merely *exposes*, through testing, a pre-existing fact about how
+  each provider package happens to be written. It is **not a production concern either way**: in
+  normal production use, the provider's own ADO.NET implementation creates the concrete command,
   parameter, and reader instances it then casts back to, so those casts always succeed — the
   failure mode only exists when something other than that provider's own driver constructs the
-  object, which fakeDb does deliberately and a real connection never would. Every Tier-1 ✅ below
-  is fully safe to run this package against in production regardless of its Tier 2 result.
+  object, which fakeDb does deliberately and a real connection never would. Every ✅ in the
+  Production column below is fully safe to run this package against in production regardless of
+  its fakeDb-testable result.
 
-| Provider | Tier 1 (admission control) | Tier 2 (fakeDb unit-testable) | Tier 2 caveat — cast inside that provider's own code |
+| Provider | Production (admission control) | fakeDb-testable | fakeDb-testable caveat — cast inside that provider's own code |
 |---|---|---|---|
 | SQLite | ✅ | ✅ | — |
 | SQL Server | ✅ | ✅ | — |
@@ -58,7 +59,7 @@ satisfying the second, and only the first matters for production use of this pac
 | Firebird | ✅ | ❌ | any string-valued parameter crashes — FirebirdSql's own `FbStringTypeMapping.ConfigureParameter` casts to concrete `FbParameter` |
 | Oracle | ✅ | ❌ | any command at all crashes — Oracle's own `OracleRelationalCommand.CreateDbCommand` casts to concrete `OracleCommand` |
 | Db2 | ✅ | ❌ | any command at all crashes — IBM's own `Db2RelationalCommand.CreateDbCommand` casts to concrete `DB2Command` |
-| DuckDB | ✅ | not fakeDb-testable | `EnergyExemplar.EntityFrameworkCore.DuckDb`'s `UseDuckDb` has no `DbConnection`-accepting overload, so this package's fakeDb-driven Tier 2 tests can't reach it at all — that's a testing-method limitation, not a StormGate incompatibility. Its `UseDuckDb` is a thin layer over `Microsoft.EntityFrameworkCore.Sqlite`: the object EF Core actually opens/closes is a real `Microsoft.Data.Sqlite.SqliteConnection`, the same connection type already proven fully Tier 1 and Tier 2 above. Confirmed directly against a real embedded DuckDB engine (no Docker, no fakeDb) — see `DuckDbInterceptorRealProviderTests`. |
+| DuckDB | ✅ | not fakeDb-testable | `EnergyExemplar.EntityFrameworkCore.DuckDb`'s `UseDuckDb` has no `DbConnection`-accepting overload, so this package's fakeDb-driven tests can't reach it at all — that's a testing-method limitation, not a StormGate incompatibility. Its `UseDuckDb` is a thin layer over `Microsoft.EntityFrameworkCore.Sqlite`: the object EF Core actually opens/closes is a real `Microsoft.Data.Sqlite.SqliteConnection`, the same connection type already proven fully Production and fakeDb-testable above. Confirmed directly against a real embedded DuckDB engine (no Docker, no fakeDb) — see `DuckDbInterceptorRealProviderTests`. |
 
 See `pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests/EfProviders.cs` for how each row
 was verified (direct reproduction against the real provider package, not assumed) and the exact
@@ -127,6 +128,18 @@ strategy), and remember worst-case latency for one call is now roughly
 `EfRetryStrategyTests.SqlServerRetryingExecutionStrategy_TreatsSaturationTimeoutAsTransient_AndRetriesUntilExhausted`
 for the confirmed reproduction.
 
+**A saturated gate doesn't always mean some other caller is competing with you — it can be a
+request blocking on a permit it already holds itself.** The scenario above assumes an unrelated
+caller occupies the budget. But if your own code holds one connection open (e.g. an explicit
+`Database.OpenConnectionAsync()`, or an outer unit of work) and, before closing it, triggers a
+*separate* `EnableRetryOnFailure`-wrapped operation that needs its own connection, that second
+operation is competing for a permit against a lease your own request is still holding. Retrying
+doesn't help — every attempt just re-times-out against the same self-imposed saturation, exactly
+like the external-caller case above but with no other traffic involved. This is a sizing problem
+(see Limits below), not a StormGate or EF Core bug: `maxConcurrentOpens` must cover the largest
+number of connection leases *one logical request* can legitimately hold at once, not just how
+many requests you expect concurrently.
+
 ## Critical: Share One StormGate
 
 The admission budget — the semaphore that does the actual throttling — lives on the
@@ -191,6 +204,16 @@ for the full pattern, including simulating a physical open failure via
 
 ## Limits
 
+- **Size for concurrent leases per logical request, not concurrent inbound requests.**
+  `maxConcurrentOpens` bounds concurrently *held* connection leases, not HTTP/RPC request
+  concurrency — those aren't the same number. A single logical request can hold more than one
+  lease at once: an explicitly-opened connection plus a separately-opened one for a nested
+  operation, or an `EnableRetryOnFailure` attempt that opens a fresh connection before an earlier
+  one on the same request has closed. Size the budget for the worst case of how many leases one
+  request may hold concurrently, multiplied by your expected request concurrency — undersizing it
+  doesn't just reject other callers under load, it can make a request wait on a permit only its
+  own earlier lease is holding. See the `EnableRetryOnFailure` note above for the shape this
+  takes.
 - **Per-process, not fleet-wide.** The semaphore caps concurrency within one `StormGate`
   instance. Across N replicas, the database can still see up to N × `maxConcurrentOpens`
   connections. This bounds your blast radius per instance — it does not coordinate a global cap.
