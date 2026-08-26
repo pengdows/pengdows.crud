@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="log4net" Version="3.4.0" />
   </ItemGroup>
 
   <!-- Every net8.0-only PackageReference lives in this one ItemGroup — the net8.0 counterpart of
@@ -69,6 +70,7 @@
          the first version depending on [8.0.4, ) and the first to target net8.0. -->
     <PackageReference Include="FirebirdSql.EntityFrameworkCore.Firebird" Version="11.0.0" />
     <PackageReference Include="EFCore.Snowflake" Version="8.0.8" />
+    <PackageReference Include="Snowflake.Data" Version="5.6.0" />
     <!-- Db2: IBM's older 8.0.0.300 has a reported EF Core 9 break, but 8.0.0.400 targets
          Microsoft.EntityFrameworkCore.Relational [8.0.12, ) on net8.0 specifically (verified via
          the NuGet registration API) and does expose a UseDb2(DbContextOptionsBuilder,

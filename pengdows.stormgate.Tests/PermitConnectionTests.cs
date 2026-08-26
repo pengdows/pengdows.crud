@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace pengdows.stormgate.Tests;
 
@@ -444,6 +446,66 @@ public class PermitConnectionTests
         // Permit must be back in the gate — should be able to open a new connection.
         var conn2 = await gate.OpenAsync();
         Assert.NotNull(conn2);
+    }
+
+    [Fact]
+    public async Task AbandonedConnection_IsCollectedAndReleasesPermit()
+    {
+        using var gate = new StormGate(new CollectibleDataSource(), 1, _timeout);
+        var weakConnection = await AbandonConnectionAsync(gate);
+
+        for (var attempt = 0; attempt < 10 && weakConnection.IsAlive; attempt++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            await Task.Yield();
+        }
+
+        Assert.False(weakConnection.IsAlive, "The abandoned gated connection should be collectible.");
+        var replacement = await gate.OpenAsync();
+        Assert.NotNull(replacement);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task<WeakReference> AbandonConnectionAsync(StormGate gate)
+    {
+        var connection = await gate.OpenAsync();
+        return new WeakReference(connection);
+    }
+
+    private sealed class CollectibleDataSource : DbDataSource
+    {
+        public override string ConnectionString => "collectible";
+        protected override DbConnection CreateDbConnection() => new CollectibleConnection();
+    }
+
+    private sealed class CollectibleConnection : DbConnection
+    {
+        private ConnectionState _state;
+        [AllowNull]
+        public override string ConnectionString { get; set; } = "collectible";
+        public override string Database => "collectible";
+        public override string DataSource => "collectible";
+        public override string ServerVersion => "1.0";
+        public override ConnectionState State => _state;
+        public override void ChangeDatabase(string databaseName)
+        {
+        }
+        public override void Open()
+        {
+            var original = _state;
+            _state = ConnectionState.Open;
+            OnStateChange(new StateChangeEventArgs(original, _state));
+        }
+        public override void Close()
+        {
+            var original = _state;
+            _state = ConnectionState.Closed;
+            OnStateChange(new StateChangeEventArgs(original, _state));
+        }
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
+        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
     }
 
     // Minor: BeginDbTransactionAsync must override to call the inner's async path, not fall
