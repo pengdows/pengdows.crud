@@ -322,8 +322,11 @@ public class ParallelTestOrchestrator
                 container = r.ContainerName,
                 success = r.Success,
                 outcome = r.Success ? "Passed" : (r.ContainerStartTimeout ? "Unavailable" : "Failed"),
+                checksAttempted = r.ChecksPassed + (r.Success ? 0 : 1),
                 checksPassed = r.ChecksPassed,
+                checksFailed = r.Success ? 0 : 1,
                 checksSkipped = r.ChecksSkipped,
+                totalChecks = r.ChecksPassed + (r.Success ? 0 : 1) + r.ChecksSkipped,
                 testTimeSeconds = r.TestTime?.TotalSeconds,
                 totalTimeSeconds = r.TotalTime.TotalSeconds,
                 error = r.Error
