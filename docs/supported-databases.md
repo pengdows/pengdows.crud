@@ -43,7 +43,7 @@ Database support is a joint capability over **(database engine, client driver)**
 | MySQL | 5.7.20 | 8.0 | 5.7, 8.4.11 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
 | MariaDB | 10.2 | 10.4 | 10.2, 10.4, 10.11, 11.4.12 | MySqlConnector 2.4.0 (recommended) | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
 | SQLite | 3.24 | 3.35 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
-| Firebird | 2.5 | 3.0 | 3.0.9 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 (3.0.9 is oldest available container) |
+| Firebird | 2.5 | 3.0 | 3.0.9, 4.0.5, 5.0.2 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 (3.0.9 is oldest available container) |
 | DuckDB | 0.8.0 | 1.0.0 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
 | CockroachDB | 23.1 | latest | v23.2.14, v24.3.0, v25.1.0 | Npgsql 9.0.3 | Npgsql connection pool reset requires `pg_advisory_unlock_all` (CockroachDB 23.1+) |
 | YugabyteDB | 2.x | latest | 2.25.2.0, 2025.2.5.2 | Npgsql 9.0.3 | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |

@@ -1,24 +1,35 @@
 [
   {
-    "engine": "DuckDB",
-    "container": "DuckDB",
-    "success": true,
-    "outcome": "Passed",
-    "checksPassed": 20,
-    "checksSkipped": 2,
-    "testTimeSeconds": 1.1336936,
-    "totalTimeSeconds": 1.2582049,
-    "error": null
-  },
-  {
-    "engine": "SQLite",
-    "container": "SQLite",
+    "engine": "Firebird",
+    "container": "Firebird [3.0.9]",
     "success": true,
     "outcome": "Passed",
     "checksPassed": 19,
-    "checksSkipped": 1,
-    "testTimeSeconds": 0.2843228,
-    "totalTimeSeconds": 0.3710185,
+    "checksSkipped": 2,
+    "testTimeSeconds": 0.6423566,
+    "totalTimeSeconds": 1.9728645,
+    "error": null
+  },
+  {
+    "engine": "Firebird",
+    "container": "Firebird [4.0.5]",
+    "success": true,
+    "outcome": "Passed",
+    "checksPassed": 19,
+    "checksSkipped": 2,
+    "testTimeSeconds": 1.1108654,
+    "totalTimeSeconds": 3.3839035,
+    "error": null
+  },
+  {
+    "engine": "Firebird",
+    "container": "Firebird [5.0.2]",
+    "success": true,
+    "outcome": "Passed",
+    "checksPassed": 19,
+    "checksSkipped": 2,
+    "testTimeSeconds": 1.0731843,
+    "totalTimeSeconds": 3.385143,
     "error": null
   }
 ]
