@@ -263,3 +263,57 @@ process/JIT/OS layer that BenchmarkDotNet measures, not in the governor's own be
 this telemetry shows is consistent. There is no equivalent internal-telemetry number for
 Dapper/EF, since neither ever touches an `IDatabaseContext` — their side of the comparison
 rests on the histogram evidence above instead.
+
+## 2026-08-27 follow-up — the correctness-artifact fix surfaced a bigger problem: three different answers for the same benchmark
+
+Fixing the two artifact bugs above (documented in the section below this one) produced a
+`Fails` column that finally matched independently-tracked ground truth exactly. That did
+**not** settle what the "real number" is — it revealed there isn't a single stable one:
+
+| Run | Dapper lost/failed | EF lost/failed | Measurement path |
+|---|---:|---:|---|
+| 2026-08-13 | 268 | 348 | Scraped from BenchmarkDotNet's preserved console log (the correctness artifact itself was lost — see "Note on artifact durability" above) |
+| 2026-08-27, before the fix | 0 | 0 | `CorrectnessColumn`, silently broken by the parameter-key mismatch bug — this row is not evidence of anything |
+| 2026-08-27, after the fix | 496 | 409 | `CorrectnessColumn`, cross-checked byte-for-byte against the independently-coded tx-latency Attempted/Committed counters |
+
+The first and third rows were measured through genuinely different code paths (console-log
+scraping vs. a structured, cross-verified artifact) and cannot be assumed comparable —
+either could be closer to the "true" rate for this exact configuration, and the honest
+position is that neither run's specific percentage should be treated as a fixed property of
+Dapper or EF. What both rows agree on: pengdows lost zero, and the competitors lost a large,
+double-digit-percent share of attempted transactions, in both measurements. **Loss rate
+varies (33-62% observed so far); zero has not varied across any run on record.** That's the
+number that belongs in citable, load-bearing claims — see the reframed section in
+`docs/positioning/product-thesis.md`.
+
+## 2026-08-27 follow-up — the `busy_timeout=10ms` objection, answered with a paired run
+
+The obvious response to the numbers above is "you configured a system to fail — set a sane
+`busy_timeout` and the comparison disappears." Rather than argue the point, this was tested
+directly: the same benchmark, same 800-attempted-transaction workload, run a second time
+with `BusyTimeoutMs` temporarily changed from 10 to 5000 (and `DefaultTimeout`/
+`CommandTimeout` scaled from 1s to 6s to match — Microsoft.Data.Sqlite's own retry loop is
+bounded by `CommandTimeout`, not the `busy_timeout` PRAGMA, so raising one without the other
+would not actually test anything). This was a manual, one-off change to a hardcoded
+constant, reverted immediately after capturing the results below — `BusyTimeoutMs` is not
+yet a permanent `[Params]` fixture in this benchmark class, which is a real gap worth
+closing so this comparison doesn't require hand-editing source to reproduce.
+
+| `busy_timeout` / `CommandTimeout` | pengdows | Dapper | EF Core |
+|---|---:|---:|---:|
+| 10ms / 1s | 0 lost, 106.6 ms mean | 496 lost (62%), 1,055 ms mean | 409 lost (51%), 1,055 ms mean |
+| 5000ms / 6s | 0 lost, 106.6 ms mean | 4 lost (0.5%), 4,272 ms mean | 57 lost (7%), 3,885 ms mean |
+
+(Fails column cross-checked against the independent tx-latency files at 5000ms too: Dapper
+4/4, EF 57/57 — the fix holds under a second configuration, not just the one it was found
+under.)
+
+pengdows's row is identical across both settings, within measurement noise — 106.6 ms
+either way, zero lost either way. Dapper and EF are not: raising the timeout traded most of
+their failures for a ~4x latency increase (1,055 ms → 3,885-4,272 ms), and even six seconds
+of patience wasn't enough to reach zero failures for either one. This is the pair worth
+citing together, not the 10ms row alone: at the hostile setting, competitors throw; at the
+sane setting, they mostly complete but pay a real latency tax and still aren't fully
+reliable; pengdows is unaffected by the setting either way, because `SingleWriter`'s
+admission control means its writers never depend on `busy_timeout` resolving contention in
+the first place — there is no contention for it to resolve.

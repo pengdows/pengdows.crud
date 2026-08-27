@@ -43,6 +43,11 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
     private const int WriteStormConcurrency = 100;
     private const int WriteStormWritesPerTransaction = 50;
+    // A 2026-08-27 paired run also captured this at 5000ms (a "sane" busy_timeout) to
+    // pre-answer "just raise the timeout": see
+    // benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md. That run
+    // temporarily hardcoded this to 5000 and reverted; it is not permanently parameterized via
+    // [Params] here yet — a real gap, tracked in that doc, not silently left unmentioned.
     private const int BusyTimeoutMs = 10;
 
     private static string BusyTimeoutSql => $"PRAGMA busy_timeout={BusyTimeoutMs};";
@@ -105,7 +110,11 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             sqliteDialect.MaxPoolSizeSettingName);
         var builder = new SqliteConnectionStringBuilder(connStr)
         {
-            DefaultTimeout = 1
+            // Must scale with BusyTimeoutMs: Microsoft.Data.Sqlite's own retry loop
+            // (Thread.Sleep(150) between attempts) is bounded by CommandTimeout, independently
+            // of the busy_timeout PRAGMA — raising the PRAGMA alone without raising this would
+            // not actually give the driver more retry patience.
+            DefaultTimeout = Math.Max(1, (BusyTimeoutMs / 1000) + 1)
         };
         _connectionString = builder.ToString();
 

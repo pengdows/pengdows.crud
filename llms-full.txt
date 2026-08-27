@@ -1102,31 +1102,55 @@ behavior came bundled with that choice. pengdows.crud is meant to be received di
 something a DBA looks at and keeps, not something they tolerate because it already
 shipped.
 
-That isn't just a philosophical stance — it's directly observable. Push both approaches
-into the same hostile, valid concurrency workload and the difference isn't subtle: 100
-concurrent writers, 50 writes each, against a shared SQLite database under
-`busy_timeout=10ms`, is exactly the kind of workload a DBA has learned to expect will
-misbehave. Verified via this project's own benchmark suite (`SQLiteWriteContentionBenchmarks`,
-`ConnectionPoolProtectionBenchmarks` — re-verified 2026-08-27 after finding and fixing two
-real bugs in the benchmark's own correctness-artifact instrumentation that were *understating*
-the failure counts below, not inflating them):
+That isn't just a philosophical stance — it's directly observable, and the number worth
+leading with is the one that holds across every run and every setting, not a single
+snapshot. Workload: 100 concurrent writers, 50 sequential writes each, against a shared
+in-memory SQLite database (`SQLiteWriteContentionBenchmarks` in this repo's own benchmark
+suite). BenchmarkDotNet's actual invocation count for this job is 8 per framework, so each
+framework attempts 800 write transactions (~40,000 individual writes) per configuration
+tested. Run 2026-08-27, AMD Ryzen 9 5950X, 8 logical/physical cores available to the
+container (see the report's own header for the exact toolchain/OS — that header travels
+with the artifact and doesn't need restating here). Two `busy_timeout` settings were run
+back to back specifically to pre-empt "just raise the timeout":
 
-| Scenario | pengdows.crud | Dapper | Entity Framework Core |
+| `busy_timeout` | pengdows.crud lost / mean | Dapper lost / mean | EF Core lost / mean |
 |---|---:|---:|---:|
-| `SQLiteWriteContentionBenchmarks` — write transactions lost (of 800 attempted) | **0** | 496 | 409 |
-| `ConnectionPoolProtectionBenchmarks` — write-storm failures | **0** | 414 | 344 |
+| 10ms (hostile) | **0 / ~106 ms** | 496 (62%) / ~1,055 ms | 409 (51%) / ~1,055 ms |
+| 5000ms (a "sane" value) | **0 / ~107 ms** | 4 (0.5%) / ~4,272 ms | 57 (7%) / ~3,885 ms |
 
-Zero is not a rounding artifact or a lucky run — it's the direct, mechanical consequence of
-principle 5's `PoolGovernor`: a pengdows writer never contends for SQLite's lock with
-another pengdows writer in the first place, because `SingleWriter` mode serializes write
-*admission* before any writer reaches the database. Dapper and EF have no equivalent —
-every one of their writers races straight for SQLite's lock, and Microsoft.Data.Sqlite's
-own retry mechanism (`Thread.Sleep(150)` between attempts, up to the connection's
-`CommandTimeout`) is the only thing standing between them and an outright crash under
-load. In `SQLiteWriteContentionBenchmarks`, where the attempted-transaction count is
-independently tracked, that's 51-62% of write transactions lost (409/800 and 496/800
-respectively) — not a benchmark curiosity, but the shortcoming principle 5 exists to
-prevent, made visible.
+pengdows's row doesn't move. That's the claim: not "pengdows loses fewer writes than Dapper
+at 10ms" — a claim about Dapper's configuration, which anyone can retune — but "pengdows's
+failure count and latency are invariant to this setting, because it never depends on
+`busy_timeout` in the first place." `SingleWriter` mode's `PoolGovernor` serializes write
+*admission* before any writer reaches the database, so a pengdows writer never contends
+for SQLite's lock with another pengdows writer at all — `busy_timeout` governs what happens
+during lock contention, and pengdows structurally has none to govern. Dapper and EF have no
+admission control, so every writer races straight for SQLite's lock, and
+Microsoft.Data.Sqlite's own retry mechanism (`Thread.Sleep(150)` between attempts, bounded
+by the connection's `CommandTimeout`) is the only thing standing between them and the
+database. Raising `busy_timeout` (and the matching `CommandTimeout`, which must move with
+it — the retry loop is bounded by the latter, not the PRAGMA) doesn't remove that
+dependency, it just trades a high failure rate for a ~4x latency tax, and even six seconds
+of patience wasn't enough to reach zero failures for either competitor. `busy_timeout` is
+blind, uncoordinated retry; the turnstile coordinates admission instead of retrying — that
+architectural difference is what produces an invariant number on one side and a
+configuration-sensitive number on the other, and the sensitivity is itself the finding, not
+just the raw failure count at any one setting.
+
+Worth stating plainly: an earlier, differently-instrumented run of this same benchmark
+(2026-08-13, exception counts scraped from console output rather than measured through the
+structured artifact) recorded 268/348 lost transactions for Dapper/EF, not 496/409 — a real,
+unexplained spread, not just an instrumentation artifact of the two correctness-artifact
+bugs fixed 2026-08-27 (documented in
+[`sqlite-write-contention-run-2026-08-13.md`](https://github.com/pengdows/pengdows.crud/blob/2.0.6/benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md)).
+Competitors' loss rate under this workload has varied 33-62% depending on machine and load
+across the runs on record. pengdows's has not varied at all. Treat any single competitor
+percentage cited elsewhere as a snapshot, not a constant — the invariant is the part of this
+claim that travels.
+
+This comparison is a manually-triggered, documented one-off (the `busy_timeout` value is
+still a hardcoded constant in the benchmark, not a permanent `[Params]` fixture in the
+suite) — a real gap, not silently left unaddressed; see the results doc for the specifics.
 
 This same posture — respecting the database's real constraints instead of assuming
 unlimited concurrency, unlimited query-optimizer patience, or a provider that will quietly
