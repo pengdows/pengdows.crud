@@ -788,7 +788,7 @@ public interface ISqlDialect
     /// <summary>
     /// True when the dialect supports SQL:2008 offset/fetch paging syntax:
     /// <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c>.
-    /// Supported by SQL Server, Oracle 12c+, PostgreSQL, Firebird 3+, DuckDB, and others.
+    /// Supported by SQL Server, Oracle, PostgreSQL, Firebird, DuckDB, and others.
     /// SQLite does not support this syntax.
     /// </summary>
     bool SupportsOffsetFetch { get; }

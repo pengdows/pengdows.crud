@@ -3,7 +3,7 @@
 // PURPOSE: SQL Server specific dialect implementation.
 //
 // AI SUMMARY:
-// - Supports SQL Server 2012+ with version-specific feature detection.
+// - Supports SQL Server 2017+ with version-specific feature detection.
 // - Key features:
 //   * MERGE statement support for upserts
 //   * Parameter marker: @ (supports named parameters)
@@ -15,7 +15,7 @@
 //   * Session settings: ANSI_NULLS, QUOTED_IDENTIFIER, etc.
 // - Session settings enforced for consistent behavior across connections.
 // - Snapshot isolation detection via sys.databases queries.
-// - OFFSET/FETCH pagination (SQL Server 2012+).
+// - OFFSET/FETCH pagination.
 // - IDENTITY column handling with OUTPUT clause for returning IDs.
 // =============================================================================
 
@@ -35,7 +35,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Supports Microsoft SQL Server 2012 and later with automatic version detection.
+/// Supports Microsoft SQL Server 2017 and later with automatic version detection.
 /// </para>
 /// <para>
 /// <strong>Session Settings:</strong> Enforces ANSI-compliant settings including

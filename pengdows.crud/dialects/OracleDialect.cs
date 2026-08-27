@@ -3,17 +3,18 @@
 // PURPOSE: Oracle Database specific dialect implementation.
 //
 // AI SUMMARY:
-// - Supports Oracle Database 12c+ with enterprise feature support.
+// - Supports Oracle Database 18c+ with enterprise feature support.
 // - Key features:
 //   * MERGE statement for upserts (with RETURNING via dual table)
 //   * Parameter marker: : (colon prefix, ODP.NET standard)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 65535 (Oracle's internal 16-bit bind variable slot limit)
 //   * Sequence-based ID generation
+//   * Identity column support (GENERATED AS IDENTITY)
 // - Uses Oracle-specific RETURNING INTO clause via PL/SQL block.
 // - Statement cache preferred over manual prepare.
 // - Stored procedure support via Oracle anonymous blocks.
-// - Parameter name limit: 30 chars (pre-12.2), 128 chars (12.2+).
+// - Parameter name limit: 128 chars.
 // =============================================================================
 
 using System.Data;
@@ -30,7 +31,7 @@ namespace pengdows.crud.dialects;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Supports Oracle Database 12c and later with automatic version detection.
+/// Supports Oracle Database 18c and later with automatic version detection.
 /// Uses Oracle-specific syntax for sequences, upserts, and returning values.
 /// </para>
 /// <para>

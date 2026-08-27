@@ -3,9 +3,9 @@
 // PURPOSE: Firebird Database specific dialect implementation.
 //
 // AI SUMMARY:
-// - Supports Firebird 2.5+ and 3.0+ with version-specific features.
+// - Supports Firebird 3.0+ with version-specific features.
 // - Key features:
-//   * MERGE statement support (Firebird 2.0+)
+//   * MERGE statement support
 //   * Parameter marker: @ (at sign)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 65535 (theoretical limit)
@@ -58,11 +58,10 @@ internal enum FirebirdGuidStorageMode
 /// </summary>
 /// <remarks>
 /// <para>
-/// Supports Firebird 2.5 and later with automatic version detection.
-/// Firebird 3.0+ adds window function support.
+/// Supports Firebird 3.0 and later with automatic version detection.
 /// </para>
 /// <para>
-/// <strong>UPSERT:</strong> Uses MERGE statement (Firebird 2.0+).
+/// <strong>UPSERT:</strong> Uses MERGE statement.
 /// </para>
 /// <para>
 /// <strong>ID Generation:</strong> Uses generators (sequences) with

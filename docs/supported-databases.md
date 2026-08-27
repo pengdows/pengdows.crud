@@ -26,71 +26,65 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
-## Minimum Server Versions & Driver Matrix
+## Verified Server Versions & Driver Matrix
 
-Database support is a joint capability over **(database engine, client driver)**. The table distinguishes between:
+Database support is a joint capability over **(database engine, client driver)**. The table reflects the versions verified by the automated testbed suite:
 
-- **Floor** — the oldest engine version where core CRUD and required syntax work according to engine feature specifications.
-- **Recommended** — the oldest version where modern features (upsert/merge, savepoints, session read-only enforcement, auto-generated IDs) are fully operational.
-- **Verified at** — the exact container version validated by the automated testbed suite.
+- **Verified Floor** — the lowest version validated in the automated testbed container sweep.
+- **Recommended** — recommended version for production deployments.
+- **Verified at** — exact container images/versions validated by the automated testbed suite.
 - **Driver used** — the specific ADO.NET driver package and version tested.
 
-| Database | Floor | Recommended | Verified at | Driver used | Key reason for recommended floor |
-|----------|-------|-------------|-------------|-------------|-----------------------------------|
-| SQL Server | 2008 (v10) | 2016 (v13) | 2017, 2019, 2022 | Microsoft.Data.SqlClient 6.0.2 | JSON support (`JSON_VALUE`) requires v13; MERGE available from v10 (2017 is oldest Linux container) |
-| PostgreSQL | 9.5 | 15 | 9.5, 15.0, 16.4 | Npgsql 9.0.3 | `INSERT ON CONFLICT` (upsert) added in 9.5; `MERGE` added in 15 |
-| Oracle | 12c | 19c | 18.4.0, 21.3.0, 23.8.0 | Oracle.ManagedDataAccess.Core 23.8.0 | Identity columns and JSON both require 12c; SQL:2016 compliance at 19c (18c XE is oldest faststart container) |
-| MySQL | 5.7.20 | 8.0 | 5.7, 8.4.11 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | `transaction_read_only` session variable requires 5.7.20; CTEs/window fns at 8.0 |
-| MariaDB | 10.2 | 10.4 | 10.2, 10.4, 10.11, 11.4.12 | MySqlConnector 2.4.0 (recommended) | CTEs and window functions at 10.2; `tx_read_only` session variable requires 10.1 |
-| SQLite | 3.24 | 3.35 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT` (upsert) requires 3.24; `RETURNING` clause requires 3.35 |
-| Firebird | 2.5 | 3.0 | 3.0.9, 4.0.5, 5.0.2 | FirebirdSql.Data.FirebirdClient 10.3.3 | MERGE and CTEs at 2.0; window functions require 3.0; declared minimum is 2.5 (3.0.9 is oldest available container) |
-| DuckDB | 0.8.0 | 1.0.0 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode` since 0.3.0; stable API and SQL:2016 at 1.0; MERGE at 1.4 |
-| CockroachDB | 23.1 | latest | v23.2.14, v24.3.0, v25.1.0 | Npgsql 9.0.3 | Npgsql connection pool reset requires `pg_advisory_unlock_all` (CockroachDB 23.1+) |
-| YugabyteDB | 2.x | latest | 2.25.2.0, 2025.2.5.2 | Npgsql 9.0.3 | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
-| TiDB | 7.0 | latest | v7.5.7, v8.5.7 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | Distributed MySQL; stored proc DDL unsupported; uses standard VALUES() upsert |
-| Snowflake | service | service | Cloud service | Snowflake.Data 5.6.0 | Cloud service — version managed by Snowflake; no minimum to configure |
-| Db2 | 11.5.0 | 11.5.8.0 | 11.5.0.0a, 11.5.8.0 | Net.IBM.Data.Db2-lnx 8.0.0.500 | Validated against `ibmcom/db2` and `icr.io/db2_community/db2` images |
+| Database | Verified Floor | Recommended | Verified at | Driver used | Key reason / capabilities verified |
+|----------|----------------|-------------|-------------|-------------|------------------------------------|
+| SQL Server | 2017 | 2022 | 2017, 2019, 2022 | Microsoft.Data.SqlClient 6.0.2 | JSON support (`JSON_VALUE`), MERGE with OUTPUT, table triggers, and OFFSET/FETCH |
+| PostgreSQL | 9.5 | 16 | 9.5, 15.0, 16.4 | Npgsql 9.0.3 | `INSERT ON CONFLICT` in 9.5; `GENERATED ALWAYS AS IDENTITY` in 10+; `MERGE` in 15 |
+| Oracle | 18c | 23c | 18.4.0, 21.3.0, 23.8.0 | Oracle.ManagedDataAccess.Core 23.8.0 | Identity columns, JSON, sequence / PL/SQL blocks, and pool isolation |
+| MySQL | 5.7 | 8.4 | 5.7, 8.0.36, 8.4.11 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | `transaction_read_only` session variable, CTEs/window functions (8.0+), EOF reader disposal |
+| MariaDB | 10.2 | 11.4 | 10.2, 10.4, 10.11, 11.4.12 | MySqlConnector 2.4.0 (recommended) | CTEs, window functions, `tx_read_only` session variable, unsigned identity return |
+| SQLite | 3.45 | 3.45 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT`, `RETURNING`, JSON, and in-memory single-connection mode |
+| Firebird | 3.0 | 5.0 | 3.0.9, 4.0.5, 5.0.2 | FirebirdSql.Data.FirebirdClient 10.3.3 | Window functions, CTEs, MERGE, and session isolation |
+| DuckDB | 1.3.2 | 1.3.2 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode`, `RETURNING` auto-id, and single-writer concurrency |
+| CockroachDB | v23.2 | latest | v23.2.14, v24.3.0, v25.1.0 | Npgsql 9.0.3 | Npgsql connection pool reset with `pg_advisory_unlock_all` validated |
+| YugabyteDB | 2.25 | latest | 2.25.2.0, 2025.2.5.2 | Npgsql 9.0.3 | PostgreSQL-compatible distributed execution, savepoints, stored proc execution, `ON CONFLICT` upsert |
+| TiDB | v7.5 | latest | v7.5.7, v8.5.7 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | Distributed MySQL compatibility, VALUES() upsert, and limit/offset paging |
+| Snowflake | service | service | Cloud service | Snowflake.Data 5.6.0 | Cloud service — version managed by Snowflake |
+| Db2 | 11.5.0 | 11.5.8.0 | 11.5.0.0a, 11.5.8.0 | Net.IBM.Data.Db2-lnx 8.0.0.500 | FINAL TABLE auto-id, typed MERGE parameter binding, and unique exception translation |
 
 > **Driver Constraints & Handshake Caveats:**
-> - **CockroachDB & Npgsql Pool Reset:** Npgsql 8.x and 9.x issue `SELECT pg_advisory_unlock_all()` on pooled connection reset. CockroachDB added support for advisory lock functions in v23.1. Pre-23.1 versions reject this query with error 42883, making CockroachDB 23.1+ the effective floor when using modern Npgsql.
-> - **Embedded Engines (SQLite & DuckDB):** Unlike client-server databases, SQLite and DuckDB execute in-process. Their engine versions are determined by the underlying native library bundled with their ADO.NET provider:
->   - **SQLite:** `Microsoft.Data.Sqlite` bundles `SQLitePCLRaw.bundle_e_sqlite3` (embedding SQLite 3.45+). Changing the underlying SQLite version requires switching providers (e.g. `System.Data.SQLite`), loading system `libsqlite3`, or reconfiguring `SQLitePCLRaw`. `SqliteDialect` automatically adapts parameter limits (999 vs 32,766 at 3.32), identity retrieval (`RETURNING` vs `last_insert_rowid()` at 3.35), window functions (3.25), and JSON (3.45) at runtime.
->   - **DuckDB:** `DuckDB.NET.Data.Full` statically bundles `libduckdb` (currently 1.3.2). `DuckDbDialect` adapts `MERGE` and encryption at 1.4+, falling back to `INSERT ... ON CONFLICT` on pre-1.4 versions.
-> - **MariaDB & Driver Support:** MariaDB versions prior to 11.0 report a `5.5.5-10.x.x-MariaDB` handshake prefix (MDEV-28910). While older `MySql.Data` releases (e.g. 8.0.22–8.0.28) rejected this prefix as unsupported, current `MySql.Data 9.3.0` and `MySqlConnector 2.4.0` both connect cleanly to MariaDB 10.x in automated testbed validation.
+> - **CockroachDB & Npgsql Pool Reset:** Npgsql 8.x and 9.x issue `SELECT pg_advisory_unlock_all()` on pooled connection reset. CockroachDB supported advisory lock functions are validated from v23.2+.
+> - **Embedded Engines (SQLite & DuckDB):** SQLite and DuckDB execute in-process, bundled with their ADO.NET provider (`Microsoft.Data.Sqlite` bundles SQLite 3.45+; `DuckDB.NET.Data.Full` bundles DuckDB 1.3.2).
+> - **MariaDB & Driver Support:** MariaDB versions report a `5.5.5-10.x.x-MariaDB` handshake prefix (MDEV-28910). Both `MySql.Data 9.3.0` and `MySqlConnector 2.4.0` connect cleanly to MariaDB 10.x/11.x in automated testbed validation.
 > - **MySQL / MariaDB Prepared Statements:** `COM_STMT_PREPARE` in MySQL 5.7 and MariaDB ≤ 10.5 rejects DDL / stored procedure statements with error 1295. `MySqlDialect` automatically detects error 1295 and falls back to text execution protocol seamlessly.
-> - **Firebird & DateTimeOffset Driver Constraint:** Firebird 4.0 and 5.0 support `TIMESTAMP WITH TIME ZONE`, but `FirebirdSql.Data.FirebirdClient 10.3.3` throws "Incorrect time zone value" in its internal `DbValue.GetTimeZoneId()` when binding raw CLR `DateTimeOffset` values. This is an ADO.NET client driver constraint rather than an engine limitation; until resolved upstream in `FirebirdClient`, use UTC `DateTime` values when targeting Firebird.
-> - **PostgreSQL & Npgsql Support Policy:** Npgsql actively tests and supports PostgreSQL versions within their community support window (~5 years back). Connecting to legacy releases like 9.5 functions over the wire for core SQL, but is outside the driver vendor's support window.
-> - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` requires MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` (10.1+). Earlier versions only support transaction-scoped `SET SESSION TRANSACTION READ ONLY`.
+> - **Firebird & DateTimeOffset Driver Constraint:** `FirebirdSql.Data.FirebirdClient 10.3.3` throws "Incorrect time zone value" in its internal `DbValue.GetTimeZoneId()` when binding raw CLR `DateTimeOffset` values. This is an ADO.NET client driver constraint; use UTC `DateTime` values when targeting Firebird.
+> - **PostgreSQL & Npgsql Support Policy:** PostgreSQL 9.5, 15.0, and 16.4 are all validated. `CREATE PROCEDURE` is verified on PostgreSQL 11+, while PostgreSQL 9.5 executes `CREATE FUNCTION`.
+> - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` is verified on MySQL 5.7+. MariaDB uses `SET SESSION tx_read_only = 1` (verified 10.2+).
 
-### Feature Version Thresholds
+### Feature Support Matrix on Verified Versions
 
-What version of each database first enables each major feature:
+All features below are verified on the tested engine versions:
 
-| Feature | SQL Server | PostgreSQL | MySQL | MariaDB | Oracle | SQLite | DuckDB | Firebird |
-|---------|-----------|-----------|-------|---------|--------|--------|--------|---------|
-| **MERGE / Upsert** | 2008 (v10) | 15 | — (uses `ON DUPLICATE KEY`) | — (uses `ON DUPLICATE KEY`) | 9i (always on) | — (uses `ON CONFLICT`) | 1.4 | 2.0 |
-| **INSERT ON CONFLICT** | — | 9.5 (always on) | — | — | — | 3.24 (always on) | 1.0 (always on) | — |
-| **ON DUPLICATE KEY UPDATE** | — | — | always on | always on | — | — | — | — |
-| **INSERT RETURNING** | always on | always on | — | — | always on | 3.35 | always on | always on (2.1+) |
-| **JSON types** | 2016 (v13) | 9.x | 5.7.8 | — (no native JSON) | 12c | 3.45 | always on | — |
-| **CTEs** | always on | always on | 8.0 | 10.2 | always on | 3.8.3 | always on | 2.0 |
-| **Window functions** | always on | always on | 8.0 | 10.2 | always on | 3.25 | always on | 3.0 |
-| **Savepoints** | always on | always on | always on | always on | always on | — | — | always on |
-| **DROP TABLE IF EXISTS** | always on | always on | always on | always on | — (PL/SQL only) | always on | always on | always on |
-| **Identity / autoincrement** | always on | always on | always on | always on | 12c | always on | always on | always on |
+| Feature | SQL Server (2017+) | PostgreSQL (9.5+) | MySQL (5.7+) | MariaDB (10.2+) | Oracle (18c+) | SQLite (3.45+) | DuckDB (1.3.2) | Firebird (3.0+) |
+|---------|-------------------|-------------------|--------------|-----------------|---------------|----------------|----------------|-----------------|
+| **Upsert** | MERGE | INSERT ON CONFLICT (9.5+) / MERGE (15+) | ON DUPLICATE KEY | ON DUPLICATE KEY | MERGE | INSERT ON CONFLICT | INSERT ON CONFLICT | MERGE |
+| **Generated ID Return** | OUTPUT clause | RETURNING / IDENTITY | AUTO_INCREMENT | AUTO_INCREMENT | RETURNING / Sequence | RETURNING | RETURNING | RETURNING |
+| **JSON types** | `JSON_VALUE` | JSON / JSONB | JSON (5.7.8+) | TEXT / JSON alias | Native JSON | JSON1 | Native JSON | — |
+| **CTEs** | Supported | Supported | Supported (8.0+) | Supported | Supported | Supported | Supported | Supported |
+| **Window functions** | Supported | Supported | Supported (8.0+) | Supported | Supported | Supported | Supported | Supported |
+| **Savepoints** | Supported | Supported | Supported | Supported | Supported | — | — | Supported |
+| **DROP TABLE IF EXISTS** | Supported | Supported | Supported | Supported | PL/SQL block | Supported | Supported | Supported |
+| **Identity / autoincrement** | IDENTITY | SERIAL / IDENTITY (10+) | AUTO_INCREMENT | AUTO_INCREMENT | IDENTITY | AUTOINCREMENT | Sequence / Default | Generator / Sequence |
 
-`—` means the feature is either not supported or uses a different mechanism on that database.
+`—` means the feature is not supported by the engine or uses a distinct mechanism.
 
-### Latent Version Mismatches
+### Version-Specific Capabilities within Verified Range
 
-The following features have no version gate in the dialect code but require a minimum server version to function. Connecting to an older server will produce SQL errors at runtime rather than a capability flag returning `false`:
+The dialect system dynamically adapts to capabilities across verified ranges:
 
-- **PostgreSQL `SupportsInsertOnConflict = true` is ungated** — requires PostgreSQL 9.5+. A server running 9.0–9.4 will receive `INSERT ... ON CONFLICT` SQL it cannot parse.
-- **PostgreSQL `CREATE PROCEDURE` / `CALL` requires PostgreSQL 11+** — pre-11 PostgreSQL only supports functions (`CREATE FUNCTION` invoked via `SELECT * FROM func()`). Dialect write-path stored procedure wrapping (`CALL proc()`) and `CREATE PROCEDURE` DDL require PostgreSQL 11+.
-- **PostgreSQL `GENERATED ALWAYS AS IDENTITY` / `OVERRIDING SYSTEM VALUE` requires PostgreSQL 10+** — pre-10 PostgreSQL uses `SERIAL` sequence pseudo-types. `SupportsOverridingSystemValue` is gated to PostgreSQL 10+ servers.
-- **SQLite `SupportsInsertOnConflict = true` is ungated** — requires SQLite 3.24+. A SQLite file opened on 3.23 will fail on upsert SQL.
-- **Oracle `SupportsIdentityColumns = true` is ungated** — identity columns (`GENERATED AS IDENTITY`) require Oracle 12c. Pre-12c servers will fail when inserting entities with `[Id(false)]`.
-- **SQL Server MERGE at `IsVersionAtLeast(10)` is broader than the declared "2012+" header** — SQL Server 2008 (v10) will pass the version check and receive MERGE SQL. The "2012+" comment in the source is a conservative recommendation, not enforced by the gate.
+- **PostgreSQL `CREATE PROCEDURE` vs `CREATE FUNCTION`** — PostgreSQL 11+ uses `CREATE PROCEDURE` / `CALL proc()`; PostgreSQL 9.5–10 uses `CREATE FUNCTION` / `SELECT func()`.
+- **PostgreSQL `GENERATED ALWAYS AS IDENTITY`** — PostgreSQL 10+ uses standard SQL identity; PostgreSQL 9.5 uses `SERIAL` sequences.
+- **MySQL Window Functions & CTEs** — MySQL 8.0+ enables window functions and CTEs; MySQL 5.7 uses standard joins and grouping.
+- **MariaDB Unsigned Identity** — MariaDB 10.2+ cleanly returns full `uint` and `ulong` auto-increment ranges.
 
 ### Sweep Methodology & Outcome Classification
 
