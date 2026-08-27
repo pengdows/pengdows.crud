@@ -13,7 +13,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 
 /// <summary>
 /// Feasibility probe (Priority 3 of the dialect-capability-refactor validation task, see
-/// docs/FUTURE_WORK.md): proves, against TWO REAL MySQL servers at genuinely different patch
+/// docs/planning/future-work.md): proves, against TWO REAL MySQL servers at genuinely different patch
 /// versions straddling the 8.0.20 <c>UpsertIncomingAlias</c> threshold
 /// (<see cref="pengdows.crud.dialects.ISqlDialect"/> — MySQL 8.0.20 deprecated the legacy
 /// <c>VALUES(col)</c> upsert-source syntax in favor of an aliased-row <c>incoming.col</c> form),
@@ -37,7 +37,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// plus a THIRD real container just to get a same-version pair. That is exactly the kind of
 /// bespoke, reflection-dependent plumbing disproportionate to the value already delivered by the
 /// deterministic fakeDb unit test, so it is intentionally not attempted here — see
-/// docs/FUTURE_WORK.md for the full recommendation.
+/// docs/planning/future-work.md for the full recommendation.
 /// </para>
 /// </summary>
 public class MultiTenantDialectVersionTests : IAsyncLifetime

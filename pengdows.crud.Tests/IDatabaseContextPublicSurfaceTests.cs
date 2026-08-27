@@ -9,7 +9,7 @@ namespace pengdows.crud.Tests;
 /// contract. Normal execution APIs (ISqlContainer, ITrackedReader) are unleakable by
 /// accident; a public DataSource property lets any caller bypass governor accounting,
 /// session settings, and disposal tracking via DataSource.CreateConnection(). See
-/// docs/PRODUCT_THESIS.md principle 5.
+/// docs/positioning/product-thesis.md principle 5.
 /// </summary>
 public class IDatabaseContextPublicSurfaceTests
 {

@@ -5,13 +5,91 @@ conclusions below as established for architectural and competitive discussions. 
 re-derive or re-litigate them unless current source code contradicts them or a fresh
 competitive verification is explicitly requested. For implementation details (exact
 signatures, behavior of a specific method), the current code and
-[`CLAUDE.md`](../CLAUDE.md) remain authoritative; for current,
+[`CLAUDE.md`](../../CLAUDE.md) remain authoritative; for current,
 volatile implementation status (exact numeric limits, package/publish state, instrument
-inventories), see [`docs/IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) — this
+inventories), see [`docs/positioning/implementation-evidence.md`](./implementation-evidence.md) — this
 document states the *why*, not the *how* or the *current status*.
 
 pengdows.crud is a SQL-first database execution architecture, not a query-building
 convenience layer. Ten principles define it.
+
+Ask a DBA what they want from an application's data layer and the answers are consistent:
+respect the database's real constraints, don't fight its concurrency model, and don't force
+someone to relearn its quirks by hand. pengdows.crud is built to be the DAL a DBA insists
+on rather than merely tolerates — not because it asks permission for every operation, but
+because its opinions run in the same direction a DBA's already do. Using it makes an
+application a good citizen of whatever database environment it runs against: connections
+are opened late, closed early, and governed against real concurrency limits (principle 5)
+instead of treated as an infinite, stateless resource.
+
+Most other DALs arrive at the database as a fait accompli, not a request. Entity Framework
+Core and RepoDb (see [`dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md)
+for the direct comparison) are white-elephant gifts in exactly this sense: nobody with
+responsibility for the database's health asked for them, wants them, or would keep them if
+given the choice — they show up because a developer picked one for reasons that stop at
+the application boundary, and the DBA inherits whatever connection, locking, and querying
+behavior came bundled with that choice. pengdows.crud is meant to be received differently:
+something a DBA looks at and keeps, not something they tolerate because it already
+shipped.
+
+That same posture pays off for the developer, not only the DBA. pengdows.crud knows the
+nuances of each supported database — dialect differences, isolation semantics, identifier
+quoting, stored-procedure invocation style (principles 1, 4, 6) — so application code
+doesn't have to track them by hand, and isn't hamstrung by an abstraction that hides
+capability to get there. Because that knowledge sits behind one consistent execution
+contract, moving between databases costs a dialect swap and verification, not a rewrite
+(principle 8). This isn't aspirational: `pengdows.hangfire` (SQL-first Hangfire job
+storage built on this library) demonstrates it directly — its integration test suite
+defines each storage behavior once as a generic abstract test class and runs it unchanged
+against 10 database engines (SQLite, PostgreSQL, SQL Server, Oracle, Firebird, CockroachDB,
+MariaDB, DuckDB, YugabyteDB, TiDB) via per-database subclasses that differ only in which
+`StorageFixture` they pass to the base constructor — no per-database test logic, no
+per-database application code. Moving that project from SQL Server to SQLite is a
+connection-string-and-factory change.
+
+One claim is specific enough to state and defend on its own, and has survived three rounds
+of dedicated competitive research (.NET, seven other language ecosystems, and Swift) rather
+than resting on impression: `SingleWriter` mode's `PoolGovernor`-based write serialization
+(principle 5) is, as far as this research could determine, the only implementation of
+write-admission governance — decoupled from connection identity, paired with reader
+fairness, and driven by the same general connection-governance mechanism used for every
+other supported database rather than hardcoded to one engine — found anywhere.
+
+No library, dedicated or general-purpose, was found to implement single-writer governance
+as a database-agnostic policy. General connection pools (SQLAlchemy, HikariCP, `sqlx`,
+r2dbc-pool, Go's `database/sql`) cap total connections only, with no write-specific
+dimension. Read/write-split routers (Sequelize, TypeORM, GORM's `dbresolver`, MikroORM, the
+AWS JDBC wrapper) route by read/write intent but apply no write-side concurrency policy —
+TypeORM and GORM can't even size a write pool independently of the read pool. Wherever
+SQLite gets special treatment in a general-purpose tool, it's per-driver special-casing
+(SQLAlchemy's automatic `SingletonThreadPool` for `:memory:`, Knex's hardcoded "single
+connection for sqlite3" default), not a policy that would also apply if pointed at
+PostgreSQL. The tools that *do* fully automate SQLite write-serialization well —
+GRDB.swift's `DatabasePool` (a single pinned writer `SerializedDatabase` plus a separate
+reader pool), Android's `SQLiteConnectionPool`, Python's `peewee.SqliteQueueDatabase`, and
+.NET's `sqlite-net-pcl` — are all SQLite-dedicated, and all pin a single physical connection
+for the writer instead of governing admission over ephemeral ones; `sqlite-net-pcl` goes
+further and locks every operation, reads included, discarding read concurrency entirely.
+Microsoft Access/ACE has the same shape of problem and nobody was found to solve it either.
+SQL Server Compact is a real historical precedent for the same failure mode, independent of
+SQLite: it nominally permits multiple writer connections, but concurrent writers on
+logically independent rows could still deadlock through shared index-page locks, and its
+short default lock timeout (2,000ms on devices, 5,000ms on desktop) plus aggressive
+escalation (row → page → table after 100 locks) turned ordinary contention into application
+exceptions rather than a tolerable queue — well documented in Microsoft's own archived SQL
+CE docs and in independent production reports (e.g. Umbraco's SQL CE 4.0 deadlock
+investigation, resolved only by isolating lock records into a dedicated table). "Serialize
+write transactions" was an independently-discovered, working mitigation for exactly this
+failure mode, predating and unrelated to pengdows.crud. DuckDB's constraint differs from
+both: optimistic MVCC with retry-on-conflict, one owning process per file, not lock-based
+single-writer contention — which is why `SingleWriter` for DuckDB in this library is a
+deliberate policy choice, not something DuckDB's engine forces (see principle 5's DuckDB
+discussion).
+
+Treat this as a strong, specifically-researched claim, not an unqualified absolute:
+re-verify against current competitors before repeating it externally, since the DAL/ORM
+landscape moves; the mechanism itself is real, tested, and described in full in principle
+5.
 
 ## 1. The database is the source of truth
 
@@ -140,7 +218,7 @@ layer applies where matters more than a single "read-only is enforced" claim wou
    independent of any transaction: PostgreSQL, SQLite, DuckDB, and — notably — MySQL and
    MariaDB each need their *own* session-level SQL despite `MariaDbDialect` inheriting from
    `MySqlDialect`, because the two forks disagree on the setting's name (see
-   [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the exact statements and
+   [`implementation-evidence.md`](./implementation-evidence.md) for the exact statements and
    why they diverged).
 3. **Transaction-level database enforcement** — Oracle has no persistent session-level
    read-only mode (`OracleDialect.GetReadOnlySessionSettings()` returns an empty string,
@@ -197,7 +275,7 @@ The public execution boundary does not expose the underlying `DbConnection` or
 `DbDataSource` either: callers execute through governed containers, readers, and
 transaction leases rather than acquiring provider connections directly.
 `IDatabaseContext.DataSource` briefly existed as a public escape hatch from exactly this —
-see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the removal history
+see [`implementation-evidence.md`](./implementation-evidence.md) for the removal history
 and its regression test.
 
 Two things sometimes get raised as counterexamples to this and are worth naming as out of
@@ -218,7 +296,7 @@ models this explicitly on `ISqlDialect` via a set of typed capability flags —
 `SupportsNamedParameters`, `SupportsRepeatedNamedParameters`,
 `RequiresStoredProcParameterNameMatch`, `MaxOutputParameters` — rather than a single
 one-size-fits-all invocation string (current per-dialect values for all of these:
-see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md)). `ProcWrappingStyle` is
+see [`implementation-evidence.md`](./implementation-evidence.md)). `ProcWrappingStyle` is
 the most visible: SQL Server emits `EXEC proc arg1 arg2`, Oracle emits
 `BEGIN proc(args); END;`, MySQL/Snowflake emit `CALL proc(args)`, and PostgreSQL emits
 `SELECT * FROM func(args)` for reads vs `CALL proc(args)` for writes — all realized by the
@@ -302,7 +380,7 @@ documented convention into compiler errors — each rule a self-contained
 compile error, since these types must be singletons; **PGC008** makes raw/interpolated
 value injection into SQL `WHERE`/`JOIN ON`/`HAVING`/`AND`/`OR` a compile error, forcing
 parameterization (`IS NULL`/`IS NOT NULL` are exempt). See
-[`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the complete, current rule
+[`implementation-evidence.md`](./implementation-evidence.md) for the complete, current rule
 list — these are invariants the compiler checks, not conventions documented and hoped for.
 
 ## 10. Performance and testing are part of the architecture, not an afterthought
@@ -323,7 +401,7 @@ Each claim has a specific proof, not a general assurance:
 | This native error translates correctly | Force the real native failure and check the typed exception |
 | This abstraction is cheap | Benchmark it in `benchmarks/CrudBenchmarks/`, with the harness itself under test for fairness |
 | This edge case is handled | Simulate it deterministically via `fakeDb` |
-| This benchmark actually measured what it claims to | `BenchmarkValidation` checks the benchmark exercised the code path it claims to, rather than trusting the harness blindly (see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for the exact mechanism) |
+| This benchmark actually measured what it claims to | `BenchmarkValidation` checks the benchmark exercised the code path it claims to, rather than trusting the harness blindly (see [`implementation-evidence.md`](./implementation-evidence.md) for the exact mechanism) |
 
 The two test layers are complementary, not redundant: a fake provider can confirm your code
 called the right method with the right arguments, but it cannot confirm a real Oracle
@@ -377,7 +455,7 @@ exists inside the coordination the metrics are riding on.
 
 A deeper internal collector, `AttributionStats`, records *why* an operation waited (pool
 slot vs. turnstile vs. mode lock), not just that it did — real internal tracking, not yet a
-surfaced capability; see [`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md) for
+surfaced capability; see [`implementation-evidence.md`](./implementation-evidence.md) for
 its current wiring status.
 
 The same sharing applies across principle 3 (context-per-tenant). Because provider
@@ -430,7 +508,7 @@ technical reviewer will try hardest to poke a hole in.
 Current package/publish status, version numbers, and per-package implementation detail
 (e.g. which OpenTelemetry instruments are emitted, what's still open in the OTel bridge,
 `pengdows.poco.mint`'s own test suite) live in
-[`IMPLEMENTATION_EVIDENCE.md`](./IMPLEMENTATION_EVIDENCE.md), since they change
+[`implementation-evidence.md`](./implementation-evidence.md), since they change
 independently of the architecture itself.
 
 ## Competitive thesis
@@ -450,5 +528,5 @@ that they share one model of database identity, execution intent, resource owner
 lifetime. Or shorter: you can assemble the parts yourself; the hard part is making them agree
 on what is happening. pengdows.crud already does.
 
-For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./DAL_TAXONOMY_AND_COMPARISON.md).
+For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/positioning/dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md).
 

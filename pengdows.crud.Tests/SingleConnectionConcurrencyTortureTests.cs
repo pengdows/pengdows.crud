@@ -21,7 +21,7 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// Long-running, multi-threaded torture test for the "no-op/real/reusable locker architecture" —
-/// the docs/FUTURE_WORK.md gap left after <see cref="TransactionReaderLockLifetimeTests"/> (which
+/// the docs/planning/future-work.md gap left after <see cref="TransactionReaderLockLifetimeTests"/> (which
 /// proves one specific lock-lifetime bug is fixed, single-threaded) and
 /// <c>ReusableAsyncLockerTests.ConcurrentLockAsync_SerializesAccess</c> (which stresses a bare
 /// <see cref="pengdows.crud.threading.ReusableAsyncLocker"/>/counter in memory, with no real

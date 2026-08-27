@@ -94,7 +94,7 @@ internal interface IInternalSqlDialect : ISqlDialect
     /// <see cref="ISqlDialect.DatabaseType"/> — at minimum the detected server version, and any
     /// other per-instance construction flag that affects generated SQL text (not raw
     /// <see cref="DbParameter"/> construction — see the fingerprint audit in
-    /// docs/FUTURE_WORK.md for why parameter-baking caches aren't safely fingerprintable yet).
+    /// docs/planning/future-work.md for why parameter-baking caches aren't safely fingerprintable yet).
     /// </summary>
     string CacheFingerprint { get; }
 }

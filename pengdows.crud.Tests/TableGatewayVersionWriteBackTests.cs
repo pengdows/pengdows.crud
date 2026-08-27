@@ -17,7 +17,7 @@ namespace pengdows.crud.Tests;
 /// the SET clause's increment is a fixed, deterministic "+1" (not a server-generated value like a
 /// rowversion/timestamp), and a successful write (rowsAffected > 0) guarantees the WHERE clause's
 /// version match succeeded, "current + 1" can be computed and written back with full certainty —
-/// no extra round trip needed. See docs/FUTURE_WORK.md's "entity freshness after a successful
+/// no extra round trip needed. See docs/planning/future-work.md's "entity freshness after a successful
 /// write" entry.
 /// </summary>
 public class TableGatewayVersionWriteBackTests : SqlLiteContextTestBase

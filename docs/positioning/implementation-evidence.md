@@ -1,6 +1,6 @@
 # pengdows.crud — Implementation Evidence
 
-This document is the companion to [`PRODUCT_THESIS.md`](./PRODUCT_THESIS.md). The thesis
+This document is the companion to [`product-thesis.md`](./product-thesis.md). The thesis
 states the architectural *why* and is meant to stay stable; this document tracks the
 volatile *current status* — exact numeric limits, package versions, publish state,
 instrument names, and internal wiring details — that changes independently of the
@@ -22,7 +22,7 @@ Last verified: 2026-08-13.
 | `pengdows.hangfire` | SQL-first Hangfire job storage | A real downstream consumer: depends on `pengdows.crud` and `pengdows.crud.analyzers`, showing the architecture generalizes past CRUD to background-job storage |
 | `pengdows.stormgate` | ADO.NET connection admission control (prevents "connection storm" thundering-herd opens) | Ships from the same repository/solution as `pengdows.crud` but is a standalone, separately-adopted package — not wired into `DatabaseContext`'s own connection governance (the `SingleWriter` turnstile governor is a distinct, internal mechanism) |
 | `pengdows.threading` | `ConvergeWait` + adaptive throttling | A separate general-purpose concurrency library from the same author/namespace; no dependency relationship with `pengdows.crud` exists in source as of this writing |
-| `pengdows.crud.opentelemetry` | OpenTelemetry metrics adapter | Genuinely built and tested (`PengdowsMetricsObserverTests.cs`): bridges `MetricsUpdated` into `System.Diagnostics.Metrics` without adding an OTel dependency to the core package, auto-discovers both DI-registered and per-tenant contexts via `ITenantContextRegistry` events, and emits per-pool (Reader/Writer) gauges — reinforcing principle 10's Emergent Capabilities metrics claim externally. Exposes **both** naming schemes side by side: the original `pengdows.db.client.*` instruments (unchanged, so no existing consumer breaks) and, additively, OTel semantic-convention names — `db.client.operation.duration` (a real Histogram, derived from the same `ActivitySource("pengdows.crud")` spans `SqlContainer` already emits for tracing, filtered to `Track()`ed contexts via a `pengdows.context_id` Activity tag so concurrent unrelated activity is never recorded) and the connection-pool counters `db.client.connection.count`/`.max`/`.pending_requests`/`.timeouts`. Still open: the semconv pool-side histograms (`create_time`/`wait_time`/`use_time`) would require new event hooks inside `PoolGovernor`'s concurrency-critical code, deliberately deferred rather than rushed; and the OTel bridge still exposes only aggregate command/connection/transaction counts, not the `DatabaseMetrics.Read`/`.Write` per-role split. **Not yet published to NuGet** as of this writing. `docs/opentelemetry-metrics.md` (renamed and rewritten 2026-08-13 from the stale `opentelemetry-metrics-plan.md`, which said "nothing here exists" long after the package shipped) has the full design rationale and current instrument/tag detail; `docs/FUTURE_WORK.md` tracks what's still open |
+| `pengdows.crud.opentelemetry` | OpenTelemetry metrics adapter | Genuinely built and tested (`PengdowsMetricsObserverTests.cs`): bridges `MetricsUpdated` into `System.Diagnostics.Metrics` without adding an OTel dependency to the core package, auto-discovers both DI-registered and per-tenant contexts via `ITenantContextRegistry` events, and emits per-pool (Reader/Writer) gauges — reinforcing principle 10's Emergent Capabilities metrics claim externally. Exposes **both** naming schemes side by side: the original `pengdows.db.client.*` instruments (unchanged, so no existing consumer breaks) and, additively, OTel semantic-convention names — `db.client.operation.duration` (a real Histogram, derived from the same `ActivitySource("pengdows.crud")` spans `SqlContainer` already emits for tracing, filtered to `Track()`ed contexts via a `pengdows.context_id` Activity tag so concurrent unrelated activity is never recorded) and the connection-pool counters `db.client.connection.count`/`.max`/`.pending_requests`/`.timeouts`. Still open: the semconv pool-side histograms (`create_time`/`wait_time`/`use_time`) would require new event hooks inside `PoolGovernor`'s concurrency-critical code, deliberately deferred rather than rushed; and the OTel bridge still exposes only aggregate command/connection/transaction counts, not the `DatabaseMetrics.Read`/`.Write` per-role split. **Not yet published to NuGet** as of this writing. `docs/opentelemetry-metrics.md` (renamed and rewritten 2026-08-13 from the stale `opentelemetry-metrics-plan.md`, which said "nothing here exists" long after the package shipped) has the full design rationale and current instrument/tag detail; `docs/planning/future-work.md` tracks what's still open |
 
 `pengdows.poco.mint` maintains its own separate test suite (`core.tests`, `api.tests`,
 `IntegrationTests`, with distinct CLI/web coverage baselines) verifying schema-generation
@@ -105,9 +105,9 @@ walks `IDatabaseContext`'s and `ITransactionContext`'s full `GetInterfaces()` cl
 `Type.GetProperty` doesn't search base interfaces) so the property can't silently reappear
 on either public interface.
 
-**Not yet on GitHub as of 2026-08-13**: this fix lives on local branch `2.0.6`, which has
-not been pushed — `origin/main` is still at `2.0.5` and still has the public `DataSource`
-property. Re-verify this section once `2.0.6` (or its successor) is pushed and merged.
+**Pushed but not yet merged as of 2026-08-27**: this fix lives on branch `2.0.6`, now pushed
+to `origin/2.0.6` — `origin/main` is still at `2.0.5` and still has the public `DataSource`
+property. Re-verify this section once `2.0.6` (or its successor) is merged into `main`.
 
 ## Internal metrics wiring status
 
@@ -124,7 +124,7 @@ Principle 10 says every claim has a specific proof rather than a general assuran
 table below is the volatile half of that promise — exact test file names, which will
 rename/move/split over time — for the claims that got a source-level audit on 2026-08-13:
 
-| Claim (PRODUCT_THESIS.md) | Proof |
+| Claim (product-thesis.md) | Proof |
 |---|---|
 | Non-lease execution paths self-clean on every outcome, including exception paths (principle 5) | `pengdows.crud.Tests/ExecuteReaderWriteConnectionLeakTests.cs` — asserts the connection is disposed when `ExecuteReaderAsync` fails before a `TrackedReader` is created |
 | MySQL and MariaDB use different read-only session SQL (`transaction_read_only` vs `tx_read_only`) (principle 4) | `pengdows.crud.Tests/ReadOnlySessionSettingsTests.cs` and `pengdows.crud.Tests/dialects/MariaDbDialectTests.cs` — the latter explicitly asserts `Assert.DoesNotContain("transaction_read_only", settings)` for MariaDB |

@@ -31,7 +31,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// Opaque version columns (<see cref="byte[]"/>,
     /// <see cref="pengdows.crud.types.valueobjects.RowVersion"/>) are excluded: their new value is
     /// DB-generated (not a fixed "+1"), so there is no free fix for those — see
-    /// docs/FUTURE_WORK.md's "entity freshness after a successful write" entry.
+    /// docs/planning/future-work.md's "entity freshness after a successful write" entry.
     /// Call only when the write is already known to have succeeded (rowsAffected &gt; 0); never
     /// call this on a failed/conflicted write.
     /// </remarks>

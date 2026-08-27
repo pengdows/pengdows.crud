@@ -2,7 +2,7 @@
 
 ## Starting a transaction
 
-`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB prefers the provider default, and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only). A dedicated `SemaphoreSlim` (`RealAsyncLocker`) guards the logical user lock so the caller can still buffer async work inside the transaction without racing commit/rollback.
+`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB prefers the provider default, and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only). A dedicated `SemaphoreSlim`, wrapped by `ReusableAsyncLocker`, guards the logical user lock so the caller can still buffer async work inside the transaction without racing commit/rollback.
 
 ### Async signatures (all return ValueTask)
 

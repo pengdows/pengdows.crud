@@ -8,7 +8,7 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Locks in the PRODUCT_THESIS.md principle-2 claim: a transaction acquires its governed
+/// Locks in the product-thesis.md principle-2 claim: a transaction acquires its governed
 /// connection exactly once, at BeginTransaction, not once per command executed inside it.
 /// </summary>
 public class TransactionGovernorAcquisitionTests

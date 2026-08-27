@@ -28,7 +28,7 @@ Traditional classifications place data access tools on a 1D spectrum from **Heav
 2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
 3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
 4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
-5. **Canonical Comparison Reference**: See [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./docs/DAL_TAXONOMY_AND_COMPARISON.md) for full comparisons across .NET, Java, Go, Rust, and Python.
+5. **Canonical Comparison Reference**: See [`docs/positioning/dal-taxonomy-and-comparison.md`](./docs/positioning/dal-taxonomy-and-comparison.md) for full comparisons across .NET, Java, Go, Rust, and Python.
 
 ## Project Structure
 
@@ -51,7 +51,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **"Open Late, Close Early" Architecture:** In `Standard` mode (for server databases), connections are acquired from the provider's pool only at the moment of execution and released immediately after. This maximizes connection pool efficiency and prevents pool exhaustion under high load.
 - **Pool Governor:** 2.0 introduces a true pool governor for read/write slot control and fairness. It provides better protection against pool saturation, safer high-concurrency operation, and separate read and write slot budgets. It is more advanced than the standalone `pengdows.stormgate` admission controller, adding fairness and full telemetry.
 - **`SingleWriter` Mode:** For file-based databases like SQLite, this mode provides a unique, built-in solution for safe concurrent writes. Re-architected in 2.0 to use a turnstile-based coordination that schedules write tasks rather than just serializing connections, significantly reducing writer starvation risk.
-- **`SingleConnection` Mode:** A dedicated mode for handling thread-safe access to a single, persistent connection, designed specifically for ephemeral `:memory:` databases, which is invaluable for testing.
+- **`SingleConnection` Mode:** For databases that can't handle more than one connection at all — every read and write serializes through one pinned, thread-safe connection. Required for ephemeral `:memory:` databases, where each additional connection would otherwise become its own isolated database; invaluable for testing.
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
     - File-based SQLite/DuckDB → `SingleWriter`

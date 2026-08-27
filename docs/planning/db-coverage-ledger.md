@@ -36,11 +36,9 @@ This is a coverage ledger, not a claim that every listed issue is a current defe
 | Db2 MERGE generated-key return and autocommit | Db2 MERGE does not currently return a generated key | Integration test proving identity retrieval remains correct after statement autocommit. |
 | SQLite truncate emulation / VACUUM in transactions | pengdows.crud does not generate SQLite truncate emulation | Transactional and non-transactional integration tests for the chosen API contract. |
 
-## Testbed capability skips
+## Testbed capability skips (resolved)
 
-The Db2 testbed currently reports two capability skips. These are not xUnit skipped tests:
+Both capability skips previously tracked here are resolved as of 2026-08-20:
 
-- Stored procedures are not modeled as supported for Db2.
-- No Db2-specific invalid-isolation profile is currently asserted.
-
-The invalid-isolation case is a test coverage gap. The stored-procedure entry is a declared capability boundary and should only become a passing check when support is intentionally added.
+- Stored procedures are now supported for Db2 (`Db2Dialect.ProcWrappingStyle => ProcWrappingStyle.Call`), with live coverage in `testbed/TestProvider.cs`'s `TestStoredProcReturnValue`.
+- A Db2-specific invalid-isolation-profile case is asserted in `testbed/TestProvider.cs`'s `TestInvalidIsolationLevels` (`SupportedDatabase.Db2 => IsolationLevel.Snapshot`, expected to throw `InvalidOperationException`).

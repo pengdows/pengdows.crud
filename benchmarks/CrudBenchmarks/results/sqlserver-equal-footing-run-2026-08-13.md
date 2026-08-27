@@ -62,7 +62,7 @@ This is a real, quantified, previously-undocumented cost of pengdows's current S
 dialect, not an artifact of an unfair benchmark. Whether an equivalent bake-in optimization
 is even possible for SQL Server (TDS/`SqlClient` doesn't have a direct analog to Postgres's
 arbitrary `Options=-c key=value` GUC-default mechanism) is an open question worth a
-dedicated investigation — logged in `docs/FUTURE_WORK.md`.
+dedicated investigation — logged in `docs/planning/future-work.md`.
 
 ### Bugs found and fixed to make this benchmark runnable at all
 

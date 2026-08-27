@@ -2,12 +2,12 @@
 
 > **HISTORICAL SNAPSHOT — not current guidance.** This is a point-in-time Q&A review, not a
 > living document. A later, more thorough review (2026-08-12, written up in
-> `docs/FUTURE_WORK.md`) found and fixed real correctness bugs in subsystems this review
+> `docs/planning/future-work.md`) found and fixed real correctness bugs in subsystems this review
 > confidently describes as sound, which this file was never updated to reflect — notably
 > its dispose-path determinism claim (superseded by the transaction reader-lock-lifetime
 > fix) and its session-init failure-handling description (superseded by
 > `SessionInitializationFailureMode`, added after this review's cutoff). Treat
-> `docs/FUTURE_WORK.md` and `docs/PRODUCT_THESIS.md` as current; use this file only for
+> `docs/planning/future-work.md` and `docs/positioning/product-thesis.md` as current; use this file only for
 > historical context on what a March 2026 review of the codebase looked like.
 
 Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6, 2026 (the

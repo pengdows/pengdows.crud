@@ -473,27 +473,31 @@ app.Use(async (context, next) =>
 
 ### Strategy Selection Logic
 
-**Initialization** (DatabaseContext.Initialization.cs:464):
+**Initialization** (DatabaseContext.Initialization.cs:590-602):
 ```csharp
-var requestedMode = ConnectionMode;
 ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
-WarnOnModeMismatch(ConnectionMode, product, wasCoerced: requestedMode != ConnectionMode);
+WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
 ```
 
 **Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs):
 ```csharp
-public static IConnectionStrategy Create(DbMode mode, IDatabaseContext context)
+internal static class ConnectionStrategyFactory
 {
-    return mode switch
+    public static IConnectionStrategy Create(DatabaseContext context, DbMode mode)
     {
-        DbMode.Standard => new StandardConnectionStrategy(context),
-        DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
-        DbMode.SingleWriter => new StandardConnectionStrategy(context),
-        DbMode.SingleConnection => new SingleConnectionStrategy(context),
-        _ => new StandardConnectionStrategy(context)
-    };
+        return mode switch
+        {
+            DbMode.Standard => new StandardConnectionStrategy(context),
+            DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
+            DbMode.SingleConnection => new SingleConnectionStrategy(context),
+            // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
+            DbMode.SingleWriter => new StandardConnectionStrategy(context),
+            _ => throw new NotSupportedException($"Unsupported database mode: {mode}")
+        };
+    }
 }
 ```
+Note: there is no silent fallback for an unrecognized mode — the default case throws `NotSupportedException`.
 
 ### IProcWrappingStrategy
 
@@ -580,8 +584,8 @@ await reader.DisposeAsync();
 **TrackedReader** auto-disposes when `Read()` or `ReadAsync()` returns `false`:
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs:216-235
-public async Task<bool> ReadAsync(CancellationToken cancellationToken)
+// pengdows.crud/wrappers/TrackedReader.cs:353
+public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
 {
     if (_disposed) return false;
 
@@ -933,7 +937,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - Subscribers expected to be observers, not controllers
 
 **What's actually done**:
-- Warning in XML docs (DatabaseContext.cs:47-48)
+- Warning in XML docs (DatabaseContext.Metrics.cs:71-86); event invoked at DatabaseContext.Metrics.cs:322
 - Event fired without holding locks
 - User responsible for not re-entering
 
@@ -1003,7 +1007,7 @@ This section documents **contracts between internal components** that aren't vis
 - Dialect selection based on SupportedDatabase enum
 - Vendor-specific behaviors encapsulated in dialect implementation
 
-**Enforcement**: DatabaseContext.Initialization.cs:422-460
+**Enforcement**: DatabaseContext.Initialization.cs:294-311
 
 ### TransactionContext ↔ IsolationResolver
 
@@ -1021,7 +1025,7 @@ This section documents **contracts between internal components** that aren't vis
 
 ### Compiled Property Setters
 
-**Benchmark**: `benchmarks/CrudBenchmarks/ReaderMappingBenchmark.cs`
+**Benchmark**: `benchmarks/CrudBenchmarks/Internal/ReaderMappingBenchmark.cs`
 
 **Results** (AMD Ryzen 9 5950X, .NET 8.0.22):
 - **100 rows**: 161.6 µs vs 969.7 µs = **6.0x faster** than pure reflection
@@ -1034,7 +1038,7 @@ This section documents **contracts between internal components** that aren't vis
 3. Compile to delegate (cached)
 4. Subsequent queries: Direct delegate invocation (no reflection)
 
-**Code**: `pengdows.crud/TableGateway.Mapping.cs:BuildReaderPlan()`
+**Code**: `pengdows.crud/DataReaderMapper.cs` — `CompileSetter<T>()` builds and caches the compiled `Expression` delegate per column set.
 
 ### SQL Template Caching
 

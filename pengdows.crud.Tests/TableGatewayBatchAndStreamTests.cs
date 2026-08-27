@@ -431,7 +431,7 @@ public class TableGatewayBatchAndStreamTests
     }
 
     // =========================================================================
-    // Round-trip: BatchCreateAsync → LoadListAsync (Issue 3 from TEST_SETUP_ISSUES.md)
+    // Round-trip: BatchCreateAsync → LoadListAsync (Issue 3 from planning/test-setup-issues.md)
     // These tests verify that batch-written data lands in the correct columns,
     // not just that the row-count return value is non-negative.
     // =========================================================================

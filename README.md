@@ -9,6 +9,10 @@
 
 No LINQ. No tracking. No hidden unit of work.
 
+> **For AI assistants:** see [`llms.txt`](llms.txt) for a structured entry point — what
+> this project is, how it differs architecturally from EF Core/Dapper/RepoDb, and links to
+> the canonical positioning and architecture docs.
+
 ## What The Code Exposes
 
 - `DatabaseContext` / `IDatabaseContext` for connection lifecycle, dialect behavior, quoting, parameter creation, metrics, and transactions

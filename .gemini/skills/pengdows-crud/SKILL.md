@@ -32,7 +32,7 @@ No LINQ, no tracking, no surprises — explicit SQL control with coordinated dat
 | Name / Concept | What it is NOT in pengdows.crud | What it ACTUALLY is in pengdows.crud |
 |---|---|---|
 | `DatabaseContext` | NOT Entity Framework's `DbContext` (not a scoped unit of work, no entity tracking). | **Singleton execution coordinator** bound to a connection string. |
-| `KeepAlive` mode | NOT RDS Proxy / network connection pool keep-alive. | `Standard` mode + **1 idle sentinel connection** kept open solely to prevent LocalDB / embedded DB engines from unloading. Never used for queries. |
+| `KeepAlive` mode | NOT RDS Proxy / network connection pool keep-alive. | `Standard` mode + **1 idle sentinel connection** kept open solely to prevent unload for databases that behave like SQL Server LocalDB (not SQLite/DuckDB — those coerce to SingleWriter instead). Never used for queries. |
 | `SingleWriter` mode | NOT a persistent single writer connection. | **Ephemeral pooled connections** where write admission is serialized via `PoolGovernor` (`MaxConcurrentWrites = 1`) with a writer-preference turnstile. Readers remain concurrent and ephemeral. |
 | `[Id]` vs `[PrimaryKey]` | NOT interchangeable. | `[Id]` is a single surrogate pseudokey for row-id operations. `[PrimaryKey]` is a natural/business key (can be composite). **Mutually exclusive on any property.** |
 | `TransactionContext` | NOT a generic "unit of work". | An **operation-scoped transaction container** that pins a dedicated connection for its lifetime. |
@@ -45,7 +45,7 @@ No LINQ, no tracking, no surprises — explicit SQL control with coordinated dat
 
 `pengdows.crud` evolves by **turning discovered engine failure modes into executable invariants**:
 - **`pengdows.crud.fakeDb` (Lifecycle Laboratory)**: A complete ADO.NET provider designed to test state transitions, slot contention, transaction rollbacks, cancellation races, and disposal leases without network I/O.
-- **`testbed/` (Multi-Engine Conformance)**: 11+ real database containers managed via Testcontainers (`SqlServer`, `PostgreSql`, `MySQL`, `MariaDB`, `Oracle`, `Firebird`, `DuckDb`, `Sqlite`, `CockroachDB`, `YugabyteDB`, `TiDB`, `Snowflake`, `Db2`).
+- **`testbed/` (Multi-Engine Conformance)**: 13+ real database containers managed via Testcontainers (`SqlServer`, `PostgreSql`, `MySQL`, `MariaDB`, `Oracle`, `Firebird`, `DuckDb`, `Sqlite`, `CockroachDB`, `YugabyteDB`, `TiDB`, `Snowflake`, `Db2`).
 - **Defect Absorption**: When real engines expose edge cases (e.g. version banner parsing, MERGE RHS alias qualifications, Firebird MATCHING syntax), generic dialect capabilities are added to `ISqlDialect` and permanently locked down with regression tests.
 - **Validation Harness & Coverage Ratchets**: BenchmarkDotNet release gates actively validate query plans (`SHOWPLAN`/`STATISTICS XML`) against real indexes. Minimum 83% CI line coverage (targeting 95%).
 
@@ -232,7 +232,7 @@ public class OrderItemGateway : PrimaryKeyTableGateway<OrderItem>
 | Mode | Value | Production Use Case | Connection Lifecycle |
 |---|---|---|---|
 | `Standard` | 0 | **Default for production servers** (PostgreSQL, SQL Server, MySQL, Oracle) | Ephemeral pooled connection per operation. |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection (LocalDB, SQLite WAL) | Standard lifecycle + 1 idle sentinel connection to prevent engine unload. |
+| `KeepAlive` | 1 | Embedded DBs needing sentinel connection (LocalDB only — SQLite/DuckDB coerce KeepAlive to SingleWriter instead) | Standard lifecycle + 1 idle sentinel connection to prevent engine unload. |
 | `SingleWriter` | 2 | File-based SQLite / DuckDB | Ephemeral connections with governor-serialized write admission (`MaxConcurrentWrites = 1`) + writer-starvation turnstile. Concurrent ephemeral readers. |
 | `SingleConnection` | 4 | In-memory `:memory:` databases | All operations funneled through 1 persistent connection locked with `RealAsyncLocker`. |
 | `Best` | 15 | **Auto-selection heuristic** | Automatically selects safest mode (e.g., `:memory:` $\to$ `SingleConnection`, file SQLite $\to$ `SingleWriter`, LocalDB $\to$ `KeepAlive`, others $\to$ `Standard`). |
@@ -276,9 +276,9 @@ await tx.CommitAsync();
 
 ## Canonical Architecture References
 
-- [DAL_TAXONOMY_AND_COMPARISON.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/DAL_TAXONOMY_AND_COMPARISON.md) — 2D architectural taxonomy and head-to-head comparison with EF Core, Dapper, Hibernate, jOOQ, sqlx, and other DALs.
-- [ARCHITECTURE.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/ARCHITECTURE.md) — Two-level locking, lifecycle, lease model, and concurrency contracts.
-- [PRODUCT_THESIS.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/PRODUCT_THESIS.md) — The 10 foundational principles and emergent capabilities.
-- [CONNECTION-MODES.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/CONNECTION-MODES.md) — Exhaustive DbMode specifications and pool governor mechanics.
+- [dal-taxonomy-and-comparison.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/positioning/dal-taxonomy-and-comparison.md) — 2D architectural taxonomy and head-to-head comparison with EF Core, Dapper, Hibernate, jOOQ, sqlx, and other DALs.
+- [architecture.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/architecture.md) — Two-level locking, lifecycle, lease model, and concurrency contracts.
+- [product-thesis.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/positioning/product-thesis.md) — The 10 foundational principles and emergent capabilities.
+- [connection-modes.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/connection/connection-modes.md) — Exhaustive DbMode specifications and pool governor mechanics.
 - [core-invariants.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/core-invariants.md) — Complete checklist of non-negotiable architectural rules.
 

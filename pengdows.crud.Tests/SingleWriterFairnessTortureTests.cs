@@ -23,7 +23,7 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// Long-running integration-level regression coverage for SingleWriter turnstile fairness,
 /// against a real, file-backed SQLite database (not fakeDb, not :memory:) via a real
-/// <see cref="DatabaseContext"/> — the gap docs/FUTURE_WORK.md called out: the turnstile
+/// <see cref="DatabaseContext"/> — the gap docs/planning/future-work.md called out: the turnstile
 /// gate/hold/release mechanism itself is already proven deterministically at the bare
 /// <see cref="pengdows.crud.infrastructure.PoolGovernor"/> level (see
 /// <c>PoolGovernorFairnessTests.WriterWithTurnstile_BlocksNewReaders</c>, which asserts a gated

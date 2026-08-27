@@ -18,7 +18,7 @@ namespace CrudBenchmarks.Internal;
 /// Benchmark comparing pengdows.crud's optimized reader mapping (compiled property setters + plan caching)
 /// against pure reflection-based mapping (no caching, no compiled delegates).
 ///
-/// This backs up the performance claims in PENGDOWS_CRUD_OVERVIEW.md section "Compiled Property Setters".
+/// This backs up the performance claims in overview.md section "Compiled Property Setters".
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5)]

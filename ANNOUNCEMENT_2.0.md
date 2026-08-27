@@ -147,7 +147,7 @@ Why it matters:
 - `[Version]` optimistic concurrency is supported in batch update
 - Dialect-specific strategies: `UPDATE FROM VALUES` (PostgreSQL), `MERGE` (SQL Server/Oracle), `ON DUPLICATE KEY` (MySQL/MariaDB)
 
-See `docs/BATCH_OPERATIONS.md` for the full reference.
+See `docs/batch-operations.md` for the full reference.
 
 ### 8) Streaming (memory-efficient large result sets)
 

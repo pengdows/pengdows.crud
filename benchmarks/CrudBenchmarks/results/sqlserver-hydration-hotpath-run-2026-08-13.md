@@ -43,7 +43,7 @@ real workload that holds a connection for meaningful work per checkout (larger r
 sets, `DbMode.SingleConnection`/`KeepAlive`, or a request that does several operations per
 acquired connection) pays that tax far less often relative to the actual work done, and
 the gap shrinks accordingly. This doesn't eliminate the cost documented in
-`docs/FUTURE_WORK.md` — `DbMode.Standard` genuinely does pay it on every operation — but it
+`docs/planning/future-work.md` — `DbMode.Standard` genuinely does pay it on every operation — but it
 does mean the *sizeable* multiplier seen there is a property of that specific connection
 policy under a workload of small, independent operations, not a general statement about
 pengdows's SQL Server execution path being 1.4-2x slower than Dapper across the board.

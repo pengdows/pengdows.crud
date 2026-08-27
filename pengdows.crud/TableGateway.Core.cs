@@ -93,7 +93,7 @@ public partial class TableGateway<TEntity, TRowID> :
     // DatabaseContext/dialect is no longer referenced) rather than a version fingerprint —
     // CreateDbParameter's behavior also depends on the live DbProviderFactory instance and, for
     // Firebird, GuidStorageMode, neither of which a simple DatabaseType+version fingerprint
-    // captures. See docs/FUTURE_WORK.md's fingerprint-audit entry before changing this.
+    // captures. See docs/planning/future-work.md's fingerprint-audit entry before changing this.
     private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
     private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
     private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();

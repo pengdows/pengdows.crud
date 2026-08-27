@@ -9,7 +9,7 @@
 > [`README.md`](../pengdows.crud.opentelemetry/README.md) is the primary reference for
 > installation and the metrics table; this file keeps the design rationale (why it's
 > shaped the way it is) and points at source for the full, current instrument list rather
-> than duplicating it — see `docs/IMPLEMENTATION_EVIDENCE.md`'s Ecosystem section for a
+> than duplicating it — see `docs/positioning/implementation-evidence.md`'s Ecosystem section for a
 > point-in-time snapshot of what's shipped vs. still open.
 
 ## What it does
@@ -88,7 +88,7 @@ What's actually applied, per `PengdowsMetricsObserver.cs`:
 - `db.name` / `db.system` — on every command/connection/transaction/error instrument.
 - `pool.label` (`reader`/`writer`) — additionally applied to pool-governor instruments only
   (`pengdows.db.client.pool.*`); command/connection/transaction counters are **not** split
-  by read/write role, only by context. `docs/FUTURE_WORK.md` tracks this as a real,
+  by read/write role, only by context. `docs/planning/future-work.md` tracks this as a real,
   still-open gap (the OTel bridge doesn't yet expose the `DatabaseMetrics.Read`/`.Write`
   per-role split that `IDatabaseContext.GetPoolStatisticsSnapshot(PoolLabel)` already has
   internally).
@@ -99,7 +99,7 @@ built.
 
 ## What's still open
 
-Per `docs/FUTURE_WORK.md`'s OpenTelemetry section: the OTel semantic-convention pool-side
+Per `docs/planning/future-work.md`'s OpenTelemetry section: the OTel semantic-convention pool-side
 histograms (`create_time`/`wait_time`/`use_time`) would require new event hooks inside
 `PoolGovernor`'s concurrency-critical code, deliberately deferred rather than rushed; and
 command/connection/transaction counters are not yet split by read/write role in the OTel

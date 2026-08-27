@@ -2,9 +2,9 @@
 
 ## Implementation snapshot
 
-`SqlDialect` maintains a lightweight `ConcurrentQueue<DbParameter>` so high-churn CRUD paths can reuse parameter instances instead of paying factory allocation costs on every call. Each rent clears the instance back to a neutral state and each return pushes it into a bounded pool (100 entries) to avoid unbounded memory growth.【F:pengdows.crud/dialects/SqlDialect.cs†L150-L151】【F:pengdows.crud/dialects/SqlDialect.cs†L991】【F:pengdows.crud/dialects/SqlDialect.cs†L1026-L1033】
+`SqlDialect` maintains a lightweight `ConcurrentQueue<DbParameter>` so high-churn CRUD paths can reuse parameter instances instead of paying factory allocation costs on every call. Each rent clears the instance back to a neutral state and each return pushes it into a bounded pool (100 entries) to avoid unbounded memory growth.【F:pengdows.crud/dialects/SqlDialect.cs†L221-L222】【F:pengdows.crud/dialects/SqlDialect.cs†L1121-L1128】
 
-Disposal of `SqlContainer` instances is the trigger that places parameters back into the pool, so callers that wrap containers in `using`/`await using` blocks automatically participate in reuse.【F:pengdows.crud/SqlContainer.cs†L917】【F:pengdows.crud/SqlContainer.cs†L2113-L2136】
+Disposal of `SqlContainer` instances is the trigger that places parameters back into the pool, so callers that wrap containers in `using`/`await using` blocks automatically participate in reuse.【F:pengdows.crud/SqlContainer.cs†L916】【F:pengdows.crud/SqlContainer.cs†L2193】
 
 ## Tests that cover the pool
 
@@ -13,7 +13,7 @@ Disposal of `SqlContainer` instances is the trigger that places parameters back 
 
 ## Practical guidance
 
-* If you hold on to `DbParameter` instances instead of disposing the owning `SqlContainer`, you opt out of pooling and will see new allocations each time. The existing BenchmarkDotNet run for `ParameterCreationBenchmark` illustrates this: because the sample never returns the parameter, it consistently allocates ~80 bytes per invocation.【F:BenchmarkDotNet.Artifacts/results/CrudBenchmarks.ParameterCreationBenchmark-report-github.md†L11-L16】
+* If you hold on to `DbParameter` instances instead of disposing the owning `SqlContainer`, you opt out of pooling and will see new allocations each time. A local BenchmarkDotNet run for `ParameterCreationBenchmark` illustrates this: because the sample never returns the parameter, it consistently allocates ~80 bytes per invocation. (`BenchmarkDotNet.Artifacts/` output is gitignored — rerun `dotnet run -c Release --project benchmarks/CrudBenchmarks --filter '*ParameterCreationBenchmark*'` to reproduce.)
 * Let the container go out of scope promptly (ideally with `await using`) so every parameter flows through the pool. That eliminates repeat allocations on hot code paths and reduces pressure on the GC without requiring any additional configuration.
 
 In short: the pool already delivers the primary perf win—zero-cost reuse once containers are disposed. Focus on ensuring containers are short-lived; adding another pool layer would not yield measurable gains beyond what is already in place.

@@ -91,6 +91,7 @@ The repository contains product support for:
 - YugabyteDB
 - TiDB
 - Snowflake
+- Db2
 
 If detection cannot identify the product, the library falls back to the SQL-92 dialect.
 

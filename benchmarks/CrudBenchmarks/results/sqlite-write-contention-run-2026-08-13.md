@@ -77,7 +77,7 @@ From the run's `PoolGovernor` snapshot (writer role):
 
 "Peak Turnstile Queued = 99" confirms the expected shape: 1 writer holds the single write
 slot, the other 99 queue at the fairness turnstile rather than contending for the SQLite
-file lock directly — exactly the mechanism principle 5 of `docs/PRODUCT_THESIS.md`
+file lock directly — exactly the mechanism principle 5 of `docs/positioning/product-thesis.md`
 describes.
 
 ### Note on artifact durability

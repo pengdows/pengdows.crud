@@ -87,7 +87,7 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
                     "SupportsMerge on, but it also surfaces an unrelated real regression in DuckDB's " +
                     "ON CONFLICT DO UPDATE alias binding (\"Referenced table \\\"s\\\" not found\") that " +
                     "pre-dates this task and needs its own fix in DuckDbDialect before the package can be " +
-                    "safely upgraded. See docs/FUTURE_WORK.md.");
+                    "safely upgraded. See docs/planning/future-work.md.");
                 return;
             }
 

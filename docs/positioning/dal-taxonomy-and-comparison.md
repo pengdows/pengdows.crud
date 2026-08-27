@@ -67,7 +67,7 @@ Most data access layers test either against superficial mocks or against SQLite 
 
 1. **`pengdows.crud.fakeDb` (Lifecycle & Failure Laboratory)**:
    - Not a mock library—a complete in-memory ADO.NET provider.
-   - **6,322 unit tests** executing deterministically in **~40 seconds** with **94.89% line coverage**.
+   - **6,517 unit tests** executing deterministically in **~46 seconds** with **94.89% line coverage**.
    - Deterministically stress-tests connection state machines, pool slot saturation, cancellation races, transaction savepoint rollbacks, and disposal leases without network or disk overhead.
 
 2. **`testbed/` (Multi-Engine Real Conformance Suite via Testcontainers)**:

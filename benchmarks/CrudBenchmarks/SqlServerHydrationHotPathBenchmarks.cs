@@ -18,7 +18,7 @@ namespace CrudBenchmarks;
 ///
 /// SqlServerEqualFootingBenchmarks.cs uses DbMode.Standard, so pengdows pays a fresh
 /// session-settings SET round trip on every single operation (see
-/// docs/FUTURE_WORK.md's P2 entry on this). This benchmark asks a different question:
+/// docs/planning/future-work.md's P2 entry on this). This benchmark asks a different question:
 /// once that per-operation session-init tax is paid ONCE instead of once per operation
 /// (DbMode.SingleConnection — same normalization HydrationHotPathBenchmarks.cs already
 /// applies for SQLite), how does pengdows's actual row-materialization cost compare to

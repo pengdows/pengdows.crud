@@ -5,7 +5,7 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// DataSource is deliberately not exposed anywhere — public or internal — on DatabaseContext
-/// (see docs/PRODUCT_THESIS.md principle 5: DbDataSource.CreateConnection() would bypass
+/// (see docs/positioning/product-thesis.md principle 5: DbDataSource.CreateConnection() would bypass
 /// governor accounting, session settings, and disposal tracking). Tests that need to verify
 /// which DbDataSource the constructor wired up read the private field directly via reflection
 /// instead of reintroducing a named accessor purely for testability.

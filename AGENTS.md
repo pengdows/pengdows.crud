@@ -23,7 +23,7 @@ Traditional classifications place data access tools on a 1D spectrum from **Heav
 2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
 3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
 4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
-5. **Canonical Comparison Reference**: See [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./docs/DAL_TAXONOMY_AND_COMPARISON.md) for full comparisons across .NET, Java, Go, Rust, and Python.
+5. **Canonical Comparison Reference**: See [`docs/positioning/dal-taxonomy-and-comparison.md`](./docs/positioning/dal-taxonomy-and-comparison.md) for full comparisons across .NET, Java, Go, Rust, and Python.
 
 ## Project Structure & Module Organization
 
@@ -331,9 +331,9 @@ This is intentional design — it allows "last modified" queries without checkin
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
+| `KeepAlive` | 1 | Databases that unload when idle, like SQL Server LocalDB (not SQLite/DuckDB — those coerce to SingleWriter instead) |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
-| `SingleConnection` | 4 | In-memory `:memory:` databases |
+| `SingleConnection` | 4 | Databases that can't handle more than one connection at all — every read and write serializes through one pinned connection (e.g. `:memory:` SQLite/DuckDB, Firebird embedded) |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.

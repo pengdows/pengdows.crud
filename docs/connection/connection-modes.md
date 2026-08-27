@@ -3,6 +3,16 @@
 This document defines the intent, invariants, and coercion rules for connection management modes in `pengdows.crud`.
 It resolves ambiguities so future contributors cannot bikeshed these rules.
 
+## 0. Philosophy
+
+`pengdows.crud` handles connections with a strong bias toward performance, predictability, and safe concurrency:
+
+- Open connections late — only when needed.
+- Close connections early — as soon as possible.
+- Respect database-specific quirks (see `connection-pooling.md` for SQLite and LocalDB rules).
+
+This avoids exhausting the connection pool, avoids leaking resources or unclosed connections, and reduces cost in cloud environments by minimizing active resource usage.
+
 ## 1. Modes & Lifecycle
 
 The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`.
@@ -38,7 +48,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
 - Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
-- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine does not actually have this limitation — it supports concurrent non-conflicting writes within one process — so SingleWriter there is pengdows.crud's own deterministic policy choice, not a limitation DuckDB's engine imposes (see `docs/PRODUCT_THESIS.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
+- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine does not actually have this limitation — it supports concurrent non-conflicting writes within one process — so SingleWriter there is pengdows.crud's own deterministic policy choice, not a limitation DuckDB's engine imposes (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 
 ### Best
 
@@ -101,7 +111,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
     to parse at all), so trusting "the pool gave me a connection, it must still be clean" is a
     correctness risk, not just a consistency one. Quantified cost tradeoff (SQL Server pays this
     every operation under `DbMode.Standard`, PostgreSQL bakes settings into the data source's
-    startup options instead): see `docs/FUTURE_WORK.md`'s SQL Server session-settings entry.
+    startup options instead): see `docs/planning/future-work.md`'s SQL Server session-settings entry.
 - Session settings are enforced at logical connection open (per the wrapper-lifetime rules above).
   Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
@@ -164,6 +174,21 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - Tests must expect `OperationCanceledException`.
 - `TaskCanceledException` may occur, but base type is sufficient and consistent.
+
+## 10. Practical Guidance
+
+**Best practices:**
+- Use `Standard` in production for client-server databases; it is on equal production footing with `SingleWriter` for file-based SQLite/DuckDB (see §1).
+- `KeepAlive` and `SingleConnection` are best suited for embedded/local DBs or dev/test, per their scoped use cases in §1.
+- Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
+
+**Timeouts:**
+- Set connection timeouts as low as reasonable to avoid hanging on transient failures.
+- Because ephemeral modes reconnect for every call, long timeouts are unnecessary.
+
+**Observability:**
+- `TrackedConnection` tracks current and max open connections with thread-safe `Interlocked` counters — useful for tuning pool sizes and spotting load issues.
+- Monitor `ModeContentionStats` (see §"Shared connection locking & timeouts" concepts in `connection-pooling.md`) through logs/metrics to see which operations are queuing on the mode lock.
 
 ---
 
