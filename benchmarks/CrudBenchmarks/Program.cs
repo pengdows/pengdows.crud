@@ -204,11 +204,19 @@ public class Program
 
         public string GetValue(Summary summary, BenchmarkCase benchmarkCase, SummaryStyle style)
         {
-            var methodName = benchmarkCase.Descriptor.WorkloadMethod.Name;
+            var method = benchmarkCase.Descriptor.WorkloadMethod;
+            var methodName = method.Name;
             string? framework = null;
             string? scenario = null;
 
-            if (methodName.EndsWith("_Pengdows", StringComparison.Ordinal))
+            // Explicit identity wins outright — see CorrectnessIdentityAttribute for why.
+            var identity = method.GetCustomAttribute<CorrectnessIdentityAttribute>();
+            if (identity != null)
+            {
+                framework = identity.Framework;
+                scenario = identity.Scenario;
+            }
+            else if (methodName.EndsWith("_Pengdows", StringComparison.Ordinal))
             {
                 framework = "Pengdows";
                 scenario = methodName[..^"_Pengdows".Length];
@@ -225,7 +233,24 @@ public class Program
             }
 
             if (framework == null || scenario == null)
+            {
+                // A blank "-" here is indistinguishable from "this class has no correctness
+                // tracking at all." If the class DOES write correctness fragments but this
+                // specific method's name didn't match any known suffix, that's the exact
+                // silent-failure class found three times in one session (2026-08-27) — render
+                // "?" and log so it can't pass for a verified zero.
+                if (BenchmarkCorrectnessArtifacts.HasFragmentsFor(summary.Title))
+                {
+                    Console.Error.WriteLine(
+                        $"[CorrectnessColumn] WARNING: '{methodName}' has correctness fragments " +
+                        "for its class but no CorrectnessIdentityAttribute and no recognized name " +
+                        "suffix (_Pengdows/_Dapper/_EntityFramework) — cannot resolve framework/" +
+                        "scenario. Add [CorrectnessIdentity(...)] to this method.");
+                    return "?";
+                }
+
                 return "-";
+            }
 
             // Must be null (not a literal placeholder string like "No parameters") for
             // parameterless benchmarks: BenchmarkCorrectnessArtifacts.CountFailures and

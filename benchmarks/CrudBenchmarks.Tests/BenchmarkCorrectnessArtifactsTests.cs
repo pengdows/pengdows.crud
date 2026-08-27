@@ -165,6 +165,48 @@ public sealed class BenchmarkCorrectnessArtifactsTests : IDisposable
         Assert.False(count.HasValue, $"Expected null after clearing stale fragments, got {count}");
     }
 
+    // Regression test for the third silent-failure instance found on 2026-08-27:
+    // PostgreSqlConnectionGovernanceBenchmarks' Dapper_StormGate method has zero correctness
+    // issues to record (it's the governed, succeeding path), so its fragment's Issues array is
+    // empty — exactly like "no fragment was ever written." CorrectnessColumn needs to tell
+    // these apart: a class with fragments but an unresolvable method identity should warn ("?"),
+    // while a class with no fragments at all should render "-" without a warning. This proves
+    // the fact HasFragmentsFor reports (fragment existence) is independent of whether that
+    // fragment's own Issues array happens to be empty.
+    [Fact]
+    public void HasFragmentsFor_WhenFragmentExistsWithNoIssues_StillReportsTrue()
+    {
+        BenchmarkCorrectnessArtifacts.Write("SomeBenchmark", Array.Empty<CorrectnessIssue>());
+
+        Assert.True(BenchmarkCorrectnessArtifacts.HasFragmentsFor("CrudBenchmarks.SomeBenchmark-20260101-000000"));
+    }
+
+    [Fact]
+    public void HasFragmentsFor_WhenNoFragmentWasEverWritten_ReportsFalse()
+    {
+        Assert.False(BenchmarkCorrectnessArtifacts.HasFragmentsFor("CrudBenchmarks.SomeOtherBenchmark-20260101-000000"));
+    }
+
+    // Regression test for the missing-denominator gap flagged on 2026-08-27: 1,950/2,158
+    // failure counts for PostgreSqlConnectionGovernanceBenchmarks had no recorded total attempt
+    // count alongside them, forcing the count to be reconstructed after the fact from
+    // BenchmarkDotNet job config instead of read directly. Write() now accepts an optional
+    // totalAttempted value; this proves it round-trips through the fragment file.
+    [Fact]
+    public void Write_WithTotalAttempted_RoundTripsThroughTheFragmentFile()
+    {
+        BenchmarkCorrectnessArtifacts.Write(
+            "SomeBenchmark",
+            new[] { new CorrectnessIssue(null, "Uncontrolled", "Dapper", "Exception: PostgresException", 1950) },
+            totalAttempted: 4000);
+
+        var fragmentsDir = Path.Combine(_tempDir, "correctness-fragments");
+        var path = Directory.GetFiles(fragmentsDir, "SomeBenchmark-*-correctness.json").Single();
+        var json = File.ReadAllText(path);
+
+        Assert.Contains("\"totalAttempted\": 4000", json);
+    }
+
     private void WriteRawFragment(string benchmarkClassName, int processId, CorrectnessIssue[] issues)
     {
         var fragmentsDir = Path.Combine(_tempDir, "correctness-fragments");

@@ -15,6 +15,15 @@ using System.Threading.Tasks;
 
 namespace CrudBenchmarks;
 
+/// <summary>
+/// FAULT INJECTION, NOT A PERFORMANCE CLAIM — see SQLiteWriteContentionBenchmarks.cs's class
+/// doc comment for the full rationale. This class is the most hostile of the three
+/// near-duplicate SQLite contention benchmarks in this suite (tracked for consolidation,
+/// not yet done): it sets no explicit `busy_timeout` at all, so SQLite's default (0ms — an
+/// immediate `SQLITE_BUSY` on any contention, no retry window whatsoever) applies. Against a
+/// real, file-based (not in-memory) SQLite database, that is a deliberately maximal stress
+/// parameter, not a recommended setting.
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 3, invocationCount: 1)]
 public class SqliteConcurrencyBenchmark

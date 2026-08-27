@@ -19,18 +19,36 @@ using pengdows.crud.infrastructure;
 namespace CrudBenchmarks;
 
 /// <summary>
-/// THESIS PROOF: SQLite Write Contention Safety
+/// FAULT INJECTION, NOT A PERFORMANCE CLAIM: this benchmark uses SQLite's global write lock
+/// as a cheap contention amplifier, not as evidence about SQLite specifically. The question
+/// being asked is "does this framework coordinate writers, or let them collide" — SQLite
+/// just makes that question answerable in ~136ms on a laptop instead of requiring thousands
+/// of concurrent connections against a server engine to observe the same failure class. The
+/// same standard practice as fault injection / fuzzing: use a cheap oracle to force a failure
+/// mode that is real but expensive to reproduce naturally.
 ///
-/// Proves thesis points #4 and #5:
-///   #4 - EF/Dapper don't protect the connection pool under heavy write contention
-///        (SQLite busy_timeout=10ms causes them to throw "database is locked" exceptions)
-///   #5 - pengdows degrades safely under contention: the SingleWriter governor serializes
-///        writers, preventing exceptions while preserving eventual correctness.
+/// `BusyTimeoutMs = 10` (below) is a deliberately narrow stress parameter, not a recommended
+/// setting and not a value tuned to produce a chosen answer — it exists to compress hours of
+/// realistic contention into a benchmark run's duration. Treat any specific failure-rate
+/// percentage this benchmark reports as a property of THIS lock, THIS timeout, THIS core
+/// count — not a fixed property of Dapper or EF Core. What generalizes across runs and
+/// hardware is the categorical result: pengdows.crud's SingleWriter governor serializes
+/// write *admission* before a writer ever reaches the database, so it never depends on
+/// `busy_timeout` resolving contention — there is no contention for it to resolve. Dapper
+/// and EF Core have no equivalent, so every writer races straight for SQLite's lock and
+/// Microsoft.Data.Sqlite's own retry loop (blocking `Thread.Sleep(150)` between attempts,
+/// bounded by `CommandTimeout`) is the only thing standing between them and the database.
+/// On a server engine the same uncoordinated-writer design collides too — just rarely enough
+/// that it surfaces in production instead of in a benchmark. See
+/// benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md for the
+/// paired 10ms/5000ms run that makes the timeout-sensitivity argument directly, and for
+/// MySqlDefaultConcurrencyBenchmarks (a real server-engine confirmation of the same
+/// coordination pattern, not just an amplified analogy of it).
 ///
-/// Design: 100 concurrent writers × 50 writes per transaction, SQLite busy_timeout=10ms.
-/// All three frameworks operate against the same shared-cache in-memory database.
-/// Exception counts are tracked per framework in _correctnessIssues.
-/// pengdows additionally tracks per-transaction commit latency for P50/P95/P99/Max analysis.
+/// Design: 100 concurrent writers × 50 writes per transaction. All three frameworks operate
+/// against the same shared-cache in-memory database. Exception counts are tracked per
+/// framework in _correctnessIssues. pengdows additionally tracks per-transaction commit
+/// latency for P50/P95/P99/Max analysis.
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 1, iterationCount: 5)]

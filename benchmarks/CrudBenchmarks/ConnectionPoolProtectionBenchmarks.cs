@@ -20,7 +20,15 @@ using pengdows.crud.metrics;
 namespace CrudBenchmarks;
 
 /// <summary>
-/// THESIS PROOF: Connection Pool Protection
+/// FAULT INJECTION, NOT A PERFORMANCE CLAIM — see the full rationale in
+/// SQLiteWriteContentionBenchmarks.cs's class doc comment, which this class's WriteStorm
+/// scenario duplicates closely enough that the two should eventually be consolidated into
+/// one benchmark class (tracked, not yet done). In short: SQLite's global write lock is used
+/// here as a cheap contention amplifier to force a failure class (uncoordinated writers
+/// colliding under load) that is real on any engine but expensive to reproduce naturally.
+/// `BusyTimeoutMs = 10` is a deliberate stress parameter, not a recommended setting, and any
+/// specific failure-rate percentage from this class is a property of this configuration and
+/// hardware, not a fixed property of Dapper or EF Core.
 ///
 /// Proves thesis points #3 and #4:
 ///   #3 - pengdows can do things they can't (SingleWriter governor serializes writes

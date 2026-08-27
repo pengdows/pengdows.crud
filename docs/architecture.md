@@ -1083,16 +1083,15 @@ This section documents **contracts between internal components** that aren't vis
 
 ### Benchmark Comparison (vs Dapper)
 
-**Note**: No official benchmarks yet, but expected characteristics:
+Measured, not projected — see `benchmarks/CrudBenchmarks/results/` for the underlying runs.
 
-| Operation | pengdows.crud | Dapper | Notes |
-|-----------|---------------|---------|-------|
-| Simple query | ~Equal | Baseline | Both use compiled setters |
-| Complex mapping | Slower | Faster | Dapper more optimized |
-| SQL generation | N/A | N/A | Dapper doesn't generate SQL |
-| Streaming | ~Equal | ~Equal | Both use IAsyncEnumerable |
+| Scenario | Result | Source |
+|----------|--------|--------|
+| Hydration hot path (SQLite, row materialization only, excludes connection acquisition) | pengdows.crud ~35–36% faster than Dapper across 100–5,000 rows, ~50% lower allocations | `hydration-hotpath-run-2026-08-13.md` |
+| SQL Server, `DbMode.Standard` per-checkout session settings | Inverse of the above — Dapper faster; this is a deliberate correctness trade-off (session-normalization enforcement), not a defect | `docs/connection/sql-server-session-settings.md` |
+| 100 concurrent SQLite writers, `busy_timeout=10ms` | pengdows.crud (`SingleWriter` turnstile): 0 lock exceptions, ~100ms completion. Dapper/EF Core: 250–350 `SQLITE_BUSY` exceptions, 1,055+ ms | `sqlite-write-contention-run-2026-08-13.md` |
 
-**Design trade-off**: pengdows.crud prioritizes **control + testability** over **absolute performance**.
+**Design trade-off**: pengdows.crud prioritizes **control + testability** at parity or better performance where governance is exercised; where a raw query path has no governance work to do (e.g. SQL Server's per-checkout session enforcement), that enforcement cost is visible and is a correctness choice, not an oversight.
 
 ---
 

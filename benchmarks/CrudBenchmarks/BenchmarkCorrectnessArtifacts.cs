@@ -108,13 +108,13 @@ internal static class BenchmarkCorrectnessArtifacts
     // relying on a single shared file surviving every process's turn to write it.
     private static string FragmentsDir => Path.Combine(ArtifactsDir, "correctness-fragments");
 
-    public static void Write(string benchmarkClassName, IReadOnlyCollection<CorrectnessIssue> issues)
+    public static void Write(string benchmarkClassName, IReadOnlyCollection<CorrectnessIssue> issues, long? totalAttempted = null)
     {
         try
         {
             Directory.CreateDirectory(FragmentsDir);
             var path = GetFragmentPath(benchmarkClassName, Environment.ProcessId);
-            var payload = new CorrectnessArtifact(benchmarkClassName, DateTime.UtcNow, issues.ToArray());
+            var payload = new CorrectnessArtifact(benchmarkClassName, DateTime.UtcNow, issues.ToArray(), totalAttempted);
             var json = JsonSerializer.Serialize(payload, SerializerOptions);
             File.WriteAllText(path, json);
             Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Wrote {path}");
@@ -176,6 +176,18 @@ internal static class BenchmarkCorrectnessArtifacts
             .Sum(issue => issue.Count);
     }
 
+    /// <summary>
+    /// True if this class wrote at least one correctness fragment for this run — i.e. it DOES
+    /// track correctness, so a caller that can't resolve a specific method's framework/scenario
+    /// identity is looking at a resolution bug, not simply an untracked class.
+    /// </summary>
+    public static bool HasFragmentsFor(string summaryTitle)
+    {
+        var benchmarkClassName = ExtractBenchmarkClassName(summaryTitle);
+        return Directory.Exists(FragmentsDir) &&
+            Directory.GetFiles(FragmentsDir, $"{benchmarkClassName}-*-correctness.json").Length > 0;
+    }
+
     private static List<CorrectnessIssue> LoadMergedIssues(string benchmarkClassName)
     {
         var merged = new List<CorrectnessIssue>();
@@ -229,5 +241,6 @@ internal static class BenchmarkCorrectnessArtifacts
     private sealed record CorrectnessArtifact(
         string BenchmarkClassName,
         DateTime GeneratedUtc,
-        CorrectnessIssue[] Issues);
+        CorrectnessIssue[] Issues,
+        long? TotalAttempted = null);
 }
