@@ -96,16 +96,86 @@ public sealed class BenchmarkCorrectnessArtifactsTests : IDisposable
     [Fact]
     public void Write_ThenRead_RoundTripsThroughTheConfiguredArtifactsDirectory_NotTheCurrentDirectory()
     {
-        // Proves the fix for item 9: the artifact lands in CRUD_BENCH_ARTIFACTS_DIR, not a path
-        // relative to whatever the process's current directory happens to be at write time — the
-        // exact thing that made the artifact unrecoverable under BenchmarkDotNet's generated,
-        // cleaned-up run directories.
+        // Proves the fix for item 9: the artifact lands under CRUD_BENCH_ARTIFACTS_DIR, not a
+        // path relative to whatever the process's current directory happens to be at write
+        // time — the exact thing that made the artifact unrecoverable under BenchmarkDotNet's
+        // generated, cleaned-up run directories. It lands in a "correctness-fragments"
+        // subdirectory, one file per process ID, per the fix below.
         BenchmarkCorrectnessArtifacts.Write("SomeBenchmark", new[]
         {
             new CorrectnessIssue(null, "WriteStorm", "Dapper", "Exception: SqliteException", 5),
         });
 
-        var expectedPath = Path.Combine(_tempDir, "SomeBenchmark-correctness.json");
-        Assert.True(File.Exists(expectedPath), $"Expected artifact at {expectedPath}");
+        var fragmentsDir = Path.Combine(_tempDir, "correctness-fragments");
+        var matches = Directory.Exists(fragmentsDir)
+            ? Directory.GetFiles(fragmentsDir, "SomeBenchmark-*-correctness.json")
+            : Array.Empty<string>();
+        Assert.True(matches.Length == 1, $"Expected exactly one fragment under {fragmentsDir}, found {matches.Length}");
+    }
+
+    // Regression test for the real bug found on 2026-08-27: each [Benchmark] method
+    // (Pengdows/Dapper/EntityFramework) runs in its own separately spawned process. The
+    // original implementation wrote one shared file per benchmark class with
+    // File.WriteAllText, so whichever process's Cleanup() happened to run (or finish) last
+    // silently overwrote every earlier framework's recorded issues — confirmed in practice on
+    // ConnectionPoolProtectionBenchmarks, where the surviving file only ever reflected
+    // whichever framework/scenario ran dead last across the whole class, making "Fails: 0" for
+    // every other row (including every Pengdows row) look verified when it never was. This
+    // test simulates two different processes' fragments existing simultaneously (as they would
+    // mid-run, before any single "last write" could clobber the others) and asserts both
+    // frameworks' issues are visible, not just the most-recently-written one.
+    [Fact]
+    public void CountFailures_MergesIssuesAcrossMultipleProcessFragments_InsteadOfOverwriting()
+    {
+        // Simulate the Dapper process's fragment (written first, in real usage).
+        WriteRawFragment("SomeBenchmark", processId: 1001, new[]
+        {
+            new CorrectnessIssue(null, "WriteStorm", "Dapper", "Exception: SqliteException", 268),
+        });
+
+        // Simulate the EntityFramework process's fragment (written last, in real usage — the
+        // one that used to silently erase Dapper's fragment above under the old shared-file
+        // design).
+        WriteRawFragment("SomeBenchmark", processId: 1002, new[]
+        {
+            new CorrectnessIssue(null, "WriteStorm", "EntityFramework", "Exception: SqliteException", 348),
+        });
+
+        var dapperCount = BenchmarkCorrectnessArtifacts.CountFailures(
+            "CrudBenchmarks.SomeBenchmark-20260101-000000", null!, "WriteStorm", "Dapper");
+        var efCount = BenchmarkCorrectnessArtifacts.CountFailures(
+            "CrudBenchmarks.SomeBenchmark-20260101-000000", null!, "WriteStorm", "EntityFramework");
+
+        Assert.Equal(268, dapperCount);
+        Assert.Equal(348, efCount);
+    }
+
+    [Fact]
+    public void ClearFragmentsFromPreviousRun_RemovesStaleFragments_SoTheyCannotPolluteAFreshRun()
+    {
+        BenchmarkCorrectnessArtifacts.Write("SomeBenchmark", new[]
+        {
+            new CorrectnessIssue(null, "WriteStorm", "Dapper", "Exception: SqliteException", 5),
+        });
+
+        BenchmarkCorrectnessArtifacts.ClearFragmentsFromPreviousRun();
+
+        var count = BenchmarkCorrectnessArtifacts.CountFailures(
+            "CrudBenchmarks.SomeBenchmark-20260101-000000", null!, "WriteStorm", "Dapper");
+        Assert.False(count.HasValue, $"Expected null after clearing stale fragments, got {count}");
+    }
+
+    private void WriteRawFragment(string benchmarkClassName, int processId, CorrectnessIssue[] issues)
+    {
+        var fragmentsDir = Path.Combine(_tempDir, "correctness-fragments");
+        Directory.CreateDirectory(fragmentsDir);
+        var path = Path.Combine(fragmentsDir, $"{benchmarkClassName}-{processId}-correctness.json");
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            new { BenchmarkClassName = benchmarkClassName, GeneratedUtc = DateTime.UtcNow, Issues = issues },
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            });
+        File.WriteAllText(path, json);
     }
 }

@@ -52,7 +52,30 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     private DbContextOptions<EfContentionContext> _efOptions = null!;
     private SqliteConnection _sentinelConnection = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
-    private readonly ConcurrentBag<long> _transactionTicks = new();
+
+    // WHY these two bags exist (added while investigating the ~1,055 ms mean that Dapper and
+    // EF converge on under this workload, and why it's nearly identical run-to-run despite
+    // "Fails" varying): Microsoft.Data.Sqlite's SqliteDataReader.NextResult() retries a
+    // busy/locked statement with Thread.Sleep(150) between attempts until elapsed time exceeds
+    // _command.CommandTimeout * 1000ms (source: dotnet/efcore, SqliteDataReader.cs). This
+    // benchmark sets DefaultTimeout=1 (1s) on the connection string, so a maximally-contended
+    // statement retries ~6-7 times (~900-1050ms of blocking Thread.Sleep) before either
+    // succeeding or throwing — which lines up with the observed ~1,055 ms mean almost exactly.
+    // Critically, Thread.Sleep is a REAL blocking sleep even though it's reached via an
+    // `await`-ed call (Microsoft.Data.Sqlite's own docs say its async methods run
+    // synchronously) — so with 100 concurrent writers, this isn't just SQLite lock contention,
+    // it's potential .NET thread-pool starvation from up to 100 threads blocked in Thread.Sleep
+    // simultaneously. `_successTicks`/`_failedTicks` exist to test that hypothesis empirically:
+    // if it's right, both should cluster near multiples of 150ms (150, 300, ..., ~900-1050),
+    // not a smooth distribution — instead of just trusting the mechanism reads plausible.
+    // Only Pengdows was tracked here originally; Dapper/EF now record both to make the
+    // comparison direct. Bags (not framework-keyed) because each [Benchmark] method runs in
+    // its own BenchmarkDotNet-spawned process with a fresh instance, so only one framework's
+    // calls ever populate these in a given process — see WriteLatencySidecar for why the
+    // output file is framework-scoped rather than a single shared file.
+    private readonly ConcurrentBag<long> _successTicks = new();
+    private readonly ConcurrentBag<long> _failedTicks = new();
+    private int? _minAvailableWorkerThreads;
 
     // Item 9 from the independent architecture review: "Fails=0" alone doesn't prove
     // correctness — it only proves nothing was flagged as invalid, which silently degrades to
@@ -149,55 +172,93 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
     private void WriteLatencySidecar()
     {
-        var ticks = _transactionTicks.ToArray();
-        if (ticks.Length == 0) return;
-
-        Array.Sort(ticks);
+        // Each [Benchmark] method runs in its own BenchmarkDotNet-spawned process with a fresh
+        // instance of this class (confirmed: "Benchmark Process NNNNN has exited" brackets each
+        // method in the run log). So _attemptedTransactions only ever has ONE framework's key
+        // populated in any given process — that key tells us which framework this Cleanup()
+        // call belongs to. A single shared filename written with File.WriteAllText (the
+        // original design) meant whichever process's Cleanup() ran LAST silently overwrote the
+        // others' data — that was the actual bug behind an "Attempted: 0" row for a framework
+        // that plainly ran (nonzero mean time, recorded exceptions). Writing one file per
+        // framework instead makes each process's output independent and makes a genuinely
+        // failed/skipped Cleanup() visible as a missing file instead of misleading zeros.
+        var framework = _attemptedTransactions.Keys.FirstOrDefault() ?? "Unknown";
 
         static double TicksToMs(long t) => (double)t / Stopwatch.Frequency * 1000.0;
 
-        long Percentile(long[] sorted, double pct)
+        static long Percentile(long[] sorted, double pct)
         {
             var idx = (int)Math.Ceiling(pct / 100.0 * sorted.Length) - 1;
             return sorted[Math.Max(0, Math.Min(idx, sorted.Length - 1))];
         }
 
-        var p50 = TicksToMs(Percentile(ticks, 50));
-        var p95 = TicksToMs(Percentile(ticks, 95));
-        var p99 = TicksToMs(Percentile(ticks, 99));
-        var max = TicksToMs(ticks[^1]);
+        static void AppendDistribution(StringBuilder sb, string label, long[] ticks)
+        {
+            sb.AppendLine($"### {label} ({ticks.Length} samples)");
+            sb.AppendLine();
+            if (ticks.Length == 0)
+            {
+                sb.AppendLine("_none recorded_");
+                sb.AppendLine();
+                return;
+            }
 
+            Array.Sort(ticks);
+            sb.AppendLine("| Percentile | Latency |");
+            sb.AppendLine("|------------|---------|");
+            sb.AppendLine($"| P50        | {TicksToMs(Percentile(ticks, 50)):F3} ms |");
+            sb.AppendLine($"| P95        | {TicksToMs(Percentile(ticks, 95)):F3} ms |");
+            sb.AppendLine($"| P99        | {TicksToMs(Percentile(ticks, 99)):F3} ms |");
+            sb.AppendLine($"| Max        | {TicksToMs(ticks[^1]):F3} ms |");
+            sb.AppendLine();
+
+            // The Thread.Sleep(150)-retry hypothesis (see the field comments above
+            // _successTicks/_failedTicks) predicts latencies clustering near multiples of
+            // 150ms rather than a smooth spread. Report the histogram directly instead of
+            // making the reader infer it from percentiles alone.
+            var buckets = ticks
+                .Select(t => (int)Math.Round(TicksToMs(t) / 150.0))
+                .GroupBy(b => b)
+                .OrderBy(g => g.Key);
+            sb.AppendLine("Histogram (bucketed to nearest 150ms — the driver's retry interval):");
+            sb.AppendLine();
+            sb.AppendLine("| ~ms (bucket × 150) | Count |");
+            sb.AppendLine("|--------------------:|------:|");
+            foreach (var bucket in buckets)
+            {
+                sb.AppendLine($"| {bucket.Key * 150} | {bucket.Count()} |");
+            }
+            sb.AppendLine();
+        }
+
+        var attempted = _attemptedTransactions.GetValueOrDefault(framework);
+        var committed = _committedTransactions.GetValueOrDefault(framework);
         var failureCount = _correctnessIssues
-            .Where(kvp => kvp.Key.Framework == FrameworkPengdows)
+            .Where(kvp => kvp.Key.Framework == framework)
             .Sum(kvp => kvp.Value);
 
         var sb = new StringBuilder();
-        sb.AppendLine("# SQLiteWriteContentionBenchmarks — Pengdows Transaction Latency");
-        sb.AppendLine();
-        sb.AppendLine("| Percentile | Latency |");
-        sb.AppendLine("|------------|---------|");
-        sb.AppendLine($"| P50        | {p50:F3} ms |");
-        sb.AppendLine($"| P95        | {p95:F3} ms |");
-        sb.AppendLine($"| P99        | {p99:F3} ms |");
-        sb.AppendLine($"| Max        | {max:F3} ms |");
-        sb.AppendLine();
-        sb.AppendLine($"Pengdows failure count: {failureCount} (0 = all transactions committed successfully)");
-        sb.AppendLine();
-        sb.AppendLine("## Attempted vs. Committed Transactions (all frameworks)");
+        sb.AppendLine($"# SQLiteWriteContentionBenchmarks — {framework} Transaction Latency");
         sb.AppendLine();
         sb.AppendLine("No framework in this benchmark retries a failed transaction — a caught");
         sb.AppendLine("exception aborts that transaction's 50 writes permanently, it is not");
         sb.AppendLine("retried to completion. `Attempted - Committed` is exactly how many");
-        sb.AppendLine("logical write-transactions were genuinely lost for that framework.");
+        sb.AppendLine("logical write-transactions were genuinely lost.");
         sb.AppendLine();
-        sb.AppendLine("| Framework | Attempted | Committed | Lost (Attempted - Committed) |");
-        sb.AppendLine("|-----------|----------:|----------:|------------------------------:|");
-        foreach (var framework in new[] { FrameworkPengdows, FrameworkDapper, FrameworkEntityFramework })
+        sb.AppendLine("| Attempted | Committed | Lost | Exception count |");
+        sb.AppendLine("|----------:|----------:|-----:|-----------------:|");
+        sb.AppendLine($"| {attempted} | {committed} | {attempted - committed} | {failureCount} |");
+        sb.AppendLine();
+        if (_minAvailableWorkerThreads.HasValue)
         {
-            var attempted = _attemptedTransactions.GetValueOrDefault(framework);
-            var committed = _committedTransactions.GetValueOrDefault(framework);
-            sb.AppendLine($"| {framework} | {attempted} | {committed} | {attempted - committed} |");
+            sb.AppendLine($"Minimum available ThreadPool worker threads observed during the storm: **{_minAvailableWorkerThreads.Value}**");
+            sb.AppendLine("(a large drop from the pre-storm baseline is evidence of thread-pool");
+            sb.AppendLine("starvation from Microsoft.Data.Sqlite's blocking Thread.Sleep(150) retry —");
+            sb.AppendLine("see the field comment on _successTicks/_failedTicks above.)");
+            sb.AppendLine();
         }
+        AppendDistribution(sb, "Committed transaction latency", _successTicks.ToArray());
+        AppendDistribution(sb, "Failed transaction latency (time to the caught exception)", _failedTicks.ToArray());
 
         try
         {
@@ -208,7 +269,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             var dir = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
                 ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{nameof(SQLiteWriteContentionBenchmarks)}-tx-latency.md");
+            var path = Path.Combine(dir, $"{nameof(SQLiteWriteContentionBenchmarks)}-{framework}-tx-latency.md");
             File.WriteAllText(path, sb.ToString());
             Console.WriteLine($"[SQLiteWriteContentionBenchmarks] Wrote {path}");
         }
@@ -276,12 +337,13 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
                 tx.Commit();
                 sw.Stop();
-                _transactionTicks.Add(sw.ElapsedTicks);
+                _successTicks.Add(sw.ElapsedTicks);
                 MarkCommitted(FrameworkPengdows);
             }
             catch (Exception ex)
             {
                 sw.Stop();
+                _failedTicks.Add(sw.ElapsedTicks);
                 MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Exception: {ex.GetType().Name}");
             }
         });
@@ -297,6 +359,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
             MarkAttempted(FrameworkDapper);
+            var sw = Stopwatch.StartNew();
             try
             {
                 await using var conn = new SqliteConnection(_connectionString);
@@ -320,10 +383,14 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
                 }
 
                 await tx.CommitAsync();
+                sw.Stop();
+                _successTicks.Add(sw.ElapsedTicks);
                 MarkCommitted(FrameworkDapper);
             }
             catch (Exception ex)
             {
+                sw.Stop();
+                _failedTicks.Add(sw.ElapsedTicks);
                 MarkInvalid(ScenarioWriteStorm, FrameworkDapper, $"Exception: {ex.GetType().Name}");
             }
         });
@@ -339,6 +406,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         await RunWriteStorm(WriteStormConcurrency, async i =>
         {
             MarkAttempted(FrameworkEntityFramework);
+            var sw = Stopwatch.StartNew();
             try
             {
                 await using var context = new EfContentionContext(_efOptions);
@@ -362,10 +430,14 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
                 }
 
                 await tx.CommitAsync();
+                sw.Stop();
+                _successTicks.Add(sw.ElapsedTicks);
                 MarkCommitted(FrameworkEntityFramework);
             }
             catch (Exception ex)
             {
+                sw.Stop();
+                _failedTicks.Add(sw.ElapsedTicks);
                 MarkInvalid(ScenarioWriteStorm, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}");
             }
         });
@@ -397,11 +469,20 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task RunWriteStorm(int concurrency, Func<int, Task> operation)
+    // Not static: records min available worker threads into an instance field so
+    // WriteLatencySidecar can report it. See the field comment on _successTicks/_failedTicks —
+    // Microsoft.Data.Sqlite's busy-retry loop uses a real Thread.Sleep(150), so 100 concurrent
+    // writers hitting contention can genuinely exhaust .NET's thread pool, not just SQLite's
+    // lock. A big drop in available threads during the storm is direct, independent evidence
+    // for that (as opposed to just the latency histogram, which is consistent with it but not
+    // conclusive on its own).
+    private async Task RunWriteStorm(int concurrency, Func<int, Task> operation)
     {
         using var startGate = new ManualResetEventSlim(false);
         using var ready = new CountdownEvent(concurrency);
         var tasks = new Task[concurrency];
+
+        ThreadPool.GetAvailableThreads(out var availableBefore, out _);
 
         for (var i = 0; i < concurrency; i++)
         {
@@ -416,7 +497,25 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
         ready.Wait();
         startGate.Set();
-        await Task.WhenAll(tasks);
+
+        // Poll available worker threads while the storm is in flight to catch the trough —
+        // by the time the whole batch finishes, everything has already drained back.
+        var whenAll = Task.WhenAll(tasks);
+        var minAvailableDuringStorm = availableBefore;
+        while (!whenAll.IsCompleted)
+        {
+            ThreadPool.GetAvailableThreads(out var currentAvailable, out _);
+            minAvailableDuringStorm = Math.Min(minAvailableDuringStorm, currentAvailable);
+            await Task.Delay(10);
+        }
+
+        await whenAll;
+
+        ThreadPool.GetAvailableThreads(out var availableAfter, out _);
+        _minAvailableWorkerThreads = minAvailableDuringStorm;
+        Console.WriteLine(
+            $"[SQLiteWriteContentionBenchmarks] ThreadPool available workers — before: {availableBefore}, " +
+            $"min during storm: {minAvailableDuringStorm}, after: {availableAfter}");
     }
 
     public void Dispose() => Cleanup();

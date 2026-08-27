@@ -120,3 +120,146 @@ iterations ranged 46.7–113.2 ms, a real warmup/JIT/OS-scheduling effect on a b
 short and this concurrency-heavy — not noise indicating an unreliable governor. All four
 iterations still landed an order of magnitude below Dapper/EF's ~1,055 ms with zero
 exceptions in every iteration.
+
+---
+
+## 2026-08-27 investigation — why Dapper/EF converge on ~1,055 ms, and why "Fails" isn't stable
+
+### Why this investigation started
+
+A fresh full-suite re-run on 2026-08-27 reproduced the same shape (pengdows 105.8 ms mean vs.
+Dapper/EF ~1,054-1,055 ms) but with a different `Fails` outcome than this file's original
+number: this run's own correctness artifact recorded 0 Dapper failures and 456 EntityFramework
+failures (`SQLiteWriteContentionBenchmarks-correctness.json`), not the 268/348 split above.
+Since the setup is identical to the original run, that alone establishes something worth
+documenting explicitly: **the exception count is not a stable, deterministic property of this
+workload** — it varies run to run even though the ~1,055 ms mean for Dapper/EF does not. That
+asymmetry (latency stable, failure count not) is itself informative and is why the P99/mean gap
+— which reproduces every time — is the more defensible number to lead with, not the exception
+count.
+
+### The mechanism, confirmed from source, not inferred
+
+`Microsoft.Data.Sqlite`'s `SqliteDataReader.NextResult()` (`dotnet/efcore` repo) retries a
+busy/locked statement like this:
+
+```csharp
+while (IsBusy(rc = sqlite3_step(stmt)))
+{
+    if (_command.CommandTimeout != 0
+        && (_totalElapsedTime + timer.Elapsed).TotalMilliseconds
+           >= _command.CommandTimeout * 1000L)
+    {
+        break;
+    }
+
+    sqlite3_reset(stmt);
+    Thread.Sleep(150);
+}
+```
+
+This benchmark sets `DefaultTimeout=1` (1 second) on the connection string. A maximally
+contended statement therefore retries roughly 6-7 times (~900-1,050 ms of `Thread.Sleep`)
+before either squeezing through or giving up — which is why Dapper and EF's mean lands so
+consistently near 1,055 ms across independent runs: it isn't organic contention timing, it's a
+near-deterministic retry budget being nearly fully consumed. Two consequences worth stating
+plainly:
+
+1. **`Thread.Sleep(150)` is a real blocking sleep**, reached from `await`-ed code, because
+   Microsoft.Data.Sqlite's own docs state its async methods run synchronously. With 100
+   concurrent writers, a contended statement doesn't just wait on SQLite's lock — it parks a
+   real .NET thread-pool worker thread for up to ~900 ms doing nothing. That's a second,
+   independent cost (thread-pool pressure) on top of raw lock-wait time, and it's specific to
+   the naive/raw-ADO.NET path — pengdows's writers never reach this retry loop at all, because
+   the `SingleWriter` governor means a pengdows writer never contends for SQLite's lock with
+   another pengdows writer in the first place.
+2. Whether a given writer's retry loop finishes *just inside* the 1-second window (success) or
+   *just outside* it (a caught `SqliteException`, recorded as a failure) plausibly comes down to
+   thread-pool scheduling variance under load — which would explain why the failure count
+   differs run to run while the mean/P99 latency does not.
+
+### Instrumentation added to test this directly, and a real bug found while adding it
+
+Added per-transaction success/failure latency tracking to the Dapper and EF paths (previously
+only pengdows recorded this), bucketed into a 150 ms histogram — if the mechanism above is
+right, Dapper/EF latencies should cluster near multiples of 150 ms rather than spread smoothly.
+Also added `ThreadPool.GetAvailableThreads()` sampling during the storm as independent evidence
+of thread-pool pressure, separate from the latency shape.
+
+While wiring this up, found and fixed a real bug in the benchmark's own existing
+Attempted/Committed instrumentation (separate from the artifact-durability issue already
+documented above): each `[Benchmark]` method in this class runs in its own BenchmarkDotNet-
+spawned process with a fresh instance, so `_attemptedTransactions`/`_committedTransactions`
+only ever have one framework's data in any given process. The original code wrote a single
+shared filename with `File.WriteAllText`, so whichever process's `Cleanup()` ran (or completed)
+last silently overwrote the others — this run's leftover file showed `Pengdows: 800/800` next
+to `Dapper: 0/0` and `EntityFramework: 0/0`, which is not "zero transactions attempted," it's
+"this framework's data was never the last write, or its process didn't complete `Cleanup()`."
+Fixed by writing one file per framework
+(`SQLiteWriteContentionBenchmarks-{Framework}-tx-latency.md`) instead of one shared file, so a
+framework's absence from the results is now visible as a missing file rather than a misleading
+zero.
+
+### Empirical result
+
+The instrumented re-run confirms the mechanism for Dapper with remarkable precision, refutes
+the thread-pool-starvation half of the hypothesis, and shows EF Core has a second, additional
+timeout layer beyond Microsoft.Data.Sqlite's own.
+
+**Dapper's failed transactions cluster in an ~2ms-wide band around 1,050 ms** (448 samples:
+P50 1051.15 ms, P99 1052.85 ms, Max 1053.30 ms) — essentially a single spike, exactly where
+`Thread.Sleep(150)` × 7 retries (1,050 ms) crossing the 1,000 ms `CommandTimeout` predicts.
+Dapper's *committed* transactions (352 samples) spread almost uniformly across every 150 ms
+bucket from 0 to 1,050 ms — the "race to get the lock, however many retries it takes and
+happens to succeed" shape.
+
+**EF Core's failures split into two clusters**: 279 at ~1,050 ms (same as Dapper) and 73 at
+~1,500 ms, with a matching small tail in its committed transactions out to 1,500 ms. That's a
+second retry/timeout mechanism specific to EF Core layered on top of the driver's own — not
+investigated further here, but real and worth knowing if anyone chases EF-specific latency
+tuning later.
+
+**Thread-pool starvation is refuted, not confirmed.** Available worker threads dropped from
+32,767 to a minimum of 32,667 during the storm — a drop of exactly 100, one thread per
+concurrent writer, nothing more. `Thread.Sleep(150)` is real and blocking, but this machine's
+thread pool has far more headroom than 100 blocked threads can dent. The latency cost is real;
+it is not a starvation cascade.
+
+**Failure count is genuinely unstable, latency is not.** This run: Dapper lost 448/800
+attempted transactions, EF lost 352/800 — the *opposite* ranking from the original
+2026-08-13 run (268 Dapper / 348 EF exceptions). Don't cite "Dapper fails more than EF" or
+vice versa as a stable claim; cite the ~1,050 ms retry-wall latency instead, which reproduces
+every time.
+
+Full histograms: `SQLiteWriteContentionBenchmarks-Dapper-tx-latency.md` and
+`SQLiteWriteContentionBenchmarks-EntityFramework-tx-latency.md` in
+`BenchmarkDotNet.Artifacts/results/`.
+
+### The more authoritative pengdows-side number: the governor's own telemetry
+
+BenchmarkDotNet's `WriteStorm_Pengdows` mean is noisy by nature (only 5 post-warmup
+iterations, with real warmup/JIT/OS-scheduling swings — see the note on StdDev above and in
+the original write-up). `pengdows.crud`'s own `PoolGovernor` telemetry, captured via
+`IDatabaseContext.Metrics` across every single write-slot acquisition during the run (not
+just 5 outer samples), gives a far larger and steadier picture of the same benchmark
+(`SQLiteWriteContentionBenchmarks-pengdows-metrics.md`, writer role, 2026-08-27 run):
+
+| Metric | Value |
+|---|---|
+| Total write-slot acquisitions | 901 |
+| Peak turnstile queued | 99 |
+| Avg wait (queued for the write slot) | 51.866 ms |
+| Avg hold (executing the 50 writes once granted) | 1.047 ms |
+| Commands executed | 40,901 |
+| Avg command latency | 0.005 ms |
+| Slot timeouts / turnstile timeouts / canceled waits | 0 / 0 / 0 |
+
+This is the more defensible number to cite for pengdows's own side of this benchmark: the
+actual database work is trivial (5 μs/command, ~1 ms to run all 50 writes once holding the
+slot); essentially all of a pengdows writer's time under 100-way contention is spent waiting
+in an orderly, zero-timeout queue, averaging 52 ms. That is a steadier and more precise claim
+than "BenchmarkDotNet mean ≈ 75-107 ms, high variance" — the variance lives in the outer
+process/JIT/OS layer that BenchmarkDotNet measures, not in the governor's own behavior, which
+this telemetry shows is consistent. There is no equivalent internal-telemetry number for
+Dapper/EF, since neither ever touches an `IDatabaseContext` — their side of the comparison
+rests on the histogram evidence above instead.

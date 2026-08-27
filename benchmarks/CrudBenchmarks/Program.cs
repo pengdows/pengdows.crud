@@ -31,6 +31,11 @@ public class Program
         Directory.CreateDirectory(resultsDir);
         Environment.SetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR", resultsDir);
 
+        // Clear correctness fragments from any previous run before this one starts, so a
+        // merged read for a class in THIS run never picks up stale issues left behind by an
+        // earlier run (e.g. a class excluded from this run's --filter).
+        BenchmarkCorrectnessArtifacts.ClearFragmentsFromPreviousRun();
+
         IConfig config = ShouldUseInProcess()
             ? new InProcessConfig()
             : new BenchmarkConfig();
@@ -222,12 +227,22 @@ public class Program
             if (framework == null || scenario == null)
                 return "-";
 
+            // Must be null (not a literal placeholder string like "No parameters") for
+            // parameterless benchmarks: BenchmarkCorrectnessArtifacts.CountFailures and
+            // MarkInvalid's own writer both normalize null/whitespace to the "*" wildcard key,
+            // and require an exact string match between what was recorded and what's queried.
+            // A literal fallback string here would never equal that wildcard, silently making
+            // this column read 0 for every parameterless class regardless of what actually
+            // happened — confirmed in practice on 2026-08-27: SQLiteWriteContentionBenchmarks
+            // showed "Fails: 0" for Dapper/EntityFramework in this exact table while their own
+            // (separately tracked, unaffected) tx-latency files recorded 512 and 456 real lost
+            // transactions respectively.
             var displayInfo = benchmarkCase.DisplayInfo;
             var start = displayInfo.IndexOf('[');
             var end = displayInfo.LastIndexOf(']');
             var paramKey = (start >= 0 && end > start)
                 ? displayInfo.Substring(start + 1, end - start - 1).Trim()
-                : "No parameters";
+                : null;
 
             var count = BenchmarkCorrectnessArtifacts.CountFailures(
                 summary.Title, paramKey, scenario, framework);

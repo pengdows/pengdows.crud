@@ -95,12 +95,25 @@ internal static class BenchmarkCorrectnessArtifacts
         Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
         ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
 
+    // Each [Benchmark] method (Pengdows/Dapper/EntityFramework) runs in its OWN separately
+    // spawned process with a fresh instance, so a single class-scoped file written with
+    // File.WriteAllText meant whichever process's Cleanup() ran (or completed) LAST silently
+    // overwrote every other framework's recorded issues — confirmed in practice on
+    // 2026-08-27: ConnectionPoolProtectionBenchmarks' correctness.json only ever contained
+    // whichever framework/scenario happened to run dead last across the whole class, so
+    // "Fails: 0" for every other row (including every Pengdows row) was unverified, not
+    // actually confirmed clean, even when Pengdows genuinely had zero issues. Fixed by giving
+    // each process its own fragment file (keyed by process ID, so concurrent/sequential
+    // processes never collide) and merging all fragments for a class at read time instead of
+    // relying on a single shared file surviving every process's turn to write it.
+    private static string FragmentsDir => Path.Combine(ArtifactsDir, "correctness-fragments");
+
     public static void Write(string benchmarkClassName, IReadOnlyCollection<CorrectnessIssue> issues)
     {
         try
         {
-            Directory.CreateDirectory(ArtifactsDir);
-            var path = GetPath(benchmarkClassName);
+            Directory.CreateDirectory(FragmentsDir);
+            var path = GetFragmentPath(benchmarkClassName, Environment.ProcessId);
             var payload = new CorrectnessArtifact(benchmarkClassName, DateTime.UtcNow, issues.ToArray());
             var json = JsonSerializer.Serialize(payload, SerializerOptions);
             File.WriteAllText(path, json);
@@ -112,66 +125,83 @@ internal static class BenchmarkCorrectnessArtifacts
         }
     }
 
-    public static CorrectnessIssueLookup LoadForSummary(string summaryTitle)
+    /// <summary>
+    /// Deletes any fragment files left over from a previous run, so a fresh run's merged view
+    /// can't be polluted by stale data from a class that isn't even part of this run's filter.
+    /// Call once, in the parent process, before BenchmarkSwitcher runs anything.
+    /// </summary>
+    public static void ClearFragmentsFromPreviousRun()
     {
-        var benchmarkClassName = ExtractBenchmarkClassName(summaryTitle);
-        var path = GetPath(benchmarkClassName);
-        if (!File.Exists(path))
-        {
-            return CorrectnessIssueLookup.Empty;
-        }
-
         try
         {
-            var json = File.ReadAllText(path);
-            var payload = JsonSerializer.Deserialize<CorrectnessArtifact>(json, SerializerOptions);
-            if (payload?.Issues == null || payload.Issues.Length == 0)
+            if (Directory.Exists(FragmentsDir))
             {
-                return CorrectnessIssueLookup.Empty;
+                Directory.Delete(FragmentsDir, recursive: true);
             }
-
-            return new CorrectnessIssueLookup(payload.Issues);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Failed to read correctness artifact: {ex.Message}");
-            return CorrectnessIssueLookup.Empty;
+            Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Failed to clear stale fragments: {ex.Message}");
         }
+    }
+
+    public static CorrectnessIssueLookup LoadForSummary(string summaryTitle)
+    {
+        var issues = LoadMergedIssues(ExtractBenchmarkClassName(summaryTitle));
+        return issues.Count == 0 ? CorrectnessIssueLookup.Empty : new CorrectnessIssueLookup(issues);
     }
 
     /// <summary>
     /// Returns the recorded failure count for this benchmark/scenario/framework, or
-    /// <c>null</c> if the correctness artifact itself could not be found or read. Callers MUST
-    /// treat <c>null</c> differently from <c>0</c> — <c>0</c> means the artifact was found and
-    /// genuinely recorded no matching issues; <c>null</c> means correctness was never verified
-    /// for this run and nothing should be inferred from it either way.
+    /// <c>null</c> if no fragment for this class could be found/read at all. Callers MUST
+    /// treat <c>null</c> differently from <c>0</c> — <c>0</c> means at least one fragment was
+    /// found and genuinely recorded no matching issues; <c>null</c> means correctness was
+    /// never verified for this run and nothing should be inferred from it either way.
     /// </summary>
-    public static int? CountFailures(string summaryTitle, string parameterKey, string scenario, string frameworkName)
+    public static int? CountFailures(string summaryTitle, string? parameterKey, string scenario, string frameworkName)
     {
-        var path = GetPath(ExtractBenchmarkClassName(summaryTitle));
-        if (!File.Exists(path))
-            return null;
-
-        try
+        var benchmarkClassName = ExtractBenchmarkClassName(summaryTitle);
+        if (!Directory.Exists(FragmentsDir) ||
+            Directory.GetFiles(FragmentsDir, $"{benchmarkClassName}-*-correctness.json").Length == 0)
         {
-            var json = File.ReadAllText(path);
-            var payload = JsonSerializer.Deserialize<CorrectnessArtifact>(json, SerializerOptions);
-            if (payload?.Issues == null)
-                return null;
-
-            var normalizedParam = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
-            return payload.Issues
-                .Where(issue =>
-                    string.Equals(string.IsNullOrWhiteSpace(issue.ParameterKey) ? "*" : issue.ParameterKey, normalizedParam, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(issue.Scenario, scenario, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(issue.Framework, frameworkName, StringComparison.OrdinalIgnoreCase))
-                .Sum(issue => issue.Count);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Failed to read correctness artifact: {ex.Message}");
             return null;
         }
+
+        var normalizedParam = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
+        return LoadMergedIssues(benchmarkClassName)
+            .Where(issue =>
+                string.Equals(string.IsNullOrWhiteSpace(issue.ParameterKey) ? "*" : issue.ParameterKey, normalizedParam, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(issue.Scenario, scenario, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(issue.Framework, frameworkName, StringComparison.OrdinalIgnoreCase))
+            .Sum(issue => issue.Count);
+    }
+
+    private static List<CorrectnessIssue> LoadMergedIssues(string benchmarkClassName)
+    {
+        var merged = new List<CorrectnessIssue>();
+        if (!Directory.Exists(FragmentsDir))
+        {
+            return merged;
+        }
+
+        foreach (var path in Directory.GetFiles(FragmentsDir, $"{benchmarkClassName}-*-correctness.json"))
+        {
+            try
+            {
+                var json = File.ReadAllText(path);
+                var payload = JsonSerializer.Deserialize<CorrectnessArtifact>(json, SerializerOptions);
+                if (payload?.Issues != null)
+                {
+                    merged.AddRange(payload.Issues);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BenchmarkCorrectnessArtifacts] Failed to read fragment {path}: {ex.Message}");
+            }
+        }
+
+        return merged;
     }
 
     private static string ExtractBenchmarkClassName(string summaryTitle)
@@ -191,9 +221,9 @@ internal static class BenchmarkCorrectnessArtifacts
         return lastDot >= 0 ? titleWithoutTimestamp[(lastDot + 1)..] : titleWithoutTimestamp;
     }
 
-    private static string GetPath(string benchmarkClassName)
+    private static string GetFragmentPath(string benchmarkClassName, int processId)
     {
-        return Path.Combine(ArtifactsDir, $"{benchmarkClassName}{FileSuffix}");
+        return Path.Combine(FragmentsDir, $"{benchmarkClassName}-{processId}{FileSuffix}");
     }
 
     private sealed record CorrectnessArtifact(

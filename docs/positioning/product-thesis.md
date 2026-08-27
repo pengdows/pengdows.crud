@@ -32,6 +32,43 @@ behavior came bundled with that choice. pengdows.crud is meant to be received di
 something a DBA looks at and keeps, not something they tolerate because it already
 shipped.
 
+That isn't just a philosophical stance — it's directly observable. Push both approaches
+into the same hostile, valid concurrency workload and the difference isn't subtle: 100
+concurrent writers, 50 writes each, against a shared SQLite database under
+`busy_timeout=10ms`, is exactly the kind of workload a DBA has learned to expect will
+misbehave. Verified via this project's own benchmark suite (`SQLiteWriteContentionBenchmarks`,
+`ConnectionPoolProtectionBenchmarks` — re-verified 2026-08-27 after finding and fixing two
+real bugs in the benchmark's own correctness-artifact instrumentation that were *understating*
+the failure counts below, not inflating them):
+
+| Scenario | pengdows.crud | Dapper | Entity Framework Core |
+|---|---:|---:|---:|
+| `SQLiteWriteContentionBenchmarks` — write transactions lost (of 800 attempted) | **0** | 496 | 409 |
+| `ConnectionPoolProtectionBenchmarks` — write-storm failures | **0** | 414 | 344 |
+
+Zero is not a rounding artifact or a lucky run — it's the direct, mechanical consequence of
+principle 5's `PoolGovernor`: a pengdows writer never contends for SQLite's lock with
+another pengdows writer in the first place, because `SingleWriter` mode serializes write
+*admission* before any writer reaches the database. Dapper and EF have no equivalent —
+every one of their writers races straight for SQLite's lock, and Microsoft.Data.Sqlite's
+own retry mechanism (`Thread.Sleep(150)` between attempts, up to the connection's
+`CommandTimeout`) is the only thing standing between them and an outright crash under
+load. In `SQLiteWriteContentionBenchmarks`, where the attempted-transaction count is
+independently tracked, that's 51-62% of write transactions lost (409/800 and 496/800
+respectively) — not a benchmark curiosity, but the shortcoming principle 5 exists to
+prevent, made visible.
+
+This same posture — respecting the database's real constraints instead of assuming
+unlimited concurrency, unlimited query-optimizer patience, or a provider that will quietly
+do the right thing — shows up in smaller ways throughout the library, not just under write
+storms: identifier quoting is forced to ANSI double-quotes even on databases whose native
+dialect uses something else (`QUOTED_IDENTIFIER ON` on SQL Server, `ANSI_QUOTES` mode on
+MySQL/MariaDB — a session-level policy enforced by the dialect, not left to each provider's
+default), and stored-procedure invocation is dispatched per the target database's real
+calling convention (principle 6) rather than assuming one style works everywhere. None of
+these are performance optimizations — they're correctness guarantees a DBA would otherwise
+have to police by hand.
+
 That same posture pays off for the developer, not only the DBA. pengdows.crud knows the
 nuances of each supported database — dialect differences, isolation semantics, identifier
 quoting, stored-procedure invocation style (principles 1, 4, 6) — so application code

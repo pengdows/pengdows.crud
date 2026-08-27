@@ -16,8 +16,15 @@ namespace CrudBenchmarks;
 /// </summary>
 internal static class BenchmarkMetricsWriter
 {
-    private static readonly string ArtifactsDir =
-        Path.Combine("BenchmarkDotNet.Artifacts", "results");
+    // Same durability issue documented in BenchmarkCorrectnessArtifacts: a path relative to
+    // the current directory here lands in BenchmarkDotNet's isolated, cleaned-up per-run child
+    // process directory. CRUD_BENCH_ARTIFACTS_DIR (set once in Program.Main, before
+    // BenchmarkSwitcher runs anything) is absolute and survives — confirmed missing in practice
+    // (this sidecar was unrecoverable after a 2026-08-27 run investigating write-storm
+    // correctness) before this fix.
+    private static string ArtifactsDir =>
+        Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+        ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
 
     /// <summary>
     /// Writes pengdows.crud metrics to a sidecar file and the console.
