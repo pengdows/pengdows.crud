@@ -308,6 +308,38 @@ public class ParallelTestOrchestrator
                 Console.WriteLine($"  {f.ContainerName}: {f.Error}");
             Console.WriteLine();
         }
+
+        EmitJsonResults(results);
+    }
+
+    private static void EmitJsonResults(IReadOnlyList<TestResult> results)
+    {
+        try
+        {
+            var output = results.Select(r => new
+            {
+                engine = r.DatabaseProvider,
+                container = r.ContainerName,
+                success = r.Success,
+                outcome = r.Success ? "Passed" : (r.ContainerStartTimeout ? "Unavailable" : "Failed"),
+                checksPassed = r.ChecksPassed,
+                checksSkipped = r.ChecksSkipped,
+                testTimeSeconds = r.TestTime?.TotalSeconds,
+                totalTimeSeconds = r.TotalTime.TotalSeconds,
+                error = r.Error
+            }).ToList();
+
+            var json = System.Text.Json.JsonSerializer.Serialize(output, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText("testbed-results.json", json);
+            if (Directory.Exists("TestResults"))
+            {
+                File.WriteAllText(Path.Combine("TestResults", "testbed-results.json"), json);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Warning] Failed to write testbed-results.json: {ex.Message}");
+        }
     }
 }
 
@@ -335,16 +367,16 @@ public static class TestbedImageMatrix
 {
     private static readonly IReadOnlyDictionary<string, ImageVersion[]> Defaults = new Dictionary<string, ImageVersion[]>(StringComparer.OrdinalIgnoreCase)
     {
-        ["PostgreSQL"] = [new("16.4", "postgres:16.4"), new("15.0", "postgres:15.0")],
-        ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36")],
-        ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11")],
-        ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2022-CU23", "mcr.microsoft.com/mssql/server:2022-CU23-ubuntu-22.04")],
-        ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0")],
+        ["PostgreSQL"] = [new("16.4", "postgres:16.4"), new("15.0", "postgres:15.0"), new("9.5", "postgres:9.5-alpine")],
+        ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36"), new("5.7", "mysql:5.7")],
+        ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11"), new("10.4", "mariadb:10.4"), new("10.2", "mariadb:10.2")],
+        ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2019", "mcr.microsoft.com/mssql/server:2019-latest"), new("2017", "mcr.microsoft.com/mssql/server:2017-latest")],
+        ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0"), new("v23.2.14", "cockroachdb/cockroach:v23.2.14")],
         ["Firebird"] = [new("3.0.9", "firebirdsql/firebird:3.0.9")],
         ["TiDB"] = [new("v8.5.7", "pingcap/tidb:v8.5.7"), new("v7.5.7", "pingcap/tidb:v7.5.7")],
         ["YugabyteDB"] = [new("2025.2.5.2-b5", "yugabytedb/yugabyte:2025.2.5.2-b5"), new("2.25.2.0-b359", "yugabytedb/yugabyte:2.25.2.0-b359")],
-        ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-slim-faststart"), new("23.8.0", "gvenzl/oracle-free:23.8.0-slim-faststart")],
-        ["Db2"] = [new("11.5.8.0", "ibmcom/db2:11.5.8.0"), new("11.5.0.0", "ibmcom/db2:11.5.0.0")]
+        ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-slim-faststart"), new("21c", "gvenzl/oracle-xe:21-slim-faststart"), new("18c", "gvenzl/oracle-xe:18.4.0-slim-faststart")],
+        ["Db2"] = [new("11.5.8.0", "ibmcom/db2:11.5.8.0"), new("11.5.0.0a", "ibmcom/db2:11.5.0.0a")]
     };
 
     public static IReadOnlyList<ImageVersion> Get(string provider)

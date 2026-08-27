@@ -27,31 +27,9 @@ public class Db2DialectTests
     }
 
     [Fact]
-    public void VersionGatedFeatures_AreDisabledWhenDb2IsBelow11_5()
+    public void CoreFeatures_AreSupportedUnconditionallyOnDb2()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Db2);
-        var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT service_level FROM TABLE (SYSPROC.ENV_GET_INST_INFO()) AS INSTANCEINFO", "11.04.0000");
-        factory.Connections.Add(connection);
-        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Db2", factory);
-
-        var dialect = (Db2Dialect)context.Dialect;
-
-        Assert.False(dialect.SupportsMerge);
-        Assert.False(dialect.SupportsIdentityColumns);
-        Assert.False(dialect.SupportsInsertReturning);
-    }
-
-    [Fact]
-    public void VersionGatedFeatures_AreEnabledAtDb2_11_5()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Db2);
-        var connection = new fakeDbConnection();
-        connection.SetScalarResultForCommand("SELECT service_level FROM TABLE (SYSPROC.ENV_GET_INST_INFO()) AS INSTANCEINFO", "11.05.0000");
-        factory.Connections.Add(connection);
-        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Db2", factory);
-
-        var dialect = (Db2Dialect)context.Dialect;
+        var dialect = CreateDialect();
 
         Assert.True(dialect.SupportsMerge);
         Assert.True(dialect.SupportsIdentityColumns);

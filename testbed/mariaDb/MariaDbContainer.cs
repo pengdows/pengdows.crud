@@ -39,8 +39,8 @@ public class MariaDbContainer : TestContainer
         await _container.StartAsync();
         var hostPort = _container.GetMappedPublicPort(_port);
         _connectionString =
-            $@"Server=localhost;Port={hostPort};Database={_database};User ID={_username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
-        await WaitForDbToStart(MySqlConnectorFactory.Instance, _connectionString, _container);
+            $@"Server=localhost;Port={hostPort};Database={_database};User ID={_username};Password={_password};";
+        await WaitForDbToStart(MySql.Data.MySqlClient.MySqlClientFactory.Instance, _connectionString, _container);
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
@@ -51,7 +51,7 @@ public class MariaDbContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, MySqlConnectorFactory.Instance, new TypeMapRegistry()));
+            new DatabaseContext(_connectionString, MySql.Data.MySqlClient.MySqlClientFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override ValueTask DisposeAsyncCore()

@@ -1,0 +1,24 @@
+[
+  {
+    "engine": "DuckDB",
+    "container": "DuckDB",
+    "success": true,
+    "outcome": "Passed",
+    "checksPassed": 20,
+    "checksSkipped": 2,
+    "testTimeSeconds": 1.1336936,
+    "totalTimeSeconds": 1.2582049,
+    "error": null
+  },
+  {
+    "engine": "SQLite",
+    "container": "SQLite",
+    "success": true,
+    "outcome": "Passed",
+    "checksPassed": 19,
+    "checksSkipped": 1,
+    "testTimeSeconds": 0.2843228,
+    "totalTimeSeconds": 0.3710185,
+    "error": null
+  }
+]
