@@ -4,7 +4,7 @@
 //
 // AI SUMMARY:
 // - Generates SQL: "EXEC proc_name args" or "EXEC proc_name" if no args.
-// - Used by SQL Server and Sybase.
+// - Used by SQL Server and T-SQL compatible databases.
 // - Note: EXEC uses space-separated args, not parenthesized comma-separated.
 // - ExecutionType is ignored - EXEC syntax is same for reads and writes.
 // - Validates procedure name is not null/empty.
@@ -28,7 +28,7 @@ namespace pengdows.crud.strategies.proc;
 /// not enclosed in parentheses like CALL syntax.
 /// </para>
 /// <para>
-/// Used by SQL Server, Sybase, and other T-SQL compatible databases.
+/// Used by SQL Server and other T-SQL compatible databases.
 /// </para>
 /// </remarks>
 internal class ExecProcWrappingStrategy : IProcWrappingStrategy

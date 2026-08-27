@@ -61,7 +61,6 @@ Database support is a joint capability over **(database engine, client driver)**
 > - **Firebird & DateTimeOffset Driver Constraint:** Firebird 4.0 and 5.0 support `TIMESTAMP WITH TIME ZONE`, but `FirebirdSql.Data.FirebirdClient 10.3.3` throws "Incorrect time zone value" in its internal `DbValue.GetTimeZoneId()` when binding raw CLR `DateTimeOffset` values. This is an ADO.NET client driver constraint rather than an engine limitation; until resolved upstream in `FirebirdClient`, use UTC `DateTime` values when targeting Firebird.
 > - **PostgreSQL & Npgsql Support Policy:** Npgsql actively tests and supports PostgreSQL versions within their community support window (~5 years back). Connecting to legacy releases like 9.5 functions over the wire for core SQL, but is outside the driver vendor's support window.
 > - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` requires MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` (10.1+). Earlier versions only support transaction-scoped `SET SESSION TRANSACTION READ ONLY`.
-> - **SAP ASE (Sybase):** An experimental testbed container exists for SAP ASE (`nguoianphu/docker-sybase`), but ASE is currently unlisted and not part of the active `SupportedDatabase` production enum.
 
 ### Feature Version Thresholds
 

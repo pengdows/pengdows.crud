@@ -58,7 +58,6 @@ public class BuildPackagesScriptTests
             ["testbed/Yugabyte/YugabyteTestContainer.cs"] = "yugabytedb/yugabyte:2025.2.5.2-b5",
             ["testbed/Firebird/FirebirdSqlTestContainer.cs"] = "firebirdsql/firebird:3.0.9",
             ["testbed/SqlServer/SqlServerTestContainer.cs"] = "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04",
-            ["testbed/Sybase/SybaseTestContainer.cs"] = "nguoianphu/docker-sybase@sha256:0fe38c4dafdb43dc5e5d0c1554006bc57efa7ed1a705aaef820ddbabf024c538",
             ["testbed/Oracle/OracleTestContainer.cs"] = "gvenzl/oracle-free:23.26.2-slim-faststart"
         };
 

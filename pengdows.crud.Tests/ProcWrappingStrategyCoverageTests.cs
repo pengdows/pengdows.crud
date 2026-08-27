@@ -14,7 +14,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-// ── ExecProcWrappingStrategy (SQL Server / Sybase) ─────────────────────────
+// ── ExecProcWrappingStrategy (SQL Server) ───────────────────────────────────
 
 public sealed class ExecProcWrappingStrategyCoverageTests
 {
