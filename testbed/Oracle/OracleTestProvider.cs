@@ -131,7 +131,7 @@ END;", triggerName, tableName, idColumn, sequenceName);
         var count = await sc.ExecuteScalarOrNullAsync<int>();
         if (count < 0)
             throw new Exception($"[ParamBinding] Oracle 2-param duplicate: invalid count {count}");
-        Console.WriteLine($"  [ParamBinding] Duplicate param (Oracle 2-param workaround): OK ({count} rows)");
+        CheckOk("ParamBinding.DuplicateParam", $"  [ParamBinding] Duplicate param (Oracle 2-param workaround): OK ({count} rows)");
     }
 
     /// <summary>
@@ -181,7 +181,7 @@ END;", triggerName, tableName, idColumn, sequenceName);
             ctx.CloseAndDisposeConnection(writer);
         }
 
-        CheckOk("  [PoolIsolation] Reader and writer use separate ODP.NET pools (Metadata Pooling discriminator): OK");
+        CheckOk("Oracle.PoolIsolation", "  [PoolIsolation] Reader and writer use separate ODP.NET pools (Metadata Pooling discriminator): OK");
     }
 
     /// <summary>
@@ -225,7 +225,7 @@ END;", triggerName, tableName, idColumn, sequenceName);
             if (val != 42)
                 throw new Exception($"[Quoting] Oracle: expected 42 for 'order' column, got {val}");
 
-            Console.WriteLine("  [Quoting] Reserved word 'order' as column name (Oracle NUMBER types): OK");
+            CheckOk("Quoting.ReservedWordsAndCase", "  [Quoting] Reserved word 'order' as column name (Oracle NUMBER types): OK");
         }
         finally
         {

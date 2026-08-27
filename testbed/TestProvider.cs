@@ -14,6 +14,13 @@ using testbed.Snowflake;
 
 namespace testbed;
 
+public sealed record CheckResult
+{
+    public required string Name { get; init; }
+    public required string Outcome { get; init; } // "passed", "skipped", "failed"
+    public string? Reason { get; init; }
+}
+
 public class TestProvider : IAsyncTestProvider
 {
     private static long _nextId;
@@ -21,22 +28,36 @@ public class TestProvider : IAsyncTestProvider
     protected readonly IDatabaseContext _context;
     protected readonly TableGateway<TestTable, long> _helper;
 
-    private int _checksPassed;
-    private int _checksSkipped;
+    private readonly List<CheckResult> _checks = new();
+    public IReadOnlyList<CheckResult> Checks => _checks;
 
-    public int ChecksPassed => _checksPassed;
-    public int ChecksSkipped => _checksSkipped;
+    public int ChecksPassed => _checks.Count(c => c.Outcome == "passed");
+    public int ChecksSkipped => _checks.Count(c => c.Outcome == "skipped");
+    public int ChecksFailed => _checks.Count(c => c.Outcome == "failed");
 
-    protected void CheckOk(string message)
+    protected void CheckOk(string name, string? message = null)
     {
-        Console.WriteLine(message);
-        _checksPassed++;
+        if (message != null)
+        {
+            Console.WriteLine(message);
+        }
+        else
+        {
+            Console.WriteLine($"  [{name}] OK");
+        }
+        _checks.Add(new CheckResult { Name = name, Outcome = "passed" });
     }
 
-    protected void CheckSkip(string message)
+    protected void CheckSkip(string name, string reason)
     {
-        Console.WriteLine(message);
-        _checksSkipped++;
+        Console.WriteLine($"  [{name}] (skipped: {reason})");
+        _checks.Add(new CheckResult { Name = name, Outcome = "skipped", Reason = reason });
+    }
+
+    protected void CheckFail(string name, string error)
+    {
+        Console.WriteLine($"  [{name}] ❌ Failed: {error}");
+        _checks.Add(new CheckResult { Name = name, Outcome = "failed", Reason = error });
     }
 
     public TestProvider(IDatabaseContext databaseContext, IServiceProvider serviceProvider)
@@ -61,6 +82,7 @@ public class TestProvider : IAsyncTestProvider
             await CreateTable();
             Console.WriteLine($"  Create table: {stepSw.ElapsedMilliseconds}ms");
             SnowflakeStep($"Create table: done in {stepSw.ElapsedMilliseconds}ms");
+            CheckOk("Lifecycle.CreateTable", "  [Lifecycle] Create table: OK");
 
             stepSw.Restart();
             Console.WriteLine("Running Insert rows");
@@ -74,6 +96,7 @@ public class TestProvider : IAsyncTestProvider
             {
                 throw new Exception("Insert did not affect expected row count");
             }
+            CheckOk("Lifecycle.InsertRows", "  [Lifecycle] Insert rows: OK");
 
             stepSw.Restart();
             Console.WriteLine("Running retrieve rows");
@@ -85,6 +108,7 @@ public class TestProvider : IAsyncTestProvider
             {
                 throw new Exception("Retrieved row did not match inserted id");
             }
+            CheckOk("Lifecycle.RetrieveRows", "  [Lifecycle] Retrieve rows: OK");
 
             stepSw.Restart();
             Console.WriteLine("Running delete rows");
@@ -97,6 +121,7 @@ public class TestProvider : IAsyncTestProvider
             {
                 throw new Exception("Delete did not affect expected row count");
             }
+            CheckOk("Lifecycle.DeleteRows", "  [Lifecycle] Delete rows: OK");
 
             stepSw.Restart();
             Console.WriteLine("Running Transaction rows");
@@ -104,6 +129,7 @@ public class TestProvider : IAsyncTestProvider
             await TestTransactions();
             Console.WriteLine($"  Transactions: {stepSw.ElapsedMilliseconds}ms");
             SnowflakeStep($"Transactions: done in {stepSw.ElapsedMilliseconds}ms");
+            CheckOk("Lifecycle.Transactions", "  [Lifecycle] Transactions: OK");
 
             stepSw.Restart();
             Console.WriteLine("Running stored procedure return value test");
@@ -592,7 +618,7 @@ CREATE TABLE {tableName} (
     {
         if (_context.ProcWrappingStyle == ProcWrappingStyle.None)
         {
-            CheckSkip($"  [StoredProc] Stored procedures not supported by {_context.Product} — skip");
+            CheckSkip("StoredProc.Execution", $"Stored procedures not supported by {_context.Product}");
             return;
         }
 
@@ -811,7 +837,7 @@ CREATE TABLE {tableName} (
                     }
                     else
                     {
-                        CheckSkip($"  [StoredProc] Skipped PostgreSQL real PROCEDURE test on {_context.DataSourceInfo.DatabaseProductVersion} (CREATE PROCEDURE requires PostgreSQL 11+)");
+                        CheckSkip("StoredProc.ProcedureInOut", $"Skipped PostgreSQL real PROCEDURE test on {_context.DataSourceInfo.DatabaseProductVersion} (CREATE PROCEDURE requires PostgreSQL 11+)");
                     }
                     break;
                 }
@@ -878,6 +904,8 @@ CREATE TABLE {tableName} (
                 throw new Exception(
                     $"[StoredProc] Unhandled database {_context.Product} in stored proc test — add a case or override ProcWrappingStyle.None.");
         }
+
+        CheckOk("StoredProc.Execution", $"  [StoredProc] Stored proc execution for {_context.Product}: OK");
     }
 
     /// <summary>
@@ -915,7 +943,7 @@ CREATE TABLE {tableName} (
         if (isNullCount != 0)
             throw new Exception($"[ParamBinding] IS NULL predicate: expected 0 rows, got {isNullCount}");
 
-        CheckOk("  [ParamBinding] NULL semantics: OK");
+        CheckOk("ParamBinding.NullSemantics", "  [ParamBinding] NULL semantics: OK");
 
         // 5a: duplicate named parameter
         await TestDuplicateParameter();
@@ -968,7 +996,7 @@ CREATE TABLE {tableName} (
             if (idCount != 1)
                 throw new Exception($"[ParamBinding] Int64 binding: expected 1, got {idCount}");
 
-            CheckOk("  [ParamBinding] Type matrix (int32, string, int64): OK");
+            CheckOk("ParamBinding.TypeMatrixBasic", "  [ParamBinding] Type matrix (int32, string, int64): OK");
         }
         finally
         {
@@ -988,7 +1016,7 @@ CREATE TABLE {tableName} (
                 $"[ParamBinding] Parameter marker: expected prefix '{expected}', got '{rendered}'");
         }
 
-        CheckOk($"  [ParamBinding] Marker prefix '{expected}': OK");
+        CheckOk("ParamBinding.MarkerPrefix", $"  [ParamBinding] Marker prefix '{expected}': OK");
     }
 
     private async Task TestTypeBindingMatrix()
@@ -1093,23 +1121,25 @@ INSERT INTO {table} (
             if (supportsDto)
             {
                 await AssertBindingCount("dto_val", DbType.DateTimeOffset, dtoWrite);
+                CheckOk("ParamBinding.DateTimeOffset", $"  [ParamBinding] DateTimeOffset binding for {_context.Product}: OK");
             }
             else
             {
-                CheckSkip($"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
+                CheckSkip("ParamBinding.DateTimeOffset", $"DateTimeOffset binding not supported by {_context.Product}");
             }
 
             if (supportsGuid)
             {
                 await AssertBindingCount("guid_val", DbType.Guid, guidVal);
+                CheckOk("ParamBinding.Guid", $"  [ParamBinding] Guid binding for {_context.Product}: OK");
             }
             else
             {
-                CheckSkip($"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
+                CheckSkip("ParamBinding.Guid", $"Guid binding not supported by {_context.Product}");
             }
 
             await AssertBindingCount("bin_val", DbType.Binary, binVal);
-            CheckOk("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
+            CheckOk("ParamBinding.TypeMatrixFull", "  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
         }
         finally
         {
@@ -1137,7 +1167,7 @@ INSERT INTO {table} (
     {
         if (!_context.SupportsRepeatedNamedParameters)
         {
-            CheckSkip("  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
+            CheckSkip("ParamBinding.DuplicateParam", "Provider does not support repeated named parameters");
             return;
         }
 
@@ -1152,7 +1182,7 @@ INSERT INTO {table} (
         var count = await sc.ExecuteScalarOrNullAsync<int>();
         if (count < 0)
             throw new Exception($"[ParamBinding] Duplicate param returned invalid count: {count}");
-        CheckOk($"  [ParamBinding] Duplicate param (same logical parameter twice): OK ({count} rows matched)");
+        CheckOk("ParamBinding.DuplicateParam", $"  [ParamBinding] Duplicate param (same logical parameter twice): OK ({count} rows matched)");
     }
 
     // -------------------------------------------------------------------------
@@ -1433,10 +1463,11 @@ INSERT INTO {table} (
                     var actualGuid = CoerceGuid(guidObj);
                     if (actualGuid != guidValue)
                         throw new Exception($"[RoundTrip] Guid mismatch: expected {guidValue}, got {actualGuid}");
+                    CheckOk("RoundTrip.Guid", "  [RoundTrip] Guid: OK");
                 }
                 else
                 {
-                    CheckSkip($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
+                    CheckSkip("RoundTrip.Guid", $"Guid not supported by {_context.Product}");
                 }
 
                 if (supportsDto)
@@ -1450,10 +1481,11 @@ INSERT INTO {table} (
                         throw new Exception(
                             $"[RoundTrip] DateTimeOffset drift {driftMs:F1}ms exceeds tolerance {toleranceMs:F1}ms");
                     }
+                    CheckOk("RoundTrip.DateTimeOffset", "  [RoundTrip] DateTimeOffset: OK");
                 }
                 else
                 {
-                    CheckSkip($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
+                    CheckSkip("RoundTrip.DateTimeOffset", $"DateTimeOffset not supported by {_context.Product} (FirebirdClient GetTimeZoneId constraint)");
                 }
             }
 
@@ -1468,7 +1500,7 @@ INSERT INTO {table} (
             if (predicateCount != 1)
                 throw new Exception($"[RoundTrip] Bool predicate expected 1, got {predicateCount}");
 
-            CheckOk("  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
+            CheckOk("RoundTrip.Fidelity", "  [RoundTrip] Fidelity (unicode, null/empty, whitespace, decimals, bool, binary, dto, guid): OK");
         }
         finally
         {
@@ -1646,7 +1678,7 @@ INSERT INTO {table} (
         }
         catch (InvalidOperationException)
         {
-            CheckOk("  [InvalidTxType] Chaos isolation level rejected: OK");
+            CheckOk("ExtendedTx.ChaosRejected", "  [InvalidTxType] Chaos isolation level rejected: OK");
         }
 
         // Database-specific: pick one level that is not supported by this database
@@ -1667,7 +1699,7 @@ INSERT INTO {table} (
 
         if (unsupported is null)
         {
-            CheckSkip($"  [InvalidTxType] No database-specific unsupported level test for {_context.Product}");
+            CheckSkip("ExtendedTx.UnsupportedIsolationRejected", $"No database-specific unsupported level test for {_context.Product}");
             return Task.CompletedTask;
         }
 
@@ -1679,7 +1711,7 @@ INSERT INTO {table} (
         }
         catch (InvalidOperationException)
         {
-            CheckOk($"  [InvalidTxType] {unsupported.Value} isolation level rejected for {_context.Product}: OK");
+            CheckOk("ExtendedTx.UnsupportedIsolationRejected", $"  [InvalidTxType] {unsupported.Value} isolation level rejected for {_context.Product}: OK");
         }
 
         return Task.CompletedTask;
@@ -1706,7 +1738,7 @@ INSERT INTO {table} (
         if (after != before)
             throw new Exception(
                 $"[ExtendedTx] Rollback-on-exception: expected {before} rows, got {after}");
-        CheckOk("  [ExtendedTx] Rollback-on-exception: OK");
+        CheckOk("ExtendedTx.RollbackOnException", "  [ExtendedTx] Rollback-on-exception: OK");
     }
 
     private async Task TestReadYourWrites()
@@ -1720,14 +1752,14 @@ INSERT INTO {table} (
         if (during != before + 1)
             throw new Exception(
                 $"[ExtendedTx] Read-your-writes: expected {before + 1} inside tx, got {during}");
-        CheckOk("  [ExtendedTx] Read-your-writes: OK");
+        CheckOk("ExtendedTx.ReadYourWrites", "  [ExtendedTx] Read-your-writes: OK");
     }
 
     private async Task TestSavepoints()
     {
         if (!_context.Dialect.SupportsSavepoints)
         {
-            CheckSkip("  [ExtendedTx] Savepoints not supported — skip");
+            CheckSkip("ExtendedTx.SavepointRollback", "Savepoints not supported by database");
             return;
         }
 
@@ -1747,7 +1779,7 @@ INSERT INTO {table} (
                 $"[ExtendedTx] Savepoint rollback: expected {before + 1} rows, got {after}");
         }
 
-        CheckOk("  [ExtendedTx] Savepoint rollback: OK");
+        CheckOk("ExtendedTx.SavepointRollback", "  [ExtendedTx] Savepoint rollback: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1774,7 +1806,7 @@ INSERT INTO {table} (
         });
 
         await Task.WhenAll(tasks);
-        CheckOk($"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
+        CheckOk("Concurrency.ParallelLoops", $"  [Concurrency] {n} parallel insert/retrieve/delete loops: OK");
     }
 
     // -------------------------------------------------------------------------
@@ -1825,7 +1857,7 @@ INSERT INTO {table} (
                     $"[Batch] Command reuse expected counts 1/1, got {count1}/{count2}");
             }
 
-            CheckOk("  [Batch] Reuse container with new parameters: OK");
+            CheckOk("Batch.CommandReuse", "  [Batch] Reuse container with new parameters: OK");
         }
         finally
         {
@@ -1839,7 +1871,7 @@ INSERT INTO {table} (
         if (_context.Product != SupportedDatabase.MySql)
         {
             // Not a MySQL.Data compatibility concern — other drivers don't have this problem.
-            // Return silently rather than recording a skip for every non-MySQL database.
+            CheckSkip("ReaderDisposal.Compatibility", "MySql.Data specific EOF disposal check");
             return;
         }
 
@@ -1883,7 +1915,7 @@ INSERT INTO {table} (
                 throw new Exception("[Reader disposal] Follow-up query failed after EOF disposal");
             }
 
-            CheckOk("  [Reader disposal] MySql.Data EOF disposal compatibility: OK");
+            CheckOk("ReaderDisposal.Compatibility", "  [Reader disposal] MySql.Data EOF disposal compatibility: OK");
         }
         finally
         {
@@ -1902,13 +1934,13 @@ INSERT INTO {table} (
     /// </summary>
     private async Task RunCapabilityTest(string capabilityName, bool dialectClaimsSupport, Func<Task> test)
     {
-        var passedBefore = _checksPassed;
-        var skippedBefore = _checksSkipped;
+        var passedBefore = ChecksPassed;
+        var skippedBefore = ChecksSkipped;
 
         await test();
 
-        var passed = _checksPassed > passedBefore;
-        var skipped = _checksSkipped > skippedBefore;
+        var passed = ChecksPassed > passedBefore;
+        var skipped = ChecksSkipped > skippedBefore;
 
         if (!passed && !skipped)
         {
@@ -1943,7 +1975,7 @@ INSERT INTO {table} (
 
         if (!supports)
         {
-            CheckSkip($"  [Capabilities] Upsert: not supported by {_context.Product} — skip");
+            CheckSkip("Capabilities.Upsert", $"Upsert not supported by {_context.Product}");
             return;
         }
 
@@ -1977,7 +2009,7 @@ INSERT INTO {table} (
                 throw new Exception(
                     $"[Capabilities] Upsert: expected 'upsert-updated', got '{retrieved.Description}'");
 
-            CheckOk("  [Capabilities] Upsert (insert + update): OK");
+            CheckOk("Capabilities.Upsert", "  [Capabilities] Upsert (insert + update): OK");
         }
         finally
         {
@@ -2034,7 +2066,7 @@ INSERT INTO {table} (
             if (!allPaged.IsSubsetOf(ids))
                 throw new Exception("[Capabilities] Paging: paged rows contain IDs not inserted by this test");
 
-            CheckOk("  [Capabilities] Paging (2 × 5-row pages, no overlap, IDs in inserted set): OK");
+            CheckOk("Capabilities.Paging", "  [Capabilities] Paging (2 × 5-row pages, no overlap, IDs in inserted set): OK");
         }
         finally
         {
@@ -2066,7 +2098,7 @@ INSERT INTO {table} (
         if (_context.Product == SupportedDatabase.Snowflake)
         {
             await _helper.CreateAsync(t, _context);
-            CheckSkip("  [ErrorMapping] Unique violation not enforced on Snowflake — skip");
+            CheckSkip("ErrorMapping.UniqueViolation", "Unique violation not enforced on Snowflake");
         }
         else
         {
@@ -2077,13 +2109,13 @@ INSERT INTO {table} (
             }
             catch (DatabaseException ex)
             {
-                CheckOk($"  [ErrorMapping] Unique violation → DatabaseException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+                CheckOk("ErrorMapping.UniqueViolation", $"  [ErrorMapping] Unique violation → DatabaseException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
             }
         }
 
         // 12b: Connection must still be usable after the exception
         var healthCount = await CountTestRows();
-        CheckOk($"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
+        CheckOk("ErrorMapping.ConnectionHealth", $"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
 
         await CleanupTestRow(id);
 
@@ -2103,7 +2135,7 @@ INSERT INTO {table} (
         if (string.IsNullOrWhiteSpace(syntaxEx?.Message))
             throw new Exception("[ErrorMapping] Syntax error exception had empty message");
 
-        CheckOk($"  [ErrorMapping] Syntax error → DatabaseException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
+        CheckOk("ErrorMapping.SyntaxError", $"  [ErrorMapping] Syntax error → DatabaseException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
     }
 
     // -------------------------------------------------------------------------
@@ -2201,7 +2233,7 @@ INSERT INTO {table} (
             if (camelVal != "CamelValue")
                 throw new Exception($"[Quoting] Expected 'CamelValue', got '{camelVal}'");
 
-            CheckOk("  [Quoting] Reserved words, spaces, and mixed case: OK");
+            CheckOk("Quoting.ReservedWordsAndCase", "  [Quoting] Reserved words, spaces, and mixed case: OK");
         }
         finally
         {

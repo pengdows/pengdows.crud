@@ -30,7 +30,7 @@ public sealed class SqlServerTestProvider : TestProvider
         catch (InvalidOperationException exception)
             when (exception.Message.Contains("ORDER BY", StringComparison.Ordinal))
         {
-            CheckOk("SQL Server paging without ORDER BY: rejected before execution");
+            CheckOk("SqlServer.PagingWithoutOrderBy", "SQL Server paging without ORDER BY: rejected before execution");
         }
 
         return Task.CompletedTask;
@@ -72,7 +72,7 @@ public sealed class SqlServerTestProvider : TestProvider
                 throw new Exception("SQL Server trigger-safe identity insert did not return an identity value");
             }
 
-            CheckOk("SQL Server identity return with enabled trigger: OK");
+            CheckOk("SqlServer.TriggerIdentityReturn", "SQL Server identity return with enabled trigger: OK");
         }
         finally
         {

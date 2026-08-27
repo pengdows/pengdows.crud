@@ -136,6 +136,7 @@ public class ParallelTestOrchestrator
             result.TotalTime = DateTime.UtcNow - startTime;
             result.ChecksPassed = testProvider.ChecksPassed;
             result.ChecksSkipped = testProvider.ChecksSkipped;
+            result.Checks = testProvider.Checks;
 
             Console.WriteLine(
                 $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s");
@@ -329,7 +330,13 @@ public class ParallelTestOrchestrator
                 totalChecks = r.ChecksPassed + (r.Success ? 0 : 1) + r.ChecksSkipped,
                 testTimeSeconds = r.TestTime?.TotalSeconds,
                 totalTimeSeconds = r.TotalTime.TotalSeconds,
-                error = r.Error
+                error = r.Error,
+                checks = r.Checks.Select(c => new
+                {
+                    name = c.Name,
+                    outcome = c.Outcome,
+                    reason = c.Reason
+                }).ToArray()
             }).ToList();
 
             var json = System.Text.Json.JsonSerializer.Serialize(output, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
@@ -409,4 +416,5 @@ public class TestResult
     public string? Error { get; set; }
     public int ChecksPassed { get; set; }
     public int ChecksSkipped { get; set; }
+    public IReadOnlyList<CheckResult> Checks { get; set; } = Array.Empty<CheckResult>();
 }

@@ -58,7 +58,7 @@ public sealed class MariaDbTestProvider : TestProvider
                 throw new Exception($"MariaDB {idType} identity was not returned as {typeof(TId).Name}");
             }
 
-            CheckOk($"MariaDB {idType} identity returned as {typeof(TId).Name}: OK");
+            CheckOk($"MariaDb.UnsignedIdentity{typeof(TId).Name}", $"MariaDB {idType} identity returned as {typeof(TId).Name}: OK");
         }
         finally
         {

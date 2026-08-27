@@ -59,7 +59,7 @@ public class Db2TestProvider : TestProvider
                 throw new Exception("Db2 MERGE parameter binding did not preserve the updated values");
             }
 
-            CheckOk("Db2 MERGE parameter binding: typed integer, string, and decimal values: OK");
+            CheckOk("Db2.TypedMergeParams", "Db2 MERGE parameter binding: typed integer, string, and decimal values: OK");
         }
         finally
         {
@@ -127,7 +127,7 @@ CREATE TABLE {tableName} (
             }
             catch (UniqueConstraintViolationException ex)
             {
-                CheckOk($"Db2 unique-constraint check: correctly threw UniqueConstraintViolationException ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
+                CheckOk("Db2.UniqueConstraintExceptionType", $"Db2 unique-constraint check: correctly threw UniqueConstraintViolationException ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
             }
         }
         finally
@@ -204,7 +204,7 @@ CREATE TABLE {tableName} (
                     "Db2 FINAL TABLE clause did not populate Id — SELECT ... FROM FINAL TABLE (INSERT ...) returned 0 or null");
             }
 
-            CheckOk($"Db2 FINAL TABLE: CreateAsync populated Id = {entity.Id} via SELECT ... FROM FINAL TABLE (INSERT ...)");
+            CheckOk("Db2.FinalTableInsert", $"Db2 FINAL TABLE: CreateAsync populated Id = {entity.Id} via SELECT ... FROM FINAL TABLE (INSERT ...)");
 
             var retrieved = await gateway.RetrieveOneAsync(entity.Id);
             if (retrieved == null || retrieved.Id != entity.Id)
@@ -213,7 +213,7 @@ CREATE TABLE {tableName} (
                     $"Db2 FINAL TABLE: RetrieveOneAsync by returned Id {entity.Id} did not find the row");
             }
 
-            CheckOk($"Db2 FINAL TABLE: RetrieveOneAsync confirmed row exists with Id = {retrieved.Id}");
+            CheckOk("Db2.FinalTableRetrieve", $"Db2 FINAL TABLE: RetrieveOneAsync confirmed row exists with Id = {retrieved.Id}");
         }
         finally
         {

@@ -78,7 +78,7 @@ CREATE TABLE {0} (
         }
         else
         {
-            CheckSkip($"  [IdentityUpsert] Skipped GENERATED ALWAYS AS IDENTITY test on PostgreSQL {context.DataSourceInfo.DatabaseProductVersion} (requires PostgreSQL 10+)");
+            CheckSkip("PostgreSql.GeneratedAlwaysIdentity", $"Skipped GENERATED ALWAYS AS IDENTITY test on PostgreSQL {context.DataSourceInfo.DatabaseProductVersion} (requires PostgreSQL 10+)");
         }
     }
 
@@ -110,7 +110,7 @@ CREATE TABLE {0} (
                 throw new Exception("PostgreSQL explicit identity upsert did not persist the updated value");
             }
 
-            CheckOk("PostgreSQL explicit GENERATED ALWAYS identity upsert: OK");
+            CheckOk("PostgreSql.GeneratedAlwaysIdentity", "PostgreSQL explicit GENERATED ALWAYS identity upsert: OK");
         }
         finally
         {
