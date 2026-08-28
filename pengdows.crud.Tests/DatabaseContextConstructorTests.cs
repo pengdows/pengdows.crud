@@ -347,7 +347,7 @@ public class DatabaseContextConstructorTests
         // Assert
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
-        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+        Assert.Equal(DbMode.PreventDatabaseUnload, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadOnly, context.ReadWriteMode);
     }
 

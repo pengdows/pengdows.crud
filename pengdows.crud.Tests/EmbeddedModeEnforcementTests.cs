@@ -20,6 +20,10 @@ public class EmbeddedModeEnforcementTests
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Best, DbMode.PreventDatabaseUnload)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Standard, DbMode.PreventDatabaseUnload)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleWriter, DbMode.PreventDatabaseUnload)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleConnection, DbMode.PreventDatabaseUnload)]
     public void EmbeddedProviders_ForceConnectionMode(
         SupportedDatabase product,
         string dataSource,
@@ -28,7 +32,9 @@ public class EmbeddedModeEnforcementTests
     {
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = $"Data Source={dataSource};EmulatedProduct={product}",
+            ConnectionString = product == SupportedDatabase.Firebird
+                ? $"Database={dataSource};ServerType=Embedded;EmulatedProduct={product}"
+                : $"Data Source={dataSource};EmulatedProduct={product}",
             DbMode = requested,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };

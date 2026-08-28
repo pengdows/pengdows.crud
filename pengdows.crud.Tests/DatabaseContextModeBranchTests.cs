@@ -37,11 +37,11 @@ public class DatabaseContextModeBranchTests
 
         var firebird = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false, true })!;
-        Assert.Equal(DbMode.SingleConnection, firebird);
+        Assert.Equal(DbMode.PreventDatabaseUnload, firebird);
 
         var localDb = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true, false })!;
-        Assert.Equal(DbMode.KeepAlive, localDb);
+        Assert.Equal(DbMode.PreventDatabaseUnload, localDb);
     }
 
     [Fact]

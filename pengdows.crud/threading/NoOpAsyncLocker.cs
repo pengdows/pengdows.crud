@@ -9,7 +9,7 @@
 //   * Lock(): Returns immediately
 //   * LockAsync(): Returns Task.CompletedTask
 //   * TryLockAsync(): Returns Task.FromResult(true)
-// - Used for ephemeral (per-operation) connections in Standard/KeepAlive modes.
+// - Used for ephemeral (per-operation) connections in Standard/PreventDatabaseUnload modes.
 // - TrackDisposeState = false: Singleton doesn't need disposal tracking.
 // - Extends SafeAsyncDisposableBase for interface compatibility.
 // - Zero overhead: No semaphore, no allocation, no contention.

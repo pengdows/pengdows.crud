@@ -13,7 +13,7 @@
 //   * Metrics collection (connection counts, timings)
 // - Connection modes (DbMode):
 //   * Standard - ephemeral connections per operation (recommended for production)
-//   * KeepAlive - sentinel connection + ephemeral work connections
+//   * PreventDatabaseUnload - passive sentinel connection(s) + ephemeral work connections
 //   * SingleWriter - governor-based single writer policy with ephemeral connections (for SQLite file mode)
 //   * SingleConnection - all work through one connection (for :memory: SQLite)
 // - Thread-safe: concurrent operations are supported in all modes.
@@ -31,6 +31,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -62,7 +63,7 @@ namespace pengdows.crud;
 /// <para>
 /// <strong>Concurrent callers are supported:</strong>
 /// Standard mode: parallel operations using ephemeral connections.
-/// KeepAlive mode: identical to Standard; additionally keeps one idle read connection open to prevent the DB from unloading.
+/// PreventDatabaseUnload mode: identical to Standard; additionally keeps one unused sentinel per materially separate pool to prevent the DB from unloading.
 /// SingleConnection mode: all operations share one persistent connection and serialize on a shared lock.
 /// SingleWriter uses the governor to serialize writes without a persistent connection.
 /// APIs returning <see cref="wrappers.ITrackedReader"/> hold a connection lease until disposed.
@@ -70,7 +71,7 @@ namespace pengdows.crud;
 /// <para><strong>Lifetime:</strong></para>
 /// <para>
 /// Register <c>DatabaseContext</c> as a <b>singleton per unique connection string</b>.
-/// This is required for modes that maintain persistent connections (e.g. KeepAlive, SingleConnection).
+/// This is required for modes that maintain persistent connections (e.g. PreventDatabaseUnload, SingleConnection).
 /// </para>
 ///
 /// <para><strong>Concurrency contract:</strong></para>
@@ -82,7 +83,7 @@ namespace pengdows.crud;
 ///   </item>
 ///   <item>
 ///     <description>
-///     <b>KeepAlive:</b> concurrent calls are allowed; a pinned sentinel connection prevents unload, but work still uses
+///     <b>PreventDatabaseUnload:</b> concurrent calls are allowed; passive sentinel connections prevent unload, but work still uses
 ///     ephemeral provider connections.
 ///     </description>
 ///   </item>
@@ -126,6 +127,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
     private ITrackedConnection? _connection = null;
+    private readonly object _sentinelLock = new();
+    private readonly List<(ITrackedConnection Connection, ExecutionType ExecutionType)> _sentinels = [];
     private SemaphoreSlim? _connectionOpenGate;
     private ReusableAsyncLocker? _connectionOpenLocker;
     // Only allocated for DbMode.SingleConnection. A transaction holds this for its whole
@@ -233,6 +236,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public string ConnectionString => _redactedConnectionString;
 
     internal string RawConnectionString => _connectionString;
+
+    internal string RawReaderConnectionString => _readerConnectionString;
 
     /// <inheritdoc/>
     public bool IsReadOnlyConnection => _isReadConnection && !_isWriteConnection;
@@ -459,18 +464,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
 
-        try
-        {
-            _connection?.Dispose();
-        }
-        catch
-        {
-            // ignore
-        }
-        finally
-        {
-            _connection = null;
-        }
+        DisposePersistentConnections();
 
         try
         {
@@ -504,21 +498,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
 
-        try
-        {
-            if (_connection is IAsyncDisposable ad)
-            {
-                await ad.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                _connection?.Dispose();
-            }
-        }
-        finally
-        {
-            _connection = null;
-        }
+        await DisposePersistentConnectionsAsync().ConfigureAwait(false);
 
         try
         {

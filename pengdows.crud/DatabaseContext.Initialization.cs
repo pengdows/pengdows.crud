@@ -11,11 +11,12 @@
 //   1. Parse connection string for pool settings and mode hints
 //   2. Detect database product (SQL Server, PostgreSQL, etc.)
 //   3. Create appropriate SQL dialect
-//   4. Initialize connection strategy (Standard, KeepAlive, etc.)
+//   4. Initialize connection strategy (Standard, PreventDatabaseUnload, etc.)
 //   5. Set up metrics collector if enabled
 // - Auto-detection of DbMode for embedded databases:
 //   * SQLite :memory: -> SingleConnection
 //   * SQLite file mode -> SingleWriter
+//   * Firebird embedded -> PreventDatabaseUnload
 //   * DuckDB in-memory -> appropriate mode
 // - Pool governor setup for connection limiting
 // - Application name handling for connection string
@@ -395,9 +396,11 @@ public partial class DatabaseContext
             RCSIEnabled = _rcsiPrefetch;
             SnapshotIsolationEnabled = _snapshotIsolationPrefetch;
 
-            // Special case: SingleConnection's pinned connection opened before detection.
-            // KeepAlive sentinel doesn't need settings — it's never used for work.
-            if (ConnectionMode == DbMode.SingleConnection)
+            // Persistent connections opened before dialect detection need their mandatory
+            // session settings applied after the final dialect is known. PreventDatabaseUnload
+            // sentinels use the same normal initialization settings even though they never run
+            // application commands.
+            if (ConnectionMode is DbMode.SingleConnection or DbMode.PreventDatabaseUnload)
             {
                 var target = initialConnection ?? PersistentConnection;
                 if (target != null)
@@ -409,14 +412,10 @@ public partial class DatabaseContext
                     catch
                     {
                         // A rejected/failed construction never returns an object for the caller
-                        // to Dispose. For SingleConnection mode `target` is typically the
-                        // already-open, already-owned PersistentConnection — undisposed, that's a
-                        // real connection leak on every FailClosed session-settings failure.
-                        target.Dispose();
-                        if (ReferenceEquals(target, PersistentConnection))
-                        {
-                            SetPersistentConnection(null);
-                        }
+                        // to Dispose. Persistent modes may own more than one connection, so
+                        // dispose the complete registered set rather than just the initialization
+                        // target.
+                        DisposePersistentConnectionsForInitializationFailure();
 
                         throw;
                     }
@@ -445,8 +444,8 @@ public partial class DatabaseContext
                 catch
                 {
                     // By this point InitializePoolGovernors() has already allocated the write/read
-                    // governors (each wrapping a SemaphoreSlim), and — for DbMode.SingleConnection —
-                    // an actual physical connection is already open and session-initialized. Since
+                    // governors (each wrapping a SemaphoreSlim), and — for persistent modes —
+                    // actual physical connections are already open and session-initialized. Since
                     // this object never escapes the failed constructor, none of that gets disposed
                     // otherwise: a real leak on every rejected duplicate-connection-string
                     // construction.
@@ -454,8 +453,7 @@ public partial class DatabaseContext
                     _writerGovernor = null;
                     _readerGovernor?.Dispose();
                     _readerGovernor = null;
-                    PersistentConnection?.Dispose();
-                    SetPersistentConnection(null);
+                    DisposePersistentConnectionsForInitializationFailure();
                     throw;
                 }
             }
@@ -469,6 +467,18 @@ public partial class DatabaseContext
             // context's connection string(s) would stay "in use" in the warning registry forever.
             UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
             _uniqueConnectionStringWarnRegistrations = null;
+            try
+            {
+                DisposePersistentConnectionsForInitializationFailure();
+                _writerGovernor?.Dispose();
+                _writerGovernor = null;
+                _readerGovernor?.Dispose();
+                _readerGovernor = null;
+            }
+            catch
+            {
+                // Preserve the original construction exception.
+            }
             _logger?.LogError(e, "DatabaseContext construction failed.");
             throw;
         }
@@ -608,7 +618,12 @@ public partial class DatabaseContext
             {
                 // Note: SingleWriter no longer uses persistent connections - it uses
                 // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
-                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection)
+                if (ConnectionMode == DbMode.PreventDatabaseUnload)
+                {
+                    RegisterSentinel(initConn, initExecutionType);
+                    initConn = null; // context owns the sentinel now
+                }
+                else if (ConnectionMode == DbMode.SingleConnection)
                 {
                     SetPersistentConnection(initConn);
                     initConn = null; // context owns it now
@@ -808,10 +823,28 @@ public partial class DatabaseContext
             ownsTurnstile: false, // Readers touch-and-release turnstile
             maxQueueDepth: _maxQueuedReads);
 
-        // Attach slot for modes with persistent connections.
-        if (ConnectionMode == DbMode.KeepAlive)
+        // Attach the slot that belongs to the initialization sentinel. Additional sentinels are
+        // created through FactoryCreateConnection below, which acquires and attaches their own
+        // pool slot as part of the normal connection path.
+        if (ConnectionMode == DbMode.PreventDatabaseUnload)
         {
-            AttachPinnedSlotIfNeeded();
+            AttachInitialSentinelSlotsIfNeeded();
+
+            if (_isWriteConnection && HasDedicatedReadConnectionString())
+            {
+                var readSentinel = FactoryCreateConnection(
+                    ExecutionType.Read, _readerConnectionString, isSharedConnection: true);
+                try
+                {
+                    readSentinel.Open();
+                    RegisterSentinel(readSentinel, ExecutionType.Read);
+                }
+                catch
+                {
+                    readSentinel.Dispose();
+                    throw;
+                }
+            }
         }
     }
 
@@ -909,7 +942,7 @@ public partial class DatabaseContext
         }
         else
         {
-            // Standard/KeepAlive: reader and writer always use separate ADO.NET pools
+            // Standard/PreventDatabaseUnload: reader and writer always use separate ADO.NET pools
             // (differentiated via ApplicationName suffix or Connection Timeout delta).
             // Stamp the resolved write size so the governor and the provider pool agree.
             // Configuration wins over connection-string, which wins over the dialect default.
@@ -1339,16 +1372,21 @@ public partial class DatabaseContext
         return readOnly && HasDedicatedReadConnectionString();
     }
 
-    internal void AttachPinnedSlotIfNeeded()
+    internal void AttachInitialSentinelSlotsIfNeeded()
     {
-        if (!_effectivePoolGovernorEnabled || _writerGovernor == null || _writerGovernor.Forbidden)
+        if (!_effectivePoolGovernorEnabled)
         {
             return;
         }
 
-        if (PersistentConnection is TrackedConnection tracked)
+        foreach (var (connection, executionType) in GetSentinelSnapshot())
         {
-            var slot = _writerGovernor.Acquire();
+            if (connection is not TrackedConnection tracked)
+            {
+                continue;
+            }
+
+            var slot = AcquireSlot(executionType);
             tracked.AttachSlot(slot);
         }
     }
@@ -1851,7 +1889,7 @@ public partial class DatabaseContext
 
                     // For shared in-memory and file-based SQLite/DuckDB:
                     // Most functional: SingleWriter
-                    // UNSAFE: Standard/KeepAlive (lock contention)
+                    // UNSAFE: Standard/PreventDatabaseUnload (lock contention)
                     // Safe but less functional: SingleConnection
 
                     if (requested == DbMode.Best)
@@ -1860,11 +1898,11 @@ public partial class DatabaseContext
                         return DbMode.SingleWriter;
                     }
 
-                    // Coerce UNSAFE modes (Standard, KeepAlive) to SingleWriter
-                    if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
+                    // Coerce UNSAFE modes (Standard, PreventDatabaseUnload) to SingleWriter
+                    if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
                     {
                         LogModeOverride(requested, DbMode.SingleWriter,
-                            "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
+                            "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
                         return DbMode.SingleWriter;
                     }
 
@@ -1874,24 +1912,27 @@ public partial class DatabaseContext
 
             case SupportedDatabase.Firebird when isFirebirdEmbedded:
                 {
-                    // Embedded Firebird REQUIRES SingleConnection
-                    if (requested != DbMode.SingleConnection)
+                    // Embedded Firebird supports multiple simultaneous attachments. Keep one
+                    // passive attachment alive without forcing all application work through it.
+                    if (requested != DbMode.PreventDatabaseUnload)
                     {
-                        LogModeOverride(requested, DbMode.SingleConnection, "Firebird embedded requires SingleConnection");
+                        LogModeOverride(requested, DbMode.PreventDatabaseUnload,
+                            "Firebird embedded supports multiple attachments; using PreventDatabaseUnload");
                     }
 
-                    return DbMode.SingleConnection;
+                    return DbMode.PreventDatabaseUnload;
                 }
 
             case SupportedDatabase.SqlServer when isLocalDb:
                 {
-                    // LocalDB REQUIRES KeepAlive to prevent unload
-                    if (requested != DbMode.KeepAlive)
+                    // LocalDB REQUIRES PreventDatabaseUnload to prevent unload
+                    if (requested != DbMode.PreventDatabaseUnload)
                     {
-                        LogModeOverride(requested, DbMode.KeepAlive, "LocalDB requires KeepAlive");
+                        LogModeOverride(requested, DbMode.PreventDatabaseUnload,
+                            "LocalDB requires PreventDatabaseUnload");
                     }
 
-                    return DbMode.KeepAlive;
+                    return DbMode.PreventDatabaseUnload;
                 }
 
             case SupportedDatabase.PostgreSql
@@ -1905,7 +1946,7 @@ public partial class DatabaseContext
                 {
                     // Full server databases: all modes are SAFE
                     // Most functional: Standard
-                    // Safe but less functional: SingleWriter, SingleConnection, KeepAlive
+                    // Safe but less functional: SingleWriter, SingleConnection, PreventDatabaseUnload
 
                     if (requested == DbMode.Best)
                     {

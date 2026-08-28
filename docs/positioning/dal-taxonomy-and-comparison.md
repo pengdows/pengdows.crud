@@ -49,7 +49,7 @@ In other frameworks:
 - **pengdows.crud**: `DatabaseContext` is a **singleton execution coordinator** bound to a specific provider and connection string. It owns:
   - **Connection Lifecycle**: Ephemeral pooled connections ("open late, close early").
   - **Admission Control**: `PoolGovernor` read/write slot quotas and fairness turnstiles.
-  - **Adaptive `DbMode` Coercion**: Automatically selects optimal concurrency strategies (e.g. `:memory:` $\to$ `SingleConnection`, file SQLite $\to$ `SingleWriter`, LocalDB $\to$ `KeepAlive`, server DBs $\to$ `Standard`).
+  - **Adaptive `DbMode` Coercion**: Automatically selects optimal concurrency strategies (e.g. `:memory:` $\to$ `SingleConnection`, file SQLite $\to$ `SingleWriter`, LocalDB/embedded Firebird $\to$ `PreventDatabaseUnload`, server DBs $\to$ `Standard`).
   - **Session State Hygiene**: Applies required ANSI session settings on connection open.
   - **Transaction Pinning**: Pins a dedicated governed connection for the transaction scope.
   - **Dialect Capability Fingerprinting**: Caches compiled SQL templates keyed by multi-tenant dialect capability fingerprints.
@@ -57,7 +57,7 @@ In other frameworks:
 ### Pillar 2: "Prego Features" (Expert-Level Built-in Solutions)
 Real-world data access has difficult edge cases that developers assume are handled by their tools, but rarely are. `pengdows.crud` provides built-in solutions:
 - **SingleWriter Mode**: Prevents SQLite disk locking (`SQLITE_BUSY`) by serializing write admission through a governor turnstile while keeping readers concurrent and ephemeral. Applied to DuckDB too, but there it's a deliberate policy choice for a single cross-engine contract, not a limitation DuckDB's own engine imposes — DuckDB supports concurrent non-conflicting writes natively.
-- **KeepAlive Sentinel**: Keeps 1 idle connection open to prevent LocalDB process teardown or SQLite WAL unmapping, while all queries use standard ephemeral connections.
+- **PreventDatabaseUnload Sentinel**: Keeps one unused permit-backed connection per materially separate pool to prevent supported engine deactivation, while all queries use standard ephemeral connections.
 - **Audit Field Invariants & Rollback**: Both `CreatedBy/On` and `LastUpdatedBy/On` are set on Create (UTC). If a write fails or is rejected before DB acceptance (e.g. concurrency conflict), in-memory audit mutations are **automatically rolled back**.
 - **Surrogate vs. Natural Key Architecture**: Strict separation between surrogate pseudokeys (`[Id]`) and domain business keys (`[PrimaryKey]`), backed by dedicated gateway interfaces (`TableGateway<T, TId>` vs `PrimaryKeyTableGateway<T>`).
 - **Portable Capability Synthesis**: Automatically emits native upsert syntax (`MERGE`, `INSERT ... ON CONFLICT`, `INSERT ... ON DUPLICATE KEY UPDATE`, or Firebird `UPDATE OR INSERT`) based on dialect capability flags.
@@ -97,7 +97,7 @@ Most data access layers test either against superficial mocks or against SQLite 
 | **SQL Generation** | None (Raw SQL strings) | LINQ expression trees $\to$ SQL translation | Fluent Query Builder / Raw SQL | **Inspectable 3-Tier Containers** (`Build` $\to$ `Load` $\to$ `Convenience`) |
 | **Connection Pooling & Lifecycle** | Delegated entirely to ADO.NET pool | Scoped connection per `DbContext` | Delegated to ADO.NET pool | **"Open Late, Close Early"** + `ITrackedReader` lease model |
 | **Concurrency Admission Control** | None | None | None | **`PoolGovernor`** with read/write slot quotas and turnstile fairness |
-| **SQLite / Embedded DB Safety** | None (frequent `SQLITE_BUSY` errors) | Basic SQLite provider (no write turnstile) | None | **`DbMode.SingleWriter`** (governor write admission) & **`DbMode.KeepAlive`** (sentinel) |
+| **SQLite / Embedded DB Safety** | None (frequent `SQLITE_BUSY` errors) | Basic SQLite provider (no write turnstile) | None | **`DbMode.SingleWriter`** (governor write admission) & **`DbMode.PreventDatabaseUnload`** (passive sentinel) |
 | **Audit Field Handling** | Manual boilerplate | ChangeTracker interceptors (complex) | Property handlers | **First-class Invariant** + in-memory rollback on pre-acceptance failure |
 | **Surrogate vs Natural Keys** | None (all columns equal) | Assumes single `[Key]` | Primary key mapping | **Strict Distinction**: `[Id]` vs `[PrimaryKey]` with separate gateways |
 | **Transaction Management** | Raw `IDbTransaction` or `TransactionScope` | `DatabaseFacade.BeginTransaction` | Raw `IDbTransaction` | **Operation-scoped `ITransactionContext`** (pins connection; `TransactionScope` forbidden) |
@@ -130,7 +130,7 @@ Most data access layers test either against superficial mocks or against SQLite 
 
 | Framework | How pengdows.crud Differs |
 |---|---|
-| **SQLx (Rust)** | Rust's `sqlx` provides compile-time query verification against a live database. It is a pure driver/mapper without adaptive connection modes (`SingleWriter`, `KeepAlive`), inspectable 3-tier SQL builders, or coordinated audit snapshot/restoration. |
+| **SQLx (Rust)** | Rust's `sqlx` provides compile-time query verification against a live database. It is a pure driver/mapper without adaptive connection modes (`SingleWriter`, `PreventDatabaseUnload`), inspectable 3-tier SQL builders, or coordinated audit snapshot/restoration. |
 | **Diesel / SeaORM** | Diesel and SeaORM are query builders and relational ORMs. `pengdows.crud` provides direct SQL control with runtime execution governance. |
 
 ---

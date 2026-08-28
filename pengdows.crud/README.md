@@ -27,7 +27,7 @@ No LINQ. No tracking. No hidden unit of work.
 - Audit field population via `IAuditValueResolver`
 - JSON, enum, GUID, binary, UTC date/time, and advanced provider-specific type mappings
 - Metrics snapshots via `IDatabaseContext.Metrics` and live updates via `MetricsUpdated`
-- `DbMode` strategies: `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, and `Best`
+- `DbMode` strategies: `Standard`, `PreventDatabaseUnload` (`KeepAlive` obsolete alias), `SingleWriter`, `SingleConnection`, and `Best`
 - Typed exception hierarchy: provider `DbException` is translated to structured subtypes (`ConcurrencyConflictException`, `UniqueConstraintViolationException`, `DeadlockException`, etc.)
 
 ## Supported Products

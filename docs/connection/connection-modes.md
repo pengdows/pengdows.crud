@@ -15,7 +15,7 @@ This avoids exhausting the connection pool, avoids leaking resources or unclosed
 
 ## 1. Modes & Lifecycle
 
-The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`.
+The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`. `KeepAlive` remains an obsolete compatibility alias for `PreventDatabaseUnload`.
 
 ### Standard
 
@@ -26,23 +26,29 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
   - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect (SQL-92 is a fallback behavior, not a distinct DbMode or supported database product).
 - Transactions: All reads/writes inside a transaction share the same connection.
 
-### KeepAlive
+### PreventDatabaseUnload
 
-**KeepAlive exists for exactly one reason, and it has nothing to do with performance.** It does not warm a connection for faster queries, does not cache anything, and does not optimize any code path — it is purely a workaround for one specific piece of external, uncontrollable engine behavior.
+**PreventDatabaseUnload exists for exactly one reason, and it has nothing to do with performance.** It is not a health check, TCP keepalive, periodic ping, warmed working connection, or concurrency mode. It retains passive sentinel connections solely to prevent a target database from unloading, deactivating, closing, or pausing.
 
 The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connection late and closes it early — every operation gets a fresh connection from the pool and releases it back immediately after. That's normally harmless, because the ADO.NET connection pool keeps the underlying physical connections warm behind the scenes. But **SQL Server LocalDB is not a normal server** — it's a lightweight, self-managed engine process that watches its own connection count and **automatically unloads the database (shuts the engine instance down) once it observes zero active connections for a while**. If pengdows.crud used plain Standard mode against LocalDB, a quiet period (no requests for a stretch) would let the pool drain to zero open connections, LocalDB would notice and unload the database, and the *next* request would pay the cost of LocalDB re-launching and re-attaching the database file before it could even open a connection.
 
-KeepAlive's entire job is to prevent that specific failure mode: it holds one single pinned, idle connection open for the lifetime of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. **That pinned connection is never used for any command, ever** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. The sentinel's only job is to exist and stay open; it does not participate in the "hot path" in any way, and removing it would not change query latency at all except for the LocalDB-unload-then-relaunch penalty it exists to prevent.
+The mode opens one sentinel through the normal connection and session-initialization path for every materially separate configured pool. **Sentinels never execute application commands, open transactions, or hand work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. Each sentinel consumes one permit from its corresponding governor, so effective working capacity is the configured capacity minus the retained sentinel(s).
 
-- Automatically selected only for LocalDb (`CoerceMode` forces LocalDb → KeepAlive, and `Best` → KeepAlive for LocalDb). For SQLite/DuckDB, a KeepAlive request is always coerced to SingleWriter instead — it is never actually reachable there regardless of what's requested. On full-server databases it is honored if explicitly requested ("safe but less functional," not unsafe), but it is not the recommended or automatically-selected choice for any of them.
-- Not a general production-workload mode the way Standard/SingleWriter are — scoped to the LocalDb sentinel use case specifically.
+- Automatically selected for SQL Server LocalDB and Firebird embedded. It is also available explicitly for normal Firebird servers and other providers where the application intentionally wants to prevent database deactivation or auto-pause.
+- Separate read and write connection strings receive separate sentinels. A reported Closed/Broken sentinel is replaced lazily, through the normal connection path, after confirming that the context is still active.
 
 ### SingleConnection
 
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
-- Used for: SQLite/DuckDB `:memory:` and Firebird embedded.
-- Not suitable for production concurrency.
+- Used for: SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
+  deployments. Durable embedded Firebird is automatically handled by `PreventDatabaseUnload`.
+- For SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
+  mode. The database is owned by the connection; if that connection closes, its contents
+  cannot be recovered by opening another connection.
+- Firebird embedded is different: durable embedded storage automatically selects
+  `PreventDatabaseUnload`, while `SingleConnection` remains an explicitly selected
+  specialized mode. The latter is still a single-concurrency boundary.
 
 ### SingleWriter
 
@@ -59,10 +65,10 @@ KeepAlive's entire job is to prevent that specific failure mode: it holds one si
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
   - Full servers → Standard
-  - LocalDb → KeepAlive
+  - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
-  - Firebird embedded → SingleConnection
+  - Firebird embedded → PreventDatabaseUnload
   - Unknown product → Standard
 
 ## 2. Provider-Driven Coercion
@@ -70,15 +76,15 @@ KeepAlive's entire job is to prevent that specific failure mode: it holds one si
 ### Always forced (cannot override):
 
 - SQLite/DuckDB `:memory:` → SingleConnection
-- Firebird embedded (`.fdb` file, no `Server=`) → SingleConnection
+- Firebird embedded (`.fdb` file, no `Server=`) → PreventDatabaseUnload
 
 ### Allowed for SQLite/DuckDB file-based:
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/KeepAlive → coerced to SingleWriter with a Warning log
+- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log
 
-### LocalDb: coerced to KeepAlive.
+### LocalDb: coerced to PreventDatabaseUnload.
 
 ### Full servers: always Standard.
 
@@ -104,7 +110,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - SessionSettingsPreamble is applied once per *logical* connection open (each `TrackedConnection`
   wrapper's first `Open`/`OpenAsync`), not once per *physical* connection. Whether that means
   "once ever" or "every checkout" depends entirely on the mode's wrapper lifetime:
-  - **Persistent modes** (KeepAlive's pinned connection, SingleConnection): one `TrackedConnection`
+  - **Persistent modes** (PreventDatabaseUnload sentinels, SingleConnection): one or more `TrackedConnection` instances
     wrapper lives for the whole context lifetime, so the preamble genuinely executes exactly once.
   - **Ephemeral modes** (Standard, SingleWriter): a fresh `TrackedConnection` wrapper is created
     per operation/checkout, so the preamble **is reapplied on every single checkout** — even when
@@ -135,7 +141,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - All commands inside a transaction (read or write) share the same physical connection.
 - Rules by mode:
-  - Standard / KeepAlive: `BeginTransaction()` creates a pinned connection for that scope.
+  - Standard / PreventDatabaseUnload: `BeginTransaction()` creates a pinned connection for that scope.
   - Write tx → acquires the single write permit and reuses the transaction connection for the scope.
   - Read-only tx → ephemeral read-only connection that still respects governor fairness when writes queue.
   - SingleConnection: all tx use the single pinned connection.
@@ -144,19 +150,19 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - Non-transactional ephemeral connections: errors bubble at `Execute…` (open-late / close-early).
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
-- Persistent modes (KeepAlive/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
+- Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
-- **After construction, `KeepAlive` and `SingleConnection` handle a broken pinned connection very differently — this asymmetry is not obvious from the mode names alone.** `KeepAliveConnectionStrategy` checks sentinel health lazily on every `GetConnection()` call (a cheap unlocked state check in the common case) and transparently repairs — disposes the dead sentinel, opens a fresh one, swaps it in — if it's `Broken`/`Closed`. `SingleConnectionStrategy.GetConnection()` has **no health check at all**; it unconditionally returns the stored connection. If that one connection breaks, every subsequent operation on that context fails against a dead connection for the rest of its lifetime — the only recovery is disposing and reconstructing the whole `DatabaseContext`.
+- **After construction, `PreventDatabaseUnload` and `SingleConnection` have different recovery contracts.** `PreventDatabaseUnload` checks each sentinel lazily and transparently replaces reported `Broken`/`Closed` sentinels. `SingleConnection` cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
 
   **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
 
-  For other single-connection-limited engines with real persistent storage behind the one connection (e.g. Firebird embedded, a `.fdb` file), the connection break is against durable data — reopening a fresh connection to the same file *would* actually recover it, so the current lack of any repair attempt is a genuine, fixable gap there, unlike the `:memory:` case.
+  For other single-connection-limited engines with real persistent storage behind the one connection (e.g. Firebird embedded, a `.fdb` file), the connection break is against durable data — reopening a fresh connection to the same file *could* recover access to the database, so repair behavior remains a separate production design question. It must not be applied to `:memory:` databases, where a replacement connection creates a different empty database.
 
 ## 7. Heuristics & Tests
 
 - Explicit Standard on embedded → coerced (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - Firebird embedded → SingleConnection
+  - Firebird embedded → PreventDatabaseUnload
   - SQLite/DuckDB file-based → SingleWriter
 - Unknown product with Best → Standard.
 
@@ -187,8 +193,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ## 10. Practical Guidance
 
 **Best practices:**
-- `Standard`, `SingleWriter`, and `KeepAlive` are all production-supported, each for a different deployment shape: `Standard` for client-server databases, `SingleWriter` for file-based SQLite/DuckDB, `KeepAlive` for single-machine/embedded deployments backed by SQL Server LocalDB.
-- `SingleConnection` against `:memory:` SQLite/DuckDB is **never production-suitable, structurally** — an in-memory database has no persistence outside that one connection, so it cannot survive a process restart or a dropped connection (see §6). Reserve it for tests and ephemeral scratch data. Against a durable-storage single-connection engine (e.g. Firebird embedded), `SingleConnection` is at least structurally viable, but remains a narrow/niche case, not general production, and currently has no connection-repair path (see §6 and `docs/planning/future-work.md`).
+- `Standard`, `PreventDatabaseUnload`, and `SingleWriter` are production-supported modes for the deployment shapes where their lifecycle and concurrency policies fit. This includes durable Firebird deployments, subject to the provider's connection and concurrency constraints.
+- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable-storage Firebird embedded automatically uses `PreventDatabaseUnload`; `SingleConnection` remains an explicit specialized deployment shape.
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**

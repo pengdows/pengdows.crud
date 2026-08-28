@@ -57,31 +57,39 @@ public enum DbMode
     Standard = 0,
 
     /// <summary>
-    /// Keeps one sentinel connection open permanently to prevent database unload.
+    /// Keeps one unused sentinel connection open for each materially separate connection pool
+    /// to prevent the database from unloading, deactivating, closing, or pausing.
     /// Otherwise behaves like <see cref="Standard"/>.
     /// </summary>
     /// <remarks>
     /// <para><b>Behavior:</b></para>
     /// <list type="bullet">
-    ///   <item><description>One persistent "sentinel" connection stays open for the lifetime of the DatabaseContext</description></item>
-    ///   <item><description>Sentinel connection is NEVER used for actual work</description></item>
-    ///   <item><description>All operations open/close connections like Standard mode</description></item>
-    ///   <item><description>Prevents database unload in embedded/user-mode databases</description></item>
+    ///   <item><description>One persistent unused sentinel stays open for each materially separate pool</description></item>
+    ///   <item><description>Sentinels are never used for application work, commands, readers, or transactions</description></item>
+    ///   <item><description>All application operations open/close connections like Standard mode</description></item>
+    ///   <item><description>Each sentinel consumes one permit from its corresponding pool</description></item>
+    ///   <item><description>Reported Closed/Broken sentinels are replaced through the normal connection path</description></item>
     /// </list>
     /// <para><b>Best For:</b></para>
     /// <list type="bullet">
     ///   <item><description>SQL Server Express LocalDB (prevents automatic database unload)</description></item>
-    ///   <item><description>Development environments with embedded databases</description></item>
-    ///   <item><description>Any database where keeping it "loaded" improves startup latency</description></item>
+    ///   <item><description>Durable embedded Firebird deployments</description></item>
+    ///   <item><description>Other databases where the application intentionally owns the loaded/active lifecycle</description></item>
     /// </list>
     /// <para><b>Operational Characteristics:</b></para>
     /// <list type="bullet">
     ///   <item><description>Same concurrency as Standard mode</description></item>
-    ///   <item><description>Slightly higher baseline resource usage (one extra connection)</description></item>
+    ///   <item><description>Higher baseline resource usage (one extra connection per materially separate pool)</description></item>
     ///   <item><description>Eliminates cold-start latency for subsequent operations</description></item>
     /// </list>
     /// </remarks>
-    KeepAlive = 1,
+    PreventDatabaseUnload = 1,
+
+    /// <summary>
+    /// Compatibility alias for <see cref="PreventDatabaseUnload"/>.
+    /// </summary>
+    [System.Obsolete("Use PreventDatabaseUnload.")]
+    KeepAlive = PreventDatabaseUnload,
 
     /// <summary>
     /// Serializes writes via a pool governor (WriteSlots=1); both reads and writes use ephemeral connections.
@@ -161,7 +169,8 @@ public enum DbMode
     ///   <item><description>SQLite file or "mode=memory;cache=shared" → <see cref="SingleWriter"/> (single-writer database)</description></item>
     ///   <item><description>DuckDB :memory: → <see cref="SingleConnection"/></description></item>
     ///   <item><description>DuckDB file → <see cref="SingleWriter"/></description></item>
-    ///   <item><description>SQL Server LocalDB → <see cref="KeepAlive"/> (prevents unload)</description></item>
+    ///   <item><description>SQL Server LocalDB → <see cref="PreventDatabaseUnload"/> (prevents unload)</description></item>
+    ///   <item><description>Firebird embedded → <see cref="PreventDatabaseUnload"/> (retains an attachment without forcing one connection for all work)</description></item>
     ///   <item><description>All other databases → <see cref="Standard"/> (client-server databases)</description></item>
     /// </list>
     /// <para><b>Benefits:</b></para>

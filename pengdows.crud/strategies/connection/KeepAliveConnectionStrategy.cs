@@ -17,6 +17,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -39,12 +40,12 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// SPECIFIC USE CASES:
 /// - LocalDB instances that might shut down when no connections are active — the only case
-///   DatabaseContext.CoerceMode actually selects KeepAlive for automatically (LocalDb → KeepAlive,
-///   and Best → KeepAlive for LocalDb).
+///   DatabaseContext.CoerceMode actually selects PreventDatabaseUnload automatically (LocalDb and
+///   embedded Firebird under the applicable automatic-selection policy).
 /// - Explicitly requested against a full-server database (PostgreSQL, SQL Server non-LocalDB,
 ///   etc.) — honored as "safe but less functional," not a recommended default.
 ///
-/// NOT a use case: SQLite/DuckDB. CoerceMode always coerces a KeepAlive request against either
+/// NOT a use case: SQLite/DuckDB. CoerceMode always coerces a PreventDatabaseUnload request against either
 /// of them to SingleWriter instead — a pinned idle connection does nothing for the write-lock
 /// contention those engines need SingleWriter's turnstile for, so this strategy is never actually
 /// reached for them regardless of what's requested.
@@ -63,7 +64,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
     private readonly object _sentinelRepairLock = new();
 
     // Test-only hook: fires synchronously right after the disposed-context re-check inside
-    // EnsureSentinelHealthy, before SetPersistentConnection/AttachPinnedSlotIfNeeded run. Lets a
+    // EnsureSentinelHealthy, before the replacement is installed. Lets a
     // test deterministically reproduce "Dispose() happens for the first time exactly in this
     // narrow window" without real threading — mirrors TrackedConnection.OpenTimingHook's pattern.
     internal static Action? PostDisposedCheckHook;
@@ -79,7 +80,15 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override void PostInitialize(ITrackedConnection? connection)
     {
-        _context.SetPersistentConnection(connection);
+        if (connection != null)
+        {
+            // Preserve the strategy's historical test/standalone behavior. Normal
+            // DatabaseContext construction registers its initialization sentinel before the
+            // strategy is created, so this branch is only used when a strategy is initialized
+            // directly with a connection.
+            _context.SetPersistentConnection(connection);
+            _context.RegisterSentinel(connection, ExecutionType.Read);
+        }
     }
 
     public override ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
@@ -121,40 +130,53 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
     /// </summary>
     private void EnsureSentinelHealthy()
     {
-        var sentinel = _context.PersistentConnection;
-        if (sentinel == null || IsHealthy(sentinel))
+        var snapshot = _context.GetSentinelSnapshot();
+        if (snapshot.Count == 0 || snapshot.All(s => IsHealthy(s.Connection)))
         {
             return;
         }
 
         lock (_sentinelRepairLock)
         {
-            var current = _context.PersistentConnection;
-            if (_context.IsDisposed || current == null || IsHealthy(current))
+            foreach (var (current, executionType) in _context.GetSentinelSnapshot())
             {
-                return; // already repaired by another thread, or context is shutting down
-            }
+                if (IsHealthy(current))
+                {
+                    continue;
+                }
 
-            _context.Logger.LogWarning(
-                "KeepAlive sentinel connection was {State}; reconnecting.", current.State);
-
-            try
-            {
-                current.Dispose();
+                RepairSentinel(current, executionType);
             }
-            catch
-            {
-                // Already broken — best-effort cleanup, nothing meaningful to do with a failure here.
-            }
+        }
+    }
 
-            var replacement = _context.FactoryCreateConnection(_context.RawConnectionString, true);
+    private void RepairSentinel(ITrackedConnection current, ExecutionType executionType)
+    {
+        if (_context.IsDisposed)
+        {
+            return;
+        }
+
+        _context.Logger.LogWarning(
+            "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+
+        try
+        {
+            current.Dispose();
+        }
+        catch
+        {
+            // Already broken — best-effort cleanup, nothing meaningful to do with a failure here.
+        }
+
+        var connectionString = executionType == ExecutionType.Read
+            ? _context.RawReaderConnectionString
+            : _context.RawConnectionString;
+        var replacement = _context.FactoryCreateConnection(executionType, connectionString, true);
+        try
+        {
             replacement.Open();
 
-            // Dispose() can complete concurrently while replacement.Open() above was in flight —
-            // it does not coordinate with this lock at all. Re-check before mutating context
-            // state: don't reassign a live connection onto an already-disposed context (nothing
-            // would ever dispose it — a leak), and don't let AttachPinnedSlotIfNeeded throw
-            // ObjectDisposedException from a governor Dispose() already tore down.
             if (_context.IsDisposed)
             {
                 replacement.Dispose();
@@ -163,33 +185,15 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
             PostDisposedCheckHook?.Invoke();
 
-            _context.SetPersistentConnection(replacement);
-
-            try
-            {
-                _context.AttachPinnedSlotIfNeeded();
-            }
-            catch (ObjectDisposedException)
-            {
-                // Narrower residual window: Dispose() completed between the check above and this
-                // call. The replacement is already installed as PersistentConnection at this
-                // point, so disposing it here also correctly tears down what
-                // SetPersistentConnection just set — nothing left dangling.
-                replacement.Dispose();
-                return;
-            }
-
-            // AttachPinnedSlotIfNeeded's own early-return guard (governance disabled/forbidden
-            // for this context) has no disposed-context check of its own — the
-            // ObjectDisposedException caught above is purely incidental to the governed branch's
-            // SemaphoreSlim.Wait() throwing on an already-disposed semaphore, not a deliberate
-            // signal. On an ungoverned context, AttachPinnedSlotIfNeeded returns cleanly even if
-            // Dispose() completed one line above it, so re-check explicitly rather than relying
-            // on an exception that only some configurations happen to throw.
-            if (_context.IsDisposed)
+            if (!_context.ReplaceSentinel(current, replacement, executionType))
             {
                 replacement.Dispose();
             }
+        }
+        catch
+        {
+            replacement.Dispose();
+            throw;
         }
     }
 
@@ -205,7 +209,7 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
             return;
         }
 
-        if (ReferenceEquals(connection, _context.PersistentConnection))
+        if (_context.GetSentinelSnapshot().Any(s => ReferenceEquals(s.Connection, connection)))
         {
             return; // keep-alive connection stays open
         }
@@ -215,7 +219,11 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
 
     public override ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        return ReleaseNonPersistentConnectionAsync(connection, _context.PersistentConnection);
+        return ReleaseNonPersistentConnectionAsync(
+            connection,
+            _context.GetSentinelSnapshot().Any(s => ReferenceEquals(s.Connection, connection))
+                ? connection
+                : null);
     }
 
     public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(

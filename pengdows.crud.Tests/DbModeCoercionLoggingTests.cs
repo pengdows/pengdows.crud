@@ -194,7 +194,7 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_BestMode_AutoSelectsSingleConnection_WithInfo()
+    public void FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -205,7 +205,7 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
         Assert.Contains(provider.Entries,
             e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
         Assert.DoesNotContain(provider.Entries,
@@ -213,7 +213,7 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_StandardMode_CoercesToSingleConnection_WithWarning()
+    public void FirebirdEmbedded_StandardMode_CoercesToPreventDatabaseUnload_WithWarning()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -224,7 +224,7 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
         Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 

@@ -5,6 +5,8 @@
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- Existing tests intentionally exercise the compatibility alias DbMode.KeepAlive. -->
+        <NoWarn>$(NoWarn);CS0618</NoWarn>
         <CollectCoverage>true</CollectCoverage>
         <CoverletOutputFormat>cobertura</CoverletOutputFormat>
         <CoverletOutput>../TestResults/</CoverletOutput>

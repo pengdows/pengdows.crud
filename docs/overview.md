@@ -52,7 +52,7 @@ The codebase also exposes:
 The public `DbMode` values are:
 
 - `Standard`
-- `KeepAlive`
+- `PreventDatabaseUnload` (obsolete alias: `KeepAlive`)
 - `SingleWriter`
 - `SingleConnection`
 - `Best`

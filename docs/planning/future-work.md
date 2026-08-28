@@ -6,11 +6,11 @@ is not lost and can be picked up when the need arises.
 
 ---
 
-## `EphemeralSecureString` — built, never wired up, intentionally kept
+## Removed: `EphemeralSecureString` (2026-08-28)
 
-`pengdows.crud/EphemeralSecureString.cs`/`IEphemeralSecureString` is a real, well-built mechanism intended to keep credentials (connection-string passwords) securely in memory: AES-encrypts on construction with a per-instance key/IV, decrypts only inside `Reveal()`/`WithRevealed()`/`WithRevealedAsync()`, auto-zeros the cached plaintext ~750ms after first reveal, and zeros key/IV/ciphertext on `Dispose()`. Confirmed with the maintainer: this was meant to be the answer to keeping passwords out of plain memory, but it was never actually wired into `DatabaseContextConfiguration`, connection-string handling, or `DbProviderLoader` — it has zero production call sites today, only its own unit test. Kept in the codebase deliberately (not an oversight) because the design work shouldn't be lost, per this document's own stated purpose.
+`pengdows.crud/EphemeralSecureString.cs`/`IEphemeralSecureString` was a real, well-built mechanism intended to keep credentials (connection-string passwords) securely in memory: AES-encrypted on construction with a per-instance key/IV, decrypted only inside `Reveal()`/`WithRevealed()`/`WithRevealedAsync()`, auto-zeroed the cached plaintext ~750ms after first reveal, and zeroed key/IV/ciphertext on `Dispose()`. Confirmed with the maintainer this was meant to be the answer to keeping passwords out of plain memory, but it was never actually wired into `DatabaseContextConfiguration`, connection-string handling, or `DbProviderLoader` — zero production call sites, only its own unit test.
 
-Notably, it does **not** currently address the `ConnectionStringNormalizationCache` unbounded-raw-connection-string entry above — that cache retains full connection strings (including embedded passwords) in a plain `string`-keyed dictionary with no relationship to this class. If `EphemeralSecureString` is wired up in the future, that cache is a second place credentials leak into long-lived memory that would also need addressing, not just the initial connection-string handling path.
+Kept deliberately for a while so the design work wasn't lost, per this document's own stated purpose — then removed by explicit maintainer decision once that purpose was served (this entry, plus the class's git history, is the record). Removal was a public-contract change: deleted `pengdows.crud/EphemeralSecureString.cs`, `pengdows.crud.abstractions/IEphemeralSecureString.cs`, and `pengdows.crud.Tests/EphemeralSecureStringTests.cs`, then regenerated the `interface-api-check` baseline (451 → 447 signatures, the interface plus its 3 methods). Full solution build clean; full unit suite (6515 tests) shows the same 4 pre-existing failures, none new.
 
 ---
 
@@ -36,10 +36,10 @@ constructible attributes risks a caller applying one and silently getting no beh
 
 ## `SingleConnectionStrategy` has no repair path — fixable for file-backed engines, impossible for `:memory:`
 
-`SingleConnectionStrategy.GetConnection()` unconditionally returns the stored connection with no health check, unlike `KeepAliveConnectionStrategy`'s lazy sentinel repair. This splits into two very different cases depending on what's behind the one connection:
+`SingleConnectionStrategy.GetConnection()` unconditionally returns the stored connection with no health check. `PreventDatabaseUnload` uses lazy sentinel repair instead. This splits into two very different cases depending on what's behind the one connection:
 
 - **`:memory:` SQLite/DuckDB: not fixable, don't attempt it.** The database exists only inside that one connection; a replacement connection to the same `:memory:` string creates a new, empty database rather than recovering anything. The current "every subsequent operation fails" behavior is the correct outcome here, not a gap.
-- **Firebird embedded (`.fdb` file) and any other durable-storage single-connection engine: a genuine, fixable gap.** The data survives independently of the connection, so reopening a fresh connection to the same file would actually recover it — `SingleConnectionStrategy` just doesn't attempt to. Worth adding a repair path modeled on `KeepAliveConnectionStrategy.EnsureSentinelHealthy()`, scoped to file/durable-backed uses of this mode only (an explicit flag or a dialect capability check, not a blanket change, so `:memory:` behavior is never silently altered).
+- **Firebird embedded (`.fdb` file) is no longer selected as `SingleConnection`.** It uses `PreventDatabaseUnload`, which preserves a passive attachment while normal work uses separate connections. Any explicitly forced durable-storage `SingleConnection` remains a separate, opt-in repair question; the repair path must never be applied to `:memory:` behavior.
 
 See `docs/connection/connection-modes.md`'s "Failure Behavior" section for the current documented state.
 
@@ -346,7 +346,7 @@ What's left:
     preamble genuinely reapplies every single time, even when the ADO.NET pool hands back an
     already-open physical connection (deliberately — see `docs/sql-server-session-settings.md`'s
     "Performance Trade-off" section for why trusting pooled connection state is a correctness
-    risk, not just a consistency one). Only persistent modes (KeepAlive's pinned connection,
+    risk, not just a consistency one). Only persistent modes (PreventDatabaseUnload's sentinel,
     SingleConnection) apply it exactly
     once. Fixed the doc to state the per-mode rule explicitly instead of one blanket (wrong) claim.
   - Generated/tested capability tables: already comprehensive — `docs/supported-databases.md` has

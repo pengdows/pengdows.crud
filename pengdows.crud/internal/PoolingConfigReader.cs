@@ -94,7 +94,7 @@ internal static class PoolingConfigReader
 
         // If pooling is explicitly disabled, retain explicit max/min if provided but do not
         // fall back to dialect defaults (callers use null to mean "no pool size constraint").
-        // Note: ApplyPoolingDefaults will have already thrown for Standard/KeepAlive/SingleWriter
+        // Note: ApplyPoolingDefaults will have already thrown for Standard/PreventDatabaseUnload/SingleWriter
         // modes, so this path is reached only for informational reads or SingleConnection mode.
         if (poolingEnabled == false)
         {

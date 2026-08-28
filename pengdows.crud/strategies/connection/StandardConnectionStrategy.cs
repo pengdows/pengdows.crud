@@ -9,7 +9,7 @@
 // - No persistent connections - each GetConnection() creates new from pool.
 // - Thread-safe: No shared state between concurrent operations.
 // - Ideal for: SQL Server, PostgreSQL, MySQL, Oracle with connection pooling.
-// - Base class for KeepAliveConnectionStrategy (adds sentinel connection).
+// - Base class for the PreventDatabaseUnload strategy (adds passive sentinels).
 // =============================================================================
 
 using System.Data.Common;

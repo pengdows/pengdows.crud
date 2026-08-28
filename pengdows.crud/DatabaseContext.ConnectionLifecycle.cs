@@ -10,7 +10,7 @@
 //   * CloseAndDisposeConnectionAsync() - Async version
 // - Delegates to IConnectionStrategy for mode-specific behavior:
 //   * Standard - Creates ephemeral connections from pool
-//   * KeepAlive - Maintains sentinel + ephemeral work connections
+//   * PreventDatabaseUnload - Maintains passive sentinels + ephemeral work connections
 //   * SingleWriter - Governor-serialized ephemeral writer + ephemeral readers
 //   * SingleConnection - All operations on one connection
 // - Pool governor integration for connection limiting/backpressure.
@@ -24,6 +24,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -87,6 +88,139 @@ public partial class DatabaseContext
     internal void SetPersistentConnection(ITrackedConnection? connection)
     {
         _connection = connection;
+    }
+
+    internal IReadOnlyList<(ITrackedConnection Connection, ExecutionType ExecutionType)> GetSentinelSnapshot()
+    {
+        lock (_sentinelLock)
+        {
+            return _sentinels.ToArray();
+        }
+    }
+
+    internal void RegisterSentinel(ITrackedConnection connection, ExecutionType executionType)
+    {
+        lock (_sentinelLock)
+        {
+            if (_sentinels.Any(s => ReferenceEquals(s.Connection, connection)))
+            {
+                return;
+            }
+
+            // Preserve an already-installed persistent connection when a strategy is
+            // initialized directly (some internal callers do this outside the normal
+            // constructor path). Normal PreventDatabaseUnload initialization starts
+            // with no persistent connection, so this does not create an extra sentinel.
+            if (_sentinels.Count == 0 && _connection != null &&
+                !ReferenceEquals(_connection, connection))
+            {
+                _sentinels.Add((_connection, executionType));
+            }
+
+            _sentinels.Add((connection, executionType));
+            _connection ??= connection;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort cleanup for constructor failures, where the caller has no context
+    /// instance available to dispose normally.
+    /// </summary>
+    internal void DisposePersistentConnectionsForInitializationFailure()
+    {
+        DisposePersistentConnections();
+    }
+
+    internal bool ReplaceSentinel(ITrackedConnection previous, ITrackedConnection replacement,
+        ExecutionType executionType)
+    {
+        lock (_sentinelLock)
+        {
+            var index = _sentinels.FindIndex(s => ReferenceEquals(s.Connection, previous));
+            if (index < 0 || IsDisposed)
+            {
+                return false;
+            }
+
+            _sentinels[index] = (replacement, executionType);
+            if (ReferenceEquals(_connection, previous))
+            {
+                _connection = replacement;
+            }
+
+            return true;
+        }
+    }
+
+    private void DisposePersistentConnections()
+    {
+        ITrackedConnection[] connections;
+        lock (_sentinelLock)
+        {
+            connections = _sentinels.Select(s => s.Connection).ToArray();
+            _sentinels.Clear();
+            if (connections.Length > 0)
+            {
+                _connection = null;
+            }
+        }
+
+        if (connections.Length == 0 && _connection != null)
+        {
+            connections = [_connection];
+            _connection = null;
+        }
+
+        foreach (var connection in connections)
+        {
+            try
+            {
+                connection.Dispose();
+            }
+            catch
+            {
+                // best-effort cleanup during context disposal
+            }
+        }
+    }
+
+    private async ValueTask DisposePersistentConnectionsAsync()
+    {
+        ITrackedConnection[] connections;
+        lock (_sentinelLock)
+        {
+            connections = _sentinels.Select(s => s.Connection).ToArray();
+            _sentinels.Clear();
+            if (connections.Length > 0)
+            {
+                _connection = null;
+            }
+        }
+
+        if (connections.Length == 0 && _connection != null)
+        {
+            connections = [_connection];
+            _connection = null;
+        }
+
+        foreach (var connection in connections)
+        {
+            try
+            {
+                if (connection is IAsyncDisposable asyncConnection)
+                {
+                    await asyncConnection.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    connection.Dispose();
+                }
+            }
+            catch
+            {
+                // best-effort cleanup during context disposal
+            }
+        }
     }
 
     /// <summary>
@@ -419,6 +553,16 @@ public partial class DatabaseContext
         bool isSharedConnection = false)
     {
         return FactoryCreateConnection(ExecutionType.Read, connectionString, isSharedConnection);
+    }
+
+    internal ITrackedConnection FactoryCreateConnection(ExecutionType executionType,
+        string? connectionString, bool isSharedConnection)
+    {
+        return FactoryCreateConnection(
+            executionType,
+            connectionString,
+            isSharedConnection,
+            AcquireSlot(executionType));
     }
 
     private DbDataSource? ResolveDataSource(bool readOnly)

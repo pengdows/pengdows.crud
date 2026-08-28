@@ -62,7 +62,7 @@ namespace pengdows.crud.wrappers;
 ///   </description></item>
 ///   <item><description>
 ///     <b>Ephemeral connections (isSharedConnection=false):</b> Returns <see cref="NoOpAsyncLocker"/>.
-///     No locking overhead since each operation gets its own connection. Used in Standard and KeepAlive
+///     No locking overhead since each operation gets its own connection. Used in Standard and PreventDatabaseUnload
 ///     modes, and for <em>all</em> connections (read and write) in SingleWriter mode — write concurrency
 ///     there is serialized by <c>PoolGovernor</c> admission control (<c>MaxConcurrentWrites=1</c>), not
 ///     by a connection-level lock, so there is no persistent connection to lock in the first place.

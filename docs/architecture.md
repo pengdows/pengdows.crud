@@ -16,7 +16,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 **Concurrent callers are supported:**
 - **Standard**: parallel operations using ephemeral connections
-- **KeepAlive**: identical to Standard; additionally keeps one idle read connection open to prevent the DB from unloading
+- **PreventDatabaseUnload**: identical to Standard; additionally keeps one unused sentinel per materially separate pool to prevent supported engines from unloading
 - **SingleConnection**: operations serialize on shared connection lock (single persistent connection, RealAsyncLocker)
 - **SingleWriter**: identical to Standard; governor fixes writable connections to 1 concurrent writer and 0 writers on read-only connections; writer-starvation-prevention turnstile enabled
 
@@ -61,7 +61,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 ### 4. Explicit Over Implicit
 - **No change tracking**: User controls when to save
 - **No lazy loading**: User controls when to query
-- **Explicit connection modes**: User chooses Standard/KeepAlive/SingleWriter/SingleConnection
+- **Explicit connection modes**: User chooses Standard/PreventDatabaseUnload/SingleWriter/SingleConnection
 
 ---
 
@@ -82,7 +82,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 | Mode | Concurrent Calls | Behavior |
 |------|-----------------|----------|
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
-| **KeepAlive** | ✅ Fully concurrent | Identical to Standard. One idle read connection is kept open to prevent DB unload; never used for operations. |
+| **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One unused sentinel per materially separate pool prevents DB unload; sentinels never perform operations. |
 | **SingleWriter** | ⚠️ Writes serialize | Identical to Standard. Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers. Writer-starvation-prevention turnstile on. |
 | **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
 | **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
@@ -172,7 +172,7 @@ handler.Invoke(this, metrics);  // No lock held during callback
 
 ### Connection Ownership Rules
 
-**Ephemeral Connections (Standard/KeepAlive modes)**:
+**Ephemeral Connections (Standard/PreventDatabaseUnload modes)**:
 - Created per operation
 - Owned by the operation
 - Disposed when operation completes
@@ -219,12 +219,12 @@ await conn.DisposeAsync();  // Returns to provider pool
 | SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
-| SQL Server | LocalDB | `KeepAlive` | **REQUIRED** - Prevents instance unload |
+| SQL Server | LocalDB | `PreventDatabaseUnload` | **REQUIRED** - Prevents instance unload |
 
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
-- Firebird embedded → **Coerced to SingleConnection** (vendor limitation)
+- Firebird embedded → **Coerced to PreventDatabaseUnload** (retains an attachment without restricting work to one connection)
 
 **Mode Mismatch Warnings** (safe but suboptimal):
 - PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
@@ -272,7 +272,7 @@ pengdows.crud uses **context-level + connection-level** locking:
 
 - **RealAsyncLocker** (SemaphoreSlim-based) for **shared connections**:
   - SingleConnection mode: The one connection is shared
-  - KeepAlive mode: Sentinel connection is shared (but never used for work)
+  - PreventDatabaseUnload mode: Sentinel connections are retained per pool (but never used for work)
 
 - **NoOpAsyncLocker** for **ephemeral connections**:
   - Standard mode: Each operation gets its own connection
@@ -461,7 +461,7 @@ This means a new dialect gets most of these ~20 flags correct "for free" simply 
 - Connection from provider pool
 - No persistent connection
 
-**KeepAlive mode** (`KeepAliveConnectionStrategy`):
+**PreventDatabaseUnload mode** (`KeepAliveConnectionStrategy`):
 - One sentinel connection kept open (never used)
 - Prevents database unload (LocalDB, embedded SQLite)
 - All work uses ephemeral connections (identical to Standard)
@@ -494,7 +494,7 @@ internal static class ConnectionStrategyFactory
         return mode switch
         {
             DbMode.Standard => new StandardConnectionStrategy(context),
-            DbMode.KeepAlive => new KeepAliveConnectionStrategy(context),
+            DbMode.PreventDatabaseUnload => new KeepAliveConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
             // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
             DbMode.SingleWriter => new StandardConnectionStrategy(context),
@@ -694,7 +694,7 @@ public class OrderService
 | **Context Lifetime** | Scoped (per request) | Singleton (per connection string) |
 | **Change Tracking** | Automatic | None (stateless) |
 | **Transactions** | Implicit (SaveChanges) | Explicit (BeginTransaction) |
-| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, KeepAlive=pooled+sentinel, SingleWriter=governor over pool, SingleConnection=single pinned) |
+| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, PreventDatabaseUnload=pooled+sentinel(s), SingleWriter=governor over pool, SingleConnection=single pinned) |
 | **Unit of Work** | DbContext | TransactionContext |
 | **Concurrency Model** | One context per request (isolated) | One context for all requests (serialized at connection/transaction level) |
 | **SQL Control** | LINQ to SQL (generated) | Raw SQL (full control) |
@@ -854,7 +854,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - Pool configuration (Min/Max Pool Size, Timeout)
 - Connection validation and reset
 
-**Correct**: DatabaseContext **uses** provider pooling in Standard/KeepAlive modes.
+**Correct**: DatabaseContext **uses** provider pooling in Standard/PreventDatabaseUnload modes.
 
 ### 3. "Context lock serializes all operations"
 
@@ -913,13 +913,13 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 **When it's correct**:
 - SQLite `:memory:` → **REQUIRED** (each connection = separate database)
-- Firebird embedded → **REQUIRED** (vendor limitation)
+- Firebird embedded → **NOT REQUIRED**; durable embedded Firebird uses `PreventDatabaseUnload` so work can use separate attachments
 - Small embedded databases → **OPTIMAL** (no connection overhead)
 
 **When it's suboptimal**:
 - PostgreSQL, SQL Server, MySQL → Use Standard instead (supports concurrency)
 
-**Correct**: SingleConnection is the **right choice** for certain databases. Not dangerous, just specialized.
+**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; durable Firebird embedded storage automatically uses PreventDatabaseUnload and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
 
 ### 7. "Best mode always selects Standard"
 
@@ -929,7 +929,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - PostgreSQL/MySQL/Oracle → Standard (full concurrency)
 - SQLite `:memory:` → SingleConnection (required for correctness)
 - SQLite file → SingleWriter (optimal for WAL)
-- SQL Server LocalDB → KeepAlive (prevents unload)
+- SQL Server LocalDB → PreventDatabaseUnload (prevents unload)
 
 **Correct**: Best = "most functional safe mode for this specific database".
 
@@ -985,7 +985,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 ### IConnectionStrategy ↔ DatabaseContext
 
 **Contract**:
-- Strategy **must** return ephemeral connections via internal GetConnection for Standard/KeepAlive modes
+- Strategy **must** return ephemeral connections via internal GetConnection for Standard/PreventDatabaseUnload modes
 - Strategy **must** return ephemeral connections for SingleWriter operations (both reads and writes; governor serializes via permits, not connection sharing)
 - Strategy **must** return the persistent connection for SingleConnection all operations
 
@@ -1103,7 +1103,7 @@ A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup cach
 
 ### Connection Reuse
 
-**Standard/KeepAlive modes**:
+**Standard/PreventDatabaseUnload modes**:
 - Provider pool reuse (ADO.NET managed)
 - DatabaseContext overhead: Minimal (delegate calls)
 

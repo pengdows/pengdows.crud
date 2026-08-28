@@ -32,7 +32,7 @@ No LINQ, no tracking, no surprises — explicit SQL control with coordinated dat
 | Name / Concept | What it is NOT in pengdows.crud | What it ACTUALLY is in pengdows.crud |
 |---|---|---|
 | `DatabaseContext` | NOT Entity Framework's `DbContext` (not a scoped unit of work, no entity tracking). | **Singleton execution coordinator** bound to a connection string. |
-| `KeepAlive` mode | NOT RDS Proxy / network connection pool keep-alive. | `Standard` mode + **1 idle sentinel connection** kept open solely to prevent unload for databases that behave like SQL Server LocalDB (not SQLite/DuckDB — those coerce to SingleWriter instead). Never used for queries. |
+| `PreventDatabaseUnload` mode | NOT RDS Proxy / network connection pool keep-alive. | `Standard` mode + **one unused permit-backed sentinel per materially separate pool** kept open solely to prevent database unload/deactivation/pause. Never used for queries. `KeepAlive` is an obsolete alias. |
 | `SingleWriter` mode | NOT a persistent single writer connection. | **Ephemeral pooled connections** where write admission is serialized via `PoolGovernor` (`MaxConcurrentWrites = 1`) with a writer-preference turnstile. Readers remain concurrent and ephemeral. |
 | `[Id]` vs `[PrimaryKey]` | NOT interchangeable. | `[Id]` is a single surrogate pseudokey for row-id operations. `[PrimaryKey]` is a natural/business key (can be composite). **Mutually exclusive on any property.** |
 | `TransactionContext` | NOT a generic "unit of work". | An **operation-scoped transaction container** that pins a dedicated connection for its lifetime. |
@@ -232,10 +232,10 @@ public class OrderItemGateway : PrimaryKeyTableGateway<OrderItem>
 | Mode | Value | Production Use Case | Connection Lifecycle |
 |---|---|---|---|
 | `Standard` | 0 | **Default for production servers** (PostgreSQL, SQL Server, MySQL, Oracle) | Ephemeral pooled connection per operation. |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection (LocalDB only — SQLite/DuckDB coerce KeepAlive to SingleWriter instead) | Standard lifecycle + 1 idle sentinel connection to prevent engine unload. |
+| `PreventDatabaseUnload` | 1 | Databases needing a passive lifecycle sentinel (LocalDB and embedded Firebird; also explicit provider-specific use) | Standard lifecycle + one unused permit-backed sentinel per materially separate pool. |
 | `SingleWriter` | 2 | File-based SQLite / DuckDB | Ephemeral connections with governor-serialized write admission (`MaxConcurrentWrites = 1`) + writer-starvation turnstile. Concurrent ephemeral readers. |
-| `SingleConnection` | 4 | In-memory `:memory:` databases | All operations funneled through 1 persistent connection locked with `RealAsyncLocker`. |
-| `Best` | 15 | **Auto-selection heuristic** | Automatically selects safest mode (e.g., `:memory:` $\to$ `SingleConnection`, file SQLite $\to$ `SingleWriter`, LocalDB $\to$ `KeepAlive`, others $\to$ `Standard`). |
+| `SingleConnection` | 4 | SQLite/DuckDB `:memory:` tests and ephemeral scratch work, or explicitly forced single-attachment scenarios | All operations funneled through 1 persistent connection locked with `RealAsyncLocker`; `:memory:` contents cannot be recovered after the connection closes. Embedded Firebird is not automatically placed here. |
+| `Best` | 15 | **Auto-selection heuristic** | Automatically selects safest mode (e.g., `:memory:` $\to$ `SingleConnection`, file SQLite $\to$ `SingleWriter`, LocalDB/embedded Firebird $\to$ `PreventDatabaseUnload`, others $\to$ `Standard`). |
 
 ---
 
@@ -281,4 +281,3 @@ await tx.CommitAsync();
 - [product-thesis.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/positioning/product-thesis.md) — The 10 foundational principles and emergent capabilities.
 - [connection-modes.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/connection/connection-modes.md) — Exhaustive DbMode specifications and pool governor mechanics.
 - [core-invariants.md](file:///home/alaricd/prj/pengdows/pengdows.crud/docs/core-invariants.md) — Complete checklist of non-negotiable architectural rules.
-

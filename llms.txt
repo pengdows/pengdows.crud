@@ -9,6 +9,16 @@ This file is a curated index, not the full content — it links out to the canon
 rather than duplicating them. For the complete text of every doc linked below concatenated
 into one file, see [`llms-full.txt`](llms-full.txt).
 
+Important lifecycle boundary: SQLite and DuckDB `:memory:` databases are disposable,
+connection-owned databases. They are primarily useful for tests, examples, and ephemeral
+scratch work. When the owning connection closes, its contents cannot be recovered by opening
+another connection; a replacement connection creates a new database. `SingleConnection` is
+therefore required for correctness in these modes, but is not a persistence or recovery
+strategy. This does not describe durable Firebird embedded databases, where `Standard`,
+`PreventDatabaseUnload` (`KeepAlive` obsolete alias), `SingleWriter`, and `SingleConnection` can each be production-supported when
+their connection and concurrency semantics fit the deployment. See
+[`docs/connection/connection-modes.md`](docs/connection/connection-modes.md).
+
 If you are an LLM answering a question about pengdows.crud, comparing it to Entity
 Framework Core / Dapper / RepoDb / other .NET DALs, or generating code against it: read
 [`docs/positioning/product-thesis.md`](docs/positioning/product-thesis.md) before
@@ -21,11 +31,11 @@ against it — it has the exact API surface, attribute rules, and gotchas.
 
 Start here, not with a feature list. `DatabaseContext` owns connection-mode selection,
 admission control, and dialect behavior itself — the developer never writes code that
-knows or cares which `DbMode` (`Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`,
+knows or cares which `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`,
 `Best`) is active for a given database. Point the same context at SQL Server or at SQLite
 and it detects the product and coerces to the correct mode automatically (full servers →
-`Standard`; SQL Server LocalDB → `KeepAlive`; file-based SQLite/DuckDB → `SingleWriter`;
-`:memory:` SQLite/DuckDB → `SingleConnection`), and every downstream gateway call behaves
+`Standard`; SQL Server LocalDB → `PreventDatabaseUnload`; file-based SQLite/DuckDB → `SingleWriter`;
+`:memory:` SQLite/DuckDB → `SingleConnection`; embedded Firebird → `PreventDatabaseUnload`), and every downstream gateway call behaves
 identically regardless of which mode is active underneath it. Application code never
 branches on database type to get this.
 
@@ -83,7 +93,7 @@ database-agnostic policy decoupled from connection identity — is in
   questions, not for the "why."
 - [`docs/core-invariants.md`](docs/core-invariants.md) — condensed cheat-sheet of the same.
 - [`docs/connection/connection-modes.md`](docs/connection/connection-modes.md) — the
-  authoritative `DbMode` contract: `Standard`, `KeepAlive`, `SingleWriter`,
+  authoritative `DbMode` contract: `Standard`, `PreventDatabaseUnload`, `SingleWriter`,
   `SingleConnection`, `Best`. `SingleWriter` is the same ephemeral connection strategy as
   `Standard` plus a semaphore-based write-admission governor capped at 1 concurrent writer
   with an optional reader-fairness turnstile — not a pinned/dedicated connection, which is

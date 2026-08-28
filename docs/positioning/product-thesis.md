@@ -296,7 +296,7 @@ SQL Server write, transactional or not, is caught only by layer 1.
 
 ## 5. Connections are ephemeral and governed by design
 
-Philosophy: open late, close early. `DbMode` (`Standard`, `KeepAlive`, `SingleWriter`,
+Philosophy: open late, close early. `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`,
 `SingleConnection`, `Best`) selects connection strategy per provider and connection string.
 
 The governance mechanism itself is general, not a SQLite-only special case:
@@ -590,4 +590,3 @@ lifetime. Or shorter: you can assemble the parts yourself; the hard part is maki
 on what is happening. pengdows.crud already does.
 
 For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/positioning/dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md).
-

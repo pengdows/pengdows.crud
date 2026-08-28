@@ -50,7 +50,7 @@ public enum DbMode
 #### 4. SingleConnection (`4`)
 - All operations (reads and writes) share a **single persistent connection**.
 - Serialized via `RealAsyncLocker` (`SemaphoreSlim`).
-- **Target Use Case**: In-memory databases (`Data Source=:memory:`) that disappear if the initial connection closes.
+- **Target Use Case**: SQLite/DuckDB in-memory databases for tests and ephemeral scratch work; durable Firebird embedded deployments where one connection is the supported production shape. For `Data Source=:memory:`, the database disappears with the owning connection and cannot be recovered by reconnecting.
 
 #### 5. Best (`15`)
 - Heuristic auto-selection at context initialization:
@@ -127,4 +127,3 @@ await tx.CommitAsync();
 3. **`ITrackedReader` is a lease**: Holds a connection lock and slot until disposed. Always dispose readers promptly.
 4. **Context Lock is NoOp**: `DatabaseContext.GetLock()` returns `NoOpAsyncLocker.Instance` to prevent false global serialization. Connection-level and transaction-level locks handle all necessary synchronization.
 5. **Supported Database Roster (15 Engines/Flavors)**: PostgreSQL, SQL Server, Oracle, IBM DB2, Firebird, SQLite, DuckDB, MySQL, MariaDB, CockroachDB, YugabyteDB, TiDB, Snowflake, AWS Aurora MySQL, AWS Aurora PostgreSQL.
-

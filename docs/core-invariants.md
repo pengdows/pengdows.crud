@@ -19,7 +19,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 4. **Connection lock is the real guard.**
    - Shared connections (SingleConnection) must serialize through the connection lock.
    - SingleWriter serializes writes via the governor (WriteSlots=1), not a connection lock — connections are ephemeral.
-   - Ephemeral connections (Standard/KeepAlive) use a NoOp lock for zero overhead.
+   - Ephemeral connections (Standard/PreventDatabaseUnload) use a NoOp lock for zero overhead; PreventDatabaseUnload sentinels are passive and separately retained.
 
 5. **ITrackedReader is a lease, not just a wrapper.**
    - It pins the connection and holds the connection lock until disposal.
@@ -33,7 +33,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 7. **DbMode.Best can coerce unsafe choices.**
    - SQLite/DuckDB `:memory:` must be SingleConnection.
    - SQLite file defaults to SingleWriter (WAL-friendly).
-   - SQL Server LocalDB coerces to KeepAlive.
+   - SQL Server LocalDB coerces to PreventDatabaseUnload.
 
 8. **fakeDb is control-flow, not database semantics.**
    - It simulates provider behavior, not SQL execution or constraints.
