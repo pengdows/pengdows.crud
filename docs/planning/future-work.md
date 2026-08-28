@@ -34,9 +34,11 @@ deployment. The five embedded tests pass on both .NET 8 and .NET 10.
 
 ---
 
-## `DatabaseMetrics.P95`/`.P99` silently return meaningless values unless `EnableApproxPercentiles` is set
+## Percentile availability flags — completed 2026-08-28
 
-`MetricsOptions.EnableApproxPercentiles` defaults to `false`; when unset, `MetricsCollector` never constructs its `PercentileRing` at all, so `DatabaseMetrics.P95`/`.P99` return their default value with nothing indicating why. See `docs/metrics.md` for the documented behavior as it stands today. Worth considering either flipping the default to `true` (the perf cost is a sliding window of `PercentileWindowSize` samples, not obviously expensive enough to justify opt-in-by-default) or having the property itself signal "not enabled" more clearly than a silently-zero value indistinguishable from "no commands executed yet" — a consumer building a dashboard off this value has no way to tell the two apart today.
+`DatabaseMetrics` and `DatabaseRoleMetrics` now expose explicit availability flags for
+command and transaction percentiles. P95/P99 remain opt-in for performance compatibility,
+but consumers can distinguish disabled or empty data from a real zero-valued measurement.
 
 ---
 

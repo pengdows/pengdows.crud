@@ -86,6 +86,7 @@ public class MetricsCollectorTests
         var snapshot = collector.CreateSnapshot();
         Assert.True(snapshot.P95CommandMs > 0d);
         Assert.True(snapshot.P99CommandMs >= snapshot.P95CommandMs);
+        Assert.True(snapshot.CommandPercentilesAvailable);
     }
 
     // Regression: DatabaseContext.OnMetricsCollectorUpdated calls CreateSnapshot() synchronously
@@ -265,6 +266,7 @@ public class MetricsCollectorTests
         var snapshot = collector.CreateSnapshot();
         Assert.Equal(0d, snapshot.P95TransactionMs);
         Assert.Equal(0d, snapshot.P99TransactionMs);
+        Assert.False(snapshot.TransactionPercentilesAvailable);
     }
 
     private static long CreateStartTimestamp(double durationMs)

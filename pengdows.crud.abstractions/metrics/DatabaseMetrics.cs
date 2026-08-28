@@ -87,4 +87,11 @@ public sealed record DatabaseMetrics(
     double AvgFailedCommandMs = 0d,
     double AvgReaderTimeToFirstRowMs = 0d,
     double AvgReaderConsumptionMs = 0d,
-    double AvgReaderLeaseMs = 0d);
+    double AvgReaderLeaseMs = 0d)
+{
+    /// <summary>Gets whether the command P95/P99 values contain percentile data.</summary>
+    public bool CommandPercentilesAvailable { get; init; }
+
+    /// <summary>Gets whether the transaction P95/P99 values contain percentile data.</summary>
+    public bool TransactionPercentilesAvailable { get; init; }
+}

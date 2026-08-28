@@ -375,6 +375,7 @@ internal sealed class MetricsCollector
             _commandDuration.GetValue(),
             percentiles.P95,
             percentiles.P99,
+            percentiles.Available,
             _failedCommandDuration.GetValue(),
             Volatile.Read(ref _maxParametersObserved),
             Interlocked.Read(ref _rowsReadTotal),
@@ -390,6 +391,7 @@ internal sealed class MetricsCollector
             Interlocked.Read(ref _slowCommandsTotal),
             txnPercentiles.P95,
             txnPercentiles.P99,
+            txnPercentiles.Available,
             Interlocked.Read(ref _errorDeadlocks),
             Interlocked.Read(ref _errorSerializationFailures),
             Interlocked.Read(ref _errorConstraintViolations),
@@ -513,6 +515,7 @@ internal sealed class MetricsCollector
         double AvgCommandMs,
         double P95CommandMs,
         double P99CommandMs,
+        bool CommandPercentilesAvailable,
         double AvgFailedCommandMs,
         int MaxParametersObserved,
         long RowsReadTotal,
@@ -528,6 +531,7 @@ internal sealed class MetricsCollector
         long SlowCommandsTotal,
         double P95TransactionMs,
         double P99TransactionMs,
+        bool TransactionPercentilesAvailable,
         long ErrorDeadlocks,
         long ErrorSerializationFailures,
         long ErrorConstraintViolations,
@@ -552,6 +556,7 @@ internal sealed class MetricsCollector
         public double AvgCommandMs { get; } = AvgCommandMs;
         public double P95CommandMs { get; } = P95CommandMs;
         public double P99CommandMs { get; } = P99CommandMs;
+        public bool CommandPercentilesAvailable { get; } = CommandPercentilesAvailable;
         public double AvgFailedCommandMs { get; } = AvgFailedCommandMs;
         public int MaxParametersObserved { get; } = MaxParametersObserved;
         public long RowsReadTotal { get; } = RowsReadTotal;
@@ -567,6 +572,7 @@ internal sealed class MetricsCollector
         public long SlowCommandsTotal { get; } = SlowCommandsTotal;
         public double P95TransactionMs { get; } = P95TransactionMs;
         public double P99TransactionMs { get; } = P99TransactionMs;
+        public bool TransactionPercentilesAvailable { get; } = TransactionPercentilesAvailable;
         public long ErrorDeadlocks { get; } = ErrorDeadlocks;
         public long ErrorSerializationFailures { get; } = ErrorSerializationFailures;
         public long ErrorConstraintViolations { get; } = ErrorConstraintViolations;
@@ -718,7 +724,7 @@ internal sealed class MetricsCollector
             Array.Sort(snapshot);
             var p95 = GetPercentile(snapshot, 0.95d);
             var p99 = GetPercentile(snapshot, 0.99d);
-            return new PercentileSnapshot(p95, p99);
+            return new PercentileSnapshot(p95, p99, true);
         }
 
         private static double GetPercentile(IReadOnlyList<double> data, double percentile)
@@ -746,10 +752,11 @@ internal sealed class MetricsCollector
         }
     }
 
-    internal readonly struct PercentileSnapshot(double p95, double p99)
+    internal readonly struct PercentileSnapshot(double p95, double p99, bool available)
     {
-        public static readonly PercentileSnapshot Empty = new(0d, 0d);
+        public static readonly PercentileSnapshot Empty = new(0d, 0d, false);
         public double P95 { get; } = p95;
         public double P99 { get; } = p99;
+        public bool Available { get; } = available;
     }
 }

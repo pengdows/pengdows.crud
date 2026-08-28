@@ -35,4 +35,15 @@ There is also an internal `AttributionStats` collector (read/write request count
 
 ## Percentile tracking is opt-in
 
-`DatabaseMetrics`'s `P95`/`P99` fields only get real data if percentile tracking is explicitly enabled: `MetricsOptions.EnableApproxPercentiles` (`pengdows.crud.metrics`, public, `init`-only) defaults to `false`. When left at the default, `MetricsCollector` never constructs its `PercentileRing` circular buffer at all, so `P95`/`P99` stay at their default value with no indication why — a consumer reading them without first setting `EnableApproxPercentiles = true` gets numbers that look valid but aren't measuring anything. `MetricsOptions.PercentileWindowSize` (default 2048, must be a power of two) controls the sliding window size once enabled. All "average" fields (unaffected by this flag) use an EWMA (exponentially weighted moving average) with per-metric window sizes rather than a true running mean.
+`DatabaseMetrics` and each `DatabaseRoleMetrics` snapshot expose
+`CommandPercentilesAvailable` and `TransactionPercentilesAvailable`. These flags are true
+only when the corresponding P95/P99 values contain data. They are false when percentile
+tracking is disabled or when no samples have been recorded, so a consumer never has to
+interpret a zero percentile as a valid measurement.
+
+Percentile tracking is enabled with `MetricsOptions.EnableApproxPercentiles`
+(`pengdows.crud.metrics`, public, `init`-only), which defaults to `false`. When disabled,
+the collector does not allocate percentile ring buffers. `MetricsOptions.PercentileWindowSize`
+(default 2048, must be a power of two) controls the sliding window size once enabled. All
+"average" fields (unaffected by this flag) use an EWMA (exponentially weighted moving average)
+with per-metric window sizes rather than a true running mean.

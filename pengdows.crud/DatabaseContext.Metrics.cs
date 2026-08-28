@@ -256,7 +256,11 @@ public partial class DatabaseContext
             snapshot.AvgFailedCommandMs,
             snapshot.AvgReaderTimeToFirstRowMs,
             snapshot.AvgReaderConsumptionMs,
-            snapshot.AvgReaderLeaseMs);
+            snapshot.AvgReaderLeaseMs)
+        {
+            CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+        };
     }
 
     private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
@@ -297,7 +301,11 @@ public partial class DatabaseContext
             snapshot.AvgFailedCommandMs,
             snapshot.AvgReaderTimeToFirstRowMs,
             snapshot.AvgReaderConsumptionMs,
-            snapshot.AvgReaderLeaseMs);
+            snapshot.AvgReaderLeaseMs)
+        {
+            CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+        };
     }
 
     private void OnMetricsCollectorUpdated()

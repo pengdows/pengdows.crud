@@ -1592,7 +1592,10 @@ OpenTelemetry bridge (`pengdows.crud.opentelemetry`) and tagged `pool.label=read
 because the OTel package added it. `MetricsUpdated` (`IDatabaseContext`) similarly surfaces
 command/connection/transaction counters live, with optional approximate percentile tracking
 (`EnableApproxPercentiles`/`PercentileWindowSize` in `MetricsOptions`) rather than counters
-alone. A metrics library added from outside the boundary can time an ADO.NET call, but it
+alone. `DatabaseMetrics` and `DatabaseRoleMetrics` expose explicit command- and
+transaction-percentile availability flags, so disabled or empty P95/P99 values are not
+mistaken for measurements. A metrics library added from outside the boundary can time an
+ADO.NET call, but it
 cannot tag that timing by which pool the connection came from, because that distinction only
 exists inside the coordination the metrics are riding on.
 
