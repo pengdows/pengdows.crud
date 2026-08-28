@@ -73,16 +73,38 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
             if (column.IsJsonType)
             {
-                var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
-                var jsonStr = Expression.Call(readerParam, getString, ordinalExpr);
+                var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+                if (runtimeTarget == typeof(types.valueobjects.JsonValue)
+                    || runtimeTarget == typeof(JsonDocument)
+                    || runtimeTarget == typeof(JsonElement))
+                {
+                    // Native JSON CLR types have provider-aware coercions. Use the
+                    // same unified read pipeline as every other advanced type;
+                    // JsonSerializer.Deserialize<T> cannot construct JsonValue and
+                    // silently produces its default value on the old path.
+                    var rawValue = Expression.Call(
+                        readerParam,
+                        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!,
+                        ordinalExpr);
+                    var nativeJsonMethod = typeof(CompiledMapperFactory<TEntity>).GetMethod(
+                        nameof(CoerceNativeJson), BindingFlags.NonPublic | BindingFlags.Static)!;
+                    valueReadExpr = Expression.Convert(
+                        Expression.Call(nativeJsonMethod, rawValue, Expression.Constant(targetType)),
+                        targetType);
+                }
+                else
+                {
+                    var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
+                    var jsonStr = Expression.Call(readerParam, getString, ordinalExpr);
 
-                // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
-                var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
-                valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
+                    // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
+                    var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
+                    valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
 
-                // For JSON, we return default (null for objects) on error to match old behavior
-                var catchBlock = Expression.Catch(typeof(JsonException), Expression.Default(targetType));
-                valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
+                    // For JSON, we return default (null for objects) on error to match old behavior
+                    var catchBlock = Expression.Catch(typeof(JsonException), Expression.Default(targetType));
+                    valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
+                }
             }
             else if (fieldType == typeof(byte[]))
             {
@@ -156,7 +178,19 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                if (fieldType == underlyingTarget && rawValue.Type == fieldType)
+                if (underlyingTarget == typeof(Stream) && fieldType == typeof(Stream))
+                {
+                    // DuckDB returns BLOBs as UnmanagedMemoryStream instances
+                    // backed by the active reader. Do not let that reader-bound
+                    // stream escape the mapper; copy it while it is valid.
+                    valueReadExpr = Expression.Convert(
+                        Expression.Call(
+                            typeof(CompiledMapperFactory<TEntity>).GetMethod(
+                                nameof(CoerceProviderStream), BindingFlags.NonPublic | BindingFlags.Static)!,
+                            Expression.Convert(rawValue, typeof(object))),
+                        targetType);
+                }
+                else if (fieldType == underlyingTarget && rawValue.Type == fieldType)
                 {
                     // Fast path: reader returned the native type — no unboxing needed.
                     if (underlyingTarget == typeof(DateTime))
@@ -221,6 +255,47 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             }
         }
         throw new InvalidOperationException("Could not find JsonSerializer.Deserialize<T>(string, options) overload.");
+    }
+
+    private static object CoerceNativeJson(object value, Type targetType)
+    {
+        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (runtimeTarget.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        var json = TypeCoercionHelper.GetJsonText(value);
+        if (runtimeTarget == typeof(JsonDocument))
+        {
+            return JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "null" : json);
+        }
+
+        if (runtimeTarget == typeof(JsonElement))
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "null" : json);
+            return document.RootElement.Clone();
+        }
+
+        if (runtimeTarget == typeof(types.valueobjects.JsonValue))
+        {
+            return types.valueobjects.JsonValue.Parse(json);
+        }
+
+        throw new InvalidOperationException($"Unsupported native JSON target type {targetType}.");
+    }
+
+    private static Stream CoerceProviderStream(object value)
+    {
+        if (value is not UnmanagedMemoryStream stream)
+        {
+            return (Stream)value;
+        }
+
+        stream.Seek(0, SeekOrigin.Begin);
+        using var copied = new MemoryStream();
+        stream.CopyTo(copied);
+        return new MemoryStream(copied.ToArray(), false);
     }
 
     private static MethodInfo GetReaderMethod(Type fieldType)

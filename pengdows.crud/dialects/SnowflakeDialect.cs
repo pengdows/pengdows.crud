@@ -53,6 +53,8 @@ internal class SnowflakeDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Snowflake;
 
+    protected override bool NeedsCommonConversions => true;
+
     // Snowflake only supports READ COMMITTED. Other levels are not available.
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
     {

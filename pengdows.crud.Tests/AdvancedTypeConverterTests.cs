@@ -100,7 +100,7 @@ public class AdvancedTypeConverterTests
 
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("AA:BB:CC:DD:EE:FF", providerValue);
+        Assert.Equal(physical, providerValue);
     }
 
     #endregion

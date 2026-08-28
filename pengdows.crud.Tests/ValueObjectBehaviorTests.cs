@@ -23,7 +23,7 @@ public class ValueObjectBehaviorTests
         var span = TimeSpan.FromDays(3) + TimeSpan.FromMinutes(5);
         var converted = PostgreSqlInterval.FromTimeSpan(span);
         Assert.Equal(3, converted.Days);
-        Assert.Equal(span.Ticks / 10, converted.Microseconds);
+        Assert.Equal(TimeSpan.FromMinutes(5).Ticks / 10, converted.Microseconds);
         Assert.Equal(0, converted.Months);
     }
 

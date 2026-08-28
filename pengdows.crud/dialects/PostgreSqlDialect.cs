@@ -89,6 +89,41 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override bool SupportsSetValuedParameters => true;
 
+    public override void ConfigureSetValuedParameter(DbParameter parameter, Array value)
+    {
+        var property = parameter.GetType().GetProperty(NpgsqlDbTypeProperty);
+        if (property == null || !property.PropertyType.IsEnum)
+        {
+            return;
+        }
+
+        var elementType = value.GetType().GetElementType();
+        var elementName = elementType == typeof(long) ? "Bigint"
+            : elementType == typeof(short) ? "Smallint"
+            : elementType == typeof(string) ? "Text"
+            : elementType == typeof(Guid) ? "Uuid"
+            : elementType == typeof(bool) ? "Boolean"
+            : "Integer";
+
+        try
+        {
+            var element = Enum.Parse(property.PropertyType, elementName, ignoreCase: true);
+            var array = Enum.Parse(property.PropertyType, "Array", ignoreCase: true);
+            var combined = Enum.ToObject(
+                property.PropertyType,
+                Convert.ToInt64(element) | Convert.ToInt64(array));
+            property.SetValue(parameter, combined);
+            parameter.GetType().GetProperty(DataTypeNameProperty)?.SetValue(
+                parameter,
+                elementName.ToLowerInvariant() + "[]");
+        }
+        catch (ArgumentException)
+        {
+            // Non-Npgsql parameters and provider versions without a matching enum member use
+            // their normal inference path.
+        }
+    }
+
     public override bool SupportsBatchUpdate => true;
 
     /// <inheritdoc />

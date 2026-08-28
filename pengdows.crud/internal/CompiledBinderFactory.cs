@@ -44,8 +44,10 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
 
             if (column.IsJsonType)
             {
-                var serializeMethod = ResolveJsonSerializeMethod(property.PropertyType);
-                finalValueExpr = Expression.Call(serializeMethod, propertyAccess, Expression.Constant(column.JsonSerializerOptions));
+                finalValueExpr = Expression.Call(
+                    typeof(CompiledBinderFactory<TEntity>).GetMethod(nameof(SerializeJsonValue),
+                        BindingFlags.NonPublic | BindingFlags.Static)!,
+                    boxedValue, Expression.Constant(column.JsonSerializerOptions));
             }
             else if (column.IsEnum)
             {
@@ -115,8 +117,10 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             Expression finalValueExpr = boxedUpdated;
             if (column.IsJsonType)
             {
-                var serializeMethod = ResolveJsonSerializeMethod(property.PropertyType);
-                finalValueExpr = Expression.Call(serializeMethod, updatedVal, Expression.Constant(column.JsonSerializerOptions));
+                finalValueExpr = Expression.Call(
+                    typeof(CompiledBinderFactory<TEntity>).GetMethod(nameof(SerializeJsonValue),
+                        BindingFlags.NonPublic | BindingFlags.Static)!,
+                    boxedUpdated, Expression.Constant(column.JsonSerializerOptions));
             }
             else if (column.IsEnum)
             {
@@ -191,5 +195,17 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             }
         }
         throw new InvalidOperationException("Could not find JsonSerializer.Serialize<T>(T, options) overload.");
+    }
+
+    private static string SerializeJsonValue(object value, JsonSerializerOptions options)
+    {
+        return value switch
+        {
+            JsonDocument document => document.RootElement.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            types.valueobjects.JsonValue jsonValue => jsonValue.AsString(),
+            string text => text,
+            _ => JsonSerializer.Serialize(value, options)
+        };
     }
 }

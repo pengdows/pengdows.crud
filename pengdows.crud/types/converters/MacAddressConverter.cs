@@ -80,9 +80,17 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
 {
     protected override object? ConvertToProvider(MacAddress value, SupportedDatabase provider)
     {
+        if (value.Address is null)
+        {
+            return null;
+        }
+
         return provider switch
         {
-            SupportedDatabase.PostgreSql => value.ToString(),
+            // Npgsql's macaddr handler accepts PhysicalAddress, while a
+            // string with NpgsqlDbType.MacAddr is rejected during preparation.
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+                value.Address,
             _ => value.Address
         };
     }

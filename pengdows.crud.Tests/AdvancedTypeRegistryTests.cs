@@ -136,7 +136,7 @@ public class AdvancedTypeRegistryTests
         var mapping = registry.GetMapping(typeof(JsonDocument), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
     }
 
@@ -191,8 +191,8 @@ public class AdvancedTypeRegistryTests
 
         Assert.NotNull(intRangeMapping);
         Assert.NotNull(dateRangeMapping);
-        Assert.Equal(DbType.String, intRangeMapping.DbType);
-        Assert.Equal(DbType.String, dateRangeMapping.DbType);
+        Assert.Equal(DbType.Object, intRangeMapping.DbType);
+        Assert.Equal(DbType.Object, dateRangeMapping.DbType);
     }
 
     [Fact]

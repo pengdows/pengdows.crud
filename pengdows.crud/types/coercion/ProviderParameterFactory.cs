@@ -45,6 +45,46 @@ internal static class ProviderParameterFactory
     {
         coercionRegistry ??= CoercionRegistry.Shared;
 
+        // Guid storage is dialect policy (native UUID, text, binary, or a
+        // provider-specific type). Let SqlDialect.ApplyGuidFormat own writes;
+        // the generic Guid coercion would assign DbType.Guid too early for
+        // providers such as Oracle and Db2 that reject that DbType.
+        if ((valueType == typeof(Guid) || valueType == typeof(Guid?)) &&
+            provider is SupportedDatabase.Oracle or SupportedDatabase.Db2 or SupportedDatabase.Snowflake)
+        {
+            return false;
+        }
+
+        // Providers without a native LOB parameter mapping cannot bind a
+        // Stream/TextReader instance as DbType.Object. Materialize those
+        // values into the portable ADO.NET representations before the
+        // provider sees them. Provider-specific mappings above this fallback
+        // still retain streaming/native LOB behavior where supported.
+        if (value is Stream stream)
+        {
+            if (stream.CanSeek)
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+            }
+
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            var bytes = buffer.ToArray();
+            parameter.Value = bytes;
+            parameter.DbType = DbType.Binary;
+            parameter.Size = bytes.Length;
+            return true;
+        }
+
+        if (value is TextReader reader)
+        {
+            var text = reader.ReadToEnd();
+            parameter.Value = text;
+            parameter.DbType = DbType.String;
+            parameter.Size = text.Length;
+            return true;
+        }
+
         // First try provider-specific coercion
         if (coercionRegistry.TryWrite(value, parameter, provider))
         {
@@ -378,7 +418,18 @@ internal static class ParameterBindingRules
         }
         else if (underlyingType == typeof(DateTimeOffset))
         {
-            parameter.DbType = DbType.DateTimeOffset;
+            if (value is DateTimeOffset dto && (provider is SupportedDatabase.PostgreSql
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb))
+            {
+                // Npgsql 6+ rejects non-UTC DateTimeOffset values for timestamptz. Store the
+                // instant as a UTC DateTime; the database type remains timestamp with time zone.
+                parameter.DbType = DbType.DateTime;
+                parameter.Value = dto.UtcDateTime;
+            }
+            else
+            {
+                parameter.DbType = DbType.DateTimeOffset;
+            }
         }
         else if (underlyingType == typeof(TimeSpan))
         {

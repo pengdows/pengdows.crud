@@ -164,7 +164,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(JsonDocument), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
@@ -182,7 +182,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(JsonDocument), SupportedDatabase.MySql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new MySqlLikeParameter();
@@ -315,7 +315,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(Range<int>), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
@@ -331,7 +331,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(Range<DateTime>), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
@@ -389,7 +389,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55")));
 
-        Assert.Equal(MockNpgsqlDbType.MacAddr, param.NpgsqlDbType);
+        Assert.Equal(MockNpgsqlDbType.MacAddr8, param.NpgsqlDbType);
     }
 
     #endregion
@@ -730,6 +730,7 @@ public class AdvancedTypeRegistryExtensiveTests
         Int4Range = 128,
         TsRange = 256,
         MacAddr = 512,
+        MacAddr8 = 4096,
         Jsonb = 1024,
         JSON = 2048
     }

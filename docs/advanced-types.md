@@ -12,6 +12,21 @@ and ordinary dialect parameter creation resolves legacy mappings first, then the
 registry, then cross-provider binding rules. Consequently, a supported value type is handled
 through the normal CRUD path; callers do not need to invoke a coercion helper directly.
 
+## Conversion contract
+
+For every advanced type exposed by pengdows.crud, the library owns the conversion boundary in
+both directions:
+
+* provider value → CLR value when materializing a result;
+* CLR value → provider parameter when inserting, updating, or filtering.
+
+The provider may expose a native type, a binary representation, text, or another ADO.NET value.
+The application model remains the same, so developers do not need a provider-specific type
+handler for each database or custom conversion code in every entity. This guarantee covers the
+provider/type combinations listed below and exercised by the unit and provider integration tests.
+It does not claim that an arbitrary third-party ADO.NET extension type can be converted without a
+registered implementation.
+
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object
@@ -78,28 +93,7 @@ wiki's `v2-Type-System` page currently shows an example calling
 `AdvancedTypeRegistry.Shared.RegisterMapping<EmailAddress>(...)` from application code — **this
 does not compile against the public API**; it was written against an earlier/aspirational shape
 of this system. There is currently no supported way for a consumer to register a custom advanced
-type mapping. If you need one, the only option today is defining `[Column(..., DbType.X)]` on a
-primitive-backed property and doing the conversion yourself in the entity, or filing a request to
-expose a public registration surface.
-
-## Declared but not wired in
-
-`types/attributes/WeirdTypeAttributes.cs` defines 12 attributes intended to configure this system
-further: `DbEnumAttribute`, `JsonContractAttribute`, `ConcurrencyTokenAttribute`,
-`RangeTypeAttribute`, `ComputedAttribute`, `CaseInsensitiveAttribute`, `AsStringAttribute`,
-`MaxLengthForInlineAttribute`, `CaseFoldOnReadAttribute`, `SpatialTypeAttribute`, and
-`CurrencyAttribute`. As of this writing **none of them are read anywhere outside their own unit
-test** (`pengdows.crud.Tests/WeirdTypeAttributesTests.cs`, which only exercises each attribute's
-constructor/property getters-setters) — they have no effect on SQL generation, type coercion, or
-`TypeMapRegistry`. Applying `[Currency("USD")]` or `[ConcurrencyToken]` to a property today is
-inert.
-
-Two of these also shadow the name of an already-wired, unrelated attribute in a different
-namespace, which is worth knowing before reaching for either by name alone:
-- `DbEnumAttribute` (`pengdows.crud.types.attributes`, inert) vs. `EnumColumnAttribute`
-  (`pengdows.crud.attributes`, real — see `docs/overview.md`) for configuring enum storage.
-- `JsonContractAttribute` (`pengdows.crud.types.attributes`, inert) vs. `[Json]`
-  (`pengdows.crud.attributes.JsonAttribute`, real) for JSON column mapping.
-
-This gap (wire these attributes into the mapping pipeline, or remove them) isn't tracked in
-`docs/planning/future-work.md` yet — worth adding there before treating any of the 12 as usable.
+type mapping. That is deliberate: the supported built-in matrix is the product contract. If a
+provider's supported type is missing from the matrix, it should be implemented in the built-in
+coercion/converter layer and covered by provider integration tests; applications should not have
+to reimplement that conversion in each entity.

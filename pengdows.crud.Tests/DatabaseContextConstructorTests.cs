@@ -483,7 +483,8 @@ public class DatabaseContextConstructorTests
         var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(rawProperty);
-        Assert.Equal(rawConnectionString, (string)rawProperty!.GetValue(context)!);
+        Assert.Equal("server=test;database=testdb;emulatedproduct=SqlServer;Min Pool Size=1",
+            (string)rawProperty!.GetValue(context)!);
     }
 
     [Fact]

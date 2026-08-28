@@ -84,10 +84,11 @@ internal class AdvancedTypeRegistry
         public const string Text = "Text";
         public const string Array = "Array";
         public const string Int4Range = "Int4Range";
+        public const string Int8Range = "BigIntRange";
         public const string TsRange = "TsRange";
         public const string Inet = "Inet";
         public const string Cidr = "Cidr";
-        public const string MacAddr = "MacAddr";
+        public const string MacAddr = "MacAddr8";
         public const string Interval = "Interval";
         public const string Uuid = "Uuid";
     }
@@ -201,11 +202,9 @@ internal class AdvancedTypeRegistry
             return true;
         }
 
-        if (IsMappedType(clrType))
-        {
-            return false;
-        }
-
+        // A legacy mapping is provider-specific. If this provider has no
+        // mapping, continue into the unified coercion/binding pipeline rather
+        // than allowing a mapping registered for another provider to block it.
         return ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider) ||
                ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
     }
@@ -380,6 +379,7 @@ internal class AdvancedTypeRegistry
         // Range converters
         RegisterConverter(new PostgreSqlRangeConverter<int>());
         RegisterConverter(new PostgreSqlRangeConverter<DateTime>());
+        RegisterConverter(new PostgreSqlRangeConverter<long>());
 
         // Network converters
         RegisterConverter(new InetConverter());
@@ -407,7 +407,7 @@ internal class AdvancedTypeRegistry
         // PostgreSQL JSONB (shared by flavors)
         var pgJson = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 param.DbType = DbType.String;
@@ -422,7 +422,7 @@ internal class AdvancedTypeRegistry
         // MySQL JSON (shared by flavors)
         var mySqlJson = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json);
@@ -513,7 +513,7 @@ internal class AdvancedTypeRegistry
         // PostgreSQL int4range
         var pgIntRange = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range);
@@ -526,7 +526,7 @@ internal class AdvancedTypeRegistry
         // PostgreSQL tsrange
         var pgTsRange = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange);
@@ -535,6 +535,19 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, pgTsRange);
         RegisterMapping<Range<DateTime>>(SupportedDatabase.CockroachDb, pgTsRange);
         RegisterMapping<Range<DateTime>>(SupportedDatabase.YugabyteDb, pgTsRange);
+
+        // PostgreSQL int8range
+        var pgLongRange = new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int8Range);
+            }
+        };
+        RegisterMapping<Range<long>>(SupportedDatabase.PostgreSql, pgLongRange);
+        RegisterMapping<Range<long>>(SupportedDatabase.CockroachDb, pgLongRange);
+        RegisterMapping<Range<long>>(SupportedDatabase.YugabyteDb, pgLongRange);
     }
 
     private void RegisterNetworkMappings()

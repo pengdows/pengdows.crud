@@ -30,7 +30,9 @@ No LINQ. No tracking. No hidden unit of work.
 - Batch create, update, upsert, and delete operations with parameter-limit-aware chunking
 - Optimistic concurrency via `[Version]`
 - Audit field population via `IAuditValueResolver`
-- JSON, enum, GUID, binary, UTC date/time, and advanced provider-specific type mappings
+- JSON, enum, GUID, binary, UTC date/time, and bidirectional advanced provider-specific type
+  mappings (including spatial, network, range, interval, JSON, large-object, and rowversion
+  values) through the normal CRUD path
 - Metrics snapshots via `IDatabaseContext.Metrics` and live updates via `MetricsUpdated`
 - `DbMode` strategies: `Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`, and `Best` (`KeepAlive` is an obsolete compatibility alias)
 - Typed exception hierarchy: provider `DbException` is translated to structured subtypes (`ConcurrencyConflictException`, `UniqueConstraintViolationException`, `DeadlockException`, etc.)

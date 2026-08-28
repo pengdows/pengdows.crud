@@ -349,7 +349,7 @@ internal class ColumnInfo : IColumnInfo
                 }
             }
 
-            if (IsJsonType)
+            if (IsJsonType && !UsesAdvancedJsonCoercion())
             {
                 // Use precompiled serializer if available, otherwise fall back to TypeCoercionHelper
                 value = JsonSerializer != null
@@ -359,5 +359,20 @@ internal class ColumnInfo : IColumnInfo
         }
 
         return value;
+    }
+
+    // JsonValue, JsonDocument, and JsonElement have registered provider-aware
+    // coercions. Keep their native CLR value intact so the normal parameter
+    // pipeline can select the provider representation and the read pipeline
+    // can hydrate the same CLR type. Other inferred JSON values (POCOs and
+    // JsonNode implementations) still use the column's JSON serializer.
+    private bool UsesAdvancedJsonCoercion()
+    {
+        var type = Nullable.GetUnderlyingType(PropertyInfo.PropertyType) ?? PropertyInfo.PropertyType;
+        return type == typeof(JsonDocument)
+               || type == typeof(JsonElement)
+               || type == typeof(types.valueobjects.JsonValue)
+               || types.coercion.CoercionRegistry.Shared.GetCoercion(type) != null
+               || types.AdvancedTypeRegistry.Shared.GetConverter(type) != null;
     }
 }

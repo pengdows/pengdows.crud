@@ -110,10 +110,9 @@ public class ProviderParameterFactoryBranchTests
         Assert.Equal(DbType.DateTime, dtParam.DbType);
 
         var guidParam = new fakeDbParameter();
-        ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
+        var configured = ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
             SupportedDatabase.Oracle);
-        Assert.Equal(DbType.Binary, guidParam.DbType);
-        Assert.Equal(16, guidParam.Size);
+        Assert.False(configured);
     }
 
     [Fact]

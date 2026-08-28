@@ -77,6 +77,8 @@ internal class FirebirdDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
 
+    protected override bool NeedsCommonConversions => true;
+
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
     {
         IsolationLevel.ReadCommitted,

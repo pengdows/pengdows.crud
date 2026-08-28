@@ -14,24 +14,6 @@ Kept deliberately for a while so the design work wasn't lost, per this document'
 
 ---
 
-## Unwired "weird type" attributes
-
-`types/attributes/WeirdTypeAttributes.cs` declares 12 attributes (`DbEnumAttribute`,
-`JsonContractAttribute`, `ConcurrencyTokenAttribute`, `RangeTypeAttribute`, `ComputedAttribute`,
-`CaseInsensitiveAttribute`, `AsStringAttribute`, `MaxLengthForInlineAttribute`,
-`CaseFoldOnReadAttribute`, `SpatialTypeAttribute`, `CurrencyAttribute`) whose only consumer in the
-whole codebase is their own construction/property unit test
-(`pengdows.crud.Tests/WeirdTypeAttributesTests.cs`). None of them are read by `TypeMapRegistry`,
-`TypeCoercionHelper`, or any dialect — applying one to an entity property currently has zero
-effect on SQL generation or type coercion. See `docs/advanced-types.md` for the full list and the
-naming collisions with real, wired attributes (`DbEnumAttribute` vs. `EnumColumnAttribute`;
-`JsonContractAttribute` vs. `[Json]`).
-
-Needs a decision: wire each into the mapping pipeline (define what it should actually do —
-e.g. `SpatialTypeAttribute.ExpectedSrid` enforcing SRID on write/read, `CurrencyAttribute`
-validating/formatting a decimal column) or remove them. Leaving them in source as inert,
-constructible attributes risks a caller applying one and silently getting no behavior.
-
 ---
 
 ## Pool-size precedence and mismatch logging — completed 2026-08-28

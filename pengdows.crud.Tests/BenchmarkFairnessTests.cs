@@ -508,7 +508,7 @@ public class BenchmarkFairnessTests
             "mysql:8.0",
             "MySqlClientFactory.Instance",
             "[Params(32, 64, 128, 256)]",
-            "RunConcurrentWithErrors"
+            "RunConcurrentWithTimeout"
         });
     }
 
@@ -636,7 +636,7 @@ public class BenchmarkFairnessTests
             "P50",
             "P95",
             "P99",
-            "StormGate failure count"
+            "StormGate"
         });
     }
 }

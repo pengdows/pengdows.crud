@@ -10,7 +10,7 @@ canonical day-to-day development guide; the documents below go deeper on specifi
 | [`architecture.md`](./architecture.md) | Internals deep-dive: locking, connection lifecycle, lease model, concurrency contracts |
 | [`core-invariants.md`](./core-invariants.md) | Condensed cheat-sheet of the invariants in `architecture.md` |
 | [`overview.md`](./overview.md) | Public API surface at a glance |
-| [`advanced-types.md`](./advanced-types.md) | Value objects for network/range/interval/spatial/`HSTORE`/`rowversion` types: usage, per-dialect wiring, and which related attributes aren't actually wired in yet |
+| [`advanced-types.md`](./advanced-types.md) | Value objects for network/range/interval/spatial/`HSTORE`/`rowversion` types and their built-in coercion behavior |
 | [`batch-operations.md`](./batch-operations.md) | Batch create/update/upsert/delete: API, runtime behavior, architecture, dialect compatibility |
 | [`generated-keys.md`](./generated-keys.md) | How `CreateAsync` retrieves an auto-generated `[Id]` value per database (`GeneratedKeyPlan` strategies) |
 | [`uuid7.md`](./uuid7.md) | `Uuid7Optimized`: monotonicity scope, clock modes, throughput/backpressure, configuration |

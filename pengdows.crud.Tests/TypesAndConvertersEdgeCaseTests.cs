@@ -437,7 +437,7 @@ public class TypesAndConvertersEdgeCaseTests
     public void ClobStreamCoercion_TryRead_UnknownType_ReturnsFalse()
     {
         var coercion = new ClobStreamCoercion();
-        var src = new DbValue(42);
+        var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
 
@@ -633,9 +633,7 @@ public class TypesAndConvertersEdgeCaseTests
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.IsType<string>(result);
-        var text = (string)result!;
-        Assert.StartsWith("P", text);
+        Assert.Equal(interval.ToTimeSpan(), result);
     }
 
     [Fact]
@@ -646,8 +644,7 @@ public class TypesAndConvertersEdgeCaseTests
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.CockroachDb);
 
-        Assert.IsType<string>(result);
-        Assert.Equal("P3M", (string)result!);
+        Assert.Equal(interval.ToTimeSpan(), result);
     }
 
     [Fact]
@@ -656,9 +653,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(6, 0, 0);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("P6M", result);
+        Assert.Equal(TimeSpan.Zero, result);
     }
 
     [Fact]
@@ -667,9 +664,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(0, 15, 0);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("P15D", result);
+        Assert.Equal(TimeSpan.FromDays(15), result);
     }
 
     [Fact]
@@ -680,11 +677,9 @@ public class TypesAndConvertersEdgeCaseTests
         var microseconds = (2L * 3600 + 30 * 60) * 1_000_000;
         var interval = new PostgreSqlInterval(0, 0, microseconds);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Contains("T", result);
-        Assert.Contains("2H", result);
-        Assert.Contains("30M", result);
+        Assert.Equal(TimeSpan.FromHours(2.5), result);
     }
 
     [Fact]
@@ -695,10 +690,9 @@ public class TypesAndConvertersEdgeCaseTests
         var microseconds = 45L * 1_000_000;
         var interval = new PostgreSqlInterval(0, 0, microseconds);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Contains("T", result);
-        Assert.Contains("45S", result);
+        Assert.Equal(TimeSpan.FromSeconds(45), result);
     }
 
     [Fact]
@@ -707,9 +701,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(0, 0, 0);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("P0D", result);
+        Assert.Equal(TimeSpan.Zero, result);
     }
 
     [Fact]
@@ -791,13 +785,9 @@ public class TypesAndConvertersEdgeCaseTests
         // 1 hour = 3600 * 1_000_000 microseconds
         var interval = new PostgreSqlInterval(2, 3, 3_600_000_000);
 
-        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.StartsWith("P", result);
-        Assert.Contains("2M", result);
-        Assert.Contains("3D", result);
-        Assert.Contains("T", result);
-        Assert.Contains("1H", result);
+        Assert.Equal(TimeSpan.FromDays(3) + TimeSpan.FromHours(1), result);
     }
 
     #endregion
@@ -1362,7 +1352,7 @@ public class TypesAndConvertersEdgeCaseTests
     public void GeographyCoercion_TryRead_UnknownType_ReturnsFalse()
     {
         var coercion = new GeographyCoercion();
-        var src = new DbValue(42);
+        var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
 
@@ -1373,7 +1363,7 @@ public class TypesAndConvertersEdgeCaseTests
     public void GeometryCoercion_TryRead_UnknownType_ReturnsFalse()
     {
         var coercion = new GeometryCoercion();
-        var src = new DbValue(42);
+        var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
 
@@ -1741,7 +1731,7 @@ public class TypesAndConvertersEdgeCaseTests
     public void IntervalYearMonthCoercion_TryRead_UnknownType_ReturnsFalse()
     {
         var coercion = new IntervalYearMonthCoercion();
-        var src = new DbValue(42);
+        var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
 

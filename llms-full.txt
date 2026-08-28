@@ -776,9 +776,10 @@ MySQL/PostgreSQL suites.
 
 ### Type Safety
 - `TRowID` must be primitive integer, `Guid`, or `string` (nullable allowed)
-- Automatic type coercion between .NET types and database types. Reads use the unified
-  `CoercionRegistry`; parameter creation preserves legacy provider mappings and then uses the
-  built-in coercion and binding pipeline for supported advanced value types.
+- Bidirectional automatic type coercion between provider values and .NET types. Reads use the
+  unified `CoercionRegistry`; parameter creation preserves legacy provider mappings and then uses
+  the built-in coercion and binding pipeline for supported advanced value types. Applications do
+  not need per-type handlers or entity-specific conversion code for the supported provider matrix.
 - Enum support with configurable parsing behavior (string or numeric via DbType)
 - JSON serialization support for complex types via `[Json]` attribute
 

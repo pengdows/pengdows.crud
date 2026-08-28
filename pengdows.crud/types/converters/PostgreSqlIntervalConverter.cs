@@ -85,12 +85,18 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
 {
     protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb)
+        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb &&
+            provider != SupportedDatabase.YugabyteDb)
         {
             return value;
         }
 
-        return FormatIso8601(value);
+        // Npgsql binds PostgreSQL INTERVAL values from TimeSpan. A string
+        // combined with NpgsqlDbType.Interval is rejected during preparation.
+        // PostgreSqlInterval retains month/day/microsecond structure on the
+        // CLR side; the provider's TimeSpan representation preserves the
+        // day/time portion supported by the ADO.NET type.
+        return value.ToTimeSpan();
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlInterval result)

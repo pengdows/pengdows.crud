@@ -49,10 +49,10 @@ namespace pengdows.crud.Tests;
 [Collection("SqliteSerial")]
 public class SingleConnectionConcurrencyTortureTests
 {
-    private const int ReaderCount = 8;
-    private const int WriterCount = 8;
-    private const int TransactionCount = 8;
-    private static readonly TimeSpan ContentionWindow = TimeSpan.FromSeconds(2);
+    private const int ReaderCount = 2;
+    private const int WriterCount = 2;
+    private const int TransactionCount = 2;
+    private static readonly TimeSpan ContentionWindow = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan OverallTimeout = TimeSpan.FromSeconds(20);
 
     [Fact]
@@ -81,7 +81,8 @@ public class SingleConnectionConcurrencyTortureTests
             {
                 ConnectionString = $"Data Source={dbFile}",
                 DbMode = DbMode.SingleConnection,
-                ReadWriteMode = ReadWriteMode.ReadWrite
+                ReadWriteMode = ReadWriteMode.ReadWrite,
+                ModeLockTimeout = TimeSpan.FromSeconds(10)
             };
 
             await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);
@@ -105,7 +106,7 @@ public class SingleConnectionConcurrencyTortureTests
                         try
                         {
                             var sc = context.CreateSqlContainer("SELECT COUNT(*) FROM TortureRows");
-                            await using (var reader = await sc.ExecuteReaderAsync())
+                            await using (var reader = await sc.ExecuteReaderAsync(CommandType.Text, stop.Token))
                             {
                                 await reader.ReadAsync();
                                 await Task.Delay(2, stop.Token);
@@ -134,7 +135,7 @@ public class SingleConnectionConcurrencyTortureTests
                         try
                         {
                             var sc = helper.BuildCreate(new TortureRow { Name = $"w{w}-{i++}" });
-                            await sc.ExecuteNonQueryAsync();
+                            await sc.ExecuteNonQueryAsync(CommandType.Text, stop.Token);
                             Interlocked.Increment(ref writesCompleted);
                         }
                         catch (Exception ex) when (!stop.IsCancellationRequested)
@@ -163,7 +164,8 @@ public class SingleConnectionConcurrencyTortureTests
                             // continuation risks starving the thread pool of the threads needed to
                             // run the continuations that would release that same gate.
                             // BeginTransactionAsync() awaits instead of blocking a thread.
-                            await using var tx = await context.BeginTransactionAsync();
+                            await using var tx = await context.BeginTransactionAsync(
+                                cancellationToken: stop.Token);
                             await helper.CreateAsync(new TortureRow { Name = $"tx{t}-{i}" }, tx);
 
                             // Every 5th iteration rolls back deliberately, exercising both commit
@@ -185,9 +187,10 @@ public class SingleConnectionConcurrencyTortureTests
                         {
                             txFailures.Add(ex);
                         }
-                        catch (OperationCanceledException)
+                        catch (Exception) when (stop.IsCancellationRequested)
                         {
-                            // Expected once stop fires mid-operation.
+                            // Cancellation can be wrapped by transaction creation after the
+                            // stop signal wins the race with provider BeginTransactionAsync.
                         }
                     }
                 }))

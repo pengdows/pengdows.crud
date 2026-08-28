@@ -619,6 +619,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (preparedValue is Array && _dialect.SupportsSetValuedParameters)
         {
             parameter.DbType = DbType.Object;
+            if (_dialect is IInternalSqlDialect internalDialect)
+            {
+                internalDialect.ConfigureSetValuedParameter(parameter, (Array)preparedValue);
+            }
         }
 
         parameter.Value = preparedValue ?? DBNull.Value;
@@ -1122,26 +1126,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ITrackedConnection? conn = null;
         DbCommand? cmd = null;
         ILockerAsync? contextLocker = null;
+        ILockerAsync? singleConnectionTxGate = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         using var activity = StartActivity("ExecuteNonQuery");
         try
         {
+            var isTransaction = _context is ITransactionContext;
+            if (!isTransaction)
+            {
+                singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
+                if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
+                {
+                    await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             contextLocker = _context.GetLock();
             if (contextLocker != NoOpAsyncLocker.Instance)
             {
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = GetConnection(executionType, isShared);
-
-            await using var singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
-            if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
-            {
-                await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
-            }
 
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
@@ -1229,6 +1237,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            if (singleConnectionTxGate != null)
+            {
+                await singleConnectionTxGate.DisposeAsync().ConfigureAwait(false);
+            }
             if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
             {
                 await contextLocker.DisposeAsync().ConfigureAwait(false);
@@ -1446,23 +1458,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var lockTransferred = false;
         try
         {
-            contextLocker = _context.GetLock();
-            if (contextLocker != NoOpAsyncLocker.Instance)
-            {
-                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-            }
-
             var isTransaction = _context is ITransactionContext;
-            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
-            conn = GetConnection(executionType, isShared);
-
-            // Reads deliberately do NOT wait on the single-connection transaction gate (see below),
-            // but a Write execution issued through this reader path — e.g. TableGateway.Core.cs's
-            // compound-statement CreateAsync, which runs "INSERT; SELECT ..." via
-            // ExecuteReaderAsync(ExecutionType.Write) — carries the exact same absorption/rollback
-            // risk under DbMode.SingleConnection that ExecuteNonQueryAsync guards against. Acquire
-            // the identical gate here for that case.
-            if (executionType == ExecutionType.Write)
+            if (!isTransaction)
             {
                 singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
                 if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
@@ -1471,6 +1468,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
+            contextLocker = _context.GetLock();
+            if (contextLocker != NoOpAsyncLocker.Instance)
+            {
+                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
+            conn = GetConnection(executionType, isShared);
+
+            // A reader keeps the shared connection occupied until it reaches EOF or is disposed.
+            // Hold the transaction gate for that entire lifetime; otherwise an ordinary read can
+            // reach a connection with another transaction pending and either fail provider
+            // validation or observe/participate in the wrong transaction.
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
@@ -1487,16 +1497,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
                     : CommandBehavior.CloseConnection);
 
-            // Reads deliberately do NOT wait on the single-connection transaction gate: an
-            // existing, intentional pattern (see TransactionStreamingTests
-            // .LoadStreamAsync_TransactionContext_PassedExplicitly_UsesCorrectConnection) reads via
-            // the plain context while a transaction is open on the same DbMode.SingleConnection
-            // connection, and asserts the read observes the connection without the transaction
-            // having to complete first. Making reads wait here would deadlock that pattern (the
-            // transaction can't complete until code after the read commits it). The absorption/
-            // rollback risk this gate exists for is write-specific (see ExecuteNonQueryAsync) — a
-            // read has no side effect to lose.
-            //
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
             // otherwise, we will have the connection set to autoclose so that we
@@ -1512,8 +1512,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 cmd,
                 metrics,
                 this,
-                contextLocker);
+                contextLocker,
+                singleConnectionTxGate);
             cmd = null;
+            singleConnectionTxGate = null; // TrackedReader owns it until reader disposal.
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
             // A transaction's context lock now guards a reader that stays open for as long as
@@ -1974,9 +1976,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// <c>TransactionContext.AcquireSingleConnectionTransactionGate</c>); an ordinary
     /// non-transactional <b>write</b> must acquire it too, briefly, so it correctly waits behind
     /// an active transaction instead of risking silent absorption into its uncommitted scope and
-    /// being rolled back with it. Deliberately not applied to reads — no side effect to lose, and
-    /// an existing, intentional pattern relies on reads observing the connection without waiting
-    /// for an open transaction to complete first (see the read path's own comment). A no-op for
+    /// being rolled back with it. The same applies to reads: a command outside the transaction
+    /// must not reach the shared connection while that transaction is pending. A no-op for
     /// transaction-scoped calls (the transaction already holds it — re-acquiring the same
     /// non-reentrant semaphore would deadlock) and for every other mode.
     /// </summary>
@@ -2141,7 +2142,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
     {
-        var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        DbParameter cloned;
+        try
+        {
+            cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        }
+        catch (ArgumentException) when (param.Value is not null and not DBNull)
+        {
+            // Some providers expose a provider-specific type through a DbType that
+            // does not describe the value (Oracle INTERVAL parameters are reported
+            // as Int64 while carrying the provider's string representation). The
+            // provider metadata is copied below; use Object only to get through the
+            // portable validation step when cloning the cached template.
+            cloned = dialect.CreateDbParameter(param.ParameterName, DbType.Object, param.Value);
+        }
 
         // Only set non-default properties to avoid unnecessary provider overhead
         if (param.Direction != ParameterDirection.Input)

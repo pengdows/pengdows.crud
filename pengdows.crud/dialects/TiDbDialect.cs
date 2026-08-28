@@ -63,6 +63,17 @@ internal class TiDbDialect : MySqlDialect
     // here.
     public override bool PrepareStatements => _isMySqlConnector;
 
+    // MySql.Data substitutes parameters into text-protocol commands using backslash
+    // escapes. TiDB receives those backslashes literally when NO_BACKSLASH_ESCAPES is
+    // enabled, so quoted strings (including JSON text) are corrupted. Keep the shared
+    // MySQL baseline but omit that mode for TiDB; MySQL Connector/J-style escaping is
+    // then interpreted correctly by TiDB.
+    public override string GetFinalSessionSettings(bool readOnly)
+    {
+        return base.GetFinalSessionSettings(readOnly)
+            .Replace(",NO_BACKSLASH_ESCAPES", string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
     // TiDB's Go AST parser does not implement stored procedure DDL (*ast.ProcedureInfo).
     // Stored procedures cannot be created or called on TiDB.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
@@ -79,6 +90,8 @@ internal class TiDbDialect : MySqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
+        var baseline = base.GetBaseSessionSettings()
+            .Replace(",NO_BACKSLASH_ESCAPES", string.Empty, StringComparison.OrdinalIgnoreCase);
+        return string.Concat(baseline, "\nSET tidb_pessimistic_txn_default = ON;");
     }
 }

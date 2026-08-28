@@ -194,7 +194,9 @@ public sealed class TargetedBranchExecutionTests
         var oneContainer = Assert.IsAssignableFrom<ISqlContainer>(methodSqlite.Invoke(pgGateway,
             new object[] { new List<int> { 11 }, pg })!);
         var p0 = oneContainer.GetParameterValue("p0");
-        Assert.IsType<int[]>(p0);
+        // A single ID uses the equality fast path even on set-valued dialects; only multi-ID
+        // retrieval uses an array parameter.
+        Assert.IsType<int>(p0);
     }
 
     [Fact]

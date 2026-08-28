@@ -330,6 +330,16 @@ internal static class TypeCoercionHelper
             return CoerceDateTime(value, options);
         }
 
+        // Provider JSON values are not consistent across ADO.NET drivers:
+        // some return strings, some return JsonDocument/JsonElement, and some
+        // expose a provider-specific wrapper. Normalize all of them through
+        // the JSON text extractor before registry/fallback conversion.
+        if (underlyingTarget == typeof(types.valueobjects.JsonValue))
+        {
+            return types.valueobjects.JsonValue.Parse(
+                ExtractJsonString(value, JsonSerializerOptions.Default));
+        }
+
         // Primary path: Use unified CoercionRegistry system for other types
         var dbValue = new types.coercion.DbValue(value, sourceType);
         if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue,
@@ -735,6 +745,11 @@ internal static class TypeCoercionHelper
             return doc.RootElement.Clone();
         }
 
+        if (actualTarget == typeof(types.valueobjects.JsonValue))
+        {
+            return types.valueobjects.JsonValue.Parse(ExtractJsonString(value, serializerOptions));
+        }
+
         if (actualTarget == typeof(JsonNode))
         {
             var text = ExtractJsonString(value, serializerOptions);
@@ -949,6 +964,25 @@ internal static class TypeCoercionHelper
             return value => Utils.IsNullOrDbNull(value) ? null : CoerceEnum(value!, enumType, parseMode, targetType);
         }
 
+        // Compiled mappers use this source/target overload and do not retain
+        // IColumnInfo. Keep the native JSON value objects on the same explicit
+        // path as the metadata-aware mapper instead of allowing a generic
+        // conversion to turn them into their default value.
+        if (runtimeTarget == typeof(types.valueobjects.JsonValue))
+        {
+            return value =>
+            {
+                if (Utils.IsNullOrDbNull(value))
+                {
+                    return null;
+                }
+
+                return value is types.valueobjects.JsonValue jsonValue
+                    ? jsonValue
+                    : types.valueobjects.JsonValue.Parse(ExtractJsonString(value!, JsonSerializerOptions.Default));
+            };
+        }
+
         if (runtimeTarget == typeof(DateTimeOffset))
         {
             return value =>
@@ -1049,4 +1083,3 @@ internal static class TypeCoercionHelper
         }
     }
 }
-

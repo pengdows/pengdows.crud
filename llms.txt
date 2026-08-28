@@ -132,8 +132,10 @@ database-agnostic policy decoupled from connection identity — is in
   Server types with no primitive .NET equivalent (`Inet`, `Cidr`, `MacAddress`, `Range<T>`,
   `PostgreSqlInterval`, `IntervalYearMonth`/`IntervalDaySecond`, `HStore`, `JsonValue`, `Geometry`/
   `Geography`, `RowVersion`): usage, unified read/write coercion through the normal CRUD path,
-  per-dialect wiring, and which nearby-named attributes are declared in source but not actually
-  consumed by the mapping pipeline.
+  per-dialect wiring, and the supported bidirectional provider↔CLR conversion contract. For a
+  listed provider/type combination, application developers do not write Dapper-style per-type
+  handlers or entity-specific conversion code; missing provider types belong in the built-in
+  coercion/converter matrix and provider integration tests.
 - [`docs/opentelemetry-metrics.md`](docs/opentelemetry-metrics.md) — the `pengdows.crud.opentelemetry`
   adapter's design: instrument names (both the original `pengdows.db.client.*` scheme and the
   additive OTel semantic-convention names), what's bridged from `MetricsUpdated`, and what's still

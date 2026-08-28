@@ -88,7 +88,7 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
     {
         return provider switch
         {
-            SupportedDatabase.Oracle => FormatIso(value),
+            SupportedDatabase.Oracle => FormatOracle(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
             _ => value
         };
@@ -128,6 +128,15 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
             "Y",
             value.Months.ToString(CultureInfo.InvariantCulture),
             "M");
+    }
+
+    private static string FormatOracle(IntervalYearMonth value)
+    {
+        var sign = value.TotalMonths < 0 ? "-" : "+";
+        var absoluteMonths = Math.Abs(value.TotalMonths);
+        return string.Concat(sign,
+            (absoluteMonths / 12).ToString("D4", CultureInfo.InvariantCulture), "-",
+            (absoluteMonths % 12).ToString("D2", CultureInfo.InvariantCulture));
     }
 
     private static IntervalYearMonth Parse(string text)

@@ -6,10 +6,16 @@
 
 ## Core Capabilities
 
-- **Automatic Type Conversion**: Handles conversions between CLR types and database types across engines (e.g. `Oracle NUMBER` to `.NET int`, `PostgreSQL UUID` to `System.Guid`).
+- **Bidirectional automatic conversion**: Handles provider values → CLR values and CLR values → provider parameters across supported engines. Applications do not need Dapper-style per-type handlers or entity-specific conversion code for the supported matrix.
+- **Advanced provider types**: Built-in coercions cover network, ranges, intervals, JSON, spatial values, large objects, and rowversion values through the normal CRUD materialization and parameter paths.
 - **UTC Timestamp Normalization**: All timestamps (`DateTime`, `DateTimeOffset`, `TimestampOffset`) are normalized to UTC.
 - **Unified GUID Handling**: Native `UUID` (PostgreSQL), `uniqueidentifier` (SQL Server), `RAW(16)` (Oracle), `BINARY(16)` (Firebird/MySQL), or `TEXT` (SQLite).
 - **JSON Serialization/Deserialization**: Seamless mapping for complex types via `System.Text.Json`. Auto-detected for `JsonDocument`, `JsonElement`, `JsonNode`, `JsonValue`.
+
+The guarantee applies to the provider/type combinations covered by the built-in registry and
+provider integration tests. An arbitrary third-party ADO.NET extension type is not automatically
+supported; missing types belong in the library's coercion/converter matrix rather than in each
+application's entities.
 
 ---
 

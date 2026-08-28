@@ -68,6 +68,10 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
     public override bool SupportsRepeatedNamedParameters => false;
 
+    // ODP.NET does not accept the generic CLR Guid/Boolean representations
+    // for the VARCHAR2/NUMBER storage used by this dialect.
+    protected override bool NeedsCommonConversions => true;
+
     // IMMUTABLE: Oracle bind variable limit is 65,535 — the hard ceiling imposed by Oracle's
     // internal 16-bit slot index for bind variables. Applies per SQL statement and per
     // PL/SQL procedure. In practice you will hit PGA memory or statement-length limits

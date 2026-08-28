@@ -182,6 +182,12 @@ public class StoredProcedureTests : DatabaseTestBase
                 return;
             }
 
+            if (context.ProcWrappingStyle == ProcWrappingStyle.None)
+            {
+                Output.WriteLine($"Skipping real PROCEDURE test on {provider}: stored procedures are unsupported.");
+                return;
+            }
+
             if (provider == SupportedDatabase.PostgreSql && context.DataSourceInfo.ParsedVersion != null &&
                 context.DataSourceInfo.ParsedVersion.Major < 11)
             {

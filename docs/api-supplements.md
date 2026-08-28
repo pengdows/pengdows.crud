@@ -50,8 +50,6 @@ UUID7 monotonicity is per thread, not process-wide or cross-machine.
 internal, and gateway hydration uses a separate compiled-plan path. `TypeCoercionOptions.JsonPreference`
 is not read; `TimePolicy` is not externally configurable through the normal gateway/context path.
 
-The attributes in `types.attributes.WeirdTypeAttributes.cs` (`DbEnumAttribute`,
-`JsonContractAttribute`, `ConcurrencyTokenAttribute`, `RangeTypeAttribute`, `ComputedAttribute`,
-`CaseInsensitiveAttribute`, `AsStringAttribute`, `MaxLengthForInlineAttribute`,
-`CaseFoldOnReadAttribute`, `SpatialTypeAttribute`, and `CurrencyAttribute`) are constructible but
-not consumed by SQL generation, mapping, or coercion. Applying them has no effect.
+Advanced value conversion is type-driven through the built-in coercion pipeline. Use the real
+attributes in `pengdows.crud.attributes`—such as `[Json]`, `[Version]`, `[EnumColumn]`,
+`[NonInsertable]`, and `[NonUpdateable]`—for mapping and persistence policies.

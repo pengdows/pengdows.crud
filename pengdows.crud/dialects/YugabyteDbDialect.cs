@@ -30,6 +30,10 @@ internal class YugabyteDbDialect : PostgreSqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.YugabyteDb;
 
+    // YSQL does not reliably bind Npgsql typed arrays for ANY(@array); expanded IN parameters
+    // preserve the same semantics without depending on that wire-level feature.
+    public override bool SupportsSetValuedParameters => false;
+
     // YugabyteDB (YSQL) is built on PostgreSQL 11+ and supports most PG features.
     // It has specific performance characteristics for distributed primary keys.
 

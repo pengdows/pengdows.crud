@@ -145,7 +145,19 @@ internal class CoercionRegistry
         var coercion = GetCoercion(targetType, provider);
         if (coercion != null)
         {
-            return coercion.TryRead(src, targetType, out value);
+            if (coercion.TryRead(src, targetType, out value))
+            {
+                return true;
+            }
+        }
+
+        // Legacy converters are registered in this same registry by the
+        // compatibility facade. This keeps older advanced types on the same
+        // read pipeline as the newer coercions.
+        if (_legacyConverters.TryGetValue(targetType, out var legacyConverter))
+        {
+            value = src.IsNull ? null : legacyConverter.FromProviderValue(src.RawValue!, provider ?? SupportedDatabase.Unknown);
+            return value != null;
         }
 
         value = null;

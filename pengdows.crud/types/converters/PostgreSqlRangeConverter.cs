@@ -112,12 +112,31 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 {
     protected override object? ConvertToProvider(Range<T> value, SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb)
+        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb &&
+            provider != SupportedDatabase.YugabyteDb)
         {
             return value;
         }
 
-        return FormatRange(value);
+        var providerType = Type.GetType($"NpgsqlTypes.NpgsqlRange`1, Npgsql")?.MakeGenericType(typeof(T));
+        var constructor = providerType?.GetConstructor(new[]
+        {
+            typeof(T), typeof(bool), typeof(bool), typeof(T), typeof(bool), typeof(bool)
+        });
+        if (constructor == null)
+        {
+            return FormatRange(value);
+        }
+
+        return constructor.Invoke(new object[]
+        {
+            value.Lower ?? default,
+            value.IsLowerInclusive,
+            !value.HasLowerBound,
+            value.Upper ?? default,
+            value.IsUpperInclusive,
+            !value.HasUpperBound
+        });
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)

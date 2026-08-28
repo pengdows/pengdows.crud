@@ -764,7 +764,12 @@ internal class JsonElementCoercion : DbCoercion<JsonElement>
 
     public override bool TryWrite(JsonElement value, DbParameter parameter)
     {
-        parameter.Value = value.GetRawText();
+        // A value-type JsonElement on a template/default entity is commonly
+        // the default Undefined value. Treat it as JSON null instead of
+        // calling GetRawText(), which throws for an uninitialized element.
+        parameter.Value = value.ValueKind == JsonValueKind.Undefined
+            ? "null"
+            : value.GetRawText();
         parameter.DbType = DbType.String;
         return true;
     }

@@ -81,11 +81,26 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
 {
     protected override object? ConvertToProvider(Inet value, SupportedDatabase provider)
     {
+        if (value.Address is null)
+        {
+            return null;
+        }
+
         return provider switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => value.ToString(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+                CreateNpgsqlInet(value),
             _ => value
         };
+    }
+
+    private static object CreateNpgsqlInet(Inet value)
+    {
+        var type = Type.GetType("NpgsqlTypes.NpgsqlInet, Npgsql");
+        var constructor = type?.GetConstructor(new[] { typeof(IPAddress), typeof(byte) });
+        return constructor?.Invoke(new object[] { value.Address, value.PrefixLength ??
+            (byte)(value.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128) })
+            ?? value.ToString();
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Inet result)
@@ -131,6 +146,12 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
 
             if (addressValue != null)
             {
+                if (maskValue == null && value.ToString() is { } providerText && providerText.Contains('/'))
+                {
+                    result = Parse(providerText);
+                    return true;
+                }
+
                 result = new Inet(addressValue, prefix);
                 return true;
             }

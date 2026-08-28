@@ -307,6 +307,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     public virtual bool SupportsSetValuedParameters => false;
+
+    /// <summary>
+    /// Reapplies provider-specific metadata after a cached command receives a new set-valued
+    /// parameter. Providers such as Npgsql encode the element type in addition to DbType.Object.
+    /// </summary>
+    public virtual void ConfigureSetValuedParameter(DbParameter parameter, Array value)
+    {
+    }
+
     public virtual int MaxParameterLimit => 2000;
 
     /// <inheritdoc />
@@ -1215,7 +1224,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Apply the dialect's declared Guid storage format when the caller passed DbType.Guid
         // and the AdvancedTypeRegistry did not already handle the parameter (e.g. PostgreSQL
         // sets NpgsqlDbType.Uuid via reflection — we must not overwrite that).
-        if (!handled && !valueIsNull && type == DbType.Guid
+        if (!valueIsNull && type == DbType.Guid
                 && runtimeType == typeof(Guid) && GuidFormat != GuidStorageFormat.PassThrough)
         {
             ApplyGuidFormat(parameter, (Guid)(object)value!);
@@ -1230,7 +1239,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Apply common type coercions (Guid→string, bool→int16, DateTimeOffset→UtcDateTime).
         // Controlled by NeedsCommonConversions so dialects can opt in independently of
         // whether they use named or positional parameters.
-        if (!handled && !valueIsNull && NeedsCommonConversions &&
+        if (!valueIsNull && NeedsCommonConversions &&
             _commonConversions.TryGetValue(parameter.DbType, out var converter))
         {
             converter(parameter, value);
@@ -1265,6 +1274,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
             parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
             parameter.Scale = (byte)inferredScale;
+        }
+
+        if (!valueIsNull && value is DateTimeOffset dto && (DatabaseType is SupportedDatabase.PostgreSql
+            or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb))
+        {
+            parameter.DbType = DbType.DateTime;
+            parameter.Value = dto.UtcDateTime;
         }
 
         if (traceTimings)

@@ -23,8 +23,8 @@ public class NetworkConverterEdgeCaseTests
         var mac = MacAddress.Parse("08:00:2B:01:02:03");
 
         var result = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
-        Assert.IsType<string>(result);
-        Assert.Equal("08:00:2B:01:02:03", result);
+        Assert.IsType<PhysicalAddress>(result);
+        Assert.Equal(new PhysicalAddress(new byte[] { 8, 0, 43, 1, 2, 3 }), result);
     }
 
     [Fact]

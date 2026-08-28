@@ -87,7 +87,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
     {
         return provider switch
         {
-            SupportedDatabase.Oracle => FormatIso(value),
+            SupportedDatabase.Oracle => FormatOracle(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
             _ => value.TotalTime
         };
@@ -133,6 +133,18 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
             "M",
             (time.Seconds + time.Milliseconds / 1000.0).ToString(CultureInfo.InvariantCulture),
             "S");
+    }
+
+    private static string FormatOracle(IntervalDaySecond value)
+    {
+        var sign = value.TotalTime < TimeSpan.Zero ? "-" : "+";
+        var absolute = value.TotalTime.Duration();
+        return string.Concat(sign,
+            absolute.Days.ToString("D9", CultureInfo.InvariantCulture), " ",
+            absolute.Hours.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Minutes.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Seconds.ToString("D2", CultureInfo.InvariantCulture), ".",
+            (absolute.Ticks % TimeSpan.TicksPerSecond).ToString("D7", CultureInfo.InvariantCulture)[..6]);
     }
 
     private static IntervalDaySecond Parse(string text)

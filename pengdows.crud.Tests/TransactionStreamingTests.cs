@@ -34,11 +34,12 @@ public class TransactionStreamingTests
 
         using var transaction = context.BeginTransaction();
 
-        var container = helper.BuildBaseRetrieve("t");
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
+        var container = transactionHelper.BuildBaseRetrieve("t");
 
         // Act - Stream within transaction
         var results = new List<TestEntity>();
-        await foreach (var entity in helper.LoadStreamAsync(container))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container))
         {
             results.Add(entity);
         }
@@ -59,10 +60,11 @@ public class TransactionStreamingTests
 
         using var transaction = context.BeginTransaction();
 
-        var container = helper.BuildBaseRetrieve("t");
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
+        var container = transactionHelper.BuildBaseRetrieve("t");
 
         // Act - Stream and verify transaction is still valid
-        await foreach (var entity in helper.LoadStreamAsync(container))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container))
         {
             // Transaction should still be active
             Assert.False(transaction.WasCommitted);
@@ -85,11 +87,12 @@ public class TransactionStreamingTests
 
         using var transaction = context.BeginTransaction();
 
-        var container = helper.BuildBaseRetrieve("t");
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
+        var container = transactionHelper.BuildBaseRetrieve("t");
 
         // Act - Break early from stream
         var count = 0;
-        await foreach (var entity in helper.LoadStreamAsync(container))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container))
         {
             count++;
             if (count >= 1)
@@ -99,8 +102,8 @@ public class TransactionStreamingTests
         }
 
         // Transaction should still be usable
-        var container2 = helper.BuildBaseRetrieve("t");
-        var moreResults = await helper.LoadListAsync(container2);
+        var container2 = transactionHelper.BuildBaseRetrieve("t");
+        var moreResults = await transactionHelper.LoadListAsync(container2);
 
         transaction.Commit();
 
@@ -144,10 +147,11 @@ public class TransactionStreamingTests
 
         using var transaction = context.BeginTransaction();
 
-        var container = helper.BuildBaseRetrieve("t");
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
+        var container = transactionHelper.BuildBaseRetrieve("t");
 
         // Act - Stream then rollback
-        await foreach (var entity in helper.LoadStreamAsync(container))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container))
         {
             // Process entities
         }
@@ -169,10 +173,11 @@ public class TransactionStreamingTests
         var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
 
         // First operation
-        var container1 = helper.BuildBaseRetrieve("t");
-        await foreach (var entity in helper.LoadStreamAsync(container1))
+        var container1 = transactionHelper.BuildBaseRetrieve("t");
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container1))
         {
             // Process
         }
@@ -181,8 +186,8 @@ public class TransactionStreamingTests
         await transaction.SavepointAsync("sp1");
 
         // Second operation
-        var container2 = helper.BuildBaseRetrieve("t");
-        await foreach (var entity in helper.LoadStreamAsync(container2))
+        var container2 = transactionHelper.BuildBaseRetrieve("t");
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container2))
         {
             // Process
         }
@@ -191,8 +196,8 @@ public class TransactionStreamingTests
         await transaction.RollbackToSavepointAsync("sp1");
 
         // Third operation after rollback
-        var container3 = helper.BuildBaseRetrieve("t");
-        await foreach (var entity in helper.LoadStreamAsync(container3))
+        var container3 = transactionHelper.BuildBaseRetrieve("t");
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container3))
         {
             // Process
         }
@@ -212,18 +217,19 @@ public class TransactionStreamingTests
         var helper = new TableGateway<TestEntity, int>(context);
 
         using var transaction = context.BeginTransaction();
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
 
         // Act - Multiple sequential streams within same transaction
-        var container1 = helper.BuildBaseRetrieve("t");
+        var container1 = transactionHelper.BuildBaseRetrieve("t");
         var count1 = 0;
-        await foreach (var entity in helper.LoadStreamAsync(container1))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container1))
         {
             count1++;
         }
 
-        var container2 = helper.BuildBaseRetrieve("t");
+        var container2 = transactionHelper.BuildBaseRetrieve("t");
         var count2 = 0;
-        await foreach (var entity in helper.LoadStreamAsync(container2))
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container2))
         {
             count2++;
         }
@@ -246,13 +252,14 @@ public class TransactionStreamingTests
 
         using var transaction = context.BeginTransaction();
 
-        // Build container WITHOUT specifying context
-        var container = helper.BuildBaseRetrieve("t");
+        // Build the container from the transaction context. A SingleConnection transaction owns
+        // the shared connection until completion; parent-context work must wait rather than
+        // execute against the pending transaction.
+        var transactionHelper = new TableGateway<TestEntity, int>(transaction);
+        var container = transactionHelper.BuildBaseRetrieve("t");
 
-        // Act - Pass transaction context during streaming
-        // Note: LoadStreamAsync uses the container's context, not the one passed to CreateAsync
-        // This test verifies the connection handling is correct
-        await foreach (var entity in helper.LoadStreamAsync(container))
+        // Act - Stream through the transaction context
+        await foreach (var entity in transactionHelper.LoadStreamAsync(container))
         {
             // Within transaction scope
             Assert.False(transaction.IsCompleted);

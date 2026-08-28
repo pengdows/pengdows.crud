@@ -32,6 +32,11 @@ internal class CockroachDbDialect : PostgreSqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.CockroachDb;
 
+    // CockroachDB accepts PostgreSQL array syntax in SQL, but its wire-level parameter
+    // handling is not compatible with Npgsql's typed ANY(@array) path. Use expanded IN
+    // parameters for reliable CRUD behavior.
+    public override bool SupportsSetValuedParameters => false;
+
     // CockroachDB only supports SERIALIZABLE isolation; READ COMMITTED is not available.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 

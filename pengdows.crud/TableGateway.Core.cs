@@ -657,6 +657,17 @@ public partial class TableGateway<TEntity, TRowID> :
             var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
             var parameters = new List<DbParameter>(sqlTemplate.InsertColumns.Count);
             binder(entity, parameters);
+            // The compiled binder deliberately only supplies CLR values. Apply
+            // column-level JSON metadata here as the direct binder path does;
+            // otherwise a recycled provider parameter can retain unrelated
+            // NpgsqlDbType state (for example Path).
+            for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
+            {
+                if (sqlTemplate.InsertColumns[i].IsJsonType)
+                {
+                    dialect.TryMarkJsonParameter(parameters[i], sqlTemplate.InsertColumns[i]);
+                }
+            }
             sc.AddParameters(parameters);
 
             return (sc, dialect);
@@ -949,6 +960,12 @@ public partial class TableGateway<TEntity, TRowID> :
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
+        if (dialect.SupportsSetValuedParameters)
+        {
+            await using var setValuedContainer = BuildRetrieve(list, ctx);
+            return await LoadListAsync(setValuedContainer, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!dialect.SupportsSetValuedParameters && ctx.MaxParameterLimit > 0 && list.Count > ctx.MaxParameterLimit)
         {
             var results = new List<TEntity>(list.Count);
@@ -1045,6 +1062,11 @@ public partial class TableGateway<TEntity, TRowID> :
     private ISqlContainer GetRetrieveContainer(IReadOnlyList<TRowID> list, IDatabaseContext ctx)
     {
         var dialect = GetDialect(ctx);
+
+        if (dialect.SupportsSetValuedParameters)
+        {
+            return BuildRetrieve(list, ctx);
+        }
 
         // Try to use cached templates for better performance, but fall back to traditional method
         // to avoid circular dependency during template building

@@ -91,6 +91,22 @@ internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
             case Stream stream:
                 try
                 {
+                    // DuckDB's UnmanagedMemoryStream is backed by the active
+                    // data reader. Copy it while the reader is alive so the
+                    // returned CLR stream remains valid after mapping.
+                    if (stream.GetType() == typeof(UnmanagedMemoryStream))
+                    {
+                        if (stream.CanSeek)
+                        {
+                            stream.Seek(0, SeekOrigin.Begin);
+                        }
+
+                        using var copied = new MemoryStream();
+                        stream.CopyTo(copied);
+                        result = new MemoryStream(copied.ToArray(), false);
+                        return true;
+                    }
+
                     if (stream.CanSeek)
                     {
                         stream.Seek(0, SeekOrigin.Begin);

@@ -46,6 +46,9 @@ The codebase also exposes:
 - `[PrimaryKey]` defines the business key and may be composite
 - `[Id]` and `[PrimaryKey]` must not appear on the same property
 - `[Json]`, `[EnumColumn]`, `[EnumLiteral]`, audit attributes, and versioning attributes are all active in the current mapper
+- Built-in advanced value types use the unified coercion pipeline in both directions: provider
+  values are materialized as CLR values, and CLR values become provider parameters. Supported
+  types do not require application-specific handlers; see [`advanced-types.md`](advanced-types.md).
 
 ## Connection Modes
 

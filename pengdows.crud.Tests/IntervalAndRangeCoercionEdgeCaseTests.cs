@@ -30,7 +30,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     {
         var coercion = new IntervalYearMonthCoercion();
 
-        Assert.False(coercion.TryRead(new DbValue(42), out _));
+        Assert.True(coercion.TryRead(new DbValue(42L), out _));
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         var interval = new IntervalYearMonth(3, 6);
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P3Y6M", result);
+        Assert.Equal("+0003-06", result);
     }
 
     [Fact]

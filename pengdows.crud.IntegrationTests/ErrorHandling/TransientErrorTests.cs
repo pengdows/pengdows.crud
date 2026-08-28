@@ -93,7 +93,8 @@ public class TransientErrorTests : DatabaseTestBase
                 new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"), Npgsql.NpgsqlFactory.Instance),
 
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
-                new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"),
+                new DatabaseContext(WithBuilderKey(RemoveBuilderKeys(rawCs,
+                        "Allow Public Key Retrieval", "Application Name"), "Port", "1"),
                     MySql.Data.MySqlClient.MySqlClientFactory.Instance),
 
             SupportedDatabase.SqlServer =>
@@ -130,6 +131,17 @@ public class TransientErrorTests : DatabaseTestBase
     {
         var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
         builder[key] = value;
+        return builder.ConnectionString;
+    }
+
+    private static string RemoveBuilderKeys(string connectionString, params string[] keys)
+    {
+        var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        foreach (var key in keys)
+        {
+            builder.Remove(key);
+        }
+
         return builder.ConnectionString;
     }
 

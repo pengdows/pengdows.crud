@@ -21,7 +21,7 @@ public class NetworkConverterBehaviorTests
         var mac = MacAddress.Parse("08:00:2b:01:02:03");
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("08:00:2B:01:02:03", providerValue);
+        Assert.Equal(new PhysicalAddress(new byte[] { 8, 0, 43, 1, 2, 3 }), providerValue);
     }
 
     [Fact]

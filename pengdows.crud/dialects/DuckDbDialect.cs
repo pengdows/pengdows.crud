@@ -53,6 +53,8 @@ internal class DuckDbDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
+
+    protected override bool NeedsCommonConversions => true;
     public override string ParameterMarker => "$";
 
     public override bool SupportsNamedParameters => true;

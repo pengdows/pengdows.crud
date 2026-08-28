@@ -82,11 +82,25 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
 {
     protected override object? ConvertToProvider(Cidr value, SupportedDatabase provider)
     {
+        if (value.Network is null)
+        {
+            return null;
+        }
+
         return provider switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => value.ToString(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+                CreateNpgsqlCidr(value),
             _ => value
         };
+    }
+
+    private static object CreateNpgsqlCidr(Cidr value)
+    {
+        var type = Type.GetType("NpgsqlTypes.NpgsqlCidr, Npgsql");
+        var constructor = type?.GetConstructor(new[] { typeof(IPAddress), typeof(byte) });
+        return constructor?.Invoke(new object[] { value.Network, value.PrefixLength })
+            ?? value.ToString();
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Cidr result)

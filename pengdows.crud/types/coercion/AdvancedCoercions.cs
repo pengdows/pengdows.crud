@@ -136,6 +136,14 @@ internal class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
             case IntervalYearMonth interval:
                 value = interval;
                 return true;
+            // ODP.NET may expose INTERVAL YEAR TO MONTH as the provider's
+            // numeric month representation after a cached statement is reused.
+            case int totalMonths:
+                value = IntervalYearMonth.FromTotalMonths(totalMonths);
+                return true;
+            case long totalMonths:
+                value = IntervalYearMonth.FromTotalMonths(checked((int)totalMonths));
+                return true;
             case string text:
                 try
                 {
@@ -738,6 +746,23 @@ internal class BlobStreamCoercion : DbCoercion<Stream>
         switch (src.RawValue)
         {
             case Stream stream:
+                // DuckDB exposes BLOB values as an UnmanagedMemoryStream whose
+                // backing buffer belongs to the data reader. Materialize it
+                // before the reader/connection can be released; returning the
+                // provider stream leaks an invalid or zero-filled view.
+                if (stream.GetType() == typeof(UnmanagedMemoryStream))
+                {
+                    if (stream.CanSeek)
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                    }
+
+                    using var copied = new MemoryStream();
+                    stream.CopyTo(copied);
+                    value = new MemoryStream(copied.ToArray(), false);
+                    return true;
+                }
+
                 if (stream.CanSeek)
                 {
                     stream.Seek(0, SeekOrigin.Begin);

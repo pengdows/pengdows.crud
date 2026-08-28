@@ -82,7 +82,7 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
 
         var configs = orchestrator.GetTestConfigurations();
 
-        Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
+        Assert.Equal(3, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
         Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "Db2"));
         Assert.All(configs.Where(c => c.DatabaseProvider == "PostgreSQL"), c =>
         {
@@ -120,7 +120,7 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
             "PostgreSQL"
         });
 
-        Assert.Equal(2, configs.Count);
+        Assert.Equal(3, configs.Count);
         Assert.All(configs, c => Assert.Equal("PostgreSQL", c.DatabaseProvider));
     }
 

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Data;
+using pengdows.crud.types;
+using pengdows.crud.types.coercion;
 
 namespace pengdows.crud;
 
@@ -97,6 +99,18 @@ internal static class DbTypeValidator
 
         // clrType is already nullable-unwrapped by ResolveClrType.
 
+        // Advanced CLR value objects are intentionally validated by their
+        // registered coercion/mapping rather than by the primitive DbType table.
+        // Their storage DbType is the provider-facing representation and need
+        // not match the value object's CLR type (for example Inet→String or
+        // Geometry→Binary).
+        if (IsAdvancedClrType(clrType) &&
+            (AdvancedTypeRegistry.Shared.IsMappedType(clrType) ||
+             CoercionRegistry.Shared.GetCoercion(clrType) != null))
+        {
+            return;
+        }
+
         if (clrType.IsEnum)
         {
             if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)
@@ -146,6 +160,21 @@ internal static class DbTypeValidator
         }
 
         // Unknown DbType with non-numeric CLR type — pass through without blocking
+    }
+
+    private static bool IsAdvancedClrType(Type type)
+    {
+        return type != typeof(string) &&
+               type != typeof(bool) &&
+               type != typeof(Guid) &&
+               type != typeof(DateTime) &&
+               type != typeof(DateTimeOffset) &&
+               type != typeof(TimeSpan) &&
+               type != typeof(decimal) &&
+               !NumericTypes.Contains(type) &&
+               type != typeof(byte[]) &&
+               type != typeof(char) &&
+               !type.IsEnum;
     }
 
     /// <summary>

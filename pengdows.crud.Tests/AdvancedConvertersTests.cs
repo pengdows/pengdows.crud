@@ -60,11 +60,11 @@ public class AdvancedConvertersTests
     {
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("00:11:22:33:44:55");
+        var physical = new PhysicalAddress(new byte[] { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 });
 
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
-        Assert.Equal("00:11:22:33:44:55", providerValue);
+        Assert.Equal(physical, providerValue);
 
-        var physical = new PhysicalAddress(new byte[] { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 });
         var fromPhysical = (MacAddress?)converter.FromProviderValue(physical, SupportedDatabase.Unknown);
         Assert.NotNull(fromPhysical);
         Assert.Equal(mac.ToString(), fromPhysical!.ToString());
@@ -77,7 +77,7 @@ public class AdvancedConvertersTests
         var interval = new IntervalYearMonth(2, 3);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P2Y3M", providerValue);
+        Assert.Equal("+0002-03", providerValue);
 
         var parsed = (IntervalYearMonth?)converter.FromProviderValue("P2Y3M", SupportedDatabase.Oracle);
         Assert.NotNull(parsed);
@@ -92,7 +92,7 @@ public class AdvancedConvertersTests
         var interval = new IntervalDaySecond(1, new TimeSpan(2, 3, 4));
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P1DT2H3M4S", providerValue);
+        Assert.Equal("+000000001 02:03:04.000000", providerValue);
 
         var parsed = (IntervalDaySecond?)converter.FromProviderValue("P1DT2H3M4S", SupportedDatabase.Oracle);
         Assert.NotNull(parsed);
@@ -107,7 +107,7 @@ public class AdvancedConvertersTests
         var interval = new PostgreSqlInterval(0, 1, 0);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
-        Assert.Equal("P1D", providerValue);
+        Assert.Equal(TimeSpan.FromDays(1), providerValue);
 
         var parsed = (PostgreSqlInterval?)converter.FromProviderValue("P2D", SupportedDatabase.PostgreSql);
         Assert.NotNull(parsed);

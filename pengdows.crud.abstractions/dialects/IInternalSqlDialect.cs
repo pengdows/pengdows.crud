@@ -10,6 +10,11 @@ namespace pengdows.crud.dialects;
 internal interface IInternalSqlDialect : ISqlDialect
 {
     /// <summary>
+    /// Reapplies provider-specific metadata after a cached command receives a set-valued value.
+    /// </summary>
+    void ConfigureSetValuedParameter(DbParameter parameter, Array value);
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);
