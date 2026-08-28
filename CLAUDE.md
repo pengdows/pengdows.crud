@@ -516,6 +516,8 @@ var returnValue = await sc.ExecuteScalarOrNullAsync<int>();
 
 **The write/read `PoolGovernor` is never actually unbounded, even under `Standard` mode with zero configuration.** `MaxConcurrentReads`/`MaxConcurrentWrites` resolve, in order: explicit config value → the connection string's `Max Pool Size` → the dialect's `DefaultMaxPoolSize` (100 for most dialects, including Snowflake, since none override it) — then get clamped to a hard, non-configurable ceiling of 512 (`DatabaseContext.AbsoluteMaxPoolSize`) regardless. So "database X behaves fine under Standard mode" is, by default, a claim about ≤100 concurrent writers, not unbounded concurrency — see `docs/connection/connection-pooling.md` for the full resolution chain before treating a green test run as evidence of higher-concurrency correctness than it actually exercised.
 
+Setting `MaxConcurrentWrites=0` promotes the context to `ReadOnly`; the writer governor and provider minimum become zero while the reader pool remains enabled.
+
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
 

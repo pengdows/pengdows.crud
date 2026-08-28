@@ -34,20 +34,9 @@ constructible attributes risks a caller applying one and silently getting no beh
 
 ---
 
-## `SingleConnectionStrategy` has no repair path — fixable for file-backed engines, impossible for `:memory:`
+## Pool-size precedence and mismatch logging — completed 2026-08-28
 
-`SingleConnectionStrategy.GetConnection()` unconditionally returns the stored connection with no health check. `PreventDatabaseUnload` uses lazy sentinel repair instead. This splits into two very different cases depending on what's behind the one connection:
-
-- **`:memory:` SQLite/DuckDB: not fixable, don't attempt it.** The database exists only inside that one connection; a replacement connection to the same `:memory:` string creates a new, empty database rather than recovering anything. The current "every subsequent operation fails" behavior is the correct outcome here, not a gap.
-- **Firebird embedded (`.fdb` file) is no longer selected as `SingleConnection`.** It uses `PreventDatabaseUnload`, which preserves a passive attachment while normal work uses separate connections. Any explicitly forced durable-storage `SingleConnection` remains a separate, opt-in repair question; the repair path must never be applied to `:memory:` behavior.
-
-See `docs/connection/connection-modes.md`'s "Failure Behavior" section for the current documented state.
-
----
-
-## `ClampMinPoolSize` silently rewrites an out-of-range `Min Pool Size` with no logging
-
-`ConnectionPoolingConfiguration.ClampMinPoolSize` (`internal/ConnectionPoolingConfiguration.cs:459`) clamps a connection string's `Min Pool Size` into `[0, MaxPoolSize]` and rewrites the connection string — with no `ILogger` parameter and no logging call anywhere in the method. A caller who sets, say, `Min Pool Size=5000` against a `Max Pool Size=100` gets silently clamped to 100 with zero indication anything was changed — the only way to notice is to inspect the actual connection string pengdows.crud ends up using. Worth at least a Warning-level log when `clamped != rawMin.Value`, matching the pattern used elsewhere in this codebase for silent-but-surprising corrections (e.g. the mode-mismatch warning already logged by `WarnOnModeMismatch`).
+`MaxConcurrentReads`/`MaxConcurrentWrites` now have an explicit precedence contract over a conflicting provider `Max Pool Size`, and the mismatch is logged with both values and the winner. Enabled pools receive a minimum of `1`; `PreventDatabaseUnload` receives a minimum of `2` so its sentinel cannot consume the entire pool. Read-only writer pools remain at zero.
 
 ---
 

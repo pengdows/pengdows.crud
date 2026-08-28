@@ -77,13 +77,13 @@ public sealed class PoolMaxMinValidationTests
     }
 
     // =========================================================================
-    // MinPoolSize clamping (polite correction, no throw)
+    // MinPoolSize normalization (enabled pools retain at least one provider connection)
     // =========================================================================
 
     [Fact]
-    public void MinPoolSize_Negative_ClampsToZeroSilently()
+    public void MinPoolSize_Negative_RaisesToEnabledFloor()
     {
-        // Negative min pool size is silently corrected to 0 — no exception thrown
+        // Negative min pool size is corrected to the enabled-pool floor — no exception thrown
         var config = SqlServerConfig("Min Pool Size=-1");
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -91,9 +91,9 @@ public sealed class PoolMaxMinValidationTests
     }
 
     [Fact]
-    public void MinPoolSize_GreaterThanMaxPoolSize_ClampsToMaxSilently()
+    public void MinPoolSize_GreaterThanMaxPoolSize_ClampsToMax()
     {
-        // Min=10 > Max=5 → silently clamped to Min=5 — no exception thrown
+        // Min=10 > Max=5 → corrected to Min=5 — no exception thrown
         var config = SqlServerConfig("Min Pool Size=10;Max Pool Size=5");
 
         using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
@@ -133,6 +133,17 @@ public sealed class PoolMaxMinValidationTests
         var snapshot = ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer);
         Assert.True(snapshot.Forbidden);
         Assert.False(snapshot.Disabled);
+    }
+
+    [Fact]
+    public void MaxConcurrentWrites_Zero_PromotesStandardContextToReadOnly()
+    {
+        var config = SqlServerConfig(maxWrites: 0);
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.Equal(ReadWriteMode.ReadOnly, ctx.ReadWriteMode);
+        Assert.True(ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).Forbidden);
     }
 
     // =========================================================================

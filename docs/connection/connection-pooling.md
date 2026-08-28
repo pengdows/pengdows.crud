@@ -1,18 +1,22 @@
 # Connection Pooling and Governors
 
 ## Pooling defaults
-`DatabaseContext` automatically rewrites connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes so sockets and clients stay in a managed pool. `ConnectionPoolingConfiguration.ApplyPoolingDefaults` detects whether the provider supports external pooling, skips raw connection strings (like `:memory:` or a bare file path), and forces `Pooling=true` when the flag is missing. It does not inject a `Min Pool Size` value anymore—if you want a minimum, set it explicitly in your connection string. Your own explicit pooling settings (other than turning pooling off) are respected, but `Pooling=false` is not: pengdows.crud requires connection pooling for its governor/session-setting model to work, so an explicit `Pooling=false` in the connection string throws `InvalidOperationException` rather than being honored.
+`DatabaseContext` automatically rewrites connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes so sockets and clients stay in a managed pool. `ConnectionPoolingConfiguration.ApplyPoolingDefaults` detects whether the provider supports external pooling, skips raw connection strings (like `:memory:` or a bare file path), and forces `Pooling=true` when the flag is missing. For supported external pools, pengdows.crud also ensures the documented provider minimum. Your own explicit pooling settings (other than turning pooling off) are respected subject to the maximum/minimum policy below, but `Pooling=false` is not: pengdows.crud requires connection pooling for its governor/session-setting model to work, so an explicit `Pooling=false` in the connection string throws `InvalidOperationException` rather than being honored.
 
 ## Pool governors
 The context creates read and write `PoolGovernor` instances in every mode except `SingleConnection`, issuing `PoolSlot` tokens before any connection is acquired. Each governor waits no longer than `PoolAcquireTimeout` (default 5 seconds via `DatabaseContextConfiguration.PoolAcquireTimeout`) before throwing a `PoolSaturatedException` with queue and slot statistics, so you fail fast instead of saturating the provider pool. Override `MaxConcurrentReads`/`MaxConcurrentWrites` to tune effective limits, and observe the snapshots if you need to correlate hot paths with pool contention.
 
-**The governor is never actually unbounded — it always resolves to a concrete slot count, in this priority order:**
+**The governor and provider pool use the same effective maximum, resolved in this priority order:**
 
 1. `DatabaseContextConfiguration.MaxConcurrentWrites`/`MaxConcurrentReads`, if explicitly set.
 2. Otherwise, the connection string's `Max Pool Size` (or the provider's own alias for it), if present.
 3. Otherwise, **the dialect's `DefaultMaxPoolSize`** (`SqlDialect.FallbackMaxPoolSize = 100`, inherited by every dialect that doesn't override it — which includes Snowflake, along with most others).
 
 Whatever number that resolves to is then subject to one more hard ceiling: `DatabaseContext.AbsoluteMaxPoolSize = 512`, an internal constant nothing can exceed regardless of configuration — a request above it is silently clamped down.
+
+When `MaxConcurrentReads` or `MaxConcurrentWrites` is explicitly configured and differs from the connection string's `Max Pool Size`, the configuration property wins for both the governor and the rewritten provider connection string. pengdows.crud logs a warning containing both values and the winning value. If the configuration property is absent, the connection-string value wins over the dialect default. `Min Pool Size` has no separate configuration property: enabled pools receive a provider minimum of `1`, or `2` in `PreventDatabaseUnload` mode. An existing connection-string minimum is raised to that floor and clamped to the effective maximum. A read-only writer pool has maximum and minimum `0`.
+
+Setting `MaxConcurrentWrites=0` promotes the context to `ReadOnly` mode, regardless of the requested connection mode. This is equivalent to explicitly selecting a read-only context: the writer governor and provider minimum are both zero, while the reader pool remains enabled.
 
 **Practical implication:** if you're evaluating a claim like "database X behaves correctly under `Standard` mode with no special write handling," check what pool size that evidence actually ran under. With zero explicit configuration, that claim is a claim about behavior at ≤100 concurrent writers (the dialect default), not unbounded concurrency — the governor caps it there whether or not you asked it to. A claim meant to demonstrate genuinely high-concurrency behavior needs to either explicitly raise `MaxConcurrentWrites` (up to 512) or state the tested concurrency level alongside the pool size it ran under, since a green result at N writers against a governor capped at N (or higher) proves less than the same result against a governor capped well below N.
 

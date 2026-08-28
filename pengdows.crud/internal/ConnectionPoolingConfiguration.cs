@@ -448,7 +448,7 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
-    /// Silently corrects Min Pool Size in the connection string to a valid range.
+    /// Corrects Min Pool Size in the connection string to a required floor and valid range.
     /// <list type="bullet">
     /// <item>Step 1: clamp to &gt;= 0 (negative values become 0)</item>
     /// <item>Step 2: clamp to &lt;= MaxPoolSize (when MaxPoolSize is known)</item>
@@ -497,6 +497,51 @@ internal static class ConnectionPoolingConfiguration
             }
 
             return result;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    internal static string EnsureMinimumPoolSize(
+        string connectionString,
+        string? minPoolSizeSettingName,
+        int? rawMin,
+        int? rawMax,
+        int requiredMinimum)
+    {
+        if (string.IsNullOrWhiteSpace(minPoolSizeSettingName) ||
+            string.IsNullOrWhiteSpace(connectionString) ||
+            requiredMinimum < 0)
+        {
+            return connectionString;
+        }
+
+        var target = Math.Max(rawMin ?? 0, requiredMinimum);
+        if (rawMax.HasValue)
+        {
+            target = Math.Min(target, rawMax.Value);
+        }
+
+        if (rawMin.HasValue && target == rawMin.Value)
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (RepresentsRawConnectionString(builder, connectionString))
+            {
+                return connectionString;
+            }
+
+            builder[minPoolSizeSettingName] = target;
+            var result = builder.ConnectionString;
+            return SensitiveValuesStripped(connectionString, result)
+                ? ReapplyModifications(connectionString, builder)
+                : result;
         }
         catch
         {

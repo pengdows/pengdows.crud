@@ -2180,6 +2180,15 @@ await conn.DisposeAsync();  // Returns to provider pool
 **What the PROVIDER manages**:
 - Physical connection pooling
 - Pool sizing (Min Pool Size, Max Pool Size)
+
+**Pool-size precedence:** `MaxConcurrentReads`/`MaxConcurrentWrites`, when explicitly configured,
+win over a conflicting connection-string `Max Pool Size` for both the governor and rewritten
+provider connection string; the mismatch is logged with both values and the winner. Without an
+external maximum, the connection-string value wins over the dialect default. Enabled pools use a
+minimum of 1, or 2 for `PreventDatabaseUnload` so its sentinel leaves working capacity. Read-only
+writer pools have maximum and minimum 0.
+Setting `MaxConcurrentWrites=0` also promotes the context to `ReadOnly`, regardless of the
+requested connection mode; the reader pool remains enabled.
 - Connection validation and reset
 
 ### Mode Selection and Coercion
