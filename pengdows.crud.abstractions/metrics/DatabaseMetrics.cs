@@ -94,4 +94,20 @@ public sealed record DatabaseMetrics(
 
     /// <summary>Gets whether the transaction P95/P99 values contain percentile data.</summary>
     public bool TransactionPercentilesAvailable { get; init; }
+
+    /// <summary>Gets cumulative read/write requests admitted by the context.</summary>
+    public long ReadRequests { get; init; }
+    public long WriteRequests { get; init; }
+
+    /// <summary>Gets cumulative requests that waited for a pool slot.</summary>
+    public long ReadPoolWaits { get; init; }
+    public long WritePoolWaits { get; init; }
+
+    /// <summary>Gets cumulative pool acquisition timeouts.</summary>
+    public long ReadPoolTimeouts { get; init; }
+    public long WritePoolTimeouts { get; init; }
+
+    /// <summary>Gets cumulative mode-lock waits and timeouts.</summary>
+    public long ModeWaits { get; init; }
+    public long ModeTimeouts { get; init; }
 }

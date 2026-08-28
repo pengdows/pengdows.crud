@@ -54,9 +54,11 @@ Every other database/framework error in this library surfaces as a `DatabaseExce
 
 ---
 
-## `AttributionStats` is half-wired — some counters recorded, never read; others never recorded at all
+## `AttributionStats` wiring — completed 2026-08-28
 
-`DatabaseContext` holds an internal `AttributionStats` collector (`ReadRequests`/`WriteRequests`/governor-wait/governor-timeout/mode-wait counters). Only `RecordReadRequest`/`RecordWriteRequest` are ever actually called (`DatabaseContext.ConnectionLifecycle.cs`); the governor-wait, governor-timeout, and mode-wait recording methods are never invoked anywhere. And even the two counters that *are* recorded are never read back — `GetSnapshot()` has no caller anywhere in the codebase. So today this is pure overhead: two counters incremented on every request, for a snapshot nothing ever asks for. See `docs/metrics.md`. Either finish wiring it into `DatabaseMetrics`/`MetricsUpdated` (it looks like it was meant to enrich the existing metrics with governor-contention attribution) or remove it — right now it's neither providing value nor fully implementing its own apparent design intent.
+`DatabaseMetrics` now exposes cumulative request, pool-wait, pool-timeout, mode-wait, and
+mode-timeout attribution. Pool and mode counts use their authoritative collectors rather than
+duplicating those counters in `AttributionStats`.
 
 ---
 

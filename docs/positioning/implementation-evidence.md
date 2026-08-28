@@ -111,12 +111,9 @@ property. Re-verify this section once `2.0.6` (or its successor) is merged into 
 
 ## Internal metrics wiring status
 
-`AttributionStats` (`pengdows.crud/metrics/AttributionStats.cs`) — a deeper internal
-collector recording *why* an operation waited (pool slot vs. turnstile vs. mode lock), not
-just that it did — is populated (`RecordReadRequest`/`RecordWriteRequest` are called from
-`DatabaseContext.ConnectionLifecycle.cs`) but its snapshot is never read anywhere in the
-codebase, including by the OTel bridge. It is real internal tracking, not yet a surfaced
-capability.
+`DatabaseMetrics` now surfaces cumulative request and contention attribution. Request counts
+come from `AttributionStats`, pool waits/timeouts come from the authoritative pool governors,
+and mode waits/timeouts come from `ModeContentionStats`.
 
 ## Test coverage backing specific thesis claims
 

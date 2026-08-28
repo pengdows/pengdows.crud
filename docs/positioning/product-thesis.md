@@ -514,10 +514,10 @@ alone. A metrics library added from outside the boundary can time an ADO.NET cal
 cannot tag that timing by which pool the connection came from, because that distinction only
 exists inside the coordination the metrics are riding on.
 
-A deeper internal collector, `AttributionStats`, records *why* an operation waited (pool
-slot vs. turnstile vs. mode lock), not just that it did — real internal tracking, not yet a
-surfaced capability; see [`implementation-evidence.md`](./implementation-evidence.md) for
-its current wiring status.
+`DatabaseMetrics` surfaces cumulative request and contention attribution: request counts
+come from `AttributionStats`, pool waits/timeouts come from the pool governors, and mode
+waits/timeouts come from `ModeContentionStats`. See [`implementation-evidence.md`](./implementation-evidence.md)
+for the implementation details.
 
 The same sharing applies across principle 3 (context-per-tenant). Because provider
 behavior, session rules, connection governance, and parameter semantics all live inside
