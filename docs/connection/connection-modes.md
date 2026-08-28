@@ -28,8 +28,12 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
 
 ### KeepAlive
 
-- Semantics: Identical to Standard, except a single pinned idle connection is kept open to prevent unload (e.g. SQL Server LocalDb).
-- Pinned connection is never used for commands.
+**KeepAlive exists for exactly one reason, and it has nothing to do with performance.** It does not warm a connection for faster queries, does not cache anything, and does not optimize any code path — it is purely a workaround for one specific piece of external, uncontrollable engine behavior.
+
+The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connection late and closes it early — every operation gets a fresh connection from the pool and releases it back immediately after. That's normally harmless, because the ADO.NET connection pool keeps the underlying physical connections warm behind the scenes. But **SQL Server LocalDB is not a normal server** — it's a lightweight, self-managed engine process that watches its own connection count and **automatically unloads the database (shuts the engine instance down) once it observes zero active connections for a while**. If pengdows.crud used plain Standard mode against LocalDB, a quiet period (no requests for a stretch) would let the pool drain to zero open connections, LocalDB would notice and unload the database, and the *next* request would pay the cost of LocalDB re-launching and re-attaching the database file before it could even open a connection.
+
+KeepAlive's entire job is to prevent that specific failure mode: it holds one single pinned, idle connection open for the lifetime of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. **That pinned connection is never used for any command, ever** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. The sentinel's only job is to exist and stay open; it does not participate in the "hot path" in any way, and removing it would not change query latency at all except for the LocalDB-unload-then-relaunch penalty it exists to prevent.
+
 - Automatically selected only for LocalDb (`CoerceMode` forces LocalDb → KeepAlive, and `Best` → KeepAlive for LocalDb). For SQLite/DuckDB, a KeepAlive request is always coerced to SingleWriter instead — it is never actually reachable there regardless of what's requested. On full-server databases it is honored if explicitly requested ("safe but less functional," not unsafe), but it is not the recommended or automatically-selected choice for any of them.
 - Not a general production-workload mode the way Standard/SingleWriter are — scoped to the LocalDb sentinel use case specifically.
 
@@ -142,6 +146,11 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
 - Persistent modes (KeepAlive/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
+- **After construction, `KeepAlive` and `SingleConnection` handle a broken pinned connection very differently — this asymmetry is not obvious from the mode names alone.** `KeepAliveConnectionStrategy` checks sentinel health lazily on every `GetConnection()` call (a cheap unlocked state check in the common case) and transparently repairs — disposes the dead sentinel, opens a fresh one, swaps it in — if it's `Broken`/`Closed`. `SingleConnectionStrategy.GetConnection()` has **no health check at all**; it unconditionally returns the stored connection. If that one connection breaks, every subsequent operation on that context fails against a dead connection for the rest of its lifetime — the only recovery is disposing and reconstructing the whole `DatabaseContext`.
+
+  **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
+
+  For other single-connection-limited engines with real persistent storage behind the one connection (e.g. Firebird embedded, a `.fdb` file), the connection break is against durable data — reopening a fresh connection to the same file *would* actually recover it, so the current lack of any repair attempt is a genuine, fixable gap there, unlike the `:memory:` case.
 
 ## 7. Heuristics & Tests
 
@@ -178,8 +187,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ## 10. Practical Guidance
 
 **Best practices:**
-- Use `Standard` in production for client-server databases; it is on equal production footing with `SingleWriter` for file-based SQLite/DuckDB (see §1).
-- `KeepAlive` and `SingleConnection` are best suited for embedded/local DBs or dev/test, per their scoped use cases in §1.
+- `Standard`, `SingleWriter`, and `KeepAlive` are all production-supported, each for a different deployment shape: `Standard` for client-server databases, `SingleWriter` for file-based SQLite/DuckDB, `KeepAlive` for single-machine/embedded deployments backed by SQL Server LocalDB.
+- `SingleConnection` against `:memory:` SQLite/DuckDB is **never production-suitable, structurally** — an in-memory database has no persistence outside that one connection, so it cannot survive a process restart or a dropped connection (see §6). Reserve it for tests and ephemeral scratch data. Against a durable-storage single-connection engine (e.g. Firebird embedded), `SingleConnection` is at least structurally viable, but remains a narrow/niche case, not general production, and currently has no connection-repair path (see §6 and `docs/planning/future-work.md`).
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**

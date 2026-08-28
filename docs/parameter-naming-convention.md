@@ -163,6 +163,10 @@ NULL values are inlined (not parameterized). Auto-chunking respects `MaxParamete
 INSERT INTO t (col1, col2) VALUES (@b0, @b1), (@b2, @b3), (@b4, @b5)
 ```
 
+### `RetrieveAsync(ids)` also auto-chunks — silently, across multiple round trips
+
+This is a separate mechanism from the batch chunking above, on a read method rather than a batch write. When the target dialect doesn't support set-valued parameters (i.e. everything except PostgreSQL/CockroachDB/YugabyteDB's `= ANY($1)` family) and `ids.Count > ctx.MaxParameterLimit`, `TableGateway.RetrieveAsync` transparently splits the request into `ceil(ids.Count / MaxParameterLimit)` separate `BuildRetrieve` + `LoadListAsync` round trips and concatenates the results, rather than generating one query with a huge `IN (...)` list. A caller retrieving, say, 5,000 IDs against SQLite (`MaxParameterLimit` 999 or 32766 depending on version) or SQL Server (2100) gets several transparent queries instead of one — correct, but worth knowing if you're reasoning about round-trip counts or profiling query logs and see more `SELECT`s than call sites.
+
 ---
 
 ## SetParameterValue — rules and gotchas

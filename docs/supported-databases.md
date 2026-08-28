@@ -125,3 +125,89 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | **Db2** | No | No | No | Not implemented — no session/connection-level read-only enforcement configured yet |
 
 > **Dual Enforcement:** For PostgreSQL, SQLite, and DuckDB, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool.
+
+---
+
+## Behavioral Gotchas by Database
+
+Capability-flag differences and dialect-specific behavior that aren't obvious from the matrices
+above — verified directly against each `dialects/*.cs` implementation. This is not exhaustive;
+it lists the quirks most likely to surprise a caller who assumes uniform SQL-standard behavior.
+
+**CockroachDB**
+- Only `Serializable` isolation is ever offered — no `ReadCommitted` fallback exists at all
+  (`CockroachDbDialect.GetSupportedIsolationLevels`).
+- Version banner never contains a bare "PostgreSQL" token even though CockroachDB is
+  wire-compatible, so the `PostgreSqlDialect.ParseVersion` fix (below) never activates for it —
+  `CockroachDbDialect` needs, and has, its own `ParseVersion` override; without it every
+  `IsVersionAtLeast()`-gated capability would silently stay off.
+- No stored procedure support (`ProcWrappingStyle.None`).
+
+**Db2**
+- Three session-level "special registers" — `CURRENT ISOLATION`, `CURRENT TEMPORAL SYSTEM_TIME`,
+  `CURRENT TEMPORAL BUSINESS_TIME` — are not transaction-scoped; their `SET` statements survive a
+  rollback. `GetBaseSessionSettings()` resets all three on every checkout specifically because a
+  prior pooled-connection borrower could otherwise leave a non-default isolation override or an
+  as-of-time temporal-table view in effect for the next caller.
+- Generated-key retrieval wraps the entire INSERT: `SELECT ... FROM FINAL TABLE (INSERT ...)`,
+  not a trailing `RETURNING`/`OUTPUT` clause like every other RETURNING-capable dialect.
+- `IBM.Data.Db2`'s driver throws immediately on `DbType.Guid` before any conversion runs; GUIDs
+  must be remapped to `DbType.String` at parameter-creation time.
+- A bare `SAVEPOINT name` fails with SQL0104N — needs the `ON ROLLBACK RETAIN CURSORS` suffix.
+
+**DuckDB**
+- `ReadOnlyConnectionsCanBlockConcurrentWriters => true` and
+  `RequiresSerializedConnectionOpen => true` — both real connection-handling constraints of
+  DuckDB's ADO.NET provider, not choices pengdows.crud made.
+- `RejectsExplicitIsolationLevelOnBeginTransaction => true` — passing an explicit
+  `IsolationLevel` to `BeginTransaction` throws; only the implicit/default path works.
+- No unique or check constraint enforcement, no savepoints.
+- MERGE only on 1.4+, and its `MergeUpdateRequiresTargetAlias => false` — the opposite of most
+  MERGE-capable dialects, which require the target alias on the SET side.
+
+**Snowflake**
+- Parses constraint DDL but enforces none of it at runtime: `EnforcesConstraints`,
+  `EnforcesForeignKeyConstraints`, `SupportsUniqueConstraints`, and `SupportsCheckConstraints`
+  are all `false`. A unique/FK/check constraint in your DDL is documentation, not enforcement.
+- No `INSERT ... RETURNING`, no savepoints; upsert always routes through MERGE.
+- `MaxRowsPerBatch => 16384` — a real per-batch cap, not just a default tuning knob.
+
+**TiDB**
+- Accepts `SERIALIZABLE` isolation syntax without error but silently enforces only
+  `RepeatableRead` — `GetSupportedIsolationLevels`/`GetIsolationProfileMapping` deliberately
+  don't offer `Serializable` at all, specifically so callers can't rely on a guarantee TiDB never
+  provides. `IsolationProfile.StrictConsistency` maps to `RepeatableRead`, its best available
+  level.
+- No FK or check-constraint enforcement (compatibility-mode defaults).
+- The `MySql.Data` driver (not MySqlConnector) has a text-protocol prepared-statement bug that
+  corrupts string parameters specifically against TiDB — `PrepareStatements` is disabled unless
+  the connector in use is MySqlConnector.
+
+**YugabyteDB**
+- Reports its version as "PostgreSQL 15.x-YB-...", which would normally trigger
+  `SupportsMerge => true` via version-gating (PostgreSQL 15+ supports MERGE) — but YSQL doesn't
+  actually implement the SQL:2016 MERGE statement and throws `0A000` if you try. `SupportsMerge`
+  is hardcoded `false` regardless of detected version; upsert always routes through
+  `INSERT ... ON CONFLICT` instead.
+- Prepared statements are fully disabled (`PrepareStatements => false`), not just left
+  auto-managed — YSQL doesn't reliably preserve a prepared statement across a pooled connection's
+  checkout/checkin cycle, and the observed failure mode is a cryptic "Connection is not open"
+  error with no obvious link back to prepare/pooling.
+
+**Firebird, MySQL/MariaDB, Oracle** (already covered conceptually by the v1 wiki pages —
+these are the v2-only additions since then)
+- Firebird: `GuidStorageMode` is a public, `init`-only property on `FirebirdDialect` (default
+  `Binary`, settable to `String` for new schemas) that changes GUID wire format per dialect
+  instance — and is folded into `CacheFingerprint` specifically so two Firebird tenants on the
+  same server version but different `GuidStorageMode` don't collide in shared gateway caches.
+  Firebird is also the sole dialect with `EmitsAnsiMergeSyntax => false` (merge-*like* syntax,
+  not ANSI `MERGE ... WHEN MATCHED`) combined with `SupportsPureKeyUpsert => true` (upsert on an
+  entity with only `[PrimaryKey]` columns and no updateable column, which every other dialect
+  rejects).
+- MySQL/MariaDB: which ADO.NET driver is in use changes the generated-key retrieval *strategy*,
+  not just the connection string — MySqlConnector doesn't support `AllowMultipleStatements`, so
+  it uses `ReaderInsertedId` where `MySql.Data` uses `CompoundStatement` for the identical
+  INSERT-then-fetch-ID operation.
+- Oracle: `RequiresOutputParameterForReturning => true` is Oracle's sole positive case for that
+  capability among all 16 dialects — every other RETURNING-capable database gets its generated
+  key via a result set, not an OUT parameter.

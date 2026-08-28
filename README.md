@@ -104,6 +104,9 @@ var ctx = new DatabaseContext(connectionString, SqlClientFactory.Instance,
     readOnlyConnectionString: replicaConnectionString);
 
 // Full configuration object (logger, pool sizes, prepare mode, etc.)
+// MaxConcurrentReads/MaxConcurrentWrites below are illustrative values for this
+// example, not library defaults — see docs/connection/connection-pooling.md for
+// what the write/read governors actually default to when left unset.
 var ctx = new DatabaseContext(
     new DatabaseContextConfiguration
     {
@@ -234,6 +237,12 @@ What "Supported Database" means in `pengdows.crud` is defined by four empirical 
 
 - Repo docs: [docs/](./docs)
 - Wiki: https://github.com/pengdows/pengdows.crud/wiki
+
+## Related Packages
+
+- [`pengdows.stormgate`](./pengdows.stormgate/README.md) / [`pengdows.stormgate.EntityFrameworkCore`](./pengdows.stormgate.EntityFrameworkCore/README.md) — a lightweight ADO.NET connection admission controller for existing Dapper/EF Core/raw-ADO.NET apps that aren't migrating to pengdows.crud. Sibling packages, not wired into `DatabaseContext`.
+- [`pengdows.crud.opentelemetry`](./docs/opentelemetry-metrics.md) — OpenTelemetry metrics adapter.
+- [`pengdows.poco.mint`](https://github.com/pengdows/pengdows.poco.mint) — schema-first POCO code generation.
 
 ## Support
 

@@ -446,6 +446,12 @@ app.Use(async (context, next) =>
 
 ---
 
+## Capability Flags Derive From One Enum: `SqlStandardLevel`
+
+`ISqlDialect` exposes roughly 20 independent-looking `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more. Reading them in isolation, each looks like it might be individually implemented per dialect. In the base `SqlDialect` class, **all of them are actually one mechanism**: each is `MaxSupportedStandard >= SqlStandardLevel.SqlXXXX` for a specific standard-year threshold (`SqlStandardLevel` is a plain year-numbered enum, `Sql86` through `Sql2023`). `MaxSupportedStandard` itself defaults to `ProductInfo.StandardCompliance` once the dialect is initialized (probed against the live server), falling back to `Sql92` before initialization.
+
+This means a new dialect gets most of these ~20 flags correct "for free" simply by having an accurate `MaxSupportedStandard`/`ProductInfo.StandardCompliance` — no per-flag implementation needed for the common case. Overriding an individual `Supports*` property is only necessary when a specific database's real behavior diverges from what its claimed standard-year compliance would predict — e.g. YugabyteDB reports as PostgreSQL 15-compatible (which would imply `SupportsMerge => true` under the standard-level default) but doesn't actually implement MERGE, so `YugabyteDbDialect` overrides `SupportsMerge` to `false` explicitly (see the per-database gotchas doc). When adding a new database (see `CLAUDE.md`'s checklist), get `MaxSupportedStandard` right first, then verify each derived flag against the engine's *actual* behavior rather than assuming standard-year compliance is uniformly accurate — some engines claim more compliance than they implement.
+
 ## Strategy Pattern Architecture
 
 ### IConnectionStrategy Implementations
@@ -970,6 +976,12 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 This section documents **contracts between internal components** that aren't visible in public APIs.
 
+### The internal-interface seam — and its failure mode for custom decorators
+
+The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connection acquisition, dialect version-detection, and session-settings internals — those live on separate `internal` interfaces (`IInternalConnectionProvider`, `IInternalSqlDialect`, `ITypeMapAccessor`) that the concrete `DatabaseContext`/`SqlDialect` classes implement *in addition to* the public ones. A family of `internal static` extension classes (`InternalConnectionExtensions`, `InternalDialectProviderExtensions`, `InternalSessionSettingsExtensions`, `InternalSqlContainerExtensions`, `InternalSqlDialectExtensions`) form the seam: each casts its `IDatabaseContext`/`ISqlDialect` parameter to the matching internal interface and throws `InvalidOperationException` (e.g. `"IDatabaseContext must provide internal connection access."`) if the cast fails. This is what lets `SqlContainer`/the gateways call capabilities that don't exist anywhere on the public surface at all.
+
+**Sharp edge:** any custom `IDatabaseContext`/`ISqlDialect` implementation *within the same solution* — most plausibly a test decorator wrapping the real implementation to override one behavior (`docs/planning/future-work.md`'s dialect-override decorator pattern for multitenancy tests is exactly this shape) — compiles fine if it only implements the public interface, but throws `InvalidOperationException` at runtime the first time internal code tries to use it, since the decorator doesn't also implement the internal interface. If you're writing a decorator around either interface for testing, it needs to forward the relevant internal interface too, not just the public one.
+
 ### IConnectionStrategy ↔ DatabaseContext
 
 **Contract**:
@@ -988,6 +1000,12 @@ This section documents **contracts between internal components** that aren't vis
 - Auto-disposal **must** release connection and lock
 
 **Enforcement**: TrackedReader.cs:91-150 (disposal logic)
+
+**On a transaction specifically, this is fail-fast, not blocking.** `ReusableAsyncLocker.MarkHeldByActiveReader()` marks the transaction's lock as held by an open reader; while marked, *any* further lock attempt on that transaction — including a nested write from the same logical caller, e.g. writing while still streaming a `LoadStreamAsync` result from the same `ITransactionContext` — throws `InvalidOperationException("Cannot execute another command on this transaction while a reader opened on it is still active. Dispose the reader...")` immediately rather than blocking until the reader closes. This is deliberate: the flow that could dispose the reader is often the same flow attempting the second command, so blocking there would deadlock instead of erroring.
+
+### RealAsyncLocker is not reentrant
+
+`RealAsyncLocker.Lock()`/`LockAsync()`/`TryLockAsync()` all throw `InvalidOperationException("Lock already acquired.")` immediately if the same locker instance is locked a second time before the first lock is released — including by the same logical caller. This is deliberate: a `SemaphoreSlim(1,1)`-backed lock would otherwise deadlock on self-reentry rather than erroring, and the loud exception is preferred over a hang. If you see this exception, look for a call path that re-enters a locked scope (directly or via a callback) rather than assuming a threading bug in the locker itself.
 
 ### MetricsCollector ↔ DatabaseContext
 
@@ -1066,6 +1084,22 @@ This section documents **contracts between internal components** that aren't vis
 - Pure delegate invocations
 
 **Invalidation**: None (schemas rarely change at runtime)
+
+### NULL handling in compiled mappers is deliberately loud
+
+`CompiledMapperFactory` skips the `IsDBNull` guard entirely for non-nullable value-type columns (`int`, `DateTime`, etc. — not `int?`) — the compiled getter calls the typed reader accessor directly. If the database genuinely returns `NULL` for a column mapped to a non-nullable value-type property (a schema change that didn't get mirrored in the C# type, most commonly), the result is a hard exception on the first NULL row rather than a silently-defaulted value. This is intentional: silently leaving the property at `default(T)` would be a worse failure mode (wrong data, no error) than a loud crash pointing at the mismatched column. If you hit this, the fix is making the property type match the column's actual nullability (`int?`), not suppressing the exception.
+
+### Compiled binders close over the dialect instance
+
+`CompiledBinderFactory<TEntity>.CreateInsertBinder`/`CreateUpdateBinder` bake the `ISqlDialect` instance itself into the compiled delegate via `Expression.Constant(dialect)` — the generated code calls back into that exact dialect object for the delegate's entire lifetime. Caching these delegates keyed on anything looser than the dialect *instance* (e.g. the `SupportedDatabase` enum alone) can silently return one tenant's compiled binder to another tenant on the same database engine but a different server version — this was a real, since-fixed bug (see `docs/planning/future-work.md`'s multitenancy-dialect-cache-collision entry). The current caches are correctly instance- or fingerprint-keyed; the mechanism is noted here so a future change to the caching layer doesn't reintroduce the same class of bug.
+
+### `BoundedCache<TKey,TValue>`
+
+A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup caches and several gateway accessor caches. Builds are deduped under concurrent load via `Lazy<T>` with `ExecutionAndPublication`, and eviction is a linear scan by last-access timestamp — cheap and correct at the library's typical bound sizes (roughly 32–512 entries depending on the cache), but not designed for a much larger working set. An application generating many distinct, ad-hoc SQL/result-set shapes at runtime (rather than a fixed, compile-time-known set of entities and queries) will churn this cache past its bound and repeatedly pay recompilation cost rather than getting a stable steady-state hit rate.
+
+### Connection-string handling in the normalization cache
+
+`ConnectionStringNormalizationCache` is a static, process-lifetime `ConcurrentDictionary<string, Dictionary<string,string>>` keyed on the **literal connection string as passed in**, with no eviction, no bound, and no TTL (only a `ClearForTests()` used by the test suite). The cached *value* has credentials scrubbed before storage — `ShouldIgnoreKey` excludes `password`/`pwd`/`user id`/`uid`/`user`/`username` and any key containing `password`/`secret`/`token`/`access` — so the parsed key/value breakdown itself never retains a credential. The cache *key*, however, is the raw connection string exactly as supplied, which for most providers embeds the password directly. For an application that constructs a fixed, small number of connection strings (the common case — one or a few per `DatabaseContext`), this is a harmless, unbounded-in-theory-but-bounded-in-practice cache. For an application that builds many distinct connection strings at runtime — per-tenant credentials, credential rotation, dynamically generated passwords — this cache grows without bound for the process lifetime and keeps every historical raw connection string (including old, rotated-out credentials) resident in memory indefinitely.
 
 ### Connection Reuse
 

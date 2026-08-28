@@ -99,6 +99,26 @@ database-agnostic policy decoupled from connection identity — is in
 - [`docs/batch-operations.md`](docs/batch-operations.md) — batch create/update/upsert/delete
   API, dialect fallback rules, and what is deliberately *not* implemented (no
   `BatchResult`, no partial-success reporting, no provider-native bulk loaders).
+- [`docs/generated-keys.md`](docs/generated-keys.md) — how `CreateAsync` retrieves an
+  auto-generated `[Id]` value per database: the `GeneratedKeyPlan` strategy enum, why
+  `SessionScopedFunction` needs a connection-pooling-safe alternative, and the exact plan each
+  of the 16 dialects uses.
+- [`docs/tracing.md`](docs/tracing.md) — zero-extra-package `ActivitySource("pengdows.crud")`
+  tracing spans emitted by the core library itself: tags (including `db.statement` with
+  parameterized, never-interpolated SQL text), setup, and how this differs from the separate
+  `pengdows.crud.opentelemetry` metrics package.
+- [`docs/uuid7.md`](docs/uuid7.md) — `Uuid7Optimized`'s per-thread-only monotonicity scope, clock
+  drift handling, throughput limits, and `Uuid7ClockMode` configuration for PTP/NTP/single-instance
+  deployments.
+- [`docs/advanced-types.md`](docs/advanced-types.md) — value objects for PostgreSQL/Oracle/SQL
+  Server types with no primitive .NET equivalent (`Inet`, `Cidr`, `MacAddress`, `Range<T>`,
+  `PostgreSqlInterval`, `IntervalYearMonth`/`IntervalDaySecond`, `HStore`, `JsonValue`, `Geometry`/
+  `Geography`, `RowVersion`): usage, per-dialect wiring, and which nearby-named attributes are
+  declared in source but not actually consumed by the mapping pipeline.
+- [`docs/opentelemetry-metrics.md`](docs/opentelemetry-metrics.md) — the `pengdows.crud.opentelemetry`
+  adapter's design: instrument names (both the original `pengdows.db.client.*` scheme and the
+  additive OTel semantic-convention names), what's bridged from `MetricsUpdated`, and what's still
+  open.
 
 ## Positioning and evidence, kept separate on purpose
 
@@ -118,6 +138,16 @@ No LINQ-to-SQL translation, no change tracking, no implicit unit of work, no que
 filtering for multitenancy (it uses context-per-tenant instead — a distinct `IDatabaseContext`
 per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionScope` support
 (incompatible with its open-late/close-early connection philosophy by design).
+
+## Related packages, not wired into this library
+
+- [`pengdows.stormgate/README.md`](pengdows.stormgate/README.md) /
+  [`pengdows.stormgate.EntityFrameworkCore/README.md`](pengdows.stormgate.EntityFrameworkCore/README.md)
+  — a lightweight ADO.NET connection admission controller (gates concurrent connection *opens*)
+  for existing Dapper/EF Core/raw-ADO.NET applications that aren't migrating to pengdows.crud.
+  Ships from the same repository/solution but is a standalone, separately-adopted package — not
+  a substitute for `DbMode.SingleWriter`, which solves a different problem (write serialization
+  on already-open connections against file-based SQLite/DuckDB).
 
 ## Optional
 

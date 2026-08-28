@@ -330,14 +330,18 @@ This is intentional design — it allows "last modified" queries without checkin
 
 | Mode | Value | Use Case |
 |------|-------|----------|
-| `Standard` | 0 | **Production default** — pool per operation |
-| `KeepAlive` | 1 | Databases that unload when idle, like SQL Server LocalDB (not SQLite/DuckDB — those coerce to SingleWriter instead) |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
-| `SingleConnection` | 4 | Databases that can't handle more than one connection at all — every read and write serializes through one pinned connection (e.g. `:memory:` SQLite/DuckDB, Firebird embedded) |
+| `Standard` | 0 | **Production-supported** — pool per operation, client-server databases |
+| `KeepAlive` | 1 | **Production-supported for single-machine/embedded deployments** — SQL Server LocalDB, where the sentinel connection keeps the engine from unloading between requests (not SQLite/DuckDB — those coerce to SingleWriter instead) |
+| `SingleWriter` | 2 | **Production-supported** — file-based SQLite/DuckDB, serializes writes via turnstile governor |
+| `SingleConnection` | 4 | Every read and write serializes through one pinned connection. **Never production-suitable for `:memory:` SQLite/DuckDB** — see below. Narrower, durable-storage uses (e.g. Firebird embedded to a `.fdb` file) are structurally viable but currently lack any connection-repair path; treat as scoped/niche rather than general production. |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
+
+**`SingleConnection` against an in-memory database (`:memory:`) is not production-suitable, and this is structural, not a current limitation to be fixed.** The entire database lives inside that one connection's process memory: no independent persistence, no crash recovery, no backup, and it cannot survive a process restart or even a dropped connection (a fresh connection to the same `:memory:` string creates a new, empty database). Reserve `:memory:` for tests and ephemeral scratch data.
+
+**`KeepAlive` has zero to do with performance or optimization — it exists to work around one specific piece of external engine behavior.** SQL Server LocalDB automatically unloads the entire database (shuts its own engine instance down) once it observes no active connections for a while. Under plain `Standard` mode (open late, close early), a quiet period with no traffic lets the pool drain to zero open connections, LocalDB unloads, and the next request pays the cost of LocalDB relaunching and reattaching the database file before it can even open a connection. `KeepAlive`'s entire job is to prevent exactly that: it holds one pinned, idle connection open for the life of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. That sentinel connection is **never used to run a single command** — every real read and write still goes through its own fresh, ephemeral connection exactly like `Standard` mode. Removing the sentinel wouldn't slow down a single query; it would just let LocalDB unload during idle periods again. That's the whole feature.
 
 ## Transactions
 
@@ -460,6 +464,8 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 
 - **`pengdows.poco.mint`**: Code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
 - **`pengdows.crud.fakeDb`**: Standalone NuGet package providing a fake ADO.NET provider. Essential for fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
+- **`pengdows.stormgate`** / **`pengdows.stormgate.EntityFrameworkCore`**: Sibling packages, not wired into `DatabaseContext`'s own connection governance. A lightweight ADO.NET connection admission controller (gates concurrent connection *opens*) for existing Dapper/EF Core/raw-ADO.NET applications that aren't migrating to pengdows.crud — not a substitute for `DbMode.SingleWriter`, which solves a different problem (write serialization on already-open connections). See `pengdows.stormgate/README.md`.
+- **`pengdows.crud.opentelemetry`**: OpenTelemetry metrics adapter bridging `MetricsUpdated` into `System.Diagnostics.Metrics`. See `docs/opentelemetry-metrics.md`.
 
 ## AI Agent Files
 

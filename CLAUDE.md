@@ -90,7 +90,7 @@ int affected = await DeleteAsync(id);
 int affected = await UpsertAsync(entity);
 TEntity? e   = await RetrieveOneAsync(id);           // By [Id]
 TEntity? e   = await RetrieveOneAsync(entityLookup); // By [PrimaryKey]
-List<TEntity> list = await RetrieveAsync(ids);
+List<TEntity> list = await RetrieveAsync(ids); // auto-chunks into multiple round trips if ids.Count exceeds MaxParameterLimit on a dialect without set-valued parameters — see docs/parameter-naming-convention.md
 IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 ```
 
@@ -315,6 +315,18 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- `IAuditValueResolver.Resolve()` is synchronous only — no async overload exists. A resolver backed by an async-only identity source (e.g. a remote claims service) must block on it itself. If `Resolve()` throws, the exception propagates unwrapped from `CreateAsync`/`UpdateAsync` — not caught or translated.
+
+**SECURITY: `AuditCreationPolicy` controls whether a caller-supplied `CreatedBy`/`CreatedOn` on the entity can override the resolver — check this before binding a request model directly onto an audited entity.**
+
+`ITableGateway`/`IPrimaryKeyTableGateway` expose a settable `AuditCreationPolicy` property, defaulting to `PreserveExplicitValues`:
+
+| Policy | Behavior on `CreateAsync` |
+|---|---|
+| `PreserveExplicitValues` (default) | If the entity's `CreatedBy`/`CreatedOn` already holds a non-default value (non-empty string, non-zero numeric, non-empty `Guid`, non-default timestamp), that value is kept as-is instead of being overwritten by the resolver. Intended for imports/migrations that need to carry an original creation timestamp/author. |
+| `Authoritative` | Always overwrites `CreatedBy`/`CreatedOn` with resolver-supplied values, ignoring whatever the entity already holds. |
+
+The default's "preserve a non-default explicit value" behavior means an application that binds an incoming request DTO directly onto an entity with audit columns — without explicitly setting `AuditCreationPolicy = AuditCreationPolicy.Authoritative` — lets a caller supply their own `CreatedBy` value, which is then trusted and persisted as the actual creator. Set `Authoritative` on any gateway whose `CreateAsync` might receive an entity populated from untrusted input.
 
 ## Multi-Tenancy
 
@@ -398,7 +410,8 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 - `HasWhereAppended` - Indicates if WHERE clause already exists
 - `WrapObjectName(string name)` - Quote identifiers safely (handles schema and alias prefixes)
 - `MakeParameterName(DbParameter dbParameter)` - Format parameter name per dialect
-- `Clone()` / `Clone(IDatabaseContext)` - Reuse SQL structure with different params or context
+- `Clone()` / `Clone(IDatabaseContext)` - Reuse SQL structure with different params or context. Deep-copies every parameter into independent `DbParameter` instances — mutating a value on the clone never affects the original (or vice versa). Can also clone across a different `IDatabaseContext`/dialect to re-render the same SQL structure for a different database.
+- `WrapForStoredProc(ExecutionType, bool includeParameters = true, bool captureReturn = false)` - Renders the query text (a bare procedure name) into dialect-correct call syntax. See "Calling Stored Procedures" below.
 
 **Parameter Naming Convention:**
 
@@ -419,6 +432,44 @@ Critical distinctions for `SetParameterValue()` reuse:
 - Always pass base name without database prefix: `"w0"` not `"@w0"`
 
 See `docs/parameter-naming-convention.md` for full per-operation detail.
+
+### Calling Stored Procedures
+
+Two patterns, depending on whether you need a captured return value:
+
+**Automatic (the common case):** put the bare procedure name in the query, add parameters normally (set `.Direction` on the `DbParameter` for OUT/INOUT), then execute with `CommandType.StoredProcedure`. The executor detects this and calls `WrapForStoredProc` internally before running it as text:
+
+```csharp
+using var sc = context.CreateSqlContainer("MyProc");
+sc.AddParameterWithValue("id", DbType.Int32, 42);
+var p = sc.AddParameterWithValue("result", DbType.String, "");
+p.Direction = ParameterDirection.Output;
+await sc.ExecuteNonQueryAsync(CommandType.StoredProcedure);
+// p.Value now holds the OUT parameter's value
+```
+
+**Capturing a return value (SQL Server only):** use `WrapForCreateWithReturn()`/`WrapForUpdateWithReturn()`/`WrapForDeleteWithReturn()` (all equivalent — pick whichever name fits the call site) instead of the `CommandType.StoredProcedure` path:
+
+```csharp
+using var sc = context.CreateSqlContainer("dbo.ReturnFive");
+var wrapped = sc.WrapForUpdateWithReturn();
+sc.Clear();
+sc.Query.Append(wrapped);   // "DECLARE @__ret INT; EXEC @__ret = dbo.ReturnFive; SELECT @__ret;"
+var returnValue = await sc.ExecuteScalarOrNullAsync<int>();
+```
+
+`captureReturn` (what these three convenience methods set internally) only works for `ProcWrappingStyle.Exec` (SQL Server) — every other dialect throws `NotSupportedException` if you try. `ProcWrappingStyle.None` (SQLite, DuckDB) means stored procedures aren't supported at all; any stored-proc call throws `NotSupportedException` there regardless of pattern.
+
+**Per-dialect call syntax** (`ISqlDialect.ProcWrappingStyle`):
+
+| Style | Databases | Generated syntax |
+|---|---|---|
+| `Exec` | SQL Server | `EXEC proc arg1, arg2` (space-separated, not parenthesized) — output-capable parameters get an ` OUTPUT` suffix appended per-argument |
+| `Call` | MySQL, MariaDB, Db2 | `CALL proc(arg1, arg2)` |
+| `Oracle` | Oracle | `BEGIN proc(arg1, arg2); END;` (PL/SQL anonymous block) |
+| `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB | **`ExecutionType`-branched:** `SELECT * FROM func(args)` for `Read`, `CALL proc(args)` for `Write` (requires PostgreSQL 11+ for `CALL`) |
+| `ExecuteProcedure` | Firebird | **`ExecutionType`-branched:** `SELECT * FROM proc(args)` for `Read`, `EXECUTE PROCEDURE proc(args)` for `Write`. Firebird disallows empty `()` — omitted entirely when there are no arguments. |
+| `None` | SQLite, DuckDB | Unsupported — `WrapForStoredProc` throws `NotSupportedException` |
 
 ### DatabaseContext Key Methods
 
@@ -452,12 +503,18 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production-supported** — pool per operation, client-server databases |
-| `KeepAlive` | 1 | Databases that unload when idle, like SQL Server LocalDB (not SQLite/DuckDB — those coerce to SingleWriter instead) |
+| `KeepAlive` | 1 | **Production-supported for single-machine/embedded deployments** — SQL Server LocalDB, where the sentinel connection keeps the engine from unloading between requests (not SQLite/DuckDB — those coerce to SingleWriter instead) |
 | `SingleWriter` | 2 | **Production-supported** — file-based SQLite/DuckDB, serializes writes via turnstile governor |
-| `SingleConnection` | 4 | Databases that can't handle more than one connection at all — every read and write serializes through one pinned connection (e.g. `:memory:` SQLite/DuckDB, Firebird embedded) |
+| `SingleConnection` | 4 | Every read and write serializes through one pinned connection. **Never production-suitable for `:memory:` SQLite/DuckDB** — see below. Narrower, durable-storage uses (e.g. Firebird embedded to a `.fdb` file) are structurally viable but currently lack any connection-repair path; treat as scoped/niche rather than general production. |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
-**Standard and SingleWriter are both production-supported modes** — Standard for client-server databases (SQL Server, PostgreSQL, MySQL, Oracle, CockroachDB, etc.), SingleWriter for file-based SQLite/DuckDB. SingleWriter's turnstile-governed write serialization is purpose-built to prevent the file-locking errors those engines are otherwise prone to under concurrent writers, while still allowing fully concurrent reads — a level of write-contention governance most comparable libraries don't provide at all. `KeepAlive` and `SingleConnection` remain scoped to their documented embedded/testing use cases, not general production workloads.
+**Standard, SingleWriter, and KeepAlive are all production-supported modes**, each for a different deployment shape: Standard for client-server databases (SQL Server, PostgreSQL, MySQL, Oracle, CockroachDB, etc.); SingleWriter for file-based SQLite/DuckDB, with turnstile-governed write serialization purpose-built to prevent the file-locking errors those engines are otherwise prone to under concurrent writers while still allowing fully concurrent reads — a level of write-contention governance most comparable libraries don't provide at all; KeepAlive for single-machine/embedded deployments backed by SQL Server LocalDB (a desktop app or single-tenant on-prem install that owns its own LocalDB instance, not a shared multi-user server).
+
+**`SingleConnection` against an in-memory database (`:memory:`) is not production-suitable, and this is not a current limitation to be fixed — it is structural.** An in-memory database's entire content lives inside that one connection's process memory: it has no independent persistence, no crash recovery, no backup, and cannot survive a process restart or even a dropped connection (a fresh connection to the same `:memory:` string creates a new, empty database — see `docs/connection/connection-modes.md`). No amount of connection-repair logic changes this; there is nothing durable underneath to repair back to. Reserve `:memory:` for tests and ephemeral scratch data, never for anything that needs to persist.
+
+**`KeepAlive` has zero to do with performance or optimization — it exists to work around one specific piece of external engine behavior.** SQL Server LocalDB automatically unloads the entire database (shuts its own engine instance down) once it observes no active connections for a while. Under plain `Standard` mode (open late, close early), a quiet period with no traffic lets the pool drain to zero open connections, LocalDB unloads, and the next request pays the cost of LocalDB relaunching and reattaching the database file before it can even open a connection. `KeepAlive`'s entire job is to prevent exactly that: it holds one pinned, idle connection open for the life of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. That sentinel connection is **never used to run a single command** — every real read and write still goes through its own fresh, ephemeral connection exactly like `Standard` mode. Removing the sentinel wouldn't slow down a single query; it would just let LocalDB unload during idle periods again. That's the whole feature.
+
+**The write/read `PoolGovernor` is never actually unbounded, even under `Standard` mode with zero configuration.** `MaxConcurrentReads`/`MaxConcurrentWrites` resolve, in order: explicit config value → the connection string's `Max Pool Size` → the dialect's `DefaultMaxPoolSize` (100 for most dialects, including Snowflake, since none override it) — then get clamped to a hard, non-configurable ceiling of 512 (`DatabaseContext.AbsoluteMaxPoolSize`) regardless. So "database X behaves fine under Standard mode" is, by default, a claim about ≤100 concurrent writers, not unbounded concurrency — see `docs/connection/connection-pooling.md` for the full resolution chain before treating a green test run as evidence of higher-concurrency correctness than it actually exercised.
 
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
@@ -518,6 +575,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
+│   ├── ReadOnlyViolationException          — write attempted on a read-only SQLite/DuckDB file
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error
 └── DataMappingException                    — strict-mode coercion failure
@@ -530,6 +588,8 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 - `TransactionException` — thrown by `TransactionContext` when begin/commit/rollback fails. After failure, `IsCompleted = true` (connection already released); `Dispose` will not attempt a second rollback.
 
 `OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
+
+**Not part of this hierarchy:** `ModeContentionException` (a timeout waiting for the `SingleWriter`/`SingleConnection` mode lock) extends `TimeoutException` directly, not `DatabaseException` — a `catch (DatabaseException)` will not catch it. It carries a `Snapshot` property (`ModeContentionSnapshot`) with waiter/timeout counts; see `docs/metrics.md`.
 
 **Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
 
@@ -683,6 +743,8 @@ var results = await helper.LoadListAsync(sc);
 
 **Every new database added to `SupportedDatabase` requires a complete integration test suite.** No exceptions.
 
+**Get `MaxSupportedStandard`/`ProductInfo.StandardCompliance` right before anything else in this checklist.** ~20 of `ISqlDialect`'s `Supports*` capability flags (`SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, etc.) are all derived from one comparison — `MaxSupportedStandard >= SqlStandardLevel.SqlXXXX` — in the base `SqlDialect` class (see `docs/architecture.md`'s "Capability Flags Derive From One Enum" section). An accurate standard-compliance year gets most of them correct automatically; then verify each derived flag against the engine's *actual* behavior and override individually where it diverges (some engines claim more standard compliance than they actually implement — see the YugabyteDB MERGE example on the wiki's Database-Specific Gotchas page).
+
 ### Checklist
 
 1. **Enum value** — add to `pengdows.crud.abstractions/enums/SupportedDatabase.cs`
@@ -794,6 +856,8 @@ MySQL/PostgreSQL suites.
 
 - **`pengdows.poco.mint`**: Code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
 - **`pengdows.crud.fakeDb`**: Standalone NuGet package providing a fake ADO.NET provider. Essential for fast, isolated unit tests for any data access logic based on ADO.NET interfaces.
+- **`pengdows.stormgate`** / **`pengdows.stormgate.EntityFrameworkCore`**: Sibling packages, not wired into `DatabaseContext`'s own connection governance. A lightweight ADO.NET connection admission controller (gates concurrent connection *opens*) for existing Dapper/EF Core/raw-ADO.NET applications that aren't migrating to pengdows.crud — not a substitute for `DbMode.SingleWriter`, which solves a different problem (write serialization on already-open connections). See `pengdows.stormgate/README.md`.
+- **`pengdows.crud.opentelemetry`**: OpenTelemetry metrics adapter bridging `MetricsUpdated` into `System.Diagnostics.Metrics`. See `docs/opentelemetry-metrics.md`.
 
 ## AI Agent Files
 

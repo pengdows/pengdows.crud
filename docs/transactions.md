@@ -104,3 +104,26 @@ await tx.RollbackToSavepointAsync("checkpoint1", ct);
 ## Connection sharing inside transactions
 
 All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools.
+
+## Isolation resolution and degradation
+
+Resolving an `IsolationProfile` to a concrete `IsolationLevel` is not always exact. `IIsolationResolver.ResolveWithDetail` classifies the resolved level against the profile's canonical guarantee and returns an `IsolationResolution` with a `Degraded` flag and an `IsolationResolutionKind` (`Exact`, `Higher`, or `Lower` — `Lower` always implies `Degraded`).
+
+Both `BeginTransaction`/`BeginTransactionAsync` overloads that accept an `IsolationProfile` also accept an optional `IsolationResolutionPolicy` (default `AllowHigher`):
+
+```csharp
+await using var tx = await context.BeginTransactionAsync(
+    IsolationProfile.StrictConsistency,
+    ExecutionType.Write,
+    cancellationToken,
+    IsolationResolutionPolicy.AllowHigher); // default — never silently weakens isolation
+```
+
+| Policy | Meaning |
+|--------|---------|
+| `ExactOnly` | No substitution permitted; throws `NotSupportedException` if the dialect doesn't offer the exact ideal level for the profile. |
+| `AllowHigher` (default) | A strictly-stronger available level may substitute for an unavailable ideal. Never opts into a weaker guarantee. |
+| `AllowLower` | A strictly-weaker level may substitute; any resolution using this is reported as `Degraded`. |
+| `AllowAny` | `AllowHigher \| AllowLower`; prefers exact, then higher, then lower. |
+
+Degradation can still happen under the default `AllowHigher` policy without the caller opting into anything: some engines simply have no level that satisfies a profile's canonical guarantee at all (e.g. TiDB and Snowflake don't offer a true `Serializable`, so `IsolationProfile.StrictConsistency` resolves to their strongest available level, which is weaker than the profile's ideal). `DatabaseContext` logs a warning in this case rather than throwing or failing silently — the caller isn't asking for a downgrade, but the engine can't fully honor the request either way.

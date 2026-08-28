@@ -5,6 +5,96 @@ implemented. Items here are not roadmap commitments — they are recorded so the
 is not lost and can be picked up when the need arises.
 
 ---
+
+## `EphemeralSecureString` — built, never wired up, intentionally kept
+
+`pengdows.crud/EphemeralSecureString.cs`/`IEphemeralSecureString` is a real, well-built mechanism intended to keep credentials (connection-string passwords) securely in memory: AES-encrypts on construction with a per-instance key/IV, decrypts only inside `Reveal()`/`WithRevealed()`/`WithRevealedAsync()`, auto-zeros the cached plaintext ~750ms after first reveal, and zeros key/IV/ciphertext on `Dispose()`. Confirmed with the maintainer: this was meant to be the answer to keeping passwords out of plain memory, but it was never actually wired into `DatabaseContextConfiguration`, connection-string handling, or `DbProviderLoader` — it has zero production call sites today, only its own unit test. Kept in the codebase deliberately (not an oversight) because the design work shouldn't be lost, per this document's own stated purpose.
+
+Notably, it does **not** currently address the `ConnectionStringNormalizationCache` unbounded-raw-connection-string entry above — that cache retains full connection strings (including embedded passwords) in a plain `string`-keyed dictionary with no relationship to this class. If `EphemeralSecureString` is wired up in the future, that cache is a second place credentials leak into long-lived memory that would also need addressing, not just the initial connection-string handling path.
+
+---
+
+## Unwired "weird type" attributes
+
+`types/attributes/WeirdTypeAttributes.cs` declares 12 attributes (`DbEnumAttribute`,
+`JsonContractAttribute`, `ConcurrencyTokenAttribute`, `RangeTypeAttribute`, `ComputedAttribute`,
+`CaseInsensitiveAttribute`, `AsStringAttribute`, `MaxLengthForInlineAttribute`,
+`CaseFoldOnReadAttribute`, `SpatialTypeAttribute`, `CurrencyAttribute`) whose only consumer in the
+whole codebase is their own construction/property unit test
+(`pengdows.crud.Tests/WeirdTypeAttributesTests.cs`). None of them are read by `TypeMapRegistry`,
+`TypeCoercionHelper`, or any dialect — applying one to an entity property currently has zero
+effect on SQL generation or type coercion. See `docs/advanced-types.md` for the full list and the
+naming collisions with real, wired attributes (`DbEnumAttribute` vs. `EnumColumnAttribute`;
+`JsonContractAttribute` vs. `[Json]`).
+
+Needs a decision: wire each into the mapping pipeline (define what it should actually do —
+e.g. `SpatialTypeAttribute.ExpectedSrid` enforcing SRID on write/read, `CurrencyAttribute`
+validating/formatting a decimal column) or remove them. Leaving them in source as inert,
+constructible attributes risks a caller applying one and silently getting no behavior.
+
+---
+
+## `SingleConnectionStrategy` has no repair path — fixable for file-backed engines, impossible for `:memory:`
+
+`SingleConnectionStrategy.GetConnection()` unconditionally returns the stored connection with no health check, unlike `KeepAliveConnectionStrategy`'s lazy sentinel repair. This splits into two very different cases depending on what's behind the one connection:
+
+- **`:memory:` SQLite/DuckDB: not fixable, don't attempt it.** The database exists only inside that one connection; a replacement connection to the same `:memory:` string creates a new, empty database rather than recovering anything. The current "every subsequent operation fails" behavior is the correct outcome here, not a gap.
+- **Firebird embedded (`.fdb` file) and any other durable-storage single-connection engine: a genuine, fixable gap.** The data survives independently of the connection, so reopening a fresh connection to the same file would actually recover it — `SingleConnectionStrategy` just doesn't attempt to. Worth adding a repair path modeled on `KeepAliveConnectionStrategy.EnsureSentinelHealthy()`, scoped to file/durable-backed uses of this mode only (an explicit flag or a dialect capability check, not a blanket change, so `:memory:` behavior is never silently altered).
+
+See `docs/connection/connection-modes.md`'s "Failure Behavior" section for the current documented state.
+
+---
+
+## `ClampMinPoolSize` silently rewrites an out-of-range `Min Pool Size` with no logging
+
+`ConnectionPoolingConfiguration.ClampMinPoolSize` (`internal/ConnectionPoolingConfiguration.cs:459`) clamps a connection string's `Min Pool Size` into `[0, MaxPoolSize]` and rewrites the connection string — with no `ILogger` parameter and no logging call anywhere in the method. A caller who sets, say, `Min Pool Size=5000` against a `Max Pool Size=100` gets silently clamped to 100 with zero indication anything was changed — the only way to notice is to inspect the actual connection string pengdows.crud ends up using. Worth at least a Warning-level log when `clamped != rawMin.Value`, matching the pattern used elsewhere in this codebase for silent-but-surprising corrections (e.g. the mode-mismatch warning already logged by `WarnOnModeMismatch`).
+
+---
+
+## `DatabaseMetrics.P95`/`.P99` silently return meaningless values unless `EnableApproxPercentiles` is set
+
+`MetricsOptions.EnableApproxPercentiles` defaults to `false`; when unset, `MetricsCollector` never constructs its `PercentileRing` at all, so `DatabaseMetrics.P95`/`.P99` return their default value with nothing indicating why. See `docs/metrics.md` for the documented behavior as it stands today. Worth considering either flipping the default to `true` (the perf cost is a sliding window of `PercentileWindowSize` samples, not obviously expensive enough to justify opt-in-by-default) or having the property itself signal "not enabled" more clearly than a silently-zero value indistinguishable from "no commands executed yet" — a consumer building a dashboard off this value has no way to tell the two apart today.
+
+---
+
+## Two exception types for "read-only violation," not unified
+
+A write attempt against a read-only context throws `NotSupportedException` (whole-context `ReadWriteMode.ReadOnly`) or a separate `InvalidOperationException("Transaction is read-only.")` (connection/transaction-scoped `IsReadOnlyConnection`), depending on which of two independent flags is set — see `docs/read-only-enforcement.md`. A caller wanting to catch "this was rejected for being read-only" generically has to catch both types with no shared marker beyond `Exception` itself. Worth considering a common base type or interface (`IReadOnlyViolation`?) both could implement, without changing which concrete type each site throws (to stay backward compatible) — purely additive.
+
+---
+
+## `ModeContentionException` sits outside the `DatabaseException` hierarchy — worth a deliberate look
+
+Every other database/framework error in this library surfaces as a `DatabaseException` subclass (see `CLAUDE.md`'s Exception Hierarchy). `ModeContentionException` (a `SingleWriter`/`SingleConnection` mode-lock timeout) is the one exception: it extends `TimeoutException` directly. This may be entirely intentional — timeout semantics arguably matter more than database semantics for this one — but it wasn't found stated as a deliberate design decision anywhere, only as an implementation fact. Worth either documenting the "why" explicitly (so it reads as a decision, not an oversight) or reconsidering whether it should also implement a common marker so a `catch (DatabaseException)` block doesn't silently miss it.
+
+---
+
+## `AttributionStats` is half-wired — some counters recorded, never read; others never recorded at all
+
+`DatabaseContext` holds an internal `AttributionStats` collector (`ReadRequests`/`WriteRequests`/governor-wait/governor-timeout/mode-wait counters). Only `RecordReadRequest`/`RecordWriteRequest` are ever actually called (`DatabaseContext.ConnectionLifecycle.cs`); the governor-wait, governor-timeout, and mode-wait recording methods are never invoked anywhere. And even the two counters that *are* recorded are never read back — `GetSnapshot()` has no caller anywhere in the codebase. So today this is pure overhead: two counters incremented on every request, for a snapshot nothing ever asks for. See `docs/metrics.md`. Either finish wiring it into `DatabaseMetrics`/`MetricsUpdated` (it looks like it was meant to enrich the existing metrics with governor-contention attribution) or remove it — right now it's neither providing value nor fully implementing its own apparent design intent.
+
+---
+
+## `DatabaseDetectionResult`'s evidence trail is never surfaced to callers
+
+`DatabaseDetectionService` internally builds a `DatabaseDetectionResult(SupportedDatabase ResolvedProduct, IReadOnlyList<DetectionProbeAttempt> Attempts)`, where each `DetectionProbeAttempt(string ProbeName, bool Succeeded, string? FailureReason)` records one detection probe's outcome — genuinely useful evidence for diagnosing a misdetected database. Its own doc comment states the purpose explicitly: capturing evidence the bare-enum entry points otherwise discard. But every public-facing entry point only returns the bare `SupportedDatabase` enum — the evidence trail is built and then thrown away. When detection picks the wrong product (falls back to SQL-92, or misidentifies a flavor like Aurora/TiDB/Yugabyte), a user has no way to see *why* — which probes ran, which failed, what the failure reason was. Worth exposing via a diagnostic method or logging the attempts at a Debug level when the result doesn't match what was expected, rather than only ever returning the final enum value.
+
+---
+
+## `ConnectionStringNormalizationCache` grows unbounded, keyed on the raw connection string
+
+`internal/ConnectionStringNormalizationCache.cs` is a static `ConcurrentDictionary<string, Dictionary<string,string>>` with no eviction, no bound, and no TTL, keyed on the literal connection string passed to `DatabaseContext`. The cached *value* correctly scrubs credentials before storage (`ShouldIgnoreKey` in `DatabaseContext.Initialization.cs`), but the *key* is the raw string, which for most providers embeds the password directly. Harmless for the common case (a fixed, small number of connection strings per process), but an application that constructs many distinct connection strings at runtime — per-tenant credentials, credential rotation, dynamically generated passwords — will grow this cache without bound for the process lifetime, retaining old/rotated-out credentials in memory indefinitely. Needs either an LRU bound (matching the pattern `BoundedCache<TKey,TValue>` already provides elsewhere) or a documented "don't do this" caveat if unbounded growth is judged an acceptable tradeoff for the common case. See `docs/architecture.md`'s "Connection-string handling in the normalization cache" section.
+
+---
+
+## `IDataReaderMapper`/`MapperOptions` and `TypeCoercionOptions.JsonPreference` are unreachable/dead externally
+
+Same class of gap as `DbProviderLoader` below. `IMapperOptions`/`MapperOptions` (`Strict`, `ColumnsOnly`, `NamePolicy`, `EnumMode`) configure `IDataReaderMapper`, but its only implementation, `DataReaderMapper`, is `internal sealed` — no external consumer can ever obtain one. It's also not what `TableGateway`/`PrimaryKeyTableGateway` actually use for row hydration: the real gateway path goes through `GetOrBuildRecordsetPlan`/`MapReaderToObjectWithPlan`, a separate compiled-plan mechanism that never touches `DataReaderMapper` at all. If configurable strict/lenient mapping and column-name-policy control are meant to be a public feature, `IDataReaderMapper` needs a public factory/DI path — or should be removed/merged into the real hydration path if it's superseded by it.
+
+Separately: `TypeCoercionOptions.JsonPreference` (`JsonPassThrough` enum: `PreferDocument`/`PreferText`) is fully dead — declared, defaulted, exercised by its own construction test, but never read anywhere in source, not even internally. `TypeCoercionOptions.TimePolicy` (`TimeMappingPolicy`) *is* read internally (gates `DateTime`→`DateTimeOffset` conversion in `TypeCoercionHelper`) but is unreachable externally since `BaseTableGateway`/`SqlContainer` only ever override `TypeCoercionOptions.Provider`, never `TimePolicy`, and `TypeCoercionHelper` itself is `internal static`.
+
+---
+
 ## Oracle
 
 ### Array binding
@@ -271,460 +361,6 @@ What's left:
   project's own TiDB integration testing, not from a tracked report. The comment now says
   so explicitly and flags that this should be re-verified against newer `MySql.Data`
   releases rather than assumed permanent.
-
----
-
-## Fixed: multitenancy dialect-cache identity collision (2026-08-14)
-
-**Symptom reported by user:** "when using multitenancy I can't use multiple versions of the same
-database" — e.g. two tenants both on MySQL, one at 8.0.18 and one at 8.0.21, interfering with each
-other's generated SQL.
-
-**Root cause:** `TableGateway<TEntity,TRowID>`, `PrimaryKeyTableGateway<TEntity>`, and
-`BaseTableGateway<TEntity>` are documented singletons deliberately shared across tenant contexts
-(`gateway.Method(entity, tenantCtx)` — see this file's multi-tenancy guidance and
-`pengdows.crud/CLAUDE.md`). Each tenant's `DatabaseContext` correctly gets its own `ISqlDialect`
-instance with its own detected `ProductInfo.ParsedVersion` — that part always worked. The bug was
-one layer up: eight SQL-template/binder/query cache fields across the three gateway classes keyed
-on `ISqlDialect.DatabaseType` (the `SupportedDatabase` enum) instead of the dialect instance:
-
-- `TableGateway.Core.cs`: `_insertBinders`, `_upsertBinders`, `_updateBinders`,
-  `_templatesByDialect`, `_containersByDialect`
-- `PrimaryKeyTableGateway.Core.cs`: `_pkTemplatesByDialect`
-- `BaseTableGateway.Core.cs`: `_queryCache`, `_whereParameterNames`
-
-`ConcurrentDictionary.GetOrAdd` only builds a cached value once per key — whichever tenant's
-dialect hit a given cache first for, say, `SupportedDatabase.MySql`, locked that cached SQL
-fragment in for every other MySQL tenant on the same gateway singleton, permanently, regardless of
-actual server version. Concretely demonstrated via `MySqlDialect.UpsertIncomingAlias`
-(`MySqlDialect.cs`), which gates UPSERT syntax on `ProductInfo.ParsedVersion >= new Version(8,0,20)`:
-whichever tenant called `UpsertAsync`/`BuildUpsert` first decided the `ON DUPLICATE KEY UPDATE`
-syntax for every other same-enum tenant afterward — the loser got either a SQL syntax error or
-silently wrong UPSERT behavior on their real server. Order-dependent (whichever tenant's dialect
-populated the cache first "won"), which is what made it "subtle" rather than immediately obvious
-in testing.
-
-Telling detail: `BaseTableGateway.Core.cs` already had a *correctly*-instance-keyed cache
-(`_wrappedTableNameCache`, `ConcurrentDictionary<ISqlDialect, string>`) sitting right next to the
-enum-keyed ones — so the instance-keying pattern already existed in the codebase, just wasn't
-applied consistently to the heavier SQL-template/binder/container caches.
-
-**First fix (correctness):** all eight caches keyed on the `ISqlDialect` instance rather than
-`DatabaseType`, using `ConditionalWeakTable<ISqlDialect, ...>` instead of
-`ConcurrentDictionary<SupportedDatabase, ...>`. `ConditionalWeakTable` (not a plain instance-keyed
-`ConcurrentDictionary`) specifically so a tenant's cached artifacts are reclaimed once its
-`DatabaseContext`/dialect is no longer referenced — `TenantContextRegistry.ContextRemoved` already
-exists for tenant offboarding, and a plain strong-reference dictionary keyed by instance would
-silently convert "bounded but wrong" (the old bug, ~15 possible enum values) into "correct but
-unbounded" (every dialect this gateway singleton has ever seen, pinned for the process lifetime).
-
-Covered by `pengdows.crud.Tests/TableGatewayMultiTenantDialectCacheTests.cs`: one `TableGateway`
-singleton, two tenant contexts (MySQL 8.0.19 vs 8.0.33) via a dialect-override `IDatabaseContext`
-decorator, asserting each tenant's `BuildUpsert` produces its own version-correct SQL — in both
-call orders (legacy-then-modern and modern-then-legacy), since the bug was order-dependent and a
-single-order test wouldn't have proven the cache was actually fixed rather than just "the first
-caller happened to be right this time."
-
-**Follow-up (space efficiency) — fingerprint-keying for the pure-SQL-text caches:**
-identity-keying is correct but doesn't dedupe tenants on the *identical* engine+version, which is
-common in practice (e.g. a managed fleet standardized on one version, with an occasional
-un-upgraded or newer outlier). A full audit of every property each of the eight caches' build
-functions reads from the dialect (transitively, including helper calls) found the risk splits
-cleanly in two:
-
-- `_templatesByDialect`, `_pkTemplatesByDialect`, `_queryCache`/`_whereParameterNames` build pure
-  SQL text/metadata — no `DbParameter` construction happens in them. Every property they read is
-  either constant per `DatabaseType` or a pure function of `ProductInfo.ParsedVersion` (verified
-  exhaustively, including the exact `MySqlDialect`/`TiDbDialect` `>= 8.0.20` upsert-alias
-  threshold). These four are **now fingerprint-keyed**: `IInternalSqlDialect.CacheFingerprint`
-  (default impl on `SqlDialect`: `"{DatabaseType}|{ParsedVersion}"`) replaces the dialect instance
-  as the key, via `ConcurrentDictionary<string, ...>` instead of
-  `ConditionalWeakTable<ISqlDialect, ...>`. Many same-version tenants now share one entry; cache
-  cardinality is bounded by distinct engine+version combinations ever seen, not tenant count.
-  Covered by `TableGatewayMultiTenantDialectCacheTests.BuildUpsert_TwoTenantsOnSameMySqlVersion_ShareOneCacheEntry`
-  (two distinct dialect instances, same version → one cache entry) alongside the original
-  different-version correctness tests (still passing, now against the fingerprint
-  implementation).
-- `_containersByDialect` and the three binder caches (`_insertBinders`/`_upsertBinders`/
-  `_updateBinders`) all bake actual `DbParameter` construction permanently into the cached
-  artifact — `CompiledBinderFactory` closes over the dialect instance itself via
-  `Expression.Constant(dialect)` and keeps calling `dialect.CreateDbParameter(...)` for the
-  cached delegate's entire lifetime. `CreateDbParameter`'s behavior depends on two things a
-  version-only fingerprint can't see:
-  1. **`FirebirdDialect.GuidStorageMode`** — an `init`-only, per-instance-configurable property
-     (defaults to `Binary`), independent of server version, that changes GUID wire format via
-     `GuidFormat`. Two Firebird tenants on the identical version but different
-     `GuidStorageMode` would silently collapse under a version-only fingerprint and corrupt each
-     other's GUID parameters — the direct Firebird analogue of the MySQL bug this entry started
-     with.
-  2. **The live `DbProviderFactory` instance** (`GetPooledParameter` → `Factory.CreateParameter()`)
-     — not exposed anywhere on `ISqlDialect`, so no fingerprint built from today's interface
-     surface can verify "same driver package" even in principle.
-
-  These four caches are **still identity-keyed** (`ConditionalWeakTable<ISqlDialect, ...>`,
-  unchanged from the first fix) rather than fingerprint-keyed — no live bug exists today, since
-  distinct dialect instances never collide regardless of `GuidStorageMode` while they stay
-  identity-keyed. Converting them to fingerprint-keying is not planned/decided.
-
-  **Precondition (a) satisfied 2026-08-17, as groundwork only, ahead of any decision to
-  convert:** `FirebirdDialect.CacheFingerprint` now folds in `GuidStorageMode`
-  (`$"{base.CacheFingerprint}|{GuidStorageMode}"`), so two Firebird tenants on the identical
-  server version but different `GuidStorageMode` no longer collapse onto one fingerprint if/when
-  something does start keying on it. Covered by `FirebirdCacheFingerprintTests.cs`
-  (`pengdows.crud.Tests/dialects/`): differing `GuidStorageMode` values produce different
-  fingerprints; matching values still share one. Full suite green (6337 tests) after the change.
-
-  Precondition (b) — the `DbProviderFactory`-identity gap — remains open and undecided: either
-  accept it as a documented assumption ("tenants sharing a fingerprint are assumed to use the same
-  driver package for that engine," realistic in practice — nobody mixes two different ADO.NET
-  providers for one engine across tenants in the same app) or add a way to source a stable factory
-  identity onto `ISqlDialect`. Still needed before actually converting `_containersByDialect`/
-  `_insertBinders`/`_upsertBinders`/`_updateBinders` to fingerprint-keying — which itself remains
-  undecided/not scheduled.
-
----
-
-## Fixed: audit fields no longer claim a write that never persisted (2026-08-14)
-
-**What was wrong:** `SetAuditFields` mutates `LastUpdatedOn`/`LastUpdatedBy` (and
-`CreatedOn`/`CreatedBy` on create) as a side effect of `Build*` — before any SQL executes. If
-`Execute*` then fails, or (for `[Version]`-column entities) succeeds but affects 0 rows, the
-entity's audit fields were left claiming a write that never happened. Concretely: an
-optimistic-concurrency conflict (a normal, expected, already-documented outcome — see
-`ConcurrencyConflictException`) would leave `entity.LastUpdatedOn` showing "just now" even though
-the row in the database was untouched.
-
-**Revised severity, reached by working through it with the user rather than accepting the
-original filing at face value:** this is narrower than a blanket "always matters" defect. In the
-two most common usage patterns it's actually harmless:
-- **Retry with the same object until it succeeds** — each retry re-stamps a fresh value; the
-  final persisted state matches the final stamped state.
-- **Discard-and-reload on `ConcurrencyConflictException`** (the idiomatic response — refetch, let
-  the caller retry the business operation) — the wrongly-mutated object gets thrown away before
-  anyone observes it.
-
-It has real, non-self-correcting impact in two narrower cases: (1) the Build tier's own
-documented contract (`pengdows.crud/CLAUDE.md`: Build methods return an `ISqlContainer` "you
-inspect, modify, or execute yourself" — dry-run/inspect-without-executing is an explicitly
-supported use case, and there's no retry to paper over a write that was never attempted at all),
-and (2) anything that inspects the entity immediately after a caught failure without reloading
-(logging being the realistic example — reporting a timestamp that says "just now" for a write
-that was rejected).
-
-**Fix:** `BaseTableGateway.Audit.cs` gained `SnapshotAuditFields`/`RestoreAuditFields` — capture
-the entity's audit-column values immediately before `SetAuditFields` mutates them, restore them
-in a catch block (or before manually raising `ConcurrencyConflictException` on a 0-rows-affected
-result) whenever the write doesn't actually succeed. Zero added round trips — pure in-memory
-bookkeeping, consistent with this project's stance against paying round-trip costs for
-correctness that don't need them (see `docs/sql-server-session-settings.md`'s "Performance
-Trade-off" section for the same stance applied elsewhere).
-
-**Scope: single-entity convenience methods only.** Wired into all 8 call sites that mutate audit
-fields and execute in the same method body:
-- `TableGateway<TEntity,TRowID>`: both `CreateAsync` overloads (`TableGateway.Core.cs`),
-  `UpdateAsync(entity, loadOriginal, ...)` (`TableGateway.Core.cs`), `UpsertAsync`
-  (`TableGateway.Upsert.cs`)
-- `PrimaryKeyTableGateway<TEntity>`: `CreateAsync` (`PrimaryKeyTableGateway.Core.cs`), both
-  `UpdateAsync` overloads (`PrimaryKeyTableGateway.Update.cs`), `UpsertAsync`
-  (`PrimaryKeyTableGateway.Upsert.cs`)
-
-**Follow-up round (same day): a `catch` block can't see a plain `return false`.** External review
-of the first push correctly caught that the fix above only restored on a *thrown* exception. Several
-of the 8 methods can signal an unsuccessful write without throwing at all — `ExecuteNonQueryAsync`
-affecting 0 rows and the method just returning `false`/`0` (no exception, so the `catch` block
-never runs):
-- `TableGateway.CreateAsync` (both overloads) — the "default path" `return rowsAffected == 1;`,
-  the PREFETCH branch's equivalent, and the CORRELATION TOKEN branch's explicit `return false;`
-- `PrimaryKeyTableGateway.CreateAsync` — same shape, single branch
-- `TableGateway.UpdateAsync` / `PrimaryKeyTableGateway.UpdateAsync` — 0 rows affected on an
-  *unversioned* entity doesn't throw `ConcurrencyConflictException` (that only fires when
-  `_versionColumn != null`); it just returns `0`, and the audit fields were never restored for
-  that case
-- `TableGateway.UpsertAsync` / `PrimaryKeyTableGateway.UpsertAsync` — same gap for unversioned
-  entities, or versioned entities on a dialect that can't detect the conflict (MySQL/MariaDB
-  `ON DUPLICATE KEY`, Firebird, non-`WHERE` `ON CONFLICT`)
-
-Fixed by adding `RestoreAuditFieldsIfFailed` (`BaseTableGateway.Audit.cs`) — the same restore,
-called explicitly at every point a method observes an unsuccessful result and is about to
-`return` normally, not only from the `catch` blocks. `UpdateAsync`/`UpsertAsync` now restore
-unconditionally on `rowsAffected == 0` before the (still-conditional) `ConcurrencyConflictException`
-throw, rather than only when a version column made that throw happen.
-
-Covered by 6 additional tests (13 total in `AuditFieldRestoreOnFailureTests.cs`) forcing
-`ExecuteNonQueryAsync` to return 0 without throwing (`fakeDbFactory.SetNonQueryResult(0)`) across
-all 8 call sites.
-
-**Third round (same day): a post-write failure was restoring PRE-write audit values.** Further
-external review caught that the follow-up round's fix was itself too blunt: the generic
-`catch { RestoreAuditFields(...); throw; }` restores unconditionally, but several of
-`TableGateway.CreateAsync`'s `GeneratedKeyPlan` branches do a post-INSERT step (retrieving a
-server-generated ID via a fallback query) *after* the INSERT has already committed. If that
-fallback step throws — the row already exists with the new audit values; the INSERT itself
-succeeded — restoring at that point makes the entity falsely claim a rollback that never happened,
-which is arguably worse than the original bug (now the entity looks like a failed write when it
-actually succeeded).
-
-Fixed by tracking a `writeSucceeded` flag, set once each branch's actual persisting write is known
-to have been accepted by the database (before any post-write fallback step that could itself
-throw). The shared `catch` now only restores when `!writeSucceeded`. (A one-element `bool[]`
-carries the flag into `ExecuteReaderInsertedIdAsync`, a private helper called via `await`, since
-`ref`/`out` parameters aren't allowed on async methods.) The general principle, stated precisely:
-```
-before the write is known to have succeeded: failure → restore the prepared audit mutation
-after the write is known to have succeeded:  failure → do NOT restore; the DB has the new values
-```
-Covered by a dedicated test forcing SQLite's `CompoundStatement` create plan to successfully
-INSERT, then fail on the fallback `SELECT last_insert_rowid()` query specifically (via
-`fakeDbConnection.SetCommandFailure`) — proving the entity keeps its new audit values rather than
-being rolled back to defaults.
-
-**Fourth round (same day): the flag itself was set a little too late in three branches.** Further
-review of the third round's placements found the flag was being set *after* a step that could
-still throw before the database had actually accepted anything else, narrowing but not closing the
-gap: the Oracle `RETURNING`/`OutputInserted` branch set it after `GetParameterValue(...)` (reading
-an already-populated OUT parameter, but still a call that could throw before the flag was true);
-the `CompoundStatement` branch and `ExecuteReaderInsertedIdAsync` both set it *after* their entire
-`await using (var reader = ...)` block, including navigating to and reading the trailing
-`SELECT`/`LastInsertedId` result — but the INSERT itself (the compound statement's first result
-set) has already run server-side the moment `ExecuteReaderAsync` returns without throwing, before
-any of that navigation happens. Fixed by moving each assignment to immediately follow the call
-that actually submits the write (right after `ExecuteNonQueryAsync`/`ExecuteScalarOrNullAsync` for
-Oracle, and as the first line inside the `await using (var reader = ...)` block for the other two)
-— the earliest point each branch can truthfully say the database has accepted the write. Also
-reworded the surrounding comments from "committed" to "the database accepted the write" per this
-round's feedback: this layer executes one command and observes whether it threw, which is a
-narrower claim than "committed" implies for a provider participating in an external/ambient
-transaction.
-
-No new tests for this round: forcing `GetParameterValue`/`NextResultAsync`/
-`GetLastInsertedIdFromCommand` specifically to throw *after* their preceding `Execute*Async` call
-already succeeded isn't practically simulable with `fakeDb` today (there's no hook to fail reader
-navigation independently of the initiating execute call). Verified by code inspection against the
-same principle the third round's test already covers, plus the full regression suite (14 tests in
-`AuditFieldRestoreOnFailureTests.cs`, full solution: 6191 tests) — documenting this gap explicitly
-rather than claiming coverage that doesn't exist.
-
-**Reframed, not fixed — Build-tier mutation is by design, not a defect.** Working through this
-with the user reset the mental model entirely. There is no general invariant available of "after
-Build (or even after Execute) the entity equals the database row" — even a fully successful write
-can diverge immediately: triggers, computed columns, server-generated defaults, another
-transaction's concurrent write. `[Version]` `rowversion`/`timestamp` columns make this structural,
-not incidental (SQL Server generates the new value itself; nothing short of `OUTPUT`/`RETURNING`
-or a reload can know it without another round trip). Given that, "Build must be side-effect free"
-was the wrong contract to aim for. The right one distinguishes three separate concepts that were
-being conflated:
-```
-1. Prepared entity state    "These are the values we're about to write."      — Build can set this
-2. Write outcome             "Did the database accept the operation?"         — known from Execute
-3. Database-current state    "Does this object exactly match the row now?"    — NOT generally knowable
-```
-`BuildCreate`/`BuildUpdateInternal` populating audit fields (and writable IDs, and initializing an
-app-managed `[Version]` to 1) is concept #1 — legitimate inputs to the SQL being built, not a
-false claim about #2 or #3. `var sc = gateway.BuildCreate(entity);` mutating `entity` before `sc`
-is ever executed is therefore expected: those are the values the *prepared* INSERT would write,
-not an assertion that it happened. Restoring on a **convenience method's** failure still makes
-sense, because that API layer explicitly knows #2 — it attempted execution and knows the DB
-rejected it. Build alone never reaches #2, so it has nothing to restore *from*. No code change
-from this — documenting the contract precisely is the fix.
-
-**Implemented — partial batch failure.** Both gateway types now weakly associate each generated
-batch container with its entity slice and restore audit fields only for failed or unexecuted
-containers. This covers chunked multi-row SQL and one-entity fallback containers for create,
-update, and upsert. Deterministic success-then-failure regressions prove that persisted entities
-retain their audit stamps while unpersisted entities are restored.
-
-**Also explicitly out of scope, raised separately during this work — post-execution entity
-freshness on *success*:** even a fully successful `UpdateAsync` never writes the new `[Version]`
-value back into the caller's entity today. This splits into two cases with very different
-fixability:
-- ~~**App-managed integer/counter version**~~ — fixed 2026-08-16: `BaseTableGateway.Version.cs`'s
-  new `WriteBackIncrementedVersion(entity)` computes `current + 1` and writes it back after a
-  successful `UpdateAsync` (`rowsAffected > 0`), for both `TableGateway<TEntity,TRowID>` and
-  `PrimaryKeyTableGateway<TEntity>`. No round trip needed: the entity's version property is never
-  mutated while building the UPDATE (the WHERE clause reads it as-is for the optimistic-concurrency
-  check), so a successful write's WHERE-match guarantees the new value is deterministically
-  "current + 1". Skipped for `byte[]` rowversion/timestamp columns (see below — no free fix exists
-  for those). Covered by `TableGatewayVersionWriteBackTests.cs` (success write-back for both
-  gateway types, and a conflict case proving a *failed* write does not fabricate a new value) plus
-  a new byte[]-exclusion regression test in `TableGatewayByteArrayVersionTests.cs`. Full suite:
-  6328 tests, one pre-existing flaky test unrelated to this change
-  (`SqlContainerActivityContextIdTests`, confirmed by rerunning it alone).
-- **DB-managed `rowversion`/`timestamp`** (`byte[]`, already correctly excluded from the SET
-  clause — see `TableGateway.Sql.cs`'s "DB handles increment" comment) — the new value is
-  generated server-side. There's no free fix; closing this needs either `OUTPUT`/`RETURNING`
-  support to capture it inline, or the caller must explicitly reload. Staleness here is
-  structural, not an oversight.
-
-User's proposed design for a future pass: an enum/options parameter (e.g. `None` /
-`RefreshComputedFields` / `ReloadFromDatabase`) letting callers choose the cost/freshness
-trade-off explicitly per call, rather than the library silently picking one. Worth designing
-properly (dialect `OUTPUT`/`RETURNING` capability varies) rather than folding into a future bug
-fix — tracked here so the design isn't lost.
-
-Overall coverage across the four rounds above: 14 tests in
-`pengdows.crud.Tests/AuditFieldRestoreOnFailureTests.cs`, spanning both gateway types, all three
-operations (Create/Update/Upsert), thrown failures, the version-conflict (0-rows-affected,
-manually-raised-exception) path, non-throwing 0-rows results, and the post-write-success failure
-case. The fourth round's precise flag-placement fix has no dedicated new test (see that round's
-entry for why) — verified by code inspection plus the existing suite. Current status:
-```
-Thrown pre-write failure                        FIXED
-Detected optimistic-concurrency failure         FIXED
-0-row non-throwing failure                      FIXED
-Post-write-success failure (must NOT restore)   FIXED, flag placed at the true write boundary
-Build mutates prepared entity state             BY DESIGN — documented above, not a defect
-Partial batch failure                           STILL OPEN — see above
-Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY — see above
-```
-
----
-
-## Fixed: hardcoded per-database checks removed from the gateway layer (2026-08-14)
-
-**What was wrong:** while working the `writeSucceeded` precision fix above, the user raised a
-standing architectural principle this codebase is supposed to follow — database independence.
-Any database-specific behavior belongs behind an `ISqlDialect` capability the gateway asks about
-generically; the generic gateway classes (`TableGateway`, `PrimaryKeyTableGateway`,
-`BaseTableGateway`) should never name a specific `SupportedDatabase` value themselves. An audit
-found 5 places (9 call sites, all confined to `TableGateway.Core.cs`, `TableGateway.Upsert.cs`,
-`PrimaryKeyTableGateway.Upsert.cs` — zero elsewhere) where the gateway violated this:
-
-1. `TableGateway.Core.cs` — `dialect.DatabaseType == SupportedDatabase.Oracle` (two overloads)
-   picked `ExecuteNonQueryAsync`+`GetParameterValue` vs `ExecuteScalarOrNullAsync` for
-   generated-key retrieval after a `Returning`/`OutputInserted` INSERT.
-2. `TableGateway.Core.cs`'s `BuildCreateWithReturning` — `== SupportedDatabase.SqlServer` picked
-   OUTPUT-before-VALUES clause placement, sitting right next to an *already-existing, already-
-   correct, completely unused* capability (`ISqlDialect.InsertReturningClauseBeforeValues`,
-   `SqlServerDialect.cs:265`) that did the exact same job — the generic mechanism had already
-   been built and just never wired in. The same block also had `== SupportedDatabase.Oracle` for
-   the OUT-parameter/clause-rewriting sub-case.
-3. `TableGateway.Upsert.cs` / `PrimaryKeyTableGateway.Upsert.cs` — `dialect.SupportsMerge &&
-   ctx.DataSourceInfo.Product != SupportedDatabase.Firebird` decided whether a 0-rows-affected
-   UPSERT could be trusted as a version conflict.
-4. Same two files — `ctx.DataSourceInfo.Product == SupportedDatabase.Firebird` routed to
-   `BuildFirebirdMergeUpsert`/`BuildPkFirebirdMergeUpsert` instead of standard MERGE, both gated
-   by the same `SupportsMerge` flag.
-5. `PrimaryKeyTableGateway.Upsert.cs` — `ctx.DataSourceInfo.Product != SupportedDatabase.Firebird`
-   guarded whether a pure-`[PrimaryKey]`-only entity (no updateable columns) could upsert at all.
-
-Root cause of #3/#4: `SupportsMerge` is overloaded to mean both "in the merge-syntax family" and
-"emits literal `MERGE ... WHEN MATCHED`" — Firebird is `true` for the first sense (it's
-version-gated SQL:2003-level support) but needs `false` for the second everywhere it's consumed,
-so every consumer had bolted on its own `!= Firebird` patch instead of asking a single capability.
-
-**Fix:** three new `ISqlDialect` capabilities, following the exact pattern the codebase already
-uses successfully for `GeneratedKeyPlan` and `InsertReturningClauseBeforeValues` — declared as
-C# 8 default-interface-method properties (so only dialects that differ from the default need to
-override), with a matching `public virtual` declaration on the `SqlDialect` base class (required
-for subclasses to `override` a default-interface member):
-
-- `bool RequiresOutputParameterForReturning` (default `false`; Oracle `true`) — replaces the
-  three Oracle checks (#1 both overloads, #2's Oracle half).
-- `bool EmitsAnsiMergeSyntax` (default **`true`**; Firebird `false`) — replaces #3/#4's four
-  `!= Firebird`/`== Firebird` checks. Defaulting to `true` (not `false`) was a deliberate,
-  verified choice: `SupportsMerge` is currently `true` for SQL Server, Oracle, Snowflake, DuckDB
-  1.4+, and PostgreSQL 15+ — defaulting the new property to `false` and only overriding the first
-  three would have silently broken conflict detection for DuckDB/PostgreSQL, which the *old*
-  `!= Firebird` check happened to get right by accident. Verified each `SupportsMerge` override
-  directly (`grep`'d every dialect) before picking the default, specifically to avoid that trap.
-- `bool SupportsPureKeyUpsert` (default `false`; Firebird `true`) — replaces #5, opposite polarity
-  from the merge property since Firebird is the sole *positive* exception here, not the sole
-  negative one.
-
-`#2`'s SqlServer half was fixed by simply wiring in the pre-existing
-`InsertReturningClauseBeforeValues` — no new API needed for that part.
-
-**Deliberately not done:** the audit's own suggestion was a full `GetUpsertSyntaxStyle()` enum
-(mirroring `GeneratedKeyPlan`) to replace the top-level upsert dispatch entirely. Declined: the
-top-level dispatch (`SupportsMerge`/`SupportsInsertOnConflict`/`SupportsOnDuplicateKey`) was
-already clean and database-agnostic — the actual problem was narrower (distinguishing Firebird's
-merge-*like* syntax from true ANSI MERGE *within* the already-correct `SupportsMerge` bucket).
-Replacing working, already-generic dispatch with a parallel enum to fix a problem one boolean
-already solves would have been a larger diff for no correctness gain.
-
-Covered by 26 new tests in `pengdows.crud.Tests/dialects/DialectCapabilityTests.cs` (one dialect
-per `SupportedDatabase` value per property, both the lone exception and the "everyone else"
-case) — a deliberate deviation from strict TDD ordering (properties were written before tests,
-given they're simple additive facts, not complex logic) was caught and corrected: verified each
-test is actually meaningful by temporarily breaking `FirebirdDialect.SupportsPureKeyUpsert` and
-confirming the corresponding test failed, before restoring it. Zero remaining
-`SupportedDatabase.X` comparisons in `TableGateway.*.cs`/`PrimaryKeyTableGateway.*.cs`/
-`BaseTableGateway.*.cs` (confirmed by grep). Full regression suite (6233 tests) passes unchanged,
-confirming the refactor preserved existing Oracle/SqlServer/Firebird behavior rather than just
-compiling.
-
-**Integration validation — done.** The capability refactor above, plus the multitenancy
-dialect-cache fix and all four audit-field-restoration rounds, have now been validated against
-real database instances via `pengdows.crud.IntegrationTests` (Testcontainers) and the full
-`testbed/` suite, not just `fakeDb`. Running against real engines surfaced two genuine bugs that
-`fakeDb` is structurally incapable of catching, since it never parses or executes real SQL and
-never returns a real server version banner:
-
-1. **`SqlDialect.ParseVersion` picked up the C compiler's version instead of the server's.**
-   The base implementation (`SqlDialect.cs`) matched the *last* dotted-number sequence in a
-   version string. Real PostgreSQL's `SELECT version()` banner ends with the gcc version it was
-   compiled with (e.g. `"PostgreSQL 18.1 ..., compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit"`),
-   so on virtually every gcc-built PostgreSQL server — i.e. every Linux/Docker image — this
-   silently returned `14.2.0` instead of `18.1`, disabling every `IsVersionAtLeast()`-gated
-   capability (`SupportsMerge`, `SupportsJsonTypes`, `SupportsSqlJsonConstructors`,
-   `SupportsJsonTable`, `SupportsMergeReturning`) regardless of the real server version. Fixed
-   with a `PostgreSqlDialect.ParseVersion` override matching `PostgreSQL\s+(\d+(?:\.\d+)*)`
-   specifically, ignoring anything after. Covered by
-   `pengdows.crud.Tests/PostgreSqlVersionParsingTests.cs` using real captured banners from two
-   different PostgreSQL builds.
-2. **MERGE version-increment fragment produced an ambiguous column reference on real Postgres.**
-   The `"version" = "version" + 1` fragment (`TableGateway.Sql.cs`,
-   `PrimaryKeyTableGateway.Core.cs`) reused the same alias-prefix variable on both sides, which is
-   empty for dialects where `MergeUpdateRequiresTargetAlias == false`. Both the MERGE target and
-   source expose a `version` column, so the unqualified RHS is genuinely ambiguous — PostgreSQL's
-   real MERGE parser rejects it (`42702: column reference "version" is ambiguous`); `fakeDb` never
-   parses the SQL so never caught it. Fixed by hardcoding the RHS to the target alias (`t.`)
-   regardless of `MergeUpdateRequiresTargetAlias`. Covered by new regression tests in
-   `BuildUpsertSqlGenerationTests.cs` and `PrimaryKeyTableGatewayTests.cs` asserting the qualified
-   form, plus real end-to-end coverage against live PostgreSQL 18 and Firebird in
-   `pengdows.crud.IntegrationTests/Core/VersionedUpsertConflictTests.cs`.
-
-Both fixes independently verified (not just trusted from the validation pass): read and confirmed
-the root cause in the actual source for each, rebuilt the full solution clean, ran the full unit
-suite (6240/6240), ran the new/modified integration tests directly against real Docker/
-Testcontainers (11/11 passed: Firebird pure-key upsert, real-unique-constraint audit-restoration,
-real-PostgreSQL-18/Firebird MERGE conflict-detection), ran
-`MultiTenantDialectVersionTests.cs` (two real MySQL 8.0.19/8.0.33 containers sharing one
-`TableGateway`, proving version-specific SQL is generated correctly for each) directly, and ran
-the full `testbed/` suite directly: 11/11 databases, 207/207 checks, 0 failures, 23 pre-existing
-skips.
-
-**Benchmark validation — done.** Two new fakeDb-only BenchmarkDotNet benchmarks were added since
-none of the existing suite exercised `CreateAsync` execution or `BuildUpsert`'s MERGE-capability
-branches:
-
-- `benchmarks/CrudBenchmarks/Internal/CreateAsyncAuditOverheadBenchmarks.cs` — `CreateAsync` with
-  vs. without audit columns, isolating the CPU cost of the `writeSucceeded`/audit snapshot-restore
-  bookkeeping.
-- `benchmarks/CrudBenchmarks/Internal/UpsertCapabilityBenchmarks.cs` — `BuildUpsert` on SQL Server
-  (`EmitsAnsiMergeSyntax == true` branch) vs. Firebird (`== false` branch).
-
-Compared a read-only worktree at the pre-session commit, HEAD with the capability refactor
-reverted, and HEAD with the refactor applied (`InvocationCount=8192, IterationCount=20,
-WarmupCount=5`, all fakeDb/in-memory, no real I/O). Results:
-
-- **Audit snapshot/restore overhead:** ~8-13% cost difference between audited and non-audited
-  entities, but that gap is present even in the pre-session baseline (it's the pre-existing cost
-  of `SetAuditFields` reflection, not the new snapshot/restore bookkeeping) and does not increase
-  monotonically across pre-fix → refactor-reverted → current; all three land within each other's
-  StdDev. No measurable regression.
-- **Dialect capability property reads:** SQL Server ANSI-MERGE and Firebird MATCHING-MERGE builds
-  differ by ~1% between baseline and current, fully inside noise — consistent with a virtual
-  property read costing the same as the enum comparison it replaced.
-- **Fingerprint caching (multitenancy fix):** not independently isolated in a per-call benchmark —
-  it's already committed on `2.0.6` HEAD (not part of this session's uncommitted diff), and
-  architecturally it's a one-time-per-dialect-fingerprint cost (`Lazy`-cached template building via
-  `ConcurrentDictionary<string, T>`), so a per-call `CreateAsync`/`BuildUpsert` benchmark wouldn't
-  show it regardless. Allocated bytes were flat across all three benchmarked states, consistent
-  with no added steady-state cost. If a dedicated cache-hit-rate/warm-up benchmark is wanted later,
-  it isn't built yet.
-
-Verdict: no statistically meaningful performance regression from any of this session's changes.
 
 ---
 
