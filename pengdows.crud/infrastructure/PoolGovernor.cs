@@ -73,6 +73,7 @@ internal sealed class PoolGovernor : IDisposable
     private long _queued;
     private long _peakQueued;
     private long _queueDepth; // unconditional — decoupled from _trackMetrics, used only for admission control.
+    private long _turnstileQueueDepth; // unconditional — decoupled from _trackMetrics, used only for admission control.
     private long _turnstileQueued;
     private long _peakTurnstileQueued;
     private long _totalAcquired;
@@ -239,6 +240,18 @@ internal sealed class PoolGovernor : IDisposable
             // are not displaced — only NEW reader attempts are gated.
             if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
             {
+                // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
+                // so a caller storm on the turnstile is bounded even when metrics tracking is
+                // disabled. Mirrors the semaphore-side check below — without this, a stalled
+                // writer holding/awaiting the turnstile let every new reader queue up and wait
+                // out the full acquire timeout with no fast-fail circuit breaker at all.
+                var turnstileQueueDepth = Interlocked.Increment(ref _turnstileQueueDepth);
+                if (turnstileQueueDepth > _maxQueueDepth)
+                {
+                    Interlocked.Decrement(ref _turnstileQueueDepth);
+                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                }
+
                 var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
                 if (_trackMetrics)
                 {
@@ -261,6 +274,7 @@ internal sealed class PoolGovernor : IDisposable
                     {
                         Interlocked.Decrement(ref _turnstileQueued);
                     }
+                    Interlocked.Decrement(ref _turnstileQueueDepth);
                 }
 
                 turnstileAcquired = true;
@@ -484,6 +498,18 @@ internal sealed class PoolGovernor : IDisposable
             // are not displaced — only NEW reader attempts are gated.
             if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
             {
+                // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
+                // so a caller storm on the turnstile is bounded even when metrics tracking is
+                // disabled. Mirrors the semaphore-side check below — without this, a stalled
+                // writer holding/awaiting the turnstile let every new reader queue up and wait
+                // out the full acquire timeout with no fast-fail circuit breaker at all.
+                var turnstileQueueDepth = Interlocked.Increment(ref _turnstileQueueDepth);
+                if (turnstileQueueDepth > _maxQueueDepth)
+                {
+                    Interlocked.Decrement(ref _turnstileQueueDepth);
+                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+                }
+
                 var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
                 if (_trackMetrics)
                 {
@@ -506,6 +532,7 @@ internal sealed class PoolGovernor : IDisposable
                     {
                         Interlocked.Decrement(ref _turnstileQueued);
                     }
+                    Interlocked.Decrement(ref _turnstileQueueDepth);
                 }
 
                 turnstileAcquired = true;

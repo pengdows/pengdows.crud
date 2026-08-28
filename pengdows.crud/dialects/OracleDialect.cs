@@ -244,9 +244,9 @@ internal class OracleDialect : SqlDialect
     /// <summary>
     /// Oracle RETURNING INTO requires a named output parameter bound by the driver,
     /// not a generic positional placeholder. Override base to provide the correct syntax.
-    /// Note: In normal operation Oracle uses PrefetchSequence (GetGeneratedKeyPlan returns
-    /// PrefetchSequence), so this path is only reached when the caller explicitly renders
-    /// the clause.
+    /// This is the normal path: <see cref="GetGeneratedKeyPlan"/> returns
+    /// <see cref="GeneratedKeyPlan.Returning"/> for Oracle, rendered via this OUT-parameter
+    /// binding rather than a result set (see <see cref="RequiresOutputParameterForReturning"/>).
     /// </summary>
     public override string RenderInsertReturningClause(string idColumnWrapped)
     {
