@@ -18,6 +18,8 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.types;
+using pengdows.crud.types.converters;
 
 namespace pengdows.crud.types.coercion;
 
@@ -31,6 +33,9 @@ internal class CoercionRegistry
 
     private readonly ConcurrentDictionary<Type, IDbCoercion> _coercions = new();
     private readonly ConcurrentDictionary<(Type, SupportedDatabase), IDbCoercion> _providerSpecificCoercions = new();
+    private readonly ConcurrentDictionary<(Type, SupportedDatabase), ProviderTypeMapping> _legacyMappings = new();
+    private readonly ConcurrentDictionary<Type, IAdvancedTypeConverter> _legacyConverters = new();
+    private readonly ConcurrentDictionary<Type, byte> _legacyMappedTypes = new();
 
     public CoercionRegistry()
     {
@@ -51,6 +56,66 @@ internal class CoercionRegistry
     public void Register<T>(SupportedDatabase provider, IDbCoercion<T> coercion)
     {
         _providerSpecificCoercions[(typeof(T), provider)] = coercion;
+    }
+
+    // Compatibility registration for the original provider-mapping API. The
+    // mapping lives here so legacy and coercion-based conversions share one
+    // registry and one lookup owner.
+    public void RegisterMapping<T>(SupportedDatabase provider, ProviderTypeMapping mapping)
+    {
+        var type = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        _legacyMappings[(type, provider)] = mapping;
+        _legacyMappedTypes[type] = 0;
+    }
+
+    public ProviderTypeMapping? GetMapping(Type type, SupportedDatabase provider)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        return _legacyMappings.TryGetValue((type, provider), out var mapping) ? mapping : null;
+    }
+
+    public void RegisterConverter<T>(AdvancedTypeConverter<T> converter)
+    {
+        _legacyConverters[typeof(T)] = converter;
+    }
+
+    public IAdvancedTypeConverter? GetConverter(Type type)
+    {
+        return _legacyConverters.TryGetValue(type, out var converter) ? converter : null;
+    }
+
+    public bool IsLegacyMappedType(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        return _legacyMappedTypes.ContainsKey(type);
+    }
+
+    public bool TryConfigureLegacyParameter(
+        DbParameter parameter,
+        Type type,
+        object? value,
+        SupportedDatabase provider)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (!_legacyMappings.TryGetValue((type, provider), out var mapping))
+        {
+            return false;
+        }
+
+        if (_legacyConverters.TryGetValue(type, out var converter) && value != null)
+        {
+            value = converter.ToProviderValue(value, provider);
+        }
+
+        parameter.DbType = mapping.DbType;
+        parameter.Value = value ?? DBNull.Value;
+        mapping.ConfigureParameter?.Invoke(parameter, value);
+        if (parameter.Value == null || parameter.Value is DBNull)
+        {
+            parameter.Value = value ?? DBNull.Value;
+        }
+
+        return true;
     }
 
     /// <summary>

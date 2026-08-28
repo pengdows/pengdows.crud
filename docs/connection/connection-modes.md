@@ -17,6 +17,25 @@ This avoids exhausting the connection pool, avoids leaking resources or unclosed
 
 The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`. `KeepAlive` remains an obsolete compatibility alias for `PreventDatabaseUnload`.
 
+### Firebird Embedded on Linux
+
+Firebird Embedded integration tests use the complete pinned Firebird 5 Linux distribution,
+not a legacy `libfbembed.so` deployment. CI extracts the distribution into a user-owned
+temporary directory; it does not invoke the root-oriented installer or modify `/opt`,
+`/etc`, system libraries, or services. The runtime provides `libfbclient.so`,
+`libEngine13.so`, and the installed configuration/support files. Set `Providers = Engine13`,
+pass the extracted client library through `ClientLibrary`, set Firebird's temporary and
+lock directories to the temporary tree, and use a fresh writable `.fdb` path. CI verifies
+that no listener owns port 3050, ensuring the test exercises in-process Engine13 rather
+than a loopback or remote connection, then removes the exact temporary runtime.
+
+The direct provider bootstrap uses `Pooling=false` while creating the database. The
+`DatabaseContext` tests use its required provider-managed pooling path; the
+`PreventDatabaseUnload` test enables it deliberately because the sentinel is pool-backed.
+Tests dispose the context and sentinel before clearing pools and deleting the temporary
+database. CI supplies an explicit `FIREBIRD_TEST_PASSWORD` to the test process; callers
+can override it when running the setup locally.
+
 ### Standard
 
 - Semantics: Ephemeral pooled connections. New connection for each statement unless inside a transaction.

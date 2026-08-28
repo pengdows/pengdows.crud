@@ -7,6 +7,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -64,6 +65,24 @@ public class SqlDialectTests
         Assert.Equal("p", p.ParameterName);
         Assert.Equal(DbType.Int32, p.DbType);
         Assert.Equal(1, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_UsesUnifiedAdvancedCoercionForNonLegacyTypes()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var schema = DataSourceInformation.BuildEmptySchema("SQLite", "1", "?", "?", 64, "\\w+", "\\w+", true);
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        var tracked = new FakeTrackedConnection(conn, schema, new Dictionary<string, object>());
+        var dialect = SqlDialectFactory.CreateDialect(tracked, factory);
+
+        var parameter = dialect.CreateDbParameter(
+            "json_value",
+            DbType.Object,
+            new JsonValue("{\"enabled\":true}"));
+
+        Assert.Equal(DbType.String, parameter.DbType);
+        Assert.Equal("{\"enabled\":true}", parameter.Value);
     }
 
     private sealed class NoNamedParameterDialect : SqlDialect

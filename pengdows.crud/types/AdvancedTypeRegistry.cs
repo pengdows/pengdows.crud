@@ -34,9 +34,8 @@ using pengdows.crud.types.coercion;
 
 namespace pengdows.crud.types;
 
-/// <summary>
-/// High-performance struct key to avoid tuple allocation in hot paths.
-/// </summary>
+// Retained as internal compatibility types for existing in-assembly tests and
+// diagnostics. Runtime mapping state is now owned by CoercionRegistry.
 internal readonly struct MappingKey : IEquatable<MappingKey>
 {
     public readonly Type ClrType;
@@ -48,26 +47,11 @@ internal readonly struct MappingKey : IEquatable<MappingKey>
         Provider = provider;
     }
 
-    public bool Equals(MappingKey other)
-    {
-        return ClrType == other.ClrType && Provider == other.Provider;
-    }
-
-    public override bool Equals(object? obj)
-    {
-        return obj is MappingKey other && Equals(other);
-    }
-
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(ClrType, Provider);
-    }
+    public bool Equals(MappingKey other) => ClrType == other.ClrType && Provider == other.Provider;
+    public override bool Equals(object? obj) => obj is MappingKey other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(ClrType, Provider);
 }
 
-/// <summary>
-/// Cached configuration for parameter setup to avoid repeated lookups.
-/// Includes a converter version stamp to detect stale entries without per-call dictionary lookup.
-/// </summary>
 internal readonly struct CachedParameterConfig
 {
     public readonly ProviderTypeMapping Mapping;
@@ -134,16 +118,7 @@ internal class AdvancedTypeRegistry
 
     public static AdvancedTypeRegistry Shared { get; } = new(true);
 
-    private readonly ConcurrentDictionary<MappingKey, ProviderTypeMapping> _mappings = new();
-    private readonly ConcurrentDictionary<Type, IAdvancedTypeConverter> _converters = new();
-    private readonly ConcurrentDictionary<Type, byte> _mappedTypes = new(); // concurrent hashset pattern
-
-    // Performance cache for frequently accessed combinations
-    private readonly ConcurrentDictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
-
-    // Version counter incremented on every RegisterConverter call.
-    // On cache hit, a cheap int compare detects stale entries without a dictionary lookup.
-    private volatile int _converterVersion;
+    private readonly CoercionRegistry _registry;
 
     // Static reflection caches — reflection results are universal across instances
     private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> PropertyCache = new();
@@ -151,6 +126,7 @@ internal class AdvancedTypeRegistry
 
     public AdvancedTypeRegistry(bool includeDefaults = false)
     {
+        _registry = includeDefaults ? CoercionRegistry.Shared : new CoercionRegistry();
         if (includeDefaults)
         {
             RegisterDefaultMappings();
@@ -166,12 +142,7 @@ internal class AdvancedTypeRegistry
         var type = typeof(T);
         type = Nullable.GetUnderlyingType(type) ?? type;
 
-        var key = new MappingKey(type, provider);
-        _mappings[key] = mapping;
-        _mappedTypes[type] = 0;
-
-        // Clear any cached config for this key to force rebuild
-        _parameterCache.TryRemove(key, out _);
+        _registry.RegisterMapping<T>(provider, mapping);
     }
 
     /// <summary>
@@ -179,20 +150,7 @@ internal class AdvancedTypeRegistry
     /// </summary>
     public void RegisterConverter<T>(AdvancedTypeConverter<T> converter)
     {
-        var type = typeof(T);
-        _converters[type] = converter;
-
-        // Bump converter version — cached entries with old version will be rebuilt on next access
-        Interlocked.Increment(ref _converterVersion);
-
-        // Also remove stale cache entries for this type (belt and suspenders)
-        foreach (var key in _parameterCache.Keys)
-        {
-            if (key.ClrType == type)
-            {
-                _parameterCache.TryRemove(key, out _);
-            }
-        }
+        _registry.RegisterConverter(converter);
     }
 
     /// <summary>
@@ -200,8 +158,7 @@ internal class AdvancedTypeRegistry
     /// </summary>
     public ProviderTypeMapping? GetMapping(Type clrType, SupportedDatabase provider)
     {
-        var key = new MappingKey(clrType, provider);
-        return _mappings.TryGetValue(key, out var mapping) ? mapping : null;
+        return _registry.GetMapping(clrType, provider);
     }
 
     /// <summary>
@@ -209,7 +166,7 @@ internal class AdvancedTypeRegistry
     /// </summary>
     public IAdvancedTypeConverter? GetConverter(Type clrType)
     {
-        return _converters.TryGetValue(clrType, out var converter) ? converter : null;
+        return _registry.GetConverter(clrType);
     }
 
     /// <summary>
@@ -218,74 +175,39 @@ internal class AdvancedTypeRegistry
     /// </summary>
     public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
     {
-        // Unwrap nullable to ensure DateTime? matches DateTime mapping, etc.
-        clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
-
-        var key = new MappingKey(clrType, provider);
-        var currentVersion = _converterVersion;
-
-        // Try cached config first for best performance
-        if (!_parameterCache.TryGetValue(key, out var cachedConfig))
-        {
-            // Build and cache the configuration
-            if (!_mappings.TryGetValue(key, out var foundMapping))
-            {
-                _parameterCache[key] = null; // Cache negative result
-                return false;
-            }
-
-            _converters.TryGetValue(clrType, out var initialConverter);
-            cachedConfig = new CachedParameterConfig(foundMapping, initialConverter, currentVersion);
-            _parameterCache[key] = cachedConfig;
-        }
-
-        if (cachedConfig == null)
-        {
-            return false;
-        }
-
-        var config = cachedConfig.Value;
-        var converter = config.Converter;
-
-        // Check if converter version is stale — cheap int compare on every call
-        // Only do a dictionary lookup when the version mismatches
-        if (config.ConverterVersion != currentVersion)
-        {
-            _converters.TryGetValue(clrType, out var latestConverter);
-            converter = latestConverter;
-            var updatedConfig = new CachedParameterConfig(config.Mapping, converter, currentVersion);
-            _parameterCache[key] = updatedConfig;
-        }
-
-        // Apply converter if present and value is not null
-        if (converter != null && value != null)
-        {
-            value = converter.ToProviderValue(value, provider);
-            System.Diagnostics.Debug.WriteLine(
-                $"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
-        }
-
-        // Initialize parameter with default mapping values
-        parameter.DbType = config.Mapping.DbType;
-        parameter.Value = value ?? DBNull.Value;
-
-        // Apply provider-specific configuration
-        config.Mapping.ConfigureParameter?.Invoke(parameter, value);
-
-        // Crucial: Update the actual parameter value with the potentially transformed 'value'
-        // only if the configuration action didn't already set it.
-        if (parameter.Value == null || parameter.Value is DBNull)
-        {
-            parameter.Value = value ?? DBNull.Value;
-        }
-
-        return true;
+        return _registry.TryConfigureLegacyParameter(parameter, clrType, value, provider);
     }
 
     internal bool IsMappedType(Type clrType)
     {
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
-        return _mappedTypes.ContainsKey(clrType);
+        return _registry.IsLegacyMappedType(clrType);
+    }
+
+    /// <summary>
+    /// Configures a parameter through the single production write pipeline.
+    /// Legacy provider mappings retain precedence. Types that are known to the
+    /// legacy registry but have no mapping for this provider deliberately fall
+    /// back to the dialect, preserving provider-specific primitive behavior.
+    /// </summary>
+    internal bool TryConfigureParameterForDialect(
+        DbParameter parameter,
+        Type clrType,
+        object? value,
+        SupportedDatabase provider)
+    {
+        if (TryConfigureParameter(parameter, clrType, value, provider))
+        {
+            return true;
+        }
+
+        if (IsMappedType(clrType))
+        {
+            return false;
+        }
+
+        return ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider) ||
+               ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
     }
 
     /// <summary>
@@ -314,6 +236,9 @@ internal class AdvancedTypeRegistry
     /// <summary>
     /// Get the coercion registry for direct access to weird type handling.
     /// </summary>
+    // Compatibility property: the application-wide facade exposes the shared
+    // coercion registry. Instance-local registries remain isolated for tests and
+    // internal custom mapping scenarios.
     public CoercionRegistry CoercionRegistry => CoercionRegistry.Shared;
 
     private void RegisterDefaultMappings()

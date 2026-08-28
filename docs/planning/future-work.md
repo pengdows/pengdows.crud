@@ -40,6 +40,18 @@ constructible attributes risks a caller applying one and silently getting no beh
 
 ---
 
+## Firebird Embedded Linux integration runtime — completed 2026-08-28
+
+Firebird Embedded integration coverage now runs against the complete pinned Firebird
+5.0.4 Linux distribution using Engine13. CI extracts the distribution and its TomMath/
+TomCrypt dependencies into user-owned temporary storage, configures private Firebird
+lock/temp directories, verifies that port 3050 has no listener, runs the real
+`DatabaseContext` tests, and removes the exact runtime afterward. It does not invoke the
+root-oriented installer, modify `/opt` or `/etc`, or depend on the obsolete `libfbembed.so`
+deployment. The five embedded tests pass on both .NET 8 and .NET 10.
+
+---
+
 ## `DatabaseMetrics.P95`/`.P99` silently return meaningless values unless `EnableApproxPercentiles` is set
 
 `MetricsOptions.EnableApproxPercentiles` defaults to `false`; when unset, `MetricsCollector` never constructs its `PercentileRing` at all, so `DatabaseMetrics.P95`/`.P99` return their default value with nothing indicating why. See `docs/metrics.md` for the documented behavior as it stands today. Worth considering either flipping the default to `true` (the perf cost is a sliding window of `PercentileWindowSize` samples, not obviously expensive enough to justify opt-in-by-default) or having the property itself signal "not enabled" more clearly than a silently-zero value indistinguishable from "no commands executed yet" — a consumer building a dashboard off this value has no way to tell the two apart today.

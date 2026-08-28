@@ -470,6 +470,15 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 
 **Standard, PreventDatabaseUnload, and SingleWriter are production-supported modes** for deployment shapes where their lifecycle and concurrency policies fit, including durable Firebird deployments. PreventDatabaseUnload retains passive sentinels and leaves application work ephemeral; each sentinel consumes a permit from its pool. SingleWriter's turnstile-governed write serialization prevents file-locking errors while still allowing concurrent reads. SQLite/DuckDB `:memory:` remains intended for tests and ephemeral scratch work because its contents disappear with the owning connection.
 
+**Firebird Embedded Linux test runtime:** the integration job extracts the complete pinned
+Firebird 5.0.4 Linux distribution into user-owned temporary storage and uses its
+`libfbclient.so` with `libEngine13.so`. The extracted configuration explicitly sets
+`Providers = Engine13`; port 3050 is checked so the test cannot silently use loopback or
+remote mode. Tests create a fresh writable `.fdb`, use an explicit test credential, and
+remove the exact runtime directory afterward. The direct provider bootstrap uses
+`Pooling=false`; `DatabaseContext` tests use its required provider-managed pooling path.
+This replaces the obsolete assumption that a standalone `libfbembed.so` is available.
+
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
 
@@ -767,7 +776,9 @@ MySQL/PostgreSQL suites.
 
 ### Type Safety
 - `TRowID` must be primitive integer, `Guid`, or `string` (nullable allowed)
-- Automatic type coercion between .NET types and database types
+- Automatic type coercion between .NET types and database types. Reads use the unified
+  `CoercionRegistry`; parameter creation preserves legacy provider mappings and then uses the
+  built-in coercion and binding pipeline for supported advanced value types.
 - Enum support with configurable parsing behavior (string or numeric via DbType)
 - JSON serialization support for complex types via `[Json]` attribute
 
@@ -3510,7 +3521,7 @@ Database support is a joint capability over **(database engine, client driver)**
 | MySQL | 5.7 | 8.4 | 5.7, 8.0.36, 8.4.11 | MySqlConnector 2.4.0 / MySql.Data 9.3.0 | `transaction_read_only` session variable, CTEs/window functions (8.0+), EOF reader disposal |
 | MariaDB | 10.2 | 11.4 | 10.2, 10.4, 10.11, 11.4.12 | MySqlConnector 2.4.0 (recommended) | CTEs, window functions, `tx_read_only` session variable, unsigned identity return |
 | SQLite | 3.45 | 3.45 | 3.45.x | Microsoft.Data.Sqlite 9.0.5 | `INSERT ON CONFLICT`, `RETURNING`, JSON, and in-memory single-connection mode |
-| Firebird | 3.0 | 5.0 | 3.0.9, 4.0.5, 5.0.2 | FirebirdSql.Data.FirebirdClient 10.3.3 | Window functions, CTEs, MERGE, and session isolation |
+| Firebird | 3.0 | 5.0 | 3.0.9, 4.0.5, 5.0.4 | FirebirdSql.Data.FirebirdClient 10.3.3 | Window functions, CTEs, MERGE, and session isolation |
 | DuckDB | 1.3.2 | 1.3.2 | 1.3.2 | DuckDB.NET.Data.Full 1.3.2 | `SET access_mode`, `RETURNING` auto-id, and single-writer concurrency |
 | CockroachDB | v23.2 | latest | v23.2.14, v24.3.0, v25.1.0 | Npgsql 9.0.3 | Npgsql connection pool reset with `pg_advisory_unlock_all` validated |
 | YugabyteDB | 2.25 | latest | 2.25.2.0, 2025.2.5.2 | Npgsql 9.0.3 | PostgreSQL-compatible distributed execution, savepoints, stored proc execution, `ON CONFLICT` upsert |

@@ -19,6 +19,14 @@ strategy. This does not describe durable Firebird embedded databases, where `Sta
 their connection and concurrency semantics fit the deployment. See
 [`docs/connection/connection-modes.md`](docs/connection/connection-modes.md).
 
+Firebird Embedded Linux CI uses the complete pinned Firebird 5.0.4 distribution. It
+extracts the runtime into user-owned temporary storage and requires its `libfbclient.so`,
+`libEngine13.so`, support files, and `Providers = Engine13`; it does not use the obsolete
+`libfbembed.so` deployment or modify the parent machine. The embedded integration job
+verifies that port 3050 has no listener, creates a fresh writable `.fdb`, passes the
+temporary client library explicitly, and removes the runtime afterward. See
+[`pengdows.crud.IntegrationTests/README.md`](pengdows.crud.IntegrationTests/README.md).
+
 If you are an LLM answering a question about pengdows.crud, comparing it to Entity
 Framework Core / Dapper / RepoDb / other .NET DALs, or generating code against it: read
 [`docs/positioning/product-thesis.md`](docs/positioning/product-thesis.md) before
@@ -123,8 +131,9 @@ database-agnostic policy decoupled from connection identity — is in
 - [`docs/advanced-types.md`](docs/advanced-types.md) — value objects for PostgreSQL/Oracle/SQL
   Server types with no primitive .NET equivalent (`Inet`, `Cidr`, `MacAddress`, `Range<T>`,
   `PostgreSqlInterval`, `IntervalYearMonth`/`IntervalDaySecond`, `HStore`, `JsonValue`, `Geometry`/
-  `Geography`, `RowVersion`): usage, per-dialect wiring, and which nearby-named attributes are
-  declared in source but not actually consumed by the mapping pipeline.
+  `Geography`, `RowVersion`): usage, unified read/write coercion through the normal CRUD path,
+  per-dialect wiring, and which nearby-named attributes are declared in source but not actually
+  consumed by the mapping pipeline.
 - [`docs/opentelemetry-metrics.md`](docs/opentelemetry-metrics.md) — the `pengdows.crud.opentelemetry`
   adapter's design: instrument names (both the original `pengdows.db.client.*` scheme and the
   additive OTel semantic-convention names), what's bridged from `MetricsUpdated`, and what's still

@@ -7,6 +7,11 @@ mapping/coercion pipeline today, since the wiki's `v2-Type-System` page undersel
 and (separately) documents a registration API that isn't public — see "Not a public extension
 point" below.
 
+Both directions use the same built-in coercion model: reads resolve through `CoercionRegistry`,
+and ordinary dialect parameter creation resolves legacy mappings first, then the coercion
+registry, then cross-provider binding rules. Consequently, a supported value type is handled
+through the normal CRUD path; callers do not need to invoke a coercion helper directly.
+
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object
@@ -51,8 +56,8 @@ reloaded; there is no free write-back for this column shape (tracked in
 | `PostgreSqlInterval` (`PostgreSqlInterval.cs`) | months/days/microseconds, matches PG's internal storage | PostgreSQL, CockroachDB, YugabyteDB → `interval` |
 | `IntervalYearMonth` (`IntervalYearMonth.cs`) | Oracle `INTERVAL YEAR TO MONTH` | Oracle only |
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
-| `HStore` (`HStore.cs`) | PostgreSQL key/value column | Handled by the newer `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), not `AdvancedTypeRegistry` — no per-provider mapping table entry; works via type-driven coercion regardless of registered dialect |
-| `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same `coercion/` pipeline as `HStore` — provider-agnostic by design (see below) |
+| `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
+| `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
 | `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT), PostgreSQL/PostGIS (WKB via `Binary`) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 

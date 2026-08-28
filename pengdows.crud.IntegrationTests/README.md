@@ -50,7 +50,7 @@ functionality:
 
 **Location**: `ConnectionManagement/`
 
-- **DbModeTests**: Standard, KeepAlive, SingleWriter, SingleConnection modes
+- **DbModeTests**: Standard, PreventDatabaseUnload, SingleWriter, SingleConnection modes
 - **ReadOnlyConnectionTests**: ReadOnly connection behavior and readonly transaction handling
 - **ExecutionTypeTests**: ExecutionType.Read vs ExecutionType.Write connection management
 - **PoolingTests**: Connection pool optimization and behavior
@@ -71,6 +71,21 @@ functionality:
 1. **.NET 8 SDK** installed
 2. **Docker** for database containers (PostgreSQL, SQL Server, MySQL, etc.)
 3. **Optional**: Oracle Database for Oracle-specific tests
+
+Firebird Embedded tests require the complete pinned Firebird 5 Linux distribution,
+not the obsolete `libfbembed.so` deployment. CI extracts it into a user-owned
+`$RUNNER_TEMP` directory with `scripts/install-firebird-embedded.sh`; it does not invoke
+the root-oriented installer or modify `/opt`, `/etc`, system libraries, or services. It
+sets `Providers = Engine13` and the Firebird runtime/lock/temp paths before running the
+tests. The tests explicitly use the extracted `libfbclient.so` and temporary writable
+`.fdb` files, so a successful connection proves the in-process Engine13 path is working
+without a TCP listener. The workflow removes the exact temporary runtime in an always-run
+cleanup step.
+
+The direct provider bootstrap uses `Pooling=false` while creating the database. The
+`DatabaseContext` tests intentionally use its required provider-managed pooling path;
+the `PreventDatabaseUnload` test additionally asserts the passive sentinel. Teardown
+disposes the context and clears provider pools before deleting the temporary database.
 
 ### Run All Integration Tests
 

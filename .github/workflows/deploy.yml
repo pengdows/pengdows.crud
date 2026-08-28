@@ -83,6 +83,17 @@ jobs:
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
 
+      - name: Install pinned Firebird 5 embedded runtime
+        run: ./scripts/install-firebird-embedded.sh
+
+      - name: Verify Firebird embedded prerequisites
+        run: |
+          set -euo pipefail
+          test -f "$FIREBIRD_EMBEDDED_CLIENT_LIBRARY"
+          test -f "$FIREBIRD/plugins/libEngine13.so"
+          test "$(grep -E '^Providers[[:space:]]*=' "$FIREBIRD/firebird.conf")" = "Providers = Engine13"
+          ! ss -ltn | grep -q ':3050 '
+
       - name: Verify interface baselines
         run: |
           dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj --configuration Release -- \
@@ -135,6 +146,21 @@ jobs:
       - name: Run integration suite
         run: |
           dotnet run --no-build --configuration Release --project testbed/testbed.csproj
+
+      - name: Run Firebird embedded integration tests
+        run: |
+          dotnet test --no-build --configuration Release \
+            pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj \
+            --filter 'Category=FirebirdEmbedded' \
+            --logger 'console;verbosity=normal'
+
+      - name: Remove temporary Firebird runtime
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -n "${FIREBIRD_RUNTIME_DIR:-}" && -d "$FIREBIRD_RUNTIME_DIR" ]]; then
+            find "$FIREBIRD_RUNTIME_DIR" -depth -delete
+          fi
 
       - name: Generate coverage report
         run: |

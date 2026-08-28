@@ -1190,21 +1190,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
             DbTypeValidator.Validate(type, runtimeType);
         }
 
-        // Fast path: well-known primitive CLR types are never registered in AdvancedTypeRegistry.
-        // Skip the IsMappedType() ConcurrentDictionary lookup for the common case.
-        // PrepareParameterValue is still called — some dialects transform primitives
-        // (e.g. Oracle converts Guid→string and bool→NUMBER via PrepareParameterValue).
+        // Fast path: well-known primitive CLR types use the dialect's established
+        // PrepareParameterValue path. Non-primitive values go through the unified
+        // advanced dispatcher, which preserves legacy mappings and then falls back
+        // to the coercion registry and cross-provider binding rules.
         bool handled;
         if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
         {
-            // Primitive fast path: skip AdvancedTypes lookup, go straight to PrepareParameterValue.
             handled = false;
         }
         else
         {
             handled = runtimeType != null &&
-                      AdvancedTypes.IsMappedType(runtimeType) &&
-                      AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
+                      AdvancedTypes.TryConfigureParameterForDialect(parameter, runtimeType, value, DatabaseType);
         }
 
         if (!handled)
