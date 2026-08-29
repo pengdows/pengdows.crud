@@ -48,6 +48,57 @@ public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
         reader2.Read();
         var e2 = helper.MapReaderToObject(reader2);
         Assert.Equal("123", e2.Name);
+
+        // TEST-009: the test name promised "BuildsSeparatePlans" but nothing here actually
+        // checked the cache — both assertions above could pass even if a single, generically
+        // coercing plan were reused for both readers. RecordsetShape.Equals compares _types[i]
+        // before _names[i] at each position, so a differing CLR type at the same column index
+        // must produce a cache miss and a second entry; assert that directly.
+        Assert.Equal(2, GetReaderPlanCacheCount(helper));
+    }
+
+    // TEST-009: RecordsetShape.Equals iterates by index, comparing name AND type at each
+    // position — this is what makes it order-sensitive. Two shapes with the exact same column
+    // names and types but in a DIFFERENT ORDER must NOT be treated as the same shape: a shared
+    // plan compiled once for one ordinal layout, reused verbatim against a reader whose columns
+    // are actually in a different physical order, would read the wrong provider value into the
+    // wrong property without any exception ever being thrown.
+    [Fact]
+    public void MapReaderToObject_ReorderedColumns_BuildsSeparatePlans()
+    {
+        var helper = new TableGateway<NameEntity, int>(Context);
+
+        var idFirst = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Id"] = 1,
+                ["Name"] = "Alice"
+            }
+        };
+        using var readerIdFirst = new FakeTrackedReader(idFirst);
+        readerIdFirst.Read();
+        var e1 = helper.MapReaderToObject(readerIdFirst);
+        Assert.Equal(1, e1.Id);
+        Assert.Equal("Alice", e1.Name);
+
+        // Same column names and types, same fieldCount — just declared in the opposite order.
+        // fakeDbDataReader's Dictionary-backed row preserves insertion order for GetName(i).
+        var nameFirst = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Bob",
+                ["Id"] = 2
+            }
+        };
+        using var readerNameFirst = new FakeTrackedReader(nameFirst);
+        readerNameFirst.Read();
+        var e2 = helper.MapReaderToObject(readerNameFirst);
+        Assert.Equal(2, e2.Id);
+        Assert.Equal("Bob", e2.Name);
+
+        Assert.Equal(2, GetReaderPlanCacheCount(helper));
     }
 
     // CORE-013: reader plans were previously keyed directly by a bare 32-bit HashCode widened to

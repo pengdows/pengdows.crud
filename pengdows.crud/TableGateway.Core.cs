@@ -564,8 +564,17 @@ public partial class TableGateway<TEntity, TRowID> :
             return;
         }
 
+        // TEST-010: a session-scoped last-insert-id function (LAST_INSERT_ID(),
+        // last_insert_rowid(), etc.) is tied to the connection that ran the INSERT, which
+        // acquired an ExecutionType.Write connection. The parameterless-ExecutionType overload
+        // of ExecuteScalarOrNullAsync hardcodes ExecutionType.Read; using it here would send this
+        // query down the read pool/connection-string instead, where the function has no
+        // meaningful value. Explicit ExecutionType.Write here does not by itself guarantee the
+        // exact same physical connection as the INSERT (a separate, deeper concern already
+        // tracked as still-open in CORE-016) — it only ensures this query is not routed to a
+        // pool/connection-string that is definitely wrong.
         await using var sc = ctx.CreateSqlContainer(lastIdQuery);
-        var generatedId = await sc.ExecuteScalarOrNullAsync<object>(CommandType.Text, cancellationToken);
+        var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken);
 
         if (generatedId != null && generatedId != DBNull.Value)
         {
