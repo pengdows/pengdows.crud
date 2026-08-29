@@ -3522,13 +3522,9 @@ yet:
 services.AddDbProviderLoading(configuration, myPreBuiltLogger);
 ```
 
-Using `DbProviderLoader` directly (what `AddDbProviderLoading` does under the hood) is only
-necessary outside a plain `IServiceCollection` composition flow:
-
-```csharp
-var loader = new DbProviderLoader(configuration, logger);
-loader.LoadAndRegisterProviders(services);
-```
+`DbProviderLoader`'s constructor is `internal` — `services.AddDbProviderLoading(...)` is the
+*only* supported way to use this feature. There is no direct-construction path for consumers
+outside `pengdows.crud` itself.
 
 Each entry under `DatabaseProviders` is keyed by an arbitrary **section key** you choose
 (`"sqlserver"`, `"custom-oracle"` above) — it does not need to match `ProviderName` or any
