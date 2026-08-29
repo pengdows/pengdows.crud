@@ -42,9 +42,12 @@ but consumers can distinguish disabled or empty data from a real zero-valued mea
 
 ---
 
-## Two exception types for "read-only violation," not unified
+## Read-only violation marker — completed 2026-08-28
 
-A write attempt against a read-only context throws `NotSupportedException` (whole-context `ReadWriteMode.ReadOnly`) or a separate `InvalidOperationException("Transaction is read-only.")` (connection/transaction-scoped `IsReadOnlyConnection`), depending on which of two independent flags is set — see `docs/read-only-enforcement.md`. A caller wanting to catch "this was rejected for being read-only" generically has to catch both types with no shared marker beyond `Exception` itself. Worth considering a common base type or interface (`IReadOnlyViolation`?) both could implement, without changing which concrete type each site throws (to stay backward compatible) — purely additive.
+The existing concrete exception behavior is preserved through derived exceptions, while
+`ReadOnlyContextException`, `ReadOnlyAccessException`, and provider-translated
+`ReadOnlyViolationException` implement the public `IReadOnlyViolation` marker. Callers can now
+handle all library-generated read-only failures without inspecting messages.
 
 ---
 

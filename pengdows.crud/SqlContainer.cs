@@ -1113,7 +1113,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // Check if context is configured as read-only (exactly ReadWriteMode.ReadOnly, not ReadWrite)
             if (_context.ReadWriteMode == ReadWriteMode.ReadOnly)
             {
-                throw new NotSupportedException("Write operations are not supported in read-only mode.");
+                throw new ReadOnlyContextException("Write operations are not supported in read-only mode.");
             }
 
             _context.AssertIsWriteConnection();
@@ -1366,7 +1366,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (executionType == ExecutionType.Write &&
             _context.ReadWriteMode == ReadWriteMode.ReadOnly)
         {
-            throw new NotSupportedException("Write operations are not supported in read-only mode.");
+            throw new ReadOnlyContextException("Write operations are not supported in read-only mode.");
         }
 
         await using var reader = await ExecuteReaderAsync(executionType, commandType, cancellationToken)

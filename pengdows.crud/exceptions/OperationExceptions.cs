@@ -87,7 +87,7 @@ public class ConnectionException : DatabaseOperationException
 /// <c>access_mode=READ_ONLY</c> write attempts) when a modifying statement reaches a
 /// read-only connection. Not transient — the caller must use a writable context.
 /// </remarks>
-public class ReadOnlyViolationException : DatabaseOperationException
+public class ReadOnlyViolationException : DatabaseOperationException, IReadOnlyViolation
 {
     public ReadOnlyViolationException(
         string message,

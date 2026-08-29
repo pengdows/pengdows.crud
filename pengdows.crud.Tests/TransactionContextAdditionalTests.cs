@@ -3,6 +3,7 @@
 using System;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -60,7 +61,7 @@ public class TransactionContextAdditionalTests
         using var ctx = CreateCtx();
         using var tx = (TransactionContext)ctx.BeginTransaction(executionType: ExecutionType.Read);
 
-        Assert.Throws<InvalidOperationException>(() => tx.AssertIsWriteConnection());
+        Assert.Throws<ReadOnlyAccessException>(() => tx.AssertIsWriteConnection());
     }
 
     [Fact]

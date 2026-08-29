@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using pengdows.crud.enums;
 using Xunit;
+using pengdows.crud.exceptions;
 
 namespace pengdows.crud.Tests;
 
@@ -14,7 +15,7 @@ public class ReadOnlyTransactionTests
         await using var context = new DatabaseContext("Data Source=:memory:", SqliteFactory.Instance);
         await using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
         await using var container = tx.CreateSqlContainer("INSERT INTO t VALUES (1)");
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<ReadOnlyAccessException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Fact]

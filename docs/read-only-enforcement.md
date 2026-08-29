@@ -31,14 +31,18 @@ The exact session SQL varies by dialect, but the framework can enforce read inte
 
 The details live in the dialect and connection-lifecycle code, not in a separate read-only subsystem with its own public API.
 
-## Two independent exception types for "read-only violation"
+## Read-only violation exceptions
 
 A write attempt is checked against **two separate flags, in sequence**, each throwing a different exception type — a catch block that only handles one will miss the other:
 
 1. **Context-level configuration**: if `context.ReadWriteMode == ReadWriteMode.ReadOnly` (the whole context was configured read-only), throws `NotSupportedException("Write operations are not supported in read-only mode.")`.
 2. **Connection/transaction-scoped intent**: checked second, only if the first check passes. `context.IsReadOnlyConnection` is a *different* flag — set per connection/transaction, e.g. a transaction opened with `ExecutionType.Read` on an otherwise-writable context. If set, throws `InvalidOperationException("Transaction is read-only.")` (`InternalConnectionAccessAssertions.AssertIsWriteConnection`).
 
-These are real, production-active guards (not `Debug.Assert`), checked on every write execution. If you need to catch "this write was rejected for being read-only" generically, catch both `NotSupportedException` and this specific `InvalidOperationException` message — they are not unified into one exception type or a shared base beyond `Exception` itself.
+These are real, production-active guards (not `Debug.Assert`), checked on every write execution.
+Both library-generated exceptions implement the public `IReadOnlyViolation` marker interface
+(`pengdows.crud.exceptions`). Their existing base types and messages are preserved, so existing
+code catching `NotSupportedException` or `InvalidOperationException` continues to work. New
+code can catch `IReadOnlyViolation` without inspecting exception messages.
 
 ## `ReadOnlyViolationException`
 

@@ -8,6 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -175,7 +176,7 @@ public class SingleWriterReadOnlyEnhancedTests
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         await using var container = tx.CreateSqlContainer("INSERT INTO t VALUES (1)");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<ReadOnlyAccessException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Fact]
@@ -273,7 +274,7 @@ public class SingleWriterReadOnlyEnhancedTests
         await using var container = tx.CreateSqlContainer("CREATE TABLE t(id INTEGER)");
 
         // This should fail because the transaction is read-only
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<ReadOnlyAccessException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Theory]

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -191,7 +192,7 @@ public class SqlContainerBranchTests
         using var ctx = CreateContext(SupportedDatabase.PostgreSql, null, ReadWriteMode.ReadOnly);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await container.ExecuteNonQueryAsync());
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () => await container.ExecuteNonQueryAsync());
     }
 
     [Fact]

@@ -215,6 +215,19 @@ public class CompleteExceptionTests
 
         Assert.IsAssignableFrom<DatabaseOperationException>(ex);
         Assert.IsAssignableFrom<DatabaseException>(ex);
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
+    }
+
+    [Fact]
+    public void ReadOnlyAccessExceptions_PreserveLegacyBaseTypesAndShareMarker()
+    {
+        var context = new ReadOnlyContextException("context");
+        var access = new ReadOnlyAccessException("access");
+
+        Assert.IsAssignableFrom<NotSupportedException>(context);
+        Assert.IsAssignableFrom<InvalidOperationException>(access);
+        Assert.IsAssignableFrom<IReadOnlyViolation>(context);
+        Assert.IsAssignableFrom<IReadOnlyViolation>(access);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -51,7 +52,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteNonQueryAsync());
     }
 
@@ -101,7 +102,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteScalarOrNullAsync<int?>(ExecutionType.Write));
         Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -118,7 +119,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.TryExecuteScalarAsync<int>(ExecutionType.Write));
         Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -135,8 +136,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        // ExecuteReaderAsync goes through AssertIsWriteConnection rather than the
-        // ReadWriteMode guard, so the exception type is InvalidOperationException.
+        // ExecuteReaderAsync validates the write-capable connection separately.
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await container.ExecuteReaderAsync(ExecutionType.Write));
     }
