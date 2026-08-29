@@ -56,7 +56,11 @@ namespace pengdows.crud.tenant;
 /// </remarks>
 public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegistry
 {
-    private readonly ConcurrentDictionary<string, Lazy<IDatabaseContext>> _contexts = new();
+    // Case-insensitive to match TenantConnectionResolver's tenant-ID comparison
+    // (StringComparer.OrdinalIgnoreCase) — "tenant-x" and "TENANT-X" must resolve to exactly
+    // one cached context, not two independently governed ones.
+    private readonly ConcurrentDictionary<string, Lazy<IDatabaseContext>> _contexts =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly object _admissionLock = new();
     private readonly ILoggerFactory _loggerFactory;
     private readonly ITenantConnectionResolver _resolver;
@@ -102,61 +106,102 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     /// <inheritdoc/>
     public IDatabaseContext GetContext(string tenant)
     {
-        ThrowIfDisposed();
-
         if (string.IsNullOrWhiteSpace(tenant))
         {
             throw new ArgumentNullException(nameof(tenant), "Tenant identifier must not be null or empty.");
         }
 
-        // Fast path: already-cached tenant — fully lock-free, no behavior change and no
-        // contention with the admission lock below.
-        if (_contexts.TryGetValue(tenant, out var existingLazy))
+        // Looped rather than a single pass: a racing Invalidate() (or registry disposal) can
+        // evict our freshly-installed Lazy before it finishes evaluating — see the orphan-check
+        // below. ThrowIfDisposed() is re-checked on every iteration (not just once up front) so
+        // a retry forced by a disposal race fails closed with ObjectDisposedException instead of
+        // looping forever re-creating and re-orphaning contexts against a disposed registry.
+        while (true)
         {
-            return ResolveLazy(tenant, existingLazy);
-        }
+            ThrowIfDisposed();
 
-        Lazy<IDatabaseContext> lazy;
-        if (_maxTenantCount.HasValue)
-        {
-            // Cap enforcement requires the count-check and the add to be atomic together,
-            // otherwise two threads racing to admit two DIFFERENT new tenants can both pass
-            // the check before either calls GetOrAdd, letting the cap be exceeded. Only the
-            // fast dictionary check+add happens under the lock; CreateDatabaseContext() stays
-            // deferred inside Lazy<T>.Value, resolved outside the lock below, so hold time
-            // stays negligible even though tenant construction itself may be slow.
-            lock (_admissionLock)
+            // Fast path: already-cached tenant — fully lock-free, no behavior change and no
+            // contention with the admission lock below. No orphan-check needed here: this Lazy
+            // was observed to be registered at the moment of lookup, which is the same
+            // guarantee normal cache reads provide (a subsequent concurrent Invalidate is not a
+            // leak, just an ordinary point-in-time race).
+            if (_contexts.TryGetValue(tenant, out var existingLazy))
             {
-                if (!_contexts.TryGetValue(tenant, out existingLazy))
-                {
-                    if (_contexts.Count >= _maxTenantCount.Value)
-                    {
-                        throw new InvalidOperationException(
-                            $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
-                            "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
-                    }
-
-                    existingLazy = _contexts.GetOrAdd(
-                        tenant,
-                        key => new Lazy<IDatabaseContext>(
-                            () => CreateDatabaseContext(key),
-                            LazyThreadSafetyMode.ExecutionAndPublication));
-                }
+                return ResolveLazy(tenant, existingLazy);
             }
 
-            lazy = existingLazy;
-        }
-        else
-        {
-            // No cap configured: unchanged, fully lock-free hot path.
-            lazy = _contexts.GetOrAdd(
-                tenant,
-                key => new Lazy<IDatabaseContext>(
-                    () => CreateDatabaseContext(key),
-                    LazyThreadSafetyMode.ExecutionAndPublication));
-        }
+            Lazy<IDatabaseContext> lazy;
+            if (_maxTenantCount.HasValue)
+            {
+                // Cap enforcement requires the count-check and the add to be atomic together,
+                // otherwise two threads racing to admit two DIFFERENT new tenants can both pass
+                // the check before either calls GetOrAdd, letting the cap be exceeded. Only the
+                // fast dictionary check+add happens under the lock; CreateDatabaseContext() stays
+                // deferred inside Lazy<T>.Value, resolved outside the lock below, so hold time
+                // stays negligible even though tenant construction itself may be slow.
+                lock (_admissionLock)
+                {
+                    if (!_contexts.TryGetValue(tenant, out existingLazy))
+                    {
+                        if (_contexts.Count >= _maxTenantCount.Value)
+                        {
+                            throw new InvalidOperationException(
+                                $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
+                                "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
+                        }
 
-        return ResolveLazy(tenant, lazy);
+                        existingLazy = _contexts.GetOrAdd(
+                            tenant,
+                            key => new Lazy<IDatabaseContext>(
+                                () => CreateDatabaseContext(key),
+                                LazyThreadSafetyMode.ExecutionAndPublication));
+                    }
+                }
+
+                lazy = existingLazy;
+            }
+            else
+            {
+                // No cap configured: unchanged, fully lock-free hot path.
+                lazy = _contexts.GetOrAdd(
+                    tenant,
+                    key => new Lazy<IDatabaseContext>(
+                        () => CreateDatabaseContext(key),
+                        LazyThreadSafetyMode.ExecutionAndPublication));
+            }
+
+            var context = ResolveLazy(tenant, lazy);
+
+            // A racing Invalidate() — or registry disposal's DisposeManaged(), which skips any
+            // Lazy that isn't yet IsValueCreated before clearing the dictionary — may have
+            // removed `lazy` between the GetOrAdd above and this point. When that happens,
+            // Invalidate's own dispose-if-created check was a no-op (the Lazy wasn't
+            // IsValueCreated yet), so `context` was just created but is unreachable through the
+            // registry: nobody else can ever observe it. Rather than hand back a live,
+            // untracked context (a permanent leak), dispose it as an orphan and retry — the next
+            // iteration either finds a healthy tracked context another thread installed, creates
+            // a fresh one that survives this check, or throws ObjectDisposedException if the
+            // registry itself was disposed in the interim.
+            if (_contexts.TryGetValue(tenant, out var currentLazy) && ReferenceEquals(currentLazy, lazy))
+            {
+                return context;
+            }
+
+            DisposeOrphanedContext(context);
+        }
+    }
+
+    private void DisposeOrphanedContext(IDatabaseContext context)
+    {
+        try
+        {
+            context.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Error disposing an orphaned tenant context created during a racing Invalidate() or registry disposal.");
+        }
     }
 
     private IDatabaseContext ResolveLazy(string tenant, Lazy<IDatabaseContext> lazy)

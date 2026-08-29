@@ -15,7 +15,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class KeepAliveConnectionStrategyBehaviorTests
+public class PreventDatabaseUnloadConnectionStrategyBehaviorTests
 {
     [Fact]
     public async Task GetConnectionAsync_OpenFailure_DISPOSES_AND_RETHROWS()
@@ -30,7 +30,7 @@ public class KeepAliveConnectionStrategyBehaviorTests
         };
 
         await using var ctx = new DatabaseContext(cfg, factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await strategy.GetConnectionAsync(ctx, ExecutionType.Read, false));
@@ -50,7 +50,7 @@ public class KeepAliveConnectionStrategyBehaviorTests
         Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
         Assert.NotNull(ctx.PersistentConnection);
 
-        var strategy = new KeepAliveConnectionStrategy(ctx);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
         await strategy.ReleaseConnectionAsync(ctx.PersistentConnection);
 
         Assert.Equal(ConnectionState.Open, ctx.PersistentConnection.State);
@@ -67,7 +67,7 @@ public class KeepAliveConnectionStrategyBehaviorTests
         };
 
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
-        var strategy = new KeepAliveConnectionStrategy(ctx);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
 
         var result = strategy.HandleDialectDetection(null, null, NullLoggerFactory.Instance);
 

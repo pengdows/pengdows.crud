@@ -75,6 +75,38 @@ public class TenantTests
         }
     }
 
+    // Deterministically pauses inside Create() so a test can inject a race (Invalidate,
+    // registry Dispose) between the moment GetContext installs the Lazy and the moment its
+    // factory delegate actually completes.
+    private sealed class BlockingContextFactory : IDatabaseContextFactory
+    {
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public BlockingContextFactory(SemaphoreSlim creationStarted, SemaphoreSlim proceedWithCreation)
+        {
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            // Only the first call blocks — a fixed implementation may retry and call this
+            // factory again after disposing an orphan, and a naive test double that blocks on
+            // every call would deadlock that (correct) retry forever on an already-consumed
+            // semaphore instead of exercising it.
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
     [Fact]
     public async Task TenantContextRegistry_ResolvesContextFromKeyedFactory()
     {
@@ -334,5 +366,195 @@ public class TenantTests
 
         Assert.Equal(20, caught.Count);
         Assert.All(caught, ex => Assert.IsType<InvalidOperationException>(ex));
+    }
+
+    // CORE-009: TenantConnectionResolver resolves tenant configuration case-insensitively
+    // (StringComparer.OrdinalIgnoreCase), but TenantContextRegistry's internal
+    // ConcurrentDictionary<string, Lazy<IDatabaseContext>> previously used the default
+    // case-sensitive comparer. "tenant-x" and "TENANT-X" both resolve to the same
+    // configuration but must also share exactly one cached context — otherwise the registry
+    // silently creates two independently governed contexts (and consumes two cardinality
+    // slots) for what the resolver considers a single tenant.
+    [Fact]
+    public void GetContext_WithDifferentCasing_ReturnsSameContextAndRaisesContextCreatedOnce()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var fireCount = 0;
+        registry.ContextCreated += _ => fireCount++;
+
+        var lower = registry.GetContext("tenant-case");
+        var upper = registry.GetContext("TENANT-CASE");
+        var mixed = registry.GetContext("Tenant-Case");
+
+        Assert.Same(lower, upper);
+        Assert.Same(lower, mixed);
+        Assert.Equal(1, fireCount);
+    }
+
+    // Concurrent variant of the case-insensitivity invariant above: many callers racing with
+    // different casings of the same tenant ID must still converge on exactly one created
+    // context and exactly one ContextCreated event.
+    [Fact]
+    public async Task GetContext_WithMixedCaseConcurrentCallers_ReturnsOneContextAndOneCreationEvent()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var fireCount = 0;
+        registry.ContextCreated += _ => Interlocked.Increment(ref fireCount);
+
+        var casings = new[] { "shared-Case", "SHARED-CASE", "shared-case", "Shared-Case" };
+        var results = new ConcurrentBag<IDatabaseContext>();
+
+        var tasks = Enumerable.Range(0, 40)
+            .Select(i => Task.Run(() => results.Add(registry.GetContext(casings[i % casings.Length]))))
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+
+        Assert.Equal(1, fireCount);
+        Assert.Single(results.Distinct());
+    }
+
+    // CORE-010: Invalidate(tenant) can TryRemove a Lazy<IDatabaseContext> before it is
+    // IsValueCreated. Because Invalidate's dispose-if-created check is then a no-op, the
+    // in-flight GetContext call that owns that Lazy finishes creating a context nobody else
+    // can ever reach through the registry — an orphaned, undisposed context. This test
+    // deterministically reproduces the race via BlockingContextFactory and proves the
+    // registry either returns the tracked context, or disposes the orphan rather than
+    // leaking it.
+    [Fact]
+    public async Task Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new BlockingContextFactory(creationStarted, proceedWithCreation),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var getContextTask = Task.Run(() => registry.GetContext("race-tenant"));
+
+        // Wait until GetContext has installed its Lazy and entered the factory.
+        await creationStarted.WaitAsync();
+
+        // Race: invalidate the tenant before its in-flight creation finishes. The Lazy is not
+        // yet IsValueCreated, so Invalidate's own dispose-if-created branch does nothing.
+        registry.Invalidate("race-tenant");
+
+        // Let the blocked creation finish.
+        proceedWithCreation.Release();
+
+        var raced = await getContextTask;
+
+        // A follow-up call must return a live, tracked context.
+        var following = registry.GetContext("race-tenant");
+        Assert.False(following.IsDisposed);
+
+        if (!ReferenceEquals(raced, following))
+        {
+            // `raced` was the orphan produced by the evicted Lazy — it must have been disposed
+            // by the registry rather than leaked as a live, untracked context.
+            Assert.True(raced.IsDisposed);
+        }
+    }
+
+    // Companion race: registry disposal itself (not Invalidate) wins against an in-flight
+    // creation. DisposeManaged() skips any Lazy that is not yet IsValueCreated and then
+    // clears the dictionary — the in-flight creation must not be allowed to hand back a live,
+    // untracked context after the registry considers itself fully disposed.
+    [Fact]
+    public async Task Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new BlockingContextFactory(creationStarted, proceedWithCreation),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var getContextTask = Task.Run(() => registry.GetContext("dispose-race-tenant"));
+
+        await creationStarted.WaitAsync();
+
+        // Race: dispose the registry before the in-flight creation finishes.
+        registry.Dispose();
+
+        proceedWithCreation.Release();
+
+        // The racing call must not return a live, untracked context past registry disposal —
+        // it either throws ObjectDisposedException, or (if it does return) the context it
+        // returns must already be disposed.
+        try
+        {
+            var raced = await getContextTask;
+            Assert.True(raced.IsDisposed);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Acceptable: failing closed instead of leaking a live context is the safe outcome.
+        }
     }
 }

@@ -267,6 +267,12 @@ public partial class DatabaseContext
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
         bool isShared = false)
     {
+        // CORE-025: this is the entry point every connection acquisition path (ordinary
+        // commands, readers, sentinel creation) ultimately reaches. Without this check, a
+        // disposed context's nulled-out governor fields made AcquireSlot silently return an
+        // ungoverned default slot instead of failing — a container created after disposal could
+        // open a fresh physical connection and execute completely outside admission control.
+        ThrowIfDisposed();
         var slot = AcquireSlot(executionType);
         try
         {
@@ -547,7 +553,13 @@ public partial class DatabaseContext
     }
 
     /// <summary>
-    /// Overload of FactoryCreateConnection using read execution type.
+    /// Overload of FactoryCreateConnection using read execution type. Every current caller of
+    /// this overload (and its 3-arg sibling below) creates an infrastructure connection —
+    /// dialect detection, TestConnect validation, or PreventDatabaseUnload sentinel
+    /// creation/repair — never an application-issued read or write, so slot acquisition here
+    /// must not be attributed to Metrics.ReadRequests/WriteRequests. The genuine
+    /// application-facing path is GetStandardConnectionWithExecutionType, which calls AcquireSlot
+    /// directly and passes its own pre-acquired slot into the 4-arg FactoryCreateConnection below.
     /// </summary>
     internal ITrackedConnection FactoryCreateConnection(string? connectionString = null,
         bool isSharedConnection = false)
@@ -562,7 +574,7 @@ public partial class DatabaseContext
             executionType,
             connectionString,
             isSharedConnection,
-            AcquireSlot(executionType));
+            AcquireInfrastructureSlot(executionType));
     }
 
     private DbDataSource? ResolveDataSource(bool readOnly)
@@ -608,10 +620,58 @@ public partial class DatabaseContext
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
         if (governor == null)
         {
+            ThrowIfGovernorMissingAfterDisposal();
+            // Not yet disposed: this is the narrow bootstrap window before
+            // InitializePoolGovernors() has run (_effectivePoolGovernorEnabled defaults to
+            // true so the very first, pre-governor connection during construction still
+            // reaches here) — ungoverned by design, matching pre-existing behavior.
             return default;
         }
 
         return governor.Acquire();
+    }
+
+    /// <summary>
+    /// Acquires a governor slot for infrastructure connections — dialect detection, TestConnect
+    /// validation, and PreventDatabaseUnload sentinel creation/repair — that consume pool
+    /// capacity but are never application-issued reads or writes. Identical to AcquireSlot except
+    /// it does not record into _attributionStats, so Metrics.ReadRequests/WriteRequests reflect
+    /// only requests the application actually made.
+    /// </summary>
+    private PoolSlot AcquireInfrastructureSlot(ExecutionType executionType)
+    {
+        if (!_effectivePoolGovernorEnabled)
+        {
+            return default;
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            ThrowIfGovernorMissingAfterDisposal();
+            // See AcquireSlot's identical branch above for why a null governor is otherwise
+            // the legitimate pre-InitializePoolGovernors() bootstrap state, not an error.
+            return default;
+        }
+
+        return governor.Acquire();
+    }
+
+    /// <summary>
+    /// CORE-025: InitializePoolGovernors always assigns a real PoolGovernor (possibly
+    /// disabled/forbidden internally, never a null reference) once it has run. A null governor
+    /// observed while the context is already disposed means DisposePoolGovernors() nulled the
+    /// field out from under an in-flight acquire — silently returning an ungoverned default slot
+    /// would let that connection bypass admission control entirely, so fail loudly instead. A
+    /// null governor observed while NOT disposed is the legitimate pre-initialization bootstrap
+    /// window instead (see callers), so this only throws for the disposed case.
+    /// </summary>
+    private void ThrowIfGovernorMissingAfterDisposal()
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(nameof(DatabaseContext));
+        }
     }
 
     /// <summary>

@@ -190,9 +190,9 @@ public class KeepAliveSentinelReconnectTests
         var originalSentinel = ctx.PersistentConnection!;
         Unwrap(originalSentinel).BreakConnection();
 
-        KeepAliveConnectionStrategy.PostDisposedCheckHook = () =>
+        PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = () =>
         {
-            KeepAliveConnectionStrategy.PostDisposedCheckHook = null; // avoid re-entrancy
+            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null; // avoid re-entrancy
             ctx.Dispose();
         };
 
@@ -207,7 +207,7 @@ public class KeepAliveSentinelReconnectTests
         }
         finally
         {
-            KeepAliveConnectionStrategy.PostDisposedCheckHook = null;
+            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null;
             opConnection?.Dispose();
         }
 

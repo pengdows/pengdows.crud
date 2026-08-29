@@ -173,4 +173,35 @@ public sealed class PreventDatabaseUnloadTests
         var connectionString = new DbConnectionStringBuilder { ConnectionString = context.RawReaderConnectionString };
         Assert.Equal(2, Convert.ToInt32(connectionString["Min Pool Size"]));
     }
+
+    [Fact]
+    public void Construction_DoesNotAttributeSentinelSlotAcquisitionAsApplicationRequests()
+    {
+        // AttachInitialSentinelSlotsIfNeeded() acquires a governor slot for each sentinel at
+        // construction time, and the secondary read-sentinel path (separate read/write
+        // connection strings) creates its sentinel through the same FactoryCreateConnection
+        // overload used for dialect detection and TestConnect. Neither should be counted as an
+        // application-issued read/write request — Metrics.ReadRequests/WriteRequests are
+        // documented as requests the context admitted on behalf of the application, not
+        // infrastructure bookkeeping performed before the application ever runs a query.
+        // EnableMetrics=true is required: Metrics returns an all-zero snapshot whenever the
+        // (opt-in) metrics collector is disabled, which would make this assertion pass
+        // vacuously regardless of whether the underlying attribution counters are contaminated.
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=primary;Database=test;EmulatedProduct=SqlServer",
+            ReadOnlyConnectionString = "Server=replica;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            MaxConcurrentReads = 3,
+            MaxConcurrentWrites = 4,
+            EnableMetrics = true
+        };
+
+        using var context = new DatabaseContext(config, factory);
+
+        Assert.Equal(2, context.GetSentinelSnapshot().Count);
+        Assert.Equal(0, context.Metrics.ReadRequests);
+        Assert.Equal(0, context.Metrics.WriteRequests);
+    }
 }

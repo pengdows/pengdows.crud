@@ -3,6 +3,7 @@
 using System;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -415,6 +416,55 @@ public class DatabaseContextConstructorTests
         Assert.Equal("3", builder["Min Pool Size"].ToString());
     }
 
+    private static string GetRawConnectionString(DatabaseContext context)
+    {
+        var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        return (string)rawProperty!.GetValue(context)!;
+    }
+
+    [Fact]
+    public void Constructor_Standard_Mode_Does_Not_Inject_MinPoolSize_Into_RealConnectionString()
+    {
+        // The public ConnectionString/context.ConnectionString property is snapshotted before
+        // pool-governor initialization runs, so asserting against it (as
+        // Constructor_Does_Not_Add_Default_MinPoolSize_For_Standard_Mode_When_Missing does) can
+        // pass even if the real connection string used to open connections diverges. This test
+        // reads the actual RawConnectionString the context opens connections with.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = GetRawConnectionString(context) };
+        Assert.False(builder.ContainsKey("Min Pool Size"));
+    }
+
+    [Fact]
+    public void Constructor_PreventDatabaseUnload_Mode_Injects_MinPoolSize_Two_Into_RealConnectionString()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = GetRawConnectionString(context) };
+        Assert.True(builder.ContainsKey("Min Pool Size"));
+        Assert.Equal("2", builder["Min Pool Size"].ToString());
+    }
+
     [Fact]
     public void Constructor_PoolingDisabled_ThrowsInvalidOperationException()
     {
@@ -483,7 +533,7 @@ public class DatabaseContextConstructorTests
         var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(rawProperty);
-        Assert.Equal("server=test;database=testdb;emulatedproduct=SqlServer;Min Pool Size=1",
+        Assert.Equal(rawConnectionString,
             (string)rawProperty!.GetValue(context)!);
     }
 

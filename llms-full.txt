@@ -2449,7 +2449,7 @@ app.Use(async (context, next) =>
 - Connection from provider pool
 - No persistent connection
 
-**PreventDatabaseUnload mode** (`KeepAliveConnectionStrategy`):
+**PreventDatabaseUnload mode** (`PreventDatabaseUnloadConnectionStrategy`):
 - One unused permit-backed sentinel kept open per materially separate pool
 - Prevents database unload, deactivation, or pause (LocalDB, embedded Firebird, and other explicitly selected providers)
 - All work uses ephemeral connections (identical to Standard)
@@ -2482,7 +2482,7 @@ internal static class ConnectionStrategyFactory
         return mode switch
         {
             DbMode.Standard => new StandardConnectionStrategy(context),
-            DbMode.PreventDatabaseUnload => new KeepAliveConnectionStrategy(context),
+            DbMode.PreventDatabaseUnload => new PreventDatabaseUnloadConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
             // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
             DbMode.SingleWriter => new StandardConnectionStrategy(context),
@@ -3475,15 +3475,6 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 This contract is authoritative — implement according to these rules, and contributors must not deviate.
 
 ---
-
-## Public database-detection diagnostics
-
-`DatabaseDetection.DetectFromConnectionWithDetail` and
-`DatabaseDetection.DetectFromConnectionWithDetailAsync` return a
-`DatabaseDetectionResult` containing the resolved `SupportedDatabase` and each
-`DetectionProbeAttempt`, including whether the probe succeeded and its failure reason.
-These APIs preserve the existing enum-only detection entry points while making detection
-evidence available to diagnostics and support tooling.
 
 ## Source: `docs/supported-databases.md`
 

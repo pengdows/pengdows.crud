@@ -322,14 +322,14 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
 
     #endregion
 
-    #region KeepAliveConnectionStrategy Tests
+    #region PreventDatabaseUnloadConnectionStrategy Tests
 
     [Fact]
     public void KeepAlive_ReleaseConnection_Null_DoesNotThrow()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Should not throw
         strategy.ReleaseConnection(null);
@@ -340,7 +340,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Get a connection and set it as persistent
         var conn = strategy.GetConnection(ExecutionType.Read, false);
@@ -358,7 +358,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Get a connection but do NOT set it as persistent
         var conn = strategy.GetConnection(ExecutionType.Read, false);
@@ -374,7 +374,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Should complete without error
         await strategy.ReleaseConnectionAsync(null);
@@ -385,7 +385,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var conn = strategy.GetConnection(ExecutionType.Read, false);
         strategy.PostInitialize(conn);
@@ -401,7 +401,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var conn = strategy.GetConnection(ExecutionType.Read, false);
 
@@ -415,7 +415,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // GetConnection opens the connection internally
         var conn = strategy.GetConnection(ExecutionType.Read, false);
@@ -433,7 +433,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
             ConnectionFailureMode.FailOnOpen);
 
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // The second open should fail since the factory was configured to skip only the first
         var ex = Assert.ThrowsAny<Exception>(() =>
@@ -448,7 +448,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Create and open a connection to pass as initConnection
         var conn = strategy.GetConnection(ExecutionType.Read, false);
@@ -467,7 +467,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var conn = strategy.GetConnection(ExecutionType.Read, false);
 
@@ -485,7 +485,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Set up a persistent connection first
         var conn = strategy.GetConnection(ExecutionType.Read, false);
@@ -505,7 +505,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // No persistent connection set, no initConnection passed
         // Strategy should create its own connection via FactoryCreateConnection
@@ -521,7 +521,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var conn = strategy.GetConnection(ExecutionType.Read, false);
         strategy.PostInitialize(conn);
@@ -533,7 +533,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     public void KeepAlive_ParameterlessConstructor_CanBeCreated()
     {
         // The parameterless constructor exists for tests that pass context per call
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
         Assert.NotNull(strategy);
     }
 
@@ -542,7 +542,7 @@ public sealed class ConnectionAndPoolingEdgeCaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         // Get and open a connection, then pass it as initConnection
         var conn = strategy.GetConnection(ExecutionType.Read, false);

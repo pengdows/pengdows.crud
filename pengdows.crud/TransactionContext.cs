@@ -649,16 +649,28 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return;
         }
 
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = _transaction;
-        cmd.CommandText = _dialect.GetSavepointSql(name);
-        if (cmd is DbCommand db)
+        // CORE-023: a savepoint is a command against the shared connection like any other — it
+        // must be serialized through the same reader-aware lock ordinary commands use, so it
+        // fails fast (instead of racing a still-open reader on the same connection) exactly like
+        // ExecuteNonQueryAsync already does.
+        await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = _transaction;
+            cmd.CommandText = _dialect.GetSavepointSql(name);
+            if (cmd is DbCommand db)
+            {
+                await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cmd.ExecuteNonQuery();
+            }
         }
-        else
+        finally
         {
-            cmd.ExecuteNonQuery();
+            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -675,16 +687,25 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return;
         }
 
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = _transaction;
-        cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
-        if (cmd is DbCommand db)
+        // See SavepointAsync for why this must go through the same reader-aware lock.
+        await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = _transaction;
+            cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
+            if (cmd is DbCommand db)
+            {
+                await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cmd.ExecuteNonQuery();
+            }
         }
-        else
+        finally
         {
-            cmd.ExecuteNonQuery();
+            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -743,90 +764,117 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     private void CompleteTransaction(Action action, bool markCommitted)
     {
-        if (Interlocked.Exchange(ref _completedState, 1) != 0)
-        {
-            throw new InvalidOperationException("Transaction already completed.");
-        }
-
+        // CORE-023: acquire the same reader-aware lock ordinary commands use, before touching
+        // any completion state. If a reader opened on this transaction is still active,
+        // ReusableAsyncLocker fails fast here (see MarkHeldByActiveReader/
+        // ThrowIfBlockedBehindActiveReader) instead of letting completion dispose the
+        // transaction/connection out from under it. Held for the entire completion so no other
+        // caller can start a new operation on the connection while it is being torn down.
+        // Acquired before flipping _completedState so a failed attempt (reader still open)
+        // leaves the transaction fully retryable rather than permanently stuck.
+        _reusableLocker.Lock();
         try
         {
-            action();
+            if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
+                throw new InvalidOperationException("Transaction already completed.");
+            }
 
-            if (markCommitted)
+            try
             {
-                Interlocked.Exchange(ref _committed, 1);
+                action();
+
+                if (markCommitted)
+                {
+                    Interlocked.Exchange(ref _committed, 1);
+                }
+                else
+                {
+                    Interlocked.Exchange(ref _rolledBack, 1);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Interlocked.Exchange(ref _rolledBack, 1);
+                // Do NOT reset _completedState — connection is already closed in finally.
+                // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+                throw new TransactionException(
+                    $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                    _context.Product, ex);
             }
-        }
-        catch (Exception ex)
-        {
-            // Do NOT reset _completedState — connection is already closed in finally.
-            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
-            throw new TransactionException(
-                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                _context.Product, ex);
+            finally
+            {
+                TryResetReadOnlySession();
+                // Disposing the transaction here — not in DisposeManaged — guarantees it happens
+                // exactly once, on whichever thread actually completed it, regardless of whether a
+                // concurrent Dispose() lost the _completionLock race (see DisposeManaged).
+                _transaction.Dispose();
+                _context.CloseAndDisposeConnection(_connection);
+                _singleConnectionTransactionGate.Dispose();
+                CompleteTransactionMetrics();
+            }
         }
         finally
         {
-            TryResetReadOnlySession();
-            // Disposing the transaction here — not in DisposeManaged — guarantees it happens
-            // exactly once, on whichever thread actually completed it, regardless of whether a
-            // concurrent Dispose() lost the _completionLock race (see DisposeManaged).
-            _transaction.Dispose();
-            _context.CloseAndDisposeConnection(_connection);
-            _singleConnectionTransactionGate.Dispose();
-            CompleteTransactionMetrics();
+            // TrackDisposeState = false: this only releases the hold acquired above (a no-op if
+            // Lock() threw before acquiring), it never permanently disposes the reusable locker.
+            _reusableLocker.Dispose();
         }
     }
 
     private async ValueTask CompleteTransactionAsync(Func<ValueTask> action, bool markCommitted)
     {
-        if (Interlocked.Exchange(ref _completedState, 1) != 0)
-        {
-            throw new InvalidOperationException("Transaction already completed.");
-        }
-
+        // See CompleteTransaction's sync counterpart for why this lock is acquired first.
+        await _reusableLocker.LockAsync().ConfigureAwait(false);
         try
         {
-            await action().ConfigureAwait(false);
+            if (Interlocked.Exchange(ref _completedState, 1) != 0)
+            {
+                throw new InvalidOperationException("Transaction already completed.");
+            }
 
-            if (markCommitted)
+            try
             {
-                Interlocked.Exchange(ref _committed, 1);
+                await action().ConfigureAwait(false);
+
+                if (markCommitted)
+                {
+                    Interlocked.Exchange(ref _committed, 1);
+                }
+                else
+                {
+                    Interlocked.Exchange(ref _rolledBack, 1);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Interlocked.Exchange(ref _rolledBack, 1);
+                // Do NOT reset _completedState — connection is already closed in finally.
+                // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
+                throw new TransactionException(
+                    $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+                    _context.Product, ex);
             }
-        }
-        catch (Exception ex)
-        {
-            // Do NOT reset _completedState — connection is already closed in finally.
-            // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
-            throw new TransactionException(
-                $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                _context.Product, ex);
+            finally
+            {
+                await TryResetReadOnlySessionAsync().ConfigureAwait(false);
+                // See CompleteTransaction's sync counterpart for why disposal happens here rather
+                // than in DisposeManagedAsync.
+                if (_transaction is IAsyncDisposable asyncTx)
+                {
+                    await asyncTx.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    _transaction.Dispose();
+                }
+
+                await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
+                await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
+                CompleteTransactionMetrics();
+            }
         }
         finally
         {
-            await TryResetReadOnlySessionAsync().ConfigureAwait(false);
-            // See CompleteTransaction's sync counterpart for why disposal happens here rather
-            // than in DisposeManagedAsync.
-            if (_transaction is IAsyncDisposable asyncTx)
-            {
-                await asyncTx.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                _transaction.Dispose();
-            }
-
-            await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
-            await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
-            CompleteTransactionMetrics();
+            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -903,12 +951,27 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
         }
 
-        _userLock.Dispose();
+        DisposeUserLockUnlessHeld();
         if (shouldDisposeLock)
         {
             _completionLock.Dispose();
         }
         CompleteTransactionMetrics();
+    }
+
+    /// <summary>
+    /// CORE-023: disposing _userLock unconditionally would corrupt an active reader still
+    /// holding it — the reader's own later cleanup calls Release() on it (via _reusableLocker),
+    /// which throws ObjectDisposedException against an already-disposed SemaphoreSlim. Only
+    /// dispose it when immediately acquirable (nobody currently holds it); otherwise leave it for
+    /// the GC — matching the existing shouldDisposeLock precedent for _completionLock just above.
+    /// </summary>
+    private void DisposeUserLockUnlessHeld()
+    {
+        if (_userLock.Wait(0))
+        {
+            _userLock.Dispose();
+        }
     }
 
     protected override async ValueTask DisposeManagedAsync()
@@ -962,7 +1025,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
         }
 
-        _userLock.Dispose();
+        DisposeUserLockUnlessHeld();
         if (shouldDisposeLock)
         {
             _completionLock.Dispose();

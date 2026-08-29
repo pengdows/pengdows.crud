@@ -58,6 +58,90 @@ public sealed class PoolGovernorTests
         Assert.True(ex.Snapshot.TotalSlotTimeouts >= 1);
     }
 
+    // CORE-027: PoolGovernor previously had no admission-closed state at all. Dispose()
+    // unconditionally tore down the semaphore with no guard against a concurrent Acquire, and
+    // WaitForDrainAsync only watched _inUse — nothing stopped new work from being admitted while
+    // draining, so a busy pool could never actually finish draining, and Dispose() racing an
+    // in-flight Acquire could throw ObjectDisposedException at the acquirer instead of failing
+    // predictably. Close() gives the governor an explicit, checked terminal state.
+    [Fact]
+    public void Close_ThenAcquire_ThrowsObjectDisposedException()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2, TimeSpan.FromSeconds(5));
+        governor.Close();
+
+        Assert.Throws<ObjectDisposedException>(() => governor.Acquire());
+    }
+
+    [Fact]
+    public void Close_ThenTryAcquire_ThrowsObjectDisposedException()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2, TimeSpan.FromSeconds(5));
+        governor.Close();
+
+        Assert.Throws<ObjectDisposedException>(() => governor.TryAcquire(out _));
+    }
+
+    [Fact]
+    public async Task Close_ThenAcquireAsync_ThrowsObjectDisposedException()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2, TimeSpan.FromSeconds(5));
+        governor.Close();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await governor.AcquireAsync());
+    }
+
+    [Fact]
+    public async Task Close_ThenTryAcquireAsync_ThrowsObjectDisposedException()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 2, TimeSpan.FromSeconds(5));
+        governor.Close();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await governor.TryAcquireAsync());
+    }
+
+    [Fact]
+    public async Task Close_PreventsNewAdmission_SoWaitForDrainAsyncActuallyCompletes()
+    {
+        // Before Close() existed, a steady stream of new acquires could keep _inUse above zero
+        // forever, so WaitForDrainAsync had no way to guarantee progress toward completion.
+        var governor = new PoolGovernor(PoolLabel.Writer, "writer-key", 1, TimeSpan.FromSeconds(5));
+        var slot = await governor.AcquireAsync();
+
+        governor.Close();
+
+        // New admission must be rejected once closed, even though a slot is still held.
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await governor.AcquireAsync());
+
+        var drainTask = governor.WaitForDrainAsync(TimeSpan.FromSeconds(5));
+        Assert.False(drainTask.IsCompleted);
+
+        await slot.DisposeAsync();
+
+        await drainTask;
+    }
+
+    [Fact]
+    public void Dispose_IsIdempotent()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromSeconds(5));
+
+        governor.Dispose();
+        var ex = Record.Exception(() => governor.Dispose());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Dispose_ClosesAdmission()
+    {
+        var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 1, TimeSpan.FromSeconds(5));
+
+        governor.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => governor.Acquire());
+    }
+
     [Fact]
     public async Task SlotDispose_ReleasesCapacity()
     {

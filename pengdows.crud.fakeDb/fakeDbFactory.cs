@@ -23,6 +23,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private bool _hasOpenedOnce;
     private readonly List<fakeDbConnection> _connections = new();
     private readonly List<fakeDbConnection> _createdConnections = new();
+    private readonly List<FakeDbDataSource> _createdDataSources = new();
     private Exception? _globalPersistentScalarException;
     private Exception? _globalTransactionCommitException;
     private Exception? _globalTransactionRollbackException;
@@ -222,8 +223,17 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
                 $"{nameof(fakeDbFactory)} does not support {nameof(CreateDataSource)} unless {nameof(SupportsNativeDataSource)} is set to true.");
         }
 
-        return new FakeDbDataSource(connectionString, this);
+        var dataSource = new FakeDbDataSource(connectionString, this);
+        _createdDataSources.Add(dataSource);
+        return dataSource;
     }
+
+    /// <summary>
+    /// Every FakeDbDataSource this factory has created via CreateDataSource, in creation order.
+    /// Lets tests verify disposal of internally-created data sources they never received a
+    /// direct handle to (e.g. ones DatabaseContext creates itself during construction).
+    /// </summary>
+    public IReadOnlyList<FakeDbDataSource> CreatedDataSources => _createdDataSources;
 
     /// <summary>
     /// Increments the shared open count and returns the new value, optionally skipping the first open

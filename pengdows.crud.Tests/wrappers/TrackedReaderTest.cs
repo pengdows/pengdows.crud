@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.connection;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.Tests;
 using pengdows.crud.wrappers;
@@ -23,6 +24,7 @@ public class TrackedReaderTests
     {
         public int CloseCallCount { get; private set; }
         public bool WasClosed => CloseCallCount > 0;
+        public bool ThrowOnDispose { get; set; }
 
         private string _connectionString = "test";
 
@@ -48,6 +50,10 @@ public class TrackedReaderTests
         public void Dispose()
         {
             Close();
+            if (ThrowOnDispose)
+            {
+                throw new InvalidOperationException("simulated connection dispose failure");
+            }
         }
 
         public ValueTask DisposeAsync()
@@ -138,6 +144,7 @@ public class TrackedReaderTests
     {
         public int DisposeCallCount { get; private set; }
         public bool WasDisposed => DisposeCallCount > 0;
+        public bool ThrowOnDispose { get; set; }
 
         public void Lock()
         {
@@ -153,12 +160,50 @@ public class TrackedReaderTests
         public void Dispose()
         {
             DisposeCallCount++;
+            if (ThrowOnDispose)
+            {
+                throw new InvalidOperationException("simulated locker dispose failure");
+            }
         }
 
         public ValueTask DisposeAsync()
         {
             DisposeCallCount++;
+            if (ThrowOnDispose)
+            {
+                throw new InvalidOperationException("simulated locker dispose failure");
+            }
+
             return ValueTask.CompletedTask;
+        }
+    }
+
+    // Throws only for an explicit Dispose() call (disposing == true) — a finalizer must never
+    // throw (it would crash the process on the finalizer thread), so disposing == false is a
+    // silent no-op, matching correct Dispose(bool) convention.
+    private sealed class ThrowingOnDisposeReader : fakeDbDataReader
+    {
+        public ThrowingOnDisposeReader() : base(Array.Empty<Dictionary<string, object>>())
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                throw new InvalidOperationException("simulated reader dispose failure");
+            }
+        }
+    }
+
+    private sealed class ThrowingOnDisposeCommand : fakeDbCommand
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                throw new InvalidOperationException("simulated command dispose failure");
+            }
         }
     }
 
@@ -313,6 +358,156 @@ public class TrackedReaderTests
         Assert.True(command.WasDisposed);
         Assert.True(locker.WasDisposed);
         Assert.False(connection.WasClosed);
+    }
+
+    // CORE-020: Close() previously delegated only to the underlying DbDataReader.Close(),
+    // leaving the wrapper's own ownership (command, connection, locks, governor slot via
+    // connection.Dispose(), metrics, lifetime-listener notification) unreleased. A consumer
+    // that follows the standard IDataReader.Close() contract (rather than Dispose()) would
+    // silently leak all of that. Close() must now perform the same complete release as
+    // Dispose(), including full idempotency.
+    [Fact]
+    public void Close_PerformsFullOwnershipRelease_LikeDispose()
+    {
+        var command = new fakeDbCommand();
+        using var reader = new DisposalOrderTrackingReader(command);
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true,
+            command: command);
+
+        tracked.Close();
+
+        Assert.True(reader.WasDisposed);
+        Assert.True(command.WasDisposed);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
+    }
+
+    [Fact]
+    public void Close_IsIdempotent_AndDoesNotDoubleDisposeWhenFollowedByDispose()
+    {
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true);
+
+        tracked.Close();
+        tracked.Close();
+        tracked.Dispose();
+
+        Assert.Equal(1, locker.DisposeCallCount);
+        Assert.Equal(1, connection.CloseCallCount);
+    }
+
+    // CORE-021: DisposeManaged/DisposeManagedAsync previously ran cleanup phases sequentially
+    // with no continue-on-failure structure. An exception from an early phase (reader dispose)
+    // skipped every later phase (command, connection — which releases the governor slot —
+    // locks, lifetime-listener notification), leaking whatever came after the throw. These
+    // tests force a failure at each phase and prove every other owned resource still releases.
+    [Fact]
+    public void Dispose_ReaderDisposeThrows_StillDisposesCommandConnectionAndLockers()
+    {
+        var command = new fakeDbCommand();
+        var reader = new ThrowingOnDisposeReader();
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true,
+            command: command);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+        Assert.Equal("simulated reader dispose failure", ex.Message);
+
+        Assert.True(command.WasDisposed);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
+    }
+
+    [Fact]
+    public void Dispose_CommandDisposeThrows_StillDisposesConnectionAndLockers()
+    {
+        var command = new ThrowingOnDisposeCommand();
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true,
+            command: command);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+        Assert.Equal("simulated command dispose failure", ex.Message);
+
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
+    }
+
+    [Fact]
+    public void Dispose_ConnectionDisposeThrows_StillDisposesCommandAndLockers()
+    {
+        var command = new fakeDbCommand();
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection { ThrowOnDispose = true };
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true,
+            command: command);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+        Assert.Equal("simulated connection dispose failure", ex.Message);
+
+        Assert.True(command.WasDisposed);
+        Assert.True(locker.WasDisposed);
+    }
+
+    [Fact]
+    public void Dispose_ConnectionLockerDisposeThrows_StillNotifiesLifetimeListenerAndDisposesOtherLockers()
+    {
+        using var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        var connection = new TestTrackedConnection();
+        var connectionLocker = new TestLockerAsync { ThrowOnDispose = true };
+        var contextLocker = new TestLockerAsync();
+        var listener = new TestReaderLifetimeListener();
+
+        var tracked = new TrackedReader(reader, connection, connectionLocker,
+            shouldCloseConnection: true, lifetimeListener: listener, contextLocker: contextLocker);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
+        Assert.Equal("simulated locker dispose failure", ex.Message);
+
+        Assert.True(contextLocker.WasDisposed);
+        Assert.True(listener.WasNotified);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ReaderDisposeThrows_StillDisposesCommandConnectionAndLockers()
+    {
+        var command = new fakeDbCommand();
+        var reader = new ThrowingOnDisposeReader();
+        var connection = new TestTrackedConnection();
+        var locker = new TestLockerAsync();
+
+        var tracked = new TrackedReader(reader, connection, locker, shouldCloseConnection: true,
+            command: command);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await tracked.DisposeAsync());
+        Assert.Equal("simulated reader dispose failure", ex.Message);
+
+        Assert.True(command.WasDisposed);
+        Assert.True(connection.WasClosed);
+        Assert.True(locker.WasDisposed);
+    }
+
+    private sealed class TestReaderLifetimeListener : IReaderLifetimeListener
+    {
+        public bool WasNotified { get; private set; }
+
+        public void OnReaderDisposed()
+        {
+            WasNotified = true;
+        }
     }
 
     [Fact]

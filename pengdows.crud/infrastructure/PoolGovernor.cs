@@ -41,7 +41,7 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud.infrastructure;
 
-internal sealed class PoolGovernor : IDisposable
+internal sealed class PoolGovernor : SafeAsyncDisposableBase
 {
     private const string NotInitializedMessage = "Pool governor is not initialized.";
     private const int QueueDepthMultiplier = 8;
@@ -62,6 +62,16 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _ownsTurnstile;
     private readonly object _drainLock = new();
     private TaskCompletionSource<bool> _drainSignal;
+
+    // CORE-027: admission-closed state. 0 = open, 1 = closed. Checked first in every acquire
+    // entry point so a caller racing a concurrent Close()/Dispose() gets a clear
+    // ObjectDisposedException instead of either silently succeeding past intended shutdown or
+    // throwing from deep inside semaphore machinery that was torn down underneath it. Also lets
+    // WaitForDrainAsync provide a real guarantee: once closed, _inUse can only decrease.
+    // Deliberately independent of SafeAsyncDisposableBase.IsDisposed: Close() can be called
+    // ahead of actual disposal (see DatabaseContext.DisposePoolGovernors) to stop admission
+    // before draining, without yet tearing down the semaphore.
+    private int _closed;
 
     // Turnstile fairness support: prevents writer starvation under reader pressure
     private readonly SemaphoreSlim? _turnstile;
@@ -180,8 +190,36 @@ internal sealed class PoolGovernor : IDisposable
     /// </summary>
     internal int MaxQueueDepth => _maxQueueDepth;
 
+    /// <summary>
+    /// True once <see cref="Close"/> (or <see cref="Dispose"/>) has been called. Every acquire
+    /// entry point checks this first and throws <see cref="ObjectDisposedException"/> if set.
+    /// </summary>
+    internal bool IsClosed => Volatile.Read(ref _closed) != 0;
+
+    /// <summary>
+    /// Closes admission: every subsequent Acquire/TryAcquire/AcquireAsync/TryAcquireAsync call
+    /// throws <see cref="ObjectDisposedException"/> immediately, before touching the semaphore.
+    /// Idempotent. Does not itself wait for existing holders to release — call
+    /// <see cref="WaitForDrainAsync(CancellationToken)"/> afterward for that; closing first is
+    /// what makes that wait a real guarantee (in-flight permits can only decrease, never
+    /// increase, once closed).
+    /// </summary>
+    public void Close()
+    {
+        Interlocked.Exchange(ref _closed, 1);
+    }
+
+    private void ThrowIfClosed()
+    {
+        if (IsClosed)
+        {
+            throw new ObjectDisposedException(nameof(PoolGovernor));
+        }
+    }
+
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -364,6 +402,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public bool TryAcquire(out PoolSlot slot, CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -440,6 +479,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -625,6 +665,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -966,8 +1007,10 @@ internal sealed class PoolGovernor : IDisposable
         internal long WritersActiveOrWaiting;
     }
 
-    public void Dispose()
+    protected override void DisposeManaged()
     {
+        Close();
+
         if (_ownsSemaphore)
         {
             _semaphore?.Dispose();

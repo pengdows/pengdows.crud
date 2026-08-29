@@ -36,6 +36,42 @@ public class DatabaseMetricsTests
         Assert.True(metrics.RowsAffectedTotal >= 1);
     }
 
+    // CORE-022 (tracker false-positive check): a prior review claimed
+    // TrackedConnection.HandleMetricsStateChange calls MetricsCollector.ConnectionOpened()
+    // twice per Open transition, permanently doubling ConnectionsOpened/ConnectionsCurrent.
+    // Empirically this does not reproduce — MetricsCollector.ConnectionOpened() propagating to
+    // a parent collector (_parent?.ConnectionOpened()) increments two DISTINCT collector
+    // instances (role-scoped and aggregate) once each, which is correct roll-up, not
+    // same-counter duplication. This test locks in the exact (not merely nonnegative) counts
+    // per TEST-014's ask, so a real regression here fails loudly.
+    [Fact]
+    public async Task Metrics_ConnectionOpenClose_CountsExactlyOncePerOperation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=metricscount;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Construction itself opens/closes exactly one connection (dialect detection).
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
+
+        await using (var container = context.CreateSqlContainer("SELECT 1"))
+        {
+            await container.ExecuteNonQueryAsync();
+        }
+
+        // Exactly one more open/close cycle — not two (which a double-count bug would produce).
+        Assert.Equal(2, context.Metrics.ConnectionsOpened);
+        Assert.Equal(2, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
+    }
+
     [Fact]
     public async Task ExecuteScalarOrNullAsync_TimeoutIsTrackedAsFailure()
     {

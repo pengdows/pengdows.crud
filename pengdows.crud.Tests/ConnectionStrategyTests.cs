@@ -121,7 +121,7 @@ public class ConnectionStrategyTests
         // keep-alive opens a persistent connection during initialization
         Assert.True(ctx.NumberOfOpenConnections >= 1);
 
-        // KeepAliveConnectionStrategy.GetConnection opens the connection itself before
+        // PreventDatabaseUnloadConnectionStrategy.GetConnection opens the connection itself before
         // returning it (deliberate fail-fast design — open-time failures surface at acquisition,
         // not on a later, separate Open() call), so it is already open here.
         var c = ctx.GetConnection(ExecutionType.Read);
@@ -362,7 +362,7 @@ public class ConnectionStrategyTests
         ctx.CloseAndDisposeConnection(read);
     }
 
-    // Additional tests for KeepAliveConnectionStrategy methods
+    // Additional tests for PreventDatabaseUnloadConnectionStrategy methods
 
     [Fact]
     public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
@@ -401,7 +401,7 @@ public class ConnectionStrategyTests
         // Use SQL Server to avoid automatic mode coercion that happens with SQLite
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
 
-        // Create a separate connection that's not the persistent one. KeepAliveConnectionStrategy
+        // Create a separate connection that's not the persistent one. PreventDatabaseUnloadConnectionStrategy
         // .GetConnection opens it before returning, so it is already open here.
         var separateConnection = ctx.GetConnection(ExecutionType.Read, false);
         var beforeCount = ctx.NumberOfOpenConnections;
@@ -732,7 +732,7 @@ public class ConnectionStrategyTests
         {
             for (var i = 0; i < roundsPerThread; i++)
             {
-                // KeepAliveConnectionStrategy.GetConnection opens it before returning.
+                // PreventDatabaseUnloadConnectionStrategy.GetConnection opens it before returning.
                 var conn = ctx.GetConnection(ExecutionType.Read);
                 await ctx.CloseAndDisposeConnectionAsync(conn);
             }

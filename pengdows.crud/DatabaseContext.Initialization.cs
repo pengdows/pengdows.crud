@@ -387,6 +387,12 @@ public partial class DatabaseContext
 
             InitializePoolGovernors();
 
+            // InitializePoolGovernors can mutate _connectionString/_readerConnectionString (e.g.
+            // PreventDatabaseUnload's minimum pool size injection) after the redacted strings were
+            // first computed in InitializeReadOnlyConnectionResources above — refresh so the public
+            // ConnectionString property reflects what the context actually opens connections with.
+            RefreshRedactedConnectionStrings();
+
             // InitializeInternals above always assigns _rcsiPrefetch/_snapshotIsolationPrefetch a
             // concrete value (default false when not applicable/attempted) before returning, for
             // every product and mode — a live IsReadCommittedSnapshotOn/IsSnapshotIsolationOn
@@ -444,16 +450,19 @@ public partial class DatabaseContext
                 catch
                 {
                     // By this point InitializePoolGovernors() has already allocated the write/read
-                    // governors (each wrapping a SemaphoreSlim), and — for persistent modes —
-                    // actual physical connections are already open and session-initialized. Since
-                    // this object never escapes the failed constructor, none of that gets disposed
-                    // otherwise: a real leak on every rejected duplicate-connection-string
-                    // construction.
+                    // governors (each wrapping a SemaphoreSlim), InitializeReadOnlyConnectionResources
+                    // has already created any internally-owned writer/reader DbDataSource, and —
+                    // for persistent modes — actual physical connections are already open and
+                    // session-initialized. Since this object never escapes the failed constructor,
+                    // none of that gets disposed otherwise: a real leak on every rejected
+                    // duplicate-connection-string construction. DisposeOwnedDataSources() already
+                    // knows not to dispose a caller-supplied DbDataSource (_dataSourceProvided).
                     _writerGovernor?.Dispose();
                     _writerGovernor = null;
                     _readerGovernor?.Dispose();
                     _readerGovernor = null;
                     DisposePersistentConnectionsForInitializationFailure();
+                    DisposeOwnedDataSources();
                     throw;
                 }
             }
@@ -474,6 +483,7 @@ public partial class DatabaseContext
                 _writerGovernor = null;
                 _readerGovernor?.Dispose();
                 _readerGovernor = null;
+                DisposeOwnedDataSources();
             }
             catch
             {
@@ -750,15 +760,19 @@ public partial class DatabaseContext
             rawReaderMax = EnsurePreventUnloadCapacity(rawReaderMax, "reader");
         }
 
-        // Enabled pools maintain at least one provider connection; PreventDatabaseUnload pools
-        // maintain two. The read-only writer pool remains disabled with maximum and minimum zero.
+        // Caller-supplied minimums are preserved as-is for every mode. PreventDatabaseUnload is
+        // the sole exception: its sentinel already keeps one physical connection open, but the
+        // provider pool still needs a minimum of two so the sentinel's permit doesn't starve
+        // ordinary work of the one remaining slot. Standard/SingleWriter/KeepAlive never inject
+        // an implicit minimum — DbConnectionStringBuilder omits Min Pool Size entirely unless
+        // the caller (or PreventDatabaseUnload above) asked for one.
         var minPoolSizeKey = _dialect?.MinPoolSizeSettingName;
-        var writerMinimum = rawWriterMax == 0 ? 0 : ConnectionMode == DbMode.PreventDatabaseUnload ? 2 : 1;
+        var writerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawWriterMax != 0 ? 2 : 0;
         _connectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
             _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax, writerMinimum);
         if (!string.IsNullOrWhiteSpace(_readerConnectionString))
         {
-            var readerMinimum = rawReaderMax == 0 ? 0 : ConnectionMode == DbMode.PreventDatabaseUnload ? 2 : 1;
+            var readerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawReaderMax != 0 ? 2 : 0;
             _readerConnectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
                 _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax, readerMinimum);
         }
@@ -1422,7 +1436,7 @@ public partial class DatabaseContext
                 continue;
             }
 
-            var slot = AcquireSlot(executionType);
+            var slot = AcquireInfrastructureSlot(executionType);
             tracked.AttachSlot(slot);
         }
     }

@@ -67,15 +67,21 @@ public sealed class FakeDbDataSource : DbDataSource
         }
     }
 
+    /// <summary>
+    /// Observable disposal flag for tests that need to prove whether disposal was
+    /// attempted/skipped (e.g. deferred cleanup while in-flight leases are still outstanding).
+    /// </summary>
+    public bool WasDisposed { get; private set; }
+
     protected override void Dispose(bool disposing)
     {
-        // No resources to dispose in fake implementation
+        WasDisposed = true;
         base.Dispose(disposing);
     }
 
     protected override ValueTask DisposeAsyncCore()
     {
-        // No resources to dispose in fake implementation
+        WasDisposed = true;
         return base.DisposeAsyncCore();
     }
 }

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using pengdows.crud.tenant;
 using Xunit;
 
@@ -413,6 +415,127 @@ public class TenantConnectionResolverTests
 
         // The stored config must reflect the value at registration time, not the mutation.
         Assert.Equal("Server=original;", stored.ConnectionString);
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesEveryConfigurationProperty()
+    {
+        // CORE-001: CloneConfiguration previously omitted ReaderPlanCacheSize,
+        // SessionInitializationFailureMode, MaxQueuedWrites, MaxQueuedReads, and
+        // EnforceUniqueConnectionString, so tenant configurations silently reverted those
+        // values to their defaults on registration. This test is reflection-based over the
+        // full IDatabaseContextConfiguration contract specifically so a future property added
+        // to the interface without a matching clone-field fails this test immediately, instead
+        // of silently reproducing the same bug.
+        var metricsOptions = new MetricsOptions
+        {
+            LongConnectionThreshold = TimeSpan.FromSeconds(17),
+            EnableApproxPercentiles = true,
+            PercentileWindowSize = 4096
+        };
+
+        var source = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=Primary;",
+            ReadOnlyConnectionString = "Server=Replica;",
+            ProviderName = "Fake.Provider",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            PrepareMode = CommandPrepareMode.Always,
+            ReaderPlanCacheSize = 42,
+            EnableMetrics = true,
+            MetricsOptions = metricsOptions,
+            MaxConcurrentWrites = 7,
+            MaxConcurrentReads = 9,
+            PoolAcquireTimeout = TimeSpan.FromSeconds(11),
+            ModeLockTimeout = TimeSpan.FromSeconds(61),
+            ApplicationName = "app-under-test",
+            EnableSingleWriterFairness = false,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
+            MaxQueuedWrites = 3,
+            MaxQueuedReads = 4,
+            EnforceUniqueConnectionString = true
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-full-config", source);
+        var cloned = resolver.GetDatabaseContextConfiguration("tenant-full-config");
+
+        foreach (var property in typeof(IDatabaseContextConfiguration).GetProperties(
+                     BindingFlags.Public | BindingFlags.Instance))
+        {
+            var expected = property.GetValue(source);
+            var actual = property.GetValue(cloned);
+            Assert.True(Equals(expected, actual),
+                $"Property '{property.Name}' was not preserved by tenant registration cloning. " +
+                $"Expected '{expected}', got '{actual}'.");
+        }
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesReaderPlanCacheSize()
+    {
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-cache-size", new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "Fake.Provider",
+            ReaderPlanCacheSize = 128
+        });
+
+        var config = resolver.GetDatabaseContextConfiguration("tenant-cache-size");
+
+        Assert.Equal(128, config.ReaderPlanCacheSize);
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesQueueCaps()
+    {
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-queue-caps", new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "Fake.Provider",
+            MaxQueuedReads = 5,
+            MaxQueuedWrites = 2
+        });
+
+        var config = resolver.GetDatabaseContextConfiguration("tenant-queue-caps");
+
+        Assert.Equal(5, config.MaxQueuedReads);
+        Assert.Equal(2, config.MaxQueuedWrites);
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesFailClosedSessionInitialization()
+    {
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-fail-closed", new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "Fake.Provider",
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed
+        });
+
+        var config = resolver.GetDatabaseContextConfiguration("tenant-fail-closed");
+
+        Assert.Equal(SessionInitializationFailureMode.FailClosed, config.SessionInitializationFailureMode);
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesEnforceUniqueConnectionString()
+    {
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-enforce-unique", new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "Fake.Provider",
+            EnforceUniqueConnectionString = true
+        });
+
+        var config = resolver.GetDatabaseContextConfiguration("tenant-enforce-unique");
+
+        Assert.True(config.EnforceUniqueConnectionString);
     }
 
     private class TestTenantConnectionResolver : ITenantConnectionResolver

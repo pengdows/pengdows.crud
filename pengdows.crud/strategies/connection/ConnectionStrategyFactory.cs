@@ -60,7 +60,7 @@ internal static class ConnectionStrategyFactory
         return mode switch
         {
             DbMode.Standard => new StandardConnectionStrategy(context),
-            DbMode.PreventDatabaseUnload => new KeepAliveConnectionStrategy(context),
+            DbMode.PreventDatabaseUnload => new PreventDatabaseUnloadConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
             // SingleWriter now uses Standard lifecycle with governor policy (WriteSlots=1 + turnstile)
             // This provides: per-operation connections, connection recovery, writer starvation prevention

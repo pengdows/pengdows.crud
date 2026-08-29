@@ -34,6 +34,8 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
 
     public int Capacity => _max;
 
+    public int Count => _map.Count;
+
     private sealed class CacheEntry
     {
         private readonly Lazy<TValue> _value;

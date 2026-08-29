@@ -58,6 +58,37 @@ public class EnforceUniqueConnectionStringTests
         using var second = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory);
     }
 
+    // CORE-026: on a governor drain timeout during disposal, DisposeManaged() proceeded
+    // unconditionally to UniqueConnectionStringRegistry.ReleaseAll() (and DisposeOwnedDataSources)
+    // even though the timeout means a lease may still be genuinely outstanding — releasing the
+    // uniqueness claim while that lease is still live defeats the entire purpose of
+    // EnforceUniqueConnectionString (a second context could now be admitted onto the same
+    // physical connection string while the first context's leaked connection is still in use).
+    [Fact]
+    public void SecondContext_SameConnectionString_AfterFirstDisposalTimesOutDraining_StillThrows()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString = $"Data Source=enforce-test-timeout;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var config = BuildConfig(connectionString, enforce: true);
+        config.PoolAcquireTimeout = TimeSpan.FromMilliseconds(50);
+
+        var first = new DatabaseContext(config, factory);
+
+        // Hold a connection open so the writer governor cannot drain within PoolAcquireTimeout.
+        var heldConnection = first.GetConnection(ExecutionType.Write);
+
+        first.Dispose();
+
+        // Release the connection only after disposal has already given up waiting for it.
+        heldConnection.Dispose();
+
+        // The uniqueness claim must NOT have been released by the timed-out disposal — a second
+        // context on the same connection string must still be rejected.
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(BuildConfig(connectionString, enforce: true), factory));
+        Assert.Contains("connection string", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void SecondContext_SameConnectionString_AfterFirstDisposed_Succeeds()
     {

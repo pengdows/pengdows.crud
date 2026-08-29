@@ -22,6 +22,18 @@ public class BoundedCacheTests
     }
 
     [Fact]
+    public void Count_ReflectsCurrentEntryCount()
+    {
+        var cache = new BoundedCache<int, string>(5);
+        Assert.Equal(0, cache.Count);
+        cache.GetOrAdd(1, _ => "a");
+        cache.GetOrAdd(2, _ => "b");
+        Assert.Equal(2, cache.Count);
+        cache.GetOrAdd(1, _ => "a-again");
+        Assert.Equal(2, cache.Count);
+    }
+
+    [Fact]
     public void EvictsOldest_WhenCapacityExceeded()
     {
         var cache = new BoundedCache<int, string>(2);

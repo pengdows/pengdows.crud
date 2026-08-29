@@ -518,6 +518,12 @@ internal static class ConnectionPoolingConfiguration
             return connectionString;
         }
 
+        if (requiredMinimum == 0 && !rawMin.HasValue)
+        {
+            // No enforced minimum and the caller didn't set one — nothing to add or preserve.
+            return connectionString;
+        }
+
         var target = Math.Max(rawMin ?? 0, requiredMinimum);
         if (rawMax.HasValue)
         {

@@ -6,7 +6,7 @@ public sealed class StrategyVisibilityTests
 {
     [Theory]
     [InlineData("pengdows.crud.strategies.connection.StandardConnectionStrategy")]
-    [InlineData("pengdows.crud.strategies.connection.KeepAliveConnectionStrategy")]
+    [InlineData("pengdows.crud.strategies.connection.PreventDatabaseUnloadConnectionStrategy")]
     public void ConnectionStrategies_AreNotPublic(string typeName)
     {
         var assembly = typeof(DatabaseContext).Assembly;

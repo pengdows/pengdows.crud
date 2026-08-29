@@ -126,9 +126,9 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
         if (_heldByActiveReader)
         {
             throw new InvalidOperationException(
-                "Cannot execute another command on this transaction while a reader opened on " +
-                "it is still active. Dispose the reader (or finish consuming it) before issuing " +
-                "another command on the same transaction.");
+                "Cannot execute another command, or commit/roll back this transaction, while a " +
+                "reader opened on it is still active. Dispose the reader (or finish consuming it) " +
+                "first.");
         }
     }
 

@@ -461,7 +461,7 @@ This means a new dialect gets most of these ~20 flags correct "for free" simply 
 - Connection from provider pool
 - No persistent connection
 
-**PreventDatabaseUnload mode** (`KeepAliveConnectionStrategy`):
+**PreventDatabaseUnload mode** (`PreventDatabaseUnloadConnectionStrategy`):
 - One sentinel connection kept open (never used)
 - Prevents database unload (LocalDB, embedded SQLite)
 - All work uses ephemeral connections (identical to Standard)
@@ -494,7 +494,7 @@ internal static class ConnectionStrategyFactory
         return mode switch
         {
             DbMode.Standard => new StandardConnectionStrategy(context),
-            DbMode.PreventDatabaseUnload => new KeepAliveConnectionStrategy(context),
+            DbMode.PreventDatabaseUnload => new PreventDatabaseUnloadConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
             // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
             DbMode.SingleWriter => new StandardConnectionStrategy(context),

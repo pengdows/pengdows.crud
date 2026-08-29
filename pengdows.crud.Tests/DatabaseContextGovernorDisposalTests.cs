@@ -51,6 +51,43 @@ public class DatabaseContextGovernorDisposalTests
         Assert.Throws<ObjectDisposedException>(() => readerGovernor.Acquire());
     }
 
+    // CORE-025: DatabaseContext did not override ValidateCanCreateContainer, and its main
+    // connection-acquisition entry point (GetStandardConnectionWithExecutionType) never called
+    // ThrowIfDisposed() — combined with a disposed context's nulled-out governor fields making
+    // AcquireSlot silently return an ungoverned default slot (see the AcquireSlot fix in
+    // DatabaseContext.ConnectionLifecycle.cs), a container created either before or after
+    // disposal could reach the provider and open a fresh physical connection completely outside
+    // admission control instead of failing.
+    [Fact]
+    public void CreateSqlContainer_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Server=test;Database=test;EmulatedProduct=SqlServer", factory);
+        context.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => context.CreateSqlContainer("SELECT 1"));
+    }
+
+    [Fact]
+    public void GetConnection_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Server=test;Database=test;EmulatedProduct=SqlServer", factory);
+        context.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => context.GetConnection(ExecutionType.Write));
+    }
+
+    [Fact]
+    public async Task GetConnectionAsync_AfterDisposeAsync_ThrowsObjectDisposedException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Server=test;Database=test;EmulatedProduct=SqlServer", factory);
+        await context.DisposeAsync();
+
+        Assert.Throws<ObjectDisposedException>(() => context.GetConnection(ExecutionType.Read));
+    }
+
     private static PoolGovernor GetGovernor(DatabaseContext context, string fieldName)
     {
         var field = typeof(DatabaseContext).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
