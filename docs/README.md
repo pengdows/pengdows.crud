@@ -1,7 +1,8 @@
 # Documentation Index
 
-This folder holds reference material for `pengdows.crud` 2.0. `CLAUDE.md` (repo root) remains the
-canonical day-to-day development guide; the documents below go deeper on specific subsystems.
+This folder holds reference material for `pengdows.crud` 2.x (currently branch 2.1). `CLAUDE.md`
+(repo root) remains the canonical day-to-day development guide; the documents below go deeper on
+specific subsystems.
 
 ## Reference
 

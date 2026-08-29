@@ -7,7 +7,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
-public sealed record TypeCoercionOptions(
+internal sealed record TypeCoercionOptions(
     TimeMappingPolicy TimePolicy,
     JsonPassThrough JsonPreference,
     SupportedDatabase Provider)

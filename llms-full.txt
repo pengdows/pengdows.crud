@@ -1058,9 +1058,9 @@ if (result.Status == ScalarStatus.None)    { /* no rows returned */ }
 
 What "Supported Database" means in `pengdows.crud` is defined by four empirical pillars:
 
-1. **`testbed/` (Multi-Engine Integration Suite)**: A uniform 19-point behavioral check matrix (DDL, CRUD, DB-generated IDs, optimistic concurrency, batch operations, stored procedures, savepoints, portable upserts, streaming, and identifier quoting) running against 12+ live engines via Testcontainers.
-2. **`pengdows.crud.fakeDb` (In-Memory ADO.NET Provider)**: A full in-memory ADO.NET provider powering **6,432 deterministic unit tests in ~40 seconds** with **94.89% line coverage**, testing failure injection, connection breaking, and lifecycle state machines without network latency.
-3. **`InterfaceApiCheck` (Public Contract Governance)**: 444 frozen interface signatures checked against a byte-exact baseline in CI to guarantee 0 accidental breaking changes.
+1. **`testbed/` (Multi-Engine Integration Suite)**: A uniform 32-point behavioral check matrix (DDL, CRUD, DB-generated IDs, optimistic concurrency, batch operations, stored procedures, savepoints, portable upserts, streaming, and identifier quoting) running against 12+ live engines via Testcontainers.
+2. **`pengdows.crud.fakeDb` (In-Memory ADO.NET Provider)**: A full in-memory ADO.NET provider powering **7,420 deterministic unit tests in ~45 seconds** with **94.89% line coverage**, testing failure injection, connection breaking, and lifecycle state machines without network latency.
+3. **`InterfaceApiCheck` (Public Contract Governance)**: 436 frozen interface signatures checked against a byte-exact baseline in CI to guarantee 0 accidental breaking changes.
 4. **Hostile Concurrency & Hot-Path Benchmarks**:
    - **Hydration Hot Path (SQLite, hydration-only, excludes connection acquisition)**: ~35–36% faster than Dapper across 100–5,000 rows with ~50% lower allocations ([results](./benchmarks/CrudBenchmarks/results/hydration-hotpath-run-2026-08-13.md)). SQL Server shows the inverse under `DbMode.Standard`'s per-checkout session-settings enforcement — see [docs/sql-server-session-settings.md](./docs/sql-server-session-settings.md).
    - **Contention Storm Survival**: Survives 100 concurrent writers under aggressive `busy_timeout=10ms` with **0 lock exceptions** and ~100 ms completion, where Dapper and EF Core take 1,055+ ms with 250–350 `SQLITE_BUSY` exceptions.
@@ -1755,11 +1755,11 @@ Most data access layers test either against superficial mocks or against SQLite 
 
 2. **`testbed/` (Multi-Engine Real Conformance Suite via Testcontainers)**:
    - **15 supported database products and flavors** (`PostgreSql`, `SqlServer`, `Oracle`, `Firebird`, `CockroachDb`, `MariaDb`, `MySql`, `Sqlite`, `DuckDB`, `YugabyteDb`, `TiDb`, `Snowflake`, `AuroraMySql`, `AuroraPostgreSql`, `Db2`).
-   - Shared 19-point uniform conformance matrix in `TestProvider.cs` runs identical behavioral contracts against every engine (portable upsert, RETURNING vs OUTPUT clauses, transaction savepoints, batch chunking, stored procedure wrapping, and typed exception mapping).
+   - Shared 32-point uniform conformance matrix in `TestProvider.cs` runs identical behavioral contracts against every engine (portable upsert, RETURNING vs OUTPUT clauses, transaction savepoints, batch chunking, stored procedure wrapping, and typed exception mapping).
 
 3. **`InterfaceApiCheck` (Public Surface Governance)**:
    - Compares the generated public API assembly against a frozen byte-exact baseline (`interfaces.txt`).
-   - Guarantees 444+ frozen interface signatures remain backward-compatible with 0 accidental breaks across releases.
+   - Guarantees 436+ frozen interface signatures remain backward-compatible with 0 accidental breaks across releases.
 
 4. **Automated Hostile Contention & Hydration Benchmarks**:
    - **Hydration Hot Path (SQLite only)**: Evaluates pure row materialization independently of connection acquisition. Pengdows is **~35–36% faster than Dapper** across 100 to 5,000 rows with **~50% lower allocations** (e.g. 1,058 KB vs 2,035 KB @ 5,000 rows) — see `benchmarks/CrudBenchmarks/results/hydration-hotpath-run-2026-08-13.md`. This does not generalize across engines: SQL Server shows the inverse under `DbMode.Standard`'s per-checkout session-settings enforcement (see `docs/sql-server-session-settings.md`), which is a deliberate correctness trade-off, not a defect.

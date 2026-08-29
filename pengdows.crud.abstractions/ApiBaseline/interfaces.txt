@@ -15,15 +15,14 @@ interface pengdows.crud.ITableGateway`2<TEntity, TRowID>
 interface pengdows.crud.ITransactionContext : System.IAsyncDisposable, System.IDisposable, pengdows.crud.IDatabaseContext, pengdows.crud.infrastructure.ISafeAsyncDisposableBase
 interface pengdows.crud.configuration.IDatabaseContextConfiguration
 interface pengdows.crud.configuration.IDbProviderLoader
-interface pengdows.crud.connection.IConnectionLocalState
 interface pengdows.crud.dialects.IDatabaseProductInfo
 interface pengdows.crud.dialects.ISqlDialect
+interface pengdows.crud.exceptions.IReadOnlyViolation
 interface pengdows.crud.infrastructure.ISafeAsyncDisposableBase : System.IAsyncDisposable, System.IDisposable
 interface pengdows.crud.isolation.IIsolationResolver
 interface pengdows.crud.metrics.IMetricsOptions
 interface pengdows.crud.tenant.ITenantConnectionResolver
 interface pengdows.crud.tenant.ITenantContextRegistry
-interface pengdows.crud.threading.ILockerAsync : System.IAsyncDisposable, System.IDisposable
 interface pengdows.crud.wrappers.ITrackedReader : System.Data.IDataReader, System.Data.IDataRecord, System.IAsyncDisposable, System.IDisposable
 method pengdows.crud.IAuditValueResolver::Resolve() -> pengdows.crud.IAuditValues
 method pengdows.crud.IAuditValues::As<T>() -> T
@@ -198,11 +197,6 @@ method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string, Syste
 method pengdows.crud.ITransactionContext::SavepointAsync(string) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.ITransactionContext::SavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.configuration.IDbProviderLoader::LoadAndRegisterProviders(Microsoft.Extensions.DependencyInjection.IServiceCollection) -> void
-method pengdows.crud.connection.IConnectionLocalState::DisablePrepare() -> void
-method pengdows.crud.connection.IConnectionLocalState::IsAlreadyPreparedForShape(string) -> bool
-method pengdows.crud.connection.IConnectionLocalState::MarkSessionSettingsApplied() -> void
-method pengdows.crud.connection.IConnectionLocalState::MarkShapePrepared(string) -> System.ValueTuple`2<bool, int>
-method pengdows.crud.connection.IConnectionLocalState::Reset() -> void
 method pengdows.crud.dialects.ISqlDialect::AnalyzeException(System.Exception) -> pengdows.crud.DbExceptionInfo
 method pengdows.crud.dialects.ISqlDialect::AppendPaging(pengdows.crud.ISqlQueryBuilder, int, int) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder) -> void
@@ -251,9 +245,6 @@ method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfigu
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
 method pengdows.crud.tenant.ITenantContextRegistry::Invalidate(string) -> void
 method pengdows.crud.tenant.ITenantContextRegistry::InvalidateAll() -> void
-method pengdows.crud.threading.ILockerAsync::Lock() -> void
-method pengdows.crud.threading.ILockerAsync::LockAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
-method pengdows.crud.threading.ILockerAsync::TryLockAsync(System.TimeSpan, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
 method pengdows.crud.wrappers.ITrackedReader::ReadAsync() -> System.Threading.Tasks.ValueTask`1<bool>
 method pengdows.crud.wrappers.ITrackedReader::ReadAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<bool>
 property pengdows.crud.IAuditValues::TimestampOffset : System.Nullable`1<System.DateTimeOffset> { get; }
@@ -355,8 +346,6 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConn
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : pengdows.crud.enums.SessionInitializationFailureMode { get; set; }
-property pengdows.crud.connection.IConnectionLocalState::PrepareDisabled : bool { get; }
-property pengdows.crud.connection.IConnectionLocalState::SessionSettingsApplied : bool { get; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ParsedVersion : System.Version { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ProductName : string { get; set; }

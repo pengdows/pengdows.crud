@@ -72,11 +72,11 @@ Most data access layers test either against superficial mocks or against SQLite 
 
 2. **`testbed/` (Multi-Engine Real Conformance Suite via Testcontainers)**:
    - **15 supported database products and flavors** (`PostgreSql`, `SqlServer`, `Oracle`, `Firebird`, `CockroachDb`, `MariaDb`, `MySql`, `Sqlite`, `DuckDB`, `YugabyteDb`, `TiDb`, `Snowflake`, `AuroraMySql`, `AuroraPostgreSql`, `Db2`).
-   - Shared 19-point uniform conformance matrix in `TestProvider.cs` runs identical behavioral contracts against every engine (portable upsert, RETURNING vs OUTPUT clauses, transaction savepoints, batch chunking, stored procedure wrapping, and typed exception mapping).
+   - Shared 32-point uniform conformance matrix in `TestProvider.cs` runs identical behavioral contracts against every engine (portable upsert, RETURNING vs OUTPUT clauses, transaction savepoints, batch chunking, stored procedure wrapping, and typed exception mapping).
 
 3. **`InterfaceApiCheck` (Public Surface Governance)**:
    - Compares the generated public API assembly against a frozen byte-exact baseline (`interfaces.txt`).
-   - Guarantees 444+ frozen interface signatures remain backward-compatible with 0 accidental breaks across releases.
+   - Guarantees 436+ frozen interface signatures remain backward-compatible with 0 accidental breaks across releases.
 
 4. **Automated Hostile Contention & Hydration Benchmarks**:
    - **Hydration Hot Path (SQLite only)**: Evaluates pure row materialization independently of connection acquisition. Pengdows is **~35–36% faster than Dapper** across 100 to 5,000 rows with **~50% lower allocations** (e.g. 1,058 KB vs 2,035 KB @ 5,000 rows) — see `benchmarks/CrudBenchmarks/results/hydration-hotpath-run-2026-08-13.md`. This does not generalize across engines: SQL Server shows the inverse under `DbMode.Standard`'s per-checkout session-settings enforcement (see `docs/sql-server-session-settings.md`), which is a deliberate correctness trade-off, not a defect.
