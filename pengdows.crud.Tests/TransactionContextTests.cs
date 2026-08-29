@@ -1025,6 +1025,54 @@ public class TransactionContextTests
         Assert.Equal(1, strategy.ReleaseCount);
     }
 
+    // TEST-013: a cancellation observed before CompleteTransactionWithWaitAsync's completion
+    // lock is even acquired must leave the transaction fully untouched — _completedState never
+    // flips, neither Commit nor Rollback's action ever runs, and OperationCanceledException
+    // propagates as-is (never wrapped — see CLAUDE.md's exception hierarchy notes). This proves
+    // a caller who catches the cancellation and retries with a fresh token gets a transaction
+    // that behaves exactly as if the cancelled call never happened, not a corrupted half-state.
+    [Fact]
+    public async Task CommitAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenCommitSucceeds()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tx.CommitAsync(cts.Token).AsTask());
+
+        Assert.False(tx.WasCommitted);
+        Assert.False(tx.WasRolledBack);
+        Assert.False(tx.IsCompleted);
+
+        // The transaction must still be fully usable — a subsequent, non-cancelled commit
+        // succeeds normally, proving the cancelled attempt left no residual state behind.
+        tx.Commit();
+        Assert.True(tx.WasCommitted);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenRollbackSucceeds()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tx.RollbackAsync(cts.Token).AsTask());
+
+        Assert.False(tx.WasCommitted);
+        Assert.False(tx.WasRolledBack);
+        Assert.False(tx.IsCompleted);
+
+        tx.Rollback();
+        Assert.True(tx.WasRolledBack);
+    }
+
     [Fact]
     public async Task RollbackAsync_MarksAsRolledBack()
     {
