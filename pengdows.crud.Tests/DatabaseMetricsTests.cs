@@ -72,6 +72,78 @@ public class DatabaseMetricsTests
         Assert.Equal(0, context.Metrics.ConnectionsCurrent);
     }
 
+    // TEST-014: a connection that fails to open must never register as opened. TrackedConnection
+    // only attaches its StateChange handler and only counts a transition INTO Open — a connection
+    // whose Open()/OpenAsync() throws before ever reaching that state must leave
+    // ConnectionsOpened/ConnectionsClosed exactly where they were, not produce an unmatched
+    // "close" for an open that never happened.
+    [Fact]
+    public async Task Metrics_ConnectionFailsToOpen_LeavesOpenCloseCountsUnchanged()
+    {
+        var factory = fakeDbFactory.CreateFailingFactoryWithSkip(SupportedDatabase.SqlServer,
+            ConnectionFailureMode.FailOnOpen);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=metrics-failopen;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        // Construction's own dialect-detection connection is the skipped "first open" — it opens
+        // and closes normally.
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+
+        await using var container = context.CreateSqlContainer("SELECT 1");
+        await Assert.ThrowsAnyAsync<Exception>(() => container.ExecuteNonQueryAsync().AsTask());
+
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
+    }
+
+    // TEST-014: a connection that breaks while held (as opposed to closing cleanly) must still
+    // count as exactly one close matching its one open — TrackedConnection.HandleMetricsStateChange
+    // treats ConnectionState.Broken identically to Closed for counting purposes. This proves that
+    // policy end to end rather than only at the TrackedConnection unit level, and proves disposing
+    // an already-broken connection afterward does not double-count the close.
+    [Fact]
+    public void Metrics_ConnectionBreaksWhileHeld_CountsExactlyOneClose_NotZeroOrTwo()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=metrics-break;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            EnableMetrics = true
+        };
+        using var context = new DatabaseContext(config, factory);
+
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+
+        // GetConnection alone only constructs/wraps the connection (open late) — it does not
+        // open it. Open it explicitly to reach the state this test is actually about.
+        var conn = context.GetConnection(ExecutionType.Write);
+        conn.Open();
+        Assert.Equal(2, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(1, context.Metrics.ConnectionsCurrent);
+
+        var underlying = (fakeDbConnection)((pengdows.crud.@internal.IInternalConnectionWrapper)conn).UnderlyingConnection;
+        underlying.BreakConnection();
+
+        Assert.Equal(2, context.Metrics.ConnectionsOpened);
+        Assert.Equal(2, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
+
+        context.CloseAndDisposeConnection(conn);
+
+        // Already broken/closed — disposing it now must not record a second close.
+        Assert.Equal(2, context.Metrics.ConnectionsClosed);
+    }
+
     [Fact]
     public async Task ExecuteScalarOrNullAsync_TimeoutIsTrackedAsFailure()
     {

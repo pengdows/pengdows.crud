@@ -117,6 +117,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     private readonly MetricsCollector? _metricsCollector;
     private readonly StateChangeEventHandler? _metricsHandler;
     private long _openTimestamp;
+    // TEST-014: a connection that breaks (Open -> Broken) already has its close counted by the
+    // Broken case below. DisposeConnectionSync/DisposeConnectionAsyncCore's own "not already
+    // Closed" guard treats Broken as still needing a close, so disposal calls the underlying
+    // connection's Close() again — a real ADO.NET state transition (Broken -> Closed), not a
+    // no-op, so it fires a second StateChange and would double-count the close without this
+    // flag. Reset on Open, consumed by the first Closed-or-Broken transition per open cycle.
+    private int _closeAlreadyCountedForThisOpen;
     private readonly ModeContentionStats? _modeContentionStats;
     private readonly DbMode _mode;
     private readonly TimeSpan? _modeLockTimeout;
@@ -279,11 +286,20 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
                 {
                     _metricsCollector.ConnectionOpened();
                     Interlocked.Exchange(ref _openTimestamp, Stopwatch.GetTimestamp());
+                    Interlocked.Exchange(ref _closeAlreadyCountedForThisOpen, 0);
                     break;
                 }
             case ConnectionState.Closed:
             case ConnectionState.Broken:
                 {
+                    if (Interlocked.Exchange(ref _closeAlreadyCountedForThisOpen, 1) != 0)
+                    {
+                        // Already counted this open cycle's close — e.g. the connection broke
+                        // (counted then) and is now separately transitioning Broken -> Closed
+                        // during disposal. One physical open/close cycle must count as one.
+                        break;
+                    }
+
                     var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
                     var duration = openedAt == 0
                         ? 0d
