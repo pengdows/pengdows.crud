@@ -51,4 +51,42 @@ public class DatabaseContextConstructionFailureCleanupTests
             "The DbDataSource created internally during a failed DatabaseContext construction " +
             "must be disposed — it can never be reached through the caller otherwise.");
     }
+
+    // TEST-017: the flip side of CORE-028's proof — a DbDataSource the CALLER supplied (via the
+    // public DatabaseContext(configuration, dataSource, factory, loggerFactory) constructor
+    // overload) is not owned by the context and must survive a failed construction untouched.
+    // _dataSourceProvided is exactly the flag DisposeOwnedDataSources() already checks for this,
+    // per the comment on the internal catch block above — this proves it holds for a real,
+    // publicly-reachable caller-supplied-DbDataSource construction path, not just the
+    // internally-created one CORE-028 covered.
+    [Fact]
+    public void Construction_FailsClaimingUniqueConnectionString_DoesNotDisposeCallerSuppliedDataSource()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite) { SupportsNativeDataSource = true };
+        var connectionString = $"Data Source=core028-caller-supplied-test;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            EnforceUniqueConnectionString = true
+        };
+
+        // First context legitimately claims the connection string.
+        using var first = new DatabaseContext(config, factory);
+
+        var callerSuppliedDataSource = factory.CreateDataSource(connectionString);
+
+        // Second construction, supplying the caller-owned data source directly, fails inside
+        // ClaimUniqueConnectionStrings — exactly like the internally-created case, just with an
+        // externally-owned DbDataSource this time.
+        Assert.Throws<InvalidOperationException>(
+            () => new DatabaseContext(config, callerSuppliedDataSource, factory));
+
+        Assert.False(((FakeDbDataSource)callerSuppliedDataSource).WasDisposed,
+            "A DbDataSource the caller supplied and still owns must never be disposed by a failed " +
+            "DatabaseContext construction — only internally-created data sources are the " +
+            "context's responsibility to clean up.");
+    }
 }
