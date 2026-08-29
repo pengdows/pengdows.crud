@@ -93,6 +93,54 @@ public sealed class SecurityRegressionTests
         Assert.Contains("must stay within", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    // CORE-015: ResolveAssemblyPath's containment check is purely lexical (Path.GetFullPath on
+    // the configured relative path, then a string-prefix check against the base directory). A
+    // symlink placed directly under the base directory — a real file that lexically satisfies
+    // "starts with the base directory" — can still point at a target outside it. The prior
+    // implementation never asked the filesystem to resolve that link, so a config value naming
+    // such a symlink sailed through containment and would go on to load whatever the link
+    // actually points to, silently defeating the documented "must stay within" guarantee.
+    [Fact]
+    public void LoadAndRegisterProviders_RejectsSymlinkUnderBaseDirectoryPointingOutside()
+    {
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var outsideDirectory = Directory.CreateTempSubdirectory("pengdows-core015-outside-");
+        var outsideTarget = Path.Combine(outsideDirectory.FullName, "outside.dll");
+        File.WriteAllBytes(outsideTarget, new byte[] { 0x00 });
+
+        var linkName = $"pengdows-core015-escape-{Guid.NewGuid():N}.dll";
+        var linkPath = Path.Combine(baseDirectory, linkName);
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideTarget);
+
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DatabaseProviders:test:ProviderName"] = "Test.Provider",
+                    ["DatabaseProviders:test:FactoryType"] = "Ignored.Factory",
+                    ["DatabaseProviders:test:AssemblyPath"] = linkName
+                })
+                .Build();
+
+            var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => loader.LoadAndRegisterProviders(new ServiceCollection()));
+            Assert.Contains("must stay within", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            outsideDirectory.Delete(recursive: true);
+        }
+    }
+
     private sealed class SecurityJsonEntity
     {
         public JsonDocument? Payload { get; set; }

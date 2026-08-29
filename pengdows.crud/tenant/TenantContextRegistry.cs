@@ -22,6 +22,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System;
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -44,9 +45,14 @@ namespace pengdows.crud.tenant;
 ///   <item>The next <see cref="GetContext"/> call creates a fresh context using the new configuration.</item>
 /// </list>
 /// <para>
-/// <b>Disposal:</b> After this registry is disposed, <see cref="GetContext"/> throws
-/// <see cref="ObjectDisposedException"/>. Contexts obtained before disposal continue working
-/// normally until they are themselves disposed.
+/// <b>Disposal:</b> The registry owns every context it creates. After this registry is
+/// disposed, <see cref="GetContext"/> throws <see cref="ObjectDisposedException"/>, and
+/// disposal itself disposes every already-created tenant context (the same "registry owns and
+/// disposes what it creates" contract <see cref="Invalidate"/>/<see cref="InvalidateAll"/> use
+/// for a single tenant, just applied to all of them at once). A context handed back by
+/// <see cref="GetContext"/> before registry disposal is not safe to keep using afterward —
+/// callers that need a context to outlive the registry must not rely on this registry for that
+/// context's lifetime.
 /// </para>
 /// <para>
 /// <b>Cardinality:</b> The optional <c>maxTenantCount</c> constructor parameter enforces an upper
@@ -260,11 +266,63 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     {
         var config = _resolver.GetDatabaseContextConfiguration(tenant);
 
+        // CORE-006: DbProviderLoader registers its keyed DI service under the DatabaseProviders
+        // configuration section KEY, not the ProviderName field inside that section (see
+        // DbProviderLoader.LoadAndRegisterProviders) — so a tenant's ProviderName must equal
+        // that section key, not necessarily the ADO.NET invariant name its own name suggests.
+        // A caller who (reasonably) sets it to the invariant name gets a confusing bare failure
+        // otherwise; spell out the actual requirement here instead.
         var factory = _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
-                      ?? throw new InvalidOperationException($"No factory registered for '{config.ProviderName}'.");
+                      ?? throw new InvalidOperationException(
+                          $"No DbProviderFactory registered for the key '{config.ProviderName}'. " +
+                          "The tenant configuration's ProviderName must match a DatabaseProviders " +
+                          "configuration section key (e.g. \"DatabaseProviders:" +
+                          $"{config.ProviderName}\": {{ ... }}), not necessarily the ADO.NET " +
+                          "provider invariant name configured inside that section.");
 
         var context = _contextFactory.Create(config, factory, _loggerFactory);
-        ContextCreated?.Invoke(context);
+
+        // CORE-011: invoke every subscriber individually rather than a single
+        // multicast-delegate Invoke() call, so one faulting subscriber does not prevent later,
+        // well-behaved subscribers from ever being notified. If any subscriber faults, `context`
+        // must not be published to the caller or cached for reuse (the Lazy wrapping this method
+        // gets evicted by the caller's own fault handling) — dispose it here, since nobody else
+        // can ever reach it, then propagate the first subscriber's exception.
+        var handler = ContextCreated;
+        if (handler != null)
+        {
+            Exception? first = null;
+            foreach (var subscriber in handler.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<IDatabaseContext>)subscriber).Invoke(context);
+                }
+                catch (Exception ex)
+                {
+                    first ??= ex;
+                    _logger.LogWarning(ex,
+                        "A ContextCreated subscriber threw while notifying tenant '{Tenant}'.", tenant);
+                }
+            }
+
+            if (first != null)
+            {
+                try
+                {
+                    context.Dispose();
+                }
+                catch (Exception disposeEx)
+                {
+                    _logger.LogWarning(disposeEx,
+                        "Error disposing a context after a ContextCreated subscriber failure for tenant '{Tenant}'.",
+                        tenant);
+                }
+
+                ExceptionDispatchInfo.Capture(first).Throw();
+            }
+        }
+
         return context;
     }
 

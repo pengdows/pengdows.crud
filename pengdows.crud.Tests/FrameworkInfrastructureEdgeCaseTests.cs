@@ -139,6 +139,78 @@ public class FrameworkInfrastructureEdgeCaseTests
         Assert.Same(LoaderFactory.Instance, resolved);
     }
 
+    // CORE-006: DbProviderLoader registers its keyed DI service under the DatabaseProviders
+    // configuration SECTION KEY (confirmed by the test immediately above — "loader", not the
+    // ProviderName field "Coverage94.LoaderProvider"), while TenantContextRegistry resolves via
+    // _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName) — the TENANT
+    // configuration's ProviderName field. For these to connect, a tenant's ProviderName must
+    // equal the DatabaseProviders section key, NOT the ADO.NET invariant name that same field's
+    // own name suggests. A caller who (reasonably) sets tenant ProviderName to the invariant name
+    // gets a confusing "No factory registered" error with no indication of the actual
+    // requirement. This test locks in the current, intentional identity (section key wins) and
+    // proves the error message is now actionable rather than a bare failure.
+    [Fact]
+    public void TenantContextRegistry_WhenTenantProviderNameIsInvariantNameNotSectionKey_ThrowsActionableError()
+    {
+        var assemblyName = typeof(LoaderFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:loader:ProviderName"] = "Coverage94.LoaderProvider",
+                ["DatabaseProviders:loader:FactoryType"] = typeof(LoaderFactory).FullName,
+                ["DatabaseProviders:loader:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+        var services = new ServiceCollection();
+        loader.LoadAndRegisterProviders(services);
+        services.AddLogging();
+
+        using var provider = services.BuildServiceProvider();
+
+        // A tenant configured with ProviderName set to the ADO.NET invariant name — the natural
+        // (but, for this loader-based DI resolution path, wrong) value to put there.
+        var tenantConfig = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test",
+            ProviderName = "Coverage94.LoaderProvider"
+        };
+
+        using var registry = new pengdows.crud.tenant.TenantContextRegistry(
+            provider,
+            new SingleTenantResolver(tenantConfig),
+            new PassthroughContextFactory(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetContext("tenant-x"));
+
+        Assert.Contains("Coverage94.LoaderProvider", ex.Message);
+        Assert.Contains("DatabaseProviders", ex.Message);
+        Assert.Contains("section key", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class SingleTenantResolver : pengdows.crud.tenant.ITenantConnectionResolver
+    {
+        private readonly IDatabaseContextConfiguration _config;
+
+        public SingleTenantResolver(IDatabaseContextConfiguration config)
+        {
+            _config = config;
+        }
+
+        public IDatabaseContextConfiguration GetDatabaseContextConfiguration(string tenant) => _config;
+    }
+
+    private sealed class PassthroughContextFactory : IDatabaseContextFactory
+    {
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        {
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
     [Fact]
     public void ModeContentionSnapshot_ExposesAllConstructorValues()
     {
@@ -197,6 +269,40 @@ public class FrameworkInfrastructureEdgeCaseTests
     private sealed class LoaderFactory : DbProviderFactory
     {
         public static LoaderFactory Instance { get; } = new();
+    }
+
+    // CORE-014: real ADO.NET providers commonly expose `Instance` as a public static READONLY
+    // FIELD, not a property — e.g. System.Data.SqlClient.SqlClientFactory.Instance and
+    // MySql.Data's MySqlClientFactory.Instance are both fields; Npgsql's NpgsqlFactory.Instance
+    // is a property. DbProviderLoader.LoadProviderFactory only ever looked for a property, so a
+    // perfectly valid field-based provider assembly would load successfully but then fail
+    // factory discovery with a misleading "does not have a static Instance property" error.
+    private sealed class FieldInstanceLoaderFactory : DbProviderFactory
+    {
+        public static readonly FieldInstanceLoaderFactory Instance = new();
+    }
+
+    [Fact]
+    public void DbProviderLoader_RegistersProviderUsingFieldBasedInstanceConvention()
+    {
+        var assemblyName = typeof(FieldInstanceLoaderFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:fieldloader:ProviderName"] = "Coverage94.FieldLoaderProvider",
+                ["DatabaseProviders:fieldloader:FactoryType"] = typeof(FieldInstanceLoaderFactory).FullName,
+                ["DatabaseProviders:fieldloader:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+        var services = new ServiceCollection();
+
+        loader.LoadAndRegisterProviders(services);
+
+        using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredKeyedService<DbProviderFactory>("fieldloader");
+        Assert.Same(FieldInstanceLoaderFactory.Instance, resolved);
     }
 
     private enum TestEnum

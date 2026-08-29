@@ -19,4 +19,12 @@ public class MultiTenantOptions
 {
     public string ApplicationName { get; set; } = string.Empty;
     public List<TenantConfiguration> Tenants { get; init; } = new();
+
+    /// <summary>
+    /// Optional upper bound on distinct cached tenants, passed through to
+    /// <see cref="TenantContextRegistry"/>'s <c>maxTenantCount</c> constructor parameter by
+    /// <see cref="TenantServiceCollectionExtensions.AddMultiTenancy"/>. <c>null</c> (default)
+    /// means unbounded.
+    /// </summary>
+    public int? MaxTenantCount { get; set; }
 }

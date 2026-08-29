@@ -88,6 +88,29 @@ services.AddSingleton<IDatabaseContext>(sp =>
 
 ---
 
+## Dynamic Provider Loading & Multi-Tenancy
+
+`DbProviderLoader` resolves `DbProviderFactory` instances from a `DatabaseProviders` config
+section (`AssemblyPath`/`AssemblyName` + `FactoryType`, or a `DbProviderFactories.GetFactory`
+fallback) instead of requiring compile-time references — this is what `ITenantContextRegistry`
+uses under the hood for context-per-tenant multi-tenancy.
+
+**Gotcha:** factories are registered as a keyed DI singleton under the config section's own
+**key**, not under that section's `ProviderName` field. A tenant's
+`IDatabaseContextConfiguration.ProviderName` must match the section key it should resolve to —
+setting it to the ADO.NET invariant name instead throws a descriptive `InvalidOperationException`.
+`FactoryType`'s static `Instance` accessor may be a property or a field (both real-world ADO.NET
+conventions are supported); `AssemblyPath` is contained to the app base directory including
+through symlinks. See `docs/connection/dynamic-provider-loading.md` in the repo for the full
+resolution order and examples.
+
+`services.AddMultiTenancy(configuration)` binds `MultiTenantOptions` from the `MultiTenant`
+config section, including the optional `MultiTenant:MaxTenantCount` cap — set it to enforce
+`TenantContextRegistry`'s production safety cap on distinct cached tenants through the standard
+DI path (omit it, or leave it `null`, for unbounded).
+
+---
+
 ## IsolationProfile
 
 Portable transaction isolation profiles mapped to the optimal native engine level:

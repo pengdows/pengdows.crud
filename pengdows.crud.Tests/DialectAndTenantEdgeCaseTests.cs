@@ -558,7 +558,9 @@ public class DialectAndTenantEdgeCaseTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => registry.GetContext("tenant_x"));
 
-        Assert.Contains("No factory registered for", ex.Message);
+        // CORE-006: message reworded to explain the actual requirement (tenant ProviderName
+        // must match a DatabaseProviders configuration section key) instead of a bare failure.
+        Assert.Contains("No DbProviderFactory registered for the key", ex.Message);
         Assert.Contains("NonExistentProvider", ex.Message);
     }
 

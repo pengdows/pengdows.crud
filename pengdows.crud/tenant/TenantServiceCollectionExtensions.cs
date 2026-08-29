@@ -18,6 +18,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using pengdows.crud;
 
 namespace pengdows.crud.tenant;
@@ -47,7 +48,20 @@ public static class TenantServiceCollectionExtensions
 
         services.AddSingleton<ITenantConnectionResolver>(resolver);
         services.TryAddSingleton<IDatabaseContextFactory, DefaultDatabaseContextFactory>();
-        services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
+
+        // CORE-017: plain `AddSingleton<ITenantContextRegistry, TenantContextRegistry>()`
+        // relies on implementation-type constructor DI, which supplies TenantContextRegistry's
+        // optional `int? maxTenantCount = null` parameter with its default — it has no way to
+        // pull a value from configuration for an unregistered parameter type. Registering via
+        // an explicit factory that closes over `options.MaxTenantCount` (already bound above)
+        // is what actually lets the "MultiTenant:MaxTenantCount" config value reach the
+        // registry's cardinality cap through this standard DI entry point.
+        services.AddSingleton<ITenantContextRegistry>(sp => new TenantContextRegistry(
+            sp,
+            sp.GetRequiredService<ITenantConnectionResolver>(),
+            sp.GetRequiredService<IDatabaseContextFactory>(),
+            sp.GetRequiredService<ILoggerFactory>(),
+            options.MaxTenantCount));
 
         return services;
     }

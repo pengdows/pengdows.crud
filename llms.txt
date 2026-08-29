@@ -158,7 +158,13 @@ database-agnostic policy decoupled from connection identity — is in
 No LINQ-to-SQL translation, no change tracking, no implicit unit of work, no query
 filtering for multitenancy (it uses context-per-tenant instead — a distinct `IDatabaseContext`
 per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionScope` support
-(incompatible with its open-late/close-early connection philosophy by design).
+(incompatible with its open-late/close-early connection philosophy by design). Per-tenant
+`DbProviderFactory` resolution for that context-per-tenant model is config-driven via
+`DbProviderLoader` — see
+[`docs/connection/dynamic-provider-loading.md`](docs/connection/dynamic-provider-loading.md)
+for the resolution order, the `Instance` property-vs-field convention it supports, symlink-safe
+`AssemblyPath` containment, and the section-key-vs-`ProviderName` identity a tenant's
+`ProviderName` must actually match.
 
 ## Related packages, not wired into this library
 

@@ -29,5 +29,22 @@
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.8" />
         <PackageReference Include="SqlKata" Version="4.0.1" />
         <PackageReference Include="Testcontainers" Version="4.4.0" />
+
+        <!--
+          Transitive-dependency pins for known high-severity advisories pulled in by the packages
+          above (none of these three are referenced directly by benchmark code — they exist only
+          to override the vulnerable transitive versions NuGet would otherwise resolve):
+            - Microsoft.Extensions.Caching.Memory 8.0.0, via Microsoft.EntityFrameworkCore(.Sqlite/.SqlServer)
+              and Npgsql.EntityFrameworkCore.PostgreSQL — GHSA-qj66-m88j-hmgj (hash-flooding DoS), fixed in 8.0.1.
+            - SQLitePCLRaw.lib.e_sqlite3 2.1.6, via Microsoft.Data.Sqlite/Microsoft.EntityFrameworkCore.Sqlite's
+              SQLitePCLRaw.bundle_e_sqlite3 — GHSA-2m69-gcr7-jv3q (SQLite memory corruption, fixed upstream in
+              SQLite 3.50.2+). The advisory shows no NuGet "fixed version" yet, but SQLitePCLRaw.bundle_e_sqlite3
+              2.1.12 (2026-07-19) bundles SQLite 3.53.3, well past the fixed threshold.
+            - SSH.NET 2024.2.0, via Testcontainers's SCP support — GHSA-q939-rpr3-3284 (ScpClient.Download path
+              traversal via a malicious server), fixed in 2026.0.0.
+        -->
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+        <PackageReference Include="SSH.NET" Version="2026.0.0" />
     </ItemGroup>
 </Project>

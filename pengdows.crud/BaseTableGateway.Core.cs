@@ -108,7 +108,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
 
     // Thread-safe cache for hybrid reader plans by recordset shape hash
-    private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
+    private BoundedCache<RecordsetShape, HybridRecordsetPlan> _readerPlans =
         new(DefaultReaderPlanCapacity);
 
     // =========================================================================
@@ -172,7 +172,14 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
         _dialect = databaseContext.GetDialect();
         _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
-        _readerPlans = new BoundedCache<long, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
+
+        // CORE-019: _readerPlans and _tableInfo are fixed for the gateway's entire lifetime from
+        // whichever context constructs it here — never re-derived from a different context
+        // passed to an individual call (see IDatabaseContextConfiguration.ReaderPlanCacheSize's
+        // remarks for why that's intentional, not a gap: reader plans key on the query result's
+        // column shape, and table metadata comes from TEntity's own attributes — neither is a
+        // function of which tenant's connection is executing a given operation).
+        _readerPlans = new BoundedCache<RecordsetShape, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
 
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
@@ -411,10 +418,23 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     protected void CheckParameterLimit(ISqlContainer sc, int? toAdd)
     {
+        // CORE-018: use the operation's own context (the one that actually built/will execute
+        // `sc`) rather than this gateway's constructor-time _context. A singleton gateway is
+        // shared across tenant contexts with materially different dialect parameter limits (e.g.
+        // SQL Server 2100 vs MySQL 65535) — validating against the wrong one either rejects a
+        // valid query for a high-limit tenant using a low-limit tenant's number, or lets an
+        // oversized query through the other way around. ISqlContainer's only real implementation
+        // already exposes its own dialect this same way (see BuildWhereInternal's existing
+        // `((ISqlDialectProvider)sqlContainer).Dialect` usage) — reuse that instead of adding new
+        // public surface area.
+        var maxParameterLimit = sc is ISqlDialectProvider dialectProvider
+            ? dialectProvider.Dialect.MaxParameterLimit
+            : _context.MaxParameterLimit;
+
         var count = sc.ParameterCount + (toAdd ?? 0);
-        if (count > _context.MaxParameterLimit)
+        if (count > maxParameterLimit)
         {
-            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
+            throw new TooManyParametersException("Too many parameters", maxParameterLimit);
         }
     }
 

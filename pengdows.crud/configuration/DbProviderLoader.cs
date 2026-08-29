@@ -58,7 +58,14 @@ public class DbProviderLoader : IDbProviderLoader
 
             var factory = LoadProviderFactory(providerKey, kvp.Value);
 
-            // Register with DI container
+            // CORE-006: the keyed DI registration below uses `providerKey` (this configuration
+            // section's own dictionary key, e.g. "loader" in "DatabaseProviders:loader:...") —
+            // deliberately NOT kvp.Value.ProviderName (the ADO.NET invariant name configured
+            // inside the section). This lets one section key host any invariant-named provider,
+            // but it also means a consumer resolving this factory via keyed DI (see
+            // TenantContextRegistry.CreateDatabaseContext) must look it up by this same section
+            // key — see IDatabaseContextConfiguration.ProviderName's remarks for the consumer
+            // side of this same contract.
             services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory);
 
             // Register with DbProviderFactories for legacy compatibility
@@ -147,19 +154,37 @@ public class DbProviderLoader : IDbProviderLoader
                 );
             }
 
+            // CORE-014: real ADO.NET providers use both conventions for the singleton accessor —
+            // System.Data.SqlClient.SqlClientFactory.Instance and MySql.Data's
+            // MySqlClientFactory.Instance are public static READONLY FIELDS, while Npgsql's
+            // NpgsqlFactory.Instance is a property. Checking only the property meant a
+            // perfectly valid field-based provider assembly would load successfully and then
+            // fail factory discovery with a misleading error. Try property first (matches prior
+            // behavior/precedence when a type exposes both), then fall back to a field.
             var instanceProperty = type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-            if (instanceProperty == null)
+            object? instanceValue;
+            if (instanceProperty != null)
             {
-                _logger.LogError(
-                    "DbProviderFactory type '{FactoryTypeName}' for provider '{ProviderKey}' does not have a static  Instance property",
-                    config.FactoryType, providerKey
-                );
-                throw new InvalidOperationException(
-                    $"DbProviderFactory type '{config.FactoryType}' for provider '{providerKey}' does not have a static  Instance property."
-                );
+                instanceValue = instanceProperty.GetValue(null);
+            }
+            else
+            {
+                var instanceField = type.GetField("Instance", BindingFlags.Public | BindingFlags.Static);
+                if (instanceField == null)
+                {
+                    _logger.LogError(
+                        "DbProviderFactory type '{FactoryTypeName}' for provider '{ProviderKey}' does not have a static Instance property or field",
+                        config.FactoryType, providerKey
+                    );
+                    throw new InvalidOperationException(
+                        $"DbProviderFactory type '{config.FactoryType}' for provider '{providerKey}' does not have a static Instance property or field."
+                    );
+                }
+
+                instanceValue = instanceField.GetValue(null);
             }
 
-            var factory = instanceProperty.GetValue(null) as DbProviderFactory;
+            var factory = instanceValue as DbProviderFactory;
             if (factory == null)
             {
                 _logger.LogError(
@@ -211,6 +236,30 @@ public class DbProviderLoader : IDbProviderLoader
         {
             throw new InvalidOperationException(
                 $"Assembly path for provider '{providerKey}' must stay within '{normalizedBaseDirectory}'.");
+        }
+
+        // CORE-015: the check above is purely lexical — it only rejects ".." traversal in the
+        // configured value itself. A symlink whose own path lexically satisfies "starts with
+        // the base directory" can still point at a target outside it, silently defeating that
+        // guarantee once Assembly.LoadFrom actually opens the file. Resolve the real target (a
+        // symlink can itself point to another symlink, so ask for the FINAL target) and re-check
+        // containment against it. This deliberately does not walk intermediate directory
+        // components for their own symlinks — that requires an attacker who can already plant a
+        // symlinked directory inside the app's own base directory, which is a materially larger
+        // compromise (arbitrary write access to the deployed app) than the "one configured
+        // relative path names a planted symlink" threat this containment check exists for.
+        if (File.Exists(candidatePath))
+        {
+            var linkTarget = File.ResolveLinkTarget(candidatePath, returnFinalTarget: true);
+            if (linkTarget != null)
+            {
+                var resolvedTargetPath = Path.GetFullPath(linkTarget.FullName);
+                if (!resolvedTargetPath.StartsWith(baseWithSeparator, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Assembly path for provider '{providerKey}' must stay within '{normalizedBaseDirectory}'.");
+                }
+            }
         }
 
         return candidatePath;

@@ -448,6 +448,82 @@ public class TenantTests
         Assert.Single(results.Distinct());
     }
 
+    // CORE-011: ContextCreated?.Invoke(context) previously threw directly out of
+    // CreateDatabaseContext when a subscriber faulted. The Lazy<IDatabaseContext> wrapping it
+    // gets evicted (ResolveLazy's own fault-handling), but the already-constructed `context` —
+    // a real DatabaseContext potentially holding open governors/connections — was never
+    // reachable by anyone and never disposed: a leak on every faulting subscriber.
+    [Fact]
+    public void GetContext_WhenContextCreatedSubscriberThrows_DisposesTheCreatedContext()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        IDatabaseContext? captured = null;
+        registry.ContextCreated += ctx =>
+        {
+            captured = ctx;
+            throw new InvalidOperationException("subscriber boom");
+        };
+
+        Assert.Throws<InvalidOperationException>(() => registry.GetContext("bad-subscriber-tenant"));
+
+        Assert.NotNull(captured);
+        Assert.True(captured!.IsDisposed,
+            "The context created for a faulting ContextCreated subscriber must be disposed — " +
+            "nobody else can ever reach it to dispose it themselves.");
+    }
+
+    // Isolation half of CORE-011: one faulting subscriber must not prevent other, well-behaved
+    // subscribers from being notified. PengdowsTelemetryService and application code may both
+    // subscribe; one broken observer should not silently blind the other.
+    [Fact]
+    public void GetContext_WhenOneContextCreatedSubscriberThrows_StillNotifiesOtherSubscribers()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var secondSubscriberNotified = false;
+        registry.ContextCreated += _ => throw new InvalidOperationException("first subscriber boom");
+        registry.ContextCreated += _ => secondSubscriberNotified = true;
+
+        Assert.Throws<InvalidOperationException>(() => registry.GetContext("multi-subscriber-tenant"));
+
+        Assert.True(secondSubscriberNotified,
+            "A well-behaved second subscriber must still be notified even though an earlier " +
+            "subscriber threw.");
+    }
+
     // CORE-010: Invalidate(tenant) can TryRemove a Lazy<IDatabaseContext> before it is
     // IsValueCreated. Because Invalidate's dispose-if-created check is then a no-op, the
     // in-flight GetContext call that owns that Lazy finishes creating a context nobody else
@@ -556,5 +632,43 @@ public class TenantTests
         {
             // Acceptable: failing closed instead of leaking a live context is the safe outcome.
         }
+    }
+
+    // CORE-007: TenantContextRegistry's own XML remarks claimed "Contexts obtained before
+    // disposal continue working normally until they are themselves disposed" — but
+    // DisposeManaged/DisposeManagedAsync actually iterate and dispose every created context on
+    // registry shutdown, exactly like Invalidate/InvalidateAll do for a single tenant. This test
+    // pins down the REAL (and, per this fix, now correctly documented) contract: the registry
+    // owns every context it creates and disposes them when the registry itself is disposed.
+    [Fact]
+    public void Dispose_DisposesAllContextsItCreated_RegistryOwnsCreatedContexts()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var context = registry.GetContext("owned-tenant");
+        Assert.False(context.IsDisposed);
+
+        registry.Dispose();
+
+        Assert.True(context.IsDisposed,
+            "The registry must dispose every context it created when the registry itself is disposed — " +
+            "a context is not safe to keep using past registry disposal.");
     }
 }

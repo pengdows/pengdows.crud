@@ -31,6 +31,7 @@ canonical day-to-day development guide; the documents below go deeper on specifi
 |---|---|
 | [`connection/connection-modes.md`](./connection/connection-modes.md) | Authoritative `DbMode` invariants, coercion rules, and practical guidance |
 | [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior |
+| [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment |
 
 ## Positioning
 

@@ -28,6 +28,17 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// Gets or sets the ADO.NET provider invariant name.
     /// </summary>
+    /// <remarks>
+    /// <b>When this configuration is resolved through <c>ITenantContextRegistry</c>/<c>DbProviderLoader</c>-based
+    /// dependency injection:</b> this value is looked up as a keyed <c>DbProviderFactory</c> DI
+    /// registration, and <c>DbProviderLoader</c> registers each factory under its
+    /// <c>DatabaseProviders</c> configuration section <em>key</em> — not the
+    /// <c>DatabaseProviderConfig.ProviderName</c> field configured inside that section. In that
+    /// path, this property must equal the <c>DatabaseProviders</c> section key
+    /// (e.g. <c>"DatabaseProviders:MyProviderKey": { ... }</c> requires
+    /// <c>ProviderName = "MyProviderKey"</c>), not the underlying ADO.NET invariant name, even
+    /// though that name is what the section's own <c>ProviderName</c> field typically holds.
+    /// </remarks>
     string ProviderName { get; set; }
 
     /// <summary>
@@ -48,6 +59,22 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// Maximum number of reader plan cache entries to maintain per TableGateway instance.
     /// </summary>
+    /// <remarks>
+    /// <b>Read once, at gateway construction, from whichever <see cref="IDatabaseContext"/> is
+    /// passed to the gateway's constructor — not re-read per operation.</b> In the documented
+    /// context-per-tenant multi-tenancy pattern, one singleton gateway is reused across many
+    /// different tenant <see cref="IDatabaseContext"/> instances passed as an optional override
+    /// parameter to individual calls (e.g. <c>RetrieveOneAsync(id, tenantContext)</c>); that
+    /// per-call context changes only which physical connection executes the operation, never
+    /// this cache-size setting or the gateway's cached entity metadata. This is intentional:
+    /// compiled reader plans are keyed by the query result's column shape (an entity-level,
+    /// tenant-independent property, not a function of which tenant's connection produced the
+    /// reader), so one shared cache per gateway is correct and avoids pointless recompilation
+    /// across tenants using the same entity. Treat this value as a gateway-lifetime capacity
+    /// tuning knob; if genuinely different tenants need genuinely different cache sizes,
+    /// construct separate gateway instances rather than relying on a shared singleton gateway
+    /// to pick up a later tenant's value.
+    /// </remarks>
     int? ReaderPlanCacheSize { get; set; }
 
     /// <summary>
