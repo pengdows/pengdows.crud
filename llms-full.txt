@@ -3476,6 +3476,15 @@ This contract is authoritative — implement according to these rules, and contr
 
 ---
 
+## Public database-detection diagnostics
+
+`DatabaseDetection.DetectFromConnectionWithDetail` and
+`DatabaseDetection.DetectFromConnectionWithDetailAsync` return a
+`DatabaseDetectionResult` containing the resolved `SupportedDatabase` and each
+`DetectionProbeAttempt`, including whether the probe succeeded and its failure reason.
+These APIs preserve the existing enum-only detection entry points while making detection
+evidence available to diagnostics and support tooling.
+
 ## Source: `docs/supported-databases.md`
 
 # Supported Databases

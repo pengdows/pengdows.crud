@@ -112,6 +112,10 @@ database-agnostic policy decoupled from connection identity — is in
   across all 16 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
   DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
   PostgreSQL, and TimescaleDB (the last three detected at runtime, no separate dialect).
+- `DatabaseDetection.DetectFromConnectionWithDetail` and
+  `DetectFromConnectionWithDetailAsync` expose the resolved `SupportedDatabase` together
+  with every product-probe result and failure reason. The existing enum-only detection APIs
+  remain unchanged; use the detailed APIs for diagnostics and support tooling.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles, savepoints. Transactions are operation-scoped, never stored as fields.
 - [`docs/batch-operations.md`](docs/batch-operations.md) — batch create/update/upsert/delete

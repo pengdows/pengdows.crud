@@ -65,9 +65,11 @@ duplicating those counters in `AttributionStats`.
 
 ---
 
-## `DatabaseDetectionResult`'s evidence trail is never surfaced to callers
+## Database-detection evidence — completed 2026-08-28
 
-`DatabaseDetectionService` internally builds a `DatabaseDetectionResult(SupportedDatabase ResolvedProduct, IReadOnlyList<DetectionProbeAttempt> Attempts)`, where each `DetectionProbeAttempt(string ProbeName, bool Succeeded, string? FailureReason)` records one detection probe's outcome — genuinely useful evidence for diagnosing a misdetected database. Its own doc comment states the purpose explicitly: capturing evidence the bare-enum entry points otherwise discard. But every public-facing entry point only returns the bare `SupportedDatabase` enum — the evidence trail is built and then thrown away. When detection picks the wrong product (falls back to SQL-92, or misidentifies a flavor like Aurora/TiDB/Yugabyte), a user has no way to see *why* — which probes ran, which failed, what the failure reason was. Worth exposing via a diagnostic method or logging the attempts at a Debug level when the result doesn't match what was expected, rather than only ever returning the final enum value.
+`DatabaseDetection.DetectFromConnectionWithDetail` and its async twin now expose the resolved
+product together with every probe outcome and failure reason. Existing bare-enum detection
+entry points remain unchanged.
 
 ---
 
