@@ -15,7 +15,10 @@ specific subsystems.
 | [`batch-operations.md`](./batch-operations.md) | Batch create/update/upsert/delete: API, runtime behavior, architecture, dialect compatibility |
 | [`generated-keys.md`](./generated-keys.md) | How `CreateAsync` retrieves an auto-generated `[Id]` value per database (`GeneratedKeyPlan` strategies) |
 | [`uuid7.md`](./uuid7.md) | `Uuid7Optimized`: monotonicity scope, clock modes, throughput/backpressure, configuration |
-| [`transactions.md`](./transactions.md) | `TransactionContext`, isolation profiles, savepoints |
+| [`transactions.md`](./transactions.md) | `TransactionContext`, isolation profiles, savepoints, concurrency contract (commit/rollback/dispose races, reader locks, cancellation) |
+| [`entity-mapping.md`](./entity-mapping.md) | Complete attribute reference: `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/`[Json]`/enum/correlation-token attributes, valid combinations, defaults |
+| [`sql-container-templates.md`](./sql-container-templates.md) | `ISqlContainer.Clone()`/`Clone(IDatabaseContext)`: template reuse, parameter rebinding, cross-dialect/tenant/transaction use, disposal independence |
+| [`capability-discovery.md`](./capability-discovery.md) | Reading `ISqlDialect`/`IDataSourceInformation` at runtime to branch on capability instead of database name |
 | [`primary-keys-pseudokeys.md`](./primary-keys-pseudokeys.md) | `[Id]` vs `[PrimaryKey]` |
 | [`parameter-naming-convention.md`](./parameter-naming-convention.md) | Parameter prefix conventions (`i`/`s`/`w`/`k`/`v`/`j`/`b`) |
 | [`read-only-enforcement.md`](./read-only-enforcement.md) | How `ReadWriteMode.ReadOnly` is enforced per dialect |
@@ -31,9 +34,11 @@ specific subsystems.
 | Doc | Covers |
 |---|---|
 | [`connection/connection-modes.md`](./connection/connection-modes.md) | Authoritative `DbMode` invariants, coercion rules, and practical guidance |
-| [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior |
+| [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior, provider-pooling-vs-admission-control distinction |
+| [`connection/ownership-and-shutdown.md`](./connection/ownership-and-shutdown.md) | What the context/transaction/reader/gateway/sentinel/registry each own, disposal ordering, the post-disposal exception contract |
 | [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment, recognized-vs-unknown-engine fallback, process-lifetime limitations |
 | [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, registration/invalidation rotation flow, lifecycle events, application-name composition |
+| [`connection/multitenancy-architecture.md`](./connection/multitenancy-architecture.md) | The architectural contract behind multi-tenancy: library-enforced vs. deployment-assumed guarantees, tenant-ID case rules, rotation/concurrency semantics |
 
 ## Positioning
 

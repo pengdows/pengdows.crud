@@ -1,5 +1,20 @@
 # Connection Pooling and Governors
 
+**Two distinct, layered mechanisms are both called "pooling" and are easy to conflate:**
+
+1. **Provider connection pooling** — physical socket/connection reuse, managed entirely by the
+   ADO.NET provider (SqlClient, Npgsql, MySqlConnector, etc.), not by pengdows.crud. See
+   `docs/architecture.md`'s "Provider Connection Pooling" section for the exact ownership split.
+2. **pengdows.crud's admission control** (`PoolGovernor`, this doc) — an in-process semaphore-based
+   gate that limits how many *concurrent operations* pengdows.crud itself admits toward the
+   provider pool, independent of and layered on top of whatever the provider does internally. A
+   `PoolGovernor` slot is not a physical connection — it's a permit to request one.
+
+Everything below this line is about the second mechanism. See `docs/metrics.md` for how admission
+pressure (waits, timeouts, queue depth) surfaces in `DatabaseMetrics`, and
+`docs/connection/ownership-and-shutdown.md` for the governor's own open/close/drain lifecycle and
+what happens to it on context disposal.
+
 ## Pooling defaults
 `DatabaseContext` automatically rewrites connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes so sockets and clients stay in a managed pool. `ConnectionPoolingConfiguration.ApplyPoolingDefaults` detects whether the provider supports external pooling, skips raw connection strings (like `:memory:` or a bare file path), and forces `Pooling=true` when the flag is missing. For supported external pools, pengdows.crud also ensures the documented provider minimum. Your own explicit pooling settings (other than turning pooling off) are respected subject to the maximum/minimum policy below, but `Pooling=false` is not: pengdows.crud requires connection pooling for its governor/session-setting model to work, so an explicit `Pooling=false` in the connection string throws `InvalidOperationException` rather than being honored.
 
@@ -46,3 +61,5 @@ Two live `DatabaseContext` instances sharing the same connection string in-proce
 
 Set `DatabaseContextConfiguration.EnforceUniqueConnectionString = true` to upgrade this to a hard `InvalidOperationException` thrown at construction of the second context. The check is all-or-nothing across a context's full set of pool keys (reader and writer pools claimed together, not independently), so a partial collision on just one of them still fails the whole construction.
 `InitializePoolGovernors` hashes the writer and reader connection strings to get pooled keys, respects the resolved pool size (including overrides) and the selected `DbMode`, and creates a governor for each pool (except `SingleConnection`, which disables governors entirely). `SingleWriter` mode uses the Standard lifecycle but adjusts the governor so writes serialize with `MaxConcurrentWrites = 1` (and an optional writer-preference turnstile); `PreventDatabaseUnload` retains one permit-backed sentinel for each materially separate pool while application work remains ephemeral. This keeps the governors aware of retained sentinels while still allowing other operations to proceed, and the hashed key ensures each unique connection string gets its own governor scope.
+
+**Sentinel repair is permit-neutral.** If a sentinel connection breaks (provider-detected `Broken`/`Closed` state), the next operation on that context transparently disposes it and acquires a replacement — through the same infrastructure-slot path used for sentinel creation, not the application-facing acquire path, so it is never attributed to `Metrics.ReadRequests`/`WriteRequests`. The net permit count for that pool returns to exactly where it was before the break once the triggering operation completes; the repair briefly holds one additional permit only for the duration of the swap. The underlying provider-level `DbDataSource` itself is never recreated during a repair — only the sentinel's `DbConnection` churns.

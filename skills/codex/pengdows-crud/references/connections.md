@@ -118,8 +118,12 @@ tenant's identity (`ContextCreated`/`ContextRemoved` pass only that context, no 
 parameter). Rotate a tenant onto new configuration by calling the concrete
 `TenantConnectionResolver.Register(tenant, newConfig)` (not exposed on the `ITenantConnectionResolver`
 interface) followed by `registry.Invalidate(tenant)` — the next `GetContext` call creates a fresh
-context from the new config. See `docs/connection/multitenancy.md` in the repo for the full
-configuration shape, DI wiring, request-time usage pattern, and lifecycle-event contract.
+context from the new config. There is no drain phase and no protection for a caller that already
+holds a live context reference when a concurrent `Invalidate` disposes it — a documented, accepted
+limitation, not a bug. See `docs/connection/multitenancy.md` in the repo for the full configuration
+shape, DI wiring, request-time usage pattern, and lifecycle-event contract, and
+`docs/connection/multitenancy-architecture.md` for the deeper library-enforced-vs-deployment-assumed
+contract and exact rotation concurrency semantics.
 
 ---
 

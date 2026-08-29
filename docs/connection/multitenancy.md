@@ -10,6 +10,11 @@ is designed around, but the library only enforces context isolation — it does 
 databases or authenticate tenant identity for you. Trusting the `tenant` string passed to
 `GetContext` is the caller's responsibility.
 
+This doc is the getting-started guide. For the deeper architectural contract — precisely what
+isolation is library-enforced vs. deployment-assumed, tenant-ID case/normalization rules, and the
+exact concurrency semantics of rotation and in-flight requests — see
+[`multitenancy-architecture.md`](./multitenancy-architecture.md).
+
 This doc covers the standard, configuration-driven path: `AddMultiTenancy`, `MultiTenantOptions`,
 `TenantConfiguration`, `ITenantConnectionResolver`, and `ITenantContextRegistry`.
 

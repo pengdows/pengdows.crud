@@ -103,7 +103,47 @@ await tx.RollbackToSavepointAsync("checkpoint1", ct);
 
 ## Connection sharing inside transactions
 
-All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools.
+All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools. `GetConnection` always returns that one pinned connection — the `ExecutionType` argument passed to it is accepted for interface-compatibility but has no effect on which connection comes back.
+
+## Concurrency contract
+
+`TransactionContext` is **single-flow by design, not built for concurrent use from multiple threads/tasks against the same instance.** Every operation — an ordinary command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, and `RollbackToSavepointAsync` — serializes through the same internal lock before touching the pinned connection. This section states exactly what happens when that design assumption is violated, since the enforced behavior (fail fast in some cases, block in others, one clean winner in a genuine race) needs to match what's documented here rather than be discovered by trial and error.
+
+### Ordinary concurrent commands: serialized, not parallel
+
+Two commands issued concurrently against the same `TransactionContext` do not corrupt anything and do not run in parallel — the second one blocks on the internal lock until the first finishes, then proceeds. There is no timeout on this wait and no `SemaphoreFullException`-style rejection; it's ordinary mutual exclusion. If you need real concurrency, use separate transactions (or no transaction) against separate connections, not one `TransactionContext` shared across concurrent workers.
+
+### An open reader blocks everything else — and fails fast instead of deadlocking
+
+`ExecuteReaderAsync` on a transaction holds that same lock for as long as the returned reader stays open (until it reaches EOF or is disposed) — not just for the duration of executing the command. While a reader is open:
+
+- **Any other operation on the same transaction — a command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, `RollbackToSavepointAsync`, or `Dispose`/`DisposeAsync` — throws `InvalidOperationException` immediately** ("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active. Dispose the reader (or finish consuming it) first.") rather than blocking. This applies identically whether the second attempt comes from the same logical flow (a bug — nested reentrant use) or a genuinely different thread sharing the same `TransactionContext` reference — the lock has no way to distinguish the two, and blocking in either case would either hang forever or eventually fail at the provider anyway (most providers reject a second command while a reader is open on the same connection). Proven for both cases: `TransactionReaderLockLifetimeTests.ExecuteReaderAsync_InTransaction_NestedOperationOnSameFlow_ThrowsImmediately_WhileReaderOpen` and `..._AnotherThread_AlsoThrowsImmediately_WhileReaderOpen`; the completion/savepoint side is covered by `TransactionCompletionReaderGuardTests.cs` (`Commit`/`CommitAsync`/`Rollback`/`RollbackAsync`/`Dispose`/`SavepointAsync`/`RollbackToSavepointAsync` all `_WhileReaderOpen_Throws...`).
+- Dispose the reader (or finish consuming it) before issuing another operation on that transaction. This is the same rule that applies to a plain `IDatabaseContext`'s reader leases — a `TransactionContext` doesn't relax it, and the fail-fast behavior here is specifically there to surface that mistake immediately instead of hanging.
+- A failed attempt (rejected because a reader is open) leaves the transaction otherwise unaffected and retryable — it does not mark the transaction completed, and does not touch `_committed`/`_rolledBack`.
+
+### Commit vs. Rollback race: exactly one wins
+
+If `Commit`/`CommitAsync` and `Rollback`/`RollbackAsync` are called concurrently on the same transaction, exactly one succeeds and the other throws `InvalidOperationException` ("Transaction already completed.") — never both, never neither, and the underlying connection is released exactly once regardless of which one won. Proven by `TransactionContextTests.CommitAndRollback_RaceOnlyOneSucceeds` (asserts exactly one of the two calls threw, the other didn't, and the connection-release count is exactly 1).
+
+### Commit/Rollback vs. Dispose race
+
+`Dispose`/`DisposeAsync` never tears down a transaction that another thread is actively completing. If `Dispose` can't immediately acquire the completion lock (because a concurrent `Commit`/`Rollback` already holds it), it logs and returns without attempting its own rollback — the in-flight `Commit`/`Rollback` call owns disposing the transaction and connection when it finishes, exactly once, regardless of which caller "started" the disposal. Proven by `TransactionContextDisposeRaceTests.cs`: `Commit_ConcurrentDispose_TransactionNotDisposedUntilCommitCompletes`, `Rollback_ConcurrentDispose_...`, their `Async` counterparts, and `Commit_ThenDispose_DisposesTransactionExactlyOnce`.
+
+### Cancellation leaves the transaction fully untouched
+
+A `CancellationToken` passed to `CommitAsync`/`RollbackAsync` that is already cancelled (or becomes cancelled before the internal completion lock is acquired) causes `OperationCanceledException` to propagate **unwrapped** — matching this project's general exception-hierarchy rule that cancellation is never translated into a `DatabaseException` — and leaves the transaction in exactly its pre-call state: `IsCompleted`/`WasCommitted`/`WasRolledBack` all remain `false`, and a subsequent call with a fresh, non-cancelled token succeeds normally. There is no half-completed state to clean up after a cancelled attempt. Proven by `TransactionContextTests.CommitAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenCommitSucceeds` and its `Rollback` counterpart.
+
+### Savepoints share the same lock as ordinary commands
+
+`SavepointAsync`/`RollbackToSavepointAsync` acquire the identical internal lock an ordinary command does before running their SQL — they are not a separate, lighter-weight operation. This means they queue behind a concurrent command exactly like any other operation, and fail fast with the same `InvalidOperationException` if a reader is currently open on the transaction.
+
+### Mode locks: `DbMode.SingleConnection`'s transaction gate
+
+Under `DbMode.SingleConnection` — where one physical connection is shared by the entire `DatabaseContext`, transactional and non-transactional work alike — beginning a transaction acquires a dedicated gate (bounded by `ModeLockTimeout`) for the transaction's **entire lifetime**, not just around individual commands. This is a separate lock from the one described above: it serializes the transaction against *other, non-transactional* callers of the same shared connection (an ordinary write issued while a transaction is open elsewhere correctly queues behind it, rather than being silently absorbed into or corrupting the open transaction), while the reader/reusable lock above serializes operations *within* the transaction itself. This gate is a no-op under every other `DbMode` — `Standard`, `SingleWriter`, and `PreventDatabaseUnload` transactions each get an ordinary pooled connection that isn't shared with concurrent non-transactional work in the first place, so there's nothing for this second gate to arbitrate.
+
+### Known, accepted limitation (not closed)
+
+A narrow TOCTOU remains between a command's internal "is this transaction already completed" check and the moment it actually acquires the lock — closing it fully would require a single atomic gate distinguishing "begin an ordinary operation" from "begin completion," a larger redesign than the current per-operation locking. Every realistic, materialized interleaving described above (command vs. commit, reader vs. commit, command vs. rollback, reader vs. dispose, savepoint vs. command) is covered; this residual gap is a race between two checks that would need to land in an implausibly narrow window to matter in practice, and is documented here as a deliberate, accepted limitation rather than an oversight.
 
 ## Isolation resolution and degradation
 

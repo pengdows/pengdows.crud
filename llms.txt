@@ -113,7 +113,29 @@ database-agnostic policy decoupled from connection identity — is in
   DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
   PostgreSQL, and TimescaleDB (the last three detected at runtime, no separate dialect).
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
-  profiles, savepoints. Transactions are operation-scoped, never stored as fields.
+  profiles, savepoints, and the concurrency contract (which commit/rollback/dispose/cancellation
+  races are safe, which throw, and the one documented residual TOCTOU). Transactions are
+  operation-scoped, never stored as fields.
+- [`docs/connection/ownership-and-shutdown.md`](docs/connection/ownership-and-shutdown.md) —
+  precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
+  close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and the uniform
+  `ObjectDisposedException` contract for every operation attempted after disposal.
+- [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md) —
+  the architectural contract behind context-per-tenant multi-tenancy: what's library-enforced
+  (context/admission isolation) vs. deployment-assumed (database-per-tenant, tenant-identity
+  trust), tenant-ID case-insensitivity, and the exact concurrency semantics of rotation
+  (including the one documented, accepted residual race on the registry's fast lookup path).
+- [`docs/entity-mapping.md`](docs/entity-mapping.md) — complete reference for all 15
+  entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
+  `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
+  combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
+- [`docs/sql-container-templates.md`](docs/sql-container-templates.md) — `ISqlContainer.Clone()`/
+  `Clone(IDatabaseContext)`: what's deep-copied vs. shared, the singleton-gateway template
+  pattern, transaction/tenant/cross-dialect use, and disposal independence.
+- [`docs/capability-discovery.md`](docs/capability-discovery.md) — reading `ISqlDialect`/
+  `IDataSourceInformation` at runtime to branch on capability instead of hard-coding database
+  names; the explicit two-audience split in `ISqlDialect` (consumer-facing flags vs. internal
+  SQL-generation machinery gateway code calls).
 - [`docs/batch-operations.md`](docs/batch-operations.md) — batch create/update/upsert/delete
   API, dialect fallback rules, and what is deliberately *not* implemented (no
   `BatchResult`, no partial-success reporting, no provider-native bulk loaders).
@@ -161,7 +183,11 @@ per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionSco
 (incompatible with its open-late/close-early connection philosophy by design). The context-per-tenant
 model itself — configuration shape, DI registration via `AddMultiTenancy`, request-time
 resolution, rotation, and lifecycle events — is documented in
-[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md). Per-tenant
+[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md); the deeper architectural
+contract (exactly what's library-enforced vs. deployment-assumed, tenant-ID case rules, and
+rotation concurrency semantics) is in
+[`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md).
+Per-tenant
 `DbProviderFactory` resolution for that model is config-driven via
 `DbProviderLoader` — see
 [`docs/connection/dynamic-provider-loading.md`](docs/connection/dynamic-provider-loading.md)

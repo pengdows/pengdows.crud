@@ -3670,6 +3670,11 @@ is designed around, but the library only enforces context isolation — it does 
 databases or authenticate tenant identity for you. Trusting the `tenant` string passed to
 `GetContext` is the caller's responsibility.
 
+This doc is the getting-started guide. For the deeper architectural contract — precisely what
+isolation is library-enforced vs. deployment-assumed, tenant-ID case/normalization rules, and the
+exact concurrency semantics of rotation and in-flight requests — see the
+`docs/connection/multitenancy-architecture.md` source further below.
+
 This doc covers the standard, configuration-driven path: `AddMultiTenancy`, `MultiTenantOptions`,
 `TenantConfiguration`, `ITenantConnectionResolver`, and `ITenantContextRegistry`.
 
@@ -3840,6 +3845,97 @@ lifecycle rules (caching, invalidation, events, `MaxTenantCount`) stay exactly a
 A custom factory must return a new, independently owned context on each call — `TenantContextRegistry`
 already caches and disposes contexts per its own lifecycle; a factory that decorates or caches
 contexts itself would double-cache and is not a supported pattern.
+
+---
+
+## Source: `docs/connection/multitenancy-architecture.md`
+
+# Multi-Tenancy: Architecture and Contract
+
+This is the architectural reference for pengdows.crud's multi-tenancy model — what the library
+actually guarantees, what it deliberately leaves to the deployment operator, and the exact
+concurrency semantics of tenant identity and rotation. For a getting-started guide (configuration,
+DI wiring, request-time usage), see `docs/connection/multitenancy.md` (inlined above).
+
+## The model: a tenant selects a complete execution environment
+
+A tenant identifier does not select a row filter, a schema, or a connection-string fragment
+applied on top of shared infrastructure. It selects a complete, independently governed
+`IDatabaseContext` — its own dialect, its own connection pool (`PoolGovernor` instances for
+reader and writer are per-`DatabaseContext` instance fields, never shared or static across
+contexts), its own admission control, and its own metrics collector. Two tenants can run against
+different database products, different server versions, and different `DbMode`s, because nothing
+about tenant isolation depends on them sharing infrastructure.
+
+## What the library enforces vs. what it assumes
+
+This distinction matters for anyone evaluating the isolation guarantee:
+
+| Library-enforced | Deployment/caller responsibility |
+|---|---|
+| Each tenant's `IDatabaseContext` has independent, non-shared `PoolGovernor` instances — one tenant's connection saturation cannot consume another tenant's admission slots. | **Database-per-tenant is a convention the library assumes, not one it verifies.** Nothing in `TenantContextRegistry`/`TenantConnectionResolver` checks that tenant A's and tenant B's connection strings point at physically distinct databases. If two tenant configurations point at the same database, the library isolates the *connections/admission*, not the *data* — that's an operator configuration error, not something the library detects or prevents. |
+| One context per tenant identifier is created and cached (`ConcurrentDictionary<string, Lazy<IDatabaseContext>>` with `Lazy<T>.ExecutionAndPublication` — the factory runs at most once per key even under concurrent first access). | **Tenant identity itself must be trusted before it reaches the registry.** `GetContext(tenant)` does not authenticate anything; it is a lookup key. Resolving `tenant` from validated authentication/authorization state upstream is the caller's job. |
+| Tenant-ID comparison is case-insensitive (`StringComparer.OrdinalIgnoreCase`) end to end — `TenantConnectionResolver`'s configuration dictionary and `TenantContextRegistry`'s context cache use the same comparer, so `"acme"` and `"ACME"` always resolve to exactly one cached context, never two independently governed ones (fixed as CORE-009; this is not an accidental convenience, it's an invariant relied on to prevent duplicate-context/cardinality-evasion bugs). | No other normalization (trimming, casing conventions beyond ordinal case-insensitivity, Unicode normalization) is applied to the tenant identifier. Two strings that differ only by leading/trailing whitespace, for example, are treated as different tenants. |
+| An optional `maxTenantCount` cap (`MultiTenantOptions.MaxTenantCount`) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
+| Object identity *is* tenant identity for lifecycle events — `ContextCreated`/`ContextRemoved` pass the `IDatabaseContext` instance itself, nothing else (see CORE-011's resolution: this is a deliberate architectural decision, not a missing feature — there is no separate tenant-ID field threaded through the API for a subscriber to correlate against). | A subscriber that needs a human-readable tenant label must derive or capture it itself (e.g. from the same call site that invoked `GetContext(tenantId)`), since the event does not supply one. |
+
+## Rotation: re-registration + invalidation, immediate and synchronous
+
+Rotating a tenant onto new configuration is a two-step, caller-driven action — there is no
+polling, no background refresh, and no eventual-consistency window baked into the registry itself:
+
+1. `TenantConnectionResolver.Register(tenant, newConfig)` replaces the stored configuration
+   snapshot for that tenant identifier. This alone has no effect on any already-cached context.
+2. `TenantContextRegistry.Invalidate(tenant)` (or `InvalidateAll()`) synchronously removes the
+   tenant's entry from the internal `ConcurrentDictionary` and, if a context had actually been
+   constructed for it (`Lazy<T>.IsValueCreated`), disposes that context and raises `ContextRemoved`
+   — all before `Invalidate` returns. There is no drain phase: `Invalidate` does not wait for
+   in-flight operations on that context to complete before disposing it. (`IDatabaseContext.Dispose`
+   itself does wait for its own outstanding pool leases to drain before releasing governors and
+   owned data sources — see `docs/architecture.md`'s Reader-as-Lease Model and Connection
+   Lifecycle Management sections for that contract. `Invalidate` triggers that same
+   disposal, it does not add a separate drain step of its own.)
+
+The next `GetContext(tenant)` call after invalidation constructs a brand-new context from
+whatever configuration `TenantConnectionResolver` holds at that moment — so rotation is
+**immediate from the registry's perspective** (the stale context is gone the instant `Invalidate`
+returns), not "eventual" in the sense of a background refresh loop, but also not a coordinated,
+zero-downtime handoff: any caller still holding a reference to the disposed context from before
+invalidation is on its own once that context's own connections are torn down.
+
+## Concurrency semantics: in-flight requests during rotation
+
+Two distinct races are relevant here, and they have different outcomes:
+
+**Creation racing invalidation (closed).** If `Invalidate`/registry disposal races a concurrent
+`GetContext` call that is still in the middle of *constructing* a new context for that same
+tenant, the registry does not leak an orphaned, untracked context. `GetContext` re-verifies after
+construction that its `Lazy` instance is still the one registered for that key; if a racing
+`Invalidate` already evicted it, the just-built context is disposed as an orphan and the call
+retries. This is closed with deterministic tests (`TenantTests.cs`:
+`Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext`,
+`Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext`).
+
+**Lookup racing invalidation (a documented, open limitation — not closed).** If a caller's
+`GetContext` call hits the fast, already-cached path and receives a live `IDatabaseContext`
+reference, there is **no protection** against a concurrent `Invalidate`/`Dispose()` disposing that
+exact context immediately afterward. The caller's reference can become a reference to a disposed
+context between the moment `GetContext` returns and the moment the caller actually uses it. This
+is an inherent consequence of handing out a bare object reference rather than a
+reference-counted/leased handle, and closing it fully would require either a leased-context API
+shape (a real public-contract change) or resolving the registry's disposal-ownership model further
+— deliberately not attempted as of this writing (see CORE-010 in
+`docs/planning/future-work.md` for the exact investigation and why a bigger redesign was judged
+out of scope rather than half-done). Practically: a caller that holds a tenant context across an
+`await` boundary during which a concurrent rotation could plausibly occur should re-resolve via
+`GetContext` rather than caching the reference itself, since the registry provides no staleness
+signal short of the context throwing `ObjectDisposedException` on its next use.
+
+**Registry-wide disposal.** This is fully closed, not a residual race: the registry's own
+`IsDisposed` flag flips atomically at the very start of `Dispose()`/`DisposeAsync()`, before any
+individual tenant context is torn down, and `GetContext`'s `ThrowIfDisposed()` check runs at the
+top of every loop iteration — so a `GetContext` call arriving concurrently with registry shutdown
+reliably observes `ObjectDisposedException` rather than a context that might be mid-disposal.
 
 ---
 
@@ -4082,7 +4178,70 @@ await tx.RollbackToSavepointAsync("checkpoint1", ct);
 
 ## Connection sharing inside transactions
 
-All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools.
+All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools. `GetConnection` always returns that one pinned connection — the `ExecutionType` argument passed to it is accepted for interface-compatibility but has no effect on which connection comes back.
+
+## Concurrency contract
+
+`TransactionContext` is **single-flow by design, not built for concurrent use from multiple threads/tasks against the same instance.** Every operation — an ordinary command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, and `RollbackToSavepointAsync` — serializes through the same internal lock before touching the pinned connection. This section states exactly what happens when that design assumption is violated, since the enforced behavior (fail fast in some cases, block in others, one clean winner in a genuine race) needs to match what's documented here rather than be discovered by trial and error.
+
+### Ordinary concurrent commands: serialized, not parallel
+
+Two commands issued concurrently against the same `TransactionContext` do not corrupt anything and do not run in parallel — the second one blocks on the internal lock until the first finishes, then proceeds. There is no timeout on this wait and no `SemaphoreFullException`-style rejection; it's ordinary mutual exclusion. If you need real concurrency, use separate transactions (or no transaction) against separate connections, not one `TransactionContext` shared across concurrent workers.
+
+### An open reader blocks everything else — and fails fast instead of deadlocking
+
+`ExecuteReaderAsync` on a transaction holds that same lock for as long as the returned reader stays open (until it reaches EOF or is disposed) — not just for the duration of executing the command. While a reader is open:
+
+- **Any other operation on the same transaction — a command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, `RollbackToSavepointAsync`, or `Dispose`/`DisposeAsync` — throws `InvalidOperationException` immediately** ("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active. Dispose the reader (or finish consuming it) first.") rather than blocking. This applies identically whether the second attempt comes from the same logical flow (a bug — nested reentrant use) or a genuinely different thread sharing the same `TransactionContext` reference — the lock has no way to distinguish the two, and blocking in either case would either hang forever or eventually fail at the provider anyway (most providers reject a second command while a reader is open on the same connection). Proven for both cases: `TransactionReaderLockLifetimeTests.ExecuteReaderAsync_InTransaction_NestedOperationOnSameFlow_ThrowsImmediately_WhileReaderOpen` and `..._AnotherThread_AlsoThrowsImmediately_WhileReaderOpen`; the completion/savepoint side is covered by `TransactionCompletionReaderGuardTests.cs` (`Commit`/`CommitAsync`/`Rollback`/`RollbackAsync`/`Dispose`/`SavepointAsync`/`RollbackToSavepointAsync` all `_WhileReaderOpen_Throws...`).
+- Dispose the reader (or finish consuming it) before issuing another operation on that transaction. This is the same rule that applies to a plain `IDatabaseContext`'s reader leases — a `TransactionContext` doesn't relax it, and the fail-fast behavior here is specifically there to surface that mistake immediately instead of hanging.
+- A failed attempt (rejected because a reader is open) leaves the transaction otherwise unaffected and retryable — it does not mark the transaction completed, and does not touch `_committed`/`_rolledBack`.
+
+### Commit vs. Rollback race: exactly one wins
+
+If `Commit`/`CommitAsync` and `Rollback`/`RollbackAsync` are called concurrently on the same transaction, exactly one succeeds and the other throws `InvalidOperationException` ("Transaction already completed.") — never both, never neither, and the underlying connection is released exactly once regardless of which one won. Proven by `TransactionContextTests.CommitAndRollback_RaceOnlyOneSucceeds` (asserts exactly one of the two calls threw, the other didn't, and the connection-release count is exactly 1).
+
+### Commit/Rollback vs. Dispose race
+
+`Dispose`/`DisposeAsync` never tears down a transaction that another thread is actively completing. If `Dispose` can't immediately acquire the completion lock (because a concurrent `Commit`/`Rollback` already holds it), it logs and returns without attempting its own rollback — the in-flight `Commit`/`Rollback` call owns disposing the transaction and connection when it finishes, exactly once, regardless of which caller "started" the disposal. Proven by `TransactionContextDisposeRaceTests.cs`: `Commit_ConcurrentDispose_TransactionNotDisposedUntilCommitCompletes`, `Rollback_ConcurrentDispose_...`, their `Async` counterparts, and `Commit_ThenDispose_DisposesTransactionExactlyOnce`.
+
+### Cancellation leaves the transaction fully untouched
+
+A `CancellationToken` passed to `CommitAsync`/`RollbackAsync` that is already cancelled (or becomes cancelled before the internal completion lock is acquired) causes `OperationCanceledException` to propagate **unwrapped** — matching this project's general exception-hierarchy rule that cancellation is never translated into a `DatabaseException` — and leaves the transaction in exactly its pre-call state: `IsCompleted`/`WasCommitted`/`WasRolledBack` all remain `false`, and a subsequent call with a fresh, non-cancelled token succeeds normally. There is no half-completed state to clean up after a cancelled attempt. Proven by `TransactionContextTests.CommitAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenCommitSucceeds` and its `Rollback` counterpart.
+
+### Savepoints share the same lock as ordinary commands
+
+`SavepointAsync`/`RollbackToSavepointAsync` acquire the identical internal lock an ordinary command does before running their SQL — they are not a separate, lighter-weight operation. This means they queue behind a concurrent command exactly like any other operation, and fail fast with the same `InvalidOperationException` if a reader is currently open on the transaction.
+
+### Mode locks: `DbMode.SingleConnection`'s transaction gate
+
+Under `DbMode.SingleConnection` — where one physical connection is shared by the entire `DatabaseContext`, transactional and non-transactional work alike — beginning a transaction acquires a dedicated gate (bounded by `ModeLockTimeout`) for the transaction's **entire lifetime**, not just around individual commands. This is a separate lock from the one described above: it serializes the transaction against *other, non-transactional* callers of the same shared connection (an ordinary write issued while a transaction is open elsewhere correctly queues behind it, rather than being silently absorbed into or corrupting the open transaction), while the reader/reusable lock above serializes operations *within* the transaction itself. This gate is a no-op under every other `DbMode` — `Standard`, `SingleWriter`, and `PreventDatabaseUnload` transactions each get an ordinary pooled connection that isn't shared with concurrent non-transactional work in the first place, so there's nothing for this second gate to arbitrate.
+
+### Known, accepted limitation (not closed)
+
+A narrow TOCTOU remains between a command's internal "is this transaction already completed" check and the moment it actually acquires the lock — closing it fully would require a single atomic gate distinguishing "begin an ordinary operation" from "begin completion," a larger redesign than the current per-operation locking. Every realistic, materialized interleaving described above (command vs. commit, reader vs. commit, command vs. rollback, reader vs. dispose, savepoint vs. command) is covered; this residual gap is a race between two checks that would need to land in an implausibly narrow window to matter in practice, and is documented here as a deliberate, accepted limitation rather than an oversight.
+
+## Isolation resolution and degradation
+
+Resolving an `IsolationProfile` to a concrete `IsolationLevel` is not always exact. `IIsolationResolver.ResolveWithDetail` classifies the resolved level against the profile's canonical guarantee and returns an `IsolationResolution` with a `Degraded` flag and an `IsolationResolutionKind` (`Exact`, `Higher`, or `Lower` — `Lower` always implies `Degraded`).
+
+Both `BeginTransaction`/`BeginTransactionAsync` overloads that accept an `IsolationProfile` also accept an optional `IsolationResolutionPolicy` (default `AllowHigher`):
+
+```csharp
+await using var tx = await context.BeginTransactionAsync(
+    IsolationProfile.StrictConsistency,
+    ExecutionType.Write,
+    cancellationToken,
+    IsolationResolutionPolicy.AllowHigher); // default — never silently weakens isolation
+```
+
+| Policy | Meaning |
+|--------|---------|
+| `ExactOnly` | No substitution permitted; throws `NotSupportedException` if the dialect doesn't offer the exact ideal level for the profile. |
+| `AllowHigher` (default) | A strictly-stronger available level may substitute for an unavailable ideal. Never opts into a weaker guarantee. |
+| `AllowLower` | A strictly-weaker level may substitute; any resolution using this is reported as `Degraded`. |
+| `AllowAny` | `AllowHigher \| AllowLower`; prefers exact, then higher, then lower. |
+
+Degradation can still happen under the default `AllowHigher` policy without the caller opting into anything: some engines simply have no level that satisfies a profile's canonical guarantee at all (e.g. TiDB and Snowflake don't offer a true `Serializable`, so `IsolationProfile.StrictConsistency` resolves to their strongest available level, which is weaker than the profile's ideal). `DatabaseContext` logs a warning in this case rather than throwing or failing silently — the caller isn't asking for a downgrade, but the engine can't fully honor the request either way.
 
 ---
 
