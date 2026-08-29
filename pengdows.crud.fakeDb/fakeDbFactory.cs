@@ -38,6 +38,16 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     /// </summary>
     public bool SupportsNativeDataSource { get; set; } = false;
 
+    /// <summary>
+    /// TEST-017: when set, every <see cref="FakeDbDataSource"/> this factory creates via
+    /// <see cref="CreateDataSource"/> has its <see cref="FakeDbDataSource.ThrowOnDispose"/> set to
+    /// this exception — lets a test make an INTERNALLY-created data source (one the test never
+    /// gets a direct handle to before construction fails) throw during cleanup, to prove the
+    /// original construction exception still propagates rather than being replaced by the
+    /// cleanup failure.
+    /// </summary>
+    public Exception? ThrowOnDataSourceDispose { get; set; }
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
@@ -224,6 +234,11 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         }
 
         var dataSource = new FakeDbDataSource(connectionString, this);
+        if (ThrowOnDataSourceDispose != null)
+        {
+            dataSource.ThrowOnDispose = ThrowOnDataSourceDispose;
+        }
+
         _createdDataSources.Add(dataSource);
         return dataSource;
     }

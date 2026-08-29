@@ -623,12 +623,12 @@ public class DataReaderMapperTests
 
     private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
     {
-        var schemaHashMethod = typeof(DataReaderMapper).GetMethod(
-                                   "BuildSchemaHash",
-                                   BindingFlags.NonPublic | BindingFlags.Static)
-                               ?? throw new InvalidOperationException("BuildSchemaHash not found");
+        var schemaShapeMethod = typeof(DataReaderMapper).GetMethod(
+                                     "BuildSchemaShape",
+                                     BindingFlags.NonPublic | BindingFlags.Static)
+                                 ?? throw new InvalidOperationException("BuildSchemaShape not found");
 
-        var schemaHash = (long)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
+        var shape = schemaShapeMethod.Invoke(null, new object[] { templateReader, options })!;
 
         var planKeyType = typeof(DataReaderMapper)
                               .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
@@ -636,7 +636,7 @@ public class DataReaderMapperTests
 
         return Activator.CreateInstance(
             planKeyType,
-            new object[] { typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode })!;
+            new object[] { typeof(T), shape, options.ColumnsOnly, options.EnumMode })!;
     }
 
     private static object? GetPlanEntry(object planCacheKey)

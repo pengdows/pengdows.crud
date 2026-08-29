@@ -111,6 +111,16 @@ config section, including the optional `MultiTenant:MaxTenantCount` cap — set 
 `TenantContextRegistry`'s production safety cap on distinct cached tenants through the standard
 DI path (omit it, or leave it `null`, for unbounded).
 
+Multi-tenancy itself is **context-per-tenant**, not row-filtering — no injected
+`WHERE tenant_id = @tenant`, and no separate tenant-ID concept anywhere in the API; the
+`IDatabaseContext` a caller gets back from `ITenantContextRegistry.GetContext(tenantId)` *is* the
+tenant's identity (`ContextCreated`/`ContextRemoved` pass only that context, no tenant-ID
+parameter). Rotate a tenant onto new configuration by calling the concrete
+`TenantConnectionResolver.Register(tenant, newConfig)` (not exposed on the `ITenantConnectionResolver`
+interface) followed by `registry.Invalidate(tenant)` — the next `GetContext` call creates a fresh
+context from the new config. See `docs/connection/multitenancy.md` in the repo for the full
+configuration shape, DI wiring, request-time usage pattern, and lifecycle-event contract.
+
 ---
 
 ## IsolationProfile

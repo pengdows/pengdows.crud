@@ -73,15 +73,34 @@ public sealed class FakeDbDataSource : DbDataSource
     /// </summary>
     public bool WasDisposed { get; private set; }
 
+    /// <summary>
+    /// TEST-017: when set, disposal throws this exception instead of completing normally —
+    /// simulates cleanup itself failing (e.g. during a construction-failure catch block), so
+    /// tests can prove the original exception still propagates rather than being replaced by
+    /// this one. <see cref="WasDisposed"/> is still set first, so the attempt is observable even
+    /// though it did not complete normally.
+    /// </summary>
+    public Exception? ThrowOnDispose { get; set; }
+
     protected override void Dispose(bool disposing)
     {
         WasDisposed = true;
+        if (ThrowOnDispose != null)
+        {
+            throw ThrowOnDispose;
+        }
+
         base.Dispose(disposing);
     }
 
     protected override ValueTask DisposeAsyncCore()
     {
         WasDisposed = true;
+        if (ThrowOnDispose != null)
+        {
+            throw ThrowOnDispose;
+        }
+
         return base.DisposeAsyncCore();
     }
 }

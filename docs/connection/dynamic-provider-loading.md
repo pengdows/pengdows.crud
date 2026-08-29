@@ -132,3 +132,44 @@ section:
 Leave it unset (`null`) for an unbounded registry — the default. A long-lived process serving
 many distinct, dynamically-discovered tenants should set this to bound worst-case connection-pool
 growth across tenants.
+
+## Recognized dialect vs. wholly-unknown engine
+
+Loading a provider does not by itself teach pengdows.crud anything about the database behind it.
+Once `DatabaseContext` opens a connection through the loaded factory, `DatabaseDetectionService`
+probes the connection (product/version queries) to resolve a `SupportedDatabase` value:
+
+- **A recognized product** (any value in `SupportedDatabase` other than `Unknown`) gets that
+  product's real `ISqlDialect` — identifier quoting, parameter markers, upsert strategy, generated-
+  key retrieval, isolation-level mapping, capability flags, and every other dialect-specific
+  behavior documented in `docs/supported-databases.md`.
+- **An engine the detection probes can't identify** resolves to `SupportedDatabase.Unknown`, and
+  `SqlDialectFactory` falls back to `Sql92Dialect` — a generic ANSI-SQL dialect (standard
+  double-quote identifier quoting, standard positional/named parameter handling, no
+  product-specific upsert/merge/pagination/isolation behavior). This lets you execute explicit,
+  portable SQL through a provider `pengdows.crud` has never heard of, but you get none of the
+  capability negotiation, optimized SQL generation, or verified-support guarantees a recognized
+  dialect provides. See `docs/planning/future-work.md`'s "What 'supported database' means" section
+  for the exact distinction between recognized dialect, generic provider compatibility, and
+  verified database support — loading a provider only ever gets you the first two.
+- If you're adding real support for a new engine, `Sql92Dialect` is the fallback you're
+  overriding, not a starting template to copy — see CLAUDE.md's "Adding a New Database" checklist.
+
+## Process-lifetime limitations
+
+`Assembly.LoadFrom`/`Assembly.Load` (the two loading mechanisms `DbProviderLoader` uses) load into
+the process's **default `AssemblyLoadContext`** — not a custom, collectible one. Consequences:
+
+- A loaded provider assembly (and its dependencies) **stays loaded for the lifetime of the
+  process**. There is no API to unload it, reload a different version, or hot-swap a provider DLL
+  without restarting the application.
+- Loading two different versions of the same provider assembly (or two providers that share a
+  transitively-referenced dependency at incompatible versions) can fail or silently resolve to
+  whichever version the runtime's default assembly-resolution rules pick first — the same
+  dependency-version-collision risk any plugin-style assembly loading has, not something
+  `DbProviderLoader` mitigates.
+- Registering providers via `AddDbProviderLoading` at startup (before the service provider is
+  built) is the supported pattern specifically because provider identity is expected to be fixed
+  for the process's lifetime. Rotating a tenant to a different `DatabaseProviders` section key at
+  runtime (see `TenantConnectionResolver`) only changes which *already-loaded* factory a tenant
+  resolves to — it does not load a new assembly on demand or unload the old one.

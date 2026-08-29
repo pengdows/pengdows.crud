@@ -9,8 +9,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.5329821,
-    "totalTimeSeconds": 2.9679373,
+    "testTimeSeconds": 0.4890189,
+    "totalTimeSeconds": 3.201821,
     "error": null,
     "checks": [
       {
@@ -175,8 +175,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.5001415,
-    "totalTimeSeconds": 2.8742913,
+    "testTimeSeconds": 0.4849779,
+    "totalTimeSeconds": 2.8774732,
     "error": null,
     "checks": [
       {
@@ -341,8 +341,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.5387864,
-    "totalTimeSeconds": 2.9142813,
+    "testTimeSeconds": 0.5333489,
+    "totalTimeSeconds": 2.9611106,
     "error": null,
     "checks": [
       {
@@ -507,8 +507,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 34,
-    "testTimeSeconds": 0.5617392,
-    "totalTimeSeconds": 44.4218619,
+    "testTimeSeconds": 0.5549218,
+    "totalTimeSeconds": 45.9481899,
     "error": null,
     "checks": [
       {
@@ -693,8 +693,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 34,
-    "testTimeSeconds": 0.4986694,
-    "totalTimeSeconds": 48.7028647,
+    "testTimeSeconds": 0.3754,
+    "totalTimeSeconds": 51.1081983,
     "error": null,
     "checks": [
       {
@@ -879,8 +879,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 1.001974,
-    "totalTimeSeconds": 1.1704087,
+    "testTimeSeconds": 0.932412,
+    "totalTimeSeconds": 1.0514106,
     "error": null,
     "checks": [
       {
@@ -1055,8 +1055,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 30,
-    "testTimeSeconds": 0.2973672,
-    "totalTimeSeconds": 1.5134951,
+    "testTimeSeconds": 0.2770677,
+    "totalTimeSeconds": 1.5001018,
     "error": null,
     "checks": [
       {
@@ -1221,8 +1221,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 30,
-    "testTimeSeconds": 0.2958092,
-    "totalTimeSeconds": 1.5391343,
+    "testTimeSeconds": 0.2409074,
+    "totalTimeSeconds": 1.4589017,
     "error": null,
     "checks": [
       {
@@ -1387,8 +1387,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 30,
-    "testTimeSeconds": 0.349466,
-    "totalTimeSeconds": 1.7139577,
+    "testTimeSeconds": 0.3442874,
+    "totalTimeSeconds": 1.6962829,
     "error": null,
     "checks": [
       {
@@ -1553,8 +1553,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0774543,
-    "totalTimeSeconds": 4.2013704,
+    "testTimeSeconds": 0.068152,
+    "totalTimeSeconds": 4.2017218,
     "error": null,
     "checks": [
       {
@@ -1729,8 +1729,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0676999,
-    "totalTimeSeconds": 7.2230902,
+    "testTimeSeconds": 0.0719552,
+    "totalTimeSeconds": 7.2017292,
     "error": null,
     "checks": [
       {
@@ -1905,8 +1905,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0695671,
-    "totalTimeSeconds": 6.2138268,
+    "testTimeSeconds": 0.0660425,
+    "totalTimeSeconds": 6.1940509,
     "error": null,
     "checks": [
       {
@@ -2081,8 +2081,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1441519,
-    "totalTimeSeconds": 4.3045359,
+    "testTimeSeconds": 0.1265801,
+    "totalTimeSeconds": 4.2879047,
     "error": null,
     "checks": [
       {
@@ -2257,8 +2257,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 30,
-    "testTimeSeconds": 0.0820699,
-    "totalTimeSeconds": 7.2141022,
+    "testTimeSeconds": 0.0739607,
+    "totalTimeSeconds": 7.2154126,
     "error": null,
     "checks": [
       {
@@ -2423,8 +2423,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 30,
-    "testTimeSeconds": 0.1195221,
-    "totalTimeSeconds": 7.2510881,
+    "testTimeSeconds": 0.114576,
+    "totalTimeSeconds": 7.2478396,
     "error": null,
     "checks": [
       {
@@ -2589,8 +2589,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 30,
-    "testTimeSeconds": 0.1360222,
-    "totalTimeSeconds": 6.3778347,
+    "testTimeSeconds": 0.1306835,
+    "totalTimeSeconds": 6.4362707,
     "error": null,
     "checks": [
       {
@@ -2755,8 +2755,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 31,
-    "testTimeSeconds": 0.5601014,
-    "totalTimeSeconds": 12.1686841,
+    "testTimeSeconds": 0.563776,
+    "totalTimeSeconds": 13.9268827,
     "error": null,
     "checks": [
       {
@@ -2926,8 +2926,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 31,
-    "testTimeSeconds": 0.6229038,
-    "totalTimeSeconds": 7.9788356,
+    "testTimeSeconds": 0.6405259,
+    "totalTimeSeconds": 8.9787377,
     "error": null,
     "checks": [
       {
@@ -3097,8 +3097,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 31,
-    "testTimeSeconds": 0.902794,
-    "totalTimeSeconds": 6.5803418,
+    "testTimeSeconds": 0.9819929,
+    "totalTimeSeconds": 8.6961824,
     "error": null,
     "checks": [
       {
@@ -3268,8 +3268,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 31,
-    "testTimeSeconds": 0.0942914,
-    "totalTimeSeconds": 1.282092,
+    "testTimeSeconds": 0.0877156,
+    "totalTimeSeconds": 1.2321837,
     "error": null,
     "checks": [
       {
@@ -3439,8 +3439,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 31,
-    "testTimeSeconds": 0.1338416,
-    "totalTimeSeconds": 1.2872563,
+    "testTimeSeconds": 0.1240646,
+    "totalTimeSeconds": 2.2746306,
     "error": null,
     "checks": [
       {
@@ -3610,8 +3610,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0875348,
-    "totalTimeSeconds": 4.2606746,
+    "testTimeSeconds": 0.0783918,
+    "totalTimeSeconds": 4.2713269,
     "error": null,
     "checks": [
       {
@@ -3786,8 +3786,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.189666,
-    "totalTimeSeconds": 5.466463,
+    "testTimeSeconds": 0.1383397,
+    "totalTimeSeconds": 5.4274703,
     "error": null,
     "checks": [
       {
@@ -3962,8 +3962,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1895674,
-    "totalTimeSeconds": 5.7076346,
+    "testTimeSeconds": 0.1752615,
+    "totalTimeSeconds": 5.5455993,
     "error": null,
     "checks": [
       {
@@ -4138,8 +4138,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1890966,
-    "totalTimeSeconds": 15.5902666,
+    "testTimeSeconds": 0.1668802,
+    "totalTimeSeconds": 15.6754987,
     "error": null,
     "checks": [
       {
@@ -4314,8 +4314,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.0413883,
-    "totalTimeSeconds": 0.0612268,
+    "testTimeSeconds": 0.032703,
+    "totalTimeSeconds": 0.0496666,
     "error": null,
     "checks": [
       {
@@ -4480,8 +4480,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.2995467,
-    "totalTimeSeconds": 1.5138063,
+    "testTimeSeconds": 0.2634767,
+    "totalTimeSeconds": 1.4693015,
     "error": null,
     "checks": [
       {
@@ -4646,8 +4646,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 30,
-    "testTimeSeconds": 0.3164708,
-    "totalTimeSeconds": 2.6640986,
+    "testTimeSeconds": 0.3242305,
+    "totalTimeSeconds": 2.6778203,
     "error": null,
     "checks": [
       {
@@ -4812,8 +4812,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 30,
-    "testTimeSeconds": 1.3001435,
-    "totalTimeSeconds": 6.8088704,
+    "testTimeSeconds": 1.2297932,
+    "totalTimeSeconds": 7.7611215,
     "error": null,
     "checks": [
       {
@@ -4978,8 +4978,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 30,
-    "testTimeSeconds": 1.6600833,
-    "totalTimeSeconds": 8.4413997,
+    "testTimeSeconds": 1.5416483,
+    "totalTimeSeconds": 8.2620519,
     "error": null,
     "checks": [
       {

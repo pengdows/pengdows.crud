@@ -204,4 +204,81 @@ public sealed class PreventDatabaseUnloadTests
         Assert.Equal(0, context.Metrics.ReadRequests);
         Assert.Equal(0, context.Metrics.WriteRequests);
     }
+
+    [Fact]
+    public void BrokenSentinel_Repair_IsPermitNeutral()
+    {
+        // TEST-004: sentinel repair disposes the old (broken) sentinel connection and acquires a
+        // fresh infrastructure slot for the replacement. Neither existing test asserted that this
+        // dispose-old/acquire-new sequence is actually permit-neutral — that InUse returns to
+        // exactly where it started, and TotalAcquired increments by exactly one new acquisition,
+        // not zero (a leak elsewhere masking this one) or two (double-acquiring for one sentinel).
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=db;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, factory);
+        var before = context.GetPoolStatisticsSnapshot(PoolLabel.Reader);
+
+        var original = context.GetSentinelSnapshot()[0].Connection;
+        var underlying = (fakeDbConnection)((IInternalConnectionWrapper)original).UnderlyingConnection;
+        underlying.BreakConnection();
+
+        using (var work = context.GetConnection(ExecutionType.Read))
+        {
+            // Triggers EnsureSentinelHealthy() -> RepairSentinel() before this connection is handed out.
+        }
+
+        var after = context.GetPoolStatisticsSnapshot(PoolLabel.Reader);
+
+        Assert.NotSame(original, context.GetSentinelSnapshot()[0].Connection);
+        // Permit-neutral: InUse returns to exactly where it started once `work` is disposed —
+        // the broken sentinel's release and the replacement's acquire cancel out, and the
+        // ordinary work connection's own acquire/release also nets to zero.
+        Assert.Equal(before.InUse, after.InUse);
+        // Exactly 2 new acquisitions happened: one for the sentinel repair's replacement
+        // connection, one for the ordinary `work` connection this GetConnection call requested.
+        // Not 1 (would mean the repair leaked/never happened) and not 3+ (would mean a double-acquire).
+        Assert.Equal(before.TotalAcquired + 2, after.TotalAcquired);
+    }
+
+    [Fact]
+    public void RepeatedWorkAndSentinelRepair_DoesNotRecreateTheUnderlyingProviderDataSource()
+    {
+        // TEST-004: "provider-pool lifetime is unsurprising" — the underlying provider-level
+        // DbDataSource (the real connection-pool object, distinct from pengdows' own PoolGovernor
+        // admission accounting) must be created once at construction and reused for the
+        // context's whole lifetime, including across ordinary connection churn and a sentinel
+        // repair cycle — never silently recreated.
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer) { SupportsNativeDataSource = true };
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=db;Database=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var context = new DatabaseContext(config, factory);
+        var dataSourceCountAfterConstruction = factory.CreatedDataSources.Count;
+        Assert.True(dataSourceCountAfterConstruction > 0, "Construction should have created a native DbDataSource.");
+
+        for (var i = 0; i < 5; i++)
+        {
+            using var work = context.GetConnection(ExecutionType.Read);
+        }
+
+        var original = context.GetSentinelSnapshot()[0].Connection;
+        var underlying = (fakeDbConnection)((IInternalConnectionWrapper)original).UnderlyingConnection;
+        underlying.BreakConnection();
+
+        using (var repairTrigger = context.GetConnection(ExecutionType.Read))
+        {
+        }
+
+        Assert.Equal(dataSourceCountAfterConstruction, factory.CreatedDataSources.Count);
+    }
 }

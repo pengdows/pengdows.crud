@@ -13,8 +13,8 @@
 //   * Caches execution plans per (Type, schema shape, options) tuple
 //   * Caches compiled setters per (Type, PropertyInfo) tuple
 //   * Bounded LRU caches prevent unbounded memory growth
-//   * BuildSchemaHash returns a long computed via pure arithmetic — zero string
-//     or AssemblyQualifiedName allocations on the hot path
+//   * BuildSchemaShape builds a structurally-equatable RecordsetShape (shared with
+//     BaseTableGateway's own reader-plan cache) instead of a bare hash — see CORE-013
 //   * LoadInternalAsync uses a direct while(ReadAsync) loop with the plan
 //     hoisted outside; per-row mapping is a simple delegate call (MapSingleRow)
 // - Column matching:
@@ -138,7 +138,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
     private readonly record struct PlanCacheKey(
         Type Type,
-        long SchemaHash,
+        RecordsetShape Shape,
         bool ColumnsOnly,
         EnumParseFailureMode EnumMode);
 
@@ -242,8 +242,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var recordReader = GetRecordReader(reader);
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(recordReader, options);
-        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var shape = BuildSchemaShape(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
         var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
 
         var result = new List<T>();
@@ -275,8 +275,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(rdr, options);
-        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var shape = BuildSchemaShape(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
         var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
         var result = new List<T>();
@@ -298,8 +298,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var recordReader = GetRecordReader(reader);
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(recordReader, options);
-        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var shape = BuildSchemaShape(recordReader, options);
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
         var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -332,8 +332,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var schemaHash = BuildSchemaHash(rdr, options);
-        var planKey = new PlanCacheKey(typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode);
+        var shape = BuildSchemaShape(rdr, options);
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
 
         var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
 
@@ -444,16 +444,20 @@ internal sealed class DataReaderMapper : IDataReaderMapper
     }
 
     /// <summary>
-    /// Computes a long hash over the reader schema and mapping options.
-    /// Pure arithmetic — no string allocations (AssemblyQualifiedName is gone).
+    /// Builds the structural shape (post-NamePolicy names + resolved types) of the reader's
+    /// schema for use as a plan-cache key. CORE-013: this used to be a bare 64-bit rolling hash
+    /// (BuildSchemaHash), which risked a theoretical hash collision silently reusing the wrong
+    /// compiled plan for a different schema. RecordsetShape (shared with BaseTableGateway's own
+    /// reader-plan cache) gives ConcurrentDictionary's own Equals-confirmed collision handling
+    /// instead of trusting a bare hash value as if it were unique.
     /// </summary>
-    private static long BuildSchemaHash(DbDataReader reader, IMapperOptions options)
+    private static RecordsetShape BuildSchemaShape(DbDataReader reader, IMapperOptions options)
     {
-        var hash = reader.FieldCount * 397L;
-        hash = unchecked(hash * 31L + (options.ColumnsOnly ? 1 : 0));
-        hash = unchecked(hash * 31L + (int)options.EnumMode);
+        var fieldCount = reader.FieldCount;
+        var names = new string[fieldCount];
+        var types = new Type[fieldCount];
 
-        for (var i = 0; i < reader.FieldCount; i++)
+        for (var i = 0; i < fieldCount; i++)
         {
             var name = reader.GetName(i);
 
@@ -462,13 +466,11 @@ internal sealed class DataReaderMapper : IDataReaderMapper
                 name = options.NamePolicy(name);
             }
 
-            hash = unchecked(hash * 31L + StringComparer.OrdinalIgnoreCase.GetHashCode(name));
-
-            var fieldType = ResolveFieldType(reader, i);
-            hash = unchecked(hash * 31L + fieldType.GetHashCode());
+            names[i] = name;
+            types[i] = ResolveFieldType(reader, i);
         }
 
-        return hash;
+        return new RecordsetShape(names, types, fieldCount);
     }
 
     private static Action<T, DbDataReader> GetOrCreateSetter<T>(

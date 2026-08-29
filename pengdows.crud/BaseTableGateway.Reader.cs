@@ -42,77 +42,12 @@ public abstract partial class BaseTableGateway<TEntity>
     // no verification that a hash hit actually came from the same schema. Two different
     // projections/shapes for the same entity that happened to hash-collide would silently reuse
     // the wrong compiled mapper — a positional mismatch that can throw an InvalidCastException or,
-    // worse, silently assign the wrong value to the wrong property. Keying by this
-    // structurally-equatable shape instead lets ConcurrentDictionary's own correct collision
-    // handling (hash to find the bucket, Equals to confirm the entry) do what it already
-    // guarantees, rather than trusting a bare hash value as if it were unique.
-    private readonly struct RecordsetShape : IEquatable<RecordsetShape>
-    {
-        private readonly string[] _names;
-        private readonly Type[] _types;
-        private readonly int _fieldCount;
-
-        // Lookup-only constructor: wraps caller-owned (possibly pooled/oversized/rented) arrays.
-        // Never persisted as a dictionary key — see Persist().
-        public RecordsetShape(string[] names, Type[] types, int fieldCount)
-        {
-            _names = names;
-            _types = types;
-            _fieldCount = fieldCount;
-        }
-
-        /// <summary>
-        /// Returns a copy safe to store as a cache key — the rented arrays backing a lookup-only
-        /// instance get returned to the pool (and their contents cleared/reused) as soon as
-        /// GetOrBuildRecordsetPlan's finally block runs.
-        /// </summary>
-        public RecordsetShape Persist()
-        {
-            var names = new string[_fieldCount];
-            var types = new Type[_fieldCount];
-            Array.Copy(_names, names, _fieldCount);
-            Array.Copy(_types, types, _fieldCount);
-            return new RecordsetShape(names, types, _fieldCount);
-        }
-
-        public bool Equals(RecordsetShape other)
-        {
-            if (_fieldCount != other._fieldCount)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < _fieldCount; i++)
-            {
-                if (_types[i] != other._types[i])
-                {
-                    return false;
-                }
-
-                if (!string.Equals(_names[i], other._names[i], StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public override bool Equals(object? obj) => obj is RecordsetShape other && Equals(other);
-
-        public override int GetHashCode()
-        {
-            var hashBuilder = new HashCode();
-            hashBuilder.Add(_fieldCount);
-            for (var i = 0; i < _fieldCount; i++)
-            {
-                hashBuilder.Add(_names[i], StringComparer.OrdinalIgnoreCase);
-                hashBuilder.Add(_types[i]);
-            }
-
-            return hashBuilder.ToHashCode();
-        }
-    }
+    // worse, silently assign the wrong value to the wrong property. Keying by RecordsetShape (a
+    // structurally-equatable shape, extracted to pengdows.crud/internal/RecordsetShape.cs so
+    // DataReaderMapper's own plan cache can share the same guarantee) instead lets
+    // ConcurrentDictionary's own correct collision handling (hash to find the bucket, Equals to
+    // confirm the entry) do what it already guarantees, rather than trusting a bare hash value as
+    // if it were unique.
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEntity MapReaderToObject(ITrackedReader reader)

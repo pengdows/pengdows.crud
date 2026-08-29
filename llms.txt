@@ -158,8 +158,11 @@ database-agnostic policy decoupled from connection identity — is in
 No LINQ-to-SQL translation, no change tracking, no implicit unit of work, no query
 filtering for multitenancy (it uses context-per-tenant instead — a distinct `IDatabaseContext`
 per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionScope` support
-(incompatible with its open-late/close-early connection philosophy by design). Per-tenant
-`DbProviderFactory` resolution for that context-per-tenant model is config-driven via
+(incompatible with its open-late/close-early connection philosophy by design). The context-per-tenant
+model itself — configuration shape, DI registration via `AddMultiTenancy`, request-time
+resolution, rotation, and lifecycle events — is documented in
+[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md). Per-tenant
+`DbProviderFactory` resolution for that model is config-driven via
 `DbProviderLoader` — see
 [`docs/connection/dynamic-provider-loading.md`](docs/connection/dynamic-provider-loading.md)
 for the resolution order, the `Instance` property-vs-field convention it supports, symlink-safe

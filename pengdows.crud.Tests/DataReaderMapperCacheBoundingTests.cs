@@ -107,6 +107,95 @@ public class DataReaderMapperCacheBoundingTests
         Assert.Same(firstPlan, secondPlan);
     }
 
+    /// <summary>
+    /// CORE-013 (DataReaderMapper remainder): before the fix, PlanCacheKey keyed the cache by a
+    /// bare 64-bit rolling hash (BuildSchemaHash) with no structural verification. Two distinct
+    /// schemas that happened to hash-collide would resolve to the SAME cache entry — the second
+    /// shape's rows would be mapped using the first shape's compiled plan. This test finds a real,
+    /// reproducible-within-this-run collision under RecordsetShape's actual GetHashCode()
+    /// algorithm (now shared with BaseTableGateway's own reader-plan cache) and proves both
+    /// shapes still get their own, independently-cached, independently-correct plan.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_TwoDistinctShapesWithCollidingHash_CacheTwoSeparatePlansAndMapCorrectly()
+    {
+        ClearPlanCache();
+
+        var (extraNameA, extraNameB) = FindDistinctExtraColumnNamesWithCollidingHash();
+
+        var readerA = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Alice",
+                [extraNameA] = 111
+            }
+        });
+        var resultA = await DataReaderMapper.LoadAsync<CacheTestEntity>(readerA, MapperOptions.Default);
+        Assert.Equal("Alice", resultA[0].Name);
+
+        var readerB = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Bob",
+                [extraNameB] = 222
+            }
+        });
+        var resultB = await DataReaderMapper.LoadAsync<CacheTestEntity>(readerB, MapperOptions.Default);
+        Assert.Equal("Bob", resultB[0].Name);
+
+        Assert.Equal(2, GetPlanCacheCount());
+    }
+
+    /// <summary>
+    /// Reproduces RecordsetShape.GetHashCode()'s exact algorithm (fieldCount, then each field's
+    /// name via StringComparer.OrdinalIgnoreCase, then its type) to find two distinct two-column
+    /// shapes — "Name"(string)/extraName(int) — whose extra column name differs but whose overall
+    /// hash collides, for whatever seed System.HashCode is using in this process.
+    /// </summary>
+    private static (string ExtraNameA, string ExtraNameB) FindDistinctExtraColumnNamesWithCollidingHash()
+    {
+        var seen = new Dictionary<int, string>();
+        for (var i = 0; i < 2_000_000; i++)
+        {
+            var extraName = "Extra" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var hash = ComputeShapeHash(extraName);
+
+            if (seen.TryGetValue(hash, out var existingExtraName))
+            {
+                if (!string.Equals(existingExtraName, extraName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (existingExtraName, extraName);
+                }
+
+                continue;
+            }
+
+            seen[hash] = extraName;
+        }
+
+        throw new InvalidOperationException(
+            "Could not find a hash collision within the search budget — this would need a larger " +
+            "budget or a different search strategy, not a change to the production fix.");
+    }
+
+    private static int ComputeShapeHash(string extraColumnName)
+    {
+        var names = new[] { "Name", extraColumnName };
+        var types = new[] { typeof(string), typeof(int) };
+
+        var hashBuilder = new HashCode();
+        hashBuilder.Add(names.Length);
+        for (var i = 0; i < names.Length; i++)
+        {
+            hashBuilder.Add(names[i], StringComparer.OrdinalIgnoreCase);
+            hashBuilder.Add(types[i]);
+        }
+
+        return hashBuilder.ToHashCode();
+    }
+
     [Fact]
     public void PlanCache_HasClearMethod()
     {
@@ -162,12 +251,12 @@ public class DataReaderMapperCacheBoundingTests
 
     private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
     {
-        var schemaHashMethod = typeof(DataReaderMapper).GetMethod(
-                                   "BuildSchemaHash",
-                                   BindingFlags.NonPublic | BindingFlags.Static)
-                               ?? throw new InvalidOperationException("BuildSchemaHash not found");
+        var schemaShapeMethod = typeof(DataReaderMapper).GetMethod(
+                                     "BuildSchemaShape",
+                                     BindingFlags.NonPublic | BindingFlags.Static)
+                                 ?? throw new InvalidOperationException("BuildSchemaShape not found");
 
-        var schemaHash = (long)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
+        var shape = schemaShapeMethod.Invoke(null, new object[] { templateReader, options })!;
 
         var planKeyType = typeof(DataReaderMapper)
                               .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
@@ -175,7 +264,7 @@ public class DataReaderMapperCacheBoundingTests
 
         return Activator.CreateInstance(
             planKeyType,
-            new object[] { typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode })!;
+            new object[] { typeof(T), shape, options.ColumnsOnly, options.EnumMode })!;
     }
 
     private static object? GetPlanEntry(object planCacheKey)

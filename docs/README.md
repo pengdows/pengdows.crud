@@ -32,7 +32,8 @@ specific subsystems.
 |---|---|
 | [`connection/connection-modes.md`](./connection/connection-modes.md) | Authoritative `DbMode` invariants, coercion rules, and practical guidance |
 | [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior |
-| [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment |
+| [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment, recognized-vs-unknown-engine fallback, process-lifetime limitations |
+| [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, registration/invalidation rotation flow, lifecycle events, application-name composition |
 
 ## Positioning
 
