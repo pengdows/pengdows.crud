@@ -1874,8 +1874,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return Task.CompletedTask;
     }
 
+    // TEST-001 discovery: PoolSaturatedException and ModeContentionException are deliberately
+    // NOT part of the DatabaseException hierarchy (see CLAUDE.md's exception-hierarchy docs —
+    // "a catch (DatabaseException) will not catch it") and must propagate to the caller as
+    // themselves. Both extend TimeoutException directly, so without this exclusion the
+    // ex is not DatabaseException && IsTimeout(ex) catch clause below treats them as a raw
+    // provider timeout and silently translates them into CommandTimeoutException whenever they
+    // originate from inside an actual command execution (as opposed to, e.g., BeginTransaction,
+    // which never reaches this code path) — destroying the documented type-identity contract.
     private static bool IsTimeout(Exception exception)
     {
+        if (exception is PoolSaturatedException || exception is ModeContentionException)
+        {
+            return false;
+        }
+
         return exception is TimeoutException ||
                exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
                (exception is DbException &&

@@ -25,6 +25,26 @@ not something known at compile time.
 }
 ```
 
+The standard entry point is the `IServiceCollection` extension method — call it once at startup,
+typically alongside `AddMultiTenancy` if you're using both:
+
+```csharp
+services.AddDbProviderLoading(configuration);
+```
+
+This constructs a `DbProviderLoader` internally and calls `LoadAndRegisterProviders(services)`,
+so all provider factories are loaded and registered as part of DI composition, before the service
+provider is built. Pass an `ILogger<DbProviderLoader>` explicitly if you need provider-loading
+diagnostics — one can't be resolved automatically at this point since the container isn't built
+yet:
+
+```csharp
+services.AddDbProviderLoading(configuration, myPreBuiltLogger);
+```
+
+Using `DbProviderLoader` directly (what `AddDbProviderLoading` does under the hood) is only
+necessary outside a plain `IServiceCollection` composition flow:
+
 ```csharp
 var loader = new DbProviderLoader(configuration, logger);
 loader.LoadAndRegisterProviders(services);

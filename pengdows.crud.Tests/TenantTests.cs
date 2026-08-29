@@ -107,6 +107,40 @@ public class TenantTests
         }
     }
 
+    // TEST-008: like BlockingContextFactory, but blocks on a caller-chosen call number (not
+    // always the first) and exposes the observed call count — needed to force a genuine race
+    // specifically on a RECREATION after an initial, uneventful creation, rather than on the
+    // very first call ever made to the factory.
+    private sealed class BlockingOnNthCallContextFactory : IDatabaseContextFactory
+    {
+        private readonly int _blockOnCall;
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public BlockingOnNthCallContextFactory(int blockOnCall, SemaphoreSlim creationStarted,
+            SemaphoreSlim proceedWithCreation)
+        {
+            _blockOnCall = blockOnCall;
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            if (Interlocked.Increment(ref _callCount) == _blockOnCall)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
     [Fact]
     public async Task TenantContextRegistry_ResolvesContextFromKeyedFactory()
     {
@@ -670,5 +704,92 @@ public class TenantTests
         Assert.True(context.IsDisposed,
             "The registry must dispose every context it created when the registry itself is disposed — " +
             "a context is not safe to keep using past registry disposal.");
+    }
+
+    // TEST-008: the full interleaving matrix. Existing tests already cover case-alias
+    // convergence and invalidate/dispose racing an in-flight FIRST creation. The remaining gap:
+    // deterministically forcing many concurrent callers to race a RECREATION after a tenant has
+    // already been invalidated once, and proving EXACT counts — not just "no corruption" — for
+    // construction attempts, ContextCreated/ContextRemoved events, and that no caller ever
+    // observes the disposed original or an orphaned duplicate.
+    [Fact]
+    public async Task GetContext_ConcurrentCallersAfterInvalidation_CreateExactlyOneReplacementContext()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+
+        // Block on the SECOND factory call (the recreation) — the first (the initial GetContext
+        // below) must complete immediately and uneventfully so the invalidate-then-race scenario
+        // starts from a clean, known state.
+        var factory = new BlockingOnNthCallContextFactory(blockOnCall: 2, creationStarted, proceedWithCreation);
+
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            factory,
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var eventLock = new object();
+        var createdEvents = new List<IDatabaseContext>();
+        var removedEvents = new List<IDatabaseContext>();
+        registry.ContextCreated += ctx =>
+        {
+            lock (eventLock)
+            {
+                createdEvents.Add(ctx);
+            }
+        };
+        registry.ContextRemoved += ctx =>
+        {
+            lock (eventLock)
+            {
+                removedEvents.Add(ctx);
+            }
+        };
+
+        var original = registry.GetContext("tenant-recreate");
+        Assert.Single(createdEvents);
+        Assert.Equal(1, factory.CallCount);
+
+        registry.Invalidate("tenant-recreate");
+        Assert.Single(removedEvents);
+        Assert.True(original.IsDisposed);
+
+        const int callerCount = 8;
+        var getContextTasks = Enumerable.Range(0, callerCount)
+            .Select(_ => Task.Run(() => registry.GetContext("tenant-recreate")))
+            .ToArray();
+
+        // Wait until the single blocked factory call has genuinely started before releasing it,
+        // proving the race is real rather than accidentally serialized.
+        await creationStarted.WaitAsync();
+        proceedWithCreation.Release();
+
+        var results = await Task.WhenAll(getContextTasks);
+
+        // Exactly one physical construction happened for the recreation (call count went from
+        // 1 to 2, not to 1 + callerCount); every concurrent caller converges on that SAME new
+        // instance; it is not the disposed original; and exactly one more ContextCreated event
+        // fired for it — no orphaned duplicates, no phantom events.
+        Assert.Equal(2, factory.CallCount);
+        Assert.All(results, ctx => Assert.Same(results[0], ctx));
+        Assert.NotSame(original, results[0]);
+        Assert.False(results[0].IsDisposed);
+        Assert.Equal(2, createdEvents.Count);
+        Assert.Same(results[0], createdEvents[1]);
+        Assert.Single(removedEvents);
     }
 }

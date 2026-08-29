@@ -93,7 +93,9 @@ services.AddSingleton<IDatabaseContext>(sp =>
 `DbProviderLoader` resolves `DbProviderFactory` instances from a `DatabaseProviders` config
 section (`AssemblyPath`/`AssemblyName` + `FactoryType`, or a `DbProviderFactories.GetFactory`
 fallback) instead of requiring compile-time references — this is what `ITenantContextRegistry`
-uses under the hood for context-per-tenant multi-tenancy.
+uses under the hood for context-per-tenant multi-tenancy. Register it via
+`services.AddDbProviderLoading(configuration)` — the standard DI entry point, typically called
+alongside `AddMultiTenancy`.
 
 **Gotcha:** factories are registered as a keyed DI singleton under the config section's own
 **key**, not under that section's `ProviderName` field. A tenant's
