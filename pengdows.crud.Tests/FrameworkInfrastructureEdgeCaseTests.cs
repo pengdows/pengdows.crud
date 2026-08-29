@@ -305,6 +305,75 @@ public class FrameworkInfrastructureEdgeCaseTests
         Assert.Same(FieldInstanceLoaderFactory.Instance, resolved);
     }
 
+    // TEST-011: partial multi-provider failure. LoadAndRegisterProviders has no try/catch inside
+    // its foreach — a failure loading any one provider throws immediately and aborts the whole
+    // call. This proves the concrete consequence of that for the CALLER's `services` collection:
+    // providers configured BEFORE the failing one are already registered by the time the
+    // exception propagates (services.AddKeyedSingleton already ran for them), while providers
+    // configured AFTER it never get a chance to load at all. A caller who assumes "if this
+    // throws, nothing got registered" would be wrong.
+    [Fact]
+    public void LoadAndRegisterProviders_OneProviderFails_RegistersProvidersBeforeItButNotAfter()
+    {
+        var assemblyName = typeof(LoaderFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:p1-before:ProviderName"] = "Coverage94.P1Provider",
+                ["DatabaseProviders:p1-before:FactoryType"] = typeof(LoaderFactory).FullName,
+                ["DatabaseProviders:p1-before:AssemblyName"] = assemblyName,
+
+                // No AssemblyPath/AssemblyName/FactoryType at all — falls through to
+                // DbProviderFactories.GetFactory(ProviderName), which throws for an invariant
+                // name nothing has ever registered.
+                ["DatabaseProviders:p2-fails:ProviderName"] = "Coverage94.NeverRegisteredProvider",
+
+                ["DatabaseProviders:p3-after:ProviderName"] = "Coverage94.P3Provider",
+                ["DatabaseProviders:p3-after:FactoryType"] = typeof(LoaderFactory).FullName,
+                ["DatabaseProviders:p3-after:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+        var services = new ServiceCollection();
+
+        Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(services));
+
+        using var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetKeyedService<DbProviderFactory>("p1-before"));
+        Assert.Null(provider.GetKeyedService<DbProviderFactory>("p3-after"));
+    }
+
+    // TEST-011: duplicate registration. Calling LoadAndRegisterProviders twice for the same
+    // section key — e.g. AddDbProviderLoading invoked twice during composition by accident, or
+    // two configuration sources both defining the same provider — must not throw or corrupt
+    // resolution. AddKeyedSingleton allows multiple registrations for one key; DI resolves the
+    // LAST one registered. This proves that behavior explicitly for this call site rather than
+    // leaving it as an unverified assumption about generic DI semantics.
+    [Fact]
+    public void LoadAndRegisterProviders_CalledTwiceForSameKey_DoesNotThrow_LastRegistrationWins()
+    {
+        var assemblyName = typeof(LoaderFactory).Assembly.GetName().Name!;
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:dup:ProviderName"] = "Coverage94.DupProvider",
+                ["DatabaseProviders:dup:FactoryType"] = typeof(LoaderFactory).FullName,
+                ["DatabaseProviders:dup:AssemblyName"] = assemblyName
+            })
+            .Build();
+
+        var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+        var services = new ServiceCollection();
+
+        loader.LoadAndRegisterProviders(services);
+        loader.LoadAndRegisterProviders(services);
+
+        using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredKeyedService<DbProviderFactory>("dup");
+        Assert.Same(LoaderFactory.Instance, resolved);
+    }
+
     private enum TestEnum
     {
         One = 1
