@@ -97,4 +97,42 @@ public class DatabaseContextGovernorDisposalTests
         Assert.NotNull(governor);
         return governor!;
     }
+
+    // TEST-016: races a brand-new acquisition attempt against an in-flight DisposeAsync that
+    // still has to drain-wait for an existing outstanding lease. DatabaseContext's disposal
+    // sequence calls governor.Close() (P0 batch, this file's PoolGovernorTests companion)
+    // synchronously before awaiting the drain, so a racing acquisition attempt started any time
+    // after DisposeAsync() has been invoked — even while the drain wait is still pending on the
+    // held lease — must be rejected outright rather than being handed a "post-close" lease.
+    [Fact]
+    public async Task DisposeAsync_RacingWithNewAcquisitionAttempt_RejectsIt_NoPostCloseLeaseGranted()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=race-drain-boundary;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            MaxConcurrentReads = 2,
+            PoolAcquireTimeout = TimeSpan.FromSeconds(5)
+        };
+
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Hold one lease so the drain has something to actually wait for.
+        var held = context.GetConnection(ExecutionType.Read);
+
+        var disposeTask = context.DisposeAsync().AsTask();
+        Assert.False(disposeTask.IsCompleted);
+
+        // Race: attempt a brand-new acquisition while disposal is in-flight but the held lease
+        // has not yet been released — governor.Close() must already have run by this point.
+        Assert.Throws<ObjectDisposedException>(() => context.GetConnection(ExecutionType.Read));
+
+        held.Dispose();
+        await disposeTask;
+
+        // The context must remain fully, terminally disposed afterward too — the racing attempt
+        // must not have left it in some half-closed state.
+        Assert.Throws<ObjectDisposedException>(() => context.GetConnection(ExecutionType.Read));
+    }
 }
