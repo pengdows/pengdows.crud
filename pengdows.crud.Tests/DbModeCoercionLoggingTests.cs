@@ -213,8 +213,13 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_StandardMode_CoercesToPreventDatabaseUnload_WithWarning()
+    public void FirebirdEmbedded_StandardMode_IsHonored_NoCoercion()
     {
+        // Embedded Firebird supports multiple simultaneous attachments — Standard is SAFE there,
+        // just less efficient than PreventDatabaseUnload (which avoids the engine fully
+        // unloading/reloading between ephemeral per-operation attachments). Only Best
+        // auto-selects PreventDatabaseUnload; an explicit Standard request is honored, matching
+        // the same "honor safe explicit choices" principle used for other client-server databases.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -224,8 +229,68 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void FirebirdClientServer_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
+    {
+        // Not embedded-specific: Firebird SuperServer's RDB$LINGER defaults to 0/NULL, so the
+        // engine closes a database and discards its cache immediately once the last attachment
+        // drops — an ordinary client-server deployment under Standard mode's "open late, close
+        // early" per-operation connections hits this exactly the way LocalDB's instance-shutdown
+        // problem does. Best protects against it the same way for both embedded and
+        // client-server Firebird.
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=localhost;Database=test;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.Best
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
         Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void FirebirdClientServer_StandardMode_IsHonored_NoCoercion()
+    {
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=localhost;Database=test;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.Standard
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void FirebirdEmbedded_PreventDatabaseUnloadMode_CanStillBeForced_NoCoercion()
+    {
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Database=C:/data/test.fdb;ServerType=Embedded;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.PreventDatabaseUnload
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]

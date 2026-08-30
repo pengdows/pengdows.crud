@@ -346,9 +346,12 @@ public class DatabaseContextConstructorTests
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
 
         // Assert
+        // Embedded Firebird (no DataSource, file-like Database value) honors an explicit
+        // SingleWriter request — only Best auto-selects PreventDatabaseUnload; every other
+        // explicit mode is genuinely safe for embedded Firebird and is not coerced.
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
-        Assert.Equal(DbMode.PreventDatabaseUnload, context.ConnectionMode);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadOnly, context.ReadWriteMode);
     }
 

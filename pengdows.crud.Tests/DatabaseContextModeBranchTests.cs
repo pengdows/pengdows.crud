@@ -16,31 +16,38 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var isolated = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false })!;
         Assert.Equal(DbMode.SingleConnection, isolated);
 
         var contextShared = CreateContext("Data Source=file:memdb1?mode=memory&cache=shared");
         var shared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false })!;
         Assert.Equal(DbMode.SingleWriter, shared);
 
         var duckShared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false })!;
         Assert.Equal(DbMode.SingleWriter, duckShared);
     }
 
     [Fact]
     public void CoerceMode_HandlesFirebirdAndLocalDb()
     {
+        // Firebird (embedded or ordinary client-server alike — CoerceMode no longer
+        // distinguishes) only auto-selects PreventDatabaseUnload on Best; an explicit Standard
+        // request is genuinely safe and honored, unlike LocalDB below.
         var context = CreateContext("ServerType=Embedded;Database=C:\\data\\test.fdb;");
         var coerce = GetInstanceMethod("CoerceMode");
 
-        var firebird = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false, true })!;
-        Assert.Equal(DbMode.PreventDatabaseUnload, firebird);
+        var firebirdBest = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.Firebird, false })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdBest);
+
+        var firebirdStandard = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
+        Assert.Equal(DbMode.Standard, firebirdStandard);
 
         var localDb = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
         Assert.Equal(DbMode.PreventDatabaseUnload, localDb);
     }
 
@@ -51,15 +58,15 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestPostgres = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false })!;
         Assert.Equal(DbMode.Standard, bestPostgres);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
 
         var unknownBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false })!;
         Assert.Equal(DbMode.Standard, unknownBest);
     }
 
@@ -86,11 +93,11 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestDb2 = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Db2, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Db2, false })!;
         Assert.Equal(DbMode.Standard, bestDb2);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
     }
 

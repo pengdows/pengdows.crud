@@ -53,7 +53,7 @@ The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connec
 
 The mode opens one sentinel through the normal connection and session-initialization path for every materially separate configured pool. **Sentinels never execute application commands, open transactions, or hand work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. Each sentinel consumes one permit from its corresponding governor, so effective working capacity is the configured capacity minus the retained sentinel(s).
 
-- Automatically selected for SQL Server LocalDB and Firebird embedded. It is also available explicitly for normal Firebird servers and other providers where the application intentionally wants to prevent database deactivation or auto-pause.
+- `Best` auto-selects it for SQL Server LocalDB and for Firebird — embedded **or** ordinary client-server, not an embedded-only quirk. Firebird's default SuperServer architecture has `RDB$LINGER=0`/`NULL`: the moment the last attachment to a database closes, the engine closes that database's file and discards its page cache immediately (terminology: Firebird doesn't unload the *server* — the process keeps running; only that one database's cache/attachment unloads). This is empirically verified against live containers, not just documented — see `testbed.TestProvider.TestIdleUnloadProbe` (sets `ALTER DATABASE SET LINGER TO 1`, drains the pool, measures a real cold-vs-warm latency gap; ~5-10x across Firebird 3.0/4.0/5.0 in CI). Unlike LocalDB, an explicit `Standard` (or any other) request against Firebird is genuinely safe and honored — only `Best` is coerced. It is also available explicitly for other providers where the application intentionally wants to prevent database deactivation or auto-pause — but extending this list requires the same empirical bar (a live-container probe proving a real reconnect cost), not just a documented or claimed lifecycle behavior; a Db2 addition was proposed and reverted in the same session specifically for lacking that verification.
 - Separate read and write connection strings receive separate sentinels. A reported Closed/Broken sentinel is replaced lazily, through the normal connection path, after confirming that the context is still active.
 
 ### SingleConnection
@@ -83,11 +83,11 @@ The mode opens one sentinel through the normal connection and session-initializa
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers → Standard
+  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, ordinary SQL Server) → Standard
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
-  - Firebird embedded → PreventDatabaseUnload
+  - Firebird (embedded **or** client-server) → PreventDatabaseUnload
   - Unknown product → Standard
 
 ## 2. Provider-Driven Coercion
@@ -95,7 +95,10 @@ The mode opens one sentinel through the normal connection and session-initializa
 ### Always forced (cannot override):
 
 - SQLite/DuckDB `:memory:` → SingleConnection
-- Firebird embedded (`.fdb` file, no `Server=`) → PreventDatabaseUnload
+
+### Coerced only on `Best` (every explicit choice is honored — genuinely safe, not merely tolerated):
+
+- Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; `Standard`/`SingleWriter`/`SingleConnection`/`PreventDatabaseUnload` requested explicitly are all honored as-is, no warning logged.
 
 ### Allowed for SQLite/DuckDB file-based:
 
@@ -103,9 +106,9 @@ The mode opens one sentinel through the normal connection and session-initializa
 - SingleConnection (allowed alternative)
 - Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log
 
-### LocalDb: coerced to PreventDatabaseUnload.
+### LocalDb: coerced to PreventDatabaseUnload (unconditionally — every request, not just `Best`; unlike Firebird, LocalDB genuinely requires it).
 
-### Full servers: always Standard.
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, ordinary SQL Server, Db2): always Standard on `Best`; Firebird is no longer grouped here — see above.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -181,8 +184,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - Explicit Standard on embedded → coerced (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - Firebird embedded → PreventDatabaseUnload
   - SQLite/DuckDB file-based → SingleWriter
+- Explicit Standard on Firebird (embedded or client-server) → honored as Standard, no coercion; only `Best` selects PreventDatabaseUnload.
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits

@@ -20,10 +20,15 @@ public class EmbeddedModeEnforcementTests
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
+    // Embedded Firebird: only Best is auto-selected to PreventDatabaseUnload (protects against
+    // RDB$LINGER=0's default immediate cache discard on last-attachment-close). Every other
+    // explicit choice is genuinely SAFE for embedded Firebird (it supports multiple simultaneous
+    // attachments) and is honored, not coerced — see DbModeCoercionLoggingTests for the
+    // "honored, no warning" cases.
     [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Best, DbMode.PreventDatabaseUnload)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Standard, DbMode.PreventDatabaseUnload)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleWriter, DbMode.PreventDatabaseUnload)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleConnection, DbMode.PreventDatabaseUnload)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Standard, DbMode.Standard)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleWriter, DbMode.SingleWriter)]
+    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleConnection, DbMode.SingleConnection)]
     public void EmbeddedProviders_ForceConnectionMode(
         SupportedDatabase product,
         string dataSource,

@@ -804,9 +804,9 @@ public partial class DatabaseContext
     // connect/detect calls, which genuinely differ (Open vs OpenAsync, Detect vs DetectAsync)
     // and are kept separate rather than hidden behind a delegate-branching abstraction.
     private DbMode CoerceModeAndValidateInMemoryUsage(DbMode requestedMode, SupportedDatabase product,
-        bool isLocalDb, bool isFirebirdEmbedded)
+        bool isLocalDb)
     {
-        var coercedMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+        var coercedMode = CoerceMode(requestedMode, product, isLocalDb);
         var inMemoryKind = DetectInMemoryKind(product, _connectionString);
 
         if (coercedMode == DbMode.SingleConnection
@@ -878,7 +878,6 @@ public partial class DatabaseContext
             var product = DatabaseDetectionService.DetectProduct(initConn, _factory);
             var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
             var isLocalDb = topology.IsLocalDb;
-            var isFirebirdEmbedded = topology.IsEmbedded;
 
             // Best-effort, provider-specific session-capability prefetch (currently only
             // meaningful for SQL Server's RCSI/snapshot isolation database options) — delegated
@@ -904,7 +903,7 @@ public partial class DatabaseContext
 
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb);
 
             // Pooling defaults will be applied after dialect detection
 
@@ -973,7 +972,6 @@ public partial class DatabaseContext
                 .ConfigureAwait(false);
             var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
             var isLocalDb = topology.IsLocalDb;
-            var isFirebirdEmbedded = topology.IsEmbedded;
 
             if (initConn != null)
             {
@@ -994,7 +992,7 @@ public partial class DatabaseContext
             }
 
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb);
 
             initConn = TakeOwnershipOfInitConnectionForMode(initConn, initExecutionType);
 
@@ -2333,7 +2331,7 @@ public partial class DatabaseContext
         return connectionString;
     }
 
-    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb, bool isFirebirdEmbedded)
+    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb)
     {
         // Key principle:
         // 1. COERCE when requested mode is UNSAFE for the provider
@@ -2381,17 +2379,34 @@ public partial class DatabaseContext
                     return requested;
                 }
 
-            case SupportedDatabase.Firebird when isFirebirdEmbedded:
+            case SupportedDatabase.Firebird:
                 {
-                    // Embedded Firebird supports multiple simultaneous attachments. Keep one
-                    // passive attachment alive without forcing all application work through it.
-                    if (requested != DbMode.PreventDatabaseUnload)
+                    // Applies to embedded AND ordinary client-server Firebird alike — this is not
+                    // an embedded-only quirk. Under Firebird's default SuperServer architecture,
+                    // RDB$LINGER defaults to 0 (NULL): the moment the last attachment to a
+                    // database closes, the engine closes that database's file and discards its
+                    // page cache immediately (the server PROCESS keeps running — only that one
+                    // database's cache unloads) — confirmed live against a real Firebird 5.0.2
+                    // container. pengdows.crud's Standard mode opens late/closes early per
+                    // operation, so a quiet period naturally drains the pool to zero connections,
+                    // and the next request pays a real (if cheaper-than-LocalDB) cache-rebuild
+                    // cost on reattach. (Linger applies only to SuperServer, not Classic/
+                    // SuperClassic, but the client side can't reliably tell which server
+                    // architecture it's talking to, so the protective default applies uniformly.)
+                    // Standard (and every other mode) remains genuinely SAFE here — nothing
+                    // breaks, unlike SQLite/DuckDB's lock contention or LocalDB's hard
+                    // requirement — so Best selects the more efficient PreventDatabaseUnload, but
+                    // an explicit choice is always honored. An application that would rather
+                    // manage this at the database level directly can do so instead via
+                    // `ALTER DATABASE SET LINGER TO n`, independent of pengdows.crud's own mode.
+                    if (requested == DbMode.Best)
                     {
                         LogModeOverride(requested, DbMode.PreventDatabaseUnload,
-                            "Firebird embedded supports multiple attachments; using PreventDatabaseUnload");
+                            "Firebird: Best selects PreventDatabaseUnload — default RDB$LINGER=0 discards the database's cache immediately after the last attachment closes");
+                        return DbMode.PreventDatabaseUnload;
                     }
 
-                    return DbMode.PreventDatabaseUnload;
+                    return requested;
                 }
 
             case SupportedDatabase.SqlServer when isLocalDb:
@@ -2411,7 +2426,6 @@ public partial class DatabaseContext
                 or SupportedDatabase.MySql
                 or SupportedDatabase.MariaDb
                 or SupportedDatabase.Oracle
-                or SupportedDatabase.Firebird
                 or SupportedDatabase.SqlServer
                 or SupportedDatabase.Db2:
                 {

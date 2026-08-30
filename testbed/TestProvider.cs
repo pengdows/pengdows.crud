@@ -188,6 +188,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Batch update: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running DbMode idle-unload probe");
+            SnowflakeStep("DbMode idle-unload probe: start");
+            await TestIdleUnloadProbe();
+            Console.WriteLine($"  DbMode idle-unload probe: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"DbMode idle-unload probe: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running reader disposal compatibility");
             SnowflakeStep("Reader disposal compatibility: start");
             await TestReaderDisposalCompatibility();
@@ -1916,6 +1923,88 @@ INSERT INTO {table} (
             await CleanupTestRow(id1);
             await CleanupTestRow(id2);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // § 10  DbMode.Best empirical capability probes
+    // -------------------------------------------------------------------------
+    //
+    // Rather than trusting documentation/general-knowledge claims about a database's idle-unload
+    // lifecycle (a real Firebird SuperServer default RDB$LINGER=0 behavior confirmed live; a
+    // since-reverted, never-actually-verified Db2 claim taken uncritically from a chat message),
+    // this probe empirically measures whether a real cold-reconnect cost exists, for any database
+    // that exposes a FAST, settable knob to force its normal (often minutes-long, CI-impractical)
+    // idle-unload timeout down to a few seconds. Databases without such a knob report an honest
+    // "not empirically tested" skip rather than guessing — see TryEnableFastIdleUnloadAsync.
+
+    /// <summary>
+    /// Override to set a short, deterministic idle-unload timeout for this database if it exposes
+    /// one natively (e.g. Firebird's <c>ALTER DATABASE SET LINGER TO n</c>). Return false (the
+    /// default) when no such fast knob exists — <see cref="TestIdleUnloadProbe"/> then reports
+    /// "not empirically tested" instead of guessing or waiting out an unknown, likely
+    /// CI-impractical default timeout.
+    /// </summary>
+    protected virtual Task<bool> TryEnableFastIdleUnloadAsync() => Task.FromResult(false);
+
+    /// <summary>
+    /// Override to force the ADO.NET provider's connection pool to release its physical
+    /// connections for this exact connection string (e.g. <c>FbConnection.ClearAllPools()</c>),
+    /// so the probe's post-drain query measures a genuine cold reconnect rather than a warm
+    /// pooled one that never actually left the process.
+    /// </summary>
+    protected virtual void ClearProviderPoolForIdleUnloadProbe()
+    {
+    }
+
+    protected virtual async Task TestIdleUnloadProbe()
+    {
+        var knobEnabled = await TryEnableFastIdleUnloadAsync();
+        if (!knobEnabled)
+        {
+            CheckSkip("DbMode.IdleUnloadProbe",
+                $"No known fast idle-unload knob for {_context.Product} — not empirically tested, DbMode.Best policy unchanged");
+            return;
+        }
+
+        // Drain the pool and wait past the fast timeout just configured, then compare the first
+        // (cold, forced-reconnect) round trip against the immediately-following (warm, pooled)
+        // one. Apples-to-apples: same query shape, same connection string, only the pool state
+        // differs between the two measurements.
+        ClearProviderPoolForIdleUnloadProbe();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        // A trivial "SELECT 1" with no FROM clause isn't universally portable (Firebird and
+        // Oracle both reject it) — count against the already-created test_table instead, which
+        // every dialect supports identically.
+        var probeSql = $"SELECT COUNT(*) FROM {_helper.WrappedTableName}";
+
+        var coldSw = Stopwatch.StartNew();
+        await using (var coldContainer = _context.CreateSqlContainer(probeSql))
+        {
+            await coldContainer.ExecuteScalarOrNullAsync<int>();
+        }
+        coldSw.Stop();
+
+        var warmSw = Stopwatch.StartNew();
+        await using (var warmContainer = _context.CreateSqlContainer(probeSql))
+        {
+            await warmContainer.ExecuteScalarOrNullAsync<int>();
+        }
+        warmSw.Stop();
+
+        var coldMs = coldSw.Elapsed.TotalMilliseconds;
+        var warmMs = Math.Max(warmSw.Elapsed.TotalMilliseconds, 0.01);
+        var ratio = coldMs / warmMs;
+
+        // Generous threshold — this only needs to distinguish "genuinely paid a reconnect/
+        // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
+        var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
+
+        CheckOk("DbMode.IdleUnloadProbe",
+            $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
+            (unloadDetected
+                ? "unload/reactivation cost DETECTED (DbMode.Best should prefer PreventDatabaseUnload)"
+                : "no unload cost detected despite the fast knob (DbMode.Best=Standard is fine)"));
     }
 
     protected virtual async Task TestReaderDisposalCompatibility()

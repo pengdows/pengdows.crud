@@ -197,7 +197,17 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(product);
         var config = new DatabaseContextConfiguration
         {
+            // ReadWriteMode is deliberately an invalid raw 0 (neither ReadOnly nor ReadWrite) —
+            // there is no real public way to disable reads alone (setting WriteOnly is silently
+            // promoted to ReadWrite; "write connection implies read connection"), so this
+            // synthetic value is the only way to exercise AssertIsReadConnection's throw path.
+            // DbMode is pinned to Standard because that's orthogonal to what this test checks —
+            // some dialects (e.g. Firebird) default DbMode.Best to PreventDatabaseUnload, whose
+            // sentinel-attachment logic would otherwise try to acquire a slot for this
+            // synthetically-disabled pool and throw PoolForbiddenException during construction,
+            // before the test ever reaches the actual assertion it's meant to exercise.
             ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            DbMode = DbMode.Standard,
             ReadWriteMode = 0
         };
         var context = new DatabaseContext(config, factory);

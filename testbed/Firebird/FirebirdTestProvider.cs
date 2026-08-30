@@ -1,5 +1,6 @@
 #region
 
+using FirebirdSql.Data.FirebirdClient;
 using pengdows.crud;
 
 #endregion
@@ -68,5 +69,28 @@ CREATE TABLE {0} (
 
         await sqlContainer.ExecuteNonQueryAsync();
         Console.WriteLine("Table created successfully");
+    }
+
+    /// <summary>
+    /// Firebird SuperServer exposes a native, per-database, instantly-effective idle-unload knob:
+    /// RDB$LINGER (default 0/NULL — closes and discards the database's cache immediately after
+    /// the last attachment closes). Set to a short, deterministic value so the probe doesn't need
+    /// to guess or wait out an unknown default.
+    /// </summary>
+    protected override async Task<bool> TryEnableFastIdleUnloadAsync()
+    {
+        await using var sc = context.CreateSqlContainer("ALTER DATABASE SET LINGER TO 1");
+        await sc.ExecuteNonQueryAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Forces the actual physical connections out of the ADO.NET pool so the probe's post-drain
+    /// query is a genuine cold reconnect, not a warm one served from a still-open pooled
+    /// connection that never actually left the process.
+    /// </summary>
+    protected override void ClearProviderPoolForIdleUnloadProbe()
+    {
+        FbConnection.ClearAllPools();
     }
 }
