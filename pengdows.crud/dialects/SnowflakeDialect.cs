@@ -145,8 +145,14 @@ internal class SnowflakeDialect : SqlDialect
                 query.Append(", ");
             }
 
+            // RHS must be qualified — Snowflake's UPDATE target has no "t" alias, so the wrapped
+            // table name is used instead (same convention as the WHERE clause below). The FROM
+            // clause's "s" source alias also projects a same-named version column (needed for
+            // that WHERE predicate), so an unqualified "version" reference here is ambiguous.
             query.Append(versionColumnName);
             query.Append(" = ");
+            query.Append(tableName);
+            query.Append('.');
             query.Append(versionColumnName);
             query.Append(" + 1");
         }

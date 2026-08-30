@@ -320,6 +320,33 @@ public class DialectBatchSqlTests
     }
 
     [Fact]
+    public void OracleDialect_BuildBatchUpdateSql_VersionColumn_MovesPredicateToTrailingWhereAndQualifiesIncrement()
+    {
+        // Oracle forbids updating (via SET) a column that's also referenced in the MERGE's ON
+        // clause (ORA-38104), and Oracle's MERGE grammar has no SQL-Server-style
+        // "WHEN MATCHED AND <cond> THEN" (ORA-02000 "missing THEN keyword" — THEN must follow
+        // WHEN MATCHED immediately). So the version equality check goes in the WHERE clause Oracle
+        // allows after UPDATE SET instead: a matched row failing that WHERE is left untouched.
+        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 1, query, GetStandardValues(),
+            "\"version\"");
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        var onClauseStart = sql.IndexOf(") s ON (", StringComparison.Ordinal);
+        var onClauseEnd = sql.IndexOf(')', onClauseStart + 8);
+        var onClause = sql.Substring(onClauseStart, onClauseEnd - onClauseStart + 1);
+
+        Assert.DoesNotContain("\"version\"", onClause);
+        Assert.Contains("WHEN MATCHED THEN UPDATE SET", sql);
+        Assert.Contains("\"version\" = t.\"version\" + 1", sql);
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", sql);
+        Assert.EndsWith("WHERE t.\"version\" = s.\"version\"", sql);
+    }
+
+    [Fact]
     public void OracleDialect_BuildBatchUpdateSql_InlinesNulls()
     {
         var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);

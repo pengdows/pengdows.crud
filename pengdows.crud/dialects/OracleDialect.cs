@@ -251,14 +251,14 @@ internal class OracleDialect : SqlDialect
             query.Append(keyColumns[i]);
         }
 
-        if (versionColumnName != null)
-        {
-            query.Append(" AND t.");
-            query.Append(versionColumnName);
-            query.Append(" = s.");
-            query.Append(versionColumnName);
-        }
-
+        // Unlike SQL Server/PostgreSQL, the version predicate does NOT go in the ON clause here:
+        // Oracle rejects updating (via SET) any column also referenced in ON (ORA-38104 "Columns
+        // referenced in the ON Clause cannot be updated"). It also can't go in a SQL-Server-style
+        // "WHEN MATCHED AND <cond> THEN" — Oracle's MERGE grammar has no such clause (ORA-02000
+        // "missing THEN keyword"; Oracle requires THEN immediately after WHEN MATCHED). Instead it
+        // goes in the WHERE clause Oracle allows AFTER UPDATE SET: a matched row that fails this
+        // WHERE is left untouched (not an error, not WHEN NOT MATCHED) — the same "stale row is
+        // silently skipped" outcome the ON-clause placement gives SQL Server/PostgreSQL.
         query.Append(") WHEN MATCHED THEN UPDATE SET ");
         for (var i = 0; i < columnNames.Count; i++)
         {
@@ -279,10 +279,20 @@ internal class OracleDialect : SqlDialect
                 query.Append(", ");
             }
 
+            // RHS qualified with the target alias for the same ambiguity reason as SQL Server/
+            // PostgreSQL — "s" also projects a same-named version column.
             query.Append(versionColumnName);
-            query.Append(" = ");
+            query.Append(" = t.");
             query.Append(versionColumnName);
             query.Append(" + 1");
+        }
+
+        if (versionColumnName != null)
+        {
+            query.Append(" WHERE t.");
+            query.Append(versionColumnName);
+            query.Append(" = s.");
+            query.Append(versionColumnName);
         }
     }
 

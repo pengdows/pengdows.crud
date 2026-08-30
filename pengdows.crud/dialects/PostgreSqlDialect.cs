@@ -164,8 +164,12 @@ internal class PostgreSqlDialect : SqlDialect
                 query.Append(", ");
             }
 
+            // RHS must be qualified with the target alias — the FROM clause's "s" source alias
+            // also projects a same-named version column (needed for the WHERE predicate below),
+            // so an unqualified "version" reference here is ambiguous (real PostgreSQL rejects it
+            // with "column reference "version" is ambiguous").
             query.Append(versionColumnName);
-            query.Append(" = ");
+            query.Append(" = t.");
             query.Append(versionColumnName);
             query.Append(" + 1");
         }

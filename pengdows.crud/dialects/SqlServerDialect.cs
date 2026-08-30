@@ -274,8 +274,12 @@ internal class SqlServerDialect : SqlDialect
                 query.Append(", ");
             }
 
+            // RHS must be qualified with the target alias — the USING source's "s" alias also
+            // projects a same-named version column (needed for the ON predicate above), so an
+            // unqualified "version" reference here is ambiguous (real SQL Server rejects it with
+            // "Ambiguous column name 'version'").
             query.Append(versionColumnName);
-            query.Append(" = ");
+            query.Append(" = t.");
             query.Append(versionColumnName);
             query.Append(" + 1");
         }

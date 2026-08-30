@@ -66,6 +66,104 @@ public class MergeConflictTests : DatabaseTestBase
     }
 
     [SkippableFact]
+    public Task BatchUpdate_VersionedEntities_IncrementsVersionAndDetectsPartialStaleConflict()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            await RecreateTableAsync(context, "versioned_entities", BuildVersionedEntityTableSql(provider, context));
+
+            var helper = new TableGateway<VersionedEntity, long>(context);
+            var entities = new List<VersionedEntity>
+            {
+                new() { Id = 1, Name = "a", Version = 1 },
+                new() { Id = 2, Name = "b", Version = 1 },
+                new() { Id = 3, Name = "c", Version = 1 }
+            };
+
+            foreach (var entity in entities)
+            {
+                await helper.CreateAsync(entity, context);
+            }
+
+            // Happy path: all three rows fresh — a real multi-row batch UPDATE (dialects with
+            // SupportsBatchUpdate use MERGE/UPDATE-FROM-VALUES; others fall back to per-entity,
+            // but the caller-visible contract — affected count, version increment — must match).
+            foreach (var entity in entities)
+            {
+                entity.Name += "-updated";
+            }
+
+            var affected = await helper.UpdateAsync(entities, context);
+            Assert.Equal(3, affected);
+
+            foreach (var entity in entities)
+            {
+                var reread = await helper.RetrieveOneAsync(entity.Id, context);
+                Assert.NotNull(reread);
+                Assert.Equal(2, reread!.Version);
+                Assert.EndsWith("-updated", reread.Name);
+            }
+
+            Output.WriteLine($"{provider}: batch update of 3 fresh rows incremented all versions to 2");
+
+            // Conflict path: entities[0] is intentionally stale (still holds Version=2's
+            // in-memory copy from before this round even started — simulate by re-fetching
+            // fresh copies for [1] and [2] but reusing the ALREADY-INCREMENTED-BY-THIS-TEST
+            // entities[0] instance whose Version the DB has since moved past via a concurrent
+            // write from a second context).
+            await using var concurrentContext = await CreateAdditionalContextAsync(provider);
+            concurrentContext.RegisterEntity<VersionedEntity>();
+            var concurrentHelper = new TableGateway<VersionedEntity, long>(concurrentContext);
+            var staleTarget = await concurrentHelper.RetrieveOneAsync(entities[0].Id, concurrentContext);
+            staleTarget!.Name = "raced-ahead";
+            var raceUpdate = await concurrentHelper.UpdateAsync(staleTarget, concurrentContext);
+            Assert.Equal(1, raceUpdate);
+
+            var fresh1 = await helper.RetrieveOneAsync(entities[1].Id, context);
+            var fresh2 = await helper.RetrieveOneAsync(entities[2].Id, context);
+            fresh1!.Name = "second-round-b";
+            fresh2!.Name = "second-round-c";
+            entities[0].Name = "second-round-a"; // still holds the now-stale Version=2
+
+            var conflictBatch = new List<VersionedEntity> { entities[0], fresh1, fresh2 };
+            await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+                await helper.UpdateAsync(conflictBatch, context));
+
+            var staleReread = await helper.RetrieveOneAsync(entities[0].Id, context);
+            var freshReread1 = await helper.RetrieveOneAsync(entities[1].Id, context);
+            var freshReread2 = await helper.RetrieveOneAsync(entities[2].Id, context);
+            Assert.Equal("raced-ahead", staleReread!.Name); // untouched by the stale-version attempt
+
+            if (context.Dialect.SupportsBatchUpdate)
+            {
+                // A real multi-row MERGE/UPDATE-FROM-VALUES statement applies each source row
+                // independently — only the stale row fails to match, so the two fresh rows in the
+                // SAME batch SQL statement must still have been written. Re-read from the database
+                // rather than trusting in-memory state, per the batch-conflict message's own
+                // guidance.
+                Assert.Equal("second-round-b", freshReread1!.Name);
+                Assert.Equal("second-round-c", freshReread2!.Name);
+                Assert.Equal(3, freshReread1.Version);
+                Assert.Equal(3, freshReread2.Version);
+                Output.WriteLine($"{provider}: batch update with one stale row threw and left the other two committed");
+            }
+            else
+            {
+                // Dialects without SupportsBatchUpdate fall back to one UPDATE statement per
+                // entity, executed sequentially in list order — the stale entity was placed first,
+                // so the loop throws immediately and the two fresh rows after it are never even
+                // attempted (unlike the atomic multi-row path above), leaving them at their
+                // first-round values.
+                Assert.Equal("b-updated", freshReread1!.Name);
+                Assert.Equal("c-updated", freshReread2!.Name);
+                Assert.Equal(2, freshReread1.Version);
+                Assert.Equal(2, freshReread2!.Version);
+                Output.WriteLine($"{provider}: per-entity fallback threw on the first (stale) entity and never attempted the rest");
+            }
+        });
+    }
+
+    [SkippableFact]
     public Task MergeRecord_UpsertAfterRemoteChange_ProducesCombinedValue()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>

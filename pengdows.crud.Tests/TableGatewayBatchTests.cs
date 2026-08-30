@@ -460,9 +460,13 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var sql = containers[0].Query.ToString();
         var setClause = sql.Substring(0, sql.IndexOf(" FROM (VALUES", StringComparison.Ordinal));
 
-        // SET must increment server-side, not copy the client's stale value.
-        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        // SET must increment server-side, not copy the client's stale value. The RHS must be
+        // qualified (t.version) — an unqualified "version" is ambiguous once the FROM clause's
+        // "s" source alias also projects a same-named column (real Postgres rejects this with
+        // "column reference "version" is ambiguous" — see MergeConflictTests integration test).
+        Assert.Contains("\"version\" = t.\"version\" + 1", setClause);
         Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", setClause);
         // WHERE must compare against each row's pre-update version — otherwise a stale-version
         // update is indistinguishable from a fresh one at the SQL level.
         Assert.Contains("t.\"version\" = s.\"version\"", sql);
@@ -482,8 +486,11 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var sql = containers[0].Query.ToString();
         var setClause = sql.Substring(sql.IndexOf("UPDATE SET ", StringComparison.Ordinal));
 
-        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        // RHS must be qualified (t.version) — real SQL Server rejects the unqualified form with
+        // "Ambiguous column name 'version'" once the USING source's "s" alias also has one.
+        Assert.Contains("\"version\" = t.\"version\" + 1", setClause);
         Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", setClause);
         Assert.Contains("t.\"version\" = s.\"version\"", sql);
     }
 
@@ -500,18 +507,22 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var containers = helper.BuildBatchUpdate(entities);
         var sql = containers[0].Query.ToString();
 
-        Assert.Contains("\"version\" = \"version\" + 1", sql);
-        // Snowflake's UPDATE target has no "t" alias (unlike Postgres/SqlServer) — the WHERE
-        // predicate qualifies with the wrapped table name instead, so check the WHERE clause
-        // specifically rather than the SET clause for the version comparison.
+        // Snowflake's UPDATE target has no "t" alias (unlike Postgres/SqlServer) — the RHS must
+        // be qualified with the wrapped table name instead, for the same ambiguity reason.
+        Assert.Contains("\"version\" = \"versioned_batch\".\"version\" + 1", sql);
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", sql);
         var whereClause = sql.Substring(sql.IndexOf("WHERE", StringComparison.Ordinal));
         Assert.DoesNotContain("\"version\" = s.\"version\"", sql.Substring(0, sql.IndexOf("WHERE", StringComparison.Ordinal)));
         Assert.Contains(".\"version\" = s.\"version\"", whereClause);
     }
 
     [Fact]
-    public void BuildBatchUpdate_Oracle_VersionColumn_IncrementsSetAndAppendsOnPredicate()
+    public void BuildBatchUpdate_Oracle_VersionColumn_MovesPredicateToTrailingWhereAndQualifiesIncrement()
     {
+        // Oracle-specific: a column referenced in MERGE's ON clause cannot also be the target of
+        // a SET assignment (ORA-38104), and Oracle's MERGE grammar has no SQL-Server-style
+        // "WHEN MATCHED AND <cond> THEN" (ORA-02000 "missing THEN keyword"). The version predicate
+        // instead lives in the WHERE clause Oracle allows after UPDATE SET.
         var helper = new TableGateway<VersionedBatchEntity, int>(_oracleContext, _audit);
         var entities = new List<VersionedBatchEntity>
         {
@@ -521,11 +532,19 @@ public class TableGatewayBatchTests : IAsyncLifetime
 
         var containers = helper.BuildBatchUpdate(entities);
         var sql = containers[0].Query.ToString();
-        var setClause = sql.Substring(sql.IndexOf("UPDATE SET ", StringComparison.Ordinal));
+        var onClause = sql.Substring(sql.IndexOf(") s ON (", StringComparison.Ordinal),
+            sql.IndexOf(")", sql.IndexOf(") s ON (", StringComparison.Ordinal) + 8, StringComparison.Ordinal)
+            - sql.IndexOf(") s ON (", StringComparison.Ordinal) + 1);
+        var setStart = sql.IndexOf("UPDATE SET ", StringComparison.Ordinal);
+        var whereStart = sql.IndexOf(" WHERE ", StringComparison.Ordinal);
+        var setClause = sql.Substring(setStart, whereStart - setStart);
 
-        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        Assert.DoesNotContain("\"version\"", onClause);
+        Assert.Contains("WHEN MATCHED THEN UPDATE SET", sql);
+        Assert.Contains("\"version\" = t.\"version\" + 1", setClause);
         Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
-        Assert.Contains("t.\"version\" = s.\"version\"", sql);
+        Assert.DoesNotContain("\"version\" = \"version\" + 1", setClause);
+        Assert.EndsWith("WHERE t.\"version\" = s.\"version\"", sql);
     }
 
     [Fact]
