@@ -179,9 +179,15 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   provides. `IsolationProfile.StrictConsistency` maps to `RepeatableRead`, its best available
   level.
 - No FK or check-constraint enforcement (compatibility-mode defaults).
-- The `MySql.Data` driver (not MySqlConnector) has a text-protocol prepared-statement bug that
-  corrupts string parameters specifically against TiDB — `PrepareStatements` is disabled unless
-  the connector in use is MySqlConnector.
+- The `MySql.Data` driver (not MySqlConnector) cannot prepare statements against TiDB at all —
+  `PrepareStatements` is disabled unless the connector in use is MySqlConnector. Originally
+  suspected to be a text-protocol backslash-escaping bug that corrupts string parameters;
+  re-verified 2026-08-30 against a live TiDB container across `MySql.Data` 9.3.0, 9.4.0, and
+  9.7.0 (see `testbed.DriverVersionMatrix/`) and found to be worse and more fundamental than
+  that: `MySqlCommand.Prepare()` itself throws an unhandled `KeyNotFoundException` (a
+  character-set-index lookup failure) before any parameter value is ever sent, identically across
+  all three driver versions spanning nearly two years of releases. The workaround remains
+  necessary; this is not a since-fixed-upstream issue.
 
 **YugabyteDB**
 - Reports its version as "PostgreSQL 15.x-YB-...", which would normally trigger
