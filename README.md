@@ -120,8 +120,14 @@ single-row result — no reader loop needed. For a result set with more than one
 `ExecuteReaderAsync` directly:
 
 ```csharp
-using var select = context.CreateSqlContainer(
-    "SELECT order_number FROM orders WHERE customer_id = ");
+using var select = context.CreateSqlContainer();
+select.Query.Append("SELECT ")
+    .Append(select.WrapObjectName("order_number"))
+    .Append(" FROM ")
+    .Append(select.WrapObjectName("orders"))
+    .Append(" WHERE ")
+    .Append(select.WrapObjectName("customer_id"))
+    .Append(" = ");
 var p = select.AddParameterWithValue("id", DbType.Int64, 7L);
 select.Query.Append(select.MakeParameterName(p));
 

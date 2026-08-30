@@ -19,4 +19,25 @@ public class PackageReadmeTests
         Assert.Contains("actions/workflows/deploy.yml/badge.svg", readme);
         Assert.DoesNotContain("actions/workflows/build.yml/badge.svg", readme);
     }
+
+    [Fact]
+    public void PlainSqlReaderExamplesWrapAllIdentifiers()
+    {
+        string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        string[] documentationPaths =
+        {
+            Path.Combine(repoRoot, "README.md"),
+            Path.Combine(repoRoot, "llms-full.txt")
+        };
+
+        foreach (string documentationPath in documentationPaths)
+        {
+            string documentation = File.ReadAllText(documentationPath);
+
+            Assert.Contains("""select.WrapObjectName("order_number")""", documentation);
+            Assert.Contains("""select.WrapObjectName("orders")""", documentation);
+            Assert.Contains("""select.WrapObjectName("customer_id")""", documentation);
+            Assert.DoesNotContain("SELECT order_number FROM orders WHERE customer_id = ", documentation);
+        }
+    }
 }
