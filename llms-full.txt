@@ -1022,10 +1022,23 @@ var context = new DatabaseContext(
     SqlClientFactory.Instance);
 
 var select = context.CreateSqlContainer("SELECT CURRENT_TIMESTAMP");
+DateTime now = await select.ExecuteScalarRequiredAsync<DateTime>();
+```
+
+`ExecuteScalarRequiredAsync<T>`/`ExecuteScalarOrNullAsync<T>` cover any single-value,
+single-row result — no reader loop needed. For a result set with more than one row, use
+`ExecuteReaderAsync` directly:
+
+```csharp
+using var select = context.CreateSqlContainer(
+    "SELECT order_number FROM orders WHERE customer_id = ");
+var p = select.AddParameterWithValue("id", DbType.Int64, 7L);
+select.Query.Append(select.MakeParameterName(p));
+
 await using var reader = await select.ExecuteReaderAsync();
-if (await reader.ReadAsync())
+while (await reader.ReadAsync())
 {
-    var now = reader.GetDateTime(0);
+    var orderNumber = reader.GetString(0);
 }
 ```
 
