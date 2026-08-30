@@ -4,13 +4,13 @@
     "container": "CockroachDB [v23.2.14]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.4890189,
-    "totalTimeSeconds": 3.201821,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.5014577,
+    "totalTimeSeconds": 2.8634244,
     "error": null,
     "checks": [
       {
@@ -125,6 +125,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -170,13 +175,13 @@
     "container": "CockroachDB [v24.3.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.4849779,
-    "totalTimeSeconds": 2.8774732,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.4627153,
+    "totalTimeSeconds": 2.7997018,
     "error": null,
     "checks": [
       {
@@ -291,6 +296,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -336,13 +346,13 @@
     "container": "CockroachDB [v25.1.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.5333489,
-    "totalTimeSeconds": 2.9611106,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.6076078,
+    "totalTimeSeconds": 2.9618051,
     "error": null,
     "checks": [
       {
@@ -461,6 +471,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -502,13 +517,13 @@
     "container": "Db2 [11.5.0.0a]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 33,
-    "checksPassed": 33,
+    "checksAttempted": 34,
+    "checksPassed": 34,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.5549218,
-    "totalTimeSeconds": 45.9481899,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.6863242,
+    "totalTimeSeconds": 45.1844202,
     "error": null,
     "checks": [
       {
@@ -623,6 +638,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -688,13 +708,13 @@
     "container": "Db2 [11.5.8.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 33,
-    "checksPassed": 33,
+    "checksAttempted": 34,
+    "checksPassed": 34,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.3754,
-    "totalTimeSeconds": 51.1081983,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.4474735,
+    "totalTimeSeconds": 48.9191719,
     "error": null,
     "checks": [
       {
@@ -813,6 +833,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -874,13 +899,13 @@
     "container": "DuckDB",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.932412,
-    "totalTimeSeconds": 1.0514106,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.9564877,
+    "totalTimeSeconds": 1.1133675,
     "error": null,
     "checks": [
       {
@@ -999,6 +1024,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -1050,13 +1080,13 @@
     "container": "Firebird [3.0.9]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 27,
-    "checksPassed": 27,
+    "checksAttempted": 28,
+    "checksPassed": 28,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.2770677,
-    "totalTimeSeconds": 1.5001018,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.2785435,
+    "totalTimeSeconds": 1.4914789,
     "error": null,
     "checks": [
       {
@@ -1171,6 +1201,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -1216,13 +1251,13 @@
     "container": "Firebird [4.0.5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 27,
-    "checksPassed": 27,
+    "checksAttempted": 28,
+    "checksPassed": 28,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.2409074,
-    "totalTimeSeconds": 1.4589017,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.2681283,
+    "totalTimeSeconds": 1.4930831,
     "error": null,
     "checks": [
       {
@@ -1337,6 +1372,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -1382,13 +1422,13 @@
     "container": "Firebird [5.0.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 27,
-    "checksPassed": 27,
+    "checksAttempted": 28,
+    "checksPassed": 28,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.3442874,
-    "totalTimeSeconds": 1.6962829,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.3434475,
+    "totalTimeSeconds": 1.695074,
     "error": null,
     "checks": [
       {
@@ -1507,6 +1547,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -1548,13 +1593,13 @@
     "container": "MariaDB [10.11.11]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.068152,
-    "totalTimeSeconds": 4.2017218,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0767619,
+    "totalTimeSeconds": 3.2119487,
     "error": null,
     "checks": [
       {
@@ -1669,6 +1714,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -1724,13 +1774,13 @@
     "container": "MariaDB [10.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.0719552,
-    "totalTimeSeconds": 7.2017292,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0749162,
+    "totalTimeSeconds": 8.2212547,
     "error": null,
     "checks": [
       {
@@ -1845,6 +1895,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -1900,13 +1955,13 @@
     "container": "MariaDB [10.4]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.0660425,
-    "totalTimeSeconds": 6.1940509,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0826884,
+    "totalTimeSeconds": 6.2168977,
     "error": null,
     "checks": [
       {
@@ -2021,6 +2076,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -2076,13 +2136,13 @@
     "container": "MariaDB [11.4.12]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1265801,
-    "totalTimeSeconds": 4.2879047,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.136841,
+    "totalTimeSeconds": 4.2796802,
     "error": null,
     "checks": [
       {
@@ -2201,6 +2261,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -2252,13 +2317,13 @@
     "container": "MySQL [5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.0739607,
-    "totalTimeSeconds": 7.2154126,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.0748424,
+    "totalTimeSeconds": 6.2043306,
     "error": null,
     "checks": [
       {
@@ -2373,6 +2438,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -2418,13 +2488,13 @@
     "container": "MySQL [8.0.36]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.114576,
-    "totalTimeSeconds": 7.2478396,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.1259707,
+    "totalTimeSeconds": 7.2488952,
     "error": null,
     "checks": [
       {
@@ -2539,6 +2609,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -2584,13 +2659,13 @@
     "container": "MySQL [8.4.11]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.1306835,
-    "totalTimeSeconds": 6.4362707,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.1382084,
+    "totalTimeSeconds": 6.357237,
     "error": null,
     "checks": [
       {
@@ -2709,6 +2784,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "passed",
         "reason": null
@@ -2750,13 +2830,13 @@
     "container": "Oracle [18c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 31,
-    "testTimeSeconds": 0.563776,
-    "totalTimeSeconds": 13.9268827,
+    "totalChecks": 32,
+    "testTimeSeconds": 0.6674576,
+    "totalTimeSeconds": 11.0779022,
     "error": null,
     "checks": [
       {
@@ -2871,6 +2951,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -2921,13 +3006,13 @@
     "container": "Oracle [21c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 31,
-    "testTimeSeconds": 0.6405259,
-    "totalTimeSeconds": 8.9787377,
+    "totalChecks": 32,
+    "testTimeSeconds": 0.5674421,
+    "totalTimeSeconds": 9.95397,
     "error": null,
     "checks": [
       {
@@ -3042,6 +3127,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -3092,13 +3182,13 @@
     "container": "Oracle [23.26.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 31,
-    "testTimeSeconds": 0.9819929,
-    "totalTimeSeconds": 8.6961824,
+    "totalChecks": 32,
+    "testTimeSeconds": 1.1387206,
+    "totalTimeSeconds": 7.8331319,
     "error": null,
     "checks": [
       {
@@ -3213,6 +3303,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -3263,13 +3358,13 @@
     "container": "PostgreSQL [15.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 31,
-    "testTimeSeconds": 0.0877156,
-    "totalTimeSeconds": 1.2321837,
+    "totalChecks": 32,
+    "testTimeSeconds": 0.08064,
+    "totalTimeSeconds": 2.2407707,
     "error": null,
     "checks": [
       {
@@ -3384,6 +3479,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -3434,13 +3534,13 @@
     "container": "PostgreSQL [16.4]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 31,
-    "testTimeSeconds": 0.1240646,
-    "totalTimeSeconds": 2.2746306,
+    "totalChecks": 32,
+    "testTimeSeconds": 0.1400967,
+    "totalTimeSeconds": 1.2894021,
     "error": null,
     "checks": [
       {
@@ -3559,6 +3659,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -3605,13 +3710,13 @@
     "container": "PostgreSQL [9.5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.0783918,
-    "totalTimeSeconds": 4.2713269,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0814405,
+    "totalTimeSeconds": 4.2356199,
     "error": null,
     "checks": [
       {
@@ -3735,6 +3840,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -3781,13 +3891,13 @@
     "container": "SQL Server [2017]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1383397,
-    "totalTimeSeconds": 5.4274703,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.1825102,
+    "totalTimeSeconds": 5.4708282,
     "error": null,
     "checks": [
       {
@@ -3902,6 +4012,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -3957,13 +4072,13 @@
     "container": "SQL Server [2019]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1752615,
-    "totalTimeSeconds": 5.5455993,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.1567197,
+    "totalTimeSeconds": 5.4892394,
     "error": null,
     "checks": [
       {
@@ -4078,6 +4193,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -4133,13 +4253,13 @@
     "container": "SQL Server [2022-CU25]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1668802,
-    "totalTimeSeconds": 15.6754987,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.2447644,
+    "totalTimeSeconds": 5.8341661,
     "error": null,
     "checks": [
       {
@@ -4258,6 +4378,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -4309,13 +4434,13 @@
     "container": "SQLite",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.032703,
-    "totalTimeSeconds": 0.0496666,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.0315115,
+    "totalTimeSeconds": 0.0482336,
     "error": null,
     "checks": [
       {
@@ -4434,6 +4559,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -4475,13 +4605,13 @@
     "container": "TiDB [v7.5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.2634767,
-    "totalTimeSeconds": 1.4693015,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.3573423,
+    "totalTimeSeconds": 1.5454048,
     "error": null,
     "checks": [
       {
@@ -4596,6 +4726,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -4641,13 +4776,13 @@
     "container": "TiDB [v8.5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 28,
-    "checksPassed": 28,
+    "checksAttempted": 29,
+    "checksPassed": 29,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 30,
-    "testTimeSeconds": 0.3242305,
-    "totalTimeSeconds": 2.6778203,
+    "totalChecks": 31,
+    "testTimeSeconds": 0.328247,
+    "totalTimeSeconds": 1.6586401,
     "error": null,
     "checks": [
       {
@@ -4766,6 +4901,11 @@
         "reason": null
       },
       {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -4807,13 +4947,13 @@
     "container": "YugabyteDB [2.25.2.0-b359]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 30,
-    "testTimeSeconds": 1.2297932,
-    "totalTimeSeconds": 7.7611215,
+    "totalChecks": 31,
+    "testTimeSeconds": 1.2696049,
+    "totalTimeSeconds": 6.9098518,
     "error": null,
     "checks": [
       {
@@ -4928,6 +5068,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },
@@ -4973,13 +5118,13 @@
     "container": "YugabyteDB [2025.2.5.2-b5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 30,
-    "testTimeSeconds": 1.5416483,
-    "totalTimeSeconds": 8.2620519,
+    "totalChecks": 31,
+    "testTimeSeconds": 1.651224,
+    "totalTimeSeconds": 8.2497587,
     "error": null,
     "checks": [
       {
@@ -5094,6 +5239,11 @@
       },
       {
         "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
         "outcome": "passed",
         "reason": null
       },

@@ -181,6 +181,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Command reuse: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running batch update");
+            SnowflakeStep("Batch update: start");
+            await TestBatchUpdate();
+            Console.WriteLine($"  Batch update: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Batch update: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running reader disposal compatibility");
             SnowflakeStep("Reader disposal compatibility: start");
             await TestReaderDisposalCompatibility();
@@ -1858,6 +1865,51 @@ INSERT INTO {table} (
             }
 
             CheckOk("Batch.CommandReuse", "  [Batch] Reuse container with new parameters: OK");
+        }
+        finally
+        {
+            await CleanupTestRow(id1);
+            await CleanupTestRow(id2);
+        }
+    }
+
+    protected virtual async Task TestBatchUpdate()
+    {
+        var id1 = await InsertTestRows();
+        var id2 = await InsertTestRows();
+
+        try
+        {
+            var t1 = await _helper.RetrieveOneAsync(id1, _context) ?? throw new Exception($"Row {id1} not found");
+            var t2 = await _helper.RetrieveOneAsync(id2, _context) ?? throw new Exception($"Row {id2} not found");
+
+            t1.Value = 111;
+            t1.Description = "batch-updated-1";
+            t2.Value = 222;
+            t2.Description = "batch-updated-2";
+
+            var affected = await _helper.BatchUpdateAsync([t1, t2], _context);
+            if (affected != 2)
+            {
+                throw new Exception($"[BatchUpdate] Expected 2 rows affected, got {affected}");
+            }
+
+            var reread1 = await RetrieveRows(id1);
+            var reread2 = await RetrieveRows(id2);
+            if (reread1.Value != 111 || reread1.Description != "batch-updated-1")
+            {
+                throw new Exception(
+                    $"[BatchUpdate] Row {id1} not updated correctly: Value={reread1.Value}, Description={reread1.Description}");
+            }
+
+            if (reread2.Value != 222 || reread2.Description != "batch-updated-2")
+            {
+                throw new Exception(
+                    $"[BatchUpdate] Row {id2} not updated correctly: Value={reread2.Value}, Description={reread2.Description}");
+            }
+
+            CheckOk("Batch.BatchUpdate",
+                $"  [Batch] BatchUpdateAsync ({(_context.Dialect.SupportsBatchUpdate ? "optimized" : "per-entity fallback")}) for {_context.Product}: OK");
         }
         finally
         {
