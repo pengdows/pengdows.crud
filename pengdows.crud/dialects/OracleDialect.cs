@@ -167,6 +167,125 @@ internal class OracleDialect : SqlDialect
         query.Append("SELECT 1 FROM DUAL");
     }
 
+    public override bool SupportsBatchUpdate => true;
+
+    /// <inheritdoc />
+    public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        string? versionColumnName = null, bool versionColumnIsOpaque = false)
+    {
+        if (rowCount <= 0)
+        {
+            return;
+        }
+
+        // Oracle has no VALUES(...) row-constructor table literal for the MERGE USING source
+        // (unlike SQL Server/PostgreSQL), so the source is built the same way Oracle's own batch
+        // INSERT already builds a multi-row shape: one "SELECT ... FROM DUAL" branch per row,
+        // joined with UNION ALL. Column aliases are declared only on the first branch — standard
+        // SQL (and Oracle) apply the first branch's aliases to the whole UNION ALL result.
+        // Table aliases use no "AS" keyword (Oracle MERGE rejects it — see the shared single-row
+        // upsert path in TableGateway.Upsert.cs), and no trailing ';' is appended: ODP.NET runs a
+        // MERGE as one bare statement, and a trailing semicolon there is ORA-00911 (see
+        // RequiresMergeStatementTerminator).
+        query.Append("MERGE INTO ");
+        query.Append(tableName);
+        query.Append(" t USING (");
+
+        var allCols = new List<string>(keyColumns);
+        allCols.AddRange(columnNames);
+        if (versionColumnName != null)
+        {
+            allCols.Add(versionColumnName);
+        }
+
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            if (row > 0)
+            {
+                query.Append(" UNION ALL ");
+            }
+
+            query.Append("SELECT ");
+            for (var col = 0; col < allCols.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker);
+                    query.Append('b');
+                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+
+                if (row == 0)
+                {
+                    query.Append(" AS ");
+                    query.Append(allCols[col]);
+                }
+            }
+
+            query.Append(" FROM DUAL");
+        }
+
+        query.Append(") s ON (");
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(" AND ");
+            }
+
+            query.Append("t.");
+            query.Append(keyColumns[i]);
+            query.Append(" = s.");
+            query.Append(keyColumns[i]);
+        }
+
+        if (versionColumnName != null)
+        {
+            query.Append(" AND t.");
+            query.Append(versionColumnName);
+            query.Append(" = s.");
+            query.Append(versionColumnName);
+        }
+
+        query.Append(") WHEN MATCHED THEN UPDATE SET ");
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(columnNames[i]);
+            query.Append(" = s.");
+            query.Append(columnNames[i]);
+        }
+
+        if (versionColumnName != null && !versionColumnIsOpaque)
+        {
+            if (columnNames.Count > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(versionColumnName);
+            query.Append(" = ");
+            query.Append(versionColumnName);
+            query.Append(" + 1");
+        }
+    }
+
     public override bool SupportsMerge => true;
 
     // ODP.NET executes a single MERGE as one bare SQL statement, not inside a PL/SQL block — a

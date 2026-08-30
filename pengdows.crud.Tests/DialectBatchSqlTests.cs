@@ -283,6 +283,57 @@ public class DialectBatchSqlTests
     }
 
     [Fact]
+    public void OracleDialect_BuildBatchUpdateSql_UsesMergeWithUnionAllSource()
+    {
+        // Oracle has no VALUES(...) row-constructor table literal, so the MERGE USING source is
+        // built as a UNION ALL of single-row "SELECT ... FROM DUAL" branches, with column aliases
+        // declared only on the first branch. No "AS" on table aliases (Oracle MERGE rejects it),
+        // and no trailing statement terminator (ODP.NET runs MERGE as one bare statement).
+        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 1, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("MERGE INTO \"my_table\" t USING (", sql);
+        Assert.DoesNotContain("MERGE INTO \"my_table\" AS t", sql);
+        Assert.Contains("SELECT :b0 AS \"id\", :b1 AS \"name\", :b2 AS \"age\" FROM DUAL", sql);
+        Assert.Contains(") s ON (t.\"id\" = s.\"id\")", sql);
+        Assert.Contains("WHEN MATCHED THEN UPDATE SET", sql);
+        Assert.Contains("\"name\" = s.\"name\"", sql);
+        Assert.False(sql.EndsWith(";", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OracleDialect_BuildBatchUpdateSql_MultiRow_UsesUnionAllPerRow_CorrectParamIndexing()
+    {
+        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 2, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("SELECT :b0 AS \"id\", :b1 AS \"name\", :b2 AS \"age\" FROM DUAL", sql);
+        Assert.Contains("UNION ALL SELECT :b3, :b4, :b5 FROM DUAL", sql);
+    }
+
+    [Fact]
+    public void OracleDialect_BuildBatchUpdateSql_InlinesNulls()
+    {
+        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+        Func<int, int, object?> getValue = (row, col) => col == 1 ? (object?)null : "val";
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, _keyColumns, 1, query, getValue);
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("SELECT :b0 AS \"id\", NULL AS \"name\", :b1 AS \"age\" FROM DUAL", sql);
+    }
+
+    [Fact]
     public void Dialect_BuildBatchUpdateSql_ZeroRows_EmitsNothing()
     {
         // rowCount <= 0 should produce an empty query (early return guard).

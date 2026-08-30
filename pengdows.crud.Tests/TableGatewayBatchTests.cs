@@ -51,6 +51,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
     private readonly IDatabaseContext _mysqlContext;
     private readonly IDatabaseContext _sqlServerContext;
     private readonly IDatabaseContext _snowflakeContext;
+    private readonly IDatabaseContext _oracleContext;
     private readonly TypeMapRegistry _typeMap;
     private readonly IAuditValueResolver _audit;
 
@@ -80,13 +81,18 @@ public class TableGatewayBatchTests : IAsyncLifetime
         snowflakeFactory.EnableDataPersistence = true;
         _snowflakeContext =
             new DatabaseContext("Account=xyz;EmulatedProduct=Snowflake", snowflakeFactory, _typeMap);
+
+        var oracleFactory = new fakeDbFactory(SupportedDatabase.Oracle);
+        oracleFactory.EnableDataPersistence = true;
+        _oracleContext =
+            new DatabaseContext("Data Source=localhost;EmulatedProduct=Oracle", oracleFactory, _typeMap);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
-        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext })
+        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext, _oracleContext })
         {
             if (ctx is IAsyncDisposable asyncDisp)
                 await asyncDisp.DisposeAsync();
@@ -407,6 +413,27 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
     }
 
+    [Fact]
+    public void BuildBatchUpdate_Oracle_UsesMergeWithUnionAllSource()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_oracleContext);
+        var entities = new List<TestEntitySimple>
+        {
+            new() { Id = 1, Name = "updated1" },
+            new() { Id = 2, Name = "updated2" }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("MERGE INTO", sql);
+        Assert.DoesNotContain(" AS t", sql);
+        Assert.Contains("UNION ALL SELECT", sql);
+        Assert.Contains("FROM DUAL", sql);
+        Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
+        Assert.False(sql.TrimEnd().EndsWith(";", StringComparison.Ordinal));
+    }
+
     // Regression: BuildBatchUpdateSql's optimized (non-fallback) path for PostgreSQL, SQL Server,
     // and Snowflake generated a WHERE clause matching only on the key column(s) — never on
     // [Version] — and copied the client's PRE-update version value straight into SET instead of
@@ -480,6 +507,25 @@ public class TableGatewayBatchTests : IAsyncLifetime
         var whereClause = sql.Substring(sql.IndexOf("WHERE", StringComparison.Ordinal));
         Assert.DoesNotContain("\"version\" = s.\"version\"", sql.Substring(0, sql.IndexOf("WHERE", StringComparison.Ordinal)));
         Assert.Contains(".\"version\" = s.\"version\"", whereClause);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_Oracle_VersionColumn_IncrementsSetAndAppendsOnPredicate()
+    {
+        var helper = new TableGateway<VersionedBatchEntity, int>(_oracleContext, _audit);
+        var entities = new List<VersionedBatchEntity>
+        {
+            new() { Id = 1, Name = "a", Version = 5 },
+            new() { Id = 2, Name = "b", Version = 7 }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+        var setClause = sql.Substring(sql.IndexOf("UPDATE SET ", StringComparison.Ordinal));
+
+        Assert.Contains("\"version\" = \"version\" + 1", setClause);
+        Assert.DoesNotContain("\"version\" = s.\"version\"", setClause);
+        Assert.Contains("t.\"version\" = s.\"version\"", sql);
     }
 
     [Fact]

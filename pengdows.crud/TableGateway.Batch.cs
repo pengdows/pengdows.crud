@@ -238,12 +238,12 @@ public partial class TableGateway<TEntity, TRowID>
     /// <summary>
     /// Builds the message for a batch-update version conflict. When the chunk contains exactly
     /// one entity (always true for dialects without SupportsBatchUpdate, which fall back to one
-    /// BuildUpdate container per entity — SQLite, MySQL, MariaDB, Oracle, Firebird), the conflict
+    /// BuildUpdate container per entity — SQLite, MySQL, MariaDB, Firebird), the conflict
     /// is unambiguous and named directly. For a real multi-row chunk (Postgres/SqlServer/
-    /// Snowflake), no RETURNING/OUTPUT is used for batch operations (by design, for cross-dialect
-    /// portability), so the specific conflicting entity/entities genuinely cannot be identified
-    /// from the affected-row count alone — the message says so honestly instead of implying an
-    /// attribution it can't make, and warns that no entity in the chunk was written back.
+    /// Snowflake/Oracle), no RETURNING/OUTPUT is used for batch operations (by design, for
+    /// cross-dialect portability), so the specific conflicting entity/entities genuinely cannot be
+    /// identified from the affected-row count alone — the message says so honestly instead of
+    /// implying an attribution it can't make, and warns that no entity in the chunk was written back.
     /// </summary>
     private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
     {

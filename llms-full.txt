@@ -4778,7 +4778,6 @@ Degradation can still happen under the default `AllowHigher` policy without the 
 ---
 
 ## Source: `docs/batch-operations.md`
-
 # Batch Operations
 
 `pengdows.crud` 2.0 exposes batch APIs on both gateway types. The implemented surface is smaller and more concrete than some older design notes in this repo.
@@ -4923,7 +4922,7 @@ This keeps generated statements within provider limits without exposing a user-c
 ### Dialect Strategy / Fallback Rules
 
 - Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity.
-- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity.
+- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects fall back to one update per entity.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
 - Batch delete by entity collection builds one delete container per entity because each delete is keyed by the mapped `[Id]` or `[PrimaryKey]` values from that entity.
