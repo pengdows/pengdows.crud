@@ -103,5 +103,5 @@ Not a metrics question, but adjacent enough to belong here: `ISqlDialect.Analyze
 returns a provider-neutral `DbExceptionInfo` (`Category`, `ConstraintKind`, `IsTransient`,
 `IsRetryable`, `ProviderErrorCode`, `SqlState`) from any caught exception — check `IsRetryable`
 instead of pattern-matching provider-specific error codes/messages yourself. See
-`docs/planning/future-work.md`'s DOC-023 entry for the dedicated write-up of this API (still
-open as of this writing) if you need the full taxonomy and provider-coverage matrix.
+[`exception-analysis.md`](./exception-analysis.md) for the full taxonomy, per-provider-family
+error-code/SQLSTATE table, and retry-policy boundary.

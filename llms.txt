@@ -130,6 +130,13 @@ database-agnostic policy decoupled from connection identity — is in
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
   combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
+- [`docs/audit-fields.md`](docs/audit-fields.md) — the full audit-field lifecycle: the
+  `IAuditValueResolver` contract (synchronous only, unwrapped exception propagation), what's set
+  on CREATE (both `Created*`/`LastUpdated*` pairs) vs. UPDATE (only `LastUpdated*`),
+  `AuditCreationPolicy`'s security implication (binding an untrusted DTO onto an audited entity
+  without `Authoritative` lets a caller supply their own `CreatedBy`), UTC-only timestamp
+  enforcement, `UserId` type coercion, batch operations resolving the audit values exactly once
+  (not once per row), and failed-write rollback of in-memory audit properties.
 - [`docs/data-reader-mapper.md`](docs/data-reader-mapper.md) — `DataReaderMapper`/
   `IDataReaderMapper`: a general-purpose, attribute-free mapper for hydrating any POCO from any
   SQL result (stored procedures, ad-hoc queries with no corresponding table) by column-name
@@ -140,13 +147,38 @@ database-agnostic policy decoupled from connection identity — is in
   signatures, the SQL each produces, identifier quoting/parameterization, and the known
   limitations (string-valued predicates only, one compound equality+null-state shape, no general
   filter system).
+- [`docs/streaming-queries.md`](docs/streaming-queries.md) — `LoadStreamAsync`/`RetrieveStreamAsync`:
+  a plain C# async iterator with no custom buffering — memory proportional to one row, query
+  execution deferred until enumeration starts, re-enumerating the same returned
+  `IAsyncEnumerable` re-runs the query from scratch, the `[EnumeratorCancellation]` overload
+  requirement for real cancellation, early-`break` cleanup via the compiler-generated
+  `DisposeAsync`, and the transaction-lock-held-for-the-whole-enumeration interaction.
+- [`docs/sql-container-composition.md`](docs/sql-container-composition.md) — `ISqlContainer`'s
+  fluent composition helpers (`AppendName`/`AppendParam`/`AppendWhere`/etc., always dialect-quoted,
+  never hand-write quote characters), `ExecutionType`/`CommandType`/cancellation execution-overload
+  selection rules, and easy-to-miss gateway/context diagnostics (`BuildWhereByPrimaryKey`,
+  `ClearCaches`, `GetPoolStatisticsSnapshot`, `MaxQueuedReads`/`MaxQueuedWrites`,
+  `EnforceUniqueConnectionString`).
 - [`docs/sql-container-templates.md`](docs/sql-container-templates.md) — `ISqlContainer.Clone()`/
   `Clone(IDatabaseContext)`: what's deep-copied vs. shared, the singleton-gateway template
   pattern, transaction/tenant/cross-dialect use, and disposal independence.
+- [`docs/stored-procedures.md`](docs/stored-procedures.md) — calling stored procedures through the
+  same `ISqlContainer` as ordinary SQL: the five `ProcWrappingStyle` call syntaxes (`Call`/`Exec`/
+  `Oracle`/`PostgreSQL`/`ExecuteProcedure`/`None`) and exactly what each generates, OUT/INOUT
+  parameter binding, SQL-Server-only return-value capture via `WrapForCreateWithReturn`/etc., and
+  the no-multi-result-set-traversal limit (`ITrackedReader` rejects `NextResult()`).
 - [`docs/capability-discovery.md`](docs/capability-discovery.md) — reading `ISqlDialect`/
   `IDataSourceInformation` at runtime to branch on capability instead of hard-coding database
   names; the explicit two-audience split in `ISqlDialect` (consumer-facing flags vs. internal
   SQL-generation machinery gateway code calls).
+- [`docs/cache-and-context-contract.md`](docs/cache-and-context-contract.md) — the full cache
+  inventory (every cache in the library, its scope/key/bound, and why each one either is or isn't
+  a multi-tenant-cardinality risk — including one real, previously-undocumented unbounded-growth
+  risk, `_wrappedTableNameCache`, whose severity depends on contexts only ever being disposed at
+  application shutdown), and the context-derived generation contract: which parts of a gateway
+  call are re-derived from whichever `IDatabaseContext` you pass per-call (dialect, connection,
+  parameters) vs. fixed once at gateway construction and shared across every later call regardless
+  of context (entity metadata, reader-plan cache, fingerprint-keyed query/parameter-name caches).
 - [`docs/schema-management-boundary.md`](docs/schema-management-boundary.md) — what schema
   tooling exists today (`pengdows.poco.mint`'s read-only inspection and POCO generation) vs. the
   not-yet-built generalized schema executor concept (inspect/target/diff/adjust/order/DDL/execute/
@@ -159,6 +191,20 @@ database-agnostic policy decoupled from connection identity — is in
   auto-generated `[Id]` value per database: the `GeneratedKeyPlan` strategy enum, why
   `SessionScopedFunction` needs a connection-pooling-safe alternative, and the exact plan each
   of the 16 dialects uses.
+- [`docs/exception-analysis.md`](docs/exception-analysis.md) — `ISqlDialect.AnalyzeException`/
+  `DbExceptionInfo`: provider-neutral `Category`/`ConstraintKind`/`IsTransient`/`IsRetryable`/
+  `ProviderErrorCode`/`SqlState` for control-flow branching without pattern-matching provider error
+  text yourself; the per-provider-family error-code/SQLSTATE table; the relationship to the typed
+  `DatabaseException` subclasses pengdows.crud actually throws; the explicit note that this and
+  `IDbExceptionTranslator` are two independently-maintained classification systems that can
+  disagree; and the retry-policy boundary (`IsRetryable` tells you whether to retry, it does not
+  retry for you — the designed-but-unbuilt `RetryContext` subsystem would be that layer).
+- [`docs/observability-guide.md`](docs/observability-guide.md) — maps operational questions
+  ("is my app slow because of the database, the pool, or a lock?", "is this reader slow because of
+  the database or my own consumption loop?", "are connections piling up or leaking?") to which
+  specific `DatabaseMetrics`/`PoolStatisticsSnapshot`/tracing field actually answers each one — a
+  decision tree built on top of `metrics.md`/`tracing.md`/`opentelemetry-metrics.md`'s field
+  references, not a fourth field list.
 - [`docs/tracing.md`](docs/tracing.md) — zero-extra-package `ActivitySource("pengdows.crud")`
   tracing spans emitted by the core library itself: tags (including `db.statement` with
   parameterized, never-interpolated SQL text), setup, and how this differs from the separate
@@ -226,6 +272,11 @@ for the resolution order, the `Instance` property-vs-field convention it support
 
 ## Optional
 
+- [`docs/api-supplements.md`](docs/api-supplements.md) / [`docs/llms-api-supplement.md`](docs/llms-api-supplement.md)
+  — small, easy-to-miss public capabilities documented on their own extension-method/concrete-type
+  surface rather than the main three-tier API pages: `Uuid7Optimized`'s `NewUuid7Bytes`/
+  `NewUuid7RfcBytes` byte-format helpers, and pointers to `data-reader-mapper.md`/`sql-container-composition.md`
+  for the fuller write-ups of capabilities that used to be summarized only here.
 - [`README.md`](README.md) — package installation, quick-start code samples for both usage
   paths (`TableGateway` entity CRUD, and plain SQL via `ISqlContainer` with no entities/
   `TableGateway` at all), full public API surface list.

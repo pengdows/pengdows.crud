@@ -28,20 +28,28 @@ means as a product.
 | [`uuid7.md`](./uuid7.md) | `Uuid7Optimized`: monotonicity scope, clock modes, throughput/backpressure, configuration |
 | [`transactions.md`](./transactions.md) | `TransactionContext`, isolation profiles, savepoints, concurrency contract (commit/rollback/dispose races, reader locks, cancellation) |
 | [`entity-mapping.md`](./entity-mapping.md) | Complete attribute reference: `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/`[Json]`/enum/correlation-token attributes, valid combinations, defaults |
+| [`audit-fields.md`](./audit-fields.md) | Full audit-field lifecycle: the `IAuditValueResolver` contract, what's set on CREATE vs. UPDATE, `AuditCreationPolicy` (including its security implication), UTC timestamp/user-ID coercion, batch resolve-once semantics, and failed-write rollback |
 | [`data-reader-mapper.md`](./data-reader-mapper.md) | `DataReaderMapper`/`IDataReaderMapper`: hydrate any POCO from any SQL result (stored procedures, ad-hoc queries) with no `[Table]`/`[Column]` attributes required — `MapperOptions`' `Strict`/`ColumnsOnly`/`NamePolicy`/`EnumMode` |
 | [`gateway-counts.md`](./gateway-counts.md) | Gateway `COUNT(*)` helpers: `CountAllAsync`/`CountWhereAsync`/`CountWhereNullAsync`/`CountWhereEqualsAsync`, SQL shape, quoting/parameterization, and limitations |
+| [`streaming-queries.md`](./streaming-queries.md) | `LoadStreamAsync`/`RetrieveStreamAsync`: memory-proportional-to-one-row semantics, query-per-enumeration, cancellation gotchas, early-termination cleanup, transaction-lock interaction |
+| [`sql-container-composition.md`](./sql-container-composition.md) | `ISqlContainer` fluent composition helpers (`AppendName`/`AppendParam`/fragment helpers), execution-overload selection (`ExecutionType`/`CommandType`), and gateway/context diagnostics (`BuildWhereByPrimaryKey`, `ClearCaches`, pool snapshots) |
 | [`sql-container-templates.md`](./sql-container-templates.md) | `ISqlContainer.Clone()`/`Clone(IDatabaseContext)`: template reuse, parameter rebinding, cross-dialect/tenant/transaction use, disposal independence |
+| [`stored-procedures.md`](./stored-procedures.md) | Calling stored procedures through `ISqlContainer`: the five `ProcWrappingStyle` call syntaxes, OUT/INOUT parameters, SQL-Server-only return-value capture, worked examples per style |
 | [`capability-discovery.md`](./capability-discovery.md) | Reading `ISqlDialect`/`IDataSourceInformation` at runtime to branch on capability instead of database name |
+| [`cache-and-context-contract.md`](./cache-and-context-contract.md) | Full cache inventory (what's cached, key, bound, tenant-cardinality reasoning) and the context-derived generation contract: what a gateway re-derives per call vs. fixes once at construction |
 | [`schema-management-boundary.md`](./schema-management-boundary.md) | What schema tooling exists today (`pengdows.poco.mint` inspection/adoption) vs. the not-yet-built generalized schema executor design; DBA-authorization and owned-object requirements |
 | [`primary-keys-pseudokeys.md`](./primary-keys-pseudokeys.md) | `[Id]` vs `[PrimaryKey]` |
 | [`parameter-naming-convention.md`](./parameter-naming-convention.md) | Parameter prefix conventions (`i`/`s`/`w`/`k`/`v`/`j`/`b`) |
 | [`read-only-enforcement.md`](./read-only-enforcement.md) | How `ReadWriteMode.ReadOnly` is enforced per dialect |
+| [`exception-analysis.md`](./exception-analysis.md) | `ISqlDialect.AnalyzeException`/`DbExceptionInfo`: provider-neutral error categories for control flow, per-provider-family error-code/SQLSTATE table, relationship to thrown `DatabaseException` subclasses, retry-policy boundary |
 | [`session-settings.md`](./session-settings.md) | Session-settings mechanism overview |
 | [`sql-server-session-settings.md`](./sql-server-session-settings.md) | SQL Server's specific session-settings cost/tradeoff |
 | [`supported-databases.md`](./supported-databases.md) | Per-database support matrix |
 | [`metrics.md`](./metrics.md) | `DatabaseMetrics` fields and access pattern |
+| [`observability-guide.md`](./observability-guide.md) | Operational questions mapped to which metrics/tracing fields actually answer them — a decision tree, not another field list |
 | [`opentelemetry-metrics.md`](./opentelemetry-metrics.md) | `pengdows.crud.opentelemetry` adapter design |
 | [`tracing.md`](./tracing.md) | Zero-extra-package `ActivitySource("pengdows.crud")` tracing spans: tags, setup, how it complements provider-level instrumentation |
+| [`api-supplements.md`](./api-supplements.md) | Public capabilities easy to miss because they live on concrete types or extension methods rather than the main three-tier API pages: UUID7 byte-format helpers, and the `DataReaderMapper`/`TypeCoercionOptions` clarifications above in more detail |
 
 ## Connection Management
 

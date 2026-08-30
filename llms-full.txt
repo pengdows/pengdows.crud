@@ -1897,7 +1897,7 @@ In other frameworks:
 ### Pillar 2: "Prego Features" (Expert-Level Built-in Solutions)
 Real-world data access has difficult edge cases that developers assume are handled by their tools, but rarely are. `pengdows.crud` provides built-in solutions:
 - **SingleWriter Mode**: Prevents SQLite disk locking (`SQLITE_BUSY`) by serializing write admission through a governor turnstile while keeping readers concurrent and ephemeral. Applied to DuckDB too, but there it's a deliberate policy choice for a single cross-engine contract, not a limitation DuckDB's own engine imposes — DuckDB supports concurrent non-conflicting writes natively.
-- **PreventDatabaseUnload Sentinel**: Keeps one unused permit-backed connection per materially separate pool to prevent supported engines from unloading, deactivating, or pausing, while all application work uses standard ephemeral connections.
+- **PreventDatabaseUnload Sentinel**: Keeps one unused permit-backed connection per materially separate pool to prevent supported engine deactivation, while all queries use standard ephemeral connections.
 - **Audit Field Invariants & Rollback**: Both `CreatedBy/On` and `LastUpdatedBy/On` are set on Create (UTC). If a write fails or is rejected before DB acceptance (e.g. concurrency conflict), in-memory audit mutations are **automatically rolled back**.
 - **Surrogate vs. Natural Key Architecture**: Strict separation between surrogate pseudokeys (`[Id]`) and domain business keys (`[PrimaryKey]`), backed by dedicated gateway interfaces (`TableGateway<T, TId>` vs `PrimaryKeyTableGateway<T>`).
 - **Portable Capability Synthesis**: Automatically emits native upsert syntax (`MERGE`, `INSERT ... ON CONFLICT`, `INSERT ... ON DUPLICATE KEY UPDATE`, or Firebird `UPDATE OR INSERT`) based on dialect capability flags.
@@ -1937,7 +1937,7 @@ Most data access layers test either against superficial mocks or against SQLite 
 | **SQL Generation** | None (Raw SQL strings) | LINQ expression trees $\to$ SQL translation | Fluent Query Builder / Raw SQL | **Inspectable 3-Tier Containers** (`Build` $\to$ `Load` $\to$ `Convenience`) |
 | **Connection Pooling & Lifecycle** | Delegated entirely to ADO.NET pool | Scoped connection per `DbContext` | Delegated to ADO.NET pool | **"Open Late, Close Early"** + `ITrackedReader` lease model |
 | **Concurrency Admission Control** | None | None | None | **`PoolGovernor`** with read/write slot quotas and turnstile fairness |
-| **SQLite / Embedded DB Safety** | None (frequent `SQLITE_BUSY` errors) | Basic SQLite provider (no write turnstile) | None | **`DbMode.SingleWriter`** (governor write admission) & **`DbMode.PreventDatabaseUnload`** (sentinel where lifecycle retention is useful) |
+| **SQLite / Embedded DB Safety** | None (frequent `SQLITE_BUSY` errors) | Basic SQLite provider (no write turnstile) | None | **`DbMode.SingleWriter`** (governor write admission) & **`DbMode.PreventDatabaseUnload`** (passive sentinel) |
 | **Audit Field Handling** | Manual boilerplate | ChangeTracker interceptors (complex) | Property handlers | **First-class Invariant** + in-memory rollback on pre-acceptance failure |
 | **Surrogate vs Natural Keys** | None (all columns equal) | Assumes single `[Key]` | Primary key mapping | **Strict Distinction**: `[Id]` vs `[PrimaryKey]` with separate gateways |
 | **Transaction Management** | Raw `IDbTransaction` or `TransactionScope` | `DatabaseFacade.BeginTransaction` | Raw `IDbTransaction` | **Operation-scoped `ITransactionContext`** (pins connection; `TransactionScope` forbidden) |
@@ -2011,7 +2011,10 @@ architecture and would otherwise make the thesis go stale every time an implemen
 detail shifts. Treat everything here as a snapshot verified against source as of the date
 below; re-verify against current code before quoting it externally.
 
-Last verified: 2026-08-13.
+Last verified: 2026-08-29, against branch `2.1` (HEAD at time of writing carries the full
+CORE-*/TEST-*/DOC-* closures tracked in `docs/planning/future-work.md`). Sections below not
+explicitly re-dated still reflect the 2026-08-13 audit and should be independently re-checked
+before being quoted as current.
 
 ## Ecosystem package status
 
@@ -2108,16 +2111,34 @@ walks `IDatabaseContext`'s and `ITransactionContext`'s full `GetInterfaces()` cl
 `Type.GetProperty` doesn't search base interfaces) so the property can't silently reappear
 on either public interface.
 
-**Pushed but not yet merged as of 2026-08-27**: this fix lives on branch `2.0.6`, now pushed
-to `origin/2.0.6` — `origin/main` is still at `2.0.5` and still has the public `DataSource`
-property. Re-verify this section once `2.0.6` (or its successor) is merged into `main`.
+**Confirmed present on branch `2.1` as of 2026-08-29** — `IDatabaseContext` (`pengdows.crud.abstractions/IDatabaseContext.cs`)
+exposes no bare `DataSource` property; only `DataSourceInfo` (`IDataSourceInformation`, a
+metadata-only object, not a raw `DbDataSource`) is public. All five test files this section
+originally named (`IDatabaseContextPublicSurfaceTests.cs`, `TransactionGovernorAcquisitionTests.cs`,
+`ExecuteReaderWriteConnectionLeakTests.cs`, `ReadOnlySessionSettingsTests.cs`,
+`dialects/MariaDbDialectTests.cs`) still exist under these exact names. The original framing
+(fix "pending on branch `2.0.6`, not yet in `main`") described a different, patch-line branch's
+merge status and does not describe `2.1` — this correction removes that stale, branch-specific
+claim rather than leaving a reader to wonder whether the fix applies here. This doc now tracks
+`2.1`'s current status going forward; if you need `2.0.x`'s status, check that branch's own copy
+of this file rather than inferring it from here.
+
+## Full release-gate suite status (2026-08-29, branch `2.1`)
+
+Per `docs/planning/future-work.md`'s TEST-006 closure:
+
+- **Unit suite** (`pengdows.crud.Tests`): 7441 tests, 0 failed, 0 skipped, both `net8.0` and `net10.0`.
+- **Testbed matrix**: 30/30 database targets, 878 checks passed, 0 failed, 53 documented skips — see
+  the Provider/version evidence table below for the per-engine breakdown.
+- **`pengdows.crud.IntegrationTests`**: 192 passed, 5 skipped (Firebird Embedded Linux-distribution
+  tests, environment-gated per their own documented setup requirements), 0 failed, both target
+  frameworks.
 
 ## Internal metrics wiring status
 
-Attribution is surfaced through `DatabaseMetrics`: request counts come from
-`AttributionStats`, pool waits/timeouts come from the pool governors, and mode waits/timeouts
-come from `ModeContentionStats`. These cumulative counters explain contention without
-duplicating the authoritative pool and mode accounting.
+`DatabaseMetrics` now surfaces cumulative request and contention attribution. Request counts
+come from `AttributionStats`, pool waits/timeouts come from the authoritative pool governors,
+and mode waits/timeouts come from `ModeContentionStats`.
 
 ## Test coverage backing specific thesis claims
 
@@ -2135,6 +2156,60 @@ rename/move/split over time — for the claims that got a source-level audit on 
 This table itself needs re-verification if any of the referenced test files are renamed,
 merged, or deleted — it's evidence of a point-in-time audit, not a standing contract that
 the tests will always exist under these names.
+
+### Additions from the 2.1 CORE-*/TEST-* closure pass (2026-08-29)
+
+| Claim (product-thesis.md) | Proof |
+|---|---|
+| Two tenants' independent `PoolGovernor`s isolate failure — saturating one tenant's admission never affects another sharing the same singleton gateway (principle 3) | `pengdows.crud.Tests/TwoTenantFailureContainmentTests.cs` — `SaturatedWriterGovernor_OnOneTenant_DoesNotAffectAnotherTenant_OnSharedSingletonGateway` |
+| `SingleWriter` mode's turnstile prevents writer starvation under sustained concurrent readers (principle 5) | `pengdows.crud.Tests/SingleWriterFairnessTortureTests.cs` — 16 continuous readers vs. 40 writers against a real file-backed SQLite context; also `PoolGovernorFairnessTests.WriterWithTurnstile_BlocksNewReaders` at the deterministic unit level |
+| `PreventDatabaseUnload` sentinel repair (reconnecting a broken sentinel) is permit-neutral — no leak, no double-acquire (principle 5) | `pengdows.crud.Tests/PreventDatabaseUnloadTests.cs` — `BrokenSentinel_Repair_IsPermitNeutral` |
+| The hazardous `GeneratedKeyPlan.SessionScopedFunction` path is unreachable by any of the 16 shipped dialects — the generated-ID two-lease race can only occur in the narrower, real-provider-only inner-fallback case (principle 5) | `pengdows.crud.Tests/dialects/GeneratedKeyPlanReachabilityTests.cs` — `[Theory]` over every `SupportedDatabase` value via the real `SqlDialectFactory.CreateDialectForType` switch |
+| Transaction commit/rollback/dispose races have exactly one winner; an open reader fails fast rather than deadlocking or corrupting the connection (principle 2) | `pengdows.crud.Tests/TransactionCompletionReaderGuardTests.cs`, `TransactionContextDisposeRaceTests.cs`, `TransactionContextTests.CommitAndRollback_RaceOnlyOneSucceeds` — see `docs/transactions.md`'s Concurrency Contract section for the full race matrix |
+| A context handed back by `ITenantContextRegistry.GetContext` is never an orphaned, untracked instance when a concurrent `Invalidate` races its construction (principle 3) | `pengdows.crud.Tests/TenantTests.cs` — `Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext`, `Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext` (the narrower lookup-vs-invalidate race remains open — see CORE-010 and `docs/connection/multitenancy-architecture.md`) |
+
+## Provider/version evidence (DOC-005)
+
+The maintained testbed (`testbed/`, run via `dotnet run -c Release --project testbed`) is the
+source of the "12 engines, 30 targets" claim used elsewhere in this project's positioning
+material. This is **verified database support** in the three-tier sense
+`docs/planning/future-work.md`'s "What 'supported database' means" section defines: each target
+below passed the shared unit/integration/testbed contracts through the public pengdows.crud
+surface, using a currently-maintained .NET provider, on 2026-08-29 (repo-root `testbed-results.json`,
+tracked in git — regenerate before quoting a later date).
+
+| Engine | Versions tested | Targets | Checks (pass/fail/skip) | .NET provider package |
+|---|---|---|---|---|
+| SQL Server | 2017, 2019, 2022-CU25 | 3 | 90 / 0 / 6 | `Microsoft.Data.SqlClient` 6.0.2 |
+| PostgreSQL | 9.5, 15.0, 16.4 | 3 | 89 / 0 / 5 | `Npgsql` 9.0.3 |
+| MySQL | 5.7, 8.0.36, 8.4.11 | 3 | 87 / 0 / 3 | `MySqlConnector` 2.4.0 / `MySql.Data` 9.3.0 |
+| MariaDB | 10.2, 10.4, 10.11.11, 11.4.12 | 4 | 120 / 0 / 8 | `MySqlConnector` 2.4.0 / `MySql.Data` 9.3.0 |
+| Oracle | 18c, 21c, 23.26.2 | 3 | 90 / 0 / 3 | `Oracle.ManagedDataAccess.Core` 23.8.0 |
+| SQLite | (file-based, single version) | 1 | 28 / 0 / 2 | `Microsoft.Data.Sqlite` 9.0.5 |
+| DuckDB | (single version) | 1 | 29 / 0 / 3 | `DuckDB.NET.Data.Full` 1.3.2 |
+| Firebird | 3.0.9, 4.0.5, 5.0.2 | 3 | 81 / 0 / 9 | `FirebirdSql.Data.FirebirdClient` 10.3.3 |
+| CockroachDB | v23.2.14, v24.3.0, v25.1.0 | 3 | 84 / 0 / 6 | `Npgsql` 9.0.3 (PostgreSQL-compatible) |
+| YugabyteDB | 2.25.2.0-b359, 2025.2.5.2-b5 | 2 | 58 / 0 / 2 | `Npgsql` 9.0.3 (PostgreSQL-compatible) |
+| TiDB | v7.5.7, v8.5.7 | 2 | 56 / 0 / 4 | `MySqlConnector` 2.4.0 (MySQL-compatible) |
+| Db2 | 11.5.0.0a, 11.5.8.0 | 2 | 66 / 0 / 2 | `Net.IBM.Data.Db2-lnx` 8.0.0.500 |
+| **Total** | | **30** | **878 / 0 / 53** | |
+
+Zero failures across every target; the 53 skips are documented, engine-specific capability
+gaps (e.g. PostgreSQL 9.5 predates `GENERATED ALWAYS AS IDENTITY`, requiring PG10+; a
+MySql.Data-specific reader-disposal quirk) — not silent omissions. `AuroraMySql` and
+`AuroraPostgreSql` are managed-AWS variants detected at runtime and covered by the MySQL/
+PostgreSQL suites rather than a separate matrix row (see CLAUDE.md's "Aurora variants" section).
+`Snowflake` requires the opt-in `INCLUDE_SNOWFLAKE=true` environment variable (cloud-only, no
+Docker image) and is correctly excluded from this always-on 30-target run.
+
+**What this table does not claim:** a database not in this list is not "unsupported" in the
+sense of being rejected — an unrecognized product falls back to `Sql92Dialect` (generic ANSI
+behavior, see `docs/capability-discovery.md` and `docs/connection/dynamic-provider-loading.md`'s
+"Recognized dialect vs. wholly-unknown engine" section) rather than throwing. The distinction
+this table draws is specifically **verified support** (this list, executable proof) vs.
+**generic provider compatibility** (any other ADO.NET-loadable engine, unverified, ANSI-only
+behavior) — see `docs/planning/future-work.md`'s "What 'supported database' means" for the full
+three-tier definition this table applies.
 
 ---
 
@@ -2158,7 +2233,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 **Concurrent callers are supported:**
 - **Standard**: parallel operations using ephemeral connections
-- **PreventDatabaseUnload**: identical to Standard; additionally keeps one unused sentinel per materially separate pool to prevent the DB from unloading
+- **PreventDatabaseUnload**: identical to Standard; additionally keeps one unused sentinel per materially separate pool to prevent supported engines from unloading
 - **SingleConnection**: operations serialize on shared connection lock (single persistent connection, RealAsyncLocker)
 - **SingleWriter**: identical to Standard; governor fixes writable connections to 1 concurrent writer and 0 writers on read-only connections; writer-starvation-prevention turnstile enabled
 
@@ -2224,7 +2299,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 | Mode | Concurrent Calls | Behavior |
 |------|-----------------|----------|
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
-| **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One passive, permit-backed sentinel is retained per materially separate pool; never used for operations. |
+| **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One unused sentinel per materially separate pool prevents DB unload; sentinels never perform operations. |
 | **SingleWriter** | ⚠️ Writes serialize | Identical to Standard. Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers. Writer-starvation-prevention turnstile on. |
 | **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
 | **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
@@ -2350,15 +2425,6 @@ await conn.DisposeAsync();  // Returns to provider pool
 **What the PROVIDER manages**:
 - Physical connection pooling
 - Pool sizing (Min Pool Size, Max Pool Size)
-
-**Pool-size precedence:** `MaxConcurrentReads`/`MaxConcurrentWrites`, when explicitly configured,
-win over a conflicting connection-string `Max Pool Size` for both the governor and rewritten
-provider connection string; the mismatch is logged with both values and the winner. Without an
-external maximum, the connection-string value wins over the dialect default. Enabled pools use a
-minimum of 1, or 2 for `PreventDatabaseUnload` so its sentinel leaves working capacity. Read-only
-writer pools have maximum and minimum 0.
-Setting `MaxConcurrentWrites=0` also promotes the context to `ReadOnly`, regardless of the
-requested connection mode; the reader pool remains enabled.
 - Connection validation and reset
 
 ### Mode Selection and Coercion
@@ -2423,7 +2489,7 @@ pengdows.crud uses **context-level + connection-level** locking:
 
 - **RealAsyncLocker** (SemaphoreSlim-based) for **shared connections**:
   - SingleConnection mode: The one connection is shared
-  - PreventDatabaseUnload mode: passive sentinel connections are retained per pool (but never used for work)
+  - PreventDatabaseUnload mode: Sentinel connections are retained per pool (but never used for work)
 
 - **NoOpAsyncLocker** for **ephemeral connections**:
   - Standard mode: Each operation gets its own connection
@@ -2597,6 +2663,12 @@ app.Use(async (context, next) =>
 
 ---
 
+## Capability Flags Derive From One Enum: `SqlStandardLevel`
+
+`ISqlDialect` exposes roughly 20 independent-looking `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more. Reading them in isolation, each looks like it might be individually implemented per dialect. In the base `SqlDialect` class, **all of them are actually one mechanism**: each is `MaxSupportedStandard >= SqlStandardLevel.SqlXXXX` for a specific standard-year threshold (`SqlStandardLevel` is a plain year-numbered enum, `Sql86` through `Sql2023`). `MaxSupportedStandard` itself defaults to `ProductInfo.StandardCompliance` once the dialect is initialized (probed against the live server), falling back to `Sql92` before initialization.
+
+This means a new dialect gets most of these ~20 flags correct "for free" simply by having an accurate `MaxSupportedStandard`/`ProductInfo.StandardCompliance` — no per-flag implementation needed for the common case. Overriding an individual `Supports*` property is only necessary when a specific database's real behavior diverges from what its claimed standard-year compliance would predict — e.g. YugabyteDB reports as PostgreSQL 15-compatible (which would imply `SupportsMerge => true` under the standard-level default) but doesn't actually implement MERGE, so `YugabyteDbDialect` overrides `SupportsMerge` to `false` explicitly (see the per-database gotchas doc). When adding a new database (see `CLAUDE.md`'s checklist), get `MaxSupportedStandard` right first, then verify each derived flag against the engine's *actual* behavior rather than assuming standard-year compliance is uniformly accurate — some engines claim more compliance than they implement.
+
 ## Strategy Pattern Architecture
 
 ### IConnectionStrategy Implementations
@@ -2607,8 +2679,8 @@ app.Use(async (context, next) =>
 - No persistent connection
 
 **PreventDatabaseUnload mode** (`PreventDatabaseUnloadConnectionStrategy`):
-- One unused permit-backed sentinel kept open per materially separate pool
-- Prevents database unload, deactivation, or pause (LocalDB, embedded Firebird, and other explicitly selected providers)
+- One sentinel connection kept open (never used)
+- Prevents database unload (LocalDB, embedded SQLite)
 - All work uses ephemeral connections (identical to Standard)
 
 **SingleWriter mode** (`StandardConnectionStrategy` + governor policy):
@@ -2839,7 +2911,7 @@ public class OrderService
 | **Context Lifetime** | Scoped (per request) | Singleton (per connection string) |
 | **Change Tracking** | Automatic | None (stateless) |
 | **Transactions** | Implicit (SaveChanges) | Explicit (BeginTransaction) |
-| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, PreventDatabaseUnload=pooled+permit-backed sentinel, SingleWriter=governor over pool, SingleConnection=single pinned) |
+| **Connection Pooling** | Always provider-managed | Mode-dependent (Standard=pooled, PreventDatabaseUnload=pooled+sentinel(s), SingleWriter=governor over pool, SingleConnection=single pinned) |
 | **Unit of Work** | DbContext | TransactionContext |
 | **Concurrency Model** | One context per request (isolated) | One context for all requests (serialized at connection/transaction level) |
 | **SQL Control** | LINQ to SQL (generated) | Raw SQL (full control) |
@@ -3058,13 +3130,13 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 **When it's correct**:
 - SQLite `:memory:` → **REQUIRED** (each connection = separate database)
-- Firebird embedded → **REQUIRED** (vendor limitation)
+- Firebird embedded → **NOT REQUIRED**; durable embedded Firebird uses `PreventDatabaseUnload` so work can use separate attachments
 - Small embedded databases → **OPTIMAL** (no connection overhead)
 
 **When it's suboptimal**:
 - PostgreSQL, SQL Server, MySQL → Use Standard instead (supports concurrency)
 
-**Correct**: SingleConnection is the **right choice** for certain databases. It is required for disposable SQLite/DuckDB `:memory:` lifetimes; durable embedded Firebird automatically uses PreventDatabaseUnload. It is not dangerous, but it is specialized.
+**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; durable Firebird embedded storage automatically uses PreventDatabaseUnload and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
 
 ### 7. "Best mode always selects Standard"
 
@@ -3121,6 +3193,12 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 This section documents **contracts between internal components** that aren't visible in public APIs.
 
+### The internal-interface seam — and its failure mode for custom decorators
+
+The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connection acquisition, dialect version-detection, and session-settings internals — those live on separate `internal` interfaces (`IInternalConnectionProvider`, `IInternalSqlDialect`, `ITypeMapAccessor`) that the concrete `DatabaseContext`/`SqlDialect` classes implement *in addition to* the public ones. A family of `internal static` extension classes (`InternalConnectionExtensions`, `InternalDialectProviderExtensions`, `InternalSessionSettingsExtensions`, `InternalSqlContainerExtensions`, `InternalSqlDialectExtensions`) form the seam: each casts its `IDatabaseContext`/`ISqlDialect` parameter to the matching internal interface and throws `InvalidOperationException` (e.g. `"IDatabaseContext must provide internal connection access."`) if the cast fails. This is what lets `SqlContainer`/the gateways call capabilities that don't exist anywhere on the public surface at all.
+
+**Sharp edge:** any custom `IDatabaseContext`/`ISqlDialect` implementation *within the same solution* — most plausibly a test decorator wrapping the real implementation to override one behavior (`docs/planning/future-work.md`'s dialect-override decorator pattern for multitenancy tests is exactly this shape) — compiles fine if it only implements the public interface, but throws `InvalidOperationException` at runtime the first time internal code tries to use it, since the decorator doesn't also implement the internal interface. If you're writing a decorator around either interface for testing, it needs to forward the relevant internal interface too, not just the public one.
+
 ### IConnectionStrategy ↔ DatabaseContext
 
 **Contract**:
@@ -3139,6 +3217,12 @@ This section documents **contracts between internal components** that aren't vis
 - Auto-disposal **must** release connection and lock
 
 **Enforcement**: TrackedReader.cs:91-150 (disposal logic)
+
+**On a transaction specifically, this is fail-fast, not blocking.** `ReusableAsyncLocker.MarkHeldByActiveReader()` marks the transaction's lock as held by an open reader; while marked, *any* further lock attempt on that transaction — including a nested write from the same logical caller, e.g. writing while still streaming a `LoadStreamAsync` result from the same `ITransactionContext` — throws `InvalidOperationException("Cannot execute another command on this transaction while a reader opened on it is still active. Dispose the reader...")` immediately rather than blocking until the reader closes. This is deliberate: the flow that could dispose the reader is often the same flow attempting the second command, so blocking there would deadlock instead of erroring.
+
+### RealAsyncLocker is not reentrant
+
+`RealAsyncLocker.Lock()`/`LockAsync()`/`TryLockAsync()` all throw `InvalidOperationException("Lock already acquired.")` immediately if the same locker instance is locked a second time before the first lock is released — including by the same logical caller. This is deliberate: a `SemaphoreSlim(1,1)`-backed lock would otherwise deadlock on self-reentry rather than erroring, and the loud exception is preferred over a hang. If you see this exception, look for a call path that re-enters a locked scope (directly or via a callback) rather than assuming a threading bug in the locker itself.
 
 ### MetricsCollector ↔ DatabaseContext
 
@@ -3217,6 +3301,22 @@ This section documents **contracts between internal components** that aren't vis
 - Pure delegate invocations
 
 **Invalidation**: None (schemas rarely change at runtime)
+
+### NULL handling in compiled mappers is deliberately loud
+
+`CompiledMapperFactory` skips the `IsDBNull` guard entirely for non-nullable value-type columns (`int`, `DateTime`, etc. — not `int?`) — the compiled getter calls the typed reader accessor directly. If the database genuinely returns `NULL` for a column mapped to a non-nullable value-type property (a schema change that didn't get mirrored in the C# type, most commonly), the result is a hard exception on the first NULL row rather than a silently-defaulted value. This is intentional: silently leaving the property at `default(T)` would be a worse failure mode (wrong data, no error) than a loud crash pointing at the mismatched column. If you hit this, the fix is making the property type match the column's actual nullability (`int?`), not suppressing the exception.
+
+### Compiled binders close over the dialect instance
+
+`CompiledBinderFactory<TEntity>.CreateInsertBinder`/`CreateUpdateBinder` bake the `ISqlDialect` instance itself into the compiled delegate via `Expression.Constant(dialect)` — the generated code calls back into that exact dialect object for the delegate's entire lifetime. Caching these delegates keyed on anything looser than the dialect *instance* (e.g. the `SupportedDatabase` enum alone) can silently return one tenant's compiled binder to another tenant on the same database engine but a different server version — this was a real, since-fixed bug (see `docs/planning/future-work.md`'s multitenancy-dialect-cache-collision entry). The current caches are correctly instance- or fingerprint-keyed; the mechanism is noted here so a future change to the caching layer doesn't reintroduce the same class of bug.
+
+### `BoundedCache<TKey,TValue>`
+
+A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup caches and several gateway accessor caches. Builds are deduped under concurrent load via `Lazy<T>` with `ExecutionAndPublication`, and eviction is a linear scan by last-access timestamp — cheap and correct at the library's typical bound sizes (roughly 32–512 entries depending on the cache), but not designed for a much larger working set. An application generating many distinct, ad-hoc SQL/result-set shapes at runtime (rather than a fixed, compile-time-known set of entities and queries) will churn this cache past its bound and repeatedly pay recompilation cost rather than getting a stable steady-state hit rate.
+
+### Connection-string handling in the normalization cache
+
+`ConnectionStringNormalizationCache` is a static, process-lifetime `ConcurrentDictionary<string, Dictionary<string,string>>` keyed on the **literal connection string as passed in**, with no eviction, no bound, and no TTL (only a `ClearForTests()` used by the test suite). The cached *value* has credentials scrubbed before storage — `ShouldIgnoreKey` excludes `password`/`pwd`/`user id`/`uid`/`user`/`username` and any key containing `password`/`secret`/`token`/`access` — so the parsed key/value breakdown itself never retains a credential. The cache *key*, however, is the raw connection string exactly as supplied, which for most providers embeds the password directly. For an application that constructs a fixed, small number of connection strings (the common case — one or a few per `DatabaseContext`), this is a harmless, unbounded-in-theory-but-bounded-in-practice cache. For an application that builds many distinct connection strings at runtime — per-tenant credentials, credential rotation, dynamically generated passwords — this cache grows without bound for the process lifetime and keeps every historical raw connection string (including old, rotated-out credentials) resident in memory indefinitely.
 
 ### Connection Reuse
 
@@ -3363,7 +3463,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 4. **Connection lock is the real guard.**
    - Shared connections (SingleConnection) must serialize through the connection lock.
    - SingleWriter serializes writes via the governor (WriteSlots=1), not a connection lock — connections are ephemeral.
-   - Ephemeral connections (Standard/PreventDatabaseUnload) use a NoOp lock for zero overhead.
+   - Ephemeral connections (Standard/PreventDatabaseUnload) use a NoOp lock for zero overhead; PreventDatabaseUnload sentinels are passive and separately retained.
 
 5. **ITrackedReader is a lease, not just a wrapper.**
    - It pins the connection and holds the connection lock until disposal.
@@ -3451,7 +3551,26 @@ This avoids exhausting the connection pool, avoids leaking resources or unclosed
 
 ## 1. Modes & Lifecycle
 
-The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`. `KeepAlive` remains an obsolete compatibility alias for value 1.
+The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`. `KeepAlive` remains an obsolete compatibility alias for `PreventDatabaseUnload`.
+
+### Firebird Embedded on Linux
+
+Firebird Embedded integration tests use the complete pinned Firebird 5 Linux distribution,
+not a legacy `libfbembed.so` deployment. CI extracts the distribution into a user-owned
+temporary directory; it does not invoke the root-oriented installer or modify `/opt`,
+`/etc`, system libraries, or services. The runtime provides `libfbclient.so`,
+`libEngine13.so`, and the installed configuration/support files. Set `Providers = Engine13`,
+pass the extracted client library through `ClientLibrary`, set Firebird's temporary and
+lock directories to the temporary tree, and use a fresh writable `.fdb` path. CI verifies
+that no listener owns port 3050, ensuring the test exercises in-process Engine13 rather
+than a loopback or remote connection, then removes the exact temporary runtime.
+
+The direct provider bootstrap uses `Pooling=false` while creating the database. The
+`DatabaseContext` tests use its required provider-managed pooling path; the
+`PreventDatabaseUnload` test enables it deliberately because the sentinel is pool-backed.
+Tests dispose the context and sentinel before clearing pools and deleting the temporary
+database. CI supplies an explicit `FIREBIRD_TEST_PASSWORD` to the test process; callers
+can override it when running the setup locally.
 
 ### Standard
 
@@ -3464,18 +3583,27 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 
 ### PreventDatabaseUnload
 
-- Semantics: Identical to Standard for application work, except one unused, permit-backed sentinel is retained per materially separate pool to prevent unload, deactivation, close, or pause.
-- Sentinels use the normal initialization path, never execute application commands, and are never handed to callers. Effective working capacity is pool capacity minus the sentinel.
-- Automatically selected for SQL Server LocalDB and applicable embedded Firebird contexts. It is also available explicitly for normal Firebird servers and other providers where the application owns the lifecycle decision.
-- A reported Closed/Broken sentinel is replaced lazily through the normal connection path; no periodic ping is performed.
+**PreventDatabaseUnload exists for exactly one reason, and it has nothing to do with performance.** It is not a health check, TCP keepalive, periodic ping, warmed working connection, or concurrency mode. It retains passive sentinel connections solely to prevent a target database from unloading, deactivating, closing, or pausing.
+
+The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connection late and closes it early — every operation gets a fresh connection from the pool and releases it back immediately after. That's normally harmless, because the ADO.NET connection pool keeps the underlying physical connections warm behind the scenes. But **SQL Server LocalDB is not a normal server** — it's a lightweight, self-managed engine process that watches its own connection count and **automatically unloads the database (shuts the engine instance down) once it observes zero active connections for a while**. If pengdows.crud used plain Standard mode against LocalDB, a quiet period (no requests for a stretch) would let the pool drain to zero open connections, LocalDB would notice and unload the database, and the *next* request would pay the cost of LocalDB re-launching and re-attaching the database file before it could even open a connection.
+
+The mode opens one sentinel through the normal connection and session-initialization path for every materially separate configured pool. **Sentinels never execute application commands, open transactions, or hand work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. Each sentinel consumes one permit from its corresponding governor, so effective working capacity is the configured capacity minus the retained sentinel(s).
+
+- Automatically selected for SQL Server LocalDB and Firebird embedded. It is also available explicitly for normal Firebird servers and other providers where the application intentionally wants to prevent database deactivation or auto-pause.
+- Separate read and write connection strings receive separate sentinels. A reported Closed/Broken sentinel is replaced lazily, through the normal connection path, after confirming that the context is still active.
 
 ### SingleConnection
 
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
-- Used for: SQLite/DuckDB `:memory:` tests and ephemeral scratch work, and durable Firebird embedded deployments.
-- For `:memory:`, the database is owned by the connection; a replacement connection creates a new database rather than recovering the old contents.
-- Durable Firebird embedded storage can use this as a production-supported specialized mode.
+- Used for: SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
+  deployments. Durable embedded Firebird is automatically handled by `PreventDatabaseUnload`.
+- For SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
+  mode. The database is owned by the connection; if that connection closes, its contents
+  cannot be recovered by opening another connection.
+- Firebird embedded is different: durable embedded storage automatically selects
+  `PreventDatabaseUnload`, while `SingleConnection` remains an explicitly selected
+  specialized mode. The latter is still a single-concurrency boundary.
 
 ### SingleWriter
 
@@ -3495,7 +3623,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
-- Firebird embedded → PreventDatabaseUnload
+  - Firebird embedded → PreventDatabaseUnload
   - Unknown product → Standard
 
 ## 2. Provider-Driven Coercion
@@ -3577,8 +3705,13 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - Non-transactional ephemeral connections: errors bubble at `Execute…` (open-late / close-early).
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
-- Persistent modes (PreventDatabaseUnload/SingleConnection): if an initial retained connection fails to open at ctor, error bubbles immediately.
+- Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
+- **After construction, `PreventDatabaseUnload` and `SingleConnection` have different recovery contracts.** `PreventDatabaseUnload` checks each sentinel lazily and transparently replaces reported `Broken`/`Closed` sentinels. `SingleConnection` cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
+
+  **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
+
+  For other single-connection-limited engines with real persistent storage behind the one connection (e.g. Firebird embedded, a `.fdb` file), the connection break is against durable data — reopening a fresh connection to the same file *could* recover access to the database, so repair behavior remains a separate production design question. It must not be applied to `:memory:` databases, where a replacement connection creates a different empty database.
 
 ## 7. Heuristics & Tests
 
@@ -3615,8 +3748,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 ## 10. Practical Guidance
 
 **Best practices:**
-- Use `Standard` in production for client-server databases; it is on equal production footing with `SingleWriter` for file-based SQLite/DuckDB (see §1).
-- `PreventDatabaseUnload` and `SingleConnection` are best suited to their scoped lifecycle use cases in §1; `SingleConnection` remains especially useful for dev/test `:memory:` databases.
+- `Standard`, `PreventDatabaseUnload`, and `SingleWriter` are production-supported modes for the deployment shapes where their lifecycle and concurrency policies fit. This includes durable Firebird deployments, subject to the provider's connection and concurrency constraints.
+- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable-storage Firebird embedded automatically uses `PreventDatabaseUnload`; `SingleConnection` remains an explicit specialized deployment shape.
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**
@@ -4838,12 +4971,3 @@ The current codebase does not expose:
 - user-selectable batch strategies
 
 Those ideas belong in [`planning/future-work.md`](./planning/future-work.md), not in the current public API.
-# LLM Reference: pengdows.crud
-
-Lifecycle note: SQLite and DuckDB `:memory:` databases are connection-owned and disposable.
-They are intended primarily for tests, examples, and ephemeral scratch work. Once the owning
-connection closes, opening another connection creates a new database rather than recovering
-the old contents. `SingleConnection` preserves correctness while that connection is alive,
-but is not a persistence or recovery strategy. Durable Firebird embedded databases are a
-different case: `Standard`, `PreventDatabaseUnload`, `SingleWriter`, and `SingleConnection` can be
-production-supported according to the deployment's connection and concurrency requirements.

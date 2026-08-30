@@ -105,13 +105,12 @@ Build/Load/convenience API surface:
   upgrades duplicate live contexts sharing a connection string from a warning into a
   construction-time exception.
 
-## What's declared but not a usable runtime feature
+## A related but separate mapper: `DataReaderMapper`
 
-`IDataReaderMapper`/`MapperOptions` are not externally usable — the only implementation
-(`DataReaderMapper`) is `internal`, and gateway hydration uses a separate, unrelated compiled-plan
-path (`GetOrBuildRecordsetPlan`/`MapReaderToObjectWithPlan`). `TypeCoercionOptions.JsonPreference`
-is declared but never read anywhere; `TypeCoercionOptions.TimePolicy` is read internally but not
-externally configurable through the normal gateway/context path. See
-`docs/planning/future-work.md`'s "`IDataReaderMapper`/`MapperOptions`... are unreachable/dead
-externally" entry for the full history — don't build application logic expecting these to do
-anything.
+`IDataReaderMapper`/`DataReaderMapper` (`DataReaderMapper.Instance`) are public and usable — see
+[`data-reader-mapper.md`](./data-reader-mapper.md) — but they are **not** part of the gateway
+hydration path documented above. Gateway hydration uses a separate, attribute-driven compiled-plan
+path (`GetOrBuildRecordsetPlan`/`MapReaderToObjectWithPlan`); `DataReaderMapper` is for mapping an
+arbitrary SQL result (e.g. a stored procedure with no corresponding entity) to any POCO by
+column-name matching instead. `TypeCoercionOptions.TimePolicy` is read internally but not
+externally configurable through the normal gateway/context path.
