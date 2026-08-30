@@ -115,15 +115,18 @@ Multi-tenancy itself is **context-per-tenant**, not row-filtering — no injecte
 `WHERE tenant_id = @tenant`, and no separate tenant-ID concept anywhere in the API; the
 `IDatabaseContext` a caller gets back from `ITenantContextRegistry.GetContext(tenantId)` *is* the
 tenant's identity (`ContextCreated`/`ContextRemoved` pass only that context, no tenant-ID
-parameter). Rotate a tenant onto new configuration by calling the concrete
-`TenantConnectionResolver.Register(tenant, newConfig)` (not exposed on the `ITenantConnectionResolver`
-interface) followed by `registry.Invalidate(tenant)` — the next `GetContext` call creates a fresh
-context from the new config. There is no drain phase and no protection for a caller that already
-holds a live context reference when a concurrent `Invalidate` disposes it — a documented, accepted
-limitation, not a bug. See `docs/connection/multitenancy.md` in the repo for the full configuration
-shape, DI wiring, request-time usage pattern, and lifecycle-event contract, and
+parameter). **There is no designed live tenant-ejection/rotation feature** — the intended way a
+tenant's context gets disposed is application shutdown (disposing the registry disposes every
+context it created). `TenantContextRegistry.Invalidate`/`InvalidateAll` exist and are tested
+(concrete `TenantConnectionResolver.Register(tenant, newConfig)`, not on the interface, followed by
+`registry.Invalidate(tenant)`), but using them for live rotation is an application-level choice
+outside their designed use case, not a recommended pattern — there is no drain phase and no
+protection for a caller that already holds a live context reference when a concurrent `Invalidate`
+disposes it (a documented, accepted limitation, not a bug, and one more reason shutdown-only
+disposal is the intended model). See `docs/connection/multitenancy.md` in the repo for the full
+configuration shape, DI wiring, request-time usage pattern, and lifecycle-event contract, and
 `docs/connection/multitenancy-architecture.md` for the deeper library-enforced-vs-deployment-assumed
-contract and exact rotation concurrency semantics.
+contract and exact `Invalidate` concurrency semantics.
 
 ---
 

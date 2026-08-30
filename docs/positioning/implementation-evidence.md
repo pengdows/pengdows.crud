@@ -8,7 +8,10 @@ architecture and would otherwise make the thesis go stale every time an implemen
 detail shifts. Treat everything here as a snapshot verified against source as of the date
 below; re-verify against current code before quoting it externally.
 
-Last verified: 2026-08-13.
+Last verified: 2026-08-29, against branch `2.1` (HEAD at time of writing carries the full
+CORE-*/TEST-*/DOC-* closures tracked in `docs/planning/future-work.md`). Sections below not
+explicitly re-dated still reflect the 2026-08-13 audit and should be independently re-checked
+before being quoted as current.
 
 ## Ecosystem package status
 
@@ -105,9 +108,28 @@ walks `IDatabaseContext`'s and `ITransactionContext`'s full `GetInterfaces()` cl
 `Type.GetProperty` doesn't search base interfaces) so the property can't silently reappear
 on either public interface.
 
-**Pushed but not yet merged as of 2026-08-27**: this fix lives on branch `2.0.6`, now pushed
-to `origin/2.0.6` — `origin/main` is still at `2.0.5` and still has the public `DataSource`
-property. Re-verify this section once `2.0.6` (or its successor) is merged into `main`.
+**Confirmed present on branch `2.1` as of 2026-08-29** — `IDatabaseContext` (`pengdows.crud.abstractions/IDatabaseContext.cs`)
+exposes no bare `DataSource` property; only `DataSourceInfo` (`IDataSourceInformation`, a
+metadata-only object, not a raw `DbDataSource`) is public. All five test files this section
+originally named (`IDatabaseContextPublicSurfaceTests.cs`, `TransactionGovernorAcquisitionTests.cs`,
+`ExecuteReaderWriteConnectionLeakTests.cs`, `ReadOnlySessionSettingsTests.cs`,
+`dialects/MariaDbDialectTests.cs`) still exist under these exact names. The original framing
+(fix "pending on branch `2.0.6`, not yet in `main`") described a different, patch-line branch's
+merge status and does not describe `2.1` — this correction removes that stale, branch-specific
+claim rather than leaving a reader to wonder whether the fix applies here. This doc now tracks
+`2.1`'s current status going forward; if you need `2.0.x`'s status, check that branch's own copy
+of this file rather than inferring it from here.
+
+## Full release-gate suite status (2026-08-29, branch `2.1`)
+
+Per `docs/planning/future-work.md`'s TEST-006 closure:
+
+- **Unit suite** (`pengdows.crud.Tests`): 7441 tests, 0 failed, 0 skipped, both `net8.0` and `net10.0`.
+- **Testbed matrix**: 30/30 database targets, 878 checks passed, 0 failed, 53 documented skips — see
+  the Provider/version evidence table below for the per-engine breakdown.
+- **`pengdows.crud.IntegrationTests`**: 192 passed, 5 skipped (Firebird Embedded Linux-distribution
+  tests, environment-gated per their own documented setup requirements), 0 failed, both target
+  frameworks.
 
 ## Internal metrics wiring status
 
@@ -131,3 +153,57 @@ rename/move/split over time — for the claims that got a source-level audit on 
 This table itself needs re-verification if any of the referenced test files are renamed,
 merged, or deleted — it's evidence of a point-in-time audit, not a standing contract that
 the tests will always exist under these names.
+
+### Additions from the 2.1 CORE-*/TEST-* closure pass (2026-08-29)
+
+| Claim (product-thesis.md) | Proof |
+|---|---|
+| Two tenants' independent `PoolGovernor`s isolate failure — saturating one tenant's admission never affects another sharing the same singleton gateway (principle 3) | `pengdows.crud.Tests/TwoTenantFailureContainmentTests.cs` — `SaturatedWriterGovernor_OnOneTenant_DoesNotAffectAnotherTenant_OnSharedSingletonGateway` |
+| `SingleWriter` mode's turnstile prevents writer starvation under sustained concurrent readers (principle 5) | `pengdows.crud.Tests/SingleWriterFairnessTortureTests.cs` — 16 continuous readers vs. 40 writers against a real file-backed SQLite context; also `PoolGovernorFairnessTests.WriterWithTurnstile_BlocksNewReaders` at the deterministic unit level |
+| `PreventDatabaseUnload` sentinel repair (reconnecting a broken sentinel) is permit-neutral — no leak, no double-acquire (principle 5) | `pengdows.crud.Tests/PreventDatabaseUnloadTests.cs` — `BrokenSentinel_Repair_IsPermitNeutral` |
+| The hazardous `GeneratedKeyPlan.SessionScopedFunction` path is unreachable by any of the 16 shipped dialects — the generated-ID two-lease race can only occur in the narrower, real-provider-only inner-fallback case (principle 5) | `pengdows.crud.Tests/dialects/GeneratedKeyPlanReachabilityTests.cs` — `[Theory]` over every `SupportedDatabase` value via the real `SqlDialectFactory.CreateDialectForType` switch |
+| Transaction commit/rollback/dispose races have exactly one winner; an open reader fails fast rather than deadlocking or corrupting the connection (principle 2) | `pengdows.crud.Tests/TransactionCompletionReaderGuardTests.cs`, `TransactionContextDisposeRaceTests.cs`, `TransactionContextTests.CommitAndRollback_RaceOnlyOneSucceeds` — see `docs/transactions.md`'s Concurrency Contract section for the full race matrix |
+| A context handed back by `ITenantContextRegistry.GetContext` is never an orphaned, untracked instance when a concurrent `Invalidate` races its construction (principle 3) | `pengdows.crud.Tests/TenantTests.cs` — `Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext`, `Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext` (the narrower lookup-vs-invalidate race remains open — see CORE-010 and `docs/connection/multitenancy-architecture.md`) |
+
+## Provider/version evidence (DOC-005)
+
+The maintained testbed (`testbed/`, run via `dotnet run -c Release --project testbed`) is the
+source of the "12 engines, 30 targets" claim used elsewhere in this project's positioning
+material. This is **verified database support** in the three-tier sense
+`docs/planning/future-work.md`'s "What 'supported database' means" section defines: each target
+below passed the shared unit/integration/testbed contracts through the public pengdows.crud
+surface, using a currently-maintained .NET provider, on 2026-08-29 (repo-root `testbed-results.json`,
+tracked in git — regenerate before quoting a later date).
+
+| Engine | Versions tested | Targets | Checks (pass/fail/skip) | .NET provider package |
+|---|---|---|---|---|
+| SQL Server | 2017, 2019, 2022-CU25 | 3 | 90 / 0 / 6 | `Microsoft.Data.SqlClient` 6.0.2 |
+| PostgreSQL | 9.5, 15.0, 16.4 | 3 | 89 / 0 / 5 | `Npgsql` 9.0.3 |
+| MySQL | 5.7, 8.0.36, 8.4.11 | 3 | 87 / 0 / 3 | `MySqlConnector` 2.4.0 / `MySql.Data` 9.3.0 |
+| MariaDB | 10.2, 10.4, 10.11.11, 11.4.12 | 4 | 120 / 0 / 8 | `MySqlConnector` 2.4.0 / `MySql.Data` 9.3.0 |
+| Oracle | 18c, 21c, 23.26.2 | 3 | 90 / 0 / 3 | `Oracle.ManagedDataAccess.Core` 23.8.0 |
+| SQLite | (file-based, single version) | 1 | 28 / 0 / 2 | `Microsoft.Data.Sqlite` 9.0.5 |
+| DuckDB | (single version) | 1 | 29 / 0 / 3 | `DuckDB.NET.Data.Full` 1.3.2 |
+| Firebird | 3.0.9, 4.0.5, 5.0.2 | 3 | 81 / 0 / 9 | `FirebirdSql.Data.FirebirdClient` 10.3.3 |
+| CockroachDB | v23.2.14, v24.3.0, v25.1.0 | 3 | 84 / 0 / 6 | `Npgsql` 9.0.3 (PostgreSQL-compatible) |
+| YugabyteDB | 2.25.2.0-b359, 2025.2.5.2-b5 | 2 | 58 / 0 / 2 | `Npgsql` 9.0.3 (PostgreSQL-compatible) |
+| TiDB | v7.5.7, v8.5.7 | 2 | 56 / 0 / 4 | `MySqlConnector` 2.4.0 (MySQL-compatible) |
+| Db2 | 11.5.0.0a, 11.5.8.0 | 2 | 66 / 0 / 2 | `Net.IBM.Data.Db2-lnx` 8.0.0.500 |
+| **Total** | | **30** | **878 / 0 / 53** | |
+
+Zero failures across every target; the 53 skips are documented, engine-specific capability
+gaps (e.g. PostgreSQL 9.5 predates `GENERATED ALWAYS AS IDENTITY`, requiring PG10+; a
+MySql.Data-specific reader-disposal quirk) — not silent omissions. `AuroraMySql` and
+`AuroraPostgreSql` are managed-AWS variants detected at runtime and covered by the MySQL/
+PostgreSQL suites rather than a separate matrix row (see CLAUDE.md's "Aurora variants" section).
+`Snowflake` requires the opt-in `INCLUDE_SNOWFLAKE=true` environment variable (cloud-only, no
+Docker image) and is correctly excluded from this always-on 30-target run.
+
+**What this table does not claim:** a database not in this list is not "unsupported" in the
+sense of being rejected — an unrecognized product falls back to `Sql92Dialect` (generic ANSI
+behavior, see `docs/capability-discovery.md` and `docs/connection/dynamic-provider-loading.md`'s
+"Recognized dialect vs. wholly-unknown engine" section) rather than throwing. The distinction
+this table draws is specifically **verified support** (this list, executable proof) vs.
+**generic provider compatibility** (any other ADO.NET-loadable engine, unverified, ANSI-only
+behavior) — see `docs/planning/future-work.md`'s "What 'supported database' means" for the full
+three-tier definition this table applies.

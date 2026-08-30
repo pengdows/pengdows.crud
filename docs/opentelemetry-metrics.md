@@ -76,10 +76,14 @@ This is a hybrid export model, and the design held up through implementation:
    The `pengdows.db.client.*` percentile/EMA gauges still ship alongside it rather than being
    replaced — both naming schemes coexist so no existing consumer of the gauges breaks.
 
-`ModeContentionSnapshot`, referenced in an earlier draft of this document as an existing
-metric source, does not exist anywhere in source — mode-lock contention metrics were
-planned but never built, and there's no `mode_contention.*` instrument in the shipped
-observer. Don't assume it exists.
+`ModeContentionSnapshot` (`pengdows.crud/metrics/ModeContentionStats.cs`) does exist in
+source — it's a real public record (`CurrentWaiters`, `PeakWaiters`, `TotalWaits`,
+`TotalTimeouts`, `TotalWaitTimeTicks`, `AverageWaitTimeTicks`) attached to
+`ModeContentionException.Snapshot` when a `SingleWriter`/`SingleConnection` mode-lock wait
+times out — see `docs/metrics.md`'s "Mode contention" section. An earlier draft of *this*
+document proposed exporting it as an OTel `mode_contention.*` instrument; that part was
+never built and there's no such instrument in the shipped observer. Don't assume the OTel
+*export* exists — the underlying snapshot type itself is real.
 
 ## Tags
 

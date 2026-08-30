@@ -3654,6 +3654,45 @@ the process's **default `AssemblyLoadContext`** — not a custom, collectible on
   runtime (see `TenantConnectionResolver`) only changes which *already-loaded* factory a tenant
   resolves to — it does not load a new assembly on demand or unload the old one.
 
+## Security and trust model
+
+**Runtime-loaded provider code executes with exactly the same privileges as the host application
+process.** There is no sandboxing, no separate AppDomain, no process isolation boundary — modern
+.NET has no AppDomain-based code-access-security mechanism at all (that was a .NET Framework
+concept, removed in .NET Core/5+). `Assembly.LoadFrom`/`Assembly.Load` load the provider assembly
+directly into the calling process's default `AssemblyLoadContext`; once loaded, its code can do
+anything the host process itself can do — file I/O, network access, reflection over the rest of
+the process, everything. Configuring `DbProviderLoader` to load an untrusted or malicious assembly
+is equivalent to directly referencing and calling into arbitrary code at startup.
+
+**Path containment (`ResolveAssemblyPath`, described above) is a *path* guarantee, not a *code*
+guarantee.** It answers one narrow question — "does the configured `AssemblyPath` resolve to a
+file inside the application's own base directory (following symlinks)?" — and nothing else. It
+says nothing about what the assembly at that path is permitted to do once loaded, whether it's
+been tampered with, or whether its own transitive dependencies are trustworthy. Do not read
+"path containment enforced" as "the loaded code is sandboxed" — those are unrelated properties,
+and conflating them is the most common mistake in reasoning about this feature's security.
+
+**Who controls `DatabaseProviders` configuration is a deployment question, not a library one.**
+`DatabaseProviders` binds through the standard `IConfiguration` pipeline exactly like any other
+configuration section (`appsettings.json`, environment variables, a secrets manager, a config
+server) — `DbProviderLoader` has no opinion on the source. In a typical deployment this
+configuration is authored by the same operators/deployment pipeline that controls connection
+strings, application secrets, and other startup configuration capable of directing the process's
+behavior — it should be held to that same trust level, not treated as safe to accept from
+end-user input or any source outside the deployment's own configuration/secrets management. If an
+attacker can write to (or inject values into) whatever configuration source feeds
+`DatabaseProviders`, they can already get pengdows.crud to load and execute arbitrary code in the
+host process — the same blast radius as an attacker who can modify any other part of the
+application's startup configuration.
+
+**Supported factory conventions** are exactly the two described in "Factory resolution order"
+above (static `Instance` property or field) plus the legacy `DbProviderFactories.GetFactory`
+fallback — there is no additional convention (e.g. a parameterless-constructor fallback) by
+design, since neither shipping ADO.NET provider convention needs one and adding an unrequested one
+would only widen what counts as a "valid" provider assembly without a corresponding real-world
+need.
+
 ---
 
 ## Source: `docs/connection/multitenancy.md`
@@ -3672,8 +3711,8 @@ databases or authenticate tenant identity for you. Trusting the `tenant` string 
 
 This doc is the getting-started guide. For the deeper architectural contract — precisely what
 isolation is library-enforced vs. deployment-assumed, tenant-ID case/normalization rules, and the
-exact concurrency semantics of rotation and in-flight requests — see the
-`docs/connection/multitenancy-architecture.md` source further below.
+exact concurrency semantics of rotation and in-flight requests — see
+[`multitenancy-architecture.md`](./multitenancy-architecture.md).
 
 This doc covers the standard, configuration-driven path: `AddMultiTenancy`, `MultiTenantOptions`,
 `TenantConfiguration`, `ITenantConnectionResolver`, and `ITenantContextRegistry`.
@@ -3711,10 +3750,11 @@ Each `TenantConfiguration.Name` is the tenant identifier you'll pass to `GetCont
 tenant's `DatabaseContextConfiguration` is a full, ordinary `IDatabaseContextConfiguration` —
 tenants can use different providers, different connection strings, different `DbMode`s, and
 different server versions; nothing requires them to share an engine. `ProviderName` here is the
-**provider-loading section key**, not necessarily an ADO.NET invariant name — see the
-"DI registration key vs. `ProviderName`" section above if you're loading providers dynamically
-alongside multi-tenancy (call `AddDbProviderLoading` before `AddMultiTenancy` so the keyed
-factories exist when tenants resolve against them).
+**provider-loading section key**, not necessarily an ADO.NET invariant name — see
+[`dynamic-provider-loading.md`](./dynamic-provider-loading.md#di-registration-key-vs-providername--the-gotcha)
+for the exact contract if you're loading providers dynamically alongside multi-tenancy (call
+`AddDbProviderLoading` before `AddMultiTenancy` so the keyed factories exist when tenants resolve
+against them).
 
 ## DI registration
 
@@ -3763,33 +3803,127 @@ public class OrderService
 upstream, not taken directly from unvalidated user input. `GetContext` does not authenticate
 anything; it looks up (or lazily creates) the `IDatabaseContext` registered under that string.
 
-## Registration, update, and invalidation (rotation) flow
+## Disposal: application shutdown is the intended path
 
-To rotate a tenant onto new configuration (a new connection string, a different provider, a
-password change) at runtime:
+The primary, designed way a tenant's `IDatabaseContext` gets disposed is **application shutdown**
+— disposing `ITenantContextRegistry` itself (directly, or via normal DI container teardown) disposes
+every context it has created. There is currently no designed, recommended product feature for
+*live* tenant ejection or configuration rotation while the application keeps running. If your
+process needs a tenant gone or reconfigured, restarting it (or the relevant subset of it) with
+updated configuration is the supported path today.
 
-1. **Re-register** the tenant's configuration. `Register` is on the *concrete*
-   `TenantConnectionResolver` class, not on the `ITenantConnectionResolver` interface —
-   `AddMultiTenancy` registers the concrete instance under the interface type, so either resolve
-   `TenantConnectionResolver` directly from DI, or cast:
-   ```csharp
-   ((TenantConnectionResolver)resolver).Register("acme", newConfig);
-   ```
-2. **Invalidate** the stale cached context so the registry stops handing it out:
-   ```csharp
-   registry.Invalidate("acme");
-   ```
-3. The next `GetContext("acme")` call creates a fresh `IDatabaseContext` using the newly
-   registered configuration.
+## `Invalidate`/`InvalidateAll`: implemented primitives, not a designed live-rotation feature
 
-`InvalidateAll()` does the same for every tenant at once (e.g. during a coordinated
-configuration reload). There is no partial/eventual rotation window — invalidation disposes and
-evicts synchronously, and the next `GetContext` call is what triggers (re-)creation. A `GetContext`
-call already in flight when `Invalidate` runs concurrently is protected against returning an
-orphaned, undisposed context (see `docs/planning/future-work.md`'s CORE-010 entry for the exact,
-narrower race that remains — a caller that already obtained a live context via the registry's fast
-lookup path has no protection against a concurrent `Invalidate` disposing it immediately
-afterward; this is a documented, accepted limitation, not an oversight).
+`ITenantContextRegistry` does expose `Invalidate(tenant)` and `InvalidateAll()`, and they are real,
+tested APIs — CORE-009/010/011 in `docs/planning/future-work.md` hardened their concurrency
+behavior. Documenting their mechanics here for completeness, **not** as a recommended workflow:
+
+```csharp
+((TenantConnectionResolver)resolver).Register("acme", newConfig); // Register is on the concrete
+                                                                    // class, not the interface
+registry.Invalidate("acme"); // disposes and evicts the cached context, if one exists
+// The next GetContext("acme") call constructs a fresh context from the newly registered config.
+```
+
+`InvalidateAll()` does the same for every tenant at once. Invalidation disposes and evicts
+synchronously — there is no partial/eventual window, and the next `GetContext` call is what
+triggers (re-)creation.
+
+**Calling this during live operation is an application-level choice, not a vetted pattern**, and
+it carries a known, accepted residual race: a caller that already obtained a live context via the
+registry's fast lookup path has no protection against a concurrent `Invalidate` disposing that
+exact context immediately afterward (see `docs/planning/future-work.md`'s CORE-010 entry). That
+race is a real gap in the primitive's live-operation safety — one more reason application shutdown,
+not live invalidation, is the only currently-designed disposal trigger. If you do call `Invalidate`
+outside of a shutdown sequence, you are taking on that risk yourself; treat it as an
+application-specific decision, not something this library has designed and hardened for routine
+use.
+
+## Heterogeneous providers behind one shared gateway
+
+Nothing about the context-per-tenant model requires tenants to share a database engine, a server
+version, or even a deployment topology. This is proven against real servers, not just asserted:
+`MultiTenantDialectVersionTests.SharedGateway_TwoRealMySqlVersions_GeneratesCorrectSqlPerTenant`
+(`pengdows.crud.IntegrationTests/Core/`) runs two real MySQL containers straddling the 8.0.20
+upsert-syntax threshold (`MySqlDialect.UpsertIncomingAlias`), constructs **one** `TableGateway<TenantEntity, long>`
+instance, and calls `BuildUpsert`/`UpsertAsync` against each tenant's context — the legacy-version
+tenant gets `VALUES(col)` syntax, the newer-version tenant gets the aliased `incoming.col` form, and
+both execute successfully against their own real server:
+
+```csharp
+var gateway = new TableGateway<TenantEntity, long>(anyInitialContext); // one instance, any tenant
+
+await gateway.UpsertAsync(entityForTenantA, tenantAContext); // MySQL 8.0.19 -> legacy VALUES(col)
+await gateway.UpsertAsync(entityForTenantB, tenantBContext); // MySQL 8.0.33 -> incoming.col alias
+```
+
+The same pattern extends to entirely different engines: tenant A on PostgreSQL, tenant B on MySQL,
+tenant C on SQL Server, all served by the same gateway instance — each call simply passes that
+tenant's own `IDatabaseContext`, and the gateway asks that context's dialect for the correct SQL
+shape every time. Multi-engine and multi-version operation is something the architecture happens
+to support as a consequence of context-per-tenant isolation — it is not what makes tenants isolated
+from each other in the first place (that's the independent `PoolGovernor`/admission/metrics
+separation covered in
+[`multitenancy-architecture.md`](./multitenancy-architecture.md#the-model-a-tenant-selects-a-complete-execution-environment)).
+A single-engine, single-version fleet gets exactly the same isolation guarantees.
+
+### Dialect-capability cache isolation
+
+A singleton `TableGateway<TEntity,TRowID>` caches several dialect-derived artifacts internally so
+repeated calls across many tenants don't repeatedly rebuild the same SQL/parameter-binding logic.
+Two tenants on different engines or different versions of the same engine never share a cache entry
+that would produce wrong SQL for either:
+
+- **Compiled parameter binders** (`_insertBinders`/`_upsertBinders`/`_updateBinders`) — keyed by
+  **dialect instance** (`ConditionalWeakTable<ISqlDialect, ...>`), because the compiled binder
+  closes over the actual dialect instance and its live `DbProviderFactory` (and, for Firebird, its
+  `GuidStorageMode`) — properties a coarse version fingerprint can't fully capture. Reclaimed
+  automatically once a tenant's `DatabaseContext`/dialect is no longer referenced.
+- **Pure SQL-text templates** (`_templatesByDialect`) — keyed by a **fingerprint string**
+  (`dialect.GetCacheFingerprint()`, effectively `DatabaseType + ParsedVersion`), not by instance —
+  every property this cache depends on is either constant per `DatabaseType` or a pure function of
+  `ParsedVersion`, so many tenants standardized on the identical engine+version correctly share one
+  cache entry instead of accumulating a redundant copy per tenant.
+- **Pre-built container templates** (`_containersByDialect`) — instance-keyed like the binder
+  caches, for the same reason (bakes real `DbParameter` construction).
+
+The comment trail in `TableGateway.Core.cs` (search `_templatesByDialect`) states the actual bug
+this design prevents: a cache keyed only by the coarse `SupportedDatabase` enum would let whichever
+tenant's dialect built the entry first silently dictate SQL for every other same-enum tenant, even
+when a dialect property is legitimately version-gated — exactly the MySQL 8.0.19-vs-8.0.33 scenario
+the integration test above exercises.
+
+### Cross-provider migration: what the mechanism would look like
+
+There is no designed, recommended live-migration *feature* (see "Disposal: application shutdown is
+the intended path" above) — but it's worth being precise about what happens mechanically if an
+application chose to use `Register`+`Invalidate` for this anyway, since the answer is "nothing
+provider-specific breaks, and no stale-cache cleanup step exists to forget":
+
+```csharp
+// Tenant "acme" is moving from SQL Server to PostgreSQL.
+var newConfig = new DatabaseContextConfiguration
+{
+    ConnectionString = "Host=acme-pg;Database=acme;...",
+    ProviderName = "postgres", // a different DatabaseProviders section key
+    DbMode = DbMode.Standard
+};
+
+((TenantConnectionResolver)resolver).Register("acme", newConfig);
+registry.Invalidate("acme"); // application-level choice, not a vetted pattern — see caveat above
+
+// The next GetContext("acme") call — from the very same shared gateway used by every other
+// tenant — constructs a context against PostgreSQL and the gateway emits PostgreSQL SQL for it,
+// with zero gateway-side code change and no separate "acme is now Postgres" branch anywhere.
+var tenantContext = registry.GetContext("acme");
+await gateway.UpsertAsync(order, tenantContext);
+```
+
+Because dialect-derived caches are keyed by dialect instance/fingerprint (not by tenant identity),
+the old SQL Server-shaped cache entries for "acme" simply stop being referenced once its context is
+disposed — there is no stale-cache cleanup step to remember, and no risk of PostgreSQL SQL landing
+on the old SQL Server connection or vice versa. This is a statement about what the *caches* do, not
+an endorsement of live invalidation as a migration strategy — the same CORE-010 caveat applies.
 
 ## Lifecycle events
 
@@ -3816,7 +3950,8 @@ attribute (visible to the database server, e.g. in `pg_stat_activity` or SQL Ser
 
 ## Tenant cardinality (`MaxTenantCount`)
 
-`MultiTenantOptions.MaxTenantCount` binds from the same `MultiTenant` configuration section and
+See [`dynamic-provider-loading.md`](./dynamic-provider-loading.md#tenant-cardinality-cap-maxtenantcount)
+— `MultiTenantOptions.MaxTenantCount` binds from the same `MultiTenant` configuration section and
 is threaded through to `TenantContextRegistry`'s cardinality cap. Leave it unset for an unbounded
 registry (the default); set it for any long-lived process serving many distinct, dynamically
 discovered tenants, to bound worst-case connection-pool growth.
@@ -3855,7 +3990,7 @@ contexts itself would double-cache and is not a supported pattern.
 This is the architectural reference for pengdows.crud's multi-tenancy model — what the library
 actually guarantees, what it deliberately leaves to the deployment operator, and the exact
 concurrency semantics of tenant identity and rotation. For a getting-started guide (configuration,
-DI wiring, request-time usage), see `docs/connection/multitenancy.md` (inlined above).
+DI wiring, request-time usage), see [`multitenancy.md`](./multitenancy.md).
 
 ## The model: a tenant selects a complete execution environment
 
@@ -3879,10 +4014,23 @@ This distinction matters for anyone evaluating the isolation guarantee:
 | An optional `maxTenantCount` cap (`MultiTenantOptions.MaxTenantCount`) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
 | Object identity *is* tenant identity for lifecycle events — `ContextCreated`/`ContextRemoved` pass the `IDatabaseContext` instance itself, nothing else (see CORE-011's resolution: this is a deliberate architectural decision, not a missing feature — there is no separate tenant-ID field threaded through the API for a subscriber to correlate against). | A subscriber that needs a human-readable tenant label must derive or capture it itself (e.g. from the same call site that invoked `GetContext(tenantId)`), since the event does not supply one. |
 
-## Rotation: re-registration + invalidation, immediate and synchronous
+## Context disposal: application shutdown, not live ejection, is the designed path
 
-Rotating a tenant onto new configuration is a two-step, caller-driven action — there is no
-polling, no background refresh, and no eventual-consistency window baked into the registry itself:
+There is no designed, recommended product feature for ejecting or reconfiguring a tenant while the
+application keeps running. The intended way a tenant's `IDatabaseContext` gets disposed is
+application shutdown — disposing `ITenantContextRegistry` disposes every context it created. If a
+deployment needs a tenant gone or reconfigured, restarting with updated configuration is the
+supported path today; there is no live-rotation feature this architecture doc is describing as
+recommended.
+
+## `Invalidate`/`InvalidateAll` mechanics — an implemented primitive, described precisely, not endorsed for live use
+
+`TenantContextRegistry.Invalidate`/`InvalidateAll` exist, are real, and their concurrency behavior
+is deliberately hardened (CORE-009/010/011) — this section documents exactly what they do so that
+if an application does choose to call them outside a shutdown sequence, the caller understands the
+guarantees and gaps precisely, not so that doing so is a recommended pattern. It is a two-step,
+caller-driven action — there is no polling, no background refresh, and no eventual-consistency
+window baked into the registry itself:
 
 1. `TenantConnectionResolver.Register(tenant, newConfig)` replaces the stored configuration
    snapshot for that tenant identifier. This alone has no effect on any already-cached context.
@@ -3903,9 +4051,10 @@ returns), not "eventual" in the sense of a background refresh loop, but also not
 zero-downtime handoff: any caller still holding a reference to the disposed context from before
 invalidation is on its own once that context's own connections are torn down.
 
-## Concurrency semantics: in-flight requests during rotation
+## Concurrency semantics: in-flight requests racing `Invalidate`
 
-Two distinct races are relevant here, and they have different outcomes:
+Two distinct races are relevant if `Invalidate` is ever called during live operation (again: not a
+recommended pattern, but the guarantees below hold regardless), and they have different outcomes:
 
 **Creation racing invalidation (closed).** If `Invalidate`/registry disposal races a concurrent
 `GetContext` call that is still in the middle of *constructing* a new context for that same

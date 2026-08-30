@@ -4,6 +4,17 @@ This folder holds reference material for `pengdows.crud` 2.x (currently branch 2
 (repo root) remains the canonical day-to-day development guide; the documents below go deeper on
 specific subsystems.
 
+**Product/repository boundary:** only `pengdows.crud` and `pengdows.crud.abstractions` are the
+core library — the actual SQL-first data-access engine. Everything else in this repository plays a
+supporting role: `pengdows.crud.fakeDb` and `pengdows.crud.opentelemetry` are real, separately
+published NuGet packages, but they exist to *test* and *observe* applications built on the core
+library, not to extend its data-access surface. `pengdows.crud.Tests`, `pengdows.crud.IntegrationTests`,
+`testbed`, and `benchmarks/` are unshipped proof/evidence harnesses. `pengdows.stormgate`/
+`pengdows.stormgate.EntityFrameworkCore` (a connection-admission controller for apps not migrating
+to pengdows.crud) and the separate `pengdows.hangfire` repository (downstream transactional proof)
+are adoption paths and evidence, not peer products. None of them are part of what "pengdows.crud"
+means as a product.
+
 ## Reference
 
 | Doc | Covers |
@@ -37,8 +48,8 @@ specific subsystems.
 | [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior, provider-pooling-vs-admission-control distinction |
 | [`connection/ownership-and-shutdown.md`](./connection/ownership-and-shutdown.md) | What the context/transaction/reader/gateway/sentinel/registry each own, disposal ordering, the post-disposal exception contract |
 | [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment, recognized-vs-unknown-engine fallback, process-lifetime limitations |
-| [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, registration/invalidation rotation flow, lifecycle events, application-name composition |
-| [`connection/multitenancy-architecture.md`](./connection/multitenancy-architecture.md) | The architectural contract behind multi-tenancy: library-enforced vs. deployment-assumed guarantees, tenant-ID case rules, rotation/concurrency semantics |
+| [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, lifecycle events, application-name composition, and the `Invalidate`/`InvalidateAll` primitives (not a designed live-rotation feature — shutdown is the intended disposal path) |
+| [`connection/multitenancy-architecture.md`](./connection/multitenancy-architecture.md) | The architectural contract behind multi-tenancy: library-enforced vs. deployment-assumed guarantees, tenant-ID case rules, and `Invalidate` concurrency semantics |
 
 ## Positioning
 

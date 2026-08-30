@@ -118,5 +118,29 @@ every other phase is still attempted (continue-on-failure, not stop-on-first-exc
 never prevents the connection from being released.
 
 Reaching end-of-results (`Read()`/`ReadAsync()` returning `false`) triggers the same full disposal
-automatically — see `docs/architecture.md`'s "Reader-as-Lease Model" for the auto-disposal
-rationale.
+automatically — confirmed directly in `TrackedReader.ReadAsync(CancellationToken)`
+(`pengdows.crud/wrappers/TrackedReader.cs`): it awaits the underlying reader's `ReadAsync`, and the
+moment that returns `false` it calls `DisposeAsync()` on itself before returning — see
+`docs/architecture.md`'s "Reader-as-Lease Model" for the auto-disposal rationale.
+
+### Streaming and cancellation
+
+`LoadStreamAsync`/`RetrieveStreamAsync` (`BaseTableGateway.Core.cs`, `TableGateway.Core.cs`) open
+their `ITrackedReader` with `await using` *inside* the `IAsyncEnumerable<T>` iterator method
+itself — not in the caller. This is what makes disposal unconditional regardless of how the
+consumer's `await foreach` exits:
+
+- **Normal completion (EOF)** — the reader already self-disposed via the EOF path above; the
+  iterator's own `await using` disposal is a no-op on an already-disposed object.
+- **Early `break` out of `await foreach`** — the compiler-generated iterator `DisposeAsync()`
+  unwinds the method's `await using` scope, disposing the still-open reader even though EOF was
+  never reached.
+- **A cancelled `CancellationToken`** — the token flows into `ReadAsync(cancellationToken)` (via
+  `[EnumeratorCancellation]`, so `await foreach (... WithCancellation(ct))` threads it through
+  correctly). A mid-read cancellation throws `OperationCanceledException` *before* the EOF
+  self-dispose path runs, but the same `await using` unwinding disposes the reader as the exception
+  propagates out of the iterator. Either way — EOF, break, or cancellation — the reader, its
+  command, its connection/permit, and its locks are released exactly once.
+- `RetrieveStreamAsync` nests one level deeper (`await using var container` wrapping a
+  `LoadStreamAsync` call it forwards the same token into), so both layers unwind together on any
+  of the three exit paths above.

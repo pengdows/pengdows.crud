@@ -27,10 +27,23 @@ This distinction matters for anyone evaluating the isolation guarantee:
 | An optional `maxTenantCount` cap (`MultiTenantOptions.MaxTenantCount`) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
 | Object identity *is* tenant identity for lifecycle events — `ContextCreated`/`ContextRemoved` pass the `IDatabaseContext` instance itself, nothing else (see CORE-011's resolution: this is a deliberate architectural decision, not a missing feature — there is no separate tenant-ID field threaded through the API for a subscriber to correlate against). | A subscriber that needs a human-readable tenant label must derive or capture it itself (e.g. from the same call site that invoked `GetContext(tenantId)`), since the event does not supply one. |
 
-## Rotation: re-registration + invalidation, immediate and synchronous
+## Context disposal: application shutdown, not live ejection, is the designed path
 
-Rotating a tenant onto new configuration is a two-step, caller-driven action — there is no
-polling, no background refresh, and no eventual-consistency window baked into the registry itself:
+There is no designed, recommended product feature for ejecting or reconfiguring a tenant while the
+application keeps running. The intended way a tenant's `IDatabaseContext` gets disposed is
+application shutdown — disposing `ITenantContextRegistry` disposes every context it created. If a
+deployment needs a tenant gone or reconfigured, restarting with updated configuration is the
+supported path today; there is no live-rotation feature this architecture doc is describing as
+recommended.
+
+## `Invalidate`/`InvalidateAll` mechanics — an implemented primitive, described precisely, not endorsed for live use
+
+`TenantContextRegistry.Invalidate`/`InvalidateAll` exist, are real, and their concurrency behavior
+is deliberately hardened (CORE-009/010/011) — this section documents exactly what they do so that
+if an application does choose to call them outside a shutdown sequence, the caller understands the
+guarantees and gaps precisely, not so that doing so is a recommended pattern. It is a two-step,
+caller-driven action — there is no polling, no background refresh, and no eventual-consistency
+window baked into the registry itself:
 
 1. `TenantConnectionResolver.Register(tenant, newConfig)` replaces the stored configuration
    snapshot for that tenant identifier. This alone has no effect on any already-cached context.
@@ -51,9 +64,10 @@ returns), not "eventual" in the sense of a background refresh loop, but also not
 zero-downtime handoff: any caller still holding a reference to the disposed context from before
 invalidation is on its own once that context's own connections are torn down.
 
-## Concurrency semantics: in-flight requests during rotation
+## Concurrency semantics: in-flight requests racing `Invalidate`
 
-Two distinct races are relevant here, and they have different outcomes:
+Two distinct races are relevant if `Invalidate` is ever called during live operation (again: not a
+recommended pattern, but the guarantees below hold regardless), and they have different outcomes:
 
 **Creation racing invalidation (closed).** If `Invalidate`/registry disposal races a concurrent
 `GetContext` call that is still in the middle of *constructing* a new context for that same

@@ -173,3 +173,42 @@ the process's **default `AssemblyLoadContext`** — not a custom, collectible on
   for the process's lifetime. Rotating a tenant to a different `DatabaseProviders` section key at
   runtime (see `TenantConnectionResolver`) only changes which *already-loaded* factory a tenant
   resolves to — it does not load a new assembly on demand or unload the old one.
+
+## Security and trust model
+
+**Runtime-loaded provider code executes with exactly the same privileges as the host application
+process.** There is no sandboxing, no separate AppDomain, no process isolation boundary — modern
+.NET has no AppDomain-based code-access-security mechanism at all (that was a .NET Framework
+concept, removed in .NET Core/5+). `Assembly.LoadFrom`/`Assembly.Load` load the provider assembly
+directly into the calling process's default `AssemblyLoadContext`; once loaded, its code can do
+anything the host process itself can do — file I/O, network access, reflection over the rest of
+the process, everything. Configuring `DbProviderLoader` to load an untrusted or malicious assembly
+is equivalent to directly referencing and calling into arbitrary code at startup.
+
+**Path containment (`ResolveAssemblyPath`, described above) is a *path* guarantee, not a *code*
+guarantee.** It answers one narrow question — "does the configured `AssemblyPath` resolve to a
+file inside the application's own base directory (following symlinks)?" — and nothing else. It
+says nothing about what the assembly at that path is permitted to do once loaded, whether it's
+been tampered with, or whether its own transitive dependencies are trustworthy. Do not read
+"path containment enforced" as "the loaded code is sandboxed" — those are unrelated properties,
+and conflating them is the most common mistake in reasoning about this feature's security.
+
+**Who controls `DatabaseProviders` configuration is a deployment question, not a library one.**
+`DatabaseProviders` binds through the standard `IConfiguration` pipeline exactly like any other
+configuration section (`appsettings.json`, environment variables, a secrets manager, a config
+server) — `DbProviderLoader` has no opinion on the source. In a typical deployment this
+configuration is authored by the same operators/deployment pipeline that controls connection
+strings, application secrets, and other startup configuration capable of directing the process's
+behavior — it should be held to that same trust level, not treated as safe to accept from
+end-user input or any source outside the deployment's own configuration/secrets management. If an
+attacker can write to (or inject values into) whatever configuration source feeds
+`DatabaseProviders`, they can already get pengdows.crud to load and execute arbitrary code in the
+host process — the same blast radius as an attacker who can modify any other part of the
+application's startup configuration.
+
+**Supported factory conventions** are exactly the two described in "Factory resolution order"
+above (static `Instance` property or field) plus the legacy `DbProviderFactories.GetFactory`
+fallback — there is no additional convention (e.g. a parameterless-constructor fallback) by
+design, since neither shipping ADO.NET provider convention needs one and adding an unrequested one
+would only widen what counts as a "valid" provider assembly without a corresponding real-world
+need.

@@ -4,36 +4,11 @@ This page records public capabilities that are easy to miss because they are imp
 concrete gateway/context types or as extension methods rather than highlighted in the main
 three-tier API pages.
 
-## SQL container helpers
-
-`SqlContainerExtensions` adds fluent helpers for custom SQL:
-
-- `AppendQuery(string)` appends literal SQL text.
-- `AppendName(string)` and `AppendName(alias, name)` quote identifiers through the active dialect.
-- `AppendParam(...)` appends a dialect-formatted placeholder without adding a parameter.
-- `AppendWhere()`, `AppendAnd()`, `AppendEquals()`, `AppendIn()`, `AppendComma()`, and
-  `AppendCloseParen()` append common SQL fragments.
-- `ExecuteReaderSingleRowAsync(...)` requests `CommandBehavior.SingleRow` where supported.
-
-`AppendQuery` is deliberately an escape hatch: values must still be parameters and identifiers
-should use `AppendName` or `WrapObjectName`.
-
-## Gateway and context diagnostics
-
-`BaseTableGateway<TEntity>.BuildWhereByPrimaryKey(...)` adds a parameterized natural-key
-predicate to an existing container. `ClearCaches()` clears compiled reader plans, column lists,
-query templates, and cached WHERE parameter names after a schema or mapping change.
-
-`IDatabaseContext` exposes `GetSupportedIsolationLevels()`, `GetBaseSessionSettings()`, and
-`GetReadOnlySessionSettings()` for diagnostics and provider-specific integration checks.
-
-`GetPoolStatisticsSnapshot(PoolLabel)` reports slot usage, queue depth, turnstile waits, timeouts,
-cancellations, and whether a pool is disabled or forbidden. `DatabaseContext` also exposes
-connection-created/reused/failure counters and `ConnectionPoolEfficiency`.
-
-`MaxQueuedReads` and `MaxQueuedWrites` independently bound admission queues. `0` disables
-queueing for that role; `null` uses the governor default. `EnforceUniqueConnectionString` upgrades
-duplicate live contexts sharing a pool from a warning into a construction-time exception.
+**SQL container fluent helpers and gateway/context diagnostics** (formerly documented here only)
+now have a proper discoverable home: see
+[`sql-container-composition.md`](./sql-container-composition.md) for `AppendName`/`AppendParam`/
+fragment helpers, execution-overload selection, `BuildWhereByPrimaryKey`/`ClearCaches`, and pool/
+session diagnostics.
 
 ## UUID7 byte formats
 

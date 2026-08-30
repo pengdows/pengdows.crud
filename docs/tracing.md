@@ -10,7 +10,7 @@ services.AddOpenTelemetry()
         .AddSource("pengdows.crud"));   // this line, specifically
 ```
 
-That's the entire setup. Every real command execution — `ExecuteNonQueryAsync`, and every scalar/reader method, since they all route through the same two internal execution paths — creates a span (`ActivitySource("pengdows.crud", "2.0.1")`, `SqlContainer.cs`).
+That's the entire setup. Every real command execution — `ExecuteNonQueryAsync`, and every scalar/reader method, since they all route through the same two internal execution paths — creates a span (`ActivitySource("pengdows.crud", <assembly version>)`, `SqlContainer.cs` — the version string is read from the assembly at startup, not hardcoded, so it can't go stale the way it once did).
 
 ## What each span carries
 

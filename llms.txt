@@ -123,8 +123,9 @@ database-agnostic policy decoupled from connection identity — is in
 - [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md) —
   the architectural contract behind context-per-tenant multi-tenancy: what's library-enforced
   (context/admission isolation) vs. deployment-assumed (database-per-tenant, tenant-identity
-  trust), tenant-ID case-insensitivity, and the exact concurrency semantics of rotation
-  (including the one documented, accepted residual race on the registry's fast lookup path).
+  trust), tenant-ID case-insensitivity, and why application shutdown — not live invalidation — is
+  the only designed context-disposal path (including the one documented, accepted residual race
+  in `Invalidate`'s fast lookup path, for anyone who calls it outside a shutdown sequence anyway).
 - [`docs/entity-mapping.md`](docs/entity-mapping.md) — complete reference for all 15
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
@@ -182,10 +183,13 @@ filtering for multitenancy (it uses context-per-tenant instead — a distinct `I
 per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionScope` support
 (incompatible with its open-late/close-early connection philosophy by design). The context-per-tenant
 model itself — configuration shape, DI registration via `AddMultiTenancy`, request-time
-resolution, rotation, and lifecycle events — is documented in
-[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md); the deeper architectural
-contract (exactly what's library-enforced vs. deployment-assumed, tenant-ID case rules, and
-rotation concurrency semantics) is in
+resolution, and lifecycle events — is documented in
+[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md). There is no designed live
+tenant-ejection/rotation feature — application shutdown (disposing the registry) is the intended
+way a tenant's context gets disposed; `Invalidate`/`InvalidateAll` exist and are tested but using
+them for live rotation is an application-level choice outside their designed use case, not a
+recommended pattern. The deeper architectural contract (exactly what's library-enforced vs.
+deployment-assumed, tenant-ID case rules, and `Invalidate`'s concurrency semantics) is in
 [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md).
 Per-tenant
 `DbProviderFactory` resolution for that model is config-driven via

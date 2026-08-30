@@ -255,12 +255,15 @@ whatever `ITenantConnectionResolver` returns, with no check that two tenants don
 to the same database, schema, or server — physical isolation is a capability this model
 enables, not an invariant the registry enforces. In the physically-separated deployment,
 though, the property is real: a WHERE-clause bug can never leak data across tenants when
-there is no shared table for the clause to filter in the first place. `ITenantContextRegistry`
-also supports `Invalidate(tenant)`/`InvalidateAll()` with
-`ContextCreated`/`ContextRemoved` lifecycle events, so a single tenant's credentials,
-connection string, or backing database can be rotated or migrated live — the next
-`GetContext` call builds a fresh context with the new configuration — without touching any
-other tenant's context or requiring an app restart.
+there is no shared table for the clause to filter in the first place. `ITenantContextRegistry` also exposes `Invalidate(tenant)`/`InvalidateAll()` with
+`ContextCreated`/`ContextRemoved` lifecycle events — the primitives a single tenant's context
+disposal/recreation would use, isolated from every other tenant's context by construction. There is
+no designed, recommended live-rotation *feature* built on them, however: the intended way a
+tenant's context gets disposed is application shutdown, not a live credential/provider swap while
+the app keeps running. Documenting the isolation property of the primitive, not endorsing live
+invalidation as a migration workflow — see `docs/connection/multitenancy-architecture.md` for the
+exact disposal-ownership contract and the residual concurrency caveat that applies if an
+application chooses to call `Invalidate` outside a shutdown sequence anyway.
 
 ## 4. READ and WRITE are execution semantics
 
