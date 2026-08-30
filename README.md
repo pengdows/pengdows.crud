@@ -69,6 +69,8 @@ dotnet add package pengdows.crud
 dotnet add package pengdows.crud.analyzers
 ```
 
+### With `TableGateway` (entity CRUD)
+
 ```csharp
 using Microsoft.Data.SqlClient;
 using pengdows.crud;
@@ -94,6 +96,52 @@ await using var tx = await context.BeginTransactionAsync();
 await gateway.UpsertAsync(order, tx);
 await tx.CommitAsync();
 ```
+
+### Plain SQL (no `TableGateway`)
+
+`DatabaseContext` is useful on its own — connection lifecycle, pooling/admission, dialect
+quoting, and parameterization — without adopting entities, attributes, or `TableGateway` at all.
+`ISqlContainer` is the raw-SQL entry point:
+
+```csharp
+using Microsoft.Data.SqlClient;
+using pengdows.crud;
+
+var context = new DatabaseContext(
+    "Server=.;Database=app;Trusted_Connection=True;",
+    SqlClientFactory.Instance);
+
+var select = context.CreateSqlContainer("SELECT CURRENT_TIMESTAMP");
+await using var reader = await select.ExecuteReaderAsync();
+if (await reader.ReadAsync())
+{
+    var now = reader.GetDateTime(0);
+}
+```
+
+Parameters and non-`SELECT` statements work the same way — never string-interpolate a value into
+`Query`, always bind it:
+
+```csharp
+using var insert = context.CreateSqlContainer();
+insert.Query.Append("INSERT INTO ").Append(insert.WrapObjectName("orders"))
+    .Append(" (").Append(insert.WrapObjectName("id"))
+    .Append(", ").Append(insert.WrapObjectName("order_number"))
+    .Append(") VALUES (");
+
+var idParam = insert.AddParameterWithValue("id", DbType.Int64, 42L);
+var numParam = insert.AddParameterWithValue("num", DbType.String, "ORD-42");
+insert.Query.Append(insert.MakeParameterName(idParam))
+    .Append(", ").Append(insert.MakeParameterName(numParam))
+    .Append(')');
+
+int rowsAffected = await insert.ExecuteNonQueryAsync();
+```
+
+See [`docs/sql-container-composition.md`](docs/sql-container-composition.md) for the fluent
+`AppendName`/`AppendParam`/`AppendWhere` helpers that make hand-built SQL like this easier to
+read, and [`docs/streaming-queries.md`](docs/streaming-queries.md) for reading large result sets
+without loading them all into memory.
 
 ### Constructor Variants
 

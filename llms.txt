@@ -221,8 +221,9 @@ for the resolution order, the `Instance` property-vs-field convention it support
 
 ## Optional
 
-- [`README.md`](README.md) — package installation, quick-start code sample, full public API
-  surface list.
+- [`README.md`](README.md) — package installation, quick-start code samples for both usage
+  paths (`TableGateway` entity CRUD, and plain SQL via `ISqlContainer` with no entities/
+  `TableGateway` at all), full public API surface list.
 - [`AGENTS.md`](AGENTS.md) / [`GEMINI.md`](GEMINI.md) — the same core technical reference as
   `CLAUDE.md`, for other AI coding assistants.
 - [`docs/planning/future-work.md`](docs/planning/future-work.md) — living backlog of
