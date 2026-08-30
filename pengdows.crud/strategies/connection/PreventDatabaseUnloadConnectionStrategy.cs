@@ -303,6 +303,13 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
 
             return (null, null);
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is never swallowed/wrapped in this project — see CLAUDE.md's Exception
+            // Hierarchy section. The bare catch below is intentional best-effort behavior for
+            // genuine detection failures, but a caller-requested cancellation must propagate.
+            throw;
+        }
         catch
         {
             return (null, null);

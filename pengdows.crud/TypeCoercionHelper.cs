@@ -90,6 +90,20 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
+    /// Atomically sets <see cref="Logger"/> to <paramref name="logger"/> only if it is still the
+    /// default <see cref="NullLogger.Instance"/> sentinel — the first caller to observe the
+    /// unset state wins, with no check-then-set race. Two <see cref="DatabaseContext"/> instances
+    /// (e.g. different tenants) constructed concurrently via <c>DatabaseContext.CreateAsync</c>
+    /// with different <c>ILoggerFactory</c> instances would otherwise race a plain
+    /// "if (Logger is NullLogger) Logger = ..." check, letting one tenant's logger silently win
+    /// process-wide for this static's own logging.
+    /// </summary>
+    internal static void SetLoggerIfUnset(ILogger logger)
+    {
+        System.Threading.Interlocked.CompareExchange(ref _logger, logger, NullLogger.Instance);
+    }
+
+    /// <summary>
     /// Converts a value to the specified target type using a cached compiled delegate.
     /// This is significantly faster than Convert.ChangeType for repeated conversions.
     /// </summary>

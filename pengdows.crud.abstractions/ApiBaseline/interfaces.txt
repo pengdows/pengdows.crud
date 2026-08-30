@@ -244,6 +244,7 @@ method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.cr
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
+method pengdows.crud.tenant.ITenantContextRegistry::GetContextAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.IDatabaseContext>
 method pengdows.crud.tenant.ITenantContextRegistry::Invalidate(string) -> void
 method pengdows.crud.tenant.ITenantContextRegistry::InvalidateAll() -> void
 method pengdows.crud.wrappers.ITrackedReader::ReadAsync() -> System.Threading.Tasks.ValueTask`1<bool>

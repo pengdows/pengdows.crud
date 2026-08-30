@@ -168,6 +168,8 @@ public partial class DatabaseContext
         ITypeMapRegistry typeMapRegistry,
         DbDataSource? dataSource)
     {
+        MarkInitializedOrThrow();
+
         ILockerAsync? initLocker = null;
         try
         {
@@ -376,6 +378,27 @@ public partial class DatabaseContext
 
     #region Initialization Helper Methods
 
+    /// <summary>
+    /// Atomically claims this instance's one-time initialization slot, throwing immediately
+    /// (before entering the constructor/InitializeAsync try block, so no partially-owned resource
+    /// from an already-completed prior initialization is ever touched by failure-cleanup logic)
+    /// if this instance has already been initialized. DatabaseContext is a documented long-lived
+    /// singleton; several identity-defining fields were made mutable (rather than `readonly`) to
+    /// support the two-phase parameterless-ctor + async-Initialize construction path
+    /// DatabaseContext.CreateAsync uses, which removed the compiler's own single-assignment
+    /// guarantee — this restores an equivalent runtime guarantee.
+    /// </summary>
+    private void MarkInitializedOrThrow()
+    {
+        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+        {
+            throw new InvalidOperationException(
+                "This DatabaseContext instance has already been initialized. DatabaseContext is " +
+                "a singleton per connection string — construct a new instance (DatabaseContext.CreateAsync " +
+                "always does) instead of re-initializing an existing one.");
+        }
+    }
+
     private void SetConnectionString(string value)
     {
         if (!string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(value))
@@ -407,11 +430,7 @@ public partial class DatabaseContext
 
         _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
         _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
-        if (TypeCoercionHelper.Logger is NullLogger)
-        {
-            TypeCoercionHelper.Logger =
-                _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
-        }
+        TypeCoercionHelper.SetLoggerIfUnset(_loggerFactory.CreateLogger(nameof(TypeCoercionHelper)));
 
         var normalizedReadWriteMode = configuration.ReadWriteMode;
         var normalizedReadPoolSize = configuration.MaxConcurrentReads;
@@ -514,6 +533,8 @@ public partial class DatabaseContext
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        MarkInitializedOrThrow();
+
         ILockerAsync? initLocker = null;
         try
         {
@@ -777,6 +798,56 @@ public partial class DatabaseContext
         FinalizeRegistrations(configuration);
     }
 
+    // Shared, purely synchronous logic factored out of InitializeInternals/InitializeInternalsAsync
+    // (mirroring the existing InitializePoolGovernorsCore precedent) — this piece has no I/O
+    // divergence between the sync and async initialization paths, unlike the surrounding
+    // connect/detect calls, which genuinely differ (Open vs OpenAsync, Detect vs DetectAsync)
+    // and are kept separate rather than hidden behind a delegate-branching abstraction.
+    private DbMode CoerceModeAndValidateInMemoryUsage(DbMode requestedMode, SupportedDatabase product,
+        bool isLocalDb, bool isFirebirdEmbedded)
+    {
+        var coercedMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+        var inMemoryKind = DetectInMemoryKind(product, _connectionString);
+
+        if (coercedMode == DbMode.SingleConnection
+            && inMemoryKind != InMemoryKind.None
+            && IsReadOnlyConnection)
+        {
+            throw new InvalidOperationException(
+                "In-memory databases that use SingleConnection mode require a read-write context.");
+        }
+
+        // Warn on mode/database mismatches (performance, not correctness)
+        WarnOnModeMismatch(coercedMode, product, requestedMode != coercedMode);
+
+        return coercedMode;
+    }
+
+    // Shared with InitializeInternalsAsync — see CoerceModeAndValidateInMemoryUsage's comment.
+    private ITrackedConnection? TakeOwnershipOfInitConnectionForMode(ITrackedConnection? initConn,
+        ExecutionType initExecutionType)
+    {
+        if (initConn == null)
+        {
+            return null;
+        }
+
+        if (ConnectionMode == DbMode.PreventDatabaseUnload)
+        {
+            RegisterSentinel(initConn, initExecutionType);
+            return null; // context owns the sentinel now
+        }
+
+        if (ConnectionMode == DbMode.SingleConnection)
+        {
+            SetPersistentConnection(initConn);
+            return null; // context owns it now
+        }
+
+        // Standard and SingleWriter: no persistent connection to configure here
+        return initConn;
+    }
+
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
     {
         // 1) Persist config first
@@ -833,42 +904,15 @@ public partial class DatabaseContext
 
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
-            var inMemoryKind = DetectInMemoryKind(product, _connectionString);
-
-            if (ConnectionMode == DbMode.SingleConnection
-                && inMemoryKind != InMemoryKind.None
-                && IsReadOnlyConnection)
-            {
-                throw new InvalidOperationException(
-                    "In-memory databases that use SingleConnection mode require a read-write context.");
-            }
-
-            // Warn on mode/database mismatches (performance, not correctness)
-            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb, isFirebirdEmbedded);
 
             // Pooling defaults will be applied after dialect detection
 
-            // 5) Apply provider/session settings according to final mode
-            if (initConn != null)
-            {
-                // Note: SingleWriter no longer uses persistent connections - it uses
-                // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
-                if (ConnectionMode == DbMode.PreventDatabaseUnload)
-                {
-                    RegisterSentinel(initConn, initExecutionType);
-                    initConn = null; // context owns the sentinel now
-                }
-                else if (ConnectionMode == DbMode.SingleConnection)
-                {
-                    SetPersistentConnection(initConn);
-                    initConn = null; // context owns it now
-                }
-                else
-                {
-                    // Standard and SingleWriter: no persistent connection to configure here
-                }
-            }
+            // 5) Apply provider/session settings according to final mode.
+            // Note: SingleWriter no longer uses persistent connections - it uses
+            // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness).
+            // Standard and SingleWriter fall through unchanged (no persistent connection to configure here).
+            initConn = TakeOwnershipOfInitConnectionForMode(initConn, initExecutionType);
 
             // 7) Isolation resolver is created in the outer constructor after RCSI/Snapshot detection.
 
@@ -911,6 +955,11 @@ public partial class DatabaseContext
             {
                 await initConn.OpenAsync(cancellationToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                // Never wrapped — cancellation propagates as-is. See CLAUDE.md's Exception Hierarchy.
+                throw;
+            }
             catch (Exception ex)
             {
                 throw new ConnectionFailedException("Failed to open database connection.", ex)
@@ -945,32 +994,9 @@ public partial class DatabaseContext
             }
 
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
-            var inMemoryKind = DetectInMemoryKind(product, _connectionString);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb, isFirebirdEmbedded);
 
-            if (ConnectionMode == DbMode.SingleConnection
-                && inMemoryKind != InMemoryKind.None
-                && IsReadOnlyConnection)
-            {
-                throw new InvalidOperationException(
-                    "In-memory databases that use SingleConnection mode require a read-write context.");
-            }
-
-            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
-
-            if (initConn != null)
-            {
-                if (ConnectionMode == DbMode.PreventDatabaseUnload)
-                {
-                    RegisterSentinel(initConn, initExecutionType);
-                    initConn = null;
-                }
-                else if (ConnectionMode == DbMode.SingleConnection)
-                {
-                    SetPersistentConnection(initConn);
-                    initConn = null;
-                }
-            }
+            initConn = TakeOwnershipOfInitConnectionForMode(initConn, initExecutionType);
 
             return initConn;
         }
@@ -1272,6 +1298,11 @@ public partial class DatabaseContext
                     await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Never wrapped — cancellation propagates as-is. See CLAUDE.md's Exception Hierarchy.
+            throw;
         }
         catch (Exception ex)
         {

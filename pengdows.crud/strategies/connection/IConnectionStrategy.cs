@@ -84,6 +84,16 @@ internal interface IConnectionStrategy
     /// Asynchronously handles dialect detection and initialization for this strategy.
     /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.
     /// </summary>
+    /// <remarks>
+    /// The default implementation is a fake-async wrapper around the synchronous
+    /// <see cref="HandleDialectDetection"/> — it still blocks the calling thread and ignores
+    /// <paramref name="cancellationToken"/>. Every strategy shipped in this library
+    /// (<c>StandardConnectionStrategy</c>, <c>SingleConnectionStrategy</c>,
+    /// <c>PreventDatabaseUnloadConnectionStrategy</c>) overrides this with a genuinely
+    /// non-blocking implementation; a new <see cref="IConnectionStrategy"/> implementer must do
+    /// the same to participate in <c>DatabaseContext.CreateAsync</c>'s non-blocking construction
+    /// path.
+    /// </remarks>
     /// <param name="initConnection">Optional connection for dialect detection</param>
     /// <param name="factory">Optional factory for creating connections. Null when using DbDataSource.</param>
     /// <param name="loggerFactory">Logger factory for diagnostic output</param>

@@ -114,6 +114,16 @@ namespace pengdows.crud;
 public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
+    // 0 = not yet initialized, 1 = initialized. Set atomically at the very start of SetupFields
+    // (the first step of both the synchronous constructor and the async CreateAsync path). Fields
+    // below this point used to be `readonly`, which made a second initialization attempt a
+    // compile error; the two-phase parameterless-ctor + async-Initialize construction path added
+    // for DatabaseContext.CreateAsync required making them mutable, so this flag replaces the
+    // compiler's single-assignment guarantee with an explicit runtime one — DatabaseContext is
+    // documented as a long-lived singleton and must never silently re-initialize (overwriting
+    // dialect/factory/logger/etc.) on an already-initialized, in-use instance.
+    private int _initialized;
+
     private DbProviderFactory _factory = null!;
     private DbDataSource? _dataSource;
     private DbDataSource? _readerDataSource;

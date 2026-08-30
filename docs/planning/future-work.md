@@ -6,6 +6,87 @@ is not lost and can be picked up when the need arises.
 
 ---
 
+## Code review of the async-context-creation branch — 10 findings, all closed 2026-08-30
+
+A code review of this branch's `DatabaseContext.CreateAsync`/two-phase-construction work (and the
+`PreventDatabaseUnload`/`TypeCoercionHelper` changes alongside it) surfaced 10 findings, all fixed
+via TDD (or, for two doc-only items, resolved as a documented limitation with no safe code fix
+available). Full unit suite green (7470 tests, 0 skipped) after every fix; `interface-api-check`
+baseline regenerated (437 → 438 signatures for the new `ITenantContextRegistry.GetContextAsync`).
+
+1. **`PreventDatabaseUnloadConnectionStrategy.HandleDialectDetectionAsync`'s bare `catch` swallowed
+   `OperationCanceledException`** — fixed: added a `catch (OperationCanceledException) { throw; }`
+   guard before the bare catch. Test:
+   `PreventDatabaseUnloadConnectionStrategyBehaviorTests.HandleDialectDetectionAsync_CancelledDuringOpen_PropagatesOperationCanceledException`.
+2. **`DatabaseContext.InitializeInternalsAsync`'s init-connection open wrapped cancellation into
+   `ConnectionFailedException`** — fixed with the same guard pattern. Test:
+   `DatabaseContextAsyncCreationTests.CreateAsync_CancelledDuringInitConnectOpen_PropagatesOperationCanceledExceptionUnwrapped`.
+3. Same bug, `TestConnectAsync`'s read-only-validation open — fixed identically. Test:
+   `DatabaseContextAsyncCreationTests.CreateAsync_CancelledDuringReadOnlyValidationOpen_PropagatesOperationCanceledExceptionUnwrapped`.
+4. **`DatabaseContext` had no re-entrancy guard**: calling `InitializeAsync` twice on the same
+   instance (or racing it against the sync constructor) could corrupt an already-initialized,
+   in-use context. Fixed with an `Interlocked`-guarded `_initialized` flag checked by a new
+   `MarkInitializedOrThrow()`, called at the very top of both entry points — before their `try`
+   blocks, so a rejected second call cannot trigger the failure-cleanup path against a healthy
+   first context. Test:
+   `DatabaseContextAsyncCreationTests.InitializeAsync_CalledTwiceOnSameInstance_ThrowsInsteadOfSilentlyReinitializing`.
+5. **`TypeCoercionHelper.Logger`'s check-then-set was a race** under concurrent `CreateAsync`
+   calls (e.g. multiple tenants constructed via `Task.WhenAll`). Fixed with
+   `TypeCoercionHelper.SetLoggerIfUnset`, an `Interlocked.CompareExchange`-based atomic
+   first-wins set. Tests: `TypeCoercionHelperLoggerRaceTests` (3 tests, including a 32-way
+   concurrent stress test).
+6. **The new non-blocking `DatabaseContext.CreateAsync` was unreachable from multi-tenancy** —
+   `TenantContextRegistry.CreateDatabaseContext` only ever called the synchronous
+   `IDatabaseContextFactory.Create`, and `ITenantContextRegistry` had no async accessor. Fixed:
+   added `ITenantContextRegistry.GetContextAsync(tenant, cancellationToken)`, sharing the same
+   `_contexts` cache as the synchronous `GetContext` (a tenant resolved through either method is
+   created at most once and observed identically by both), preserving the existing dedup/
+   `MaxTenantCount`-cap/orphan-disposal guarantees for the async path. Tests:
+   `TenantContextRegistryAsyncTests` (6 tests: async-only factory routing, cache sharing with
+   `GetContext`, concurrent-race dedup, cap enforcement, post-dispose, argument validation).
+7. **`IDatabaseContextFactory.CreateAsync`'s default interface implementation is fake-async**
+   (`Task.FromResult(Create(...))`, blocks and ignores the cancellation token) — the shipped
+   `DefaultDatabaseContextFactory` already overrides it correctly, so no shipped code path is
+   affected; this is a trap only for a future custom `IDatabaseContextFactory` implementer who
+   doesn't override it. No safe code fix exists at the interface-default level (a default method
+   cannot know how to make an arbitrary implementer's synchronous `Create` non-blocking). Resolved
+   by documenting the limitation and the override requirement in the interface's XML doc.
+8. **`IConnectionStrategy.HandleDialectDetectionAsync`'s default implementation has the same
+   fake-async shape** — same resolution: all three shipped strategies
+   (`StandardConnectionStrategy`, `SingleConnectionStrategy`, `PreventDatabaseUnloadConnectionStrategy`)
+   already override it correctly; documented the requirement for future implementers.
+9. **`InitializeInternals`/`InitializeInternalsAsync` were substantially duplicated** (unlike
+   `InitializePoolGovernorsCore`, which factors the sync/async pair into one shared core). The
+   I/O-divergent portions (connection open, product/capability detection) genuinely can't be
+   unified without a delegate-branching abstraction that would add more risk than it removes,
+   per this file's own preference for explicit code over premature abstraction — but the pure,
+   no-I/O tail (mode coercion + in-memory validation + mode-mismatch warning, and the
+   sentinel/persistent-connection ownership handoff) was byte-identical and safely extracted into
+   two shared private helpers, `CoerceModeAndValidateInMemoryUsage` and
+   `TakeOwnershipOfInitConnectionForMode`. Pure refactor, no behavior change — verified via the
+   full existing suite before/after (7468 → 7468, same pass count) rather than a new red/green
+   test.
+10. **`DataReaderMapper.BuildSchemaShape` allocated two fresh arrays on every call, including
+    cache-hit calls** — unlike `BaseTableGateway.Reader.cs`'s sibling reader-plan cache, which
+    rents lookup arrays from an `ArrayPool` and only allocates real copies via
+    `RecordsetShape.Persist()` on an actual cache miss. Fixed: added the same `ArrayPool<string>`/
+    `ArrayPool<Type>` rent/return pair (plus an `ArrayPool<T>.Shared` fallback for schemas wider
+    than 64 fields) and a new `GetOrBuildPlan<T>` that does lookup-with-rented-arrays,
+    persist-only-on-miss — mirroring `BaseTableGateway.Reader.cs`'s `GetOrBuildRecordsetPlan`
+    exactly. `BuildSchemaShape` itself is kept as a small allocating convenience wrapper (used by
+    an existing whitebox test that builds an external plan-cache key). Tests:
+    `DataReaderMapperReaderPlanPoolingTests` (wide-schema `ArrayPool.Shared` fallback path,
+    repeated-call cache-hit correctness) plus the full existing `DataReaderMapperCacheBoundingTests`
+    suite (including the CORE-013 hash-collision regression test) as the correctness safety net —
+    raw allocation-count reduction itself was not measured by an automated test (no allocation-
+    counting harness exists in this repo yet; `benchmarks/CrudBenchmarks` would be the place to add
+    one if this needs to be tracked going forward). This is the one explicitly acknowledged
+    verification gap in this pass: the fix's *correctness* is TDD-proven, its *allocation
+    reduction* is not measured, only reasoned about from the pooled-array code path matching the
+    already-proven sibling implementation.
+
+---
+
 ## Removed: `EphemeralSecureString` (2026-08-28)
 
 `pengdows.crud/EphemeralSecureString.cs`/`IEphemeralSecureString` was a real, well-built mechanism intended to keep credentials (connection-string passwords) securely in memory: AES-encrypted on construction with a per-instance key/IV, decrypted only inside `Reveal()`/`WithRevealed()`/`WithRevealedAsync()`, auto-zeroed the cached plaintext ~750ms after first reveal, and zeroed key/IV/ciphertext on `Dispose()`. Confirmed with the maintainer this was meant to be the answer to keeping passwords out of plain memory, but it was never actually wired into `DatabaseContextConfiguration`, connection-string handling, or `DbProviderLoader` — zero production call sites, only its own unit test.

@@ -1,3 +1,6 @@
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace pengdows.crud.tenant;
 
 /// <summary>
@@ -12,6 +15,27 @@ public interface ITenantContextRegistry
     /// <returns>The associated database context.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
     public IDatabaseContext GetContext(string tenant);
+
+    /// <summary>
+    /// Asynchronously retrieves a database context for the specified tenant, sharing the same
+    /// cache as <see cref="GetContext"/> — a tenant resolved through either method is created
+    /// at most once and observed identically by both.
+    /// </summary>
+    /// <remarks>
+    /// For a not-yet-cached tenant, this performs the underlying connection/dialect-detection
+    /// work via <see cref="IDatabaseContextFactory.CreateAsync"/> instead of the blocking
+    /// <see cref="IDatabaseContextFactory.Create"/>, so the calling thread is not held for the
+    /// duration of context construction. An already-cached tenant resolves immediately, just
+    /// like <see cref="GetContext"/>.
+    /// </remarks>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <param name="cancellationToken">
+    /// Observed only while a not-yet-cached tenant's context is being created; has no effect
+    /// once the tenant is cached.
+    /// </param>
+    /// <returns>The associated database context.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
+    public Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Disposes and removes the cached context for the specified tenant.

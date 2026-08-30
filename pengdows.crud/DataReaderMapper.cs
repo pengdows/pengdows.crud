@@ -26,6 +26,7 @@
 // - Thread-safe: All caches use thread-safe data structures.
 // =============================================================================
 
+using System.Buffers;
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
@@ -87,6 +88,20 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
     private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
+
+    // Mirrors BaseTableGateway.Reader.cs's FieldNamePool/FieldTypePool: a lookup-only
+    // RecordsetShape is built from rented arrays on every call (cache hit or miss), so the
+    // hot cache-hit path allocates nothing. Real arrays are only allocated (via
+    // RecordsetShape.Persist()) when a shape is actually new and must outlive this call as a
+    // cache key.
+    private const int FieldPoolMaxLength = 64;
+    private const int FieldPoolArraysPerBucket = 32;
+
+    private static readonly ArrayPool<string> FieldNamePool =
+        ArrayPool<string>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
+
+    private static readonly ArrayPool<Type> FieldTypePool =
+        ArrayPool<Type>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
 
     private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
         _propertyLookupCache = new(MaxPropertyLookupCacheSize);
@@ -242,9 +257,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var recordReader = GetRecordReader(reader);
         options ??= MapperOptions.Default;
 
-        var shape = BuildSchemaShape(recordReader, options);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+        var plan = GetOrBuildPlan<T>(recordReader, options);
 
         var result = new List<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -275,9 +288,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var shape = BuildSchemaShape(rdr, options);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = GetOrBuildPlan<T>(rdr, options);
 
         var result = new List<T>();
 
@@ -298,9 +309,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var recordReader = GetRecordReader(reader);
         options ??= MapperOptions.Default;
 
-        var shape = BuildSchemaShape(recordReader, options);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options));
+        var plan = GetOrBuildPlan<T>(recordReader, options);
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -332,10 +341,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
 
         options ??= MapperOptions.Default;
 
-        var shape = BuildSchemaShape(rdr, options);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = GetOrBuildPlan<T>(rdr, options);
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -444,19 +450,53 @@ internal sealed class DataReaderMapper : IDataReaderMapper
     }
 
     /// <summary>
-    /// Builds the structural shape (post-NamePolicy names + resolved types) of the reader's
-    /// schema for use as a plan-cache key. CORE-013: this used to be a bare 64-bit rolling hash
-    /// (BuildSchemaHash), which risked a theoretical hash collision silently reusing the wrong
-    /// compiled plan for a different schema. RecordsetShape (shared with BaseTableGateway's own
-    /// reader-plan cache) gives ConcurrentDictionary's own Equals-confirmed collision handling
-    /// instead of trusting a bare hash value as if it were unique.
+    /// Resolves the cached <see cref="MapperPlan{T}"/> for this reader's current schema shape
+    /// (post-NamePolicy names + resolved types), building and caching a new one on a miss.
+    /// CORE-013: the cache key is a structurally-equatable <see cref="RecordsetShape"/> (shared
+    /// with BaseTableGateway's own reader-plan cache), not a bare hash, so a hash collision
+    /// between two different shapes can never silently reuse the wrong compiled plan.
     /// </summary>
-    private static RecordsetShape BuildSchemaShape(DbDataReader reader, IMapperOptions options)
+    /// <remarks>
+    /// The lookup shape is built from rented arrays and never itself stored as a dictionary
+    /// key — on a cache hit (the hot path) this call allocates nothing beyond the arrays it
+    /// rents and returns. Only a genuine miss pays for <see cref="RecordsetShape.Persist"/>'s
+    /// real array copies, mirroring BaseTableGateway.Reader.cs's GetOrBuildRecordsetPlan.
+    /// </remarks>
+    private static MapperPlan<T> GetOrBuildPlan<T>(DbDataReader reader, IMapperOptions options)
+        where T : class, new()
     {
         var fieldCount = reader.FieldCount;
-        var names = new string[fieldCount];
-        var types = new Type[fieldCount];
+        var names = RentStringArray(fieldCount);
+        var types = RentTypeArray(fieldCount);
 
+        try
+        {
+            PopulateSchemaShapeArrays(reader, options, names, types, fieldCount);
+
+            // Lookup-only: backed by the rented arrays above, never stored as a dictionary key.
+            var lookupShape = new RecordsetShape(names, types, fieldCount);
+            var lookupKey = new PlanCacheKey(typeof(T), lookupShape, options.ColumnsOnly, options.EnumMode);
+
+            if (_planCache.TryGet(lookupKey, out var existingPlan))
+            {
+                return (MapperPlan<T>)existingPlan;
+            }
+
+            // Cache miss: the key must outlive this call, so persist a copy before inserting —
+            // the lookup shape's backing arrays get returned to the pool in the finally below.
+            var persistedKey = lookupKey with { Shape = lookupShape.Persist() };
+            return (MapperPlan<T>)_planCache.GetOrAdd(persistedKey, _ => BuildPlan<T>(reader, options));
+        }
+        finally
+        {
+            ReturnStringArray(names, fieldCount);
+            ReturnTypeArray(types, fieldCount);
+        }
+    }
+
+    private static void PopulateSchemaShapeArrays(DbDataReader reader, IMapperOptions options, string[] names,
+        Type[] types, int fieldCount)
+    {
         for (var i = 0; i < fieldCount; i++)
         {
             var name = reader.GetName(i);
@@ -469,8 +509,59 @@ internal sealed class DataReaderMapper : IDataReaderMapper
             names[i] = name;
             types[i] = ResolveFieldType(reader, i);
         }
+    }
 
+    /// <summary>
+    /// Allocating convenience wrapper around <see cref="PopulateSchemaShapeArrays"/> for callers
+    /// that need a persisted <see cref="RecordsetShape"/> directly (e.g. tests building an
+    /// external plan-cache key to verify reuse) rather than the pooled lookup-then-persist-on-miss
+    /// path <see cref="GetOrBuildPlan{T}"/> uses on the hot path.
+    /// </summary>
+    private static RecordsetShape BuildSchemaShape(DbDataReader reader, IMapperOptions options)
+    {
+        var fieldCount = reader.FieldCount;
+        var names = new string[fieldCount];
+        var types = new Type[fieldCount];
+        PopulateSchemaShapeArrays(reader, options, names, types, fieldCount);
         return new RecordsetShape(names, types, fieldCount);
+    }
+
+    private static string[] RentStringArray(int size)
+    {
+        return size <= FieldPoolMaxLength
+            ? FieldNamePool.Rent(size)
+            : ArrayPool<string>.Shared.Rent(size);
+    }
+
+    private static void ReturnStringArray(string[] array, int size)
+    {
+        if (size <= FieldPoolMaxLength)
+        {
+            FieldNamePool.Return(array, clearArray: true);
+        }
+        else
+        {
+            ArrayPool<string>.Shared.Return(array, clearArray: true);
+        }
+    }
+
+    private static Type[] RentTypeArray(int size)
+    {
+        return size <= FieldPoolMaxLength
+            ? FieldTypePool.Rent(size)
+            : ArrayPool<Type>.Shared.Rent(size);
+    }
+
+    private static void ReturnTypeArray(Type[] array, int size)
+    {
+        if (size <= FieldPoolMaxLength)
+        {
+            FieldTypePool.Return(array, clearArray: false);
+        }
+        else
+        {
+            ArrayPool<Type>.Shared.Return(array, clearArray: false);
+        }
     }
 
     private static Action<T, DbDataReader> GetOrCreateSetter<T>(

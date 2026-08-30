@@ -86,6 +86,40 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         return _failOnOpenByConnectionString.TryGetValue(connectionString, out exception);
     }
 
+    private readonly Dictionary<string, System.Threading.Tasks.TaskCompletionSource<bool>> _openGateByConnectionString =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/> equals
+    /// <paramref name="connectionString"/> await a test-controlled gate before completing
+    /// <c>OpenAsync</c>, instead of completing immediately — the connection-string-scoped analog of
+    /// <see cref="fakeDbConnection.SetOpenGate"/>. Lets a test cancel the token passed to
+    /// <c>OpenAsync</c> for one specific connection-string role (e.g. a distinct read-only
+    /// validation connection string) while earlier connections built from a different connection
+    /// string (the writer string, or a dialect-detection probe) open normally and unblocked.
+    /// </summary>
+    public System.Threading.Tasks.TaskCompletionSource<bool> SetOpenGateForConnectionString(string connectionString)
+    {
+        ArgumentNullException.ThrowIfNull(connectionString);
+        var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        _openGateByConnectionString[connectionString] = tcs;
+        return tcs;
+    }
+
+    internal bool TryGetOpenGateForConnectionString(
+        string connectionString,
+        [NotNullWhen(true)] out System.Threading.Tasks.TaskCompletionSource<bool>? gate)
+    {
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            gate = null;
+            return false;
+        }
+
+        return _openGateByConnectionString.TryGetValue(connectionString, out gate);
+    }
+
     private fakeDbFactory()
     {
         _pretendToBe = SupportedDatabase.Unknown;

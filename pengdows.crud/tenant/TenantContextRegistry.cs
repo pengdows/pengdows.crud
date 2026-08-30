@@ -25,6 +25,7 @@ using System;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -262,68 +263,172 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         }
     }
 
-    private IDatabaseContext CreateDatabaseContext(string tenant)
+    private DbProviderFactory ResolveProviderFactory(IDatabaseContextConfiguration config)
     {
-        var config = _resolver.GetDatabaseContextConfiguration(tenant);
-
         // CORE-006: DbProviderLoader registers its keyed DI service under the DatabaseProviders
         // configuration section KEY, not the ProviderName field inside that section (see
         // DbProviderLoader.LoadAndRegisterProviders) — so a tenant's ProviderName must equal
         // that section key, not necessarily the ADO.NET invariant name its own name suggests.
         // A caller who (reasonably) sets it to the invariant name gets a confusing bare failure
         // otherwise; spell out the actual requirement here instead.
-        var factory = _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
-                      ?? throw new InvalidOperationException(
-                          $"No DbProviderFactory registered for the key '{config.ProviderName}'. " +
-                          "The tenant configuration's ProviderName must match a DatabaseProviders " +
-                          "configuration section key (e.g. \"DatabaseProviders:" +
-                          $"{config.ProviderName}\": {{ ... }}), not necessarily the ADO.NET " +
-                          "provider invariant name configured inside that section.");
+        return _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
+               ?? throw new InvalidOperationException(
+                   $"No DbProviderFactory registered for the key '{config.ProviderName}'. " +
+                   "The tenant configuration's ProviderName must match a DatabaseProviders " +
+                   "configuration section key (e.g. \"DatabaseProviders:" +
+                   $"{config.ProviderName}\": {{ ... }}), not necessarily the ADO.NET " +
+                   "provider invariant name configured inside that section.");
+    }
 
-        var context = _contextFactory.Create(config, factory, _loggerFactory);
-
-        // CORE-011: invoke every subscriber individually rather than a single
-        // multicast-delegate Invoke() call, so one faulting subscriber does not prevent later,
-        // well-behaved subscribers from ever being notified. If any subscriber faults, `context`
-        // must not be published to the caller or cached for reuse (the Lazy wrapping this method
-        // gets evicted by the caller's own fault handling) — dispose it here, since nobody else
-        // can ever reach it, then propagate the first subscriber's exception.
+    // CORE-011: invoke every subscriber individually rather than a single multicast-delegate
+    // Invoke() call, so one faulting subscriber does not prevent later, well-behaved subscribers
+    // from ever being notified. If any subscriber faults, `context` must not be published to the
+    // caller or cached for reuse (the Lazy/creation task wrapping this call gets evicted by the
+    // caller's own fault handling) — dispose it here, since nobody else can ever reach it, then
+    // propagate the first subscriber's exception.
+    private void NotifyContextCreatedOrDisposeOnFailure(string tenant, IDatabaseContext context)
+    {
         var handler = ContextCreated;
-        if (handler != null)
+        if (handler == null)
         {
-            Exception? first = null;
-            foreach (var subscriber in handler.GetInvocationList())
+            return;
+        }
+
+        Exception? first = null;
+        foreach (var subscriber in handler.GetInvocationList())
+        {
+            try
             {
-                try
-                {
-                    ((Action<IDatabaseContext>)subscriber).Invoke(context);
-                }
-                catch (Exception ex)
-                {
-                    first ??= ex;
-                    _logger.LogWarning(ex,
-                        "A ContextCreated subscriber threw while notifying tenant '{Tenant}'.", tenant);
-                }
+                ((Action<IDatabaseContext>)subscriber).Invoke(context);
             }
-
-            if (first != null)
+            catch (Exception ex)
             {
-                try
-                {
-                    context.Dispose();
-                }
-                catch (Exception disposeEx)
-                {
-                    _logger.LogWarning(disposeEx,
-                        "Error disposing a context after a ContextCreated subscriber failure for tenant '{Tenant}'.",
-                        tenant);
-                }
-
-                ExceptionDispatchInfo.Capture(first).Throw();
+                first ??= ex;
+                _logger.LogWarning(ex,
+                    "A ContextCreated subscriber threw while notifying tenant '{Tenant}'.", tenant);
             }
         }
 
+        if (first != null)
+        {
+            try
+            {
+                context.Dispose();
+            }
+            catch (Exception disposeEx)
+            {
+                _logger.LogWarning(disposeEx,
+                    "Error disposing a context after a ContextCreated subscriber failure for tenant '{Tenant}'.",
+                    tenant);
+            }
+
+            ExceptionDispatchInfo.Capture(first).Throw();
+        }
+    }
+
+    private IDatabaseContext CreateDatabaseContext(string tenant)
+    {
+        var config = _resolver.GetDatabaseContextConfiguration(tenant);
+        var factory = ResolveProviderFactory(config);
+        var context = _contextFactory.Create(config, factory, _loggerFactory);
+        NotifyContextCreatedOrDisposeOnFailure(tenant, context);
         return context;
+    }
+
+    private async Task<IDatabaseContext> CreateDatabaseContextAsync(string tenant, CancellationToken cancellationToken)
+    {
+        var config = _resolver.GetDatabaseContextConfiguration(tenant);
+        var factory = ResolveProviderFactory(config);
+        var context = await _contextFactory.CreateAsync(config, factory, _loggerFactory, cancellationToken)
+            .ConfigureAwait(false);
+        NotifyContextCreatedOrDisposeOnFailure(tenant, context);
+        return context;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenant))
+        {
+            throw new ArgumentNullException(nameof(tenant), "Tenant identifier must not be null or empty.");
+        }
+
+        // Mirrors GetContext's loop/orphan-check shape (see its comments for the full
+        // rationale), but the real construction I/O happens via CreateDatabaseContextAsync
+        // *before* any dictionary mutation, since it cannot run inside a Lazy<T> factory
+        // delegate without reintroducing a blocking wait on the calling thread.
+        while (true)
+        {
+            ThrowIfDisposed();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (_contexts.TryGetValue(tenant, out var existingLazy))
+            {
+                return ResolveLazy(tenant, existingLazy);
+            }
+
+            if (_maxTenantCount.HasValue)
+            {
+                lock (_admissionLock)
+                {
+                    if (!_contexts.ContainsKey(tenant) && _contexts.Count >= _maxTenantCount.Value)
+                    {
+                        throw new InvalidOperationException(
+                            $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
+                            "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
+                    }
+                }
+            }
+
+            var context = await CreateDatabaseContextAsync(tenant, cancellationToken).ConfigureAwait(false);
+            var lazy = new Lazy<IDatabaseContext>(() => context, LazyThreadSafetyMode.ExecutionAndPublication);
+
+            Lazy<IDatabaseContext> installed;
+            if (_maxTenantCount.HasValue)
+            {
+                lock (_admissionLock)
+                {
+                    // Re-check the cap here (not just before the await above): the count-check
+                    // and the install must be atomic together, otherwise two concurrent
+                    // GetContextAsync calls admitting two DIFFERENT new tenants could both pass
+                    // the earlier check before either installs. Doing this check+install pair
+                    // under the lock is safe because, unlike CreateDatabaseContext's Lazy-deferred
+                    // I/O, the context here is already fully constructed — install is a cheap,
+                    // synchronous dictionary operation.
+                    if (!_contexts.ContainsKey(tenant) && _contexts.Count >= _maxTenantCount.Value)
+                    {
+                        DisposeOrphanedContext(context);
+                        throw new InvalidOperationException(
+                            $"TenantContextRegistry has reached its maximum tenant count of {_maxTenantCount}. " +
+                            "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
+                    }
+
+                    installed = _contexts.GetOrAdd(tenant, lazy);
+                }
+            }
+            else
+            {
+                installed = _contexts.GetOrAdd(tenant, lazy);
+            }
+
+            if (!ReferenceEquals(installed, lazy))
+            {
+                // Another call (sync or async) already installed a context for this tenant while
+                // we were awaiting creation — ours is redundant, not needed.
+                DisposeOrphanedContext(context);
+                return ResolveLazy(tenant, installed);
+            }
+
+            if (_contexts.TryGetValue(tenant, out var currentLazy) && ReferenceEquals(currentLazy, lazy))
+            {
+                return context;
+            }
+
+            // A racing Invalidate()/registry disposal removed our just-installed entry before we
+            // could observe it as published — see GetContext's identical comment for the
+            // rationale. Dispose the orphan and retry.
+            DisposeOrphanedContext(context);
+        }
     }
 
     protected override void DisposeManaged()

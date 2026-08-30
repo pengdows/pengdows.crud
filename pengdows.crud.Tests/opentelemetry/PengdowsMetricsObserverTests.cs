@@ -1163,6 +1163,10 @@ public class PengdowsMetricsObserverTests
         public event Action<IDatabaseContext>? ContextRemoved;
 
         public IDatabaseContext GetContext(string tenant) => throw new NotSupportedException();
+
+        public Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public void Invalidate(string tenant) => throw new NotSupportedException();
         public void InvalidateAll() => throw new NotSupportedException();
 

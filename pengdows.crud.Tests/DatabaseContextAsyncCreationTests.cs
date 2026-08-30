@@ -1,5 +1,7 @@
 using System;
 using System.Data.Common;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -110,6 +112,80 @@ public class DatabaseContextAsyncCreationTests
             var config = new DatabaseContextConfiguration { ConnectionString = "" };
             await DatabaseContext.CreateAsync(config, factory);
         });
+    }
+
+    // Code-review finding: InitializeInternalsAsync's `catch (Exception ex)` around the init
+    // connection's OpenAsync wrapped OperationCanceledException into ConnectionFailedException
+    // instead of letting it propagate unwrapped, violating this project's documented invariant
+    // that cancellation is never wrapped. This must throw OperationCanceledException, not
+    // ConnectionFailedException.
+    [Fact]
+    public async Task CreateAsync_CancelledDuringInitConnectOpen_PropagatesOperationCanceledExceptionUnwrapped()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Host=localhost;Database=cancel_init_connect_test;EmulatedProduct=PostgreSql"
+        };
+
+        // Probe construction (no injected gate) to learn the exact ConnectionString the init
+        // connection ends up carrying, without guessing at any normalization/decoration.
+        var probingFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        await using (await DatabaseContext.CreateAsync(config, probingFactory))
+        {
+        }
+
+        var probedInitConnectionString = probingFactory.CreatedConnections
+            .Select(c => c.ConnectionString)
+            .First(cs => cs != null && cs.Contains("cancel_init_connect_test", StringComparison.Ordinal))!;
+
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        factory.SetOpenGateForConnectionString(probedInitConnectionString); // never completed
+
+        using var cts = new CancellationTokenSource();
+        var createTask = DatabaseContext.CreateAsync(config, factory, cancellationToken: cts.Token);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await createTask);
+    }
+
+    // Code-review finding: TestConnectAsync's `catch (Exception ex)` around the read-only
+    // validation connection's OpenAsync likewise wrapped OperationCanceledException into
+    // ConnectionFailedException{Phase="ReadOnlyValidation"} — the same bug class as InitConnect,
+    // a second site.
+    [Fact]
+    public async Task CreateAsync_CancelledDuringReadOnlyValidationOpen_PropagatesOperationCanceledExceptionUnwrapped()
+    {
+        var writeConnectionString = "Host=localhost;Database=cancel_ro_validation_write;EmulatedProduct=PostgreSql";
+        var readConnectionString = "Host=localhost;Database=cancel_ro_validation_read;EmulatedProduct=PostgreSql";
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = writeConnectionString,
+            ReadOnlyConnectionString = readConnectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        // Probe construction (no injected gate) to learn the exact ConnectionString the
+        // read-only-validation connection ends up carrying.
+        var probingFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        await using (await DatabaseContext.CreateAsync(config, probingFactory))
+        {
+        }
+
+        var probedReadConnectionString = probingFactory.CreatedConnections
+            .Select(c => c.ConnectionString)
+            .First(cs => cs != null && cs.Contains("cancel_ro_validation_read", StringComparison.Ordinal))!;
+
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        factory.SetOpenGateForConnectionString(probedReadConnectionString); // never completed
+
+        using var cts = new CancellationTokenSource();
+        var createTask = DatabaseContext.CreateAsync(config, factory, cancellationToken: cts.Token);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await createTask);
     }
 
     [Fact]
@@ -247,6 +323,49 @@ public class DatabaseContextAsyncCreationTests
         {
             context.Dispose();
         }
+    }
+
+    // Code-review finding: a dozen identity-defining fields (_factory, _dialect, _loggerFactory,
+    // _logger, TypeMapRegistry, Name, metrics collectors, etc.) went from `readonly` to mutable to
+    // support the new two-phase (parameterless-ctor + async Initialize) construction, with no
+    // runtime guard replacing the compiler's single-assignment guarantee. DatabaseContext is
+    // documented as a long-lived singleton — nothing should be able to re-run initialization on an
+    // already-initialized, in-use instance and silently overwrite its identity.
+    [Fact]
+    public async Task InitializeAsync_CalledTwiceOnSameInstance_ThrowsInsteadOfSilentlyReinitializing()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Host=localhost;Database=reentrancy_test;EmulatedProduct=PostgreSql"
+        };
+
+        await using var context = await DatabaseContext.CreateAsync(config, factory);
+        var originalName = context.Name;
+
+        var initializeAsyncMethod = typeof(DatabaseContext).GetMethod(
+            "InitializeAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(initializeAsyncMethod);
+
+        var secondFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var secondConfig = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=reentrancy_test2;EmulatedProduct=Sqlite"
+        };
+
+        var invokeResult = initializeAsyncMethod!.Invoke(context, new object?[]
+        {
+            secondConfig, secondFactory, NullLoggerFactory.Instance, new TypeMapRegistry(), null, CancellationToken.None
+        });
+        var secondInitTask = (Task)invokeResult!;
+
+        var ex = await Record.ExceptionAsync(async () => await secondInitTask);
+        Assert.IsType<InvalidOperationException>(ex);
+
+        // The original context must be completely unaffected by the rejected re-initialization
+        // attempt — proving this isn't just throwing after already overwriting fields.
+        Assert.Equal(originalName, context.Name);
+        Assert.Equal(SupportedDatabase.PostgreSql, context.Dialect.DatabaseType);
     }
 
     private sealed class BlockingAsyncDbProviderFactory : DbProviderFactory

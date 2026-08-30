@@ -870,6 +870,12 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         OpenAsyncCount++;
 
         var gate = _openGate;
+        if (gate == null && _factoryRef != null &&
+            _factoryRef.TryGetOpenGateForConnectionString(ConnectionString, out var csGate))
+        {
+            gate = csGate;
+        }
+
         if (gate == null)
         {
             try
