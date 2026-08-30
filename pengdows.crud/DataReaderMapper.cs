@@ -26,7 +26,6 @@
 // - Thread-safe: All caches use thread-safe data structures.
 // =============================================================================
 
-using System.Buffers;
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
@@ -89,19 +88,11 @@ internal sealed class DataReaderMapper : IDataReaderMapper
     private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
     private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
 
-    // Mirrors BaseTableGateway.Reader.cs's FieldNamePool/FieldTypePool: a lookup-only
+    // Uses RecordsetFieldArrayPool (shared with BaseTableGateway.Reader.cs): a lookup-only
     // RecordsetShape is built from rented arrays on every call (cache hit or miss), so the
     // hot cache-hit path allocates nothing. Real arrays are only allocated (via
     // RecordsetShape.Persist()) when a shape is actually new and must outlive this call as a
     // cache key.
-    private const int FieldPoolMaxLength = 64;
-    private const int FieldPoolArraysPerBucket = 32;
-
-    private static readonly ArrayPool<string> FieldNamePool =
-        ArrayPool<string>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
-
-    private static readonly ArrayPool<Type> FieldTypePool =
-        ArrayPool<Type>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
 
     private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
         _propertyLookupCache = new(MaxPropertyLookupCacheSize);
@@ -466,8 +457,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         where T : class, new()
     {
         var fieldCount = reader.FieldCount;
-        var names = RentStringArray(fieldCount);
-        var types = RentTypeArray(fieldCount);
+        var names = RecordsetFieldArrayPool.RentStringArray(fieldCount);
+        var types = RecordsetFieldArrayPool.RentTypeArray(fieldCount);
 
         try
         {
@@ -489,8 +480,8 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         }
         finally
         {
-            ReturnStringArray(names, fieldCount);
-            ReturnTypeArray(types, fieldCount);
+            RecordsetFieldArrayPool.ReturnStringArray(names, fieldCount);
+            RecordsetFieldArrayPool.ReturnTypeArray(types, fieldCount);
         }
     }
 
@@ -524,44 +515,6 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var types = new Type[fieldCount];
         PopulateSchemaShapeArrays(reader, options, names, types, fieldCount);
         return new RecordsetShape(names, types, fieldCount);
-    }
-
-    private static string[] RentStringArray(int size)
-    {
-        return size <= FieldPoolMaxLength
-            ? FieldNamePool.Rent(size)
-            : ArrayPool<string>.Shared.Rent(size);
-    }
-
-    private static void ReturnStringArray(string[] array, int size)
-    {
-        if (size <= FieldPoolMaxLength)
-        {
-            FieldNamePool.Return(array, clearArray: true);
-        }
-        else
-        {
-            ArrayPool<string>.Shared.Return(array, clearArray: true);
-        }
-    }
-
-    private static Type[] RentTypeArray(int size)
-    {
-        return size <= FieldPoolMaxLength
-            ? FieldTypePool.Rent(size)
-            : ArrayPool<Type>.Shared.Rent(size);
-    }
-
-    private static void ReturnTypeArray(Type[] array, int size)
-    {
-        if (size <= FieldPoolMaxLength)
-        {
-            FieldTypePool.Return(array, clearArray: false);
-        }
-        else
-        {
-            ArrayPool<Type>.Shared.Return(array, clearArray: false);
-        }
     }
 
     private static Action<T, DbDataReader> GetOrCreateSetter<T>(

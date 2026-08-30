@@ -6,6 +6,53 @@ is not lost and can be picked up when the need arises.
 
 ---
 
+## Ad hoc architecture review (own findings, not from an external tool) — 2 fixed, 2 deliberately deferred, 2026-08-30
+
+Asked directly ("are there any spots where we got weird/sloppy with our architecture?") after
+evaluating an external (Codex) architecture review and a second pass that fact-checked it. Two
+things surfaced that neither external pass caught, both found through direct first-hand
+familiarity with the code (not static analysis) and both fixed the same session:
+
+1. **`BaseTableGateway.Reader.cs` and `DataReaderMapper.cs` each independently declared the exact
+   same `ArrayPool<string>`/`ArrayPool<Type>` pooling mechanism** (same constants, same two pool
+   instances, same four `RentStringArray`/`ReturnStringArray`/`RentTypeArray`/`ReturnTypeArray`
+   methods) — a direct consequence of the pooling work added earlier this session (see the code
+   review above, finding #10) mirroring rather than sharing the pattern. **Fixed:** extracted to
+   a new shared `pengdows.crud/internal/RecordsetFieldArrayPool.cs`, used by both call sites; the
+   per-file duplicate declarations removed. Pure refactor, no behavior change other than the two
+   previously-independent pools (one per `BaseTableGateway<TEntity>` closed generic type, i.e.
+   effectively one pool per distinct entity type in the app, plus one for `DataReaderMapper`)
+   now being a single shared pool across every entity type and `DataReaderMapper` — `ArrayPool<T>`
+   always falls back to an ordinary allocation on a pool miss (never blocks, never throws), so
+   this only changes baseline memory footprint and pool-contention characteristics, not
+   correctness. Verified via the full existing suite before/after (7473 tests, both
+   net8.0/net10.0), not a new red/green test, since no new behavior was introduced.
+2. **`TypeCoercionHelper.Logger` is a process-wide static, not a per-tenant one — the earlier
+   `SetLoggerIfUnset` fix (code review finding #5) made the race atomic but not the underlying
+   scope correct.** In a multi-tenant process with distinct per-tenant `ILoggerFactory` instances,
+   every tenant except the first one to construct a `DatabaseContext` has its type-coercion
+   diagnostics logged through the *first* tenant's logger — misattributed, not lost. Given the
+   fix that would make this genuinely per-tenant (threading a logger through every
+   `TypeCoercionHelper` call site from the calling context) is a large, invasive, cross-cutting
+   change for a diagnostics-attribution issue, not a correctness bug, **resolved by documenting it
+   as a deliberate, accepted scope limitation** rather than attempting that rewrite: expanded XML
+   doc on `TypeCoercionHelper.Logger`/`SetLoggerIfUnset`, and added a new row to
+   `docs/connection/multitenancy-architecture.md`'s "What the library enforces vs. what it
+   assumes" table making the limitation explicit and discoverable outside source comments.
+
+**Deliberately not attempted — real, but too large/risky for a fast pass:**
+- **Two independent exception-classification systems that can disagree** (`IDbExceptionTranslator`/
+  `DbExceptionTranslatorRegistry` vs. `SqlDialect.TryClassifyProviderException`/`IsUniqueViolation`/
+  etc.) — already self-documented in CLAUDE.md's "Adding a New Database" checklist item 11.
+  Unifying them means touching every dialect and every translator; a real project, not a quick fix.
+- **Onboarding a new database requires manually touching 7+ non-dialect call sites** (see
+  CLAUDE.md's "Easy-to-miss spots" list) instead of one centralized dialect-driven dispatch point.
+  Also already self-documented, also a large cross-cutting refactor (would mean adding new
+  virtual/abstract `SqlDialect` members and refactoring every switch-on-`SupportedDatabase` call
+  site to use them) rather than something safe to attempt without dedicating a real pass to it.
+
+---
+
 ## Code review of the async-context-creation branch — 10 findings, all closed 2026-08-30
 
 A code review of this branch's `DatabaseContext.CreateAsync`/two-phase-construction work (and the

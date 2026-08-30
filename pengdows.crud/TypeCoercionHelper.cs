@@ -83,6 +83,21 @@ internal static class TypeCoercionHelper
 
     private static ILogger _logger = NullLogger.Instance;
 
+    /// <summary>
+    /// Process-wide logger for <see cref="TypeCoercionHelper"/>'s own diagnostic output (coercion
+    /// warnings/errors). Not a per-<see cref="DatabaseContext"/> or per-tenant concern: this type
+    /// is <c>internal static</c> and shares one logger across every context in the process.
+    /// </summary>
+    /// <remarks>
+    /// <b>Known limitation:</b> in a multi-tenant process with per-tenant <c>ILoggerFactory</c>
+    /// instances (different sinks, different structured-logging scopes/tags per tenant),
+    /// <see cref="SetLoggerIfUnset"/>'s first-wins semantics mean every tenant *except* the first
+    /// one to construct a <see cref="DatabaseContext"/> has its coercion diagnostics logged
+    /// through the *first* tenant's logger, not its own — misattributed, not lost. This is a
+    /// deliberate, accepted scope limitation of a process-wide diagnostic utility, not a bug to
+    /// silently work around: if a tenant needs to see its own coercion diagnostics reliably
+    /// attributed, don't rely on this logger for that — it was never designed to be per-tenant.
+    /// </remarks>
     public static ILogger Logger
     {
         get => _logger;
@@ -95,8 +110,11 @@ internal static class TypeCoercionHelper
     /// unset state wins, with no check-then-set race. Two <see cref="DatabaseContext"/> instances
     /// (e.g. different tenants) constructed concurrently via <c>DatabaseContext.CreateAsync</c>
     /// with different <c>ILoggerFactory</c> instances would otherwise race a plain
-    /// "if (Logger is NullLogger) Logger = ..." check, letting one tenant's logger silently win
-    /// process-wide for this static's own logging.
+    /// "if (Logger is NullLogger) Logger = ..." check, which could corrupt the sentinel-check
+    /// itself under concurrent construction. This method makes the *check-and-set* atomic; it
+    /// does not — and cannot — make the result per-tenant. Whichever context's logger wins here
+    /// wins for every other context in the process too. See <see cref="Logger"/>'s remarks for
+    /// the accepted scope limitation this implies.
     /// </summary>
     internal static void SetLoggerIfUnset(ILogger logger)
     {
