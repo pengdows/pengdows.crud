@@ -409,22 +409,40 @@ public class FakeDataStore
                 return filteredRows.ToList();
             }
 
-            // Handle specific columns
-            var columns = selectPart.Split(',').Select(c => CleanIdentifier(c.Trim())).ToList();
+            // Handle specific columns, honoring an optional "AS alias" or implicit "column alias"
+            // suffix on each — mirrors HandleLiteralSelect's identical alias pattern for the
+            // no-FROM literal-select path, so both SELECT forms support aliasing consistently.
+            var columnSpecs = selectPart.Split(',').Select(ParseColumnSpec).ToList();
             return filteredRows.Select(row =>
             {
                 var result = new Dictionary<string, object?>();
-                foreach (var col in columns)
+                foreach (var (sourceColumn, outputKey) in columnSpecs)
                 {
-                    if (row.ContainsKey(col))
+                    if (row.ContainsKey(sourceColumn))
                     {
-                        result[col] = row[col];
+                        result[outputKey] = row[sourceColumn];
                     }
                 }
 
                 return result;
             }).ToList();
         }
+    }
+
+    private (string SourceColumn, string OutputKey) ParseColumnSpec(string token)
+    {
+        var trimmed = token.Trim();
+        var match = Regex.Match(trimmed, @"^(.+?)\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)$", RegexOptions.IgnoreCase);
+
+        if (match.Success)
+        {
+            var sourceColumn = CleanIdentifier(match.Groups[1].Value.Trim());
+            var alias = match.Groups[2].Value.Trim();
+            return (sourceColumn, alias);
+        }
+
+        var column = CleanIdentifier(trimmed);
+        return (column, column);
     }
 
     private object? HandleCountQuery(string commandText, DbParameterCollection? parameters)

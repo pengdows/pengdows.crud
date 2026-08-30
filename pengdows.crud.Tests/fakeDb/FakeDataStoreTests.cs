@@ -181,6 +181,68 @@ public class FakeDataStoreTests
         Assert.NotNull(reader["name"]);
     }
 
+    // Gap found while writing an external DataReaderMapper reachability test (FEAT-004):
+    // HandleSelect's specific-column branch split the select list on commas and treated each
+    // token as a bare column name (via CleanIdentifier) with no "AS alias" parsing at all — unlike
+    // HandleLiteralSelect (the no-FROM path), which already had this exact regex for
+    // "value AS alias"/"value alias". A token like "order_id AS OrderId" silently failed
+    // row.ContainsKey(...) and was dropped from the result entirely (no exception, no aliasing —
+    // the column just vanished), which is a real capability gap for any test needing a query
+    // result shaped by column aliases.
+    [Fact]
+    public async Task Select_WithColumnAliasUsingAs_ReturnsColumnUnderTheAliasName()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id, customer_name) VALUES (42, 'Acme Corp')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id AS OrderId, customer_name AS CustomerName FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(42L, Convert.ToInt64(reader["OrderId"]));
+        Assert.Equal("Acme Corp", reader["CustomerName"]?.ToString());
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
+    public async Task Select_WithImplicitColumnAlias_ReturnsColumnUnderTheAliasName()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id) VALUES (7)";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id OrderId FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(7L, Convert.ToInt64(reader["OrderId"]));
+    }
+
+    [Fact]
+    public async Task Select_MixOfAliasedAndPlainColumns_BothResolveCorrectly()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id, status) VALUES (1, 'shipped')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id AS OrderId, status FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(1L, Convert.ToInt64(reader["OrderId"]));
+        Assert.Equal("shipped", reader["status"]?.ToString());
+    }
+
     [Fact]
     public async Task Select_WithLikeWhere_ReturnsMatchingRowsOnly()
     {

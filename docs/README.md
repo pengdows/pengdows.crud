@@ -28,6 +28,7 @@ means as a product.
 | [`uuid7.md`](./uuid7.md) | `Uuid7Optimized`: monotonicity scope, clock modes, throughput/backpressure, configuration |
 | [`transactions.md`](./transactions.md) | `TransactionContext`, isolation profiles, savepoints, concurrency contract (commit/rollback/dispose races, reader locks, cancellation) |
 | [`entity-mapping.md`](./entity-mapping.md) | Complete attribute reference: `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/`[Json]`/enum/correlation-token attributes, valid combinations, defaults |
+| [`data-reader-mapper.md`](./data-reader-mapper.md) | `DataReaderMapper`/`IDataReaderMapper`: hydrate any POCO from any SQL result (stored procedures, ad-hoc queries) with no `[Table]`/`[Column]` attributes required — `MapperOptions`' `Strict`/`ColumnsOnly`/`NamePolicy`/`EnumMode` |
 | [`gateway-counts.md`](./gateway-counts.md) | Gateway `COUNT(*)` helpers: `CountAllAsync`/`CountWhereAsync`/`CountWhereNullAsync`/`CountWhereEqualsAsync`, SQL shape, quoting/parameterization, and limitations |
 | [`sql-container-templates.md`](./sql-container-templates.md) | `ISqlContainer.Clone()`/`Clone(IDatabaseContext)`: template reuse, parameter rebinding, cross-dialect/tenant/transaction use, disposal independence |
 | [`capability-discovery.md`](./capability-discovery.md) | Reading `ISqlDialect`/`IDataSourceInformation` at runtime to branch on capability instead of database name |

@@ -130,6 +130,11 @@ database-agnostic policy decoupled from connection identity — is in
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
   combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
+- [`docs/data-reader-mapper.md`](docs/data-reader-mapper.md) — `DataReaderMapper`/
+  `IDataReaderMapper`: a general-purpose, attribute-free mapper for hydrating any POCO from any
+  SQL result (stored procedures, ad-hoc queries with no corresponding table) by column-name
+  matching, separate from and unrelated to `TableGateway`'s attribute-driven compiled-plan
+  hydration; `MapperOptions`' `Strict`/`ColumnsOnly`/`NamePolicy`/`EnumMode`.
 - [`docs/gateway-counts.md`](docs/gateway-counts.md) — the four gateway `COUNT(*)` helpers
   (`CountAllAsync`/`CountWhereAsync`/`CountWhereNullAsync`/`CountWhereEqualsAsync`): exact
   signatures, the SQL each produces, identifier quoting/parameterization, and the known
