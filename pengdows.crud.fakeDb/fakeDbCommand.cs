@@ -200,6 +200,11 @@ public class fakeDbCommand : DbCommand
                 throw exScalar!;
             }
 
+            if (!string.IsNullOrWhiteSpace(CommandText))
+            {
+                conn.ExecutedScalarTexts.Add(CommandText);
+            }
+
             // A resolver takes full, exclusive control over every scalar response by command
             // text — including throwing for a command the test didn't expect — which is exactly
             // what version/flavor-detection tests need instead of the canned defaults below.

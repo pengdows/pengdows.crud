@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -170,5 +171,46 @@ public class DatabaseContextConstructionFailureCleanupTests
         Assert.True(
             factory.CreatedDataSources[^1].WasDisposed,
             "The disposal attempt must still have been made even though it threw.");
+    }
+
+    // TEST-017: read-only validation is another of the six named constructor phases the tracker
+    // had no fakeDb fault-injection hook for. TestConnect() opens a connection built from the
+    // distinct ReadOnlyConnectionString and wraps any Open() exception in ConnectionFailedException
+    // — this closes the gap with a connection-string-scoped fail-on-open hook so only that specific
+    // connection string fails, not the earlier writer-side connections built during dialect
+    // detection/session setup that share the (different) main connection string.
+    [Fact]
+    public void Construction_ReadOnlyValidationFails_PropagatesConnectionFailedException()
+    {
+        var writeConnectionString = "Data Source=test017-ro-validation-write;EmulatedProduct=Sqlite";
+        var readConnectionString = "Data Source=test017-ro-validation-read;EmulatedProduct=Sqlite";
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = writeConnectionString,
+            ReadOnlyConnectionString = readConnectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        // Probe construction (no injected failure) to learn the exact ConnectionString the
+        // read-only-validation connection ends up carrying, without guessing at any
+        // dialect-applied normalization/decoration of the raw string.
+        var probingFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        using (new DatabaseContext(config, probingFactory))
+        {
+        }
+
+        var probedReadConnectionString = probingFactory.CreatedConnections
+            .Select(c => c.ConnectionString)
+            .First(cs => cs.Contains("test017-ro-validation-read", StringComparison.Ordinal));
+
+        var failingFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var injected = new InvalidOperationException("read-only validation boom");
+        failingFactory.SetFailOnOpenForConnectionString(probedReadConnectionString, injected);
+
+        var thrown = Assert.Throws<ConnectionFailedException>(() => new DatabaseContext(config, failingFactory));
+        Assert.Same(injected, thrown.InnerException);
+        Assert.Equal("ReadOnlyValidation", thrown.Phase);
+        Assert.Equal("ReadOnly", thrown.Role);
     }
 }

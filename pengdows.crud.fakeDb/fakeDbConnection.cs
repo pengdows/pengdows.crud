@@ -63,6 +63,14 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public readonly List<string> ExecutedReaderTexts = new();
 
     /// <summary>
+    /// Command text for every ExecuteScalar/ExecuteScalarAsync call this connection instance has
+    /// run — the scalar-path equivalent of <see cref="ExecutedNonQueryTexts"/>/<see cref="ExecutedReaderTexts"/>,
+    /// which the scalar path lacked until TEST-010's connection-affinity investigation needed it to
+    /// prove which physical connection instance actually ran a given scalar query.
+    /// </summary>
+    public readonly List<string> ExecutedScalarTexts = new();
+
+    /// <summary>
     /// Command text paired with the exact parameter names/values bound at execution time,
     /// captured before the command is disposed. EF Core (and other callers) dispose the
     /// DbCommand — clearing its Parameters collection — before an await on the executing
@@ -710,6 +718,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
 
         _openCallCount++;
+
+        if (_factoryRef != null && _factoryRef.TryGetFailOnOpenForConnectionString(ConnectionString, out var csFailure))
+        {
+            var originalCsState = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(originalCsState);
+            throw csFailure;
+        }
 
         // Check if we should use shared factory counter
         if (_sharedFactory != null && _sharedFailAfterOpenCount.HasValue)

@@ -57,6 +57,35 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private readonly Dictionary<string, Exception> _sharedCommandFailures =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Dictionary<string, Exception> _failOnOpenByConnectionString =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// TEST-017: makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/>
+    /// equals <paramref name="connectionString"/> fail on <c>Open()</c>/<c>OpenAsync()</c> — unlike
+    /// the factory-wide <see cref="ConnectionFailureMode.FailOnOpen"/>, this lets a test fail one
+    /// specific connection-string role (e.g. <c>DatabaseContext</c>'s distinct read-only validation
+    /// connection string) without also breaking earlier connections built from a different
+    /// connection string (the writer connection string, or a dialect-detection probe).
+    /// </summary>
+    public void SetFailOnOpenForConnectionString(string connectionString, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(connectionString);
+        ArgumentNullException.ThrowIfNull(exception);
+        _failOnOpenByConnectionString[connectionString] = exception;
+    }
+
+    internal bool TryGetFailOnOpenForConnectionString(string connectionString, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            exception = null;
+            return false;
+        }
+
+        return _failOnOpenByConnectionString.TryGetValue(connectionString, out exception);
+    }
+
     private fakeDbFactory()
     {
         _pretendToBe = SupportedDatabase.Unknown;
