@@ -1134,6 +1134,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         ILockerAsync? singleConnectionTxGate = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
+        var commandFailed = false;
         using var activity = StartActivity("ExecuteNonQuery");
         try
         {
@@ -1151,6 +1152,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (contextLocker != NoOpAsyncLocker.Instance)
             {
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (executionType == ExecutionType.Write && IsDdlStatement(Query.ToString()) &&
+                _dialect is SqlDialect ddlDialect)
+            {
+                ddlDialect.ResetConnectionPoolForDdl(InternalConnectionStringAccess.GetRawConnectionString(_context));
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
@@ -1176,12 +1183,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         catch (OperationCanceledException)
         {
+            commandFailed = true;
             metrics?.CommandCancelled(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
+            commandFailed = true;
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
             var translated = TranslateDatabaseException(ex, operationKind);
@@ -1190,6 +1199,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         catch (Exception ex) when (ex is not DatabaseException)
         {
+            commandFailed = true;
             if (ex is not DbException)
             {
                 metrics?.CommandFailed(startTimestamp);
@@ -1234,7 +1244,48 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 await contextLocker.DisposeAsync().ConfigureAwait(false);
             }
+
+            if (commandFailed && executionType == ExecutionType.Write)
+            {
+                await TryRollBackFailedWriteAsync(conn).ConfigureAwait(false);
+            }
+
             Cleanup(cmd, conn);
+        }
+    }
+
+    /// <summary>
+    /// See <see cref="SqlDialect.RequiresExplicitRollbackAfterFailedWrite"/>. Issues a bare
+    /// <c>ROLLBACK</c> on the connection when the dialect needs it and the connection is still
+    /// usable — best-effort: any failure here (e.g. no transaction was actually active) is
+    /// swallowed, since the alternative (a lingering server-side lock on a pooled connection) is
+    /// strictly worse than a harmless no-op rollback attempt.
+    /// </summary>
+    private async ValueTask TryRollBackFailedWriteAsync(ITrackedConnection? conn)
+    {
+        if (conn == null || _dialect is not SqlDialect concreteDialect ||
+            !concreteDialect.RequiresExplicitRollbackAfterFailedWrite ||
+            conn.State != ConnectionState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            if (conn is not IInternalConnectionWrapper wrapper)
+            {
+                return;
+            }
+
+            await using var rollbackCommand = wrapper.UnderlyingConnection.CreateCommand();
+            rollbackCommand.CommandText = "ROLLBACK";
+            await rollbackCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort — nothing to roll back is the common case for every other dialect path
+            // that could theoretically reach here, and a failure here must never mask the
+            // original exception already in flight.
         }
     }
 
@@ -1939,6 +1990,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
+    }
+
+    /// <summary>
+    /// Detects a DDL statement by leading keyword, for dialects that need
+    /// <see cref="SqlDialect.ResetConnectionPoolForDdl"/> called before executing one. Only
+    /// meaningful for that hook — not used for exception-message operation-kind labeling
+    /// (<see cref="DetermineOperationKind"/> is separate and unaffected).
+    /// </summary>
+    private static bool IsDdlStatement(string sql)
+    {
+        var trimmed = sql.TrimStart();
+        return trimmed.StartsWith("CREATE", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("DROP", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("ALTER", StringComparison.OrdinalIgnoreCase) ||
+               trimmed.StartsWith("TRUNCATE", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ShouldUseSharedConnection(IDatabaseContext context, ExecutionType executionType,

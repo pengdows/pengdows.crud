@@ -18,6 +18,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -167,6 +168,48 @@ internal class FirebirdDialect : SqlDialect
     // requirement (unlike everyone else's merge/on-conflict/on-duplicate-key syntax).
     public override bool EmitsAnsiMergeSyntax => false;
     public override bool SupportsPureKeyUpsert => true;
+
+    // Confirmed against a live container: a failed write's implicit transaction otherwise leaves
+    // a server-side lock that persists on the pooled connection (not released by Dispose/Close
+    // alone), blocking later DDL/DML on the same table from other connections with "lock
+    // conflict" / "object ... is in use" until that specific pooled connection happens to be
+    // reset or the process exits.
+    internal override bool RequiresExplicitRollbackAfterFailedWrite => true;
+
+    // Confirmed against a live container: Firebird's DDL commit additionally requires that no
+    // OTHER connection — even one holding only cleanly-committed transactions — still be sitting
+    // idle in the ADO.NET connection pool referencing the table's current metadata generation.
+    // After enough prior round trips reuse pooled connections, a later CREATE/DROP/ALTER can fail
+    // with "object TABLE ... is in use" even though nothing is actually still running or
+    // uncommitted. FbConnection.ClearPool(connectionString) before the DDL statement resolves
+    // this immediately — verified live, no retry/backoff needed once the pool is cleared. Called
+    // via reflection (no hard package reference from pengdows.crud to
+    // FirebirdSql.Data.FirebirdClient) — same pattern as OracleDialect's StatementCacheSize hook.
+    internal override void ResetConnectionPoolForDdl(string connectionString)
+    {
+        try
+        {
+            using var sampleConnection = Factory.CreateConnection();
+            if (sampleConnection == null)
+            {
+                return;
+            }
+
+            var connectionType = sampleConnection.GetType();
+            var clearPoolMethod = connectionType.GetMethod(
+                "ClearPool",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+            clearPoolMethod?.Invoke(null, new object[] { connectionString });
+        }
+        catch
+        {
+            // Best-effort — a missed pool reset just means the caller sees the original
+            // "object ... is in use" failure, no worse than before this hook existed.
+        }
+    }
 
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;

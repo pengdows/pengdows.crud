@@ -55,8 +55,27 @@ public class MergeConflictTests : DatabaseTestBase
             Assert.Equal(1, firstUpdate);
 
             secondCopy!.Name = "second";
-            await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+            var conflictException = await Record.ExceptionAsync(async () =>
                 await concurrentHelper.UpdateAsync(secondCopy, concurrentContext));
+
+            // Normally this manifests as ConcurrencyConflictException (the second UPDATE
+            // completes but its WHERE ... AND version = @stale matches 0 rows, because the first
+            // UPDATE already committed a new version by the time this one runs). But
+            // FirebirdExceptionTranslator documents that Firebird's SQLSTATE 40001 cannot
+            // distinguish a true lock-cycle deadlock from an optimistic update conflict — both
+            // produce the identical signature — so a SerializationConflictException is an equally
+            // valid, deliberately-classified outcome here specifically for Firebird, depending on
+            // exactly how much the two writes' timing overlaps.
+            if (provider == SupportedDatabase.Firebird)
+            {
+                Assert.True(
+                    conflictException is ConcurrencyConflictException or SerializationConflictException,
+                    $"Expected ConcurrencyConflictException or SerializationConflictException, got {conflictException?.GetType().Name}: {conflictException?.Message}");
+            }
+            else
+            {
+                Assert.IsType<ConcurrencyConflictException>(conflictException);
+            }
 
             var final = await helper.RetrieveOneAsync(initial.Id, context);
             Assert.NotNull(final);

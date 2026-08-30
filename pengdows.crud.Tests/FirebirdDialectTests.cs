@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -17,6 +18,45 @@ public class FirebirdDialectTests
             NullLogger<FirebirdDialect>.Instance);
         Assert.Equal("\"", dialect.QuotePrefix);
         Assert.Equal("\"", dialect.QuoteSuffix);
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_ReturnsTrue_AsRequiredCapability()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        Assert.True(dialect.RequiresExplicitRollbackAfterFailedWrite);
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_NoClearPoolMethodOnConnectionType_DoesNotThrow()
+    {
+        // fakeDb's connection type has no static ClearPool(string) method — the reflection
+        // lookup must resolve to null and no-op cleanly, rather than throwing, so a caller on a
+        // real FirebirdSql.Data.FirebirdClient connection gets the pool reset while every other
+        // (including test-double) connection type is unaffected.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+
+        var ex = Record.Exception(() => dialect.ResetConnectionPoolForDdl("Data Source=test"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DdlStatement_TriggersPoolResetHookWithoutThrowing()
+    {
+        // End-to-end: SqlContainer must detect a DDL leading keyword and call
+        // FirebirdDialect.ResetConnectionPoolForDdl before executing — against fakeDb's
+        // connection type (no real ClearPool method), that call is a safe no-op, so the
+        // statement must still complete normally rather than throw.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        await using var container = context.CreateSqlContainer("CREATE TABLE \"ddl_probe\" (\"id\" INTEGER)");
+
+        var ex = await Record.ExceptionAsync(async () => await container.ExecuteNonQueryAsync());
+
+        Assert.Null(ex);
     }
 
     [Fact]

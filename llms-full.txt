@@ -4380,7 +4380,6 @@ reliably observes `ObjectDisposedException` rather than a context that might be 
 ---
 
 ## Source: `docs/supported-databases.md`
-
 # Supported Databases
 
 pengdows.crud supports 15 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
@@ -4548,6 +4547,26 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
 - MERGE only on 1.4+, and its `MergeUpdateRequiresTargetAlias => false` — the opposite of most
   MERGE-capable dialects, which require the target alias on the SET side.
 
+**Firebird**
+- `FirebirdSql.Data.FirebirdClient` starts an implicit transaction per command and auto-commits
+  it on success, but has no corresponding auto-rollback on failure — a command that throws
+  mid-execution leaves that transaction open, and Firebird's server-side lock on the affected
+  row/table is not released by merely closing/disposing the connection; it can persist for the
+  life of the pooled connection. Confirmed live via a deliberate unique-constraint-violation
+  repro. `pengdows.crud` compensates automatically: `SqlContainer.ExecuteNonQueryAsync` issues an
+  explicit bare `ROLLBACK` after any failed write on Firebird (`SqlDialect.RequiresExplicitRollbackAfterFailedWrite`,
+  internal) before the connection returns to the pool — no application code needs to know about
+  this.
+- Separately, Firebird's DDL commit (`CREATE`/`DROP`/`ALTER`/`TRUNCATE`) requires that no OTHER
+  connection — even one holding only cleanly-committed transactions — still be idle in the
+  ADO.NET connection pool referencing the table's current metadata generation. After enough prior
+  round trips reusing pooled connections, a later DDL statement can fail with "object TABLE ...
+  is in use" even though nothing is actually still running or uncommitted. `pengdows.crud`
+  compensates automatically here too: before executing DDL, `SqlDialect.ResetConnectionPoolForDdl`
+  (internal, Firebird-only) clears the ADO.NET pool for that exact connection string via
+  reflection into `FbConnection.ClearPool(string)` — no application code needs to know about this
+  either.
+
 **Snowflake**
 - Parses constraint DDL but enforces none of it at runtime: `EnforcesConstraints`,
   `EnforcesForeignKeyConstraints`, `SupportsUniqueConstraints`, and `SupportsCheckConstraints`
@@ -4600,8 +4619,6 @@ these are the v2-only additions since then)
 - Oracle: `RequiresOutputParameterForReturning => true` is Oracle's sole positive case for that
   capability among all 16 dialects — every other RETURNING-capable database gets its generated
   key via a result set, not an OUT parameter.
-
----
 
 ## Source: `docs/transactions.md`
 

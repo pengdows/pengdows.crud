@@ -547,6 +547,24 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // this to false.
     public virtual bool RequiresMergeStatementTerminator => true;
 
+    // Internal, not part of ISqlDialect: true when a failed write command on this dialect can
+    // leave an uncommitted provider-managed implicit transaction on the connection that an
+    // explicit ROLLBACK is needed to clear before the connection is returned to the pool/disposed.
+    // Most ADO.NET providers (SQL Server, PostgreSQL, MySQL, SQLite, etc.) roll back a pending
+    // transaction automatically when the connection is closed/disposed — this is purely a
+    // SqlContainer connection-cleanup implementation detail, not a caller-observable capability,
+    // so it stays off the public interface (see ApplyConnectionSettingsCore for the same pattern).
+    // Firebird overrides this to true — see FirebirdDialect for the full rationale.
+    internal virtual bool RequiresExplicitRollbackAfterFailedWrite => false;
+
+    // Internal, not part of ISqlDialect: called before executing a DDL statement (CREATE/DROP/
+    // ALTER/TRUNCATE) so a dialect can clear stale ADO.NET connection-pool state that would
+    // otherwise block the DDL's commit. No-op for every dialect except Firebird — see
+    // FirebirdDialect for the full rationale.
+    internal virtual void ResetConnectionPoolForDdl(string connectionString)
+    {
+    }
+
     // True only for dialects whose upsert syntax has no UPDATE/SET-clause requirement (Firebird).
     public virtual bool SupportsPureKeyUpsert => false;
 

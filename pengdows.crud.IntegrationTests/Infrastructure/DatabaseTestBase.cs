@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using testbed;
 using System.Runtime.CompilerServices;
@@ -236,14 +237,30 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     protected static async Task DropTableIfExistsAsync(IDatabaseContext context, string tableName)
     {
         var wrappedTable = IntegrationObjectNameHelper.Table(context, tableName);
-        await using var container = context.CreateSqlContainer($"DROP TABLE {wrappedTable}");
-        try
+
+        // A short bounded retry for genuinely transient DatabaseException outcomes (IsTransient)
+        // across any dialect. Firebird's own DDL-vs-connection-pooling interaction (a stale pooled
+        // connection blocking a DDL commit even with no active transaction) is handled centrally
+        // in SqlContainer.ExecuteNonQueryAsync via SqlDialect.ResetConnectionPoolForDdl, not here —
+        // this loop no longer needs Firebird-specific handling.
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await container.ExecuteNonQueryAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex) when (IsTableMissingException(ex))
-        {
-            // Table was not present; swallow
+            await using var container = context.CreateSqlContainer($"DROP TABLE {wrappedTable}");
+            try
+            {
+                await container.ExecuteNonQueryAsync().ConfigureAwait(false);
+                return;
+            }
+            catch (Exception ex) when (IsTableMissingException(ex))
+            {
+                // Table was not present; swallow
+                return;
+            }
+            catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+            }
         }
     }
 
