@@ -134,7 +134,7 @@ handle all library-generated read-only failures without inspecting messages.
 
 ## `ModeContentionException` sits outside the `DatabaseException` hierarchy — worth a deliberate look
 
-Every other database/framework error in this library surfaces as a `DatabaseException` subclass (see `CLAUDE.md`'s Exception Hierarchy). `ModeContentionException` (a `SingleWriter`/`SingleConnection` mode-lock timeout) is the one exception: it extends `TimeoutException` directly. This may be entirely intentional — timeout semantics arguably matter more than database semantics for this one — but it wasn't found stated as a deliberate design decision anywhere, only as an implementation fact. Worth either documenting the "why" explicitly (so it reads as a decision, not an oversight) or reconsidering whether it should also implement a common marker so a `catch (DatabaseException)` block doesn't silently miss it.
+Consolidated into the tracker below as **FEAT-002** (section 10) — see that row for the full finding.
 
 ---
 
@@ -148,9 +148,7 @@ duplicating those counters in `AttributionStats`.
 
 ## `DatabaseDetectionResult`'s evidence trail is never surfaced to callers
 
-`DatabaseDetectionService` internally builds a `DatabaseDetectionResult(SupportedDatabase ResolvedProduct, IReadOnlyList<DetectionProbeAttempt> Attempts)`, where each `DetectionProbeAttempt(string ProbeName, bool Succeeded, string? FailureReason)` records one detection probe's outcome — genuinely useful evidence for diagnosing a misdetected database. Its own doc comment states the purpose explicitly: capturing evidence the bare-enum entry points otherwise discard. But every public-facing entry point only returns the bare `SupportedDatabase` enum — the evidence trail is built and then thrown away. When detection picks the wrong product (falls back to SQL-92, or misidentifies a flavor like Aurora/TiDB/Yugabyte), a user has no way to see *why* — which probes ran, which failed, what the failure reason was.
-
-**Attempted and reverted 2026-08-29:** a public `DatabaseDetection` wrapper class was added exposing this evidence directly (`DatabaseDetection.DetectFromConnectionWithDetail`/`Async`), with the result types made `public` in the `pengdows.crud` namespace. Code review caught two problems: (1) it put public API surface directly in `pengdows.crud` instead of `pengdows.crud.abstractions`, bypassing `interface-api-check`'s baseline validation entirely since that tool only checks the abstractions assembly; (2) `DetectionProbeAttempt.FailureReason` stored raw provider `ex.Message` text, which can contain server names, database names, or SQL fragments — unsafe to hand to arbitrary external callers without sanitization. Reverted back to fully `internal`. If this is revisited, it needs to live in `pengdows.crud.abstractions` as a proper public contract, and `FailureReason` needs to become a coarse category rather than a raw provider message.
+Consolidated into the tracker below as **FEAT-003** (section 10) — see that row for the full finding, including the 2026-08-29 attempt-and-revert history.
 
 ---
 
@@ -164,26 +162,14 @@ duplicating those counters in `AttributionStats`.
 
 ## `IDataReaderMapper`/`MapperOptions` and `TypeCoercionOptions.JsonPreference` are unreachable/dead externally
 
-Same class of gap as `DbProviderLoader` below. `IMapperOptions`/`MapperOptions` (`Strict`, `ColumnsOnly`, `NamePolicy`, `EnumMode`) configure `IDataReaderMapper`, but its only implementation, `DataReaderMapper`, is `internal sealed` — no external consumer can ever obtain one. It's also not what `TableGateway`/`PrimaryKeyTableGateway` actually use for row hydration: the real gateway path goes through `GetOrBuildRecordsetPlan`/`MapReaderToObjectWithPlan`, a separate compiled-plan mechanism that never touches `DataReaderMapper` at all. If configurable strict/lenient mapping and column-name-policy control are meant to be a public feature, `IDataReaderMapper` needs a public factory/DI path — or should be removed/merged into the real hydration path if it's superseded by it.
-
-Separately: `TypeCoercionOptions.JsonPreference` (`JsonPassThrough` enum: `PreferDocument`/`PreferText`) is fully dead — declared, defaulted, exercised by its own construction test, but never read anywhere in source, not even internally. `TypeCoercionOptions.TimePolicy` (`TimeMappingPolicy`) *is* read internally (gates `DateTime`→`DateTimeOffset` conversion in `TypeCoercionHelper`) but is unreachable externally since `BaseTableGateway`/`SqlContainer` only ever override `TypeCoercionOptions.Provider`, never `TimePolicy`, and `TypeCoercionHelper` itself is `internal static`.
+Consolidated into the tracker below as **FEAT-004** (section 10) — see that row for the full finding. (The "same class of gap as `DbProviderLoader` below" this section used to open with refers to `DbProviderLoader`'s own gap, which was since closed — see DOC-002/CORE-006.)
 
 ---
 
 ## Oracle
 
-### Array binding
-Oracle's `OracleCommand.ArrayBindCount` allows a single `ExecuteNonQuery` to insert N rows
-with array-valued parameters, avoiding multi-row VALUES syntax entirely. More efficient than
-INSERT ALL for large row counts. Requires ODP.NET (Managed or Unmanaged); not available via
-the generic ADO.NET `DbProviderFactory` abstraction, so would need provider-specific code
-paths.
-
-### Batch UPDATE strategy
-The base `SqlDialect.SupportsBatchUpdate` returns `false` for Oracle, meaning batch updates
-fall back to one `UPDATE` per entity. PostgreSQL uses `UPDATE FROM VALUES` and SQL Server
-uses `MERGE`; Oracle has no direct equivalent without either a global temporary table or
-PL/SQL. Design work needed before implementation.
+Array binding and the batch-UPDATE strategy are consolidated into the tracker below as
+**FEAT-005** and **FEAT-006** (section 10) respectively — see those rows for the full findings.
 
 ---
 
@@ -192,8 +178,8 @@ PL/SQL. Design work needed before implementation.
 `pengdows.crud.opentelemetry` bridges `IDatabaseContext.Metrics`/`MetricsUpdated` into
 OpenTelemetry without adding an OpenTelemetry dependency to the core package. Built.
 
-Still open: it exports approximate P95/P99 as gauges rather than raw duration
-samples/histograms — see the review below.
+Still open: it exports approximate P95/P99 as gauges rather than raw duration samples/histograms
+— consolidated into the tracker below as **FEAT-007** (section 10).
 
 ---
 
@@ -234,7 +220,7 @@ is bounded by how many tables the app actually uses.
 
 What's left:
 
-### P1
+### P1 (fully closed 2026-08-30 — kept for its detailed resolution history)
 
 - **Detection probes are still synchronous — partially fixed.** Split into three phases by risk:
   - Phase 1 (done): `DatabaseDetectionService` now has genuine async twins
@@ -330,11 +316,8 @@ What's left:
   wrapper now emits the required `OUTPUT` marker for `Output` and `InputOutput` parameters.
   `StoredProc_OutputParameter_WorksOnSqlServer` proves the behavior against a real SQL Server;
   `ExecStyle_AppendsOutputForOutputAndInputOutputParameters` locks the generated SQL down.
-- **Provider driver-version compatibility matrix.** Database-engine coverage is strong; testing
-  across multiple meaningful driver releases (Npgsql, SqlClient, MySqlConnector/MySql.Data,
-  Oracle providers, etc.) is not.
-- **More mutation/fuzz/state-machine testing**, particularly around parameter rendering,
-  connection lifecycle, transactions, cancellation, and mapping/coercion.
+- Provider driver-version compatibility matrix and broader mutation/fuzz/state-machine testing —
+  consolidated into the tracker below as **FEAT-008**/**FEAT-009** (section 10).
 - ~~**SingleWriter fairness torture test.**~~ — fixed 2026-08-16:
   `SingleWriterFairnessTortureTests.cs` (`pengdows.crud.Tests`) proves writers don't starve under
   sustained concurrent readers against a real, file-backed SQLite `DatabaseContext` in
@@ -403,11 +386,8 @@ What's left:
 
 ### P3
 
-- **One immutable capability snapshot.** Capability truth is still spread across
-  dialect/detection/context structures rather than one typed, inspectable surface.
-- **Benchmark process issues** (misleading `Fails=0` reporting under contention, correctness
-  sidecar files not surviving BenchmarkDotNet artifact cleanup) — lives in `benchmarks/`,
-  separate from the core library, not touched by this review.
+- One immutable capability snapshot, and benchmark-harness process issues — consolidated into the
+  tracker below as **FEAT-010**/**FEAT-011** (section 10).
 - **Documentation lag** — partially resolved 2026-08-16:
   - Connection-mode semantics: `docs/connection/connection-modes.md` §4 had a concrete factual error, found
     while re-reading it against `TrackedConnection`'s actual behavior — it claimed session settings
@@ -422,8 +402,10 @@ What's left:
     once. Fixed the doc to state the per-mode rule explicitly instead of one blanket (wrong) claim.
   - Generated/tested capability tables: already comprehensive — `docs/supported-databases.md` has
     a 114-line enum/version-floor/feature-threshold matrix across all 16 databases. Nothing to add.
-  - `crud`-naming/positioning problem: still open — this is a product-positioning question
-    (`docs/positioning/product-thesis.md` territory), not a documentation-accuracy bug; no doc edit resolves it.
+  - `crud`-naming/positioning problem: still open — tracked in section 6's "Product-positioning
+    guardrails" as an open question, not here, since this is a positioning decision
+    (`docs/positioning/product-thesis.md` territory), not a documentation-accuracy bug that a doc
+    edit could resolve.
 - ~~**TiDB/MySql.Data prepare workaround** lacks a version number or upstream issue
   reference in its source comment~~ — fixed 2026-08-13: `TiDbDialect.cs` now names the
   tested `MySql.Data` version (9.3.0) and the exact mechanism (text-protocol backslash
@@ -436,6 +418,9 @@ What's left:
 ---
 
 ## RetryContext Subsystem (Governor-Aware Resilient Execution)
+
+Tracked in the tracker below as **FEAT-001** (section 10) — this section is the full design
+write-up that row points back to; nothing here has been implemented yet.
 
 ### Architectural Problem
 Existing third-party retry libraries (such as Polly or manual retry loops) are unaware of low-level connection pool topology, connection hold times, or admission control. Wrapping raw ADO.NET or TableGateway calls in an external retry policy leads to two critical operational failure modes:
@@ -474,13 +459,15 @@ Existing third-party retry libraries (such as Polly or manual retry loops) are u
 
 ## pengdows.crud 2.1 — Code, Proof, and Documentation Tracker
 
-Last consolidated: 2026-08-29
+Last consolidated: 2026-08-30
 Core scope: pengdows.crud and pengdows.crud.abstractions
-Reference branch: 2.1
+Reference branch: 2.1 (renamed to `3.0` on 2026-08-30, both locally and on `origin` — this
+tracker's "2.1" naming predates that rename and is kept as-is rather than mass-renamed, since it
+identifies the review effort, not a live version number)
 
 ### Purpose
 
-This is the durable source of truth for shortcomings, missing proof, documentation debt, and product claims discovered during review of pengdows.crud 2.1.
+This is the durable source of truth for shortcomings, missing proof, documentation debt, and product claims discovered during review of pengdows.crud 2.1. As of 2026-08-30 it also consolidates every other genuinely-still-open item that used to live scattered across this file's earlier, pre-tracker sections (see section 10) — this tracker is now the single place to check "what else is needed."
 
 Only pengdows.crud and pengdows.crud.abstractions are the library. Other repositories and projects are tests, evidence, integrations, or adoption paths that lead developers to the core library. They may prove the architecture, but they are not part of the core product surface.
 
@@ -678,6 +665,12 @@ Implying arbitrary unknown database engines automatically receive a complete dia
 
 Treating tests, Hangfire, or generators as code shipped by the two core library projects.
 
+**Open question (not resolved by a code or doc change):** the `crud`-naming/positioning
+problem — is "pengdows.crud" the right product name and category framing for the strong
+SaaS/DBA positioning claim this section describes, or does the name itself undersell/mismatch
+the claim? Surfaced during the 2026-08-12 architecture review, still open as of 2026-08-30. This
+is a decision for whoever owns product positioning, not engineering backlog.
+
 ### 7. Recommended release sequence
 
 1. ~~Stabilize the contract: CORE-001 and CORE-002~~ — **done**, full test suite green (7441 tests).
@@ -736,3 +729,30 @@ This ledger records source-inspection findings, not executed-test results, becau
 Re-check file/line references when fixes land; track conclusions and contracts here rather than brittle line numbers.
 
 When an item closes, preserve a short resolution note and link its tests/docs instead of deleting the row.
+
+### 10. Deferred features and design debt (not defects)
+
+**Consolidated 2026-08-30.** Everything below used to live in standalone sections scattered
+earlier in this file, or in the "Open items from architecture/DAL-comparison review (2026-08-12)"
+section's P1/P2/P3 lists — none of it is a defect in shipped, correct code (that's what sections
+1–2 above are for); it's either a designed-but-unbuilt subsystem, a real dead/unreachable code
+surface awaiting a decision, or open-ended hardening work with no natural "done" state. Pulled
+into one place, with its own `FEAT-NNN` ID sequence, so this tracker is the single answer to
+"what else is needed" instead of splitting that answer across a dozen small sections. The original
+sections were replaced with a one-line pointer back here rather than duplicated.
+
+| ID | Priority | Status | Area | Finding |
+|---|---|---|---|---|
+| FEAT-001 | P2 | Planned, zero implementation | RetryContext subsystem | A governor-aware retry coordinator, fully designed but unbuilt: `ExecuteTransactionalAsync` (atomic operation, rolls back + releases the connection lease + restores audit-snapshot state on a transient failure, then reacquires a fresh `PoolGovernor` slot after decorrelated-jitter backoff) and `ExecuteSequentialAsync` (retries only the failed item in a stream, leaves earlier committed items alone). Core design principle: zero connection slots held during backoff sleep, re-admission through `PoolGovernor`'s fairness turnstile, so retry storms can't cause connection-pool thundering herds the way an external retry library (Polly, manual loops) unaware of pool topology would. Transient classification already exists and needs no new work: `DatabaseException.IsTransient` already correctly distinguishes `DeadlockException`/`SerializationConflictException`/`CommandTimeoutException` (retryable) from `UniqueConstraintViolationException`/`ForeignKeyViolationException` (fail-fast). Full design write-up (dual retry modes, `PoolGovernor` slot coordination, exception classification table) is preserved above this tracker under "RetryContext Subsystem (Governor-Aware Resilient Execution)". This is the single largest piece of real, scoped-but-unbuilt work in this file — pick it up as its own TDD-first effort, not a quick addition. |
+| FEAT-002 | P3 | Open — design decision needed | `ModeContentionException` hierarchy consistency | Every other database/framework error surfaces as a `DatabaseException` subclass (see CLAUDE.md's Exception Hierarchy); `ModeContentionException` (a `SingleWriter`/`SingleConnection` mode-lock timeout) is the one exception — it extends `TimeoutException` directly, so `catch (DatabaseException)` silently misses it. May be entirely intentional (timeout semantics arguably matter more than database semantics here), but no design note anywhere states that as a deliberate choice rather than an oversight. Resolve either way: document the "why" explicitly in CLAUDE.md's "Not part of this hierarchy" note (already covers `ModeContentionException` and `PoolForbiddenException`, so this may just need an explicit rationale sentence added there), or give it a shared marker interface so a broad catch doesn't miss it. |
+| FEAT-003 | P2 | Open — redo needed, not a fresh start | `DatabaseDetectionResult` evidence-trail exposure | `DatabaseDetectionService` internally builds a full per-probe evidence trail (`DatabaseDetectionResult`/`DetectionProbeAttempt`: which probes ran, which failed, why) but every public entry point only returns the bare `SupportedDatabase` enum — genuinely useful diagnostic evidence for a misdetected database is built and discarded. **Already attempted once (2026-08-29) and reverted** after code review caught two real problems: (1) the public wrapper (`DatabaseDetection.DetectFromConnectionWithDetail`/`Async`) was placed directly in `pengdows.crud` instead of `pengdows.crud.abstractions`, bypassing `interface-api-check`'s baseline validation entirely (that tool only checks the abstractions assembly); (2) `DetectionProbeAttempt.FailureReason` stored the raw provider `ex.Message`, which can contain server names, database names, or SQL fragments — unsafe to hand to arbitrary external callers unsanitized. A correct redo needs the public contract to live in `pengdows.crud.abstractions`, and `FailureReason` to become a coarse category rather than a raw provider message. |
+| FEAT-004 | P3 | Open — cleanup/design decision | Unreachable `IDataReaderMapper`/`MapperOptions`; dead `TypeCoercionOptions` fields | `IMapperOptions`/`MapperOptions` (`Strict`/`ColumnsOnly`/`NamePolicy`/`EnumMode`) configure `IDataReaderMapper`, but its only implementation (`DataReaderMapper`) is `internal sealed` — no external consumer can ever obtain one, and it isn't even what `TableGateway`/`PrimaryKeyTableGateway` use for row hydration (the real path is `GetOrBuildRecordsetPlan`/`MapReaderToObjectWithPlan`, a separate compiled-plan mechanism that never touches `DataReaderMapper`). Decide: give configurable strict/lenient mapping and column-name-policy control a real public factory/DI path, or remove/merge the superseded surface. Separately, confirmed fully dead: `TypeCoercionOptions.JsonPreference` (declared, defaulted, has its own construction test, never read anywhere — not even internally). `TypeCoercionOptions.TimePolicy` *is* read internally (gates `DateTime`→`DateTimeOffset` coercion in `TypeCoercionHelper`) but is externally unreachable since `BaseTableGateway`/`SqlContainer` only ever override `TypeCoercionOptions.Provider`, and `TypeCoercionHelper` itself is `internal static`. |
+| FEAT-005 | P3 | Not started — design work needed | Oracle array binding | `OracleCommand.ArrayBindCount` allows one `ExecuteNonQuery` to insert N rows with array-valued parameters, avoiding multi-row VALUES syntax entirely — more efficient than `INSERT ALL` for large row counts. Requires ODP.NET (Managed or Unmanaged); not reachable via the generic `DbProviderFactory` abstraction, so needs a provider-specific code path design before implementation. |
+| FEAT-006 | P3 | Not started — design work needed | Oracle batch UPDATE strategy | `SqlDialect.SupportsBatchUpdate` returns `false` for Oracle, so batch updates fall back to one `UPDATE` per entity. PostgreSQL uses `UPDATE FROM VALUES`, SQL Server uses `MERGE`; Oracle has no direct equivalent without either a global temporary table or a PL/SQL block. Needs a design decision before implementation. |
+| FEAT-007 | P3 | Known limitation, not started | OpenTelemetry adapter exports approximate percentiles as gauges | `pengdows.crud.opentelemetry` bridges `IDatabaseContext.Metrics`/`MetricsUpdated` into OpenTelemetry without adding an OpenTelemetry dependency to the core package — built and working. Still exports approximate P95/P99 as point-in-time gauges rather than raw duration samples/histograms, which loses distribution shape a real OTel histogram instrument would preserve. No implementation started. |
+| FEAT-008 | P3 | Open-ended, ongoing | Provider driver-version compatibility matrix | Database-engine coverage is strong (16 dialects, 12 testbed engines); testing across multiple meaningful driver *releases* for the same engine (Npgsql, SqlClient, MySqlConnector/MySql.Data, Oracle providers, etc.) is not tracked or systematic. Not a task with a natural "done" state — treat as ongoing hardening, expand opportunistically rather than expecting a closing PR. |
+| FEAT-009 | P3 | Open-ended, ongoing | Broader mutation/fuzz/state-machine testing | Particularly around parameter rendering, connection lifecycle, transactions, cancellation, and mapping/coercion. Same open-ended nature as FEAT-008 — direction, not a discrete closeable item. |
+| FEAT-010 | P3 | Open — architectural nicety | One immutable capability snapshot | Capability truth is still spread across dialect/detection/context structures rather than one typed, inspectable surface a caller (or this library's own code) could snapshot and compare. `docs/capability-discovery.md` (DOC/CAP-022) already teaches the *current* multi-source shape well; this item is about whether a single unified snapshot type is worth building on top of that, not about undocumented behavior. |
+| FEAT-011 | P3 | Open, lives outside the core library | Benchmark harness reporting issues | In `benchmarks/`, separate from `pengdows.crud`/`pengdows.crud.abstractions` (see this tracker's own scope note): misleading `Fails=0` reporting under contention, and correctness sidecar files not surviving BenchmarkDotNet's own artifact cleanup between runs. Not touched by the 2.1 review pass; tracked here only so it isn't lost. |
+
+**Not tracked as a FEAT item — a positioning decision, not code or doc work:** the `crud`-naming/positioning question (is "pengdows.crud" the right product name/category framing going forward?) is still open. It belongs with section 6's "Product-positioning guardrails" as an open question for whoever owns that decision, not as engineering backlog — no code change or documentation fix resolves it.
