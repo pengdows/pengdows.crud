@@ -188,4 +188,46 @@ public class TableGatewayCountTests
 
         Assert.Equal(2, count);
     }
+
+    // -------------------------------------------------------------------------
+    // CountWhereEqualsAsync — both andWhereNull and andWhereNotNull supplied
+    //
+    // The interface XML doc states "Exactly one of andWhereNull or andWhereNotNull may be
+    // set," but the implementation silently let andWhereNull win (checked first, andWhereNotNull
+    // only consulted in an `else if`) with no validation at all — a caller who mistakenly sets
+    // both got a query silently filtered by only one of the two conditions they asked for,
+    // instead of an error. Found during a documentation pass (DOC-030); fixed here by enforcing
+    // the documented "at most one" contract with a thrown ArgumentException.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CountWhereEqualsAsync_WithBothAndWhereNullAndAndWhereNotNull_ThrowsArgumentException()
+    {
+        await using var ctx = MakeContext();
+        var gw = new TableGateway<CountItem, int>(ctx);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            gw.CountWhereEqualsAsync(
+                "queue", "default",
+                andWhereNull: "fetched_at",
+                andWhereNotNull: "fetched_at").AsTask());
+
+        Assert.Contains("andWhereNull", ex.Message);
+        Assert.Contains("andWhereNotNull", ex.Message);
+    }
+
+    [Fact]
+    public async Task CountWhereEqualsAsync_WithNeitherAndWhereNullNorAndWhereNotNull_CountsByEqualityOnly()
+    {
+        await using var ctx = MakeContext();
+        var gw = new TableGateway<CountItem, int>(ctx);
+
+        await gw.CreateAsync(new CountItem { Queue = "default", FetchedAt = null });
+        await gw.CreateAsync(new CountItem { Queue = "default", FetchedAt = DateTime.UtcNow });
+        await gw.CreateAsync(new CountItem { Queue = "critical", FetchedAt = null });
+
+        var count = await gw.CountWhereEqualsAsync("queue", "default");
+
+        Assert.Equal(2, count);
+    }
 }

@@ -104,12 +104,16 @@ var pending = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNu
 var fetched = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNotNull: "fetched_at");
 ```
 
-**If both `andWhereNull` and `andWhereNotNull` are non-null, `andWhereNull` silently wins** —
-the implementation checks `andWhereNull != null` first and only falls through to
-`andWhereNotNull` in an `else if`. There is no argument validation and no exception thrown for
-supplying both; `andWhereNotNull` is simply ignored in that case. Callers should treat the two
-parameters as mutually exclusive by convention, since the XML doc comment on the interface says
-"exactly one... may be set" but nothing enforces it at runtime.
+**`andWhereNull` and `andWhereNotNull` are mutually exclusive — enforced.** Supplying both throws
+`ArgumentException`. Supplying neither is fine (falls back to the plain equality count shown
+above); supplying exactly one applies that null-state check as documented.
+
+```csharp
+// Throws ArgumentException: "andWhereNull and andWhereNotNull cannot both be set —
+// at most one null-state check is supported."
+await gateway.CountWhereEqualsAsync("queue", "default",
+    andWhereNull: "fetched_at", andWhereNotNull: "fetched_at");
+```
 
 ## Identifier quoting and parameterization
 

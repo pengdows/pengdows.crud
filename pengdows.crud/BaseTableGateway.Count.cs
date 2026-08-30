@@ -59,8 +59,12 @@ public abstract partial class BaseTableGateway<TEntity>
 
     /// <summary>
     /// Returns a COUNT(*) where <paramref name="column"/> equals <paramref name="value"/>,
-    /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
+    /// optionally combined with an IS NULL or IS NOT NULL check on a second column. At most one
+    /// of <paramref name="andWhereNull"/>/<paramref name="andWhereNotNull"/> may be set.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Both <paramref name="andWhereNull"/> and <paramref name="andWhereNotNull"/> were supplied.
+    /// </exception>
     public async ValueTask<long> CountWhereEqualsAsync(
         string column,
         string value,
@@ -68,6 +72,13 @@ public abstract partial class BaseTableGateway<TEntity>
         string? andWhereNotNull = null,
         IDatabaseContext? context = null)
     {
+        if (andWhereNull != null && andWhereNotNull != null)
+        {
+            throw new ArgumentException(
+                "andWhereNull and andWhereNotNull cannot both be set — at most one null-state check is supported.",
+                nameof(andWhereNotNull));
+        }
+
         var ctx = context ?? _context;
         using var sc = ctx.CreateSqlContainer();
         sc.Query.Append("SELECT COUNT(*) FROM ").Append(WrappedTableName)
