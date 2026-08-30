@@ -79,4 +79,21 @@ internal interface IConnectionStrategy
         ITrackedConnection? initConnection,
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory);
+
+    /// <summary>
+    /// Asynchronously handles dialect detection and initialization for this strategy.
+    /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.
+    /// </summary>
+    /// <param name="initConnection">Optional connection for dialect detection</param>
+    /// <param name="factory">Optional factory for creating connections. Null when using DbDataSource.</param>
+    /// <param name="loggerFactory">Logger factory for diagnostic output</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(HandleDialectDetection(initConnection, factory, loggerFactory));
+    }
 }

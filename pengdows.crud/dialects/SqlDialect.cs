@@ -115,6 +115,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// override, matching the pre-existing behavior this replaces.
     /// </summary>
     internal virtual SessionCapabilityPrefetch DetectSessionCapabilities(ITrackedConnection connection) => default;
+    internal virtual Task<SessionCapabilityPrefetch> DetectSessionCapabilitiesAsync(ITrackedConnection connection, CancellationToken cancellationToken = default) =>
+        Task.FromResult(default(SessionCapabilityPrefetch));
 
     /// <summary>
     /// The set of ADO.NET <see cref="IsolationLevel"/> values this database genuinely enforces.
@@ -1529,9 +1531,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return false;
     }
 
+    public virtual Task<bool> IsReadCommittedSnapshotOnAsync(ITrackedConnection connection, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(false);
+    }
+
     public virtual bool IsSnapshotIsolationOn(ITrackedConnection connection)
     {
         return false;
+    }
+
+    public virtual Task<bool> IsSnapshotIsolationOnAsync(ITrackedConnection connection, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(false);
     }
 
     public virtual bool IsUniqueViolation(DbException ex)

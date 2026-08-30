@@ -155,6 +155,12 @@ public partial class DatabaseContext
                 nameof(dialect));
     }
 
+#pragma warning disable CS8618
+    private DatabaseContext()
+    {
+    }
+#pragma warning restore CS8618
+
     private DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbProviderFactory factory,
@@ -167,329 +173,21 @@ public partial class DatabaseContext
         {
             initLocker = GetLockInternal();
             initLocker.Lock();
-            if (configuration is null)
-            {
-                throw new ArgumentNullException(nameof(configuration));
-            }
 
-            if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
-            {
-                throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
-            }
-
-            ValidateConfiguration(configuration);
-
-            _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
-            _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
-            if (TypeCoercionHelper.Logger is NullLogger)
-            {
-                TypeCoercionHelper.Logger =
-                    _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
-            }
-
-            var normalizedReadWriteMode = configuration.ReadWriteMode;
-            var normalizedReadPoolSize = configuration.MaxConcurrentReads;
-            var normalizedWritePoolSize = configuration.MaxConcurrentWrites;
-            NormalizePoolLimitConfiguration(
-                configuration.DbMode,
-                ref normalizedReadWriteMode,
-                ref normalizedReadPoolSize,
-                ref normalizedWritePoolSize);
-
-            ReadWriteMode = normalizedReadWriteMode;
-            TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
-            ConnectionMode = configuration.DbMode;
-            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            _dataSource = dataSource;
-            _readerDataSource = dataSource;
-            _dataSourceProvided = dataSource != null;
-            _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
-            _stateChangeHandler = (sender, args) =>
-            {
-                switch (args.CurrentState)
-                {
-                    case ConnectionState.Open:
-                        _logger.LogDebug("Opening connection: " + Name);
-                        UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
-                        break;
-                    case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
-                    case ConnectionState.Broken:
-                        _logger.LogDebug("Closed or broken connection: " + Name);
-                        Interlocked.Decrement(ref _connectionCount);
-                        break;
-                }
-            };
-            // ExecuteSessionSettings/ExecuteSessionSettingsAsync handle their own exceptions
-            // internally (log + return, or throw ConnectionException when FailClosed is
-            // configured). No outer try-catch needed here for the sync handlers.
-            _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
-            _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
-            // The async handlers keep a thin outer catch — NOT to re-catch session-settings
-            // failures (ExecuteSessionSettingsAsync already handles those, including the
-            // FailClosed throw), but purely as a safety net for the logging call inside its
-            // own catch block throwing (e.g. a broken logging sink). OperationCanceledException
-            // and ConnectionException (the FailClosed signal) must still propagate untouched.
-            _firstOpenHandlerAsyncRw = async (tc, ct) =>
-            {
-                try
-                {
-                    await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (ConnectionException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
-                }
-            };
-            _firstOpenHandlerAsyncRo = async (tc, ct) =>
-            {
-                try
-                {
-                    await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (ConnectionException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
-                }
-            };
-            _prepareMode = configuration.PrepareMode;
-            _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
-            _poolAcquireTimeout = configuration.PoolAcquireTimeout;
-            _modeLockTimeout = configuration.ModeLockTimeout;
-            _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
-            _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
-            _maxQueuedWrites = configuration.MaxQueuedWrites;
-            _maxQueuedReads = configuration.MaxQueuedReads;
-            _configuredReadPoolSize = normalizedReadPoolSize;
-            _configuredWritePoolSize = normalizedWritePoolSize;
-            if (configuration.EnableMetrics)
-            {
-                var options = configuration.MetricsOptions ?? MetricsOptions.Default;
-                _metricsCollector = new MetricsCollector(options);
-                _readerMetricsCollector = new MetricsCollector(options, _metricsCollector);
-                _writerMetricsCollector = new MetricsCollector(options, _metricsCollector);
-                _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
-            }
-
+            SetupFields(configuration, factory, loggerFactory, typeMapRegistry, dataSource);
             var initialConnection = InitializeInternals(configuration);
 
-            // Build strategies now that mode is final (moved from InitializeInternals)
             _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
 
-            // Delegate dialect detection to the strategy
             var (dialect, dataSourceInfo) =
                 _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
 
-            if (dialect != null && dataSourceInfo != null)
-            {
-                _dialect = dialect as SqlDialect
-                           ?? throw new InvalidOperationException(
-                               $"Dialect returned by dialect detection must derive from SqlDialect; got {dialect.GetType().Name}.");
-                _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
-            }
-            else
-            {
-                // Fall back to a safe SQL-92 dialect when detection fails
-                var logger = _loggerFactory.CreateLogger<SqlDialect>();
-                _dialect = new Sql92Dialect(_factory, logger);
-                _dialect.InitializeUnknownProductInfo();
-                _dataSourceInfo = new DataSourceInformation(_dialect);
-            }
-
-            _sessionSettingsDetectionCompleted = true;
-
-            Name = _dataSourceInfo.DatabaseProductName;
-            _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
-            if (_dialect.RequiresSerializedConnectionOpen)
-            {
-                RequiresSerializedOpen = true;
-                _connectionOpenGate = new SemaphoreSlim(1, 1);
-                _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
-            }
-
-            if (ConnectionMode == DbMode.SingleConnection)
-            {
-                // DbMode.SingleConnection shares one physical connection across the entire
-                // context. A transaction acquires this gate for its whole lifetime (Begin through
-                // Commit/Rollback/Dispose) so every other operation — another transaction attempt,
-                // or an ordinary non-transactional command — correctly waits its turn instead of
-                // racing directly against the connection or silently executing while a transaction
-                // is mid-flight (risking absorption into that transaction's uncommitted scope).
-                // Separate from the connection's own per-command RealAsyncLocker (TrackedConnection
-                // .GetLock()) so a transaction holding this gate never deadlocks against its own
-                // commands, which still acquire that other lock as normal.
-                _singleConnectionTransactionGate = new SemaphoreSlim(1, 1);
-            }
-
-            // Apply pooling defaults now that we have the final mode and dialect
-            var builder = GetFactoryConnectionStringBuilder(_connectionString);
-            _connectionString = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
-                _connectionString,
-                Product,
-                ConnectionMode,
-                _dialect?.SupportsExternalPooling ?? false,
-                _dialect?.PoolingSettingName,
-                builder);
-
-            var effectiveApplicationName = ResolveApplicationName(configuration.ApplicationName);
-
-            // Apply application name if configured or required for read/write pool splitting
-            _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
-                _connectionString,
-                effectiveApplicationName,
-                _dialect?.ApplicationNameSettingName,
-                builder);
-
-            if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
-            {
-                _connectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
-                    _connectionString,
-                    _dialect?.PoolingSettingName);
-            }
-
-            InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);
-
-            // PRE-COMPUTE SESSION SETTINGS: computed after app name is resolved so dialects that
-            // embed the application name in session SQL (e.g. Oracle DBMS_APPLICATION_INFO) get
-            // the correct rw/ro-suffixed name. GetFinalSessionSettings produces exactly ONE
-            // optimized string per pool type (baseline + intent) for a single RTT on the hot path.
-            var rwAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
-                ? null
-                : effectiveApplicationName + WriteApplicationNameSuffix;
-            var roAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
-                ? null
-                : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
-            _cachedReadWriteSessionSettings = _dialect?.GetFinalSessionSettings(readOnly: false, rwAppName) ?? string.Empty;
-            _cachedReadOnlySessionSettings  = _dialect?.GetFinalSessionSettings(readOnly: true,  roAppName) ?? string.Empty;
-
-            // Validate read-only connection if an explicit RO connection string was provided
-            if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
-                HasDedicatedReadConnectionString())
-            {
-                TestConnect(_readerConnectionString, "ReadOnlyValidation", "ReadOnly");
-            }
-
-            InitializePoolGovernors();
-
-            // InitializePoolGovernors can mutate _connectionString/_readerConnectionString (e.g.
-            // PreventDatabaseUnload's minimum pool size injection) after the redacted strings were
-            // first computed in InitializeReadOnlyConnectionResources above — refresh so the public
-            // ConnectionString property reflects what the context actually opens connections with.
-            RefreshRedactedConnectionStrings();
-
-            // InitializeInternals above always assigns _rcsiPrefetch/_snapshotIsolationPrefetch a
-            // concrete value (default false when not applicable/attempted) before returning, for
-            // every product and mode — a live IsReadCommittedSnapshotOn/IsSnapshotIsolationOn
-            // re-query here was dead code (proven via targeted fakeDb command-failure injection;
-            // it never executed under any construction path), so it's been removed rather than
-            // kept as unreachable defensive code.
-            RCSIEnabled = _rcsiPrefetch;
-            SnapshotIsolationEnabled = _snapshotIsolationPrefetch;
-
-            // Persistent connections opened before dialect detection need their mandatory
-            // session settings applied after the final dialect is known. PreventDatabaseUnload
-            // sentinels use the same normal initialization settings even though they never run
-            // application commands.
-            if (ConnectionMode is DbMode.SingleConnection or DbMode.PreventDatabaseUnload)
-            {
-                var target = initialConnection ?? PersistentConnection;
-                if (target != null)
-                {
-                    try
-                    {
-                        ExecuteSessionSettings(target, IsReadOnlyConnection);
-                    }
-                    catch
-                    {
-                        // A rejected/failed construction never returns an object for the caller
-                        // to Dispose. Persistent modes may own more than one connection, so
-                        // dispose the complete registered set rather than just the initialization
-                        // target.
-                        DisposePersistentConnectionsForInitializationFailure();
-
-                        throw;
-                    }
-                }
-            }
-
-            // For Standard and SingleWriter modes, dispose the connection after dialect initialization is complete
-            if (ConnectionMode is DbMode.Standard or DbMode.SingleWriter && initialConnection != null)
-            {
-                initialConnection.Dispose();
-                // Reset counters to "fresh" state after initialization probe
-                Interlocked.Exchange(ref _connectionCount, 0);
-                Interlocked.Exchange(ref _peakOpenConnections, 0);
-            }
-
-            _isolationResolver = new IsolationResolver(_dialect!, RCSIEnabled, SnapshotIsolationEnabled);
-
-            _uniqueConnectionStringWarnRegistrations = RegisterConnectionStringsForDuplicateWarning(configuration);
-
-            if (configuration.EnforceUniqueConnectionString)
-            {
-                try
-                {
-                    _uniqueConnectionStringClaims = ClaimUniqueConnectionStrings(configuration);
-                }
-                catch
-                {
-                    // By this point InitializePoolGovernors() has already allocated the write/read
-                    // governors (each wrapping a SemaphoreSlim), InitializeReadOnlyConnectionResources
-                    // has already created any internally-owned writer/reader DbDataSource, and —
-                    // for persistent modes — actual physical connections are already open and
-                    // session-initialized. Since this object never escapes the failed constructor,
-                    // none of that gets disposed otherwise: a real leak on every rejected
-                    // duplicate-connection-string construction. DisposeOwnedDataSources() already
-                    // knows not to dispose a caller-supplied DbDataSource (_dataSourceProvided).
-                    _writerGovernor?.Dispose();
-                    _writerGovernor = null;
-                    _readerGovernor?.Dispose();
-                    _readerGovernor = null;
-                    DisposePersistentConnectionsForInitializationFailure();
-                    DisposeOwnedDataSources();
-                    throw;
-                }
-            }
-
-            // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
+            FinishInitialization(configuration, initialConnection, dialect, dataSourceInfo);
         }
         catch (Exception e)
         {
-            // A rejected/failed construction never returns an object for the caller to Dispose,
-            // so anything already registered above must be unwound here — otherwise a dead
-            // context's connection string(s) would stay "in use" in the warning registry forever.
-            UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
-            _uniqueConnectionStringWarnRegistrations = null;
-            try
-            {
-                DisposePersistentConnectionsForInitializationFailure();
-                _writerGovernor?.Dispose();
-                _writerGovernor = null;
-                _readerGovernor?.Dispose();
-                _readerGovernor = null;
-                DisposeOwnedDataSources();
-            }
-            catch
-            {
-                // Preserve the original construction exception.
-            }
-            _logger?.LogError(e, "DatabaseContext construction failed.");
+            UnwindInitializationFailure(e);
             throw;
         }
         finally
@@ -539,6 +237,143 @@ public partial class DatabaseContext
 
     #endregion
 
+    #region CreateAsync
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/> instance.
+    /// </summary>
+    /// <param name="configuration">Context configuration.</param>
+    /// <param name="factory">Provider factory.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task returning the initialized database context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateAsync(configuration, null, factory, loggerFactory, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/> instance with a native <see cref="DbDataSource"/>.
+    /// </summary>
+    /// <param name="configuration">Context configuration.</param>
+    /// <param name="dataSource">Data source for connection creation.</param>
+    /// <param name="factory">Provider factory.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task returning the initialized database context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (dataSource is null)
+        {
+            throw new ArgumentNullException(nameof(dataSource));
+        }
+
+        return CreateAsync(configuration, dataSource, factory, loggerFactory, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/> instance.
+    /// </summary>
+    /// <param name="connectionString">Database connection string.</param>
+    /// <param name="providerFactory">Provider invariant name.</param>
+    /// <param name="mode">Database connection mode.</param>
+    /// <param name="readWriteMode">Read/write mode.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="readOnlyConnectionString">Optional read-only connection string.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task returning the initialized database context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        string connectionString,
+        string providerFactory,
+        DbMode mode = DbMode.Best,
+        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+        ILoggerFactory? loggerFactory = null,
+        string? readOnlyConnectionString = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (connectionString is null)
+        {
+            throw new ArgumentNullException(nameof(connectionString));
+        }
+
+        if (providerFactory is null)
+        {
+            throw new ArgumentNullException(nameof(providerFactory));
+        }
+
+        var config = new DatabaseContextConfiguration
+        {
+            ProviderName = providerFactory,
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            ReadWriteMode = readWriteMode,
+            DbMode = mode
+        };
+
+        var factory = DbProviderFactories.GetFactory(providerFactory);
+        return CreateAsync(config, null, factory, loggerFactory, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/> instance.
+    /// </summary>
+    /// <param name="connectionString">Database connection string.</param>
+    /// <param name="factory">Provider factory.</param>
+    /// <param name="readOnlyConnectionString">Optional read-only connection string.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task returning the initialized database context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        string connectionString,
+        DbProviderFactory factory,
+        string? readOnlyConnectionString = null,
+        CancellationToken cancellationToken = default)
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        return CreateAsync(config, null, factory, NullLoggerFactory.Instance, new TypeMapRegistry(), cancellationToken);
+    }
+
+    internal static Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateAsync(configuration, null, factory, loggerFactory, typeMapRegistry, cancellationToken);
+    }
+
+    internal static async Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource? dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        CancellationToken cancellationToken = default)
+    {
+        var context = new DatabaseContext();
+        await context.InitializeAsync(configuration, factory, loggerFactory, typeMapRegistry, dataSource, cancellationToken)
+            .ConfigureAwait(false);
+        return context;
+    }
+
+    #endregion
+
     #region Initialization Helper Methods
 
     private void SetConnectionString(string value)
@@ -549,6 +384,397 @@ public partial class DatabaseContext
         }
 
         _connectionString = value;
+    }
+
+    private void SetupFields(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbDataSource? dataSource)
+    {
+        if (configuration is null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration.ConnectionString))
+        {
+            throw new ArgumentException("ConnectionString is required.", nameof(configuration.ConnectionString));
+        }
+
+        ValidateConfiguration(configuration);
+
+        _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+        _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
+        if (TypeCoercionHelper.Logger is NullLogger)
+        {
+            TypeCoercionHelper.Logger =
+                _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
+        }
+
+        var normalizedReadWriteMode = configuration.ReadWriteMode;
+        var normalizedReadPoolSize = configuration.MaxConcurrentReads;
+        var normalizedWritePoolSize = configuration.MaxConcurrentWrites;
+        NormalizePoolLimitConfiguration(
+            configuration.DbMode,
+            ref normalizedReadWriteMode,
+            ref normalizedReadPoolSize,
+            ref normalizedWritePoolSize);
+
+        ReadWriteMode = normalizedReadWriteMode;
+        TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
+        ConnectionMode = configuration.DbMode;
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _dataSource = dataSource;
+        _readerDataSource = dataSource;
+        _dataSourceProvided = dataSource != null;
+        _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
+        _stateChangeHandler = (sender, args) =>
+        {
+            switch (args.CurrentState)
+            {
+                case ConnectionState.Open:
+                    _logger.LogDebug("Opening connection: " + Name);
+                    UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
+                    break;
+                case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
+                case ConnectionState.Broken:
+                    _logger.LogDebug("Closed or broken connection: " + Name);
+                    Interlocked.Decrement(ref _connectionCount);
+                    break;
+            }
+        };
+        _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
+        _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
+        _firstOpenHandlerAsyncRw = async (tc, ct) =>
+        {
+            try
+            {
+                await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ConnectionException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+            }
+        };
+        _firstOpenHandlerAsyncRo = async (tc, ct) =>
+        {
+            try
+            {
+                await ExecuteSessionSettingsAsync(tc, true, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (ConnectionException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
+            }
+        };
+        _prepareMode = configuration.PrepareMode;
+        _readerPlanCacheSize = configuration.ReaderPlanCacheSize;
+        _poolAcquireTimeout = configuration.PoolAcquireTimeout;
+        _modeLockTimeout = configuration.ModeLockTimeout;
+        _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
+        _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
+        _maxQueuedWrites = configuration.MaxQueuedWrites;
+        _maxQueuedReads = configuration.MaxQueuedReads;
+        _configuredReadPoolSize = normalizedReadPoolSize;
+        _configuredWritePoolSize = normalizedWritePoolSize;
+        if (configuration.EnableMetrics)
+        {
+            var options = configuration.MetricsOptions ?? MetricsOptions.Default;
+            _metricsCollector = new MetricsCollector(options);
+            _readerMetricsCollector = new MetricsCollector(options, _metricsCollector);
+            _writerMetricsCollector = new MetricsCollector(options, _metricsCollector);
+            _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
+        }
+    }
+
+    private async Task InitializeAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbDataSource? dataSource,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ILockerAsync? initLocker = null;
+        try
+        {
+            initLocker = GetLockInternal();
+            await initLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+
+            SetupFields(configuration, factory, loggerFactory, typeMapRegistry, dataSource);
+            var initialConnection = await InitializeInternalsAsync(configuration, cancellationToken).ConfigureAwait(false);
+
+            _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
+            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
+
+            var (dialect, dataSourceInfo) = await _connectionStrategy
+                .HandleDialectDetectionAsync(initialConnection, _factory, _loggerFactory, cancellationToken)
+                .ConfigureAwait(false);
+
+            await FinishInitializationAsync(
+                configuration,
+                initialConnection,
+                dialect,
+                dataSourceInfo,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            UnwindInitializationFailure(e);
+            throw;
+        }
+        finally
+        {
+            if (initLocker is IAsyncDisposable iad)
+            {
+                await iad.DisposeAsync().ConfigureAwait(false);
+            }
+            else if (initLocker is IDisposable id)
+            {
+                id.Dispose();
+            }
+        }
+    }
+
+    private void UnwindInitializationFailure(Exception e)
+    {
+        UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
+        _uniqueConnectionStringWarnRegistrations = null;
+        try
+        {
+            DisposePersistentConnectionsForInitializationFailure();
+            _writerGovernor?.Dispose();
+            _writerGovernor = null;
+            _readerGovernor?.Dispose();
+            _readerGovernor = null;
+            DisposeOwnedDataSources();
+        }
+        catch
+        {
+            // Preserve the original construction exception.
+        }
+        _logger?.LogError(e, "DatabaseContext construction failed.");
+    }
+
+    private void SetupDialectAndGates(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)
+    {
+        if (dialect != null && dataSourceInfo != null)
+        {
+            _dialect = dialect as SqlDialect
+                       ?? throw new InvalidOperationException(
+                           $"Dialect returned by dialect detection must derive from SqlDialect; got {dialect.GetType().Name}.");
+            _dataSourceInfo = (DataSourceInformation)dataSourceInfo;
+        }
+        else
+        {
+            var logger = _loggerFactory.CreateLogger<SqlDialect>();
+            _dialect = new Sql92Dialect(_factory, logger);
+            _dialect.InitializeUnknownProductInfo();
+            _dataSourceInfo = new DataSourceInformation(_dialect);
+        }
+
+        _sessionSettingsDetectionCompleted = true;
+        Name = _dataSourceInfo.DatabaseProductName;
+        _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+        if (_dialect.RequiresSerializedConnectionOpen)
+        {
+            RequiresSerializedOpen = true;
+            _connectionOpenGate = new SemaphoreSlim(1, 1);
+            _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
+        }
+
+        if (ConnectionMode == DbMode.SingleConnection)
+        {
+            _singleConnectionTransactionGate = new SemaphoreSlim(1, 1);
+        }
+    }
+
+    private void SetupConnectionStringsAndSessionSettings(
+        IDatabaseContextConfiguration configuration)
+    {
+        var effectiveApplicationName = ResolveApplicationName(configuration.ApplicationName);
+
+        var builder = GetFactoryConnectionStringBuilder(_connectionString);
+        _connectionString = ConnectionPoolingConfiguration.ApplyPoolingDefaults(
+            _connectionString,
+            Product,
+            ConnectionMode,
+            _dialect?.SupportsExternalPooling ?? false,
+            _dialect?.PoolingSettingName,
+            builder);
+
+        _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
+            _connectionString,
+            effectiveApplicationName,
+            _dialect?.ApplicationNameSettingName,
+            builder);
+
+        if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
+        {
+            _connectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
+                _connectionString,
+                _dialect?.PoolingSettingName);
+        }
+
+        InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);
+
+        var rwAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+            ? null
+            : effectiveApplicationName + WriteApplicationNameSuffix;
+        var roAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+            ? null
+            : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
+        _cachedReadWriteSessionSettings = _dialect?.GetFinalSessionSettings(readOnly: false, rwAppName) ?? string.Empty;
+        _cachedReadOnlySessionSettings  = _dialect?.GetFinalSessionSettings(readOnly: true,  roAppName) ?? string.Empty;
+    }
+
+    private void FinalizeRegistrations(IDatabaseContextConfiguration configuration)
+    {
+        _isolationResolver = new IsolationResolver(_dialect!, RCSIEnabled, SnapshotIsolationEnabled);
+        _uniqueConnectionStringWarnRegistrations = RegisterConnectionStringsForDuplicateWarning(configuration);
+
+        if (configuration.EnforceUniqueConnectionString)
+        {
+            try
+            {
+                _uniqueConnectionStringClaims = ClaimUniqueConnectionStrings(configuration);
+            }
+            catch
+            {
+                _writerGovernor?.Dispose();
+                _writerGovernor = null;
+                _readerGovernor?.Dispose();
+                _readerGovernor = null;
+                DisposePersistentConnectionsForInitializationFailure();
+                DisposeOwnedDataSources();
+                throw;
+            }
+        }
+    }
+
+    private void FinishInitialization(
+        IDatabaseContextConfiguration configuration,
+        ITrackedConnection? initialConnection,
+        ISqlDialect? dialect,
+        IDataSourceInformation? dataSourceInfo)
+    {
+        SetupDialectAndGates(dialect, dataSourceInfo);
+        SetupConnectionStringsAndSessionSettings(configuration);
+
+        if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
+            HasDedicatedReadConnectionString())
+        {
+            TestConnect(_readerConnectionString, "ReadOnlyValidation", "ReadOnly");
+        }
+
+        InitializePoolGovernors();
+        RefreshRedactedConnectionStrings();
+
+        RCSIEnabled = _rcsiPrefetch;
+        SnapshotIsolationEnabled = _snapshotIsolationPrefetch;
+
+        if (ConnectionMode is DbMode.SingleConnection or DbMode.PreventDatabaseUnload)
+        {
+            var target = initialConnection ?? PersistentConnection;
+            if (target != null)
+            {
+                try
+                {
+                    ExecuteSessionSettings(target, IsReadOnlyConnection);
+                }
+                catch
+                {
+                    DisposePersistentConnectionsForInitializationFailure();
+                    throw;
+                }
+            }
+        }
+
+        if (ConnectionMode is DbMode.Standard or DbMode.SingleWriter && initialConnection != null)
+        {
+            initialConnection.Dispose();
+            Interlocked.Exchange(ref _connectionCount, 0);
+            Interlocked.Exchange(ref _peakOpenConnections, 0);
+        }
+
+        FinalizeRegistrations(configuration);
+    }
+
+    private async Task FinishInitializationAsync(
+        IDatabaseContextConfiguration configuration,
+        ITrackedConnection? initialConnection,
+        ISqlDialect? dialect,
+        IDataSourceInformation? dataSourceInfo,
+        CancellationToken cancellationToken)
+    {
+        SetupDialectAndGates(dialect, dataSourceInfo);
+        SetupConnectionStringsAndSessionSettings(configuration);
+
+        if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
+            HasDedicatedReadConnectionString())
+        {
+            await TestConnectAsync(_readerConnectionString, "ReadOnlyValidation", "ReadOnly", cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        await InitializePoolGovernorsAsync(cancellationToken).ConfigureAwait(false);
+        RefreshRedactedConnectionStrings();
+
+        RCSIEnabled = _rcsiPrefetch;
+        SnapshotIsolationEnabled = _snapshotIsolationPrefetch;
+
+        if (ConnectionMode is DbMode.SingleConnection or DbMode.PreventDatabaseUnload)
+        {
+            var target = initialConnection ?? PersistentConnection;
+            if (target != null)
+            {
+                try
+                {
+                    await ExecuteSessionSettingsAsync(target, IsReadOnlyConnection, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    DisposePersistentConnectionsForInitializationFailure();
+                    throw;
+                }
+            }
+        }
+
+        if (ConnectionMode is DbMode.Standard or DbMode.SingleWriter && initialConnection != null)
+        {
+            if (initialConnection is IAsyncDisposable ad)
+            {
+                await ad.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                initialConnection.Dispose();
+            }
+            Interlocked.Exchange(ref _connectionCount, 0);
+            Interlocked.Exchange(ref _peakOpenConnections, 0);
+        }
+
+        FinalizeRegistrations(configuration);
     }
 
     private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
@@ -666,6 +892,111 @@ public partial class DatabaseContext
         }
     }
 
+    private async Task<ITrackedConnection?> InitializeInternalsAsync(
+        IDatabaseContextConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var rawConnectionString =
+            config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
+        _connectionString = NormalizeConnectionString(rawConnectionString);
+
+        ITrackedConnection? initConn = null;
+        try
+        {
+            var initExecutionType = IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write;
+            initConn = FactoryCreateConnection(initExecutionType, _connectionString, true);
+            try
+            {
+                await initConn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                throw new ConnectionFailedException("Failed to open database connection.", ex)
+                {
+                    Phase = "InitConnect",
+                    Role = "ReadWrite"
+                };
+            }
+
+            var product = await DatabaseDetectionService.DetectProductAsync(initConn, _factory, cancellationToken)
+                .ConfigureAwait(false);
+            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
+            var isLocalDb = topology.IsLocalDb;
+            var isFirebirdEmbedded = topology.IsEmbedded;
+
+            if (initConn != null)
+            {
+                var prefetchLogger = _loggerFactory.CreateLogger<SqlDialect>();
+                var prefetchDialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, _factory, prefetchLogger);
+                var prefetch = await prefetchDialect.DetectSessionCapabilitiesAsync(initConn, cancellationToken)
+                    .ConfigureAwait(false);
+                _rcsiPrefetch = prefetch.Rcsi;
+                _snapshotIsolationPrefetch = prefetch.SnapshotIsolation;
+            }
+
+            if (initConn != null && config.DbMode == DbMode.Standard)
+            {
+                _dataSourceInfo = (DataSourceInformation)await DataSourceInformation.CreateAsync(initConn, _factory, _loggerFactory, cancellationToken)
+                    .ConfigureAwait(false);
+                _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
+                Name = _dataSourceInfo.DatabaseProductName;
+            }
+
+            var requestedMode = ConnectionMode;
+            ConnectionMode = CoerceMode(requestedMode, product, isLocalDb, isFirebirdEmbedded);
+            var inMemoryKind = DetectInMemoryKind(product, _connectionString);
+
+            if (ConnectionMode == DbMode.SingleConnection
+                && inMemoryKind != InMemoryKind.None
+                && IsReadOnlyConnection)
+            {
+                throw new InvalidOperationException(
+                    "In-memory databases that use SingleConnection mode require a read-write context.");
+            }
+
+            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
+
+            if (initConn != null)
+            {
+                if (ConnectionMode == DbMode.PreventDatabaseUnload)
+                {
+                    RegisterSentinel(initConn, initExecutionType);
+                    initConn = null;
+                }
+                else if (ConnectionMode == DbMode.SingleConnection)
+                {
+                    SetPersistentConnection(initConn);
+                    initConn = null;
+                }
+            }
+
+            return initConn;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize DatabaseContext: {Message}", ex.Message);
+            try
+            {
+                if (initConn is IAsyncDisposable ad)
+                {
+                    await ad.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    initConn?.Dispose();
+                }
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            throw;
+        }
+    }
+
     private string NormalizeConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -700,7 +1031,7 @@ public partial class DatabaseContext
         }
     }
 
-    private void InitializePoolGovernors()
+    private void InitializePoolGovernorsCore()
     {
         if (_dialect == null)
         {
@@ -804,18 +1135,6 @@ public partial class DatabaseContext
         // read replica), sharing the turnstile would incorrectly gate replica reads behind
         // primary writes — those operations are independent and should not compete.
         // Also skip when writes are forbidden — no writes means no turnstile needed.
-        //
-        // NOTE: this is deliberately NOT a comparison of the writer/reader connection-string
-        // hashes (writerKey/readerKey) — those strings are intentionally mutated differently
-        // for reader vs. writer during InitializeReadOnlyConnectionResources (pooling stripped
-        // from the reader, an "-rw" ApplicationName suffix + MaxPoolSize=1 on the writer) even
-        // when the caller supplied only one connection string, so a hash comparison is always
-        // false for the common single-connection-string SingleWriter case. Whether reader and
-        // writer target the same physical server is determined by whether the caller supplied
-        // an explicit ReadOnlyConnectionString, not by whether the derived strings still match.
-        // An explicit ReadOnlyConnectionString that happens to equal ConnectionString verbatim
-        // (raw, pre-derivation) still targets the same physical database, so it must not disable
-        // sharing either.
         var sharesTurnstile = !_explicitReadOnlyConnectionString || _readOnlyConnectionStringTargetsSameDatabase;
 
         SemaphoreSlim? turnstile = null;
@@ -848,6 +1167,11 @@ public partial class DatabaseContext
             holdTurnstile: false,
             ownsTurnstile: false, // Readers touch-and-release turnstile
             maxQueueDepth: _maxQueuedReads);
+    }
+
+    private void InitializePoolGovernors()
+    {
+        InitializePoolGovernorsCore();
 
         // Attach the slot that belongs to the initialization sentinel. Additional sentinels are
         // created through FactoryCreateConnection below, which acquires and attaches their own
@@ -874,6 +1198,39 @@ public partial class DatabaseContext
         }
     }
 
+    private async Task InitializePoolGovernorsAsync(CancellationToken cancellationToken)
+    {
+        InitializePoolGovernorsCore();
+
+        if (ConnectionMode == DbMode.PreventDatabaseUnload)
+        {
+            AttachInitialSentinelSlotsIfNeeded();
+
+            if (_isWriteConnection && HasDedicatedReadConnectionString())
+            {
+                var readSentinel = FactoryCreateConnection(
+                    ExecutionType.Read, _readerConnectionString, isSharedConnection: true);
+                try
+                {
+                    await readSentinel.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    RegisterSentinel(readSentinel, ExecutionType.Read);
+                }
+                catch
+                {
+                    if (readSentinel is IAsyncDisposable ad)
+                    {
+                        await ad.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        readSentinel.Dispose();
+                    }
+                    throw;
+                }
+            }
+        }
+    }
+
     private void TestConnect(string connectionString, string phase, string role)
     {
         var isReadOnly = role == "ReadOnly";
@@ -882,6 +1239,39 @@ public partial class DatabaseContext
         {
             using var conn = FactoryCreateConnection(executionType, connectionString, true);
             conn.Open();
+        }
+        catch (Exception ex)
+        {
+            throw new ConnectionFailedException(
+                $"Failed to validate {role.ToLowerInvariant()} connection.", ex)
+            {
+                Phase = phase,
+                Role = role
+            };
+        }
+    }
+
+    private async Task TestConnectAsync(string connectionString, string phase, string role, CancellationToken cancellationToken)
+    {
+        var isReadOnly = role == "ReadOnly";
+        var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
+        try
+        {
+            var conn = FactoryCreateConnection(executionType, connectionString, true);
+            if (conn is IAsyncDisposable ad)
+            {
+                await using (ad.ConfigureAwait(false))
+                {
+                    await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                using (conn)
+                {
+                    await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
         catch (Exception ex)
         {

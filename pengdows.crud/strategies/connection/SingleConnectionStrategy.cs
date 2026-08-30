@@ -113,4 +113,23 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
 
         return (null, null);
     }
+
+    public async Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
+    {
+        var connectionForDetection = _context.PersistentConnection ?? initConnection;
+
+        if (connectionForDetection != null && factory != null)
+        {
+            var dialect = await SqlDialectFactory.CreateDialectAsync(connectionForDetection, factory, loggerFactory, cancellationToken)
+                .ConfigureAwait(false);
+            var dataSourceInfo = new DataSourceInformation(dialect);
+            return (dialect, dataSourceInfo);
+        }
+
+        return (null, null);
+    }
 }

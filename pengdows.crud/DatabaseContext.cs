@@ -114,12 +114,12 @@ namespace pengdows.crud;
 public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextIdentity, ISqlDialectProvider,
     IMetricsCollectorAccessor, IInternalConnectionProvider, ITypeMapAccessor
 {
-    private readonly DbProviderFactory _factory = null!;
+    private DbProviderFactory _factory = null!;
     private DbDataSource? _dataSource;
     private DbDataSource? _readerDataSource;
-    private readonly bool _dataSourceProvided;
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly ILogger<IDatabaseContext> _logger;
+    private bool _dataSourceProvided;
+    private ILoggerFactory _loggerFactory = null!;
+    private ILogger<IDatabaseContext> _logger = null!;
 
     /// <summary>Exposes the context's logger to connection strategies in the same assembly.</summary>
     internal ILogger Logger => _logger;
@@ -141,14 +141,14 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private string _readerConnectionString = string.Empty;
     private string _redactedConnectionString = string.Empty;
     private string _redactedReaderConnectionString = string.Empty;
-    private readonly Action<DbConnection> _disposeHandler;
+    private Action<DbConnection> _disposeHandler = null!;
     private StateChangeEventHandler _stateChangeHandler = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRw = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRo = null!;
     private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRw = null!;
     private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRo = null!;
     private DataSourceInformation _dataSourceInfo = null!;
-    private readonly SqlDialect _dialect = null!;
+    private SqlDialect _dialect = null!;
     private IsolationResolver _isolationResolver = null!;
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
@@ -159,8 +159,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
-    private readonly CommandPrepareMode _prepareMode;
-    private readonly int? _readerPlanCacheSize;
+    private CommandPrepareMode _prepareMode;
+    private int? _readerPlanCacheSize;
     // Non-nullable: InitializeInternals always assigns a concrete value (default false) before
     // returning, for every product/mode — there is no code path that reaches the outer
     // constructor with these still unset. A `bool?` here previously implied a real "not yet
@@ -177,9 +177,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _roSettingsBakedIntoDataSource;
     private string? _connectionNamePrefixWrite;
     private string? _connectionNamePrefixRead;
-    private readonly MetricsCollector? _metricsCollector;
-    private readonly MetricsCollector? _readerMetricsCollector;
-    private readonly MetricsCollector? _writerMetricsCollector;
+    private MetricsCollector? _metricsCollector;
+    private MetricsCollector? _readerMetricsCollector;
+    private MetricsCollector? _writerMetricsCollector;
     private EventHandler<DatabaseMetrics>? _metricsUpdated;
     private int _metricsHasActivity;
     private PoolGovernor? _readerGovernor;
@@ -229,7 +229,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     /// <inheritdoc/>
-    public string Name { get; private set; }
+    public string Name { get; private set; } = string.Empty;
 
     // Expose original requested mode for internal strategy decisions
     /// <inheritdoc/>
@@ -295,7 +295,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public DbMode ConnectionMode { get; private set; }
 
 
-    internal ITypeMapRegistry TypeMapRegistry { get; }
+    internal ITypeMapRegistry TypeMapRegistry { get; private set; } = null!;
 
     ITypeMapRegistry ITypeMapAccessor.TypeMapRegistry => TypeMapRegistry;
 

@@ -269,6 +269,59 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
             }
         }
     }
+
+    public override async Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
+    {
+        var detectionTarget = initConnection ?? _context.PersistentConnection;
+        var ownsConnection = false;
+
+        if (detectionTarget == null)
+        {
+            detectionTarget =
+                _context.FactoryCreateConnection(_context.RawConnectionString, true);
+            ownsConnection = true;
+        }
+
+        try
+        {
+            if (detectionTarget.State != ConnectionState.Open)
+            {
+                await detectionTarget.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (factory != null)
+            {
+                var dialect = await SqlDialectFactory.CreateDialectAsync(detectionTarget, factory, loggerFactory, cancellationToken)
+                    .ConfigureAwait(false);
+                var dataSourceInfo = new DataSourceInformation(dialect);
+                return (dialect, dataSourceInfo);
+            }
+
+            return (null, null);
+        }
+        catch
+        {
+            return (null, null);
+        }
+        finally
+        {
+            if (ownsConnection && detectionTarget != null)
+            {
+                if (detectionTarget is IAsyncDisposable asyncDisposable)
+                {
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    detectionTarget.Dispose();
+                }
+            }
+        }
+    }
 }
 
 internal static class PreventDatabaseUnloadConnectionStrategyTestExtensions

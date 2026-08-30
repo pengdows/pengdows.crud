@@ -385,11 +385,31 @@ internal class SqlServerDialect : SqlDialect
         return v == 1;
     }
 
+    public override async Task<bool> IsReadCommittedSnapshotOnAsync(ITrackedConnection conn, CancellationToken cancellationToken = default)
+    {
+        await using var cmd = (DbCommand)conn.CreateCommand();
+        cmd.CommandText = RcsiQuery;
+        var val = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        var v = val is int i ? i : Convert.ToInt32(val ?? 0);
+        return v == 1;
+    }
+
     public override bool IsSnapshotIsolationOn(ITrackedConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = SnapshotIsolationQuery;
         var value = cmd.ExecuteScalar();
+        var state = value is int i
+            ? i
+            : Convert.ToInt32(value ?? 0, CultureInfo.InvariantCulture);
+        return state == 1;
+    }
+
+    public override async Task<bool> IsSnapshotIsolationOnAsync(ITrackedConnection conn, CancellationToken cancellationToken = default)
+    {
+        await using var cmd = (DbCommand)conn.CreateCommand();
+        cmd.CommandText = SnapshotIsolationQuery;
+        var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         var state = value is int i
             ? i
             : Convert.ToInt32(value ?? 0, CultureInfo.InvariantCulture);
@@ -417,6 +437,32 @@ internal class SqlServerDialect : SqlDialect
         try
         {
             snapshotIsolation = IsSnapshotIsolationOn(connection);
+        }
+        catch
+        {
+            /* ignore prefetch failures */
+        }
+
+        return new SessionCapabilityPrefetch(rcsi, snapshotIsolation);
+    }
+
+    internal override async Task<SessionCapabilityPrefetch> DetectSessionCapabilitiesAsync(ITrackedConnection connection, CancellationToken cancellationToken = default)
+    {
+        var rcsi = false;
+        var snapshotIsolation = false;
+
+        try
+        {
+            rcsi = await IsReadCommittedSnapshotOnAsync(connection, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            /* ignore prefetch failures */
+        }
+
+        try
+        {
+            snapshotIsolation = await IsSnapshotIsolationOnAsync(connection, cancellationToken).ConfigureAwait(false);
         }
         catch
         {

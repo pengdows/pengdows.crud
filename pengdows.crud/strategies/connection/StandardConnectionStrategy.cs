@@ -118,4 +118,21 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
 
         return (null, null);
     }
+
+    public virtual async Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
+    {
+        if (initConnection != null && factory != null)
+        {
+            var dialect = await SqlDialectFactory.CreateDialectAsync(initConnection, factory, loggerFactory, cancellationToken)
+                .ConfigureAwait(false);
+            var dataSourceInfo = new DataSourceInformation(dialect);
+            return (dialect, dataSourceInfo);
+        }
+
+        return (null, null);
+    }
 }

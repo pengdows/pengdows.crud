@@ -200,12 +200,8 @@ What's left:
     `DataSourceInformationAsyncTests.CreateAsync_PreCanceledToken_DoesNotOpenOrProbeConnection`
     regression test proves a pre-cancelled request stops before any connection I/O. This is a
     direct-call capability only: ordinary `DatabaseContext` construction is still synchronous.
-  - Phase 3 (**explicitly deferred / ignore for the current release**, the risky part): expose it via a `DatabaseContext.CreateAsync` factory.
-    Requires rewriting the ~400-line private constructor into a shared async core the sync
-    constructor also routes through, making the full test suite the regression gate for that
-    rewrite. `IConnectionStrategy.HandleDialectDetectionAsync` (an async twin of
-    `HandleDialectDetection`) belongs here, not in Phase 2 — it would have no caller until this
-    factory exists. Deliberately deferred on its own merits, independent of Phase 2 being done.
+  - Phase 3 (**completed 2026-08-30**): expose it via `DatabaseContext.CreateAsync` static factory overloads and `IDatabaseContextFactory.CreateAsync`.
+    Rewrote `DatabaseContext` initialization pipeline into modular synchronous and asynchronous setup paths (`SetupFields`, `InitializeInternalsAsync`, `HandleDialectDetectionAsync`, `FinishInitializationAsync`), added `IDatabaseContextFactory.CreateAsync`, implemented `IConnectionStrategy.HandleDialectDetectionAsync` across all strategies, added `SqlDialect.DetectSessionCapabilitiesAsync` with `SqlServerDialect` overrides, and implemented non-blocking `DatabaseContext.CreateAsync` overloads. Verified via full TDD suite (`DatabaseContextAsyncCreationTests.cs`) and full solution test run (7,453 unit tests passing with ~94% line coverage).
 
 ### P2
 

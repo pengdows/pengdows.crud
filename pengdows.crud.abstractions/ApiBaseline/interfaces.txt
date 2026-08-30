@@ -48,6 +48,7 @@ method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbPa
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string
 method pengdows.crud.IDatabaseContext::WrapObjectName(string) -> string
 method pengdows.crud.IDatabaseContextFactory::Create(pengdows.crud.configuration.IDatabaseContextConfiguration, System.Data.Common.DbProviderFactory, Microsoft.Extensions.Logging.ILoggerFactory) -> pengdows.crud.IDatabaseContext
+method pengdows.crud.IDatabaseContextFactory::CreateAsync(pengdows.crud.configuration.IDatabaseContextConfiguration, System.Data.Common.DbProviderFactory, Microsoft.Extensions.Logging.ILoggerFactory, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.IDatabaseContext>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchCreateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchDeleteAsync(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BatchUpdateAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
