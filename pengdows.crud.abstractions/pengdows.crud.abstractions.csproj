@@ -24,9 +24,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.5"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4"/>
-        <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4"/>
+        <!-- Only IServiceCollection (IDbProviderLoader) and ILoggerFactory (IDatabaseContextFactory)
+             are used anywhere in this project — both are pure contract types that live in the
+             lightweight *.Abstractions packages, not the full DI/logging implementation packages.
+             Microsoft.Extensions.Configuration was previously referenced here with zero actual
+             usage anywhere in this project. -->
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.4"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4"/>
     </ItemGroup>
     <ItemGroup>
         <None Include="README.md" Pack="true" PackagePath=""/>

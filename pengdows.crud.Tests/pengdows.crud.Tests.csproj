@@ -30,6 +30,13 @@
         <PackageReference Include="JetBrains.Annotations" Version="2025.1.0-eap1" />
         <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
         <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+        <!-- Concrete ServiceProvider/ServiceCollection, LoggerFactory, and ConfigurationBuilder for
+             test setup — pengdows.crud.abstractions only references the lightweight *.Abstractions
+             packages (IServiceCollection/ILoggerFactory contracts only), so this project needs its
+             own direct reference to the real DI, logging, and configuration implementations. -->
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.4" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
         <PackageReference Include="MySql.Data" Version="9.3.0" />
         <PackageReference Include="Moq" Version="4.20.72" />
