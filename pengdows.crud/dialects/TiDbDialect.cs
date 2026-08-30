@@ -49,18 +49,25 @@ internal class TiDbDialect : MySqlDialect
     // but benefits from a "Pessimistic" transaction mode for correctness
     // in complex distributed workloads.
 
-    // Oracle MySql.Data (tested at 9.3.0 — see MySql.Data PackageReference across this repo)
-    // has a bug/incompatibility with TiDB when preparing statements: its text-protocol
-    // prepared-statement path applies MySQL server-side backslash-escaping assumptions that
-    // corrupt string parameter values against TiDB. MySqlConnector's binary-protocol
-    // parameters avoid this entirely.
+    // Oracle MySql.Data has a bug/incompatibility with TiDB when preparing statements.
+    // Originally suspected (tested at 9.3.0) to be a text-protocol backslash-escaping mismatch
+    // corrupting string parameter values. MySqlConnector's binary-protocol parameters avoid this
+    // entirely, hence the driver check below.
     //
-    // This was found empirically via this project's own TiDB integration testing
-    // (testbed/TiDB/), not from a public tracked issue — a search for a matching upstream
-    // bug report in mysql/mysql-connector-net or pingcap/tidb (2026-08-13) did not turn one
-    // up. Re-verify against a newer MySql.Data release before assuming this workaround is
-    // still needed; it may already be fixed upstream without a version bump being noticed
-    // here.
+    // Re-verified 2026-08-30 (see testbed.DriverVersionMatrix/MySqlDataTiDbBackslashCorruptionTests.cs)
+    // against a live TiDB container across MySql.Data 9.3.0, 9.4.0, and 9.7.0 (the newest
+    // available on NuGet at the time) — the real failure is more fundamental and MORE severe
+    // than originally documented, and identical across all three versions spanning nearly two
+    // years of releases: MySqlCommand.Prepare() itself throws an unhandled KeyNotFoundException
+    // against TiDB (MySqlField.SetFieldEncoding's character-set-index lookup doesn't recognize
+    // the charset ID TiDB's handshake reports) before any parameter value is ever sent — the
+    // backslash-corruption scenario below is never actually reached; Prepare() crashes outright
+    // first. This workaround is confirmed still necessary, and has been continuously since at
+    // least 9.3.0 — this is not a since-fixed-upstream issue.
+    //
+    // Originally found empirically via this project's own TiDB integration testing
+    // (testbed/TiDB/), not from a public tracked issue — a search for a matching upstream bug
+    // report in mysql/mysql-connector-net or pingcap/tidb (2026-08-13) did not turn one up.
     public override bool PrepareStatements => _isMySqlConnector;
 
     // MySql.Data substitutes parameters into text-protocol commands using backslash
