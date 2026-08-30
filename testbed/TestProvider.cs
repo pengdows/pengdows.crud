@@ -2000,11 +2000,63 @@ INSERT INTO {table} (
         // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
         var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
 
+        // Detecting a real cost does NOT mean DbMode.Best should auto-select
+        // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
+        // docs/connection/connection-modes.md). A heavily-trafficked deployment may never drain
+        // its pool to zero (the cost never actually materializes), and a deliberately
+        // scale-to-zero/cost-optimized deployment may not want a permanent sentinel forced on it
+        // at all — only the operator knows which applies. This probe's job is to confirm the cost
+        // is real and that PreventDatabaseUnload genuinely mitigates it (see the sentinel
+        // validation below), not to decide the default on the operator's behalf.
         CheckOk("DbMode.IdleUnloadProbe",
             $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
             (unloadDetected
-                ? "unload/reactivation cost DETECTED (DbMode.Best should prefer PreventDatabaseUnload)"
-                : "no unload cost detected despite the fast knob (DbMode.Best=Standard is fine)"));
+                ? "unload/reactivation cost DETECTED (PreventDatabaseUnload available as an explicit opt-in to mitigate it)"
+                : "no unload cost detected despite the fast knob"));
+
+        if (unloadDetected)
+        {
+            await TestSentinelPreventsDetectedUnloadCostAsync(probeSql, coldMs, warmMs);
+        }
+    }
+
+    /// <summary>
+    /// Closes the loop on a detected idle-unload cost: does <see cref="DbMode.PreventDatabaseUnload"/>'s
+    /// actual mechanism — one connection held open, never returned to the pool — genuinely prevent
+    /// it? Rather than trusting the design intent, this holds a real open reader (pinning a
+    /// connection exactly the way a PreventDatabaseUnload sentinel does) through the same
+    /// pool-clear-and-wait sequence, then re-measures. <see cref="ClearProviderPoolForIdleUnloadProbe"/>
+    /// only releases connections currently idle IN the pool — a connection actively checked out
+    /// (in use, not yet returned) is untouched by it, so the database should never actually see
+    /// zero attachments this time. The pass bar is relative to this database's own already-measured
+    /// cold/warm gap (recovering at least half of it), not a fixed absolute number — the raw
+    /// magnitude of the cost varies a lot per database (Firebird ~9ms, SQL Server AUTO_CLOSE ~40ms).
+    /// </summary>
+    private async Task TestSentinelPreventsDetectedUnloadCostAsync(string probeSql, double coldMs, double warmMs)
+    {
+        await using var sentinelContainer = _context.CreateSqlContainer(probeSql);
+        await using var sentinelReader = await sentinelContainer.ExecuteReaderAsync();
+
+        ClearProviderPoolForIdleUnloadProbe();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        var sw = Stopwatch.StartNew();
+        await using (var container = _context.CreateSqlContainer(probeSql))
+        {
+            await container.ExecuteScalarOrNullAsync<int>();
+        }
+        sw.Stop();
+
+        var sentinelMs = sw.Elapsed.TotalMilliseconds;
+        var originalGap = coldMs - warmMs;
+        var remainingGap = sentinelMs - warmMs;
+        var sentinelPrevented = remainingGap < originalGap / 2.0;
+
+        CheckOk("DbMode.SentinelPreventsUnload",
+            $"  [DbMode] Sentinel validation for {_context.Product}: round trip with one connection held open throughout = {sentinelMs:F2}ms (original gap was {originalGap:F2}ms) — " +
+            (sentinelPrevented
+                ? "unload cost PREVENTED (confirms PreventDatabaseUnload's sentinel mechanism actually works here)"
+                : "cost still present — sentinel did NOT prevent it (investigate before trusting PreventDatabaseUnload for this database)"));
     }
 
     protected virtual async Task TestReaderDisposalCompatibility()

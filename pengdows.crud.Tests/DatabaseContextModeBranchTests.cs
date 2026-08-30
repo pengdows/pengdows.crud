@@ -32,19 +32,25 @@ public class DatabaseContextModeBranchTests
     [Fact]
     public void CoerceMode_HandlesFirebirdAndLocalDb()
     {
-        // Firebird (embedded or ordinary client-server alike — CoerceMode no longer
-        // distinguishes) only auto-selects PreventDatabaseUnload on Best; an explicit Standard
-        // request is genuinely safe and honored, unlike LocalDB below.
+        // Firebird (embedded or ordinary client-server alike — CoerceMode makes no distinction)
+        // is treated as an ordinary full server database: Best selects Standard, and
+        // PreventDatabaseUnload remains available as an explicitly-honored opt-in knob rather
+        // than an auto-selected default — unlike LocalDB below, which genuinely requires it
+        // unconditionally.
         var context = CreateContext("ServerType=Embedded;Database=C:\\data\\test.fdb;");
         var coerce = GetInstanceMethod("CoerceMode");
 
         var firebirdBest = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Best, SupportedDatabase.Firebird, false })!;
-        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdBest);
+        Assert.Equal(DbMode.Standard, firebirdBest);
 
         var firebirdStandard = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
         Assert.Equal(DbMode.Standard, firebirdStandard);
+
+        var firebirdPreventUnload = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.PreventDatabaseUnload, SupportedDatabase.Firebird, false })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdPreventUnload);
 
         var localDb = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;

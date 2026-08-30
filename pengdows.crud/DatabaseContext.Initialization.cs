@@ -2379,36 +2379,6 @@ public partial class DatabaseContext
                     return requested;
                 }
 
-            case SupportedDatabase.Firebird:
-                {
-                    // Applies to embedded AND ordinary client-server Firebird alike — this is not
-                    // an embedded-only quirk. Under Firebird's default SuperServer architecture,
-                    // RDB$LINGER defaults to 0 (NULL): the moment the last attachment to a
-                    // database closes, the engine closes that database's file and discards its
-                    // page cache immediately (the server PROCESS keeps running — only that one
-                    // database's cache unloads) — confirmed live against a real Firebird 5.0.2
-                    // container. pengdows.crud's Standard mode opens late/closes early per
-                    // operation, so a quiet period naturally drains the pool to zero connections,
-                    // and the next request pays a real (if cheaper-than-LocalDB) cache-rebuild
-                    // cost on reattach. (Linger applies only to SuperServer, not Classic/
-                    // SuperClassic, but the client side can't reliably tell which server
-                    // architecture it's talking to, so the protective default applies uniformly.)
-                    // Standard (and every other mode) remains genuinely SAFE here — nothing
-                    // breaks, unlike SQLite/DuckDB's lock contention or LocalDB's hard
-                    // requirement — so Best selects the more efficient PreventDatabaseUnload, but
-                    // an explicit choice is always honored. An application that would rather
-                    // manage this at the database level directly can do so instead via
-                    // `ALTER DATABASE SET LINGER TO n`, independent of pengdows.crud's own mode.
-                    if (requested == DbMode.Best)
-                    {
-                        LogModeOverride(requested, DbMode.PreventDatabaseUnload,
-                            "Firebird: Best selects PreventDatabaseUnload — default RDB$LINGER=0 discards the database's cache immediately after the last attachment closes");
-                        return DbMode.PreventDatabaseUnload;
-                    }
-
-                    return requested;
-                }
-
             case SupportedDatabase.SqlServer when isLocalDb:
                 {
                     // LocalDB REQUIRES PreventDatabaseUnload to prevent unload
@@ -2427,12 +2397,28 @@ public partial class DatabaseContext
                 or SupportedDatabase.MariaDb
                 or SupportedDatabase.Oracle
                 or SupportedDatabase.SqlServer
-                or SupportedDatabase.Db2:
+                or SupportedDatabase.Db2
+                or SupportedDatabase.Firebird:
                 {
                     // Full server databases: all modes are SAFE
                     // Most functional: Standard
                     // Safe but less functional: SingleWriter, SingleConnection, PreventDatabaseUnload
-
+                    //
+                    // Firebird lives here deliberately, not in a dedicated auto-selecting case:
+                    // its default SuperServer RDB$LINGER=0 does cause a real, empirically-confirmed
+                    // reconnect cost after an idle period (testbed.TestProvider.TestIdleUnloadProbe;
+                    // ~5-10x cold/warm latency ratio against live 3.0/4.0/5.0 containers), and
+                    // PreventDatabaseUnload genuinely mitigates it (confirmed by the same probe's
+                    // sentinel-validation follow-up). But unlike LocalDB, the cost only matters for
+                    // deployments with real idle gaps — a heavily-trafficked Firebird instance may
+                    // never actually drain its pool to zero, making the sentinel's permanent permit
+                    // cost pure overhead — and forcing it by default would be exactly the wrong call
+                    // for anyone deliberately running a scale-to-zero/cost-optimized deployment.
+                    // Only the operator knows which situation applies, so PreventDatabaseUnload
+                    // stays a fully-supported, explicitly-honored KNOB here (same treatment already
+                    // correctly given to Db2's implicit-activation lifecycle and SQL Server's
+                    // opt-in AUTO_CLOSE) rather than an auto-selected default — see
+                    // docs/connection/connection-modes.md and CLAUDE.md for the full policy.
                     if (requested == DbMode.Best)
                     {
                         LogModeOverride(requested, DbMode.Standard, "Full server: Best selects Standard");

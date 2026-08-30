@@ -194,8 +194,17 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
+    public void FirebirdEmbedded_BestMode_SelectsStandard_PreventDatabaseUnloadRemainsAnExplicitKnob()
     {
+        // Firebird's RDB$LINGER=0 default does cause a real, empirically-confirmed reconnect cost
+        // after an idle gap (testbed.TestProvider.TestIdleUnloadProbe), and PreventDatabaseUnload
+        // genuinely mitigates it — but unlike LocalDB, the cost only matters for deployments with
+        // real idle gaps: a heavily-trafficked instance may never drain its pool to zero, and a
+        // deliberately cost-optimized/scale-to-zero deployment may not want a permanent sentinel
+        // forced on it at all. Only the operator knows which applies, so Firebird is treated as an
+        // ordinary full server database here (Best selects Standard, same as Db2/PostgreSQL/etc.)
+        // — PreventDatabaseUnload stays fully available and honored as an explicit opt-in, never
+        // auto-selected.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -205,9 +214,7 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
         Assert.DoesNotContain(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
@@ -235,14 +242,11 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdClientServer_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
+    public void FirebirdClientServer_BestMode_SelectsStandard_SameAsEmbedded()
     {
-        // Not embedded-specific: Firebird SuperServer's RDB$LINGER defaults to 0/NULL, so the
-        // engine closes a database and discards its cache immediately once the last attachment
-        // drops — an ordinary client-server deployment under Standard mode's "open late, close
-        // early" per-operation connections hits this exactly the way LocalDB's instance-shutdown
-        // problem does. Best protects against it the same way for both embedded and
-        // client-server Firebird.
+        // CoerceMode makes no embedded-vs-client-server distinction for Firebird — see
+        // FirebirdEmbedded_BestMode_SelectsStandard_PreventDatabaseUnloadRemainsAnExplicitKnob
+        // for the full policy rationale.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -252,9 +256,7 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
         Assert.DoesNotContain(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }

@@ -9,8 +9,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.467579,
-    "totalTimeSeconds": 2.8184999,
+    "testTimeSeconds": 0.4989057,
+    "totalTimeSeconds": 2.8788982,
     "error": null,
     "checks": [
       {
@@ -185,8 +185,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.4791557,
-    "totalTimeSeconds": 2.8371154,
+    "testTimeSeconds": 0.4687602,
+    "totalTimeSeconds": 2.8068108,
     "error": null,
     "checks": [
       {
@@ -361,8 +361,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.5117511,
-    "totalTimeSeconds": 2.896177,
+    "testTimeSeconds": 0.5482654,
+    "totalTimeSeconds": 2.9167871,
     "error": null,
     "checks": [
       {
@@ -537,8 +537,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 36,
-    "testTimeSeconds": 3.5385388,
-    "totalTimeSeconds": 46.3977183,
+    "testTimeSeconds": 3.5593078,
+    "totalTimeSeconds": 46.2781987,
     "error": null,
     "checks": [
       {
@@ -733,8 +733,8 @@
     "checksFailed": 0,
     "checksSkipped": 1,
     "totalChecks": 36,
-    "testTimeSeconds": 3.2999182,
-    "totalTimeSeconds": 50.6482406,
+    "testTimeSeconds": 3.3084975,
+    "totalTimeSeconds": 50.8088234,
     "error": null,
     "checks": [
       {
@@ -929,8 +929,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 34,
-    "testTimeSeconds": 0.9888027,
-    "totalTimeSeconds": 1.0286897,
+    "testTimeSeconds": 1.0052653,
+    "totalTimeSeconds": 1.0480753,
     "error": null,
     "checks": [
       {
@@ -1110,13 +1110,13 @@
     "container": "Firebird [3.0.9]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 3.2698399,
-    "totalTimeSeconds": 4.5124874,
+    "totalChecks": 33,
+    "testTimeSeconds": 6.6074314,
+    "totalTimeSeconds": 7.8772199,
     "error": null,
     "checks": [
       {
@@ -1241,6 +1241,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -1286,13 +1291,13 @@
     "container": "Firebird [4.0.5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 3.3096883,
-    "totalTimeSeconds": 4.5389654,
+    "totalChecks": 33,
+    "testTimeSeconds": 6.5813537,
+    "totalTimeSeconds": 7.7920717,
     "error": null,
     "checks": [
       {
@@ -1417,6 +1422,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -1462,13 +1472,13 @@
     "container": "Firebird [5.0.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 3.3796832,
-    "totalTimeSeconds": 4.7264574,
+    "totalChecks": 33,
+    "testTimeSeconds": 6.6842138,
+    "totalTimeSeconds": 8.0311121,
     "error": null,
     "checks": [
       {
@@ -1593,6 +1603,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -1643,8 +1658,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.1244664,
-    "totalTimeSeconds": 3.2423721,
+    "testTimeSeconds": 0.0990741,
+    "totalTimeSeconds": 4.3094665,
     "error": null,
     "checks": [
       {
@@ -1829,8 +1844,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.0641354,
-    "totalTimeSeconds": 7.1829976,
+    "testTimeSeconds": 0.0660062,
+    "totalTimeSeconds": 7.2270379,
     "error": null,
     "checks": [
       {
@@ -2015,8 +2030,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.0707716,
-    "totalTimeSeconds": 6.2003338,
+    "testTimeSeconds": 0.0710023,
+    "totalTimeSeconds": 6.2405792,
     "error": null,
     "checks": [
       {
@@ -2201,8 +2216,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.0798496,
-    "totalTimeSeconds": 6.2216289,
+    "testTimeSeconds": 0.1971171,
+    "totalTimeSeconds": 4.3558366,
     "error": null,
     "checks": [
       {
@@ -2387,8 +2402,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0752792,
-    "totalTimeSeconds": 6.2031899,
+    "testTimeSeconds": 0.1353762,
+    "totalTimeSeconds": 6.2698043,
     "error": null,
     "checks": [
       {
@@ -2563,8 +2578,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1147246,
-    "totalTimeSeconds": 7.2492707,
+    "testTimeSeconds": 0.1169563,
+    "totalTimeSeconds": 7.2545838,
     "error": null,
     "checks": [
       {
@@ -2739,8 +2754,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1324441,
-    "totalTimeSeconds": 5.3561275,
+    "testTimeSeconds": 0.1330336,
+    "totalTimeSeconds": 5.377333,
     "error": null,
     "checks": [
       {
@@ -2915,8 +2930,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.5463092,
-    "totalTimeSeconds": 10.8540836,
+    "testTimeSeconds": 0.6378224,
+    "totalTimeSeconds": 10.9561302,
     "error": null,
     "checks": [
       {
@@ -3096,8 +3111,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.5467203,
-    "totalTimeSeconds": 8.9013091,
+    "testTimeSeconds": 0.5457971,
+    "totalTimeSeconds": 9.8607726,
     "error": null,
     "checks": [
       {
@@ -3277,8 +3292,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.8497508,
-    "totalTimeSeconds": 7.5112932,
+    "testTimeSeconds": 0.8410506,
+    "totalTimeSeconds": 7.4815863,
     "error": null,
     "checks": [
       {
@@ -3458,8 +3473,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.0832547,
-    "totalTimeSeconds": 1.253055,
+    "testTimeSeconds": 0.0895367,
+    "totalTimeSeconds": 1.2275754,
     "error": null,
     "checks": [
       {
@@ -3639,8 +3654,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.1210778,
-    "totalTimeSeconds": 1.26282,
+    "testTimeSeconds": 0.1281367,
+    "totalTimeSeconds": 1.2784702,
     "error": null,
     "checks": [
       {
@@ -3820,8 +3835,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 34,
-    "testTimeSeconds": 0.0806716,
-    "totalTimeSeconds": 4.2195598,
+    "testTimeSeconds": 0.0841314,
+    "totalTimeSeconds": 4.2375505,
     "error": null,
     "checks": [
       {
@@ -4001,13 +4016,13 @@
     "container": "SQL Server [2017]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 3.1742006,
-    "totalTimeSeconds": 7.4803176,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.2117813,
+    "totalTimeSeconds": 12.5065071,
     "error": null,
     "checks": [
       {
@@ -4132,6 +4147,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -4187,13 +4207,13 @@
     "container": "SQL Server [2019]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 3.2144638,
-    "totalTimeSeconds": 8.493596,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.2263627,
+    "totalTimeSeconds": 10.5641304,
     "error": null,
     "checks": [
       {
@@ -4318,6 +4338,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -4373,13 +4398,13 @@
     "container": "SQL Server [2022-CU25]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 3.2713311,
-    "totalTimeSeconds": 8.8164583,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.282278,
+    "totalTimeSeconds": 11.8175412,
     "error": null,
     "checks": [
       {
@@ -4504,6 +4529,11 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
         "outcome": "passed",
         "reason": null
       },
@@ -4564,8 +4594,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0370252,
-    "totalTimeSeconds": 0.0513319,
+    "testTimeSeconds": 0.0334493,
+    "totalTimeSeconds": 0.0484552,
     "error": null,
     "checks": [
       {
@@ -4740,8 +4770,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.3258005,
-    "totalTimeSeconds": 1.6265976,
+    "testTimeSeconds": 0.2920124,
+    "totalTimeSeconds": 2.5129752,
     "error": null,
     "checks": [
       {
@@ -4916,8 +4946,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.3232763,
-    "totalTimeSeconds": 2.6797177,
+    "testTimeSeconds": 0.3372745,
+    "totalTimeSeconds": 2.6782938,
     "error": null,
     "checks": [
       {
@@ -5092,8 +5122,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 1.3072118,
-    "totalTimeSeconds": 8.0201519,
+    "testTimeSeconds": 1.2557159,
+    "totalTimeSeconds": 6.8100964,
     "error": null,
     "checks": [
       {
@@ -5268,8 +5298,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 1.6748818,
-    "totalTimeSeconds": 8.408938,
+    "testTimeSeconds": 1.6971072,
+    "totalTimeSeconds": 8.4071819,
     "error": null,
     "checks": [
       {

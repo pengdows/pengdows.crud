@@ -20,15 +20,11 @@ public class EmbeddedModeEnforcementTests
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
-    // Embedded Firebird: only Best is auto-selected to PreventDatabaseUnload (protects against
-    // RDB$LINGER=0's default immediate cache discard on last-attachment-close). Every other
-    // explicit choice is genuinely SAFE for embedded Firebird (it supports multiple simultaneous
-    // attachments) and is honored, not coerced — see DbModeCoercionLoggingTests for the
-    // "honored, no warning" cases.
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Best, DbMode.PreventDatabaseUnload)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.Standard, DbMode.Standard)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleWriter, DbMode.SingleWriter)]
-    [InlineData(SupportedDatabase.Firebird, "test.fdb", DbMode.SingleConnection, DbMode.SingleConnection)]
+    // Firebird (embedded or not) is NOT in this list — CoerceMode treats it as an ordinary full
+    // server database (Best selects Standard, every explicit choice including
+    // PreventDatabaseUnload is honored, nothing forced) — see
+    // DatabaseContextModeBranchTests.CoerceMode_HandlesFirebirdAndLocalDb and
+    // DbModeCoercionLoggingTests for that coverage and the full policy rationale.
     public void EmbeddedProviders_ForceConnectionMode(
         SupportedDatabase product,
         string dataSource,
@@ -37,9 +33,7 @@ public class EmbeddedModeEnforcementTests
     {
         var cfg = new DatabaseContextConfiguration
         {
-            ConnectionString = product == SupportedDatabase.Firebird
-                ? $"Database={dataSource};ServerType=Embedded;EmulatedProduct={product}"
-                : $"Data Source={dataSource};EmulatedProduct={product}",
+            ConnectionString = $"Data Source={dataSource};EmulatedProduct={product}",
             DbMode = requested,
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
