@@ -296,7 +296,7 @@ public class TypeCoercionHelperBranchTests
     public void CoerceDateTimeOffset_PrivateHandlesInputs()
     {
         var options = TypeCoercionOptions.Default;
-        var forceOptions = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var forceOptions = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.Unknown);
         var dto = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 

@@ -67,7 +67,6 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
         var options = TypeCoercionOptions.Default;
 
         Assert.Equal(TimeMappingPolicy.PreferDateTimeOffset, options.TimePolicy);
-        Assert.Equal(JsonPassThrough.PreferDocument, options.JsonPreference);
         Assert.Equal(SupportedDatabase.Unknown, options.Provider);
     }
 
@@ -76,12 +75,10 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     {
         var options = new TypeCoercionOptions(
             TimeMappingPolicy.ForceUtcDateTime,
-            JsonPassThrough.PreferText,
             SupportedDatabase.PostgreSql);
 
         Assert.Equal(TimeMappingPolicy.ForceUtcDateTime, options.TimePolicy);
         Assert.NotEqual(TypeCoercionOptions.Default.TimePolicy, options.TimePolicy);
-        Assert.Equal(JsonPassThrough.PreferText, options.JsonPreference);
         Assert.Equal(SupportedDatabase.PostgreSql, options.Provider);
     }
 
@@ -292,7 +289,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void CoerceDateTimeOffset_FromDateTime_PreferDateTimeOffset()
     {
         var dt = DateTime.UtcNow;
-        var options = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset,
             SupportedDatabase.Unknown);
         var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
 
@@ -303,7 +300,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void CoerceDateTimeOffset_FromDateTime_ForceUtc()
     {
         var dt = DateTime.Now; // Local time
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.Unknown);
         var result = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
 
@@ -323,7 +320,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void CoerceDateTimeOffset_FromDateTimeString_ParsesCorrectly()
     {
         var dateString = "2023-01-01T12:00:00Z"; // Explicit UTC timestamp
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.Unknown);
         var result =
             (DateTimeOffset)TypeCoercionHelper.Coerce(dateString, typeof(string), typeof(DateTimeOffset), options)!;
@@ -342,7 +339,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void CoerceDateTime_FromDateTime_ConvertedToUtc()
     {
         var dt = DateTime.Now; // Local time
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.Unknown);
         var result = (DateTime)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTime), options)!;
 

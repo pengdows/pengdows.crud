@@ -124,13 +124,13 @@ public class TypeCoercionHelperTests
     [Fact]
     public void CoerceDateTimeOffset_UsesPolicy()
     {
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.SqlServer);
         var dt = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Unspecified);
         var dto = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options)!;
         Assert.Equal(DateTimeKind.Utc, dto.UtcDateTime.Kind);
 
-        var options2 = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset, JsonPassThrough.PreferDocument,
+        var options2 = new TypeCoercionOptions(TimeMappingPolicy.PreferDateTimeOffset,
             SupportedDatabase.SqlServer);
         var dto2 = (DateTimeOffset)TypeCoercionHelper.Coerce(dt, typeof(DateTime), typeof(DateTimeOffset), options2)!;
         Assert.Equal(TimeSpan.Zero, dto2.Offset);

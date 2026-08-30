@@ -42,7 +42,7 @@ public class TypeCoercionHelperBehaviorTests
     [Fact]
     public void CoerceDateTimeOffset_FromString_ForceUtc()
     {
-        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime, JsonPassThrough.PreferDocument,
+        var options = new TypeCoercionOptions(TimeMappingPolicy.ForceUtcDateTime,
             SupportedDatabase.Sqlite);
         var result =
             (DateTimeOffset)TypeCoercionHelper.Coerce("2026-02-07T03:00:00", typeof(string), typeof(DateTimeOffset),
