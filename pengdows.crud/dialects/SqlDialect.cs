@@ -557,10 +557,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Firebird overrides this to true — see FirebirdDialect for the full rationale.
     internal virtual bool RequiresExplicitRollbackAfterFailedWrite => false;
 
+    // Internal, not part of ISqlDialect: true when this dialect needs ResetConnectionPoolForDdl
+    // called before executing DDL. SqlContainer checks this cheap property first, before doing
+    // any string work (Query.ToString() + leading-keyword scan) to detect a DDL statement — false
+    // for every dialect except Firebird, so no write on any other database pays that cost.
+    internal virtual bool RequiresConnectionPoolResetForDdl => false;
+
     // Internal, not part of ISqlDialect: called before executing a DDL statement (CREATE/DROP/
     // ALTER/TRUNCATE) so a dialect can clear stale ADO.NET connection-pool state that would
     // otherwise block the DDL's commit. No-op for every dialect except Firebird — see
-    // FirebirdDialect for the full rationale.
+    // FirebirdDialect for the full rationale. Only ever invoked when
+    // RequiresConnectionPoolResetForDdl is true.
     internal virtual void ResetConnectionPoolForDdl(string connectionString)
     {
     }

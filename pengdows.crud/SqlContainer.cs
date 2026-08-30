@@ -1154,8 +1154,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            if (executionType == ExecutionType.Write && IsDdlStatement(Query.ToString()) &&
-                _dialect is SqlDialect ddlDialect)
+            if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
+                ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
             {
                 ddlDialect.ResetConnectionPoolForDdl(InternalConnectionStringAccess.GetRawConnectionString(_context));
             }
@@ -1287,11 +1287,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             rollbackCommand.CommandText = "ROLLBACK";
             await rollbackCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
             // Best-effort — nothing to roll back is the common case for every other dialect path
             // that could theoretically reach here, and a failure here must never mask the
-            // original exception already in flight.
+            // original exception already in flight. Still worth a breadcrumb: if this ever
+            // misfires against a real provider, there'd otherwise be zero trace of it.
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Best-effort rollback after a failed write did not complete");
+            }
         }
     }
 

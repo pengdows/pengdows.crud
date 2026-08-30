@@ -176,6 +176,8 @@ internal class FirebirdDialect : SqlDialect
     // reset or the process exits.
     internal override bool RequiresExplicitRollbackAfterFailedWrite => true;
 
+    internal override bool RequiresConnectionPoolResetForDdl => true;
+
     // Confirmed against a live container: Firebird's DDL commit additionally requires that no
     // OTHER connection — even one holding only cleanly-committed transactions — still be sitting
     // idle in the ADO.NET connection pool referencing the table's current metadata generation.

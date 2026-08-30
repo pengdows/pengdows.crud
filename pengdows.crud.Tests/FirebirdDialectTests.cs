@@ -23,11 +23,30 @@ public class FirebirdDialectTests
     }
 
     [Fact]
-    public void ResetConnectionPoolForDdl_ReturnsTrue_AsRequiredCapability()
+    public void RequiresExplicitRollbackAfterFailedWrite_ReturnsTrue_ForFirebird()
     {
         var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
             NullLogger<FirebirdDialect>.Instance);
         Assert.True(dialect.RequiresExplicitRollbackAfterFailedWrite);
+    }
+
+    [Fact]
+    public void RequiresConnectionPoolResetForDdl_ReturnsTrue_ForFirebird()
+    {
+        // SqlContainer gates the (relatively expensive) IsDdlStatement(Query.ToString()) check on
+        // this flag before doing any string work — must be true for Firebird, the only dialect
+        // that actually needs ResetConnectionPoolForDdl called.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        Assert.True(dialect.RequiresConnectionPoolResetForDdl);
+    }
+
+    [Fact]
+    public void RequiresConnectionPoolResetForDdl_ReturnsFalse_ForNonFirebirdDialect()
+    {
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
+            NullLogger<PostgreSqlDialect>.Instance);
+        Assert.False(dialect.RequiresConnectionPoolResetForDdl);
     }
 
     [Fact]
