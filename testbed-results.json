@@ -9,8 +9,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.486134,
-    "totalTimeSeconds": 2.8273381,
+    "testTimeSeconds": 0.467579,
+    "totalTimeSeconds": 2.8184999,
     "error": null,
     "checks": [
       {
@@ -185,8 +185,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.4552128,
-    "totalTimeSeconds": 2.8627659,
+    "testTimeSeconds": 0.4791557,
+    "totalTimeSeconds": 2.8371154,
     "error": null,
     "checks": [
       {
@@ -361,8 +361,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.572407,
-    "totalTimeSeconds": 2.921649,
+    "testTimeSeconds": 0.5117511,
+    "totalTimeSeconds": 2.896177,
     "error": null,
     "checks": [
       {
@@ -532,13 +532,13 @@
     "container": "Db2 [11.5.0.0a]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 34,
-    "checksPassed": 34,
+    "checksAttempted": 35,
+    "checksPassed": 35,
     "checksFailed": 0,
-    "checksSkipped": 2,
+    "checksSkipped": 1,
     "totalChecks": 36,
-    "testTimeSeconds": 0.5361214,
-    "totalTimeSeconds": 42.857031,
+    "testTimeSeconds": 3.5385388,
+    "totalTimeSeconds": 46.3977183,
     "error": null,
     "checks": [
       {
@@ -663,8 +663,8 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
-        "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for Db2 \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -728,13 +728,13 @@
     "container": "Db2 [11.5.8.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 34,
-    "checksPassed": 34,
+    "checksAttempted": 35,
+    "checksPassed": 35,
     "checksFailed": 0,
-    "checksSkipped": 2,
+    "checksSkipped": 1,
     "totalChecks": 36,
-    "testTimeSeconds": 0.386193,
-    "totalTimeSeconds": 47.6847574,
+    "testTimeSeconds": 3.2999182,
+    "totalTimeSeconds": 50.6482406,
     "error": null,
     "checks": [
       {
@@ -859,8 +859,8 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
-        "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for Db2 \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -929,8 +929,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 34,
-    "testTimeSeconds": 0.9754688,
-    "totalTimeSeconds": 1.0169521,
+    "testTimeSeconds": 0.9888027,
+    "totalTimeSeconds": 1.0286897,
     "error": null,
     "checks": [
       {
@@ -1115,8 +1115,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 3.2901912,
-    "totalTimeSeconds": 4.5134071,
+    "testTimeSeconds": 3.2698399,
+    "totalTimeSeconds": 4.5124874,
     "error": null,
     "checks": [
       {
@@ -1291,8 +1291,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 3.3008686,
-    "totalTimeSeconds": 4.5309306,
+    "testTimeSeconds": 3.3096883,
+    "totalTimeSeconds": 4.5389654,
     "error": null,
     "checks": [
       {
@@ -1467,8 +1467,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 3.3506715,
-    "totalTimeSeconds": 4.6940352,
+    "testTimeSeconds": 3.3796832,
+    "totalTimeSeconds": 4.7264574,
     "error": null,
     "checks": [
       {
@@ -1643,8 +1643,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.080948,
-    "totalTimeSeconds": 3.212841,
+    "testTimeSeconds": 0.1244664,
+    "totalTimeSeconds": 3.2423721,
     "error": null,
     "checks": [
       {
@@ -1829,8 +1829,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.065209,
-    "totalTimeSeconds": 7.1931903,
+    "testTimeSeconds": 0.0641354,
+    "totalTimeSeconds": 7.1829976,
     "error": null,
     "checks": [
       {
@@ -2015,8 +2015,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.0708,
-    "totalTimeSeconds": 6.1913626,
+    "testTimeSeconds": 0.0707716,
+    "totalTimeSeconds": 6.2003338,
     "error": null,
     "checks": [
       {
@@ -2201,8 +2201,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 34,
-    "testTimeSeconds": 0.1288352,
-    "totalTimeSeconds": 5.2794619,
+    "testTimeSeconds": 0.0798496,
+    "totalTimeSeconds": 6.2216289,
     "error": null,
     "checks": [
       {
@@ -2387,8 +2387,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0780046,
-    "totalTimeSeconds": 7.1964781,
+    "testTimeSeconds": 0.0752792,
+    "totalTimeSeconds": 6.2031899,
     "error": null,
     "checks": [
       {
@@ -2563,8 +2563,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.1244934,
-    "totalTimeSeconds": 7.2670484,
+    "testTimeSeconds": 0.1147246,
+    "totalTimeSeconds": 7.2492707,
     "error": null,
     "checks": [
       {
@@ -2739,8 +2739,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 0.129288,
-    "totalTimeSeconds": 5.3599966,
+    "testTimeSeconds": 0.1324441,
+    "totalTimeSeconds": 5.3561275,
     "error": null,
     "checks": [
       {
@@ -2915,8 +2915,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.5899239,
-    "totalTimeSeconds": 10.9717845,
+    "testTimeSeconds": 0.5463092,
+    "totalTimeSeconds": 10.8540836,
     "error": null,
     "checks": [
       {
@@ -3096,8 +3096,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.5986177,
-    "totalTimeSeconds": 7.8881164,
+    "testTimeSeconds": 0.5467203,
+    "totalTimeSeconds": 8.9013091,
     "error": null,
     "checks": [
       {
@@ -3277,8 +3277,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.8808232,
-    "totalTimeSeconds": 7.5094437,
+    "testTimeSeconds": 0.8497508,
+    "totalTimeSeconds": 7.5112932,
     "error": null,
     "checks": [
       {
@@ -3458,8 +3458,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.0855784,
-    "totalTimeSeconds": 1.2308787,
+    "testTimeSeconds": 0.0832547,
+    "totalTimeSeconds": 1.253055,
     "error": null,
     "checks": [
       {
@@ -3639,8 +3639,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 33,
-    "testTimeSeconds": 0.1244003,
-    "totalTimeSeconds": 1.2671453,
+    "testTimeSeconds": 0.1210778,
+    "totalTimeSeconds": 1.26282,
     "error": null,
     "checks": [
       {
@@ -3820,8 +3820,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 34,
-    "testTimeSeconds": 0.089211,
-    "totalTimeSeconds": 4.2397958,
+    "testTimeSeconds": 0.0806716,
+    "totalTimeSeconds": 4.2195598,
     "error": null,
     "checks": [
       {
@@ -4001,13 +4001,13 @@
     "container": "SQL Server [2017]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
+    "checksSkipped": 2,
     "totalChecks": 34,
-    "testTimeSeconds": 0.1532987,
-    "totalTimeSeconds": 5.4155827,
+    "testTimeSeconds": 3.1742006,
+    "totalTimeSeconds": 7.4803176,
     "error": null,
     "checks": [
       {
@@ -4132,8 +4132,8 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
-        "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for SqlServer \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -4187,13 +4187,13 @@
     "container": "SQL Server [2019]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
+    "checksSkipped": 2,
     "totalChecks": 34,
-    "testTimeSeconds": 0.1513571,
-    "totalTimeSeconds": 5.4276483,
+    "testTimeSeconds": 3.2144638,
+    "totalTimeSeconds": 8.493596,
     "error": null,
     "checks": [
       {
@@ -4318,8 +4318,8 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
-        "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for SqlServer \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -4373,13 +4373,13 @@
     "container": "SQL Server [2022-CU25]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
+    "checksSkipped": 2,
     "totalChecks": 34,
-    "testTimeSeconds": 0.2005372,
-    "totalTimeSeconds": 5.7340008,
+    "testTimeSeconds": 3.2713311,
+    "totalTimeSeconds": 8.8164583,
     "error": null,
     "checks": [
       {
@@ -4504,8 +4504,8 @@
       },
       {
         "name": "DbMode.IdleUnloadProbe",
-        "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for SqlServer \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -4564,8 +4564,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.0327772,
-    "totalTimeSeconds": 0.0472025,
+    "testTimeSeconds": 0.0370252,
+    "totalTimeSeconds": 0.0513319,
     "error": null,
     "checks": [
       {
@@ -4740,8 +4740,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.3336978,
-    "totalTimeSeconds": 1.6230208,
+    "testTimeSeconds": 0.3258005,
+    "totalTimeSeconds": 1.6265976,
     "error": null,
     "checks": [
       {
@@ -4916,8 +4916,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 32,
-    "testTimeSeconds": 0.2929968,
-    "totalTimeSeconds": 2.5164557,
+    "testTimeSeconds": 0.3232763,
+    "totalTimeSeconds": 2.6797177,
     "error": null,
     "checks": [
       {
@@ -5092,8 +5092,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 1.237931,
-    "totalTimeSeconds": 6.8830873,
+    "testTimeSeconds": 1.3072118,
+    "totalTimeSeconds": 8.0201519,
     "error": null,
     "checks": [
       {
@@ -5268,8 +5268,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 32,
-    "testTimeSeconds": 1.6583009,
-    "totalTimeSeconds": 8.2760597,
+    "testTimeSeconds": 1.6748818,
+    "totalTimeSeconds": 8.408938,
     "error": null,
     "checks": [
       {

@@ -1,4 +1,5 @@
 using System.Data;
+using Microsoft.Data.SqlClient;
 using pengdows.crud;
 using pengdows.crud.attributes;
 
@@ -15,6 +16,26 @@ public sealed class SqlServerTestProvider : TestProvider
     {
         await TestIdentityReturningWithTriggerAsync();
         await TestPagingRequiresOrderByAsync();
+    }
+
+    /// <summary>
+    /// AUTO_CLOSE is OFF by default for ordinary SQL Server databases (unlike Firebird's
+    /// RDB$LINGER=0 or Db2's implicit-activation default), so DbMode.Best correctly stays
+    /// Standard without this. This override exists purely to empirically check: IF an
+    /// application/DBA turns AUTO_CLOSE on for a specific database, does the same idle-unload
+    /// probe methodology detect a real cost the way it does for Firebird? (It must not change
+    /// SQL Server's own DbMode.Best resolution — that stays Standard; AUTO_CLOSE is opt-in.)
+    /// </summary>
+    protected override async Task<bool> TryEnableFastIdleUnloadAsync()
+    {
+        await using var sc = _context.CreateSqlContainer("ALTER DATABASE CURRENT SET AUTO_CLOSE ON");
+        await sc.ExecuteNonQueryAsync();
+        return true;
+    }
+
+    protected override void ClearProviderPoolForIdleUnloadProbe()
+    {
+        SqlConnection.ClearAllPools();
     }
 
     private Task TestPagingRequiresOrderByAsync()
