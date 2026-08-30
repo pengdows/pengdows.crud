@@ -171,9 +171,12 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   mid-execution leaves that transaction open, and Firebird's server-side lock on the affected
   row/table is not released by merely closing/disposing the connection; it can persist for the
   life of the pooled connection. Confirmed live via a deliberate unique-constraint-violation
-  repro. `pengdows.crud` compensates automatically: `SqlContainer.ExecuteNonQueryAsync` issues an
-  explicit bare `ROLLBACK` after any failed write on Firebird (`SqlDialect.RequiresExplicitRollbackAfterFailedWrite`,
-  internal) before the connection returns to the pool — no application code needs to know about
+  repro. `pengdows.crud` compensates automatically: `SqlContainer` issues an explicit bare
+  `ROLLBACK` after any failed write on Firebird (`SqlDialect.RequiresExplicitRollbackAfterFailedWrite`,
+  internal) before the connection returns to the pool — covering both `ExecuteNonQueryAsync` and
+  the reader/scalar path used by autoincrement `[Id(false)]` creates (Firebird's
+  `GeneratedKeyPlan.Returning`). Never fires inside an explicit `ITransactionContext`, whose own
+  commit/rollback lifecycle owns that connection instead. No application code needs to know about
   this.
 - Separately, Firebird's DDL commit (`CREATE`/`DROP`/`ALTER`/`TRUNCATE`) requires that no OTHER
   connection — even one holding only cleanly-committed transactions — still be idle in the

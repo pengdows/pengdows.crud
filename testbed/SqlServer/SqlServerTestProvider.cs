@@ -38,6 +38,17 @@ public sealed class SqlServerTestProvider : TestProvider
         SqlConnection.ClearAllPools();
     }
 
+    /// <summary>
+    /// Restores AUTO_CLOSE to OFF — the default for every non-Express SQL Server edition,
+    /// including the full server image the testbed container runs — so the probe doesn't leave
+    /// every later test in this testbed run against an AUTO_CLOSE-enabled database.
+    /// </summary>
+    protected override async Task RestoreIdleUnloadKnobAsync()
+    {
+        await using var sc = _context.CreateSqlContainer("ALTER DATABASE CURRENT SET AUTO_CLOSE OFF");
+        await sc.ExecuteNonQueryAsync();
+    }
+
     private Task TestPagingRequiresOrderByAsync()
     {
         using var container = _context.CreateSqlContainer();

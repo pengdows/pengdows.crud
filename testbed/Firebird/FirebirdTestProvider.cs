@@ -93,4 +93,15 @@ CREATE TABLE {0} (
     {
         FbConnection.ClearAllPools();
     }
+
+    /// <summary>
+    /// Restores LINGER to Firebird's shipped default (60 seconds per firebird.conf's documented
+    /// <c>DatabaseLinger</c> default) so the probe doesn't leave every later test in this testbed
+    /// run against a 1-second-linger database.
+    /// </summary>
+    protected override async Task RestoreIdleUnloadKnobAsync()
+    {
+        await using var sc = context.CreateSqlContainer("ALTER DATABASE SET LINGER TO 60");
+        await sc.ExecuteNonQueryAsync();
+    }
 }

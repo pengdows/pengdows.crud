@@ -1956,6 +1956,15 @@ INSERT INTO {table} (
     {
     }
 
+    /// <summary>
+    /// Override to undo whatever database-level setting <see cref="TryEnableFastIdleUnloadAsync"/>
+    /// mutated (e.g. restore Firebird's <c>LINGER</c> or SQL Server's <c>AUTO_CLOSE</c>), so the
+    /// probe doesn't leave a persistent, contaminating setting behind for every later test that
+    /// runs against the same container in this testbed session. Default no-op — correct for any
+    /// override (e.g. Db2's) that doesn't actually mutate persistent database state.
+    /// </summary>
+    protected virtual Task RestoreIdleUnloadKnobAsync() => Task.CompletedTask;
+
     protected virtual async Task TestIdleUnloadProbe()
     {
         var knobEnabled = await TryEnableFastIdleUnloadAsync();
@@ -1966,57 +1975,67 @@ INSERT INTO {table} (
             return;
         }
 
-        // Drain the pool and wait past the fast timeout just configured, then compare the first
-        // (cold, forced-reconnect) round trip against the immediately-following (warm, pooled)
-        // one. Apples-to-apples: same query shape, same connection string, only the pool state
-        // differs between the two measurements.
-        ClearProviderPoolForIdleUnloadProbe();
-        await Task.Delay(TimeSpan.FromSeconds(3));
-
-        // A trivial "SELECT 1" with no FROM clause isn't universally portable (Firebird and
-        // Oracle both reject it) — count against the already-created test_table instead, which
-        // every dialect supports identically.
-        var probeSql = $"SELECT COUNT(*) FROM {_helper.WrappedTableName}";
-
-        var coldSw = Stopwatch.StartNew();
-        await using (var coldContainer = _context.CreateSqlContainer(probeSql))
+        try
         {
-            await coldContainer.ExecuteScalarOrNullAsync<int>();
+            // Drain the pool and wait past the fast timeout just configured, then compare the first
+            // (cold, forced-reconnect) round trip against the immediately-following (warm, pooled)
+            // one. Apples-to-apples: same query shape, same connection string, only the pool state
+            // differs between the two measurements.
+            ClearProviderPoolForIdleUnloadProbe();
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            // A trivial "SELECT 1" with no FROM clause isn't universally portable (Firebird and
+            // Oracle both reject it) — count against the already-created test_table instead, which
+            // every dialect supports identically.
+            var probeSql = $"SELECT COUNT(*) FROM {_helper.WrappedTableName}";
+
+            var coldSw = Stopwatch.StartNew();
+            await using (var coldContainer = _context.CreateSqlContainer(probeSql))
+            {
+                await coldContainer.ExecuteScalarOrNullAsync<int>();
+            }
+            coldSw.Stop();
+
+            var warmSw = Stopwatch.StartNew();
+            await using (var warmContainer = _context.CreateSqlContainer(probeSql))
+            {
+                await warmContainer.ExecuteScalarOrNullAsync<int>();
+            }
+            warmSw.Stop();
+
+            var coldMs = coldSw.Elapsed.TotalMilliseconds;
+            var warmMs = Math.Max(warmSw.Elapsed.TotalMilliseconds, 0.01);
+            var ratio = coldMs / warmMs;
+
+            // Generous threshold — this only needs to distinguish "genuinely paid a reconnect/
+            // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
+            var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
+
+            // Detecting a real cost does NOT mean DbMode.Best should auto-select
+            // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
+            // docs/connection/connection-modes.md). A heavily-trafficked deployment may never drain
+            // its pool to zero (the cost never actually materializes), and a deliberately
+            // scale-to-zero/cost-optimized deployment may not want a permanent sentinel forced on it
+            // at all — only the operator knows which applies. This probe's job is to confirm the cost
+            // is real and that PreventDatabaseUnload genuinely mitigates it (see the sentinel
+            // validation below), not to decide the default on the operator's behalf.
+            CheckOk("DbMode.IdleUnloadProbe",
+                $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
+                (unloadDetected
+                    ? "unload/reactivation cost DETECTED (PreventDatabaseUnload available as an explicit opt-in to mitigate it)"
+                    : "no unload cost detected despite the fast knob"));
+
+            if (unloadDetected)
+            {
+                await TestSentinelPreventsDetectedUnloadCostAsync(probeSql, coldMs, warmMs);
+            }
         }
-        coldSw.Stop();
-
-        var warmSw = Stopwatch.StartNew();
-        await using (var warmContainer = _context.CreateSqlContainer(probeSql))
+        finally
         {
-            await warmContainer.ExecuteScalarOrNullAsync<int>();
-        }
-        warmSw.Stop();
-
-        var coldMs = coldSw.Elapsed.TotalMilliseconds;
-        var warmMs = Math.Max(warmSw.Elapsed.TotalMilliseconds, 0.01);
-        var ratio = coldMs / warmMs;
-
-        // Generous threshold — this only needs to distinguish "genuinely paid a reconnect/
-        // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
-        var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
-
-        // Detecting a real cost does NOT mean DbMode.Best should auto-select
-        // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
-        // docs/connection/connection-modes.md). A heavily-trafficked deployment may never drain
-        // its pool to zero (the cost never actually materializes), and a deliberately
-        // scale-to-zero/cost-optimized deployment may not want a permanent sentinel forced on it
-        // at all — only the operator knows which applies. This probe's job is to confirm the cost
-        // is real and that PreventDatabaseUnload genuinely mitigates it (see the sentinel
-        // validation below), not to decide the default on the operator's behalf.
-        CheckOk("DbMode.IdleUnloadProbe",
-            $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
-            (unloadDetected
-                ? "unload/reactivation cost DETECTED (PreventDatabaseUnload available as an explicit opt-in to mitigate it)"
-                : "no unload cost detected despite the fast knob"));
-
-        if (unloadDetected)
-        {
-            await TestSentinelPreventsDetectedUnloadCostAsync(probeSql, coldMs, warmMs);
+            // Undo the fast-timeout knob regardless of outcome, so this probe never leaves a
+            // mutated database-level setting behind for the rest of this testbed run.
+            await RestoreIdleUnloadKnobAsync();
+            ClearProviderPoolForIdleUnloadProbe();
         }
     }
 

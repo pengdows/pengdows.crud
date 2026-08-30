@@ -1247,7 +1247,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (commandFailed && executionType == ExecutionType.Write)
             {
-                await TryRollBackFailedWriteAsync(conn).ConfigureAwait(false);
+                await TryRollBackFailedWriteAsync(conn, cancellationToken).ConfigureAwait(false);
             }
 
             Cleanup(cmd, conn);
@@ -1260,10 +1260,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// usable — best-effort: any failure here (e.g. no transaction was actually active) is
     /// swallowed, since the alternative (a lingering server-side lock on a pooled connection) is
     /// strictly worse than a harmless no-op rollback attempt.
+    ///
+    /// Never fires when <see cref="_context"/> is an <see cref="ITransactionContext"/>: that
+    /// connection is pinned to an explicit, caller-owned transaction whose commit/rollback
+    /// lifecycle is entirely the transaction's own responsibility (see
+    /// <c>TransactionContext.Dispose</c>/<c>DisposeAsync</c>) — issuing a bare, un-enlisted
+    /// ROLLBACK here would race or interfere with that ownership.
     /// </summary>
-    private async ValueTask TryRollBackFailedWriteAsync(ITrackedConnection? conn)
+    private async ValueTask TryRollBackFailedWriteAsync(ITrackedConnection? conn, CancellationToken cancellationToken)
     {
-        if (conn == null || _dialect is not SqlDialect concreteDialect ||
+        if (conn == null || _context is ITransactionContext || _dialect is not SqlDialect concreteDialect ||
             !concreteDialect.RequiresExplicitRollbackAfterFailedWrite ||
             conn.State != ConnectionState.Open)
         {
@@ -1279,7 +1285,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             await using var rollbackCommand = wrapper.UnderlyingConnection.CreateCommand();
             rollbackCommand.CommandText = "ROLLBACK";
-            await rollbackCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await rollbackCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -1496,6 +1502,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         using var activity = StartActivity("ExecuteReader");
         var lockTransferred = false;
+        var commandFailed = false;
         try
         {
             var isTransaction = _context is ITransactionContext;
@@ -1575,12 +1582,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         catch (OperationCanceledException)
         {
+            commandFailed = true;
             metrics?.CommandCancelled(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Canceled");
             throw;
         }
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
+            commandFailed = true;
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
             var translated = TranslateDatabaseException(ex, operationKind);
@@ -1589,6 +1598,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         catch (Exception ex) when (ex is not DatabaseException)
         {
+            commandFailed = true;
             if (ex is not DbException)
             {
                 metrics?.CommandFailed(startTimestamp);
@@ -1663,6 +1673,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 {
                     // ignore
                 }
+            }
+
+            // lockTransferred is only ever set true on the success path, after every catch block
+            // above that could set commandFailed has already been passed — the two are mutually
+            // exclusive by construction, so conn is always still SqlContainer-owned here when
+            // commandFailed is true.
+            if (commandFailed && executionType == ExecutionType.Write)
+            {
+                await TryRollBackFailedWriteAsync(conn, cancellationToken).ConfigureAwait(false);
             }
 
             // On success (lockTransferred), TrackedReader owns the connection — pass null.
