@@ -51,3 +51,25 @@ the collector does not allocate percentile ring buffers. `MetricsOptions.Percent
 (default 2048, must be a power of two) controls the sliding window size once enabled. All
 "average" fields (unaffected by this flag) use an EWMA (exponentially weighted moving average)
 with per-metric window sizes rather than a true running mean.
+
+## Long-connection and slow-command thresholds
+
+Two more `MetricsOptions` (`pengdows.crud.metrics`, public, `init`-only) controls classify
+individual connections and commands as outliers, independent of the percentile/EWMA latency
+tracking above:
+
+- `LongConnectionThreshold` (`TimeSpan`, defaults to 30 seconds, must be positive) — when a
+  connection closes, its hold duration is compared against this threshold. A hold duration at
+  or above the threshold increments `LongLivedConnections` on the `DatabaseMetrics`/
+  `DatabaseRoleMetrics` snapshot.
+- `SlowCommandThreshold` (`TimeSpan`, defaults to 1 second, must be positive) — when a command
+  finishes (success or failure), its elapsed duration is compared against this threshold. An
+  elapsed duration at or above the threshold increments `SlowCommandsTotal` on the same
+  snapshots.
+
+Both counters are cumulative totals, not gauges — they only grow, the same as
+`ConnectionsOpened` or `CommandsExecuted`. For example, with
+`LongConnectionThreshold = TimeSpan.FromMilliseconds(1)`, a connection held for 5ms increments
+`LongLivedConnections` by 1 when it closes; with `SlowCommandThreshold = TimeSpan.FromMilliseconds(10)`,
+a command that takes 50ms — whether it ultimately succeeds or fails — increments
+`SlowCommandsTotal` by 1.

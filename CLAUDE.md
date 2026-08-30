@@ -577,7 +577,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
-│   ├── ReadOnlyViolationException          — write attempted on a read-only SQLite/DuckDB file
+│   ├── ReadOnlyViolationException          — write attempted on a read-only SQLite/DuckDB file (see "Read-only violations" below)
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error
 └── DataMappingException                    — strict-mode coercion failure
@@ -588,12 +588,33 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 - `DataMappingException` — thrown by `DataReaderMapper` in strict mode when column→property coercion fails. Uses `SupportedDatabase.Unknown`. Fires during `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`.
 - `ConnectionException` — thrown by provider translators for connection-level failures (SQL Server error codes 10053/10054/10060/233/10061, Postgres SQLSTATE 08xx, MySQL codes 1040–1044, SQLite codes 14/26).
 - `TransactionException` — thrown by `TransactionContext` when begin/commit/rollback fails. After failure, `IsCompleted = true` (connection already released); `Dispose` will not attempt a second rollback.
+- `ReadOnlyViolationException` — thrown only by `SqliteExceptionTranslator`/`DuckDbExceptionTranslator` (`DbExceptionTranslationSupport.CreateReadOnlyViolation`) when the provider itself rejects a write against a read-only database file (SQLite `SQLITE_READONLY`/error 8, DuckDB SQLSTATE `25006`/`access_mode=READ_ONLY`). Always constructed with `IsTransient = false`.
 
 `OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
 
-**Not part of this hierarchy:** `ModeContentionException` (a timeout waiting for the `SingleWriter`/`SingleConnection` mode lock) extends `TimeoutException` directly, not `DatabaseException` — a `catch (DatabaseException)` will not catch it. It carries a `Snapshot` property (`ModeContentionSnapshot`) with waiter/timeout counts; see `docs/metrics.md`.
+**Not part of this hierarchy:** `ModeContentionException` (a timeout waiting for the `SingleWriter`/`SingleConnection` mode lock) extends `TimeoutException` directly, not `DatabaseException` — a `catch (DatabaseException)` will not catch it. It carries a `Snapshot` property (`ModeContentionSnapshot`) with waiter/timeout counts; see `docs/metrics.md`. `PoolForbiddenException` (below) is likewise not part of this hierarchy.
 
 **Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
+
+### Read-only violations: three exception types, one marker interface
+
+A write rejected because of read-only state is **one of three distinct exception types**, not one — each thrown from a different layer, and only one is a `DatabaseException` subclass:
+
+| Exception | Base type | Layer / condition |
+|---|---|---|
+| `ReadOnlyContextException` | `NotSupportedException` | `SqlContainer` pre-flight check: the whole context is configured `ReadWriteMode.ReadOnly`. Purely local, no round trip. |
+| `ReadOnlyAccessException` | `InvalidOperationException` | `TransactionContext`/`InternalConnectionAccessAssertions.AssertIsWriteConnection` pre-flight check: this specific connection or transaction was opened read-only (e.g. an `ExecutionType.Read` transaction on an otherwise-writable context), independent of the context-wide flag above. Also local, no round trip. |
+| `ReadOnlyViolationException` | `DatabaseOperationException` → `DatabaseException` | Provider actually rejected a write against a read-only SQLite/DuckDB file (see throw site above). The only one of the three that is a `DatabaseException` — `catch (DatabaseException)` catches it but not the other two. |
+
+All three implement the marker interface `IReadOnlyViolation` (`pengdows.crud.exceptions`), so a caller who only cares "was this a read-only rejection, whichever layer caught it" can write one catch block instead of three:
+
+```csharp
+catch (IReadOnlyViolation) { /* handle any of the three uniformly */ }
+```
+
+**Retry:** never valid for any of the three. `ReadOnlyViolationException` hardcodes `IsTransient = false`; the other two aren't `DatabaseException`s at all (no `IsTransient` property), but conceptually retrying doesn't help either — the context/connection/database's read-only state doesn't change between attempts of the same operation. See `docs/read-only-enforcement.md` for full detail and examples.
+
+**Related but distinct — not a read-only violation:** `PoolForbiddenException` (`: InvalidOperationException`, `pengdows.crud.exceptions`) is thrown by `PoolGovernor.Acquire`/`AcquireAsync` when a pool configured with `MaxConcurrentWrites=0`/`MaxPoolSize=0` is accessed at all — e.g. the write pool on a context promoted to `ReadOnly`. It does **not** implement `IReadOnlyViolation`: it is an admission-control rejection (no connection slot exists for this pool), not a rejection of a write that reached a connection.
 
 ### ISqlDialect.AnalyzeException — provider-agnostic exception analysis
 

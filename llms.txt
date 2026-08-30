@@ -130,6 +130,11 @@ database-agnostic policy decoupled from connection identity — is in
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
   combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
+- [`docs/gateway-counts.md`](docs/gateway-counts.md) — the four gateway `COUNT(*)` helpers
+  (`CountAllAsync`/`CountWhereAsync`/`CountWhereNullAsync`/`CountWhereEqualsAsync`): exact
+  signatures, the SQL each produces, identifier quoting/parameterization, and the known
+  limitations (string-valued predicates only, one compound equality+null-state shape, no general
+  filter system).
 - [`docs/sql-container-templates.md`](docs/sql-container-templates.md) — `ISqlContainer.Clone()`/
   `Clone(IDatabaseContext)`: what's deep-copied vs. shared, the singleton-gateway template
   pattern, transaction/tenant/cross-dialect use, and disposal independence.
@@ -137,6 +142,11 @@ database-agnostic policy decoupled from connection identity — is in
   `IDataSourceInformation` at runtime to branch on capability instead of hard-coding database
   names; the explicit two-audience split in `ISqlDialect` (consumer-facing flags vs. internal
   SQL-generation machinery gateway code calls).
+- [`docs/schema-management-boundary.md`](docs/schema-management-boundary.md) — what schema
+  tooling exists today (`pengdows.poco.mint`'s read-only inspection and POCO generation) vs. the
+  not-yet-built generalized schema executor concept (inspect/target/diff/adjust/order/DDL/execute/
+  verify), and the non-negotiable DBA-authorization and owned-object-boundary requirements any
+  future implementation of that concept must meet.
 - [`docs/batch-operations.md`](docs/batch-operations.md) — batch create/update/upsert/delete
   API, dialect fallback rules, and what is deliberately *not* implemented (no
   `BatchResult`, no partial-success reporting, no provider-native bulk loaders).

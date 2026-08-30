@@ -28,8 +28,10 @@ means as a product.
 | [`uuid7.md`](./uuid7.md) | `Uuid7Optimized`: monotonicity scope, clock modes, throughput/backpressure, configuration |
 | [`transactions.md`](./transactions.md) | `TransactionContext`, isolation profiles, savepoints, concurrency contract (commit/rollback/dispose races, reader locks, cancellation) |
 | [`entity-mapping.md`](./entity-mapping.md) | Complete attribute reference: `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/`[Json]`/enum/correlation-token attributes, valid combinations, defaults |
+| [`gateway-counts.md`](./gateway-counts.md) | Gateway `COUNT(*)` helpers: `CountAllAsync`/`CountWhereAsync`/`CountWhereNullAsync`/`CountWhereEqualsAsync`, SQL shape, quoting/parameterization, and limitations |
 | [`sql-container-templates.md`](./sql-container-templates.md) | `ISqlContainer.Clone()`/`Clone(IDatabaseContext)`: template reuse, parameter rebinding, cross-dialect/tenant/transaction use, disposal independence |
 | [`capability-discovery.md`](./capability-discovery.md) | Reading `ISqlDialect`/`IDataSourceInformation` at runtime to branch on capability instead of database name |
+| [`schema-management-boundary.md`](./schema-management-boundary.md) | What schema tooling exists today (`pengdows.poco.mint` inspection/adoption) vs. the not-yet-built generalized schema executor design; DBA-authorization and owned-object requirements |
 | [`primary-keys-pseudokeys.md`](./primary-keys-pseudokeys.md) | `[Id]` vs `[PrimaryKey]` |
 | [`parameter-naming-convention.md`](./parameter-naming-convention.md) | Parameter prefix conventions (`i`/`s`/`w`/`k`/`v`/`j`/`b`) |
 | [`read-only-enforcement.md`](./read-only-enforcement.md) | How `ReadWriteMode.ReadOnly` is enforced per dialect |
