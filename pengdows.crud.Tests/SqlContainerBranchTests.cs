@@ -15,6 +15,14 @@ namespace pengdows.crud.Tests;
 public class SqlContainerBranchTests
 {
     [Fact]
+    public void CreateForDialect_NullDialect_Throws()
+    {
+        using var ctx = CreateContext(SupportedDatabase.PostgreSql);
+
+        Assert.Throws<ArgumentNullException>(() => SqlContainer.CreateForDialect(ctx, null!));
+    }
+
+    [Fact]
     public void AddParameterWithValue_OutputUnsupported_Throws()
     {
         using var ctx = CreateContext(SupportedDatabase.Sqlite);
