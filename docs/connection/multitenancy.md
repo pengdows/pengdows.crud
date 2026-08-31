@@ -74,6 +74,64 @@ This single call, reading the `MultiTenant` configuration section, registers:
   factory above, with `MultiTenantOptions.MaxTenantCount` already threaded through as its
   cardinality cap
 
+## Custom resolver (no `AddMultiTenancy`)
+
+`AddMultiTenancy` covers the common case — a static tenant list expressible as configuration. If
+your tenant list is dynamic (loaded from a control-plane database, provisioned by a separate
+onboarding system, too large for `appsettings.json`), implement `ITenantConnectionResolver`
+yourself and wire the pieces `AddMultiTenancy` would otherwise assemble for you by hand:
+
+```csharp
+public interface ITenantConnectionResolver
+{
+    IDatabaseContextConfiguration GetDatabaseContextConfiguration(string tenant);
+}
+```
+
+```csharp
+// 1. A keyed DbProviderFactory for every ADO.NET provider your tenants use — same requirement
+//    as the configuration-driven path, just without AddDbProviderLoading doing it for you.
+services.AddKeyedSingleton<DbProviderFactory>("postgres", NpgsqlFactory.Instance);
+services.AddKeyedSingleton<DbProviderFactory>("sqlserver", SqlClientFactory.Instance);
+
+// 2. Your resolver, as a singleton.
+services.AddSingleton<ITenantConnectionResolver, MyCustomTenantResolver>();
+
+// 3. AddMultiTenancy registers both of these for you; a custom setup registers them directly.
+//    TenantContextRegistry's constructor also takes IServiceProvider and ILoggerFactory, but
+//    those are supplied automatically by the container — nothing extra to register for them.
+services.AddSingleton<IDatabaseContextFactory, DefaultDatabaseContextFactory>();
+services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
+```
+
+From here, request-time usage (`ITenantContextRegistry.GetContext(tenantId)`, singleton-gateway
+calls) is identical to the `AddMultiTenancy` path — the registry doesn't know or care which kind of
+resolver it's backed by. See
+[`docs/examples/CustomTenantResolver-example.cs`](../examples/CustomTenantResolver-example.cs) for
+a complete, worked example: a resolver that loads tenant rows from a control-plane database via
+plain ADO.NET, plus the two-step `Register`-then-`Invalidate` pattern for picking up a single
+tenant's changed configuration.
+
+## Non-blocking context creation (`GetContextAsync`)
+
+`GetContext` is synchronous — for a not-yet-cached tenant, the calling thread blocks for the
+duration of connection/dialect-detection work. `GetContextAsync(tenant, cancellationToken)` does
+the same lookup-or-create job without blocking the caller's thread on a not-yet-cached tenant:
+
+```csharp
+var tenantContext = await registry.GetContextAsync(tenantId, cancellationToken);
+```
+
+Both methods share the same cache — an already-cached tenant resolves immediately and identically
+from either method. For two concurrent `GetContextAsync` calls racing to construct the *same*
+not-yet-cached tenant, only one wins and installs its context; the other's redundant,
+already-constructed context is disposed as an orphan and that caller transparently receives the
+winner's context instead — never a leaked, uncached duplicate (see
+[`multitenancy-architecture.md`](./multitenancy-architecture.md#concurrency-semantics-in-flight-requests-racing-invalidate)
+for the exact mechanism, including how it differs from `GetContext`'s own dedup). `CancellationToken`
+is honored only while a not-yet-cached tenant's context is actually being constructed; it has no
+effect once the tenant is cached (there is nothing left to cancel).
+
 ## Request-time resolution and singleton-gateway usage
 
 `ITenantContextRegistry` is the entry point at request time. Resolve the tenant's context and pass
@@ -243,11 +301,13 @@ and raises the event for every context the registry has created) — not just th
 
 `TenantConnectionResolver.Register(MultiTenantOptions)` composes each tenant's effective
 `ApplicationName` as `"{MultiTenantOptions.ApplicationName}:{TenantName}"` before constructing that
-tenant's `DatabaseContextConfiguration`. With the example above, tenant `acme` connects with
-application name `MyApp:acme`. This is purely a connection-string/session-level `ApplicationName`
-attribute (visible to the database server, e.g. in `pg_stat_activity` or SQL Server's
-`sys.dm_exec_sessions`) — it is not re-exposed as a queryable property on the constructed
-`IDatabaseContext` itself.
+tenant's `DatabaseContextConfiguration` — but only when that tenant's own
+`DatabaseContextConfiguration.ApplicationName` wasn't already set explicitly; an
+already-populated per-tenant `ApplicationName` is left untouched. With the example above, tenant
+`acme` (which doesn't set its own `ApplicationName`) connects with application name `MyApp:acme`.
+This is purely a connection-string/session-level `ApplicationName` attribute (visible to the
+database server, e.g. in `pg_stat_activity` or SQL Server's `sys.dm_exec_sessions`) — it is not
+re-exposed as a queryable property on the constructed `IDatabaseContext` itself.
 
 ## Tenant cardinality (`MaxTenantCount`)
 

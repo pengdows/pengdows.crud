@@ -120,6 +120,14 @@ database-agnostic policy decoupled from connection identity — is in
   precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and the uniform
   `ObjectDisposedException` contract for every operation attempted after disposal.
+- [`docs/connection/multitenancy.md`](docs/connection/multitenancy.md) — the multi-tenancy
+  getting-started guide: `AddMultiTenancy` configuration shape, DI registration, request-time
+  resolution with a singleton gateway, a fully custom `ITenantConnectionResolver` setup for a
+  dynamic tenant list (no `AddMultiTenancy` call — see
+  [`docs/examples/CustomTenantResolver-example.cs`](docs/examples/CustomTenantResolver-example.cs)
+  for a worked control-plane-database-backed resolver), the non-blocking `GetContextAsync` method,
+  lifecycle events, application-name composition, and the `Invalidate`/`InvalidateAll` primitives
+  (not a designed live-rotation feature — shutdown is the intended disposal path).
 - [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md) —
   the architectural contract behind context-per-tenant multi-tenancy: what's library-enforced
   (context/admission isolation) vs. deployment-assumed (database-per-tenant, tenant-identity

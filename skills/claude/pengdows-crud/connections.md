@@ -123,10 +123,18 @@ context it created). `TenantContextRegistry.Invalidate`/`InvalidateAll` exist an
 outside their designed use case, not a recommended pattern — there is no drain phase and no
 protection for a caller that already holds a live context reference when a concurrent `Invalidate`
 disposes it (a documented, accepted limitation, not a bug, and one more reason shutdown-only
-disposal is the intended model). See `docs/connection/multitenancy.md` in the repo for the full
-configuration shape, DI wiring, request-time usage pattern, and lifecycle-event contract, and
+disposal is the intended model). `ITenantContextRegistry.GetContextAsync(tenant, ct)` is the
+non-blocking counterpart to `GetContext` — same cache, same tenant, but a not-yet-cached tenant's
+construction doesn't block the calling thread; two concurrent `GetContextAsync` calls racing the
+same new tenant dedup to one winner, the loser's already-built context disposed as an orphan. A
+tenant list that isn't static configuration (loaded from a control-plane database, provisioned
+externally) skips `AddMultiTenancy` entirely: implement `ITenantConnectionResolver` yourself and
+register it plus `IDatabaseContextFactory`/`ITenantContextRegistry` directly — see
+`docs/examples/CustomTenantResolver-example.cs` in the repo for a worked example. See
+`docs/connection/multitenancy.md` in the repo for the full configuration shape, DI wiring,
+request-time usage pattern, custom-resolver setup, and lifecycle-event contract, and
 `docs/connection/multitenancy-architecture.md` for the deeper library-enforced-vs-deployment-assumed
-contract and exact `Invalidate` concurrency semantics.
+contract and exact `Invalidate`/`GetContextAsync` concurrency semantics.
 
 ---
 

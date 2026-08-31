@@ -79,6 +79,25 @@ retries. This is closed with deterministic tests (`TenantTests.cs`:
 `Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext`,
 `Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext`).
 
+**Two concurrent `GetContextAsync` calls racing to construct the same new tenant (closed).**
+`GetContext`'s blocking construction runs inside a `Lazy<T>` factory delegate, so
+`LazyThreadSafetyMode.ExecutionAndPublication` alone prevents duplicate construction there.
+`GetContextAsync` can't use that mechanism — its construction is `await`ed *before* any dictionary
+mutation, since real I/O can't run inside a `Lazy<T>` factory without reintroducing a blocking wait
+on the calling thread. Instead, whichever caller installs its already-built context into the
+shared dictionary first (`ConcurrentDictionary.GetOrAdd`) wins; the loser's redundant,
+fully-constructed context is disposed as an orphan and that caller transparently receives the
+winner's context instead of its own. Closed with a deterministic test in
+`TenantContextRegistryAsyncTests.cs`
+(`GetContextAsync_CalledConcurrentlyForSameNewTenant_ResultsInExactlyOneCachedContext`, which also
+confirms a subsequent sync `GetContext` call for that tenant observes the same winning instance).
+Both methods share one cache — an already-cached tenant resolves identically and immediately from
+either method (`GetContextAsync_ForAlreadyCachedTenant_ReturnsSameInstanceAsSyncGetContext`). The
+dedup mechanism is shared code, so a genuine race between a blocking `GetContext` call and a
+concurrent `GetContextAsync` call for the same not-yet-cached tenant should resolve the same way,
+but that exact mixed-mode race isn't independently exercised by a dedicated test the way the
+async-vs-async case is.
+
 **Lookup racing invalidation (a documented, open limitation — not closed).** If a caller's
 `GetContext` call hits the fast, already-cached path and receives a live `IDatabaseContext`
 reference, there is **no protection** against a concurrent `Invalidate`/`Dispose()` disposing that

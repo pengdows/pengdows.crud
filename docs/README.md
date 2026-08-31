@@ -59,7 +59,7 @@ means as a product.
 | [`connection/connection-pooling.md`](./connection/connection-pooling.md) | Database-specific pooling behavior, provider-pooling-vs-admission-control distinction |
 | [`connection/ownership-and-shutdown.md`](./connection/ownership-and-shutdown.md) | What the context/transaction/reader/gateway/sentinel/registry each own, disposal ordering, the post-disposal exception contract |
 | [`connection/dynamic-provider-loading.md`](./connection/dynamic-provider-loading.md) | `DbProviderLoader`: config-driven `DbProviderFactory` resolution, the section-key-vs-`ProviderName` tenant gotcha, symlink-safe `AssemblyPath` containment, recognized-vs-unknown-engine fallback, process-lifetime limitations |
-| [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, lifecycle events, application-name composition, and the `Invalidate`/`InvalidateAll` primitives (not a designed live-rotation feature — shutdown is the intended disposal path) |
+| [`connection/multitenancy.md`](./connection/multitenancy.md) | `AddMultiTenancy`: context-per-tenant model, configuration shape, request-time resolution, a fully custom `ITenantConnectionResolver` setup, non-blocking `GetContextAsync`, lifecycle events, application-name composition, and the `Invalidate`/`InvalidateAll` primitives (not a designed live-rotation feature — shutdown is the intended disposal path) |
 | [`connection/multitenancy-architecture.md`](./connection/multitenancy-architecture.md) | The architectural contract behind multi-tenancy: library-enforced vs. deployment-assumed guarantees, tenant-ID case rules, and `Invalidate` concurrency semantics |
 
 ## Positioning
@@ -83,5 +83,5 @@ means as a product.
 | Path | Covers |
 |---|---|
 | [`perf/`](./perf/) | Benchmark evaluations and perf-sensitive implementation notes |
-| [`examples/`](./examples/) | Copy-paste reference implementations (e.g. `IAuditValueResolver` for OIDC claims) |
+| [`examples/`](./examples/) | Copy-paste reference implementations (e.g. `IAuditValueResolver` for OIDC claims, a control-plane-database-backed `ITenantConnectionResolver`) |
 | [`archive/`](./archive/) | Historical, superseded documents kept for record — not current guidance |
