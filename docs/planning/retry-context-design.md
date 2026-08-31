@@ -15,6 +15,16 @@ against. This revision folds in a second review pass that caught a genuinely new
 (commit ambiguity, below) and corrected an overstated claim in the first draft about what an
 external tool can and can't do.
 
+**Third revision note:** the API/ownership shape (shortcoming #3, originally left open) has since
+been decided through direct design discussion and is now the specified shape below — an
+`IDatabaseContext`-returning `CreateRetryContext(RetryType)` builds a *queue* of `ISqlContainer`s
+rather than wrapping an arbitrary caller delegate. That decision resolves shortcoming #2 (audit
+mutation composition) outright and half of shortcoming #6 (materialization), but it is a
+**narrower** feature than "retry an arbitrary unit of work" — see the new "Deliberate scope
+boundary" subsection below. Shortcoming #1 (commit ambiguity) remains blocking and is, if anything,
+sharper under this shape: `RetryType.Sequential`'s "remove a command from the queue on success"
+mechanic only works if a transient exception reliably means "did not reach the server."
+
 ## The problem this is meant to solve
 
 `AnalyzeException`/`DatabaseException.IsTransient` already tell a caller *whether* retrying might
@@ -83,7 +93,7 @@ They address two different layers of the execution lifecycle:
 | Dimension | `PoolGovernor` (admission gatekeeper) | `RetryContext` (retry coordinator) |
 |---|---|---|
 | **Core responsibility** | Protects the database engine and provider pool from unbounded concurrency. | Manages the lifecycle and resilience of one retrying operation across attempts. |
-| **During active queries** | Limits concurrent active reads/writes; fast-rejects deep queues. | Executes the caller's delegate within an assigned transaction lease. |
+| **During active queries** | Limits concurrent active reads/writes; fast-rejects deep queues. | Executes its queued commands within an assigned transaction lease (`RetryType.Transactional`) or one command at a time (`RetryType.Sequential`) — see "The design as currently specified" below for the queue shape. |
 | **On transient error** | Unaware of query exceptions — just tracks that a permit is in use. | Rolls back the transaction immediately, freeing server-side locks, and disposes the connection lease. |
 | **During backoff sleep** | Holds a slot as in-use if the caller doesn't explicitly release it. | Rolls back and disposes the transaction lease, which returns its permit before `Task.Delay`; zero permits are held during backoff. |
 | **On wake-up** | Regulates entry through the semaphore and, for writers, the turnstile. | Starts the next attempt through `BeginTransactionAsync`, whose normal context acquisition re-enters the semaphore/turnstile fairly. |
@@ -93,21 +103,72 @@ retries don't defeat that protection by hoarding permits while asleep.
 
 ## The design as currently specified
 
-Everything in this section is prose-only design from `future-work.md`; nothing is built.
+Everything in this section is prose/sketch-only design; nothing is built.
 
-### Dual retry modes
+### Shape: an `IDatabaseContext`-returning queue builder, not a delegate wrapper
 
-- **`ExecuteTransactionalAsync`** — treats an entire caller-supplied delegate as one atomic,
-  all-or-nothing unit. On a transient failure (`DatabaseException.IsTransient == true`): roll back
-  the current transaction, dispose its transaction/connection lease immediately (returning its
-  governor permit), revert any in-memory audit mutations the delegate made, sleep with decorrelated
-  exponential jitter while holding **zero** connection slots, then start the next attempt via
-  public `BeginTransactionAsync` (whose normal context acquisition goes back through the fairness
-  turnstile, not around it) and start
-  the whole delegate over from a fresh transaction.
-- **`ExecuteSequentialAsync`** — processes an independent stream/queue of items one at a time. If
-  item *K* fails transiently, only *K* retries with backoff; items `1..K-1` stay committed and are
-  never re-executed; execution advances to `K+1` once `K` succeeds.
+The originally-sketched shape in `future-work.md` was a delegate wrapper —
+`ExecuteTransactionalAsync(async ctx => { ... })`. That has been superseded by a different shape,
+worked out directly against the shortcomings below: `CreateRetryContext` returns something that
+*is* an `IDatabaseContext`, so every existing `CreateSqlContainer`/`BuildX` call site works against
+it completely unchanged — no new delegate-shaped API for callers to learn.
+
+```csharp
+IDatabaseContext rc = context.CreateRetryContext(RetryType.Transactional);
+var sc = rc.CreateSqlContainer();      // NOT executed yet — appended to rc's internal queue
+sc.Query.Append("dbo.sp");
+// ... AddParameterWithValue, etc. — same ISqlContainer API as always ...
+await rc.StartAsync();                 // runs the queue per RetryType's semantics
+```
+
+Calling `rc.CreateSqlContainer()` (or a Tier-1 `BuildX` method through it — see the open question
+below) does **not** execute anything. It appends the resulting `ISqlContainer`, fully built and
+parameterized, to an internal queue. Nothing hits the database until `StartAsync()` runs. This is
+the mechanism that resolves shortcoming #2: because every command's SQL text and parameter values
+are fixed once, at the moment it's added to the queue, retrying a command means literally
+re-sending the same already-decided values (presumably via `ISqlContainer.Clone()` for a fresh
+`DbCommand` per attempt) — there is no delegate re-invoked, so there is no shared mutable entity
+object whose audit fields could be stamped twice, or preserved-vs-overwritten inconsistently,
+across attempts. Audit stamping happens exactly once, at build time.
+
+### Dual retry modes, both queue-driven
+
+- **`RetryType.Transactional`** — the whole queue runs inside **one transaction**, all-or-nothing.
+  On a transient failure (`DatabaseException.IsTransient == true`) at any point: roll back, dispose
+  the transaction/connection lease immediately (returning its governor permit), sleep with
+  decorrelated exponential jitter while holding **zero** connection slots, then retry the **entire
+  queue from the first command**, in a fresh transaction opened via the normal public
+  `BeginTransactionAsync` (so re-admission goes back through the real fairness turnstile, not
+  around it).
+- **`RetryType.Sequential`** — commands execute **one at a time**. A command that succeeds is
+  **removed from the queue** and never re-executed. A command that fails transiently retries (with
+  backoff, holding zero slots between attempts) up to the configured retry budget. The loop
+  terminates on exactly one of three conditions:
+  a. the queue is empty — every command eventually succeeded;
+  b. an unrecoverable (non-transient) exception — stop immediately, whatever remains in the queue
+     never runs;
+  c. the retry budget is exhausted for the command currently being retried — stop.
+
+  Open questions this raises, not yet decided (see shortcoming #3 below): does each command commit
+  in its own transaction as it succeeds (matching "items `1..K-1` stay committed and are never
+  re-executed" from the original phrasing), or does the whole queue share one long-lived
+  transaction with a cursor advancing through it? And on termination via (b) or (c), what does the
+  caller get back — which commands succeeded, which one failed and why, and which never ran?
+  Neither is specified yet.
+
+### Deliberate scope boundary: no intermediate reads inside one retry unit
+
+Because the entire queue must be built *before* `StartAsync()` runs, nothing has executed yet for
+calling code to react to. This shape cannot express "read a value, branch on it, then decide what
+to write" within a single retry unit — e.g. "check the balance, only enqueue the debit if it's
+sufficient." That pattern covers a large fraction of real transactional code (see every worked
+example in this project's own docs: retrieve-then-conditionally-update). `RetryContext` as
+specified here is **declarative-batch retry over a fully-known-up-front sequence of commands**, not
+a general-purpose "retry an arbitrary unit of work" wrapper. That's a legitimate, useful scope
+(batch imports, a multi-step insert/update chain whose values are all known before it starts) — but
+it's narrower than `future-work.md`'s original "arbitrary delegate" framing, and that framing needs
+updating to match once this shape is adopted, so a reader doesn't expect read-then-branch support
+that was never built.
 
 ### Transient exception classification
 
@@ -115,7 +176,9 @@ No new work needed here — `DatabaseException.IsTransient` (verified:
 `pengdows.crud.abstractions/exceptions/DatabaseException.cs` hierarchy, see CLAUDE.md's Exception
 Hierarchy section) already distinguishes `DeadlockException`/`SerializationConflictException`/
 `CommandTimeoutException` (retryable) from `UniqueConstraintViolationException`/
-`ForeignKeyViolationException` (fail-fast, never retried).
+`ForeignKeyViolationException` (fail-fast, never retried). This is also the exact boundary
+`RetryType.Sequential`'s condition (b) above depends on: "unrecoverable" means
+`IsTransient == false`.
 
 ## Shortcomings and open gaps — resolve these before implementing
 
@@ -124,13 +187,15 @@ review pass on this document — surfaced concrete gaps the prose doesn't addres
 blocking**: implementing backoff mechanics before deciding a commit-ambiguity policy risks shipping
 a feature that silently duplicates writes.
 
-1. **Blocking — commit ambiguity is not addressed.** If `CommitAsync` itself throws a transient
-   exception (a timeout, a dropped connection mid-commit), the transaction may have *already
-   committed on the server* even though the caller never received confirmation. Blindly retrying
-   the delegate in that state can duplicate inserts or re-apply other side effects — this is
-   especially sharp for `ExecuteSequentialAsync`, where item *K* may have actually applied before
-   its failure became visible to the caller. The design as written has no policy for this at all.
-   Before backoff mechanics are implemented, the contract must explicitly choose one of:
+1. **Blocking — commit ambiguity is not addressed, and the queue shape makes it concrete rather
+   than abstract.** If a command's execution (or, for `RetryType.Transactional`, the final
+   `CommitAsync`) throws a transient exception — a timeout, a dropped connection — the write may
+   have *already landed on the server* even though the caller never received confirmation. For
+   `RetryType.Sequential`, whose entire mechanism is "remove a command from the queue on success,
+   keep and retry it on failure," this is no longer a background risk: the removal decision **is**
+   the commit-ambiguity decision. If a transient exception doesn't reliably mean "did not reach the
+   server," retrying a kept command can double-apply it. The design as written has no policy for
+   this at all. Before backoff mechanics are implemented, the contract must explicitly choose one of:
    - never retry a failure that occurred during commit (fail closed, surface it to the caller as-is);
    - retry only when the specific provider/exception guarantees the outcome is known (e.g. the
      connection never left the client before failing);
@@ -138,29 +203,41 @@ a feature that silently duplicates writes.
      retried past a commit attempt; or
    - surface an explicit "commit outcome unknown" terminal result distinct from ordinary failure,
      so the caller can decide rather than the library guessing.
-2. **The audit-rollback primitive doesn't compose with an arbitrary delegate, and needs an explicit
-   guarantee boundary.** The design says a failed attempt reverts in-memory audit mutations "using
-   `RestoreAuditSnapshot`," as if this were an existing, generically callable utility. What actually
-   exists (verified: `pengdows.crud/BaseTableGateway.Audit.cs`) is `SnapshotAuditFields(TEntity)`/
-   `RestoreAuditFields(TEntity, in AuditFieldSnapshot)` — `protected` members of
-   `BaseTableGateway<TEntity>`, generic over **one entity type**, called internally by
-   `CreateAsync`/`UpdateAsync`/`UpsertAsync` around their own single-entity write. `RetryContext`'s
-   stated unit of retry is an arbitrary caller-supplied delegate, which could touch zero, one, or
-   many entities across one or several gateways and tables in a single transaction. There is no
-   existing hook for "snapshot everything this delegate is about to mutate, across every gateway it
-   touches, and restore all of it on failure." The design must not promise automatic rollback for an
-   arbitrary delegate — either callers are responsible for making their own entity mutations
-   retry-safe, or a new, explicit enlistment/snapshot mechanism gets designed (new surface area, not
-   a reuse of what exists today).
-3. **API and ownership contract needs to be made concrete.** The most likely shape: a delegate
-   receiving the current attempt's `ITransactionContext` and a `CancellationToken`, with
-   `RetryContext` itself owning transaction creation, commit, rollback, and disposal around each
-   attempt — nested transactions are already forbidden by `ITransactionContext`, so the delegate
-   should not be able to (or need to) start its own. The implementation should go through the
-   existing public `BeginTransactionAsync` surface for admission — which already performs governed
-   acquisition — rather than exposing `PoolGovernor`/`PoolSlot` through `pengdows.crud.abstractions`.
-   Still open: is `RetryContext` a static entry point taking an `IDatabaseContext`, an instance
-   method on `IDatabaseContext` itself, or a separate object a caller constructs once and reuses?
+2. **RESOLVED by the queue shape — audit-rollback no longer needs a generic snapshot/restore
+   mechanism.** The original concern: `RestoreAuditSnapshot` was described as if it were an
+   existing, generically callable utility, when what actually exists (verified:
+   `pengdows.crud/BaseTableGateway.Audit.cs`) is `SnapshotAuditFields(TEntity)`/
+   `RestoreAuditFields(TEntity, in AuditFieldSnapshot)` — `protected`, generic over **one entity
+   type**, called internally by `CreateAsync`/`UpdateAsync`/`UpsertAsync` around their own
+   single-entity write. That concern assumed an arbitrary caller delegate re-invoked per attempt,
+   which could touch any number of entities across any number of gateways, with no existing hook to
+   snapshot/restore all of it. Under the queue shape, there is no delegate re-invoked at all: every
+   command's parameter values (including any audit-stamped ones) are fixed once, when the command is
+   built and appended to the queue, before `StartAsync()` ever runs. A retry just re-sends the same
+   already-decided values — there is no shared mutable entity state that could be double-stamped or
+   inconsistently preserved across attempts. No new snapshot/restore surface area is needed.
+3. **RESOLVED (shape) — `CreateRetryContext(RetryType)` returns an `IDatabaseContext`; open
+   sub-questions remain.** `RetryContext` is not a delegate wrapper or a static entry point — it's
+   an `IDatabaseContext` obtained via `context.CreateRetryContext(RetryType)`, so every existing
+   `CreateSqlContainer`/`BuildX` call site works against it unchanged; `CreateSqlContainer`/`BuildX`
+   append to an internal queue instead of executing, and `StartAsync()` runs the queue per the
+   `RetryType`'s semantics (see "The design as currently specified" above). Nested transactions are
+   still forbidden by `ITransactionContext`, and admission still goes through the existing public
+   `BeginTransactionAsync` surface — `PoolGovernor`/`PoolSlot` stay unexposed in
+   `pengdows.crud.abstractions`. What the shape decision does *not* yet answer:
+   - Does the queue accept Tier-1 `BuildCreate`/`BuildUpdateAsync`/etc. from `TableGateway`/
+     `PrimaryKeyTableGateway` (giving entity CRUD retry-safety), or only raw `CreateSqlContainer()`
+     text built by hand?
+   - Is retry of a single command implemented via `ISqlContainer.Clone()` (a fresh `DbCommand` per
+     attempt, reusing the already-bound parameter values) or some other mechanism?
+   - `RetryType.Sequential`'s transaction boundary — one commit per successful command, or one
+     shared transaction with a cursor? (See "Dual retry modes" above.)
+   - What return shape reports partial progress when `Sequential` stops on an unrecoverable error or
+     exhausted retry budget — succeeded/failed/never-ran per command?
+   - This shape is deliberately narrower than "retry an arbitrary unit of work" — see "Deliberate
+     scope boundary" above. `future-work.md`'s original delegate-shaped description needs updating
+     to match once this is adopted, so it doesn't advertise read-then-branch support that isn't
+     part of this design.
 4. **Backoff parameters are unspecified.** "Decorrelated exponential jitter" names an algorithm
    family (see the AWS Architecture Blog's 2015 "Exponential Backoff and Jitter" post, which coined
    the term for `sleep = min(cap, random_between(base, previous_sleep * 3))`) but the design states
@@ -177,15 +254,17 @@ a feature that silently duplicates writes.
    *reacquire* a slot after backoff itself be retried, with its own distinct policy? The design is
    silent, and `PoolForbiddenException` specifically should probably never be retried at all (it's a
    configuration-level admission rejection, not a transient condition).
-6. **`ExecuteSequentialAsync` has no idempotency or input-materialization story.** "Only item K
-   retries, `1..K-1` stay committed" is fine when items are independent, but the design doesn't say:
-   whether the input sequence must be fully materialized up front (so a retried item K re-reads the
-   same value) or may be a one-shot/side-effecting source that can't safely be re-enumerated; or what
-   a caller must guarantee if item K's transient failure (e.g. a dropped connection mid-write) leaves
-   ambiguous state — did K itself partially apply before the transient error, such that retrying it
-   double-applies (the same class of problem as shortcoming #1, at per-item scope)? EF Core's
-   execution-strategy docs call out non-idempotent side effects as the caller's problem, in bold
-   text, for comparison — this design should do the same, explicitly.
+6. **`RetryType.Sequential`'s materialization question is RESOLVED by the queue shape; the
+   idempotency half is not (it's shortcoming #1).** The original concern was whether the input
+   sequence must be fully materialized up front or could be a one-shot/side-effecting source unsafe
+   to re-enumerate. Under the queue shape, materialization isn't optional — the queue is, by
+   construction, a fully-built list of `ISqlContainer`s before `StartAsync()` ever runs; there's no
+   ambiguity to resolve. What remains open is exactly shortcoming #1's question restated per-item:
+   if command *K*'s transient failure leaves ambiguous state (did it partially apply before the
+   error?), retrying it can double-apply — the same commit-ambiguity policy decision, just scoped to
+   one queue entry instead of one whole transaction. EF Core's execution-strategy docs call out
+   non-idempotent side effects as the caller's problem, in bold text, for comparison — this design
+   should do the same, explicitly, once #1 is decided.
 7. **No telemetry/metrics integration decided.** The project has rich built-in observability
    (`DatabaseMetrics`, `AttributionStats`, `ActivitySource("pengdows.crud")` tracing spans, the
    OpenTelemetry adapter — see `docs/metrics.md`, `docs/tracing.md`, `docs/opentelemetry-metrics.md`).
@@ -235,7 +314,8 @@ specifically should block starting on backoff mechanics until it has a decided a
 | **Backoff algorithm** | Configurable (fixed, linear, exponential, jittered exponential via `Backoff.DecorrelatedJitterBackoffV2`) | Whatever the author writes, often a fixed sleep | Decorrelated exponential jitter (algorithm named, parameters unspecified — see shortcoming #4) |
 | **Exception classification** | Caller supplies a predicate (`Policy.Handle<T>(predicate)`) — no built-in database-transient-vs-permanent distinction | Caller supplies whatever check they write | Reuses `DatabaseException.IsTransient`, already correct for every shipped provider's typed exceptions |
 | **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Not yet decided — **blocking gap, see shortcoming #1** |
-| **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Only proven for single-entity gateway writes today; not automatic for an arbitrary multi-entity delegate — see shortcoming #2 |
+| **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Not a rollback problem under the queue shape at all — commands are fully built (audit fields stamped once) before `StartAsync()` runs, so there's no shared mutable state to restore — see shortcoming #2 |
+| **Intermediate reads affecting later writes, within one retry unit** | Fully supported — the retried delegate can read, branch, and write freely | Same | **Not supported** — the queue must be fully built before execution starts; see "Deliberate scope boundary" above |
 
 Polly (used correctly, with a transaction scoped inside the retried delegate) is a legitimate,
 pool-safe choice today for an application that's willing to get that scoping right itself and
@@ -249,7 +329,7 @@ draft of this document claimed.
 
 | DAL / ecosystem | Retry story | How it compares to designed `RetryContext` |
 |---|---|---|
-| **EF Core** (`IExecutionStrategy`, `EnableRetryOnFailure()`) | Provider-specific strategies (`SqlServerRetryingExecutionStrategy`, `NpgsqlRetryingExecutionStrategy`) wrap a delegate with exponential backoff + jitter. EF Core **forbids starting a transaction manually inside a retried operation** — you must call `strategy.ExecuteInTransactionAsync(...)`, which owns the transaction lifecycle itself so a retry can cleanly restart it. This is the closest real-world precedent for `RetryContext`'s "the coordinator owns the transaction around the delegate" shape (shortcoming #3). | Same core idea (coordinator, not caller, owns the transaction-retry boundary), but EF Core's strategy has no pool-admission-controller concept to release/reacquire — `DbContext` doesn't sit on top of anything like `PoolGovernor`. `RetryContext`'s pool-slot coordination is genuinely new relative to this precedent. Note also: EF Core's docs are explicit that non-idempotent operations are the caller's problem — this design should match that clarity (shortcoming #6). |
+| **EF Core** (`IExecutionStrategy`, `EnableRetryOnFailure()`) | Provider-specific strategies (`SqlServerRetryingExecutionStrategy`, `NpgsqlRetryingExecutionStrategy`) wrap a delegate with exponential backoff + jitter. EF Core **forbids starting a transaction manually inside a retried operation** — you must call `strategy.ExecuteInTransactionAsync(...)`, which owns the transaction lifecycle itself so a retry can cleanly restart it. EF Core's shape is delegate-based and supports intermediate reads-then-writes; `RetryContext`'s queue shape (see above) does not, in exchange for resolving the audit/entity-mutation composition problem EF Core doesn't have to deal with in the first place. | Same core idea (coordinator, not caller, owns the transaction-retry boundary), but EF Core's strategy has no pool-admission-controller concept to release/reacquire — `DbContext` doesn't sit on top of anything like `PoolGovernor`. `RetryContext`'s pool-slot coordination is genuinely new relative to this precedent. Note also: EF Core's docs are explicit that non-idempotent operations are the caller's problem — this design should match that clarity (shortcoming #6). |
 | **Dapper** | None. No retry, no backoff, no transient classification. Users wrap calls in Polly or hand-rolled loops entirely outside the library. | `RetryContext` would be strictly more capable than "nothing," which is the actual bar here. |
 | **jOOQ** (Java) | None built in; documentation points to wrapping calls with an external library. Connection pooling (HikariCP, etc.) is a fully separate concern with no coordination hook for a retry layer. | Same gap this project's own `docs/positioning/dal-taxonomy-and-comparison.md` already notes for jOOQ generally (pooling/admission control left to external tools) — retry is the same story. |
 | **Spring / resilience4j** (Java) | `@Retryable` annotations / resilience4j's `Retry` module — generic, Polly-equivalent. No JDBC connection-pool coordination; HikariCP's pool has no retry-aware admission hook either. | Same structural gap as Polly: generic and pool-blind by default, correct only if the caller scopes things right. |
@@ -257,27 +337,37 @@ draft of this document claimed.
 | **Rust (`sqlx`, Diesel)** | No built-in retry in either. Compile-time query checking (`sqlx`) is orthogonal to runtime resilience. | Not comparable feature-for-feature; neither claims this space. |
 
 **Net position:** no DAL surveyed in this repo's own comparison doc (`dal-taxonomy-and-comparison.md`)
-claims pool-admission-aware retry today, and none of them has solved commit ambiguity or
-multi-entity audit rollback either — those are open problems for this design to solve, not gaps
-relative to prior art. If `RetryContext` is built with shortcomings #1–#10 actually resolved (not
-just implemented around), it would be a genuinely differentiated capability. That comparison doc
-does not currently list retry/resilience as a pillar at all; if this gets built, it belongs there.
+claims pool-admission-aware retry today, and none of them has solved commit ambiguity either — that
+remains an open problem for this design to solve, not a gap relative to prior art. (Multi-entity
+audit rollback, the other originally-open problem, is now sidestepped rather than solved — the
+queue shape has no delegate re-invocation for it to apply to, at the cost of losing the
+read-then-branch expressiveness EF Core's delegate shape has.) If `RetryContext` is built with
+shortcoming #1 actually resolved (not just implemented around), it would be a genuinely
+differentiated capability. That comparison doc does not currently list retry/resilience as a pillar
+at all; if this gets built, it belongs there.
 
 ## If you pick this up
 
 Treat it as its own TDD-first effort, not a quick addition — per CLAUDE.md's mandatory-TDD rule,
-write the failing test for each behavior before implementing it. Suggested sequencing:
+write the failing test for each behavior before implementing it. Shortcomings #2 and #3 (shape) are
+now decided in prose above; suggested sequencing for what's left:
 
-1. **Decide the commit-ambiguity policy first (shortcoming #1).** This is blocking — it changes
-   what "retry" is even allowed to mean for `ExecuteTransactionalAsync`.
-2. Decide the public API shape and ownership contract (shortcoming #3) — everything else depends on
-   it.
-3. Resolve the audit-rollback scope question (shortcoming #2) before writing any rollback code — it
-   changes what the delegate contract looks like.
-4. Pick concrete backoff defaults (shortcoming #4) and make them configurable, not hardcoded.
-5. Decide the `PoolSaturatedException`/`ModeContentionException`/`PoolForbiddenException`
+1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
+   `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
+   `RetryType.Transactional` it governs whether a transient failure during the final commit is ever
+   safe to retry.
+2. Close `RetryType.Sequential`'s two remaining open sub-questions from shortcoming #3: per-command
+   commit vs. one shared transaction with a cursor, and the partial-progress return shape on early
+   termination.
+3. Decide whether the queue accepts Tier-1 `BuildX` calls from `TableGateway`/
+   `PrimaryKeyTableGateway` (entity CRUD) or only raw `CreateSqlContainer()` text — this determines
+   how much of the library's normal CRUD surface gets retry-safety at all.
+4. Update `future-work.md`'s FEAT-001 entry to match the queue shape (it currently still describes
+   the superseded delegate-wrapper framing) so the two documents don't disagree about what's being
+   built.
+5. Pick concrete backoff defaults (shortcoming #4) and make them configurable, not hardcoded.
+6. Decide the `PoolSaturatedException`/`ModeContentionException`/`PoolForbiddenException`
    interaction (shortcoming #5) explicitly, even if the decision is "out of scope for v1."
-6. Settle `ExecuteSequentialAsync`'s materialization and idempotency contract (shortcoming #6).
 7. Add metrics/tracing hooks (shortcoming #7) alongside the first implementation, not as a
    follow-up — this project already has the plumbing for every other execution path; a retry
    subsystem with no visibility into attempt counts or backoff durations would be a real
