@@ -681,6 +681,101 @@ public class TenantTests
         }
     }
 
+    private sealed class RecordingBlockingContextFactory : IDatabaseContextFactory
+    {
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public IDatabaseContext? CreatedContext { get; private set; }
+
+        public RecordingBlockingContextFactory(SemaphoreSlim creationStarted, SemaphoreSlim proceedWithCreation)
+        {
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            var context = new DatabaseContext(configuration, factory, loggerFactory);
+            CreatedContext = context;
+            return context;
+        }
+    }
+
+    // External-review finding, 2026-08-30: the sibling test above only proves the racing CALLER
+    // fails closed (ObjectDisposedException) — it never inspects whether the context that was
+    // actually constructed during the race gets disposed. DisposeManaged()/DisposeManagedAsync()
+    // skip any entry that isn't yet IsCompletedSuccessfully and attach no continuation for it
+    // (unlike Invalidate's MarkRemoved, which does) before clearing _contexts — so if construction
+    // later succeeds, the resulting IDatabaseContext is unreachable through the registry AND never
+    // disposed by anyone. This test captures the context a recording factory actually built and
+    // proves it is eventually disposed, not merely that the caller was turned away.
+    [Fact]
+    public async Task Dispose_RacingWithInFlightCreate_DisposesTheOrphanedContextOnceConstructionCompletes()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+        var factory = new RecordingBlockingContextFactory(creationStarted, proceedWithCreation);
+
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            factory,
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var getContextTask = Task.Run(() => registry.GetContext("dispose-race-tenant-orphan"));
+
+        await creationStarted.WaitAsync();
+
+        // Race: dispose the registry before the in-flight creation finishes.
+        registry.Dispose();
+
+        proceedWithCreation.Release();
+
+        try
+        {
+            await getContextTask;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expected — already proven by the sibling test. This test is about what happens to
+            // the context that was actually constructed, not the caller's own outcome.
+        }
+
+        var created = factory.CreatedContext;
+        Assert.NotNull(created);
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!created!.IsDisposed && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(created.IsDisposed,
+            "A context constructed while racing registry disposal must eventually be disposed, not leaked untracked.");
+    }
+
     // CORE-007: TenantContextRegistry's own XML remarks claimed "Contexts obtained before
     // disposal continue working normally until they are themselves disposed" — but
     // DisposeManaged/DisposeManagedAsync actually iterate and dispose every created context on

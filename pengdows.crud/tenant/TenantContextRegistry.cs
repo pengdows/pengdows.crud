@@ -572,69 +572,164 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
     protected override void DisposeManaged()
     {
-        foreach (var entry in _contexts.Values)
+        var entries = _contexts.Values.ToArray();
+        _contexts.Clear();
+
+        foreach (var entry in entries)
         {
-            if (!entry.LazyContext.IsValueCreated)
+            if (TryTakeCompletedResult(entry, out var context, out var faulted))
             {
-                continue;
+                DisposeShutdownContextSync(context!);
             }
-
-            var task = entry.LazyContext.Value;
-            if (!task.IsCompletedSuccessfully)
+            else if (!faulted)
             {
-                continue;
-            }
-
-            try
-            {
-                var context = task.Result;
-                context.Dispose();
-                ContextRemoved?.Invoke(context);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing tenant context during shutdown.");
+                ScheduleBackgroundShutdownDisposal(entry, useAsyncDisposal: false);
             }
         }
-
-        _contexts.Clear();
     }
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        foreach (var entry in _contexts.Values)
+        var entries = _contexts.Values.ToArray();
+        _contexts.Clear();
+
+        foreach (var entry in entries)
         {
-            if (!entry.LazyContext.IsValueCreated)
+            if (TryTakeCompletedResult(entry, out var context, out var faulted))
             {
-                continue;
+                await DisposeShutdownContextAsync(context!).ConfigureAwait(false);
             }
-
-            var task = entry.LazyContext.Value;
-            if (!task.IsCompletedSuccessfully)
+            else if (!faulted)
             {
-                continue;
+                ScheduleBackgroundShutdownDisposal(entry, useAsyncDisposal: true);
             }
+        }
+    }
 
+    /// <summary>
+    /// Returns true (with <paramref name="context"/> set) only if this entry's construction has
+    /// already completed successfully — the common case, handled synchronously/inline by the
+    /// caller. <paramref name="faulted"/> is true if construction already completed but failed
+    /// (nothing to dispose, and no background wait needed either). Both false means construction
+    /// is still in flight — see <see cref="ScheduleBackgroundShutdownDisposal"/>.
+    /// </summary>
+    private static bool TryTakeCompletedResult(TenantContextEntry entry, out IDatabaseContext? context,
+        out bool faulted)
+    {
+        context = null;
+        faulted = false;
+
+        if (!entry.LazyContext.IsValueCreated)
+        {
+            return false;
+        }
+
+        var task = entry.LazyContext.Value;
+        if (task.IsCompletedSuccessfully)
+        {
+            context = task.Result;
+            return true;
+        }
+
+        faulted = task.IsCompleted; // completed-but-faulted/canceled vs. still running
+        return false;
+    }
+
+    /// <summary>
+    /// Disposes one tenant's context during shutdown once its construction — still in flight when
+    /// <see cref="DisposeManaged"/>/<see cref="DisposeManagedAsync"/> ran — eventually completes.
+    /// </summary>
+    /// <remarks>
+    /// Regression fixed 2026-08-30 (found by an external review of the lease rework, not this
+    /// repo's own tests — the original fix's regression tests only proved the racing *caller*
+    /// fails closed with <see cref="ObjectDisposedException"/>, never that the context actually
+    /// constructed during the race gets disposed; see
+    /// <c>Dispose_RacingWithInFlightCreate_DisposesTheOrphanedContextOnceConstructionCompletes</c>
+    /// in <c>TenantTests.cs</c>). Disposing here would either see nothing yet (a synchronous
+    /// factory delegate still blocked elsewhere, so <see cref="Lazy{T}.IsValueCreated"/> isn't even
+    /// true yet) or need to block waiting for someone else's in-flight construction — neither
+    /// acceptable on the thread calling <see cref="Dispose"/>/<see cref="DisposeAsync"/>. Waiting
+    /// happens on a dedicated thread-pool work item instead: it blocks on
+    /// <see cref="Lazy{T}.Value"/> exactly like any other caller racing the same construction would
+    /// (returning immediately if already resolved by the time this runs), then disposes whatever
+    /// it produces — unconditionally, regardless of any outstanding lease, since shutdown is
+    /// terminal by design (leases only protect against a concurrent <see cref="Invalidate"/>).
+    /// </remarks>
+    private void ScheduleBackgroundShutdownDisposal(TenantContextEntry entry, bool useAsyncDisposal)
+    {
+        ThreadPool.UnsafeQueueUserWorkItem(static state =>
+        {
+            var (owner, capturedEntry, capturedUseAsync) = state;
+            Task<IDatabaseContext> task;
             try
             {
-                var context = task.Result;
-                if (context is IAsyncDisposable asyncDisposable)
+                task = capturedEntry.LazyContext.Value; // blocks this background thread, never the caller
+            }
+            catch
+            {
+                return; // Construction faulted — nothing to dispose.
+            }
+
+            void DisposeResult(IDatabaseContext context)
+            {
+                if (capturedUseAsync)
                 {
-                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    owner.DisposeShutdownContextAsync(context).AsTask().GetAwaiter().GetResult();
                 }
                 else
                 {
-                    context.Dispose();
+                    owner.DisposeShutdownContextSync(context);
                 }
-
-                ContextRemoved?.Invoke(context);
             }
-            catch (Exception ex)
+
+            if (task.IsCompletedSuccessfully)
             {
-                _logger.LogWarning(ex, "Error asynchronously disposing tenant context during shutdown.");
+                DisposeResult(task.Result);
             }
-        }
+            else
+            {
+                task.ContinueWith(t =>
+                {
+                    if (t.Status == TaskStatus.RanToCompletion)
+                    {
+                        DisposeResult(t.Result);
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }
+        }, (this, entry, useAsyncDisposal), preferLocal: false);
+    }
 
-        _contexts.Clear();
+    private void DisposeShutdownContextSync(IDatabaseContext context)
+    {
+        try
+        {
+            context.Dispose();
+            ContextRemoved?.Invoke(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error disposing tenant context during shutdown.");
+        }
+    }
+
+    private async ValueTask DisposeShutdownContextAsync(IDatabaseContext context)
+    {
+        try
+        {
+            if (context is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                context.Dispose();
+            }
+
+            ContextRemoved?.Invoke(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error asynchronously disposing tenant context during shutdown.");
+        }
     }
 }
