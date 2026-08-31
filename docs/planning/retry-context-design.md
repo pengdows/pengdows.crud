@@ -121,15 +121,54 @@ sc.Query.Append("dbo.sp");
 await rc.StartAsync();                 // runs the queue per RetryType's semantics
 ```
 
-Calling `rc.CreateSqlContainer()` (or a Tier-1 `BuildX` method through it — see the open question
-below) does **not** execute anything. It appends the resulting `ISqlContainer`, fully built and
-parameterized, to an internal queue. Nothing hits the database until `StartAsync()` runs. This is
-the mechanism that resolves shortcoming #2: because every command's SQL text and parameter values
-are fixed once, at the moment it's added to the queue, retrying a command means literally
-re-sending the same already-decided values (presumably via `ISqlContainer.Clone()` for a fresh
-`DbCommand` per attempt) — there is no delegate re-invoked, so there is no shared mutable entity
-object whose audit fields could be stamped twice, or preserved-vs-overwritten inconsistently,
-across attempts. Audit stamping happens exactly once, at build time.
+Calling `rc.CreateSqlContainer()` does **not** execute anything. It appends the resulting
+`ISqlContainer`, fully built and parameterized, to an internal queue. Nothing hits the database
+until `StartAsync()` runs. This is the mechanism that resolves shortcoming #2: because every
+command's SQL text and parameter values are fixed once, at the moment it's added to the queue,
+retrying a command means literally re-sending the same already-decided values (presumably via
+`ISqlContainer.Clone()` for a fresh `DbCommand` per attempt) — there is no delegate re-invoked, so
+there is no shared mutable entity object whose audit fields could be stamped twice, or
+preserved-vs-overwritten inconsistently, across attempts. Audit stamping happens exactly once, at
+build time.
+
+### Entity CRUD composes for free — but only through Tier 1, and this is not a new decision
+
+`TableGateway<TEntity,TRowID>`/`PrimaryKeyTableGateway<TEntity>` are already written against
+`IDatabaseContext` — the constructor takes one, and most Tier-2/3 methods accept an optional
+per-call `IDatabaseContext? db` override (see CLAUDE.md's "Common Test Patterns"). Since `rc`
+satisfies that same interface, any existing gateway — constructed against `rc` directly, or an
+existing singleton gateway called with `rc` passed as the per-call `db` — gets fully-formed,
+audit-stamped, correctly-parameterized entity CRUD SQL added to the queue with **zero new code
+needed in `TableGateway` itself**. This resolves the "does the queue accept entity CRUD" question
+that shortcoming #3 originally left open, and it resolves in the affirmative for exactly one half of
+the three-tier API, not by an arbitrary restriction but as a direct consequence of the tiers'
+existing contracts:
+
+- **Tier 1 (`BuildCreate`/`BuildUpdateAsync`/`BuildUpsert`/`BuildDelete`) composes with no friction
+  at all.** These already do nothing but call `_context.CreateSqlContainer()` and build SQL —
+  "generation only, nothing sent to the database, you decide what happens to the container" is
+  *already* their documented contract. Pointed at `rc`, that's exactly "append this to the queue and
+  don't execute it yet."
+- **Tier 3 (`CreateAsync`/`UpdateAsync`/`UpsertAsync`/`DeleteAsync`) is out of scope for the queue,
+  by construction, not by restriction.** Their contract is "build *and* execute in one call, return
+  a real result now" — a `bool` success flag, or a resolved DB-generated `Id`. That promise is
+  fundamentally incompatible with deferred, possibly-repeated execution: there is no way to honor
+  "return a real result now" without either lying about it (returning success before anything has
+  run) or actually executing immediately (defeating the whole point of queuing). A caller who wants
+  entity CRUD in a retry queue uses Tier 1 against `rc`, the same way anyone composing custom SQL or
+  reusing a container across contexts already does today.
+
+This also sharpens the scope boundary below: even a **write**'s output isn't available inside the
+same retry unit, not just a read's. A DB-generated `[Id(false)]` value from a queued `BuildCreate`
+isn't known until `StartAsync()` actually runs that command — so it can't be used as an FK value
+for a later command in the same queue, regardless of which tier built it.
+
+Worth noting as a byproduct: this is a genuinely new justification for the existing Tier-1/Tier-3
+split, alongside the two already documented elsewhere (composability — inspect/modify a container
+before executing it — and `Clone()`/`Clone(IDatabaseContext)` template reuse across dialects and
+tenants, see `docs/sql-container-templates.md`). "Build something now and hand it to something else
+that decides when, and how many times, it actually runs" is a third reason, and `RetryContext` is
+the first concrete design that actually needs it.
 
 ### Dual retry modes, both queue-driven
 
@@ -156,19 +195,22 @@ across attempts. Audit stamping happens exactly once, at build time.
   caller get back — which commands succeeded, which one failed and why, and which never ran?
   Neither is specified yet.
 
-### Deliberate scope boundary: no intermediate reads inside one retry unit
+### Deliberate scope boundary: no intermediate reads *or generated-value writes* inside one retry unit
 
 Because the entire queue must be built *before* `StartAsync()` runs, nothing has executed yet for
 calling code to react to. This shape cannot express "read a value, branch on it, then decide what
 to write" within a single retry unit — e.g. "check the balance, only enqueue the debit if it's
 sufficient." That pattern covers a large fraction of real transactional code (see every worked
-example in this project's own docs: retrieve-then-conditionally-update). `RetryContext` as
+example in this project's own docs: retrieve-then-conditionally-update). The same limitation extends
+to writes, not just reads: a DB-generated `[Id(false)]` value from an earlier queued command isn't
+known until `StartAsync()` actually runs it, so it can't be threaded into a later command in the
+same queue as an FK value either (see "Entity CRUD composes for free" above). `RetryContext` as
 specified here is **declarative-batch retry over a fully-known-up-front sequence of commands**, not
 a general-purpose "retry an arbitrary unit of work" wrapper. That's a legitimate, useful scope
 (batch imports, a multi-step insert/update chain whose values are all known before it starts) — but
 it's narrower than `future-work.md`'s original "arbitrary delegate" framing, and that framing needs
-updating to match once this shape is adopted, so a reader doesn't expect read-then-branch support
-that was never built.
+updating to match once this shape is adopted, so a reader doesn't expect read-then-branch (or
+write-then-use-generated-value) support that was never built.
 
 ### Transient exception classification
 
@@ -224,10 +266,15 @@ a feature that silently duplicates writes.
    `RetryType`'s semantics (see "The design as currently specified" above). Nested transactions are
    still forbidden by `ITransactionContext`, and admission still goes through the existing public
    `BeginTransactionAsync` surface — `PoolGovernor`/`PoolSlot` stay unexposed in
-   `pengdows.crud.abstractions`. What the shape decision does *not* yet answer:
-   - Does the queue accept Tier-1 `BuildCreate`/`BuildUpdateAsync`/etc. from `TableGateway`/
-     `PrimaryKeyTableGateway` (giving entity CRUD retry-safety), or only raw `CreateSqlContainer()`
-     text built by hand?
+   `pengdows.crud.abstractions`. **Also resolved, as a direct consequence rather than a separate
+   decision:** the queue accepts entity CRUD via Tier-1 `BuildCreate`/`BuildUpdateAsync`/`BuildUpsert`/
+   `BuildDelete` from `TableGateway`/`PrimaryKeyTableGateway` — pointing an existing or new gateway at
+   `rc` (constructor or per-call `db` parameter) gets fully-formed, audit-stamped SQL into the queue
+   for free, since those methods already do nothing but call `_context.CreateSqlContainer()`. Tier-3
+   convenience methods (`CreateAsync`/`UpdateAsync`/`UpsertAsync`/`DeleteAsync`) are out of scope for
+   the queue, because their "execute now, return a real result" contract cannot be honored under
+   deferred execution — see "Entity CRUD composes for free" above. What the shape decision does *not*
+   yet answer:
    - Is retry of a single command implemented via `ISqlContainer.Clone()` (a fresh `DbCommand` per
      attempt, reusing the already-bound parameter values) or some other mechanism?
    - `RetryType.Sequential`'s transaction boundary — one commit per successful command, or one
@@ -315,7 +362,7 @@ specifically should block starting on backoff mechanics until it has a decided a
 | **Exception classification** | Caller supplies a predicate (`Policy.Handle<T>(predicate)`) — no built-in database-transient-vs-permanent distinction | Caller supplies whatever check they write | Reuses `DatabaseException.IsTransient`, already correct for every shipped provider's typed exceptions |
 | **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Not yet decided — **blocking gap, see shortcoming #1** |
 | **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Not a rollback problem under the queue shape at all — commands are fully built (audit fields stamped once) before `StartAsync()` runs, so there's no shared mutable state to restore — see shortcoming #2 |
-| **Intermediate reads affecting later writes, within one retry unit** | Fully supported — the retried delegate can read, branch, and write freely | Same | **Not supported** — the queue must be fully built before execution starts; see "Deliberate scope boundary" above |
+| **Intermediate reads/generated-value writes affecting later commands, within one retry unit** | Fully supported — the retried delegate can read, branch, write, and use a just-generated ID freely | Same | **Not supported** — the queue must be fully built before execution starts, so neither a read result nor a DB-generated `Id` from an earlier queued command is available to a later one; see "Deliberate scope boundary" above |
 
 Polly (used correctly, with a transaction scoped inside the retried delegate) is a legitimate,
 pool-safe choice today for an application that's willing to get that scoping right itself and
@@ -349,8 +396,9 @@ at all; if this gets built, it belongs there.
 ## If you pick this up
 
 Treat it as its own TDD-first effort, not a quick addition — per CLAUDE.md's mandatory-TDD rule,
-write the failing test for each behavior before implementing it. Shortcomings #2 and #3 (shape) are
-now decided in prose above; suggested sequencing for what's left:
+write the failing test for each behavior before implementing it. Shortcomings #2 and #3 (shape,
+including the Tier-1-only entity-CRUD question) are now decided in prose above; suggested sequencing
+for what's left:
 
 1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
    `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
@@ -359,9 +407,8 @@ now decided in prose above; suggested sequencing for what's left:
 2. Close `RetryType.Sequential`'s two remaining open sub-questions from shortcoming #3: per-command
    commit vs. one shared transaction with a cursor, and the partial-progress return shape on early
    termination.
-3. Decide whether the queue accepts Tier-1 `BuildX` calls from `TableGateway`/
-   `PrimaryKeyTableGateway` (entity CRUD) or only raw `CreateSqlContainer()` text — this determines
-   how much of the library's normal CRUD surface gets retry-safety at all.
+3. Decide whether single-command retry is implemented via `ISqlContainer.Clone()` or some other
+   mechanism (the other remaining shortcoming #3 sub-question).
 4. Update `future-work.md`'s FEAT-001 entry to match the queue shape (it currently still describes
    the superseded delegate-wrapper framing) so the two documents don't disagree about what's being
    built.
