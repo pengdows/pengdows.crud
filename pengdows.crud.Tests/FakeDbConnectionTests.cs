@@ -59,6 +59,72 @@ public class fakeDbConnectionTests
         await conn.DisposeAsync();
     }
 
+    // fakeDb is meant to be a drop-in ADO.NET provider substitute, not just something
+    // pengdows.crud's own internals happen to work against. Database/DataSource/ConnectionTimeout
+    // are standard DbConnection properties application code can legitimately read directly (via
+    // ITrackedConnection, which passes them straight through) -- found during a fakeDb audit that
+    // Database returned the *emulated product name* (e.g. "PostgreSql") instead of an actual
+    // parsed database/catalog name, DataSource always returned the literal "FakeSource" ignoring
+    // the connection string entirely, and ConnectionTimeout was hardcoded to 0 regardless of any
+    // "Connect Timeout=" the connection string specified. None of these are read anywhere inside
+    // pengdows.crud's own logic (checked before fixing), so this didn't break this repo's own test
+    // suite -- but any application code reading these properties directly would get misleading
+    // values from fakeDb versus what the same connection string would produce against a real
+    // provider.
+    [Fact]
+    public void ConnectionTimeout_NotSpecified_DefaultsToFifteen()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        Assert.Equal(15, conn.ConnectionTimeout);
+    }
+
+    [Fact]
+    public void ConnectionTimeout_SpecifiedInConnectionString_ReturnsParsedValue()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite};Connect Timeout=45";
+
+        Assert.Equal(45, conn.ConnectionTimeout);
+    }
+
+    [Fact]
+    public void Database_NotSpecified_ReturnsEmptyString()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        Assert.Equal(string.Empty, conn.Database);
+    }
+
+    [Fact]
+    public void Database_SpecifiedInConnectionString_ReturnsIt()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite};Database=MyAppDb";
+
+        Assert.Equal("MyAppDb", conn.Database);
+    }
+
+    [Fact]
+    public void DataSource_NotSpecified_KeepsDefaultPlaceholder()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        Assert.Equal("FakeSource", conn.DataSource);
+    }
+
+    [Fact]
+    public void DataSource_SpecifiedInConnectionString_ReturnsIt()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=myserver.example.com;EmulatedProduct={SupportedDatabase.Sqlite}";
+
+        Assert.Equal("myserver.example.com", conn.DataSource);
+    }
+
     [Fact]
     public void GetSchema_UnknownProduct_ReturnsDefaultSchema()
     {

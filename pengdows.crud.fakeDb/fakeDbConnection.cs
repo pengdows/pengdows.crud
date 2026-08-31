@@ -47,7 +47,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private string? _emulatedTypeName;
     private Action? _customOpenBehavior;
     private Action? _customCommandBehavior;
-    public override string DataSource => "FakeSource";
+    public override string DataSource =>
+        GetConnectionStringValue(new[] { "Data Source", "Server", "Host" }, "FakeSource")!;
     public override string ServerVersion => GetEmulatedServerVersion();
 
     internal readonly Queue<fakeDbDataReader> ReaderResults = new();
@@ -681,8 +682,42 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
-    public override int ConnectionTimeout => 0;
-    public override string Database => _emulatedProduct?.ToString() ?? string.Empty;
+    // Parsed from the connection string, matching real ADO.NET provider behavior (SqlConnection,
+    // NpgsqlConnection, etc. all reflect their actual configured timeout/database/server rather
+    // than a fixed placeholder) -- found during a fakeDb audit that these three were previously
+    // hardcoded/mismatched (ConnectionTimeout always 0, Database returned the emulated product
+    // name instead of an actual database name, DataSource ignored the connection string
+    // entirely), which is misleading for any application code reading these standard
+    // DbConnection properties directly (ITrackedConnection passes them straight through).
+    public override int ConnectionTimeout
+    {
+        get
+        {
+            var text = GetConnectionStringValue(new[] { "Connect Timeout", "Connection Timeout", "Timeout" }, null);
+            return text != null && int.TryParse(text, out var value) ? value : 15;
+        }
+    }
+
+    public override string Database =>
+        GetConnectionStringValue(new[] { "Database", "Initial Catalog" }, string.Empty)!;
+
+    private string? GetConnectionStringValue(string[] keys, string? defaultValue)
+    {
+        var builder = new DbConnectionStringBuilder { ConnectionString = ConnectionString };
+        foreach (var key in keys)
+        {
+            if (builder.TryGetValue(key, out var raw) && raw is not null)
+            {
+                var text = raw.ToString();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    return text;
+                }
+            }
+        }
+
+        return defaultValue;
+    }
 
     public override ConnectionState State => _state;
 
