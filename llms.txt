@@ -317,5 +317,11 @@ for the resolution order, the `Instance` property-vs-field convention it support
   assumes exists (e.g. `PoolGovernor` being `internal sealed`, the audit-rollback primitive being
   per-entity not per-delegate), and comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories.
   Designed, not implemented.
+- [`docs/planning/bulk-loading-design.md`](docs/planning/bulk-loading-design.md) — FEAT-005/
+  FEAT-012/FEAT-013: provider-native bulk loading (`SqlBulkCopy`, Npgsql `COPY`/`NpgsqlBinaryImporter`,
+  `MySqlBulkCopy`, DuckDB `Appender` — each verified against the real package this repo already
+  depends on), Oracle array binding as Oracle's version of the same mechanism, and batch upsert via
+  a single multi-row `MERGE` reusing FEAT-006's proven technique. Designed, not implemented; no
+  mainstream .NET DAL abstracts bulk loading across providers today.
 - [`docs/archive/codex-architecture-review.md`](docs/archive/codex-architecture-review.md)
   — a historical point-in-time review snapshot, explicitly superseded; not current guidance.

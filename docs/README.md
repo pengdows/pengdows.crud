@@ -77,6 +77,7 @@ means as a product.
 |---|---|
 | [`planning/future-work.md`](./planning/future-work.md) | Living backlog of open work |
 | [`planning/retry-context-design.md`](./planning/retry-context-design.md) | FEAT-001 `RetryContext` subsystem: full design, concrete shortcomings/open gaps found by tracing what it assumes exists, and comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories — designed, not implemented |
+| [`planning/bulk-loading-design.md`](./planning/bulk-loading-design.md) | FEAT-005/FEAT-012/FEAT-013: provider-native bulk loading (`SqlBulkCopy`/`COPY`/`MySqlBulkCopy`/DuckDB Appender, verified against real package APIs), Oracle array binding, and batch upsert via a single multi-row `MERGE` — designed, not implemented |
 | [`planning/test-setup-issues.md`](./planning/test-setup-issues.md) | Known test-infrastructure pain points |
 | [`planning/db-coverage-ledger.md`](./planning/db-coverage-ledger.md) | Test coverage status for provider findings, by database |
 
