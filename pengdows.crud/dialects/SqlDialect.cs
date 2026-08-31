@@ -930,16 +930,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
     }
 
-    private static bool StartsWith(ReadOnlySpan<char> span, ReadOnlySpan<char> value, int start)
-    {
-        if (start < 0 || start + value.Length > span.Length)
-        {
-            return false;
-        }
-
-        return span.Slice(start, value.Length).SequenceEqual(value);
-    }
-
     private static int IndexOf(ReadOnlySpan<char> span, ReadOnlySpan<char> value)
     {
         if (value.Length == 0)
