@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -96,6 +97,73 @@ public class DatabaseContextGovernorDisposalTests
         var governor = field!.GetValue(context) as PoolGovernor;
         Assert.NotNull(governor);
         return governor!;
+    }
+
+    // FEAT-009: DisposeAsync_WaitsForOutstandingLease_ThenDisposesGovernors above races disposal
+    // against an ALREADY-open connection that's simply being held via a plain reference — the
+    // governor slot exists, but nothing is actually in flight inside the async open machinery.
+    // This test races disposal against a connection genuinely stuck INSIDE its own async
+    // OpenAsync call (paused via fakeDbFactory.SetOpenGateForConnectionString, the same mechanism
+    // DatabaseContextAsyncCreationTests uses for construction-time opens) — a different point in
+    // the connection lifecycle state machine, and one FEAT-008/future-work.md's FEAT-009 entry
+    // explicitly calls out ("pause... open... at deterministic points") as still needing coverage.
+    // Confirms the drain wait is genuinely permit-based (tracks the acquired PoolSlot, not
+    // connection.State) and that a lease acquired before disposal began is allowed to finish
+    // opening and executing normally — drain-then-dispose, not force-fail-in-flight-work.
+    [Fact]
+    public async Task DisposeAsync_RacingConnectionStuckMidOpenAsync_DrainsAndSucceedsAfterGateReleased()
+    {
+        const string connectionString = "Data Source=race-dispose-mid-open;EmulatedProduct=Sqlite";
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            DbMode = DbMode.Standard,
+            PoolAcquireTimeout = TimeSpan.FromSeconds(5)
+        };
+
+        // Probe first (no injected gate) to learn the exact ConnectionString a query connection
+        // ends up carrying, without guessing at any normalization/decoration DatabaseContext
+        // applies — same rationale as DatabaseContextAsyncCreationTests' probing pattern.
+        var probingFactory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using (var probeContext = new DatabaseContext(config, probingFactory, NullLoggerFactory.Instance))
+        {
+            using var probeSc = probeContext.CreateSqlContainer("SELECT 1");
+            await probeSc.ExecuteScalarOrNullAsync<int>();
+        }
+
+        var probedQueryConnectionString = probingFactory.CreatedConnections
+            .Select(c => c.ConnectionString)
+            .Last(cs => cs != null && cs.Contains("race-dispose-mid-open", StringComparison.Ordinal))!;
+
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        // Gate applies only to connections opened after this point — construction's own
+        // dialect-detection connection already opened and closed normally, unaffected.
+        var gate = factory.SetOpenGateForConnectionString(probedQueryConnectionString);
+
+        using var sc = context.CreateSqlContainer("SELECT 1");
+        var execTask = sc.ExecuteScalarOrNullAsync<int>().AsTask();
+
+        // The governor slot is acquired synchronously before OpenAsync is even awaited, so this
+        // operation holds an outstanding lease for the whole time it's stuck here.
+        Assert.False(execTask.IsCompleted);
+
+        var disposeTask = context.DisposeAsync().AsTask();
+        Assert.False(disposeTask.IsCompleted);
+
+        gate.SetResult(true);
+
+        // Releasing the gate lets the stuck open complete; the operation that acquired its lease
+        // before disposal began must be allowed to finish normally rather than being force-failed.
+        await execTask;
+
+        // Disposal's drain wait was blocked on exactly this lease — it must now complete too,
+        // without hanging or throwing.
+        await disposeTask;
+
+        // The context must still end up fully, terminally disposed afterward.
+        Assert.Throws<ObjectDisposedException>(() => context.GetConnection(ExecutionType.Read));
     }
 
     // TEST-016: races a brand-new acquisition attempt against an in-flight DisposeAsync that

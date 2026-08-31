@@ -416,7 +416,20 @@ public class fakeDbCommand : DbCommand
     {
         ct.ThrowIfCancellationRequested();
         AsyncExecuteCount++;
+
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteNonQueryAsyncWithGate(gate, ct);
+        }
+
         return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
+    }
+
+    private async Task<int> ExecuteNonQueryAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken ct)
+    {
+        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        return BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery();
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
@@ -429,7 +442,19 @@ public class fakeDbCommand : DbCommand
             return Task.FromException<object?>(asyncOnlyEx);
         }
 
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteScalarAsyncWithGate(gate, ct);
+        }
+
         return Task.FromResult(BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar());
+    }
+
+    private async Task<object?> ExecuteScalarAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken ct)
+    {
+        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        return BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar();
     }
 
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
@@ -437,7 +462,21 @@ public class fakeDbCommand : DbCommand
     {
         ct.ThrowIfCancellationRequested();
         AsyncExecuteCount++;
+
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteDbDataReaderAsyncWithGate(behavior, gate, ct);
+        }
+
         return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
+    }
+
+    private async Task<DbDataReader> ExecuteDbDataReaderAsyncWithGate(
+        CommandBehavior behavior, TaskCompletionSource<bool> gate, CancellationToken ct)
+    {
+        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        return BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior);
     }
 
     public override Task PrepareAsync(CancellationToken ct)

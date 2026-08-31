@@ -206,6 +206,11 @@ dotnet test testbed.DriverVersionMatrix.MySqlConnector262/testbed.DriverVersionM
 # Oracle ODP.NET's DbType.Guid rejection (no Docker needed — client-side check):
 dotnet test testbed.DriverVersionMatrix.OracleOdp321/testbed.DriverVersionMatrix.OracleOdp321.csproj -c Release  # 3.21.230 (21c line)
 dotnet test testbed.DriverVersionMatrix.OracleOdp23/testbed.DriverVersionMatrix.OracleOdp23.csproj -c Release    # 23.26.300
+# Npgsql's DateTimeOffset-must-be-UTC-for-timestamptz requirement, against Postgres (requires Docker):
+dotnet test testbed.DriverVersionMatrix.Npgsql5/testbed.DriverVersionMatrix.Npgsql5.csproj -c Release  # 5.0.18 (pre-"6+")
+dotnet test testbed.DriverVersionMatrix.Npgsql9/testbed.DriverVersionMatrix.Npgsql9.csproj -c Release  # 9.0.3
+# SqlClient decimal Precision/Scale auto-inference, against SQL Server (requires Docker):
+dotnet test testbed.DriverVersionMatrix.SqlClientDecimalPrecision/testbed.DriverVersionMatrix.SqlClientDecimalPrecision.csproj -c Release  # 6.0.2
 
 # Verify API baseline (run after any interface changes)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \

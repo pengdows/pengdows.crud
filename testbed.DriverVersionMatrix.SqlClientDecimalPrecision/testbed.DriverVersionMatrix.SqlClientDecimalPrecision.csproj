@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+
+    <!--
+      FEAT-008 (docs/planning/future-work.md): investigates SqlDialect.cs's CreateDbParameter
+      comment ("Microsoft.Data.SqlClient 6.x validates that the decimal value fits within the
+      parameter's declared Precision/Scale ... When Precision=0, SqlClient treats the parameter
+      as DECIMAL(1,0), which rejects any value requiring more than one significant digit").
+      Pinned at 6.0.2, the version pengdows.crud.Tests/testbed already depend on. Unlike the other
+      projects in this family, this is NOT a two-project old-vs-new split: manual investigation
+      (recorded in future-work.md's FEAT-008 row) found IDENTICAL auto-inference behavior on both
+      6.0.2 and the older 5.2.2 (already pinned in benchmarks/CrudBenchmarks) across every
+      parameter-configuration order tried — the specific claimed rejection never reproduced on
+      either version, so there is no version boundary here to lock down as a two-sided regression
+      gate. This single project instead locks down the CURRENT (correct, non-rejecting) behavior
+      as a regression gate: if a future SqlClient release reintroduces stricter Precision
+      validation, this is the test that should start failing.
+    -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
+        <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2"/>
+        <PackageReference Include="Testcontainers" Version="4.4.0"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

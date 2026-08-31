@@ -913,6 +913,29 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         return tcs;
     }
 
+    private TaskCompletionSource<bool>? _executeGate;
+
+    /// <summary>
+    /// The command-execution analogue of <see cref="SetOpenGate"/>: makes the next async execute
+    /// call on any <see cref="fakeDbCommand"/> created against this connection
+    /// (ExecuteNonQueryAsync, ExecuteScalarAsync, or the reader's ExecuteDbDataReaderAsync) await
+    /// this test-controlled gate before running the fake execution logic, instead of completing
+    /// immediately. Lets a test hold an async command execution "in flight" and then cancel or
+    /// release it deterministically, proving genuine mid-flight cancellation (the fake execution
+    /// never actually runs) rather than a completed-then-discarded result. Stays set for every
+    /// subsequent command on this connection, same as <see cref="SetOpenGate"/> does for opens —
+    /// callers targeting a single operation should use <see cref="DbMode.SingleConnection"/> (or
+    /// otherwise ensure this connection instance is only used once) so the gate is unambiguous.
+    /// </summary>
+    public TaskCompletionSource<bool> SetExecuteGate()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _executeGate = tcs;
+        return tcs;
+    }
+
+    internal TaskCompletionSource<bool>? ExecuteGate => _executeGate;
+
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
