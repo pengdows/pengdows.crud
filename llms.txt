@@ -223,7 +223,8 @@ database-agnostic policy decoupled from connection identity — is in
   `DatabaseException` subclasses pengdows.crud actually throws; the explicit note that this and
   `IDbExceptionTranslator` are two independently-maintained classification systems that can
   disagree; and the retry-policy boundary (`IsRetryable` tells you whether to retry, it does not
-  retry for you — the designed-but-unbuilt `RetryContext` subsystem would be that layer).
+  retry for you — the designed-but-unbuilt `RetryContext` subsystem would be that layer; see
+  `docs/planning/retry-context-design.md`).
 - [`docs/observability-guide.md`](docs/observability-guide.md) — maps operational questions
   ("is my app slow because of the database, the pool, or a lock?", "is this reader slow because of
   the database or my own consumption loop?", "are connections piling up or leaking?") to which
@@ -311,5 +312,10 @@ for the resolution order, the `Instance` property-vs-field convention it support
   `CLAUDE.md`, for other AI coding assistants.
 - [`docs/planning/future-work.md`](docs/planning/future-work.md) — living backlog of
   open/planned work; do not treat items here as shipped.
+- [`docs/planning/retry-context-design.md`](docs/planning/retry-context-design.md) — FEAT-001
+  `RetryContext` subsystem: full design, concrete shortcomings/open gaps found by tracing what it
+  assumes exists (e.g. `PoolGovernor` being `internal sealed`, the audit-rollback primitive being
+  per-entity not per-delegate), and comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories.
+  Designed, not implemented.
 - [`docs/archive/codex-architecture-review.md`](docs/archive/codex-architecture-review.md)
   — a historical point-in-time review snapshot, explicitly superseded; not current guidance.

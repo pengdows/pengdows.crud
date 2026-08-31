@@ -109,9 +109,11 @@ throws in the first place, before your code ever sees it.
 anything itself. There is no built-in retry loop, backoff, or connection-pool-aware retry
 coordinator in the current library. A `RetryContext` subsystem with exactly that shape (governor-
 aware backoff, no connection held during sleep, transient-exception-only retry) is designed but
-**not implemented** — see `docs/planning/future-work.md`'s "RetryContext Subsystem" section for the
-full design if you want to build your own retry wrapper around `IsRetryable`/`IsTransient` today;
-don't assume it already exists.
+**not implemented** — see [`docs/planning/retry-context-design.md`](./planning/retry-context-design.md)
+for the full design, its concrete shortcomings, and how it compares to Polly/EF Core/other DALs
+(the original design prose lives in `docs/planning/future-work.md`'s "RetryContext Subsystem"
+section, tracked as `FEAT-001`) if you want to build your own retry wrapper around
+`IsRetryable`/`IsTransient` today; don't assume it already exists.
 
 ```csharp
 // Minimal example of what an application-level retry wrapper looks like today —
