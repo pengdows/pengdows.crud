@@ -193,13 +193,19 @@ dotnet test -c Release --results-directory TestResults -- DataCollectionRunSetti
 # Run integration suite (requires Docker)
 dotnet run -c Release --project testbed
 
-# Run a driver-*version* matrix probe (requires Docker) — distinct from testbed's server-version
-# matrix; a fully separate project per driver+version pair investigated, since one project can't
-# reference two versions of the same NuGet package (see FEAT-008 in docs/planning/future-work.md).
-# One sibling project per pinned MySql.Data version tested against TiDB:
+# Run a driver-*version* matrix probe — distinct from testbed's server-version matrix; a fully
+# separate project per driver+version pair investigated, since one project can't reference two
+# versions of the same NuGet package (see FEAT-008 in docs/planning/future-work.md).
+# MySql.Data versions tested against TiDB (requires Docker):
 dotnet test testbed.DriverVersionMatrix/testbed.DriverVersionMatrix.csproj -c Release              # 9.7.0
 dotnet test testbed.DriverVersionMatrix.MySqlData930/testbed.DriverVersionMatrix.MySqlData930.csproj -c Release  # 9.3.0
 dotnet test testbed.DriverVersionMatrix.MySqlData940/testbed.DriverVersionMatrix.MySqlData940.csproj -c Release  # 9.4.0
+# MySqlConnector's AllowMultipleStatements support (no Docker needed — client-side check):
+dotnet test testbed.DriverVersionMatrix.MySqlConnector200/testbed.DriverVersionMatrix.MySqlConnector200.csproj -c Release  # 2.0.0
+dotnet test testbed.DriverVersionMatrix.MySqlConnector262/testbed.DriverVersionMatrix.MySqlConnector262.csproj -c Release  # 2.6.2
+# Oracle ODP.NET's DbType.Guid rejection (no Docker needed — client-side check):
+dotnet test testbed.DriverVersionMatrix.OracleOdp321/testbed.DriverVersionMatrix.OracleOdp321.csproj -c Release  # 3.21.230 (21c line)
+dotnet test testbed.DriverVersionMatrix.OracleOdp23/testbed.DriverVersionMatrix.OracleOdp23.csproj -c Release    # 23.26.300
 
 # Verify API baseline (run after any interface changes)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \

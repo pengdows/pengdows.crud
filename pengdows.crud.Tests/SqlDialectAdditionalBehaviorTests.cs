@@ -260,6 +260,50 @@ public class SqlDialectAdditionalBehaviorTests
         Assert.Null(dialect.ParseVersion("invalid version"));
     }
 
+    // Found via a live Oracle 23ai/26ai container during a FEAT-008 driver-matrix investigation:
+    // System.Version.TryParse supports at most 4 dot-separated components (Major.Minor.Build.
+    // Revision), but Oracle's version scheme is a 5-part "23.26.2.0.0". The main regex match
+    // ("23.26.2.0.0") failed Version.TryParse outright, silently falling through to the
+    // single-digit fallback regex -- which matched "26" from the unrelated "26ai" marketing
+    // branding token earlier in the banner ("Oracle AI Database 26ai Free Release
+    // 23.26.2.0.0 - Develop, Learn, and Run for Free"), not the real major version (23). This
+    // produced a *wrong*, not just missing, ParsedVersion.Major whenever a product's
+    // marketing/branding number diverges from its actual release-train number -- every
+    // ParsedVersion-gated capability flag (e.g. OracleDialect.SupportsJsonTypes) would have
+    // silently evaluated against the wrong major version.
+    [Fact]
+    public void ParseVersion_FivePartVersionString_TruncatesToFourComponentsInsteadOfFailing()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+
+        var parsed = dialect.ParseVersion(
+            "Oracle AI Database 26ai Free Release 23.26.2.0.0 - Develop, Learn, and Run for Free");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(23, parsed!.Major);
+        Assert.Equal(26, parsed.Minor);
+        Assert.Equal(2, parsed.Build);
+        Assert.Equal(0, parsed.Revision);
+    }
+
+    [Fact]
+    public void ParseVersion_FivePartVersionString_NoMisleadingBrandingPrefix_StillParsesCorrectly()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+
+        // Same 5-part shape, no earlier stray digit in the string to confirm the fix is the
+        // truncate-to-4-components path, not an accidental fallback-regex coincidence.
+        var parsed = dialect.ParseVersion("Oracle Database Release 21.3.0.0.0");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(21, parsed!.Major);
+        Assert.Equal(3, parsed.Minor);
+        Assert.Equal(0, parsed.Build);
+        Assert.Equal(0, parsed.Revision);
+    }
+
     [Fact]
     public void GenerateRandomName_TruncatesToMax()
     {

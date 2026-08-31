@@ -561,8 +561,23 @@ internal class OracleDialect : SqlDialect
     internal override string? ReadOnlyPoolDiscriminatorSettingName => "Metadata Pooling";
     internal override string? ReadOnlyPoolDiscriminatorSettingValue => "false";
 
-    // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
-    // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
+    // Two independent facts, not one (FEAT-008 driver-matrix investigation corrected this
+    // comment, which used to blanket-attribute both to "ODP.NET 23.x"):
+    // - DbType.Guid: OracleParameter.DbType's setter itself rejects it with ArgumentException,
+    //   immediately, client-side, no connection needed -- confirmed identical across every
+    //   tested ODP.NET version from 3.21.230 (oldest 21c-line release) through 23.26.300
+    //   (newest 23.x release). Not actually 23.x-specific at all; ODP.NET has apparently never
+    //   supported this DbType natively. See testbed.DriverVersionMatrix.OracleOdp23/OracleOdp321.
+    // - DbType.Boolean: the driver accepts the assignment fine in every version tested. The real
+    //   failure is server-version-dependent, not driver-version-dependent: Oracle Database
+    //   23c/23ai added a genuine native BOOLEAN type, so binding DbType.Boolean succeeds against
+    //   a 23c+ server but throws InvalidCastException against an 18c/21c server that predates
+    //   it. Confirmed live against all three server versions testbed's own Oracle matrix already
+    //   covers -- see testbed/Oracle/OracleTestProvider.cs's TestBooleanDbTypeServerVersionBehavior.
+    //   The remap below stays unconditional (not server-version-gated) because pengdows.crud
+    //   doesn't currently branch Oracle dialect behavior by connected server version, only by
+    //   product -- Int16 round-trips correctly on every Oracle server version tested either way.
+    // ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
     protected override DbType RemapDbType(DbType type) => type switch
     {
         DbType.Boolean => DbType.Int16,

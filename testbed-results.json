@@ -7,10 +7,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.5236064,
-    "totalTimeSeconds": 2.903109,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.4838491,
+    "totalTimeSeconds": 2.9506653,
     "error": null,
     "checks": [
       {
@@ -147,6 +147,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -188,10 +193,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.5219592,
-    "totalTimeSeconds": 2.9128109,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.4751218,
+    "totalTimeSeconds": 2.8263006,
     "error": null,
     "checks": [
       {
@@ -328,6 +333,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -369,10 +379,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.5723787,
-    "totalTimeSeconds": 2.9632886,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.5014781,
+    "totalTimeSeconds": 2.8933083,
     "error": null,
     "checks": [
       {
@@ -511,6 +521,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -550,10 +565,10 @@
     "checksAttempted": 36,
     "checksPassed": 36,
     "checksFailed": 0,
-    "checksSkipped": 1,
-    "totalChecks": 37,
-    "testTimeSeconds": 3.5814652,
-    "totalTimeSeconds": 46.5112656,
+    "checksSkipped": 2,
+    "totalChecks": 38,
+    "testTimeSeconds": 3.5523595,
+    "totalTimeSeconds": 45.960127,
     "error": null,
     "checks": [
       {
@@ -690,6 +705,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -751,10 +771,10 @@
     "checksAttempted": 37,
     "checksPassed": 37,
     "checksFailed": 0,
-    "checksSkipped": 1,
-    "totalChecks": 38,
-    "testTimeSeconds": 6.4056462,
-    "totalTimeSeconds": 53.2048267,
+    "checksSkipped": 2,
+    "totalChecks": 39,
+    "testTimeSeconds": 6.41126,
+    "totalTimeSeconds": 52.5921835,
     "error": null,
     "checks": [
       {
@@ -898,6 +918,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -957,10 +982,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 4,
-    "totalChecks": 35,
-    "testTimeSeconds": 1.0131607,
-    "totalTimeSeconds": 1.0542389,
+    "checksSkipped": 5,
+    "totalChecks": 36,
+    "testTimeSeconds": 1.0146664,
+    "totalTimeSeconds": 1.0579541,
     "error": null,
     "checks": [
       {
@@ -1099,6 +1124,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -1148,10 +1178,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 6.4919291,
-    "totalTimeSeconds": 7.7164481,
+    "checksSkipped": 4,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.4806134,
+    "totalTimeSeconds": 7.7010974,
     "error": null,
     "checks": [
       {
@@ -1293,6 +1323,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -1334,10 +1369,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 6.5870791,
-    "totalTimeSeconds": 7.8026462,
+    "checksSkipped": 4,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.5683955,
+    "totalTimeSeconds": 7.8098621,
     "error": null,
     "checks": [
       {
@@ -1479,6 +1514,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -1520,10 +1560,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 6.6736662,
-    "totalTimeSeconds": 7.9984048,
+    "checksSkipped": 4,
+    "totalChecks": 35,
+    "testTimeSeconds": 6.659336,
+    "totalTimeSeconds": 8.0270083,
     "error": null,
     "checks": [
       {
@@ -1667,6 +1707,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -1706,10 +1751,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 35,
-    "testTimeSeconds": 0.0867259,
-    "totalTimeSeconds": 3.2165951,
+    "checksSkipped": 4,
+    "totalChecks": 36,
+    "testTimeSeconds": 0.0736848,
+    "totalTimeSeconds": 3.1994827,
     "error": null,
     "checks": [
       {
@@ -1846,6 +1891,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -1897,10 +1947,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 35,
-    "testTimeSeconds": 0.0671473,
-    "totalTimeSeconds": 7.1908861,
+    "checksSkipped": 4,
+    "totalChecks": 36,
+    "testTimeSeconds": 0.075416,
+    "totalTimeSeconds": 7.1964304,
     "error": null,
     "checks": [
       {
@@ -2037,6 +2087,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -2088,10 +2143,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 35,
-    "testTimeSeconds": 0.0672172,
-    "totalTimeSeconds": 6.225854,
+    "checksSkipped": 4,
+    "totalChecks": 36,
+    "testTimeSeconds": 0.0751797,
+    "totalTimeSeconds": 6.1975216,
     "error": null,
     "checks": [
       {
@@ -2228,6 +2283,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -2279,10 +2339,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 35,
-    "testTimeSeconds": 0.1322884,
-    "totalTimeSeconds": 5.270804,
+    "checksSkipped": 4,
+    "totalChecks": 36,
+    "testTimeSeconds": 0.1391414,
+    "totalTimeSeconds": 3.2934963,
     "error": null,
     "checks": [
       {
@@ -2421,6 +2481,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -2470,10 +2535,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.0872678,
-    "totalTimeSeconds": 7.2151188,
+    "checksSkipped": 3,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.0877004,
+    "totalTimeSeconds": 7.2152674,
     "error": null,
     "checks": [
       {
@@ -2610,6 +2675,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -2651,10 +2721,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.1189931,
-    "totalTimeSeconds": 7.2561845,
+    "checksSkipped": 3,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.1158229,
+    "totalTimeSeconds": 7.246034,
     "error": null,
     "checks": [
       {
@@ -2791,6 +2861,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -2832,10 +2907,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.1433515,
-    "totalTimeSeconds": 6.4256167,
+    "checksSkipped": 3,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.134005,
+    "totalTimeSeconds": 5.367647,
     "error": null,
     "checks": [
       {
@@ -2974,6 +3049,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -3010,13 +3090,13 @@
     "container": "Oracle [18c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.6061362,
-    "totalTimeSeconds": 10.9704921,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.6214221,
+    "totalTimeSeconds": 11.0054948,
     "error": null,
     "checks": [
       {
@@ -3151,6 +3231,11 @@
       },
       {
         "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
         "outcome": "passed",
         "reason": null
       },
@@ -3196,13 +3281,13 @@
     "container": "Oracle [21c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.6113918,
-    "totalTimeSeconds": 8.9463589,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.6707233,
+    "totalTimeSeconds": 6.9522773,
     "error": null,
     "checks": [
       {
@@ -3337,6 +3422,11 @@
       },
       {
         "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
         "outcome": "passed",
         "reason": null
       },
@@ -3382,13 +3472,13 @@
     "container": "Oracle [23.26.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 32,
-    "checksPassed": 32,
+    "checksAttempted": 33,
+    "checksPassed": 33,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.9256998,
-    "totalTimeSeconds": 7.5921078,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.9744467,
+    "totalTimeSeconds": 7.6258028,
     "error": null,
     "checks": [
       {
@@ -3523,6 +3613,11 @@
       },
       {
         "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
         "outcome": "passed",
         "reason": null
       },
@@ -3571,10 +3666,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.0828265,
-    "totalTimeSeconds": 1.2238405,
+    "checksSkipped": 3,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.0835793,
+    "totalTimeSeconds": 1.2232065,
     "error": null,
     "checks": [
       {
@@ -3711,6 +3806,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -3757,10 +3857,10 @@
     "checksAttempted": 32,
     "checksPassed": 32,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.1309668,
-    "totalTimeSeconds": 1.2833536,
+    "checksSkipped": 3,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.1243878,
+    "totalTimeSeconds": 1.2708469,
     "error": null,
     "checks": [
       {
@@ -3899,6 +3999,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -3943,10 +4048,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 4,
-    "totalChecks": 35,
-    "testTimeSeconds": 0.0876239,
-    "totalTimeSeconds": 4.2367891,
+    "checksSkipped": 5,
+    "totalChecks": 36,
+    "testTimeSeconds": 0.0849076,
+    "totalTimeSeconds": 4.2263168,
     "error": null,
     "checks": [
       {
@@ -4090,6 +4195,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4134,10 +4244,10 @@
     "checksAttempted": 34,
     "checksPassed": 34,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 36,
-    "testTimeSeconds": 6.2233044,
-    "totalTimeSeconds": 10.568575,
+    "checksSkipped": 3,
+    "totalChecks": 37,
+    "testTimeSeconds": 6.2023194,
+    "totalTimeSeconds": 10.5286644,
     "error": null,
     "checks": [
       {
@@ -4279,6 +4389,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -4330,10 +4445,10 @@
     "checksAttempted": 34,
     "checksPassed": 34,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 36,
-    "testTimeSeconds": 6.2292101,
-    "totalTimeSeconds": 12.5981493,
+    "checksSkipped": 3,
+    "totalChecks": 37,
+    "testTimeSeconds": 6.2207304,
+    "totalTimeSeconds": 10.5490987,
     "error": null,
     "checks": [
       {
@@ -4475,6 +4590,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -4526,10 +4646,10 @@
     "checksAttempted": 34,
     "checksPassed": 34,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 36,
-    "testTimeSeconds": 6.2975031,
-    "totalTimeSeconds": 11.8732079,
+    "checksSkipped": 3,
+    "totalChecks": 37,
+    "testTimeSeconds": 6.295797,
+    "totalTimeSeconds": 11.8503664,
     "error": null,
     "checks": [
       {
@@ -4673,6 +4793,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4722,10 +4847,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.0325804,
-    "totalTimeSeconds": 0.0473668,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.0324542,
+    "totalTimeSeconds": 0.0471392,
     "error": null,
     "checks": [
       {
@@ -4864,6 +4989,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4903,10 +5033,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.3056918,
-    "totalTimeSeconds": 2.5481312,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.3068773,
+    "totalTimeSeconds": 1.4974121,
     "error": null,
     "checks": [
       {
@@ -5043,6 +5173,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -5084,10 +5219,10 @@
     "checksAttempted": 30,
     "checksPassed": 30,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.3424803,
-    "totalTimeSeconds": 2.6751553,
+    "checksSkipped": 4,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.3271939,
+    "totalTimeSeconds": 2.6698497,
     "error": null,
     "checks": [
       {
@@ -5226,6 +5361,11 @@
         "reason": null
       },
       {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -5265,10 +5405,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 1.4009235,
-    "totalTimeSeconds": 6.8971572,
+    "checksSkipped": 3,
+    "totalChecks": 34,
+    "testTimeSeconds": 1.3222017,
+    "totalTimeSeconds": 6.7838492,
     "error": null,
     "checks": [
       {
@@ -5405,6 +5545,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",
@@ -5446,10 +5591,10 @@
     "checksAttempted": 31,
     "checksPassed": 31,
     "checksFailed": 0,
-    "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 1.5926343,
-    "totalTimeSeconds": 8.2895785,
+    "checksSkipped": 3,
+    "totalChecks": 34,
+    "testTimeSeconds": 1.634529,
+    "totalTimeSeconds": 8.326899,
     "error": null,
     "checks": [
       {
@@ -5586,6 +5731,11 @@
         "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
       },
       {
         "name": "Capabilities.Upsert",

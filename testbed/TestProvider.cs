@@ -209,6 +209,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"GetOrdinal unknown-column behavior: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running Boolean DbType server-version behavior");
+            SnowflakeStep("Boolean DbType server-version behavior: start");
+            await TestBooleanDbTypeServerVersionBehavior();
+            Console.WriteLine($"  Boolean DbType server-version behavior: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"Boolean DbType server-version behavior: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running capability probes");
             SnowflakeStep("Capability probes: start");
             await TestCapabilityProbes();
@@ -2216,6 +2223,24 @@ INSERT INTO {table} (
         {
             await CleanupTestRow(id);
         }
+    }
+
+    /// <summary>
+    /// Oracle-specific (see <see cref="OracleTestProvider"/>'s override) — every other provider
+    /// skips. FEAT-008 investigation: OracleDialect.cs's RemapDbType comment used to claim "Oracle
+    /// ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid." The Guid half of
+    /// that claim turned out to be driver-version-independent and is covered by
+    /// testbed.DriverVersionMatrix.OracleOdp23/OracleOdp321 (no live database needed there). The
+    /// Boolean half turned out to be a *server*-version story instead of a driver one:
+    /// OracleParameter.DbType accepts the assignment fine in every driver version, but whether
+    /// binding it actually succeeds depends on whether Oracle Database 23c/23ai's native BOOLEAN
+    /// type is present on the connected server — this override proves that live, against whichever
+    /// Oracle server version this test run is actually targeting.
+    /// </summary>
+    protected virtual Task TestBooleanDbTypeServerVersionBehavior()
+    {
+        CheckSkip("Oracle.BooleanDbTypeServerVersionBehavior", "Oracle-specific probe");
+        return Task.CompletedTask;
     }
 
     // -------------------------------------------------------------------------

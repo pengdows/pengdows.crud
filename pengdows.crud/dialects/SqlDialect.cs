@@ -2376,7 +2376,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
         var matches = Regex.Matches(versionString, @"\d+(?:\.\d+)+");
         if (matches.Count > 0)
         {
-            if (Version.TryParse(matches[^1].Value, out var detailed))
+            var candidate = matches[^1].Value;
+
+            // System.Version supports at most 4 dot-separated components
+            // (Major.Minor.Build.Revision) and Version.TryParse rejects anything longer outright.
+            // Some products report more (Oracle's 5-part scheme, e.g. "23.26.2.0.0") — truncate
+            // to the first 4 rather than letting TryParse fail and falling through to the
+            // fragile single-digit fallback below, which can silently grab an unrelated number
+            // from elsewhere in the string (e.g. a marketing/branding token whose number diverges
+            // from the real release version) instead of failing loudly.
+            var parts = candidate.Split('.');
+            if (parts.Length > 4)
+            {
+                candidate = string.Join('.', parts.Take(4));
+            }
+
+            if (Version.TryParse(candidate, out var detailed))
             {
                 return detailed;
             }

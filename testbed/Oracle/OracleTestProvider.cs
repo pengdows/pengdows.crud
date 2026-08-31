@@ -185,6 +185,60 @@ END;", triggerName, tableName, idColumn, sequenceName);
     }
 
     /// <summary>
+    /// FEAT-008 investigation: OracleDialect.RemapDbType converts DbType.Boolean -&gt;
+    /// DbType.Int16 unconditionally, regardless of which Oracle server version is actually
+    /// connected. This proves why that's still necessary rather than dead defensive code: binds
+    /// a raw (bypassing pengdows.crud's own dialect/remap layer entirely) OracleParameter with
+    /// DbType.Boolean against whichever server this test run targets. Oracle Database 23c/23ai
+    /// added a genuine native BOOLEAN type — binding succeeds there, but throws
+    /// InvalidCastException against an older (18c/21c) server that predates it. Uses the raw,
+    /// non-redacted connection string the same way TestPoolIsolation does.
+    /// </summary>
+    protected override async Task TestBooleanDbTypeServerVersionBehavior()
+    {
+        var rawCs = (context as DatabaseContext)?.RawConnectionString ?? context.ConnectionString;
+        await using var connection = new OracleConnection(rawCs);
+        await connection.OpenAsync();
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT :p1 FROM DUAL";
+        var p = cmd.CreateParameter();
+        p.ParameterName = "p1";
+        p.DbType = DbType.Boolean;
+        p.Value = true;
+        cmd.Parameters.Add(p);
+
+        var serverIsAtLeast23c = context.DataSourceInfo.ParsedVersion?.Major >= 23;
+
+        if (serverIsAtLeast23c)
+        {
+            var result = await cmd.ExecuteScalarAsync();
+            if (result is not (true or "1" or 1))
+            {
+                throw new Exception(
+                    $"[BooleanDbType] Expected native Boolean bind to round-trip true on a 23c+ server, got {result ?? "null"}");
+            }
+
+            CheckOk("Oracle.BooleanDbTypeServerVersionBehavior",
+                "  [BooleanDbType] DbType.Boolean binds and executes natively against a 23c+ server: OK");
+        }
+        else
+        {
+            try
+            {
+                await cmd.ExecuteScalarAsync();
+                throw new Exception(
+                    "[BooleanDbType] Expected InvalidCastException binding DbType.Boolean against a pre-23c server, but it succeeded — RemapDbType may no longer be necessary for this server version.");
+            }
+            catch (InvalidCastException)
+            {
+                CheckOk("Oracle.BooleanDbTypeServerVersionBehavior",
+                    "  [BooleanDbType] DbType.Boolean throws InvalidCastException against a pre-23c server (confirms RemapDbType is still necessary): OK");
+            }
+        }
+    }
+
+    /// <summary>
     /// Oracle uses NUMBER types rather than INT/BIGINT, and requires PL/SQL for conditional DROP.
     /// </summary>
     protected override async Task TestIdentifierQuoting()
