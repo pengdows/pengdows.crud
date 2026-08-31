@@ -189,4 +189,9 @@ The current codebase does not expose:
 - partial-success reporting
 - user-selectable batch strategies
 
-Those ideas belong in [`planning/future-work.md`](./planning/future-work.md), not in the current public API.
+Most of these are open ideas — see [`planning/future-work.md`](./planning/future-work.md), not the
+current public API. **Provider-native bulk loaders/pipelines specifically were investigated and
+rejected** (`FEAT-012`, see [`planning/bulk-loading-design.md`](./planning/bulk-loading-design.md)):
+`SqlBulkCopy`/`COPY`/`MySqlBulkCopy`/DuckDB's `Appender` aren't semantically uniform across
+providers, so a caller-facing API built on them would break this library's provider-independence
+guarantee. Don't expect that one to ship without a new, explicit request.

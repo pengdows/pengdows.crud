@@ -1,21 +1,49 @@
 # Bulk and High-Volume Write Paths — Design (FEAT-005, FEAT-012, FEAT-013)
 
-**Status: designed, zero implementation.** Nothing described in this document exists in code yet.
 This covers three related gaps in one place because they're really one question answered three
 ways per-provider: how does pengdows.crud move *many* rows to the server faster than the existing
-per-entity/multi-row-`VALUES` batch path (`docs/batch-operations.md`)?
+per-entity/multi-row-`VALUES` batch path (`docs/batch-operations.md`)? **Part 1 (FEAT-012) was
+rejected by explicit maintainer decision on 2026-08-31, the same day it was written up** — kept
+below as the record of why, per this repository's own precedent (see `EphemeralSecureString`'s
+removal entry above) for not silently deleting a considered-and-declined idea. Parts 2 and 3
+(FEAT-005, FEAT-013) are unaffected and remain live designs — see the status table.
 
-| ID | Gap | Tracking status before this document |
+| ID | Gap | Status |
 |---|---|---|
-| `FEAT-005` | Oracle array binding | Already tracked in `future-work.md`, one line, "not started — design work needed." Expanded here. |
-| `FEAT-012` | Provider-native bulk loading (`SqlBulkCopy`/`COPY`/`MySqlBulkCopy`/DuckDB Appender) | **Not tracked at all before this document.** `docs/batch-operations.md`'s own "What Is Not Implemented" section already names this explicitly, but no `future-work.md` row existed. New. |
-| `FEAT-013` | Batch upsert via a single multi-row `MERGE` (SQL Server/Oracle/Firebird) | **Not tracked at all before this document.** Mentioned only as an aside in `FEAT-006`'s closing note ("batch *upsert* via MERGE still doesn't exist for any dialect... a separate, wider gap"). New. |
+| `FEAT-005` | Oracle array binding | Live design (Part 2). Already tracked in `future-work.md`; expanded here. Purely an internal execution-strategy swap behind the existing `BatchCreateAsync` — no new caller-visible surface, so it doesn't carry FEAT-012's rejection reason. |
+| `FEAT-012` | Provider-native bulk loading (`SqlBulkCopy`/`COPY`/`MySqlBulkCopy`/DuckDB Appender) | **Rejected (2026-08-31).** See "Why this was rejected" below Part 1. Kept as a design record, not a live item. |
+| `FEAT-013` | Batch upsert via a single multi-row `MERGE` (SQL Server/Oracle/Firebird) | Live design (Part 3). Purely an internal SQL-generation change behind the existing `BatchUpsertAsync` — same reasoning as FEAT-005, unaffected by FEAT-012's rejection. |
 
 Every technical claim about a third-party provider API below was verified by loading the exact
 package version this repo already depends on and reflecting over its public surface — not assumed
 from memory or documentation. Each claim names the version checked.
 
-## Part 1: Provider-native bulk loading (FEAT-012)
+## Part 1: Provider-native bulk loading (FEAT-012) — REJECTED
+
+### Why this was rejected
+
+The maintainer rejected this outright on review, for a reason the original write-up underweighted:
+**`SqlBulkCopy`, `NpgsqlBinaryImporter`, `MySqlBulkCopy`, and `DuckDBAppender` are not semantically
+uniform across providers** — different failure/partial-application semantics, different transaction
+participation quirks, and SQL Server specifically has no `COPY`-equivalent at all (`SqlBulkCopy` is
+the closest analog, but it's a distinct object model, not a SQL statement). A caller using the
+proposed `IBulkLoader<TEntity>` would have needed to know provider-specific behavior to use it
+safely. That's a real breach of the "write once, run correctly on any of 16 databases" guarantee
+every other public API in this library upholds — unlike, say, `UpsertAsync()`, where PostgreSQL's
+`ON CONFLICT` and MySQL's `ON DUPLICATE KEY UPDATE` differ in generated SQL but present one uniform
+contract to the caller. This is a stronger, more specific reason than "no DAL abstracts this
+today" (true, but beside the point) — the point is this library's own provider-independence
+principle, stated directly by the maintainer, rules it out regardless of what peers do.
+
+**Do not re-propose this as a caller-facing `IBulkLoader<TEntity>`-shaped API without a new,
+explicit request** — the same standing instruction this file already applies to `FEAT-003`'s
+rejected public detection-evidence API. If a future need for faster large-volume loads arises, the
+right shape is almost certainly something that stays entirely behind the existing abstracted API
+(more like FEAT-005/FEAT-013's approach) rather than a new provider-shaped surface.
+
+The rest of Part 1 is preserved below exactly as investigated, since the technical findings (what
+each provider's native mechanism actually is, and the `IInternalConnectionWrapper` seam) remain
+accurate and could inform a differently-shaped future proposal — just not this one.
 
 ### The gap
 
@@ -126,25 +154,32 @@ and `MySqlBulkCopy` are each provider-specific ADO.NET features, unwrapped by Da
 the right native mechanism per dialect would be more abstracted than what exists in any peer
 ecosystem's first-party tooling — a genuine differentiator if built, not a catch-up feature.
 
-## Part 2: Oracle array binding (FEAT-005) — Oracle's version of Part 1
+## Part 2: Oracle array binding (FEAT-005) — an internal execution-strategy swap, not a new surface
 
-Oracle has no `BulkCopy`-shaped streaming-importer type. Its efficient multi-row mechanism is array
-binding: set `OracleCommand.ArrayBindCount = N`, bind each `OracleParameter`'s `Value` to an *array*
-of N values instead of a scalar, and one `ExecuteNonQuery` inserts all N rows — more efficient than
-the `INSERT ALL ... SELECT ... FROM DUAL` multi-row-literal trick `FEAT-006` already uses for
-Oracle's batch UPDATE-via-MERGE, and the natural fit for large row counts specifically.
+**Unaffected by Part 1's rejection** — this is a different shape of change entirely. Where Part 1
+proposed a new, provider-shaped `IBulkLoader<TEntity>` surface the caller would interact with
+directly (the reason it was rejected), FEAT-005 changes nothing the caller sees: it's an internal
+optimization to how `BatchCreateAsync`/`BuildBatchCreate` execute against Oracle specifically,
+exactly the same kind of change as PostgreSQL using `ON CONFLICT` versus MySQL using
+`ON DUPLICATE KEY UPDATE` underneath one uniform `UpsertAsync()` call today. Provider independence
+is preserved by construction: the public contract (`BatchCreateAsync(entities)`) stays identical
+across all 16 dialects; only Oracle's dialect implementation changes what SQL/parameter-binding
+strategy it uses internally to satisfy that same contract faster.
 
-This is not a separate feature from Part 1 conceptually — it's Oracle's `IBulkLoader<TEntity>`
-implementation, using array-bound parameters instead of a streaming-importer object because that's
-what ODP.NET actually offers. It should be exposed through the *same* `IBulkLoader<TEntity>`
-interface proposed in Part 1, with `OracleDialect` providing the array-binding implementation
-underneath, rather than a second, Oracle-only API surface a caller has to know to reach for.
+Oracle has no `BulkCopy`-shaped streaming-importer type (see Part 1's provider survey). Its
+efficient multi-row mechanism is array binding: set `OracleCommand.ArrayBindCount = N`, bind each
+`OracleParameter`'s `Value` to an *array* of N values instead of a scalar, and one `ExecuteNonQuery`
+inserts all N rows — more efficient than the `INSERT ALL ... SELECT ... FROM DUAL` multi-row-literal
+trick `FEAT-006` already uses for Oracle's batch UPDATE-via-MERGE, and the natural fit for large row
+counts specifically.
 
 Requires ODP.NET (Managed or Unmanaged) specifically — `ArrayBindCount` is not reachable via the
 generic `DbProviderFactory`/`DbCommand`/`DbParameter` abstraction, so this needs the same
 reflection-based provider-specific hook pattern already used elsewhere in `OracleDialect.cs`
 (`StatementCacheSize`) rather than a hard package reference from `pengdows.crud` to
-`Oracle.ManagedDataAccess.Core`.
+`Oracle.ManagedDataAccess.Core`. This is purely an `OracleDialect`-internal decision about *how* to
+satisfy `BuildBatchCreate`'s existing contract — no new interface, no new public type, nothing a
+caller opts into or needs to know exists.
 
 ## Part 3: Batch upsert via a single multi-row `MERGE` (FEAT-013)
 
@@ -189,16 +224,12 @@ every other cross-dialect SQL claim in this file.
 
 ## Sequencing recommendation
 
-These three are independently shippable — none blocks the others:
+FEAT-012 is rejected and not part of any roadmap (see Part 1). The remaining two are independently
+shippable and neither depends on the other:
 
 1. **FEAT-013 (batch upsert via `MERGE`) first** — smallest scope, directly reuses `FEAT-006`'s
    proven technique, no new public API surface, no governance/transaction-participation design
    questions to resolve first.
-2. **FEAT-005 (Oracle array binding) second** — single-provider, but needs the `IBulkLoader<TEntity>`
-   interface shape from Part 1 decided first if it's to share that surface rather than ship as a
-   one-off Oracle-only API.
-3. **FEAT-012 (general bulk loading) last** — the largest scope, with the most open design
-   questions (transaction participation, streaming adapter for `SqlBulkCopy`/`MySqlBulkCopy`,
-   testbed coverage across every engine) — treat as its own TDD-first effort per CLAUDE.md's
-   mandatory-TDD rule, the same way `docs/planning/retry-context-design.md` recommends for
-   `RetryContext`.
+2. **FEAT-005 (Oracle array binding) second** — single-provider, entirely internal to
+   `OracleDialect`'s existing `BuildBatchCreate` implementation; no interface design to settle
+   first now that it no longer shares a surface with the rejected Part 1.
