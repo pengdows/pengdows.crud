@@ -420,16 +420,10 @@ public class fakeDbCommand : DbCommand
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
-            return ExecuteNonQueryAsyncWithGate(gate, ct);
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
         }
 
         return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
-    }
-
-    private async Task<int> ExecuteNonQueryAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken ct)
-    {
-        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
-        return BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery();
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
@@ -437,24 +431,34 @@ public class fakeDbCommand : DbCommand
         ct.ThrowIfCancellationRequested();
         AsyncExecuteCount++;
 
-        if (FakeConnection != null && FakeConnection.TryGetAsyncOnlyScalarFailure(CommandText, out var asyncOnlyEx))
+        object? RunScalar()
         {
-            return Task.FromException<object?>(asyncOnlyEx);
+            if (FakeConnection != null && FakeConnection.TryGetAsyncOnlyScalarFailure(CommandText, out var asyncOnlyEx))
+            {
+                throw asyncOnlyEx;
+            }
+
+            return BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar();
         }
 
+        // The async-only-scalar-failure check must happen after the gate wait (not before it),
+        // so a connection configured with both an execute gate and an async-only failure still
+        // blocks in flight until the gate is released/cancelled, rather than the failure
+        // bypassing the gate and returning immediately.
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
-            return ExecuteScalarAsyncWithGate(gate, ct);
+            return ExecuteWithGateAsync(gate, ct, RunScalar);
         }
 
-        return Task.FromResult(BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar());
-    }
-
-    private async Task<object?> ExecuteScalarAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken ct)
-    {
-        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
-        return BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar();
+        try
+        {
+            return Task.FromResult(RunScalar());
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<object?>(ex);
+        }
     }
 
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
@@ -466,17 +470,20 @@ public class fakeDbCommand : DbCommand
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
-            return ExecuteDbDataReaderAsyncWithGate(behavior, gate, ct);
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
         }
 
         return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
     }
 
-    private async Task<DbDataReader> ExecuteDbDataReaderAsyncWithGate(
-        CommandBehavior behavior, TaskCompletionSource<bool> gate, CancellationToken ct)
+    /// <summary>
+    /// Shared implementation behind every gated async execute path: awaits the test-controlled
+    /// gate (see <see cref="fakeDbConnection.SetExecuteGate"/>), then runs <paramref name="execute"/>.
+    /// </summary>
+    private static async Task<T> ExecuteWithGateAsync<T>(TaskCompletionSource<bool> gate, CancellationToken ct, Func<T> execute)
     {
         await gate.Task.WaitAsync(ct).ConfigureAwait(false);
-        return BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior);
+        return execute();
     }
 
     public override Task PrepareAsync(CancellationToken ct)

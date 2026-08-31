@@ -130,6 +130,34 @@ public class fakeDbAdvancedCapabilitiesTests
         Assert.Equal(ConnectionState.Open, conn.State);
     }
 
+    // Code-review finding: fakeDbCommand.ExecuteScalarAsync checked TryGetAsyncOnlyScalarFailure
+    // before consulting the connection's execute gate, so a connection configured with both an
+    // async-only scalar failure and an execute gate bypassed the gate entirely and faulted
+    // immediately instead of blocking in flight until the gate was released or cancelled.
+    [Fact]
+    public async Task ExecuteScalarAsync_WithGateAndAsyncOnlyFailure_WaitsForGateBeforeFaulting()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.Open();
+
+        const string commandText = "SELECT 1";
+        var configuredFailure = new InvalidOperationException("simulated async-only scalar failure");
+        conn.SetAsyncOnlyScalarFailure(commandText, configuredFailure);
+        var gate = conn.SetExecuteGate();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = commandText;
+        var scalarTask = cmd.ExecuteScalarAsync();
+
+        Assert.False(scalarTask.IsCompleted);
+
+        gate.SetResult(true);
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => scalarTask);
+        Assert.Same(configuredFailure, thrown);
+    }
+
     [Fact]
     public async Task Reader_HonorsRealCancellationToken_PassedIntoReadAsync()
     {
