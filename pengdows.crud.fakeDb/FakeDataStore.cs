@@ -27,6 +27,17 @@ public class FakeDataStore
     private int _nextId = 1;
     private int _lastInsertId = 0;
 
+    /// <summary>
+    /// When <c>false</c> (the default, unchanged from before this flag existed), a statement
+    /// shape this parser doesn't recognize silently "succeeds" instead of failing loudly: an
+    /// unparseable INSERT and any other unrecognized nonquery SQL both return 1 affected row, and
+    /// an unrecognized SELECT returns zero rows. When <c>true</c>, all three throw
+    /// <see cref="NotSupportedException"/> instead — for a test that wants the stronger
+    /// substitutability guarantee that every statement it runs through fakeDb was actually
+    /// understood, not just tolerated.
+    /// </summary>
+    public bool StrictMode { get; set; }
+
     public void Clear()
     {
         lock (_lockObject)
@@ -71,6 +82,12 @@ public class FakeDataStore
         }
 
         // Default for other operations
+        if (StrictMode)
+        {
+            throw new NotSupportedException(
+                $"FakeDataStore (StrictMode) does not recognize this nonquery statement shape: {commandText}");
+        }
+
         return 1;
     }
 
@@ -203,6 +220,12 @@ public class FakeDataStore
                     _tables[tableName].Add(row);
                 }
                 return 1;
+            }
+
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this INSERT statement shape: {commandText}");
             }
 
             return 1; // Unrecognized INSERT format — treat as success
@@ -384,6 +407,12 @@ public class FakeDataStore
 
         if (!selectMatch.Success)
         {
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this SELECT statement shape: {commandText}");
+            }
+
             return Enumerable.Empty<Dictionary<string, object?>>();
         }
 

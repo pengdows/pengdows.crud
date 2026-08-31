@@ -452,4 +452,101 @@ public class FakeDataStoreTests
         await Assert.ThrowsAsync<NotSupportedException>(
             () => selectCmd.ExecuteReaderAsync());
     }
+
+    // ── StrictMode: unrecognized statement shape ────────────────────────────────
+    //
+    // FakeDataStore is a regex/prefix-based SQL parser, not a real SQL engine. By default
+    // (StrictMode = false, unchanged from before this test class) a statement shape it doesn't
+    // recognize silently "succeeds" instead of failing loudly: an unparseable INSERT format and
+    // any other unrecognized nonquery SQL both return 1 affected row, and an unrecognized SELECT
+    // returns zero rows — the main false-positive risk found in a fakeDb audit, since a test can
+    // pass without FakeDataStore ever having understood the SQL it was handed. StrictMode is an
+    // opt-in flag (default off, so nothing existing changes behavior) that makes all three throw
+    // instead, for tests that want the stronger guarantee.
+
+    [Fact]
+    public async Task Default_UnrecognizedInsertFormat_ReturnsOneRowAffected()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        // Not a shape HandleInsert's regexes recognize (no VALUES clause at all).
+        cmd.CommandText = "INSERT INTO users DEFAULT VALUES";
+
+        var result = await cmd.ExecuteNonQueryAsync();
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task Default_UnrecognizedNonQuery_ReturnsOneRowAffected()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "TRUNCATE TABLE users";
+
+        var result = await cmd.ExecuteNonQueryAsync();
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task Default_UnrecognizedSelect_ReturnsEmptyRows()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
+
+        using var reader = await cmd.ExecuteReaderAsync();
+
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedInsertFormat_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO users DEFAULT VALUES";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedNonQuery_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "TRUNCATE TABLE users";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedSelect_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteReaderAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_RecognizedStatements_StillWorkNormally()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO users (name) VALUES ('Alice')";
+        Assert.Equal(1, await insertCmd.ExecuteNonQueryAsync());
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM users";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+        Assert.True(reader.Read());
+    }
 }
