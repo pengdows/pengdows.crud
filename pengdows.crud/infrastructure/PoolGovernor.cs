@@ -175,6 +175,20 @@ internal sealed class PoolGovernor : SafeAsyncDisposableBase
     internal bool OwnsSemaphore => _ownsSemaphore;
 
     /// <summary>
+    /// Current number of immediately-acquirable semaphore permits. Test-only diagnostic used to
+    /// verify <see cref="ReleaseToken"/>'s release ordering (permits must become available before
+    /// <c>_inUse</c> reflects the release, not after).
+    /// </summary>
+    internal int AvailablePermits => _semaphore?.CurrentCount ?? 0;
+
+    /// <summary>
+    /// Test-only hook invoked immediately before <see cref="ReleaseToken"/> decrements
+    /// <c>_inUse</c> — lets a test observe/assert state at that exact instant. Never set outside
+    /// tests.
+    /// </summary>
+    internal Action? TestOnlyBeforeInUseDecrement { get; set; }
+
+    /// <summary>
     /// Whether this governor is forbidden (MaxPoolSize=0).
     /// Forbidden governors throw <see cref="PoolForbiddenException"/> on every acquire attempt.
     /// </summary>
@@ -781,6 +795,21 @@ internal sealed class PoolGovernor : SafeAsyncDisposableBase
                     break;
                 }
 
+                // Stale signal, _inUse still genuinely positive: a concurrent ResetDrainSignalIfNeeded
+                // hasn't installed a fresh signal yet. Respect cancellation/timeout instead of
+                // spinning past it, and yield instead of hot-looping a CPU core waiting for the
+                // other thread's ResetDrainSignalIfNeeded to run.
+                if (effectiveToken.IsCancellationRequested)
+                {
+                    if (timeoutCts != null && timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                    {
+                        throw new TimeoutException("Drain timeout");
+                    }
+
+                    throw new OperationCanceledException(cancellationToken);
+                }
+
+                await Task.Yield();
                 continue;
             }
 
@@ -887,6 +916,34 @@ internal sealed class PoolGovernor : SafeAsyncDisposableBase
 
     private PoolSlot OnAcquired(long waitStart, bool releaseWriterTurnstileInterestOnRelease)
     {
+        if (IsClosed)
+        {
+            // CORE-027 TOCTOU: ThrowIfClosed() is only checked once, at the very top of
+            // Acquire/TryAcquire/AcquireAsync/TryAcquireAsync, before any semaphore/turnstile
+            // work. A concurrent Close() landing after that check but before a slow-path Wait()
+            // completes lets this straggler still reach here with a real permit in hand — give it
+            // back and reject exactly as ThrowIfClosed() would have a few instructions earlier,
+            // so "once closed, _inUse can only decrease" (WaitForDrainAsync's contract) actually
+            // holds and a concurrent drain-then-dispose can't tear down the semaphore/turnstile
+            // out from under this still-in-flight acquire.
+            //
+            // Only the semaphore permit is released here — the turnstile permit (if any writer is
+            // currently holding one) is released by the caller's own catch block via its
+            // `turnstileAcquired` local, exactly like every other failure path in
+            // Acquire/TryAcquire/AcquireAsync/TryAcquireAsync. Only the WritersActiveOrWaiting
+            // bookkeeping needs handling directly here, since every call site already flips its
+            // local writerTurnstileInterestRegistered to false immediately before calling
+            // OnAcquired, making the caller's own UnregisterWriterTurnstileInterest a no-op by the
+            // time this throws.
+            _semaphore?.Release();
+            if (releaseWriterTurnstileInterestOnRelease && _turnstileState != null)
+            {
+                Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+            }
+
+            throw new ObjectDisposedException(nameof(PoolGovernor));
+        }
+
         var inUse = Interlocked.Increment(ref _inUse);
         ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
@@ -897,11 +954,14 @@ internal sealed class PoolGovernor : SafeAsyncDisposableBase
     internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt, bool releaseWriterTurnstileInterest)
     {
         RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
-        Interlocked.Decrement(ref _inUse);
 
-        // Release semaphore and turnstile BEFORE signaling drain-waiters.
-        // If the signal fires first, DisposeAsync can dispose these objects
-        // before Release() is called, causing ObjectDisposedException.
+        // Release semaphore and turnstile BEFORE decrementing _inUse (and before signaling
+        // drain-waiters below). _inUse dropping to zero is the signal callers rely on — both
+        // WaitForDrainAsync's direct _inUse==0 fast path and the drain-signal machinery further
+        // down — to mean "safe to dispose the governor". If _inUse were decremented first, a
+        // concurrent WaitForDrainAsync could observe zero and let a caller dispose the semaphore/
+        // turnstile while this method is still about to call Release() on them, throwing
+        // ObjectDisposedException on this thread.
         _semaphore?.Release();
 
         // Writers release turnstile when slot is released
@@ -914,6 +974,9 @@ internal sealed class PoolGovernor : SafeAsyncDisposableBase
         {
             Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
         }
+
+        TestOnlyBeforeInUseDecrement?.Invoke();
+        Interlocked.Decrement(ref _inUse);
 
         // Signal drain-waiters only if _inUse is still zero at the instant
         // the signal is set.  The read and the TrySetResult must happen under

@@ -3,6 +3,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Threading;
+using System.Threading.Tasks;
 
 #endregion
 
@@ -29,6 +30,12 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     /// <summary>Number of times <see cref="Rollback"/> was invoked, whether or not it then threw.</summary>
     public int RollbackCallCount { get; private set; }
+
+    /// <summary>Number of times <see cref="CommitAsync"/> (not the sync <see cref="Commit"/>) was invoked.</summary>
+    public int CommitAsyncCallCount { get; private set; }
+
+    /// <summary>Number of times <see cref="RollbackAsync"/> (not the sync <see cref="Rollback"/>) was invoked.</summary>
+    public int RollbackAsyncCallCount { get; private set; }
 
     /// <summary>Number of times Dispose() (sync or async) actually disposed this transaction.</summary>
     public int DisposeCallCount { get; private set; }
@@ -69,6 +76,20 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
         {
             throw RollbackException;
         }
+    }
+
+    public override Task CommitAsync(CancellationToken cancellationToken = default)
+    {
+        CommitAsyncCallCount++;
+        Commit();
+        return Task.CompletedTask;
+    }
+
+    public override Task RollbackAsync(CancellationToken cancellationToken = default)
+    {
+        RollbackAsyncCallCount++;
+        Rollback();
+        return Task.CompletedTask;
     }
 
     protected override void Dispose(bool disposing)

@@ -611,6 +611,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         catch (TimeoutException ex)
         {
+            // CORE-026: deliberately does NOT call governor.Dispose() here. If drain timed out, a
+            // lease may still be genuinely outstanding — disposing now would tear down the
+            // semaphore/turnstile out from under it, turning a leak into an ObjectDisposedException
+            // crash for whatever still holds that lease. Leaked rather than corrupted is the safe
+            // default; see the same rationale at DisposeManaged's call site above.
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
             return false;
         }
@@ -636,6 +641,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         catch (TimeoutException ex)
         {
+            // See the sync counterpart's catch block above (CORE-026) — governor.Dispose() is
+            // deliberately skipped here for the same reason.
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
             return false;
         }

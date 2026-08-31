@@ -94,17 +94,19 @@ public class TransactionContextDelegationAndSavepointTests
     }
 
     [Fact]
-    public async Task TransactionContext_RollbackToSavepointAsync_WhenDialectNoSavepoints_ReturnsEarly()
+    public async Task TransactionContext_RollbackToSavepointAsync_WhenDialectNoSavepoints_ThrowsNotSupported()
     {
-        // DuckDB has SupportsSavepoints=false; RollbackToSavepointAsync must return immediately (line 610).
+        // DuckDB has SupportsSavepoints=false. Unlike SavepointAsync (a harmless no-op — creating
+        // a savepoint that's never used costs nothing), silently no-op-ing a ROLLBACK to a
+        // savepoint that was never actually created is dangerous: the caller believes partial
+        // work was undone when nothing happened at all. Must throw NotSupportedException instead.
         using var ctx = new DatabaseContext(
             "Data Source=test;EmulatedProduct=DuckDB",
             new fakeDbFactory(SupportedDatabase.DuckDB));
 
         using var txn = ctx.BeginTransaction();
 
-        // Should not throw.
-        await txn.RollbackToSavepointAsync("sp_no_op");
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await txn.RollbackToSavepointAsync("sp_no_op"));
 
         txn.Rollback();
     }

@@ -612,11 +612,27 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        return CompleteTransactionWithWaitAsync(() =>
+        return CompleteTransactionWithWaitAsync(() => CommitTransactionAsync(cancellationToken), true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commits via <see cref="DbTransaction.CommitAsync"/> when the underlying transaction is a
+    /// real <see cref="DbTransaction"/> (true for every ADO.NET provider), so a provider with a
+    /// genuinely async/cancellable commit gets to use it and the cancellation token actually
+    /// reaches the call, instead of always falling back to the plain sync Commit() under an
+    /// async facade. Falls back to the sync IDbTransaction.Commit() for the rare non-DbTransaction
+    /// implementation (e.g. a hand-rolled test double).
+    /// </summary>
+    private async ValueTask CommitTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_transaction is DbTransaction dbTransaction)
+        {
+            await dbTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
         {
             _transaction.Commit();
-            return ValueTask.CompletedTask;
-        }, true, cancellationToken);
+        }
     }
 
     /// <inheritdoc/>
@@ -629,11 +645,20 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        return CompleteTransactionWithWaitAsync(() =>
+        return CompleteTransactionWithWaitAsync(() => RollbackTransactionAsync(cancellationToken), false, cancellationToken);
+    }
+
+    /// <summary>Async counterpart of <see cref="CommitTransactionAsync"/> — see its remarks.</summary>
+    private async ValueTask RollbackTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_transaction is DbTransaction dbTransaction)
+        {
+            await dbTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
         {
             _transaction.Rollback();
-            return ValueTask.CompletedTask;
-        }, false, cancellationToken);
+        }
     }
 
     /// <inheritdoc/>
@@ -684,7 +709,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (!_dialect.SupportsSavepoints)
         {
-            return;
+            // Unlike SavepointAsync's no-op (creating a savepoint that's never used is harmless),
+            // silently no-op-ing a rollback here would let the caller believe partial work was
+            // undone when nothing happened — throw instead of lying about the outcome.
+            throw new NotSupportedException(
+                $"{_context.Product} does not support savepoints; RollbackToSavepointAsync is unavailable.");
         }
 
         // See SavepointAsync for why this must go through the same reader-aware lock.
@@ -793,6 +822,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     Interlocked.Exchange(ref _rolledBack, 1);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // OperationCanceledException is never wrapped, matching every other execution
+                // path in the library — the finally below still runs unconditionally.
+                throw;
+            }
             catch (Exception ex)
             {
                 // Do NOT reset _completedState — connection is already closed in finally.
@@ -844,6 +879,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 {
                     Interlocked.Exchange(ref _rolledBack, 1);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // OperationCanceledException is never wrapped, matching every other execution
+                // path in the library — the finally below still runs unconditionally.
+                throw;
             }
             catch (Exception ex)
             {
@@ -908,55 +949,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override void DisposeManaged()
     {
-        var shouldDisposeLock = true;
-        if (!IsCompleted)
-        {
-            try
-            {
-                // Attempt immediate rollback using internal completion lock.
-                if (_completionLock.Wait(0))
-                {
-                    try
-                    {
-                        CompleteTransaction(() => _transaction.Rollback(), false);
-                    }
-                    finally
-                    {
-                        try
-                        {
-                            _completionLock.Release();
-                        }
-                        catch (ObjectDisposedException)
-                        {
-                            shouldDisposeLock = false;
-                        }
-                    }
-                }
-                else
-                {
-                    // Another thread is completing the transaction and still holds the lock —
-                    // it is potentially still inside _transaction.Commit()/Rollback() right now.
-                    // It will dispose the transaction and close the connection itself via
-                    // CompleteTransaction.finally once it finishes; disposing _transaction here
-                    // would race with that in-flight call. Do NOT dispose _completionLock here
-                    // either — the other thread still holds it and its Release() would throw
-                    // ObjectDisposedException.
-                    shouldDisposeLock = false;
-                    _logger.LogError("TransactionContext.Dispose could not acquire lock; skipping explicit rollback.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Rollback failed during Dispose.");
-            }
-        }
-
-        DisposeUserLockUnlessHeld();
-        if (shouldDisposeLock)
-        {
-            _completionLock.Dispose();
-        }
-        CompleteTransactionMetrics();
+        // Delegates to the async implementation (same pattern as Commit()/Rollback() blocking on
+        // their own async counterparts) rather than maintaining a second, independently-coded
+        // sync copy of this logic — the two had drifted into near-duplicates that both needed
+        // updating in lockstep for every fix. Every internal await here uses ConfigureAwait(false),
+        // so blocking synchronously carries no captured-SynchronizationContext deadlock risk.
+        DisposeManagedAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -987,11 +985,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 {
                     try
                     {
-                        await CompleteTransactionAsync(() =>
-                        {
-                            _transaction.Rollback();
-                            return ValueTask.CompletedTask;
-                        }, false).ConfigureAwait(false);
+                        await CompleteTransactionAsync(() => RollbackTransactionAsync(CancellationToken.None), false)
+                            .ConfigureAwait(false);
                     }
                     finally
                     {
