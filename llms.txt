@@ -151,6 +151,17 @@ database-agnostic policy decoupled from connection identity — is in
   without `Authoritative` lets a caller supply their own `CreatedBy`), UTC-only timestamp
   enforcement, `UserId` type coercion, batch operations resolving the audit values exactly once
   (not once per row), and failed-write rollback of in-memory audit properties.
+- [`docs/testing-with-fakedb.md`](docs/testing-with-fakedb.md) — `pengdows.crud.fakeDb`, a
+  complete in-process `DbProviderFactory` (not an interface mock) for testing without a real
+  database: dialect emulation across all 15 supported products (schema/version-probe responses),
+  result injection (queued readers/scalars, exact-text-keyed `SetScalarResultForCommand`, a
+  `ScalarResolver` for total command-text-routed control, multi-result-set readers), three-layer
+  failure injection (command/connection/factory — exact-text or connection-string-scoped, N-th-call
+  targeting, deterministic open-gates for real concurrency proofs), execution-time parameter
+  capture (`ExecutedNonQueryCommands`/`ExecutedReaderCommands` via `CapturedCommand`, the only way
+  to observe a bound value after a caller disposes the command before you can inspect it), and the
+  opt-in `FakeDataStore` in-memory SQL engine (explicitly documented as proving SQL *shape*, not
+  real-database correctness).
 - [`docs/data-reader-mapper.md`](docs/data-reader-mapper.md) — `DataReaderMapper`/
   `IDataReaderMapper`: a general-purpose, attribute-free mapper for hydrating any POCO from any
   SQL result (stored procedures, ad-hoc queries with no corresponding table) by column-name

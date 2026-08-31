@@ -61,6 +61,45 @@ Available Failure Hooks:
 - `SetFailOnBeginTransaction(...)`
 - `SetFailAfterOpenCount(...)`
 - `SetCustomFailureException(...)`
+- `SetCommandFailure(commandText, ex)` — exact-text match, at the connection level (checked first)
+  or the factory level (`_sharedCommandFailures`, applies to every connection the factory creates);
+  fires for non-query, scalar, and reader execution alike.
+- `ConnectionFailureMode` (`None`/`FailOnOpen`/`FailOnCommand`/`FailOnTransaction`/`FailAfterCount`/
+  `Broken`) via `fakeDbFactory.CreateFailingFactory(...)`/`SetGlobalFailureMode(...)` — `FailAfterCount`
+  counts opens across *every* connection the factory has created, not per instance.
+- `SetOpenGate()`/`SetOpenGateForConnectionString(...)` — a `TaskCompletionSource` `OpenAsync` awaits
+  before completing, for proving real concurrent-open admission control instead of timing a `Delay`.
+
+### Result routing by exact command text
+
+Beyond simple FIFO queues, `SetScalarResultForCommand(text, value)` answers every call matching
+that exact SQL indefinitely (not consumed), and `ScalarResolver` (`Func<string, object?>`) takes
+total, exclusive control over every scalar response by command text — let it throw for anything
+unanticipated to catch a probe the test didn't expect. `SetEmulatedTypeName`/`SetMaxParameterLimit`
+override `GetType().FullName`/the reported parameter limit for exercising dialect code that checks
+either.
+
+### Introspection: proving what actually executed
+
+`ExecutedNonQueryTexts`/`ExecutedReaderTexts`/`ExecutedScalarTexts` capture every command text a
+connection ran; `ExecutedNonQueryCommands`/`ExecutedReaderCommands` (`List<CapturedCommand>`, each
+a `CommandText` + `IReadOnlyList<CapturedParameter>`) additionally snapshot **bound parameter
+name/value at the moment of execution** — the only way to inspect a real bound value once the
+caller disposes the command before you can otherwise get at it. `fakeDbFactory.CreatedConnections`
+lists every physical connection instance the factory handed out, for answering "which connection
+ran this specific follow-up command" under `DbMode`s that don't always reuse the same instance.
+
+### `FakeDataStore` (opt-in in-memory SQL engine)
+
+`EnableDataPersistence = true` switches from canned/queued responses to a real (if intentionally
+limited) in-memory engine executing actual `CREATE`/`INSERT`/`UPDATE`/`DELETE`/`SELECT` against
+tables that only exist in a `Dictionary`. It's a hand-rolled parser recognizing only the SQL shapes
+pengdows.crud itself generates — a passing test proves SQL was *shaped* correctly, not that a real
+database would accept it; that's still `testbed`'s job.
+
+See `docs/testing-with-fakedb.md` in the repo for the full capability catalog (dialect emulation
+across all 15 supported products, output-parameter/multi-result-set queuing, transaction
+commit/rollback call counts and gates, and worked examples).
 
 ---
 

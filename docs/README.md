@@ -1,6 +1,6 @@
 # Documentation Index
 
-This folder holds reference material for `pengdows.crud` 2.x (currently branch 2.1). `CLAUDE.md`
+This folder holds reference material for `pengdows.crud` 2.x (currently branch 3.0). `CLAUDE.md`
 (repo root) remains the canonical day-to-day development guide; the documents below go deeper on
 specific subsystems.
 
@@ -22,6 +22,7 @@ means as a product.
 | [`architecture.md`](./architecture.md) | Internals deep-dive: locking, connection lifecycle, lease model, concurrency contracts |
 | [`core-invariants.md`](./core-invariants.md) | Condensed cheat-sheet of the invariants in `architecture.md` |
 | [`overview.md`](./overview.md) | Public API surface at a glance |
+| [`testing-with-fakedb.md`](./testing-with-fakedb.md) | `pengdows.crud.fakeDb`: a complete in-process ADO.NET provider for testing without a real database — dialect emulation across 15 products, queued/keyed/resolver-driven result injection, three-layer failure injection, execution-time parameter capture, and the opt-in `FakeDataStore` in-memory SQL engine |
 | [`advanced-types.md`](./advanced-types.md) | Value objects for network/range/interval/spatial/`HSTORE`/`rowversion` types and their built-in coercion behavior |
 | [`batch-operations.md`](./batch-operations.md) | Batch create/update/upsert/delete: API, runtime behavior, architecture, dialect compatibility |
 | [`generated-keys.md`](./generated-keys.md) | How `CreateAsync` retrieves an auto-generated `[Id]` value per database (`GeneratedKeyPlan` strategies) |
