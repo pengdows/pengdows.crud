@@ -42,6 +42,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrudBenchmarks.Tests", "ben
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testbed.DriverVersionMatrix", "testbed.DriverVersionMatrix\testbed.DriverVersionMatrix.csproj", "{64BFC47B-C94D-4DEA-A63B-94F77F78590F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testbed.DriverVersionMatrix.MySqlData930", "testbed.DriverVersionMatrix.MySqlData930\testbed.DriverVersionMatrix.MySqlData930.csproj", "{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testbed.DriverVersionMatrix.MySqlData940", "testbed.DriverVersionMatrix.MySqlData940\testbed.DriverVersionMatrix.MySqlData940.csproj", "{459A0E56-9741-447A-AFD1-1012AE302BFA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -280,6 +284,30 @@ Global
 		{64BFC47B-C94D-4DEA-A63B-94F77F78590F}.Release|x64.Build.0 = Release|Any CPU
 		{64BFC47B-C94D-4DEA-A63B-94F77F78590F}.Release|x86.ActiveCfg = Release|Any CPU
 		{64BFC47B-C94D-4DEA-A63B-94F77F78590F}.Release|x86.Build.0 = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|x64.Build.0 = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Debug|x86.Build.0 = Debug|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|x64.ActiveCfg = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|x64.Build.0 = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|x86.ActiveCfg = Release|Any CPU
+		{7143B8C6-CDEA-4ECB-92A0-94FB36A7FE0B}.Release|x86.Build.0 = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|x64.Build.0 = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Debug|x86.Build.0 = Debug|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|x64.ActiveCfg = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|x64.Build.0 = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|x86.ActiveCfg = Release|Any CPU
+		{459A0E56-9741-447A-AFD1-1012AE302BFA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

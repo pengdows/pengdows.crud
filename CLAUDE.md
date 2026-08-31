@@ -195,8 +195,11 @@ dotnet run -c Release --project testbed
 
 # Run a driver-*version* matrix probe (requires Docker) — distinct from testbed's server-version
 # matrix; a fully separate project per driver+version pair investigated, since one project can't
-# reference two versions of the same NuGet package (see FEAT-008 in docs/planning/future-work.md)
-dotnet test testbed.DriverVersionMatrix/testbed.DriverVersionMatrix.csproj -c Release
+# reference two versions of the same NuGet package (see FEAT-008 in docs/planning/future-work.md).
+# One sibling project per pinned MySql.Data version tested against TiDB:
+dotnet test testbed.DriverVersionMatrix/testbed.DriverVersionMatrix.csproj -c Release              # 9.7.0
+dotnet test testbed.DriverVersionMatrix.MySqlData930/testbed.DriverVersionMatrix.MySqlData930.csproj -c Release  # 9.3.0
+dotnet test testbed.DriverVersionMatrix.MySqlData940/testbed.DriverVersionMatrix.MySqlData940.csproj -c Release  # 9.4.0
 
 # Verify API baseline (run after any interface changes)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
