@@ -4,13 +4,13 @@
     "container": "CockroachDB [v23.2.14]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.4989057,
-    "totalTimeSeconds": 2.8788982,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.5236064,
+    "totalTimeSeconds": 2.903109,
     "error": null,
     "checks": [
       {
@@ -142,6 +142,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -180,13 +185,13 @@
     "container": "CockroachDB [v24.3.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.4687602,
-    "totalTimeSeconds": 2.8068108,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.5219592,
+    "totalTimeSeconds": 2.9128109,
     "error": null,
     "checks": [
       {
@@ -318,6 +323,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -356,13 +366,13 @@
     "container": "CockroachDB [v25.1.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.5482654,
-    "totalTimeSeconds": 2.9167871,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.5723787,
+    "totalTimeSeconds": 2.9632886,
     "error": null,
     "checks": [
       {
@@ -496,6 +506,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -532,13 +547,13 @@
     "container": "Db2 [11.5.0.0a]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 35,
-    "checksPassed": 35,
+    "checksAttempted": 36,
+    "checksPassed": 36,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 36,
-    "testTimeSeconds": 3.5593078,
-    "totalTimeSeconds": 46.2781987,
+    "totalChecks": 37,
+    "testTimeSeconds": 3.5814652,
+    "totalTimeSeconds": 46.5112656,
     "error": null,
     "checks": [
       {
@@ -670,6 +685,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -728,13 +748,13 @@
     "container": "Db2 [11.5.8.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 35,
-    "checksPassed": 35,
+    "checksAttempted": 37,
+    "checksPassed": 37,
     "checksFailed": 0,
     "checksSkipped": 1,
-    "totalChecks": 36,
-    "testTimeSeconds": 3.3084975,
-    "totalTimeSeconds": 50.8088234,
+    "totalChecks": 38,
+    "testTimeSeconds": 6.4056462,
+    "totalTimeSeconds": 53.2048267,
     "error": null,
     "checks": [
       {
@@ -863,9 +883,19 @@
         "reason": null
       },
       {
+        "name": "DbMode.SentinelPreventsUnload",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -924,13 +954,13 @@
     "container": "DuckDB",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 4,
-    "totalChecks": 34,
-    "testTimeSeconds": 1.0052653,
-    "totalTimeSeconds": 1.0480753,
+    "totalChecks": 35,
+    "testTimeSeconds": 1.0131607,
+    "totalTimeSeconds": 1.0542389,
     "error": null,
     "checks": [
       {
@@ -1064,6 +1094,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -1110,13 +1145,13 @@
     "container": "Firebird [3.0.9]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 6.6074314,
-    "totalTimeSeconds": 7.8772199,
+    "totalChecks": 34,
+    "testTimeSeconds": 6.4919291,
+    "totalTimeSeconds": 7.7164481,
     "error": null,
     "checks": [
       {
@@ -1253,6 +1288,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -1291,13 +1331,13 @@
     "container": "Firebird [4.0.5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 6.5813537,
-    "totalTimeSeconds": 7.7920717,
+    "totalChecks": 34,
+    "testTimeSeconds": 6.5870791,
+    "totalTimeSeconds": 7.8026462,
     "error": null,
     "checks": [
       {
@@ -1434,6 +1474,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -1472,13 +1517,13 @@
     "container": "Firebird [5.0.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 33,
-    "testTimeSeconds": 6.6842138,
-    "totalTimeSeconds": 8.0311121,
+    "totalChecks": 34,
+    "testTimeSeconds": 6.6736662,
+    "totalTimeSeconds": 7.9984048,
     "error": null,
     "checks": [
       {
@@ -1617,6 +1662,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -1653,13 +1703,13 @@
     "container": "MariaDB [10.11.11]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.0990741,
-    "totalTimeSeconds": 4.3094665,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.0867259,
+    "totalTimeSeconds": 3.2165951,
     "error": null,
     "checks": [
       {
@@ -1791,6 +1841,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -1839,13 +1894,13 @@
     "container": "MariaDB [10.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.0660062,
-    "totalTimeSeconds": 7.2270379,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.0671473,
+    "totalTimeSeconds": 7.1908861,
     "error": null,
     "checks": [
       {
@@ -1977,6 +2032,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -2025,13 +2085,13 @@
     "container": "MariaDB [10.4]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.0710023,
-    "totalTimeSeconds": 6.2405792,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.0672172,
+    "totalTimeSeconds": 6.225854,
     "error": null,
     "checks": [
       {
@@ -2163,6 +2223,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -2211,13 +2276,13 @@
     "container": "MariaDB [11.4.12]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.1971171,
-    "totalTimeSeconds": 4.3558366,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.1322884,
+    "totalTimeSeconds": 5.270804,
     "error": null,
     "checks": [
       {
@@ -2351,6 +2416,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -2397,13 +2467,13 @@
     "container": "MySQL [5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1353762,
-    "totalTimeSeconds": 6.2698043,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0872678,
+    "totalTimeSeconds": 7.2151188,
     "error": null,
     "checks": [
       {
@@ -2533,6 +2603,11 @@
       },
       {
         "name": "ReaderDisposal.Compatibility",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
       },
@@ -2573,13 +2648,13 @@
     "container": "MySQL [8.0.36]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1169563,
-    "totalTimeSeconds": 7.2545838,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.1189931,
+    "totalTimeSeconds": 7.2561845,
     "error": null,
     "checks": [
       {
@@ -2709,6 +2784,11 @@
       },
       {
         "name": "ReaderDisposal.Compatibility",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
         "outcome": "passed",
         "reason": null
       },
@@ -2749,13 +2829,13 @@
     "container": "MySQL [8.4.11]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.1330336,
-    "totalTimeSeconds": 5.377333,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.1433515,
+    "totalTimeSeconds": 6.4256167,
     "error": null,
     "checks": [
       {
@@ -2889,6 +2969,11 @@
         "reason": null
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -2925,13 +3010,13 @@
     "container": "Oracle [18c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.6378224,
-    "totalTimeSeconds": 10.9561302,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.6061362,
+    "totalTimeSeconds": 10.9704921,
     "error": null,
     "checks": [
       {
@@ -3063,6 +3148,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -3106,13 +3196,13 @@
     "container": "Oracle [21c]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.5457971,
-    "totalTimeSeconds": 9.8607726,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.6113918,
+    "totalTimeSeconds": 8.9463589,
     "error": null,
     "checks": [
       {
@@ -3244,6 +3334,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -3287,13 +3382,13 @@
     "container": "Oracle [23.26.2]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.8410506,
-    "totalTimeSeconds": 7.4815863,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.9256998,
+    "totalTimeSeconds": 7.5921078,
     "error": null,
     "checks": [
       {
@@ -3427,6 +3522,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -3468,13 +3568,13 @@
     "container": "PostgreSQL [15.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.0895367,
-    "totalTimeSeconds": 1.2275754,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.0828265,
+    "totalTimeSeconds": 1.2238405,
     "error": null,
     "checks": [
       {
@@ -3606,6 +3706,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -3649,13 +3754,13 @@
     "container": "PostgreSQL [16.4]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 31,
-    "checksPassed": 31,
+    "checksAttempted": 32,
+    "checksPassed": 32,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 33,
-    "testTimeSeconds": 0.1281367,
-    "totalTimeSeconds": 1.2784702,
+    "totalChecks": 34,
+    "testTimeSeconds": 0.1309668,
+    "totalTimeSeconds": 1.2833536,
     "error": null,
     "checks": [
       {
@@ -3789,6 +3894,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -3830,13 +3940,13 @@
     "container": "PostgreSQL [9.5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 4,
-    "totalChecks": 34,
-    "testTimeSeconds": 0.0841314,
-    "totalTimeSeconds": 4.2375505,
+    "totalChecks": 35,
+    "testTimeSeconds": 0.0876239,
+    "totalTimeSeconds": 4.2367891,
     "error": null,
     "checks": [
       {
@@ -3975,6 +4085,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4016,13 +4131,13 @@
     "container": "SQL Server [2017]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 33,
-    "checksPassed": 33,
+    "checksAttempted": 34,
+    "checksPassed": 34,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 35,
-    "testTimeSeconds": 6.2117813,
-    "totalTimeSeconds": 12.5065071,
+    "totalChecks": 36,
+    "testTimeSeconds": 6.2233044,
+    "totalTimeSeconds": 10.568575,
     "error": null,
     "checks": [
       {
@@ -4159,6 +4274,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -4207,13 +4327,13 @@
     "container": "SQL Server [2019]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 33,
-    "checksPassed": 33,
+    "checksAttempted": 34,
+    "checksPassed": 34,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 35,
-    "testTimeSeconds": 6.2263627,
-    "totalTimeSeconds": 10.5641304,
+    "totalChecks": 36,
+    "testTimeSeconds": 6.2292101,
+    "totalTimeSeconds": 12.5981493,
     "error": null,
     "checks": [
       {
@@ -4350,6 +4470,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -4398,13 +4523,13 @@
     "container": "SQL Server [2022-CU25]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 33,
-    "checksPassed": 33,
+    "checksAttempted": 34,
+    "checksPassed": 34,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 35,
-    "testTimeSeconds": 6.282278,
-    "totalTimeSeconds": 11.8175412,
+    "totalChecks": 36,
+    "testTimeSeconds": 6.2975031,
+    "totalTimeSeconds": 11.8732079,
     "error": null,
     "checks": [
       {
@@ -4543,6 +4668,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4589,13 +4719,13 @@
     "container": "SQLite",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.0334493,
-    "totalTimeSeconds": 0.0484552,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.0325804,
+    "totalTimeSeconds": 0.0473668,
     "error": null,
     "checks": [
       {
@@ -4729,6 +4859,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -4765,13 +4900,13 @@
     "container": "TiDB [v7.5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.2920124,
-    "totalTimeSeconds": 2.5129752,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.3056918,
+    "totalTimeSeconds": 2.5481312,
     "error": null,
     "checks": [
       {
@@ -4903,6 +5038,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -4941,13 +5081,13 @@
     "container": "TiDB [v8.5.7]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 29,
-    "checksPassed": 29,
+    "checksAttempted": 30,
+    "checksPassed": 30,
     "checksFailed": 0,
     "checksSkipped": 3,
-    "totalChecks": 32,
-    "testTimeSeconds": 0.3372745,
-    "totalTimeSeconds": 2.6782938,
+    "totalChecks": 33,
+    "testTimeSeconds": 0.3424803,
+    "totalTimeSeconds": 2.6751553,
     "error": null,
     "checks": [
       {
@@ -5081,6 +5221,11 @@
         "reason": "MySql.Data specific EOF disposal check"
       },
       {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "Capabilities.Upsert",
         "outcome": "passed",
         "reason": null
@@ -5117,13 +5262,13 @@
     "container": "YugabyteDB [2.25.2.0-b359]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 1.2557159,
-    "totalTimeSeconds": 6.8100964,
+    "totalChecks": 33,
+    "testTimeSeconds": 1.4009235,
+    "totalTimeSeconds": 6.8971572,
     "error": null,
     "checks": [
       {
@@ -5255,6 +5400,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
@@ -5293,13 +5443,13 @@
     "container": "YugabyteDB [2025.2.5.2-b5]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 30,
-    "checksPassed": 30,
+    "checksAttempted": 31,
+    "checksPassed": 31,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 32,
-    "testTimeSeconds": 1.6971072,
-    "totalTimeSeconds": 8.4071819,
+    "totalChecks": 33,
+    "testTimeSeconds": 1.5926343,
+    "totalTimeSeconds": 8.2895785,
     "error": null,
     "checks": [
       {
@@ -5431,6 +5581,11 @@
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
       },
       {
         "name": "Capabilities.Upsert",
