@@ -109,10 +109,11 @@ public class SqlDialectAdditionalBehaviorTests
     [Fact]
     public void CreateDbParameter_DecimalValue_SetsPrecisionToAtLeast18AndExactScale()
     {
-        // Precision is set to max(inferred, 18) so SqlClient 6.x accepts any value
-        // for a standard DECIMAL(18,x) column.  Scale is the value's natural scale.
-        // 123.4500m trims trailing fractional zeros → scale=2; inferred precision=5;
-        // final Precision = max(5, 18) = 18.
+        // Precision is set to max(inferred, 18), the industry-convention DECIMAL(18,x) shape
+        // (see SqlDialect.CreateDbParameter's comment for why — not a confirmed SqlClient
+        // version-specific requirement, despite how this used to be worded here). Scale is the
+        // value's natural scale. 123.4500m trims trailing fractional zeros → scale=2; inferred
+        // precision=5; final Precision = max(5, 18) = 18.
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
         var parameter = dialect.CreateDbParameter("p", DbType.Decimal, 123.4500m);

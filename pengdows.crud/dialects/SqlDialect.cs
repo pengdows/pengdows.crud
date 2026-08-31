@@ -1272,20 +1272,24 @@ internal abstract class SqlDialect : IInternalSqlDialect
             }
         }
 
-        // Microsoft.Data.SqlClient 6.x validates that the decimal value fits
-        // within the parameter's declared Precision/Scale before sending to the
-        // server.  When Precision=0, SqlClient treats the parameter as DECIMAL(1,0)
-        // (the minimum valid SQL decimal), which rejects any value requiring more
-        // than one significant digit (e.g. 10, 19.99, 100).
+        // Forces a floor of Precision=18 on every decimal parameter (Scale is left at the
+        // value's natural fractional-digit count, e.g. 2 for 19.99m, 0 for 10m), matching the
+        // industry-convention DECIMAL(18,S) shape used by Dapper and EF Core, rather than
+        // whatever Precision/Scale the client driver happens to auto-infer from the value.
+        // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.) accept
+        // DECIMAL(18,S) parameters for columns declared with P≤18.
         //
-        // Fix: always set Precision to at least 18 (the standard SQL Server
-        // DECIMAL column precision) so any value that fits in a typical column
-        // is accepted.  Scale is set to the value's natural fractional digits
-        // (e.g. 2 for 19.99m, 0 for 10m) so no silent rounding occurs.
-        //
-        // Using Precision=18 is the industry convention (used by Dapper, EF Core).
-        // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
-        // accept DECIMAL(18,S) parameters for columns declared with P≤18.
+        // This was originally written to guard against a specific claimed defect: "Microsoft.
+        // Data.SqlClient 6.x defaults an untouched parameter to DECIMAL(1,0), rejecting any
+        // value needing more than one significant digit (e.g. 10, 19.99, 100)." Live
+        // investigation against real SQL Server (2026-08-31, docs/planning/future-work.md's
+        // FEAT-008 row; see testbed.DriverVersionMatrix.SqlClientDecimalPrecision/) could not
+        // reproduce that scenario on either 5.2.2 or 6.0.2 — setting DbType.Decimal then Value
+        // (the exact sequence below) makes SqlParameter auto-infer a correct, non-zero
+        // Precision/Scale from the value on both versions; Precision never stayed at 0. The
+        // floor is kept anyway — it costs nothing and matches a real, independently-justified
+        // convention — but the specific "SqlClient 6.x" defect this comment used to describe as
+        // fact is unverified and should not be repeated as a confirmed bug.
         if (!valueIsNull && parameter.DbType == DbType.Decimal && value is decimal dec)
         {
             var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
