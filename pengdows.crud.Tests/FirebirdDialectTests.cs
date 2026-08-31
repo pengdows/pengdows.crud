@@ -2,7 +2,9 @@ using System;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -101,7 +103,7 @@ public class FirebirdDialectTests
 
         Assert.NotNull(ex);
         Assert.Contains(factory.CreatedConnections,
-            c => c.ExecutedNonQueryTexts.Contains("ROLLBACK"));
+            c => c.CreatedCommands.Any(cmd => cmd.CommandText == "ROLLBACK"));
     }
 
     [Fact]
@@ -125,6 +127,58 @@ public class FirebirdDialectTests
         Assert.NotNull(ex);
         Assert.DoesNotContain(factory.CreatedConnections,
             c => c.ExecutedNonQueryTexts.Contains("ROLLBACK"));
+    }
+
+    [Fact]
+    public async Task TryRollBackFailedWriteAsync_RollbackCommandItselfThrows_SwallowsException_LogsAtDebug()
+    {
+        // Covers the best-effort catch block: if the bare ROLLBACK we issue after a failed write
+        // itself throws (e.g. no transaction was actually active on this connection), that must
+        // never mask the original failure already in flight - it's swallowed, with a debug-level
+        // breadcrumb logged since there'd otherwise be zero trace of it.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        const string failingSql = "INSERT INTO \"probe\" (\"id\") VALUES (1) RETURNING \"id\"";
+        var originalFailure = new InvalidOperationException("simulated provider failure");
+        factory.SetCommandFailure(failingSql, originalFailure);
+        factory.SetCommandFailure("ROLLBACK", new InvalidOperationException("no transaction was active"));
+
+        var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug));
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Firebird"
+        };
+        await using var context = new DatabaseContext(cfg, factory, loggerFactory);
+        await using var container = context.CreateSqlContainer(failingSql);
+
+        var ex = await Record.ExceptionAsync(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+
+        // The original failure must still surface, unmasked by the rollback attempt's own failure.
+        Assert.NotNull(ex);
+        Assert.Same(originalFailure, ex);
+        Assert.Contains(factory.CreatedConnections,
+            c => c.CreatedCommands.Any(cmd => cmd.CommandText == "ROLLBACK"));
+    }
+
+    [Fact]
+    public async Task TryRollBackFailedWriteAsync_RollbackCommandItselfThrows_SwallowsException_WithoutDebugLogger()
+    {
+        // Same scenario as above but with the default (non-Debug) logger, to cover the
+        // IsEnabled(Debug) == false side of that branch too.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        const string failingSql = "INSERT INTO \"probe\" (\"id\") VALUES (1) RETURNING \"id\"";
+        var originalFailure = new InvalidOperationException("simulated provider failure");
+        factory.SetCommandFailure(failingSql, originalFailure);
+        factory.SetCommandFailure("ROLLBACK", new InvalidOperationException("no transaction was active"));
+
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        await using var container = context.CreateSqlContainer(failingSql);
+
+        var ex = await Record.ExceptionAsync(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+
+        Assert.NotNull(ex);
+        Assert.Same(originalFailure, ex);
     }
 
     [Fact]
