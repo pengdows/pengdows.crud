@@ -30,6 +30,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public bool EnableDataPersistence { get; set; } = false;
 
     /// <summary>
+    /// When set, propagated to every <see cref="fakeDbConnection.CommandFactory"/> this factory
+    /// creates (or hands back from the pre-enqueued queue) — see that property's remarks.
+    /// </summary>
+    public Func<fakeDbConnection, fakeDbCommand>? CommandFactory { get; set; }
+
+    /// <summary>
     /// When true, <see cref="CreateDataSource"/> returns a <see cref="FakeDbDataSource"/> wrapping
     /// this factory instead of throwing <see cref="NotSupportedException"/> — opt-in so tests that
     /// specifically need to exercise DatabaseContext's provider-native-DataSource path don't have
@@ -176,6 +182,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
+            pre.CommandFactory ??= CommandFactory;
             pre.SetFactoryReference(this);
             _createdConnections.Add(pre);
             return pre;
@@ -229,6 +236,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
         // Apply data persistence setting from factory
         c.EnableDataPersistence = EnableDataPersistence;
+        c.CommandFactory = CommandFactory;
 
         c.SetFactoryReference(this);
         _createdConnections.Add(c);

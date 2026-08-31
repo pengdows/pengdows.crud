@@ -48,9 +48,11 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+        var arrayBound = dialect is SqlDialect concreteDialectForArrayBinding &&
+                          concreteDialectForArrayBinding.SupportsArrayBinding;
 
         // Fallback for dialects that cannot execute EXECUTE BLOCK / multi-row INSERT with ADO.NET parameters
-        if (!dialect.SupportsBatchInsert)
+        if (!arrayBound && !dialect.SupportsBatchInsert)
         {
             var fallback = new List<ISqlContainer>(entities.Count);
             foreach (var entity in entities)
@@ -80,12 +82,20 @@ public partial class TableGateway<TEntity, TRowID>
             PrepareVersionForCreate(entity);
         }
 
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
+        // Array binding uses exactly one parameter per column regardless of row count (the array
+        // IS the multi-row payload), so the per-cell parameter-count limit that constrains the
+        // multi-row-VALUES/INSERT-ALL chunking below doesn't apply — chunk by MaxRowsPerBatch alone
+        // (paramsPerRow=1 makes ChunkList's parameter-limit math a no-op).
+        var chunks = arrayBound
+            ? ChunkList(entities, 1, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch)
+            : ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
 
         foreach (var chunk in chunks)
         {
-            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
+            var sc = arrayBound
+                ? BuildArrayBoundInsertContainer(chunk, insertableColumns, ctx, dialect)
+                : BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
             result.Add(sc);
         }
 
@@ -655,6 +665,90 @@ public partial class TableGateway<TEntity, TRowID>
 
                 sc.AddParameter(p);
             }
+        }
+
+        TrackBatchContainer(sc, chunk);
+        return sc;
+    }
+
+    /// <summary>
+    /// FEAT-005: builds a single-row-shaped INSERT (one parameter per column, not per cell) whose
+    /// parameters are bound to arrays of per-row values, for dialects where
+    /// <see cref="SqlDialect.SupportsArrayBinding"/> is true (currently only Oracle, via
+    /// <see cref="SqlDialect.ConfigureArrayBinding"/>'s ArrayBindCount reflection hook — see
+    /// docs/planning/bulk-loading-design.md's Part 2). Entities must already be fully prepared
+    /// (audit/version/writable-ID) by the caller — this method only reads column values, it never
+    /// mutates entities, unlike <see cref="PrepareInsertContainer"/>'s single-row path.
+    /// </summary>
+    private ISqlContainer BuildArrayBoundInsertContainer(
+        IReadOnlyList<TEntity> chunk,
+        IReadOnlyList<IColumnInfo> insertableColumns,
+        IDatabaseContext ctx,
+        ISqlDialect dialect)
+    {
+        var sc = ctx.CreateSqlContainer();
+        var counters = new ClauseCounters();
+
+        var wrappedTableName = BuildWrappedTableName(dialect);
+
+        sc.Query.Append("INSERT INTO ");
+        sc.Query.Append(wrappedTableName);
+        sc.Query.Append(" (");
+        for (var c = 0; c < insertableColumns.Count; c++)
+        {
+            if (c > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(dialect.WrapSimpleName(insertableColumns[c].Name));
+        }
+
+        sc.Query.Append(") VALUES (");
+
+        for (var c = 0; c < insertableColumns.Count; c++)
+        {
+            var column = insertableColumns[c];
+            var name = counters.NextIns();
+
+            // Row 0's own prepared value becomes the parameter "shell" (Precision/Scale/any
+            // reflection-based provider-specific configuration CreateDbParameter already applied
+            // for this exact column/value combination), then its scalar .Value is replaced with
+            // the full per-row array below — reuses all of CreateDbParameter's existing
+            // type-coercion logic (Guid formatting, enum storage, DateTimeOffset-to-UTC, etc.)
+            // instead of duplicating it for array binding specifically.
+            var firstValue = column.MakeParameterValueFromField(chunk[0]);
+            var p = dialect.CreateDbParameter(name, column.DbType, firstValue);
+            if (column.IsJsonType)
+            {
+                dialect.TryMarkJsonParameter(p, column);
+            }
+
+            var values = new object[chunk.Count];
+            values[0] = p.Value ?? DBNull.Value;
+            for (var row = 1; row < chunk.Count; row++)
+            {
+                var rowValue = column.MakeParameterValueFromField(chunk[row]);
+                var rowShell = dialect.CreateDbParameter($"{name}_row{row}", column.DbType, rowValue);
+                values[row] = rowShell.Value ?? DBNull.Value;
+            }
+
+            p.Value = values;
+            sc.AddParameter(p);
+
+            if (c > 0)
+            {
+                sc.Query.Append(", ");
+            }
+
+            sc.Query.Append(sc.MakeParameterName(p));
+        }
+
+        sc.Query.Append(')');
+
+        if (sc is SqlContainer concreteContainer)
+        {
+            concreteContainer.ArrayBindRowCount = chunk.Count;
         }
 
         TrackBatchContainer(sc, chunk);

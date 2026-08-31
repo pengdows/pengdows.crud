@@ -167,6 +167,34 @@ internal class OracleDialect : SqlDialect
         query.Append("SELECT 1 FROM DUAL");
     }
 
+    // FEAT-005: OracleCommand.ArrayBindCount lets one parameterized, single-row-shaped INSERT bind
+    // each column to an array of per-row values — more efficient than the INSERT ALL multi-row
+    // literal shape below for large row counts, and the only genuinely provider-native bulk-write
+    // mechanism ODP.NET offers. See docs/planning/bulk-loading-design.md's Part 2.
+    internal override bool SupportsArrayBinding => true;
+
+    /// <inheritdoc/>
+    internal override void ConfigureArrayBinding(DbCommand cmd, int rowCount)
+    {
+        // NOTE: "ArrayBindCount" is an intentional provider contract for Oracle.ManagedDataAccess —
+        // not on the generic DbCommand surface, so reached via reflection, no hard package
+        // reference. Same pattern as ApplyConnectionSettingsCore's StatementCacheSize hook.
+        if (cmd.GetType().FullName?.Contains("Oracle") != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var arrayBindCountProperty = cmd.GetType().GetProperty("ArrayBindCount");
+            arrayBindCountProperty?.SetValue(cmd, rowCount);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to configure Oracle ArrayBindCount via reflection");
+        }
+    }
+
     public override bool SupportsBatchUpdate => true;
 
     /// <inheritdoc />

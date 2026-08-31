@@ -74,6 +74,11 @@ public interface ISqlDialect
     /// </summary>
     bool SupportsBatchInsert { get; }
 
+    // SupportsArrayBinding lives on the internal SqlDialect base class, not here — like
+    // RequiresConnectionPoolResetForDdl/RequiresExplicitRollbackAfterFailedWrite, it's a
+    // SqlContainer/TableGateway execution-strategy implementation detail, not a caller-observable
+    // capability, so it deliberately stays off the public interface.
+
     /// <summary>
     /// Builds a multi-row INSERT statement structure for the dialect.
     /// </summary>

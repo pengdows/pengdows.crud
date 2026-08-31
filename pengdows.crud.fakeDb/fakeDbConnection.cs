@@ -93,6 +93,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public object? NextCommandLastInsertedId { get; set; }
 
     /// <summary>
+    /// When set, every command created by this connection is constructed via this factory instead
+    /// of a plain <see cref="fakeDbCommand"/>. Lets a test supply a subclass whose type name
+    /// satisfies a dialect's reflection-based provider-type check (e.g. a fake command exposing
+    /// Oracle's <c>ArrayBindCount</c>), without needing a per-provider fake command hierarchy in
+    /// this project for every such hook.
+    /// </summary>
+    public Func<fakeDbConnection, fakeDbCommand>? CommandFactory { get; set; }
+
+    /// <summary>
     /// When set, every command created by this connection has its
     /// <see cref="fakeDbCommand.BlockSynchronousExecution"/> pre-set to this value — lets a test
     /// prove production code used the async execution path without knowing in advance which
@@ -1058,7 +1067,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Invoke custom command behavior if set
         _customCommandBehavior?.Invoke();
 
-        var command = new fakeDbCommand(this);
+        var command = CommandFactory?.Invoke(this) ?? new fakeDbCommand(this);
         if (NextCommandLastInsertedId != null)
         {
             command.LastInsertedId = NextCommandLastInsertedId;

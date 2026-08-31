@@ -575,6 +575,24 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // True only for dialects whose upsert syntax has no UPDATE/SET-clause requirement (Firebird).
     public virtual bool SupportsPureKeyUpsert => false;
 
+    // Internal, not part of ISqlDialect: true when this dialect can insert a whole batch through
+    // one parameterized, single-row-shaped statement by binding each column to an array of
+    // per-row values (e.g. Oracle's OracleCommand.ArrayBindCount), instead of a multi-row VALUES
+    // list or a container per entity. TableGateway.BuildBatchCreate checks this before
+    // SupportsBatchInsert. Purely an internal execution-strategy choice with no effect on the
+    // caller-visible contract — see docs/planning/bulk-loading-design.md's Part 2. False for every
+    // dialect except Oracle.
+    internal virtual bool SupportsArrayBinding => false;
+
+    // Internal, not part of ISqlDialect: called by SqlContainer right after parameters are bound,
+    // before a command built for array binding executes. No-op for every dialect except Oracle —
+    // see OracleDialect for the ArrayBindCount reflection hook (mirrors ApplyConnectionSettingsCore's
+    // StatementCacheSize pattern: no hard package reference to Oracle.ManagedDataAccess.Core).
+    // Only ever invoked when SupportsArrayBinding is true.
+    internal virtual void ConfigureArrayBinding(DbCommand cmd, int rowCount)
+    {
+    }
+
     /// <summary>
     /// Gets the SQL statement to create a savepoint with the given name.
     /// Override for databases with non-standard syntax (e.g., SQL Server uses SAVE TRANSACTION).

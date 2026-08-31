@@ -6,11 +6,12 @@ per-entity/multi-row-`VALUES` batch path (`docs/batch-operations.md`)? **Part 1 
 rejected by explicit maintainer decision on 2026-08-31, the same day it was written up** — kept
 below as the record of why, per this repository's own precedent (see `EphemeralSecureString`'s
 removal entry above) for not silently deleting a considered-and-declined idea. Parts 2 and 3
-(FEAT-005, FEAT-013) are unaffected and remain live designs — see the status table.
+(FEAT-005, FEAT-013) were unaffected by that rejection; **Part 2 (FEAT-005) shipped the same
+day** — see the status table.
 
 | ID | Gap | Status |
 |---|---|---|
-| `FEAT-005` | Oracle array binding | Live design (Part 2). Already tracked in `future-work.md`; expanded here. Purely an internal execution-strategy swap behind the existing `BatchCreateAsync` — no new caller-visible surface, so it doesn't carry FEAT-012's rejection reason. |
+| `FEAT-005` | Oracle array binding | **Done (2026-08-31).** Purely an internal execution-strategy swap behind the existing `BatchCreateAsync` — no new caller-visible surface, so it never carried FEAT-012's rejection reason. See Part 2 for the shipped implementation and `future-work.md`'s row for the full TDD/verification record. |
 | `FEAT-012` | Provider-native bulk loading (`SqlBulkCopy`/`COPY`/`MySqlBulkCopy`/DuckDB Appender) | **Rejected (2026-08-31).** See "Why this was rejected" below Part 1. Kept as a design record, not a live item. |
 | `FEAT-013` | Batch upsert via a single multi-row `MERGE` (SQL Server/Oracle/Firebird) | Live design (Part 3). Purely an internal SQL-generation change behind the existing `BatchUpsertAsync` — same reasoning as FEAT-005, unaffected by FEAT-012's rejection. |
 
@@ -181,6 +182,36 @@ reflection-based provider-specific hook pattern already used elsewhere in `Oracl
 satisfy `BuildBatchCreate`'s existing contract — no new interface, no new public type, nothing a
 caller opts into or needs to know exists.
 
+### Shipped (2026-08-31)
+
+Implemented as designed above, TDD throughout, verified live:
+
+- Internal `SqlDialect.SupportsArrayBinding`/`ConfigureArrayBinding(DbCommand, int)` (base no-op,
+  `OracleDialect` override) — not on `ISqlDialect`, matching the established internal-flag pattern
+  `RequiresConnectionPoolResetForDdl`/`ResetConnectionPoolForDdl` already use for the same reason
+  ("SqlContainer/TableGateway execution-strategy implementation detail, not a caller-observable
+  capability").
+- Internal `SqlContainer.ArrayBindRowCount`, checked right after parameters are bound in
+  `PrepareAndCreateCommandAsync`.
+- `TableGateway.BuildBatchCreate` checks `SupportsArrayBinding` before `SupportsBatchInsert` and
+  dispatches to a new `BuildArrayBoundInsertContainer` — one `DbParameter` per column, each bound
+  to a `chunk.Count`-length `object[]`, built by calling `CreateDbParameter` once per row and
+  keeping only its already-coerced `.Value` (reusing all existing type-coercion logic — Guid
+  formatting, enum storage, DateTimeOffset-to-UTC — instead of duplicating it for arrays).
+  Chunking uses `MaxRowsPerBatch` alone, since array binding needs exactly one parameter per
+  column regardless of row count, unlike the per-cell multi-row-VALUES/INSERT-ALL path.
+- `fakeDb` expanded with a general `fakeDbConnection`/`fakeDbFactory.CommandFactory` hook (a
+  `Func<fakeDbConnection, fakeDbCommand>?`) letting a test supply a command subclass whose type
+  name satisfies a reflection-based provider-type check — not Oracle-specific, reusable for any
+  future dialect hook needing the same kind of test double.
+- Verified live against a real Oracle server via ODP.NET, not just `fakeDb`:
+  `pengdows.crud.IntegrationTests/DatabaseSpecific/OracleArrayBindingRoundTripTests.cs` inserts 3
+  rows — including a `NULL` in the middle of the batch, confirming `DBNull.Value` array elements
+  round-trip correctly — via `BatchCreateAsync` and reads them back correctly.
+
+See `future-work.md`'s `FEAT-005` row for the full test-by-test TDD record (each new behavior
+confirmed red before implementing).
+
 ## Part 3: Batch upsert via a single multi-row `MERGE` (FEAT-013)
 
 ### Current state (verified: `docs/batch-operations.md`'s "Upsert Shape Used Today" table)
@@ -224,12 +255,9 @@ every other cross-dialect SQL claim in this file.
 
 ## Sequencing recommendation
 
-FEAT-012 is rejected and not part of any roadmap (see Part 1). The remaining two are independently
-shippable and neither depends on the other:
+FEAT-012 is rejected and not part of any roadmap (see Part 1). FEAT-005 shipped 2026-08-31 (see
+Part 2). Only FEAT-013 remains:
 
-1. **FEAT-013 (batch upsert via `MERGE`) first** — smallest scope, directly reuses `FEAT-006`'s
-   proven technique, no new public API surface, no governance/transaction-participation design
-   questions to resolve first.
-2. **FEAT-005 (Oracle array binding) second** — single-provider, entirely internal to
-   `OracleDialect`'s existing `BuildBatchCreate` implementation; no interface design to settle
-   first now that it no longer shares a surface with the rejected Part 1.
+1. **FEAT-013 (batch upsert via `MERGE`)** — smallest scope, directly reuses `FEAT-006`'s proven
+   technique, no new public API surface, no governance/transaction-participation design questions
+   to resolve first.

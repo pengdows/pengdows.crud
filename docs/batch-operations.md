@@ -141,8 +141,8 @@ This keeps generated statements within provider limits without exposing a user-c
 
 ### Dialect Strategy / Fallback Rules
 
-- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity.
-- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects fall back to one update per entity.
+- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. **Oracle is a third case** (FEAT-005, `docs/planning/bulk-loading-design.md`'s Part 2): it uses neither shape for `BuildBatchCreate`/`BatchCreateAsync` — an internal `SupportsArrayBinding` flag takes priority over `SupportsBatchInsert` there, producing one parameterized, single-row-shaped `INSERT` per chunk with each column bound to an array of per-row values (`OracleCommand.ArrayBindCount`), not the `INSERT ALL ... SELECT 1 FROM DUAL` multi-row-literal shape Oracle's `BuildBatchInsertSql` dialect override still exists for (that override remains reachable for any other caller of `BuildBatchInsertSql` directly, e.g. `PrimaryKeyTableGateway`'s batch upsert fallback, which array binding does not currently cover). Purely an internal execution-strategy choice — the public `BuildBatchCreate`/`BatchCreateAsync` contract is unchanged.
+- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape Oracle's `BuildBatchInsertSql` dialect override still generates, even though `BuildBatchCreate` itself no longer calls that override — see the batch-insert bullet above). All other dialects fall back to one update per entity.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
 - Batch delete by entity collection builds one delete container per entity because each delete is keyed by the mapped `[Id]` or `[PrimaryKey]` values from that entity.
@@ -159,7 +159,7 @@ This keeps generated statements within provider limits without exposing a user-c
 
 | Operation | Uses dialect capability | Fallback when unsupported |
 |---|---|---|
-| Batch create | `SupportsBatchInsert` | one `BuildCreate(...)` container per entity |
+| Batch create | `SupportsBatchInsert` (or Oracle's internal `SupportsArrayBinding`, which takes priority — see above) | one `BuildCreate(...)` container per entity |
 | Batch update | `SupportsBatchUpdate` | one update container per entity |
 | Batch upsert | `SupportsInsertOnConflict` / `SupportsOnDuplicateKey` | one `BuildUpsert(...)` container per entity |
 | Batch delete by IDs | always available on `TableGateway<TEntity, TRowID>` | n/a |

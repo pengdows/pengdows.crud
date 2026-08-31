@@ -118,6 +118,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private readonly IDatabaseContext _context;
     private readonly ISqlDialect _dialect;
 
+    /// <summary>
+    /// Set by <c>TableGateway.BuildBatchCreate</c> when the dialect's array-binding execution
+    /// strategy is used instead of a multi-row VALUES/INSERT-ALL shape (see
+    /// <see cref="SqlDialect.SupportsArrayBinding"/>). Not part of <see cref="ISqlContainer"/> —
+    /// purely an internal execution-strategy detail with no effect on the caller-visible contract.
+    /// When set, <see cref="PrepareAndCreateCommandAsync"/> asks the dialect to configure the
+    /// underlying command for that many array-bound rows right after parameters are added.
+    /// </summary>
+    internal int? ArrayBindRowCount { get; set; }
+
     private readonly ILogger<ISqlContainer> _logger;
 
     private readonly IDictionary<string, DbParameter> _parameters =
@@ -1836,6 +1846,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         cmd.CommandText = cmdText;
         // Bind parameters consistently with CreateCommand
         AddParametersToCommand(cmd);
+
+        if (ArrayBindRowCount.HasValue && _dialect is SqlDialect arrayBindDialect)
+        {
+            arrayBindDialect.ConfigureArrayBinding(cmd, ArrayBindRowCount.Value);
+        }
 
         if (traceTimings)
         {

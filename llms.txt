@@ -318,9 +318,11 @@ for the resolution order, the `Instance` property-vs-field convention it support
   per-entity not per-delegate), and comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories.
   Designed, not implemented.
 - [`docs/planning/bulk-loading-design.md`](docs/planning/bulk-loading-design.md) — FEAT-005
-  (Oracle array binding) and FEAT-013 (batch upsert via a single multi-row `MERGE`, reusing
-  FEAT-006's proven technique): live designs, purely internal execution-strategy changes behind
-  the existing `BatchCreateAsync`/`BatchUpsertAsync` contract, no new caller-visible surface.
+  (Oracle array binding, **shipped** — `SqlDialect.SupportsArrayBinding`/`ConfigureArrayBinding`,
+  verified live against a real Oracle server) and FEAT-013 (batch upsert via a single multi-row
+  `MERGE`, reusing FEAT-006's proven technique, live design): purely internal execution-strategy
+  changes behind the existing `BatchCreateAsync`/`BatchUpsertAsync` contract, no new caller-visible
+  surface.
   FEAT-012 (a caller-facing bulk-loading API atop `SqlBulkCopy`/Npgsql `COPY`/`MySqlBulkCopy`/
   DuckDB `Appender`) is also documented in full but **rejected by the maintainer** — those
   mechanisms aren't semantically uniform across providers, so a caller-facing API built on them

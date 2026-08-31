@@ -158,6 +158,45 @@ public class fakeDbAdvancedCapabilitiesTests
         Assert.Same(configuredFailure, thrown);
     }
 
+    private sealed class NamedFakeCommand : fakeDbCommand
+    {
+        public NamedFakeCommand(fakeDbConnection connection) : base(connection)
+        {
+        }
+
+        public bool WasConstructedByFactory { get; set; }
+    }
+
+    [Fact]
+    public void CommandFactory_Set_ConstructsCommandsThroughIt_InsteadOfPlainFakeDbCommand()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.CommandFactory = c => new NamedFakeCommand(c) { WasConstructedByFactory = true };
+        conn.Open();
+
+        using var cmd = conn.CreateCommand();
+
+        var named = Assert.IsType<NamedFakeCommand>(cmd);
+        Assert.True(named.WasConstructedByFactory);
+    }
+
+    [Fact]
+    public void CommandFactory_SetOnFactory_PropagatesToEveryCreatedConnection()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Oracle)
+        {
+            CommandFactory = c => new NamedFakeCommand(c) { WasConstructedByFactory = true }
+        };
+
+        using var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = "Data Source=test;EmulatedProduct=Oracle";
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+
+        Assert.IsType<NamedFakeCommand>(cmd);
+    }
+
     [Fact]
     public async Task Reader_HonorsRealCancellationToken_PassedIntoReadAsync()
     {
