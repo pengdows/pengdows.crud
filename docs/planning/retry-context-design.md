@@ -29,7 +29,7 @@ operational failure modes specific to a governed connection pool:
    `pengdows.crud/infrastructure/PoolGovernor.cs`. Once a caller holds a `PoolSlot`, `PoolGovernor`
    has no control over how long it's held. A naive retry loop that catches a transient exception
    and sleeps *while still holding* an active `ITransactionContext` (and its pinned
-   `ITrackedConnection` and `PoolSlot`) keeps that permit occupied for the whole sleep. Under load,
+   `ITrackedConnection` and its `PoolSlot`) keeps that permit occupied for the whole sleep. Under load,
    this is how a handful of transient deadlocks turns into other, unrelated callers being rejected
    with `PoolSaturatedException` — the governor is doing its job (protecting the provider pool),
    but throughput collapses because permits are pinned by idle, sleeping tasks rather than active
@@ -85,8 +85,8 @@ They address two different layers of the execution lifecycle:
 | **Core responsibility** | Protects the database engine and provider pool from unbounded concurrency. | Manages the lifecycle and resilience of one retrying operation across attempts. |
 | **During active queries** | Limits concurrent active reads/writes; fast-rejects deep queues. | Executes the caller's delegate within an assigned transaction lease. |
 | **On transient error** | Unaware of query exceptions — just tracks that a permit is in use. | Rolls back the transaction immediately, freeing server-side locks, and disposes the connection lease. |
-| **During backoff sleep** | Holds a slot as in-use if the caller doesn't explicitly release it. | Explicitly releases the `PoolSlot`, holding zero permits during `Task.Delay`. |
-| **On wake-up** | Regulates entry through the semaphore and, for writers, the turnstile. | Re-acquires a slot via `PoolGovernor.AcquireAsync`, passing through admission fairly like any other caller. |
+| **During backoff sleep** | Holds a slot as in-use if the caller doesn't explicitly release it. | Rolls back and disposes the transaction lease, which returns its permit before `Task.Delay`; zero permits are held during backoff. |
+| **On wake-up** | Regulates entry through the semaphore and, for writers, the turnstile. | Starts the next attempt through `BeginTransactionAsync`, whose normal context acquisition re-enters the semaphore/turnstile fairly. |
 
 `PoolGovernor` prevents connection storms in general; `RetryContext`'s job is to make sure *its own*
 retries don't defeat that protection by hoarding permits while asleep.
@@ -99,10 +99,11 @@ Everything in this section is prose-only design from `future-work.md`; nothing i
 
 - **`ExecuteTransactionalAsync`** — treats an entire caller-supplied delegate as one atomic,
   all-or-nothing unit. On a transient failure (`DatabaseException.IsTransient == true`): roll back
-  the current transaction, dispose its connection lease immediately, revert any in-memory audit
-  mutations the delegate made, release the `PoolGovernor` slot, sleep with decorrelated exponential
-  jitter while holding **zero** connection slots, then reacquire a fresh slot via
-  `PoolGovernor.AcquireAsync` (going back through the fairness turnstile, not around it) and start
+  the current transaction, dispose its transaction/connection lease immediately (returning its
+  governor permit), revert any in-memory audit mutations the delegate made, sleep with decorrelated
+  exponential jitter while holding **zero** connection slots, then start the next attempt via
+  public `BeginTransactionAsync` (whose normal context acquisition goes back through the fairness
+  turnstile, not around it) and start
   the whole delegate over from a fresh transaction.
 - **`ExecuteSequentialAsync`** — processes an independent stream/queue of items one at a time. If
   item *K* fails transiently, only *K* retries with backoff; items `1..K-1` stay committed and are
