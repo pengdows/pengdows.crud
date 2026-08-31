@@ -162,6 +162,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Reader disposal compatibility: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running GetOrdinal unknown-column behavior");
+            SnowflakeStep("GetOrdinal unknown-column behavior: start");
+            await TestGetOrdinalUnknownColumnBehavior();
+            Console.WriteLine($"  GetOrdinal unknown-column behavior: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"GetOrdinal unknown-column behavior: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running capability probes");
             SnowflakeStep("Capability probes: start");
             await TestCapabilityProbes();
@@ -1774,6 +1781,82 @@ INSERT INTO {table} (
             }
 
             CheckOk("  [Reader disposal] MySql.Data EOF disposal compatibility: OK");
+        }
+        finally
+        {
+            await CleanupTestRow(id);
+        }
+    }
+
+    /// <summary>
+    /// The documented <c>IDataRecord.GetOrdinal(string)</c> contract is: throw
+    /// <see cref="IndexOutOfRangeException"/> when the name is not a valid column name.
+    /// <c>fakeDbDataReader.GetOrdinal</c> instead returns <c>-1</c> for a miss — a real divergence
+    /// from that contract found during a documentation/behavior audit. This probe records what
+    /// every real provider tested here actually does, so that divergence is measured instead of
+    /// assumed, and so a future fix to fakeDb's behavior has real cross-provider evidence behind
+    /// it rather than just the .NET documentation's word for it. Never hard-fails on a provider
+    /// throwing something other than <see cref="IndexOutOfRangeException"/> (or not throwing at
+    /// all) — this is a comparison probe, not a spec enforcement; any divergence found is exactly
+    /// the point and gets recorded via <see cref="CheckOk"/> either way, with the actual observed
+    /// behavior described directly in the message.
+    /// </summary>
+    protected virtual async Task TestGetOrdinalUnknownColumnBehavior()
+    {
+        var id = Interlocked.Increment(ref _nextId);
+        await _helper.CreateAsync(new TestTable
+        {
+            Id = id,
+            Name = NameEnum.Test,
+            Description = "get-ordinal-unknown-column",
+            Value = 42,
+            IsActive = true
+        });
+
+        try
+        {
+            var select = _context.CreateSqlContainer();
+            select.Query.AppendFormat(
+                "SELECT {0} FROM {1} WHERE {2} = {3}",
+                _context.WrapObjectName("id"),
+                _context.WrapObjectName("test_table"),
+                _context.WrapObjectName("id"),
+                select.MakeParameterName("p0"));
+            select.AddParameterWithValue("p0", DbType.Int64, id);
+
+            await using var reader = await select.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                throw new Exception("[GetOrdinal] Expected a row");
+            }
+
+            // Sanity check: a real column name still resolves normally.
+            var knownOrdinal = reader.GetOrdinal("id");
+            if (knownOrdinal < 0)
+            {
+                throw new Exception($"[GetOrdinal] Known column 'id' returned invalid ordinal {knownOrdinal}");
+            }
+
+            const string unknownColumn = "this_column_definitely_does_not_exist_xyz123";
+            try
+            {
+                var ordinal = reader.GetOrdinal(unknownColumn);
+                CheckOk("Reader.GetOrdinalUnknownColumn",
+                    $"  [GetOrdinal] {_context.Product} does NOT throw for an unknown column name — " +
+                    $"returned ordinal {ordinal} instead of the documented IndexOutOfRangeException.");
+            }
+            catch (IndexOutOfRangeException)
+            {
+                CheckOk("Reader.GetOrdinalUnknownColumn",
+                    $"  [GetOrdinal] {_context.Product} throws IndexOutOfRangeException for an unknown " +
+                    "column name (matches the documented IDataRecord.GetOrdinal contract): OK");
+            }
+            catch (Exception ex)
+            {
+                CheckOk("Reader.GetOrdinalUnknownColumn",
+                    $"  [GetOrdinal] {_context.Product} throws {ex.GetType().Name} (not " +
+                    "IndexOutOfRangeException) for an unknown column name: recorded, not enforced.");
+            }
         }
         finally
         {

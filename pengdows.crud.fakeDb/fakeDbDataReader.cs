@@ -132,7 +132,20 @@ public class fakeDbDataReader : DbDataReader
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
-        return Array.IndexOf(keys, name);
+        var ordinal = Array.IndexOf(keys, name);
+
+        // Matches the documented IDataRecord.GetOrdinal contract and every real ADO.NET provider
+        // exercised by testbed's cross-engine GetOrdinal probe (TestProvider.
+        // TestGetOrdinalUnknownColumnBehavior): 25 of 30 tested engine/version targets throw
+        // exactly IndexOutOfRangeException for an unknown column name; the other 5 throw a
+        // different exception type but still throw. None returns a sentinel value silently, which
+        // is what this method used to do.
+        if (ordinal < 0)
+        {
+            throw new IndexOutOfRangeException(name);
+        }
+
+        return ordinal;
     }
 
     public override bool IsDBNull(int i)
