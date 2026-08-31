@@ -836,6 +836,205 @@ public class PostgreSqlDialectTests
         return (connectionMock, commandMock);
     }
 
+    // =========================================================================
+    // GetFinalSessionSettings — single consolidated SET statement
+    // =========================================================================
+
+    [Fact]
+    public void GetFinalSessionSettings_ReadOnlyTrue_SetsReadOnlyTransactionOn()
+    {
+        var result = _dialect.GetFinalSessionSettings(readOnly: true);
+
+        Assert.Contains("standard_conforming_strings = on", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages = warning", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("default_transaction_read_only = on;", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GetFinalSessionSettings_ReadOnlyFalse_SetsReadOnlyTransactionOff()
+    {
+        var result = _dialect.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Contains("default_transaction_read_only = off;", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("= on;", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // =========================================================================
+    // MergeStartupOptions (via PrepareConnectionStringForDataSource) — token parsing
+    // =========================================================================
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_MultipleExistingTokens_ParsesEachToken()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // Two well-formed user tokens back to back exercise both the "value ends at next -c"
+        // branch (search_path) and the "value ends at end of string" branch (lock_timeout).
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;" +
+                 "Options=-c search_path=myschema -c lock_timeout=5000;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("search_path=myschema", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("lock_timeout=5000", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_MalformedLeadingToken_SkipsToNextValidToken()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // "garbage" does not start with "-c " — the parser must skip past it to the next
+        // real "-c " token instead of throwing or discarding the whole Options string.
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;" +
+                 "Options=garbage -c search_path=myschema;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("search_path=myschema", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_MalformedTokenWithNoValidPrefixAnywhere_FallsBackToBaseline()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        // No "-c " appears anywhere — the skip-forward search must terminate the parse loop
+        // (not throw), leaving only the required baseline keys in the merged result.
+        var cs = "Host=localhost;Database=mydb;Username=u;Password=p;" +
+                 "Options=completely malformed value with no dash-c token;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("client_min_messages=warning", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // =========================================================================
+    // ConfigureSetValuedParameter — Npgsql array parameter element-type mapping
+    // =========================================================================
+
+    [Fact]
+    public void ConfigureSetValuedParameter_ParameterHasNoNpgsqlDbTypeProperty_ReturnsWithoutThrowing()
+    {
+        var parameter = new fakeDbParameter();
+
+        _dialect.ConfigureSetValuedParameter(parameter, new long[] { 1L, 2L });
+
+        // No NpgsqlDbType-shaped property exists on fakeDbParameter — the method must no-op.
+        Assert.Equal(default, parameter.DbType); // untouched default, not overwritten
+    }
+
+    [Fact]
+    public void ConfigureSetValuedParameter_PropertyExistsButNotEnum_ReturnsWithoutThrowing()
+    {
+        var parameter = new NonEnumNpgsqlDbTypeParameter();
+
+        _dialect.ConfigureSetValuedParameter(parameter, new[] { "a", "b" });
+
+        Assert.Equal(0, parameter.NpgsqlDbType); // untouched — property type isn't an enum
+    }
+
+    [Theory]
+    [InlineData(typeof(long), FakeNpgsqlArrayDbType.Bigint)]
+    [InlineData(typeof(short), FakeNpgsqlArrayDbType.Smallint)]
+    [InlineData(typeof(string), FakeNpgsqlArrayDbType.Text)]
+    [InlineData(typeof(Guid), FakeNpgsqlArrayDbType.Uuid)]
+    [InlineData(typeof(bool), FakeNpgsqlArrayDbType.Boolean)]
+    [InlineData(typeof(decimal), FakeNpgsqlArrayDbType.Integer)] // unmapped element type falls back to Integer
+    public void ConfigureSetValuedParameter_MapsElementTypeToExpectedNpgsqlDbType(Type elementType, FakeNpgsqlArrayDbType expectedElementFlag)
+    {
+        var parameter = new FakeNpgsqlArrayParameter();
+        var value = Array.CreateInstance(elementType, 2);
+
+        _dialect.ConfigureSetValuedParameter(parameter, value);
+
+        var expectedCombined = expectedElementFlag | FakeNpgsqlArrayDbType.Array;
+        Assert.Equal(expectedCombined, parameter.NpgsqlDbType);
+        Assert.Equal(expectedElementFlag.ToString().ToLowerInvariant() + "[]", parameter.DataTypeName);
+    }
+
+    [Fact]
+    public void ConfigureSetValuedParameter_EnumHasNoArrayMember_CatchesArgumentExceptionAndLeavesParameterUnchanged()
+    {
+        var parameter = new NoArrayMemberParameter();
+        var originalDbType = parameter.NpgsqlDbType;
+
+        _dialect.ConfigureSetValuedParameter(parameter, new long[] { 1L });
+
+        // "Array" has no member on this enum — Enum.Parse throws ArgumentException, which the
+        // method must swallow, leaving the parameter's NpgsqlDbType/DataTypeName untouched.
+        Assert.Equal(originalDbType, parameter.NpgsqlDbType);
+        Assert.Equal(string.Empty, parameter.DataTypeName);
+    }
+
+    [Flags]
+    public enum FakeNpgsqlArrayDbType
+    {
+        Bigint = 1,
+        Smallint = 2,
+        Text = 4,
+        Uuid = 8,
+        Boolean = 16,
+        Integer = 32,
+        Array = 64
+    }
+
+    private sealed class FakeNpgsqlArrayParameter : DbParameter
+    {
+        public FakeNpgsqlArrayDbType NpgsqlDbType { get; set; }
+        public string DataTypeName { get; set; } = string.Empty;
+
+        public override DbType DbType { get; set; }
+        public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
+        public override bool IsNullable { get; set; }
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
+        public override bool SourceColumnNullMapping { get; set; }
+        public override int Size { get; set; }
+        public override void ResetDbType() { }
+    }
+
+    private enum NoArrayEnum
+    {
+        Bigint = 1
+        // Deliberately no "Array" member — forces Enum.Parse(..., "Array", ...) to throw.
+    }
+
+    private sealed class NoArrayMemberParameter : DbParameter
+    {
+        public NoArrayEnum NpgsqlDbType { get; set; }
+        public string DataTypeName { get; set; } = string.Empty;
+
+        public override DbType DbType { get; set; }
+        public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
+        public override bool IsNullable { get; set; }
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
+        public override bool SourceColumnNullMapping { get; set; }
+        public override int Size { get; set; }
+        public override void ResetDbType() { }
+    }
+
+    private sealed class NonEnumNpgsqlDbTypeParameter : DbParameter
+    {
+        public int NpgsqlDbType { get; set; } // not an enum — must be ignored by the guard check
+
+        public override DbType DbType { get; set; }
+        public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
+        public override bool IsNullable { get; set; }
+        [AllowNull] public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
+        [AllowNull] public override object Value { get; set; } = DBNull.Value;
+        public override bool SourceColumnNullMapping { get; set; }
+        public override int Size { get; set; }
+        public override void ResetDbType() { }
+    }
+
     // Test helper classes
 
     private class TestConnection : DbConnection
