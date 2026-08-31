@@ -368,6 +368,92 @@ public class DatabaseContextAsyncCreationTests
         Assert.Equal(SupportedDatabase.PostgreSql, context.Dialect.DatabaseType);
     }
 
+    // Coverage: the DbDataSource-based CreateAsync overload's own null-guard (separate from the
+    // connection-string-based overload below) — never exercised anywhere in the existing suite.
+    [Fact]
+    public async Task CreateAsync_WithConfigurationAndNullDataSource_ThrowsArgumentNullException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Host=localhost;Database=test;EmulatedProduct=PostgreSql"
+        };
+
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await DatabaseContext.CreateAsync(config, (DbDataSource)null!, factory);
+        });
+
+        Assert.Equal("dataSource", ex.ParamName);
+    }
+
+    // Coverage: the (connectionString, providerFactory-name) CreateAsync overload's two guard
+    // clauses — neither the connectionString nor the providerFactory-name null check was
+    // previously exercised.
+    [Fact]
+    public async Task CreateAsync_WithNullConnectionString_ThrowsArgumentNullException()
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await DatabaseContext.CreateAsync((string)null!, "System.Data.SqlClient");
+        });
+
+        Assert.Equal("connectionString", ex.ParamName);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithNullProviderFactoryName_ThrowsArgumentNullException()
+    {
+        var ex = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await DatabaseContext.CreateAsync("Host=localhost;Database=test", (string)null!);
+        });
+
+        Assert.Equal("providerFactory", ex.ParamName);
+    }
+
+    // Coverage: TestConnectAsync's generic `catch (Exception ex)` path for the read-only
+    // validation connection — only the OperationCanceledException-propagation sibling
+    // (CreateAsync_CancelledDuringReadOnlyValidationOpen_...) existed before this.
+    [Fact]
+    public async Task CreateAsync_ReadOnlyValidationOpenFails_ThrowsConnectionFailedExceptionWithReadOnlyPhase()
+    {
+        var writeConnectionString = "Host=localhost;Database=ro_validation_fail_write;EmulatedProduct=PostgreSql";
+        var readConnectionString = "Host=localhost;Database=ro_validation_fail_read;EmulatedProduct=PostgreSql";
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = writeConnectionString,
+            ReadOnlyConnectionString = readConnectionString,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        // Probe construction (no injected failure) to learn the exact ConnectionString the
+        // read-only-validation connection ends up carrying — same technique as the cancellation
+        // sibling test above.
+        var probingFactory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        await using (await DatabaseContext.CreateAsync(config, probingFactory))
+        {
+        }
+
+        var probedReadConnectionString = probingFactory.CreatedConnections
+            .Select(c => c.ConnectionString)
+            .First(cs => cs != null && cs.Contains("ro_validation_fail_read", StringComparison.Ordinal))!;
+
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        factory.SetFailOnOpenForConnectionString(
+            probedReadConnectionString,
+            new InvalidOperationException("Simulated read-only validation open failure."));
+
+        var ex = await Assert.ThrowsAsync<ConnectionFailedException>(async () =>
+        {
+            await DatabaseContext.CreateAsync(config, factory);
+        });
+
+        Assert.Equal("ReadOnlyValidation", ex.Phase);
+        Assert.Equal("ReadOnly", ex.Role);
+    }
+
     private sealed class BlockingAsyncDbProviderFactory : DbProviderFactory
     {
         private readonly fakeDbFactory _inner;
