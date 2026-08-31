@@ -192,4 +192,50 @@ public class CompiledBinderFactoryTests
         Assert.Single(parameters);
         Assert.Equal((int)Status.Inactive, Convert.ToInt32(parameters[0].Value));
     }
+
+    private static string InvokeSerializeJsonValue(object value, JsonSerializerOptions options)
+    {
+        var method = typeof(CompiledBinderFactory<BinderEntity>).GetMethod(
+            "SerializeJsonValue",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        return (string)method.Invoke(null, new[] { value, options })!;
+    }
+
+    [Fact]
+    public void SerializeJsonValue_JsonDocument_ReturnsRawText()
+    {
+        using var doc = JsonDocument.Parse("{\"a\":1}");
+        var result = InvokeSerializeJsonValue(doc, JsonSerializerOptions.Default);
+        Assert.Equal("{\"a\":1}", result);
+    }
+
+    [Fact]
+    public void SerializeJsonValue_JsonElement_ReturnsRawText()
+    {
+        using var doc = JsonDocument.Parse("[1,2,3]");
+        var result = InvokeSerializeJsonValue(doc.RootElement, JsonSerializerOptions.Default);
+        Assert.Equal("[1,2,3]", result);
+    }
+
+    [Fact]
+    public void SerializeJsonValue_JsonValueObject_ReturnsAsString()
+    {
+        var jsonValue = pengdows.crud.types.valueobjects.JsonValue.Parse("{\"b\":2}");
+        var result = InvokeSerializeJsonValue(jsonValue, JsonSerializerOptions.Default);
+        Assert.Equal(jsonValue.AsString(), result);
+    }
+
+    [Fact]
+    public void SerializeJsonValue_PlainString_ReturnsSameString()
+    {
+        var result = InvokeSerializeJsonValue("already-json", JsonSerializerOptions.Default);
+        Assert.Equal("already-json", result);
+    }
+
+    [Fact]
+    public void SerializeJsonValue_ArbitraryObject_FallsBackToJsonSerializer()
+    {
+        var result = InvokeSerializeJsonValue(new BinderEntityNumericEnum { Id = 7 }, JsonSerializerOptions.Default);
+        Assert.Contains("\"Id\":7", result);
+    }
 }

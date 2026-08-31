@@ -181,22 +181,6 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
         throw new InvalidOperationException("Could not find generic CreateDbParameter method on ISqlDialect");
     }
 
-    private static MethodInfo ResolveJsonSerializeMethod(Type inputType)
-    {
-        var methods = typeof(JsonSerializer).GetMethods();
-        foreach (var m in methods)
-        {
-            if (m.Name == nameof(JsonSerializer.Serialize) &&
-                m.IsGenericMethod &&
-                m.GetParameters().Length == 2 &&
-                m.GetParameters()[1].ParameterType == typeof(JsonSerializerOptions))
-            {
-                return m.MakeGenericMethod(inputType);
-            }
-        }
-        throw new InvalidOperationException("Could not find JsonSerializer.Serialize<T>(T, options) overload.");
-    }
-
     private static string SerializeJsonValue(object value, JsonSerializerOptions options)
     {
         return value switch
