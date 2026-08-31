@@ -2,9 +2,15 @@ using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
-namespace pengdows.crud.Tests;
+namespace pengdows.crud.Tests.wrappers;
 
-public class ConnectionLocalStateTests
+// TrackedConnection implements IConnectionLocalState directly (LocalState => this, inlined to
+// avoid an allocation per connection checkout) rather than delegating to a separate class — these
+// tests exercise that inline implementation through the public LocalState property. Moved here
+// (and renamed) from ConnectionLocalStateTests.cs, which tested this exact behavior under a name
+// implying a standalone ConnectionLocalState class was involved; that class had zero production
+// call sites and was deleted as dead code.
+public class TrackedConnectionLocalStateTests
 {
     [Fact]
     public void Reset_ClearsPreparedShape_AndKeepsDisableFlag()
@@ -54,7 +60,7 @@ public class ConnectionLocalStateTests
             state.MarkShapePrepared($"SELECT {i} FROM t");
         }
 
-        // After 40 additions with cap 32, the first 8 entries (0–7) must have been evicted.
+        // After 40 additions with cap 32, the first 8 entries (0-7) must have been evicted.
         Assert.False(state.IsAlreadyPreparedForShape("SELECT 0 FROM t"), "Oldest shape should have been evicted");
         Assert.False(state.IsAlreadyPreparedForShape("SELECT 7 FROM t"), "Shape 7 should have been evicted");
         Assert.True(state.IsAlreadyPreparedForShape("SELECT 8 FROM t"), "Shape 8 should still be cached");

@@ -35,21 +35,17 @@ public class PublicApiSurfaceLeakageTests
 
     // CORE-032: mutator methods (DisablePrepare, Reset, MarkShapePrepared) are internal prepared-
     // statement bookkeeping a consumer should never call directly, and the only exposure point,
-    // ITrackedConnection.LocalState, is itself on an internal interface.
+    // ITrackedConnection.LocalState, is itself on an internal interface. The interface's only
+    // implementation is TrackedConnection itself (LocalState => this, inlined to avoid an
+    // allocation) — the standalone ConnectionLocalState class this comment used to also guard was
+    // found to be genuinely dead code (zero production call sites) and was deleted outright rather
+    // than kept public or internal.
     [Fact]
     public void IConnectionLocalState_IsNotPublic()
     {
         Assert.False(typeof(IConnectionLocalState).IsPublic,
             "IConnectionLocalState has no reachable consumer outside pengdows.crud — it must not " +
             "be part of the public API surface.");
-    }
-
-    [Fact]
-    public void ConnectionLocalState_IsNotPublic()
-    {
-        Assert.False(typeof(ConnectionLocalState).IsPublic,
-            "ConnectionLocalState is the concrete implementation of an internal-only interface — " +
-            "it must not be public either.");
     }
 
     // CORE-034: TypeCoercionOptions is never accepted or returned by anything in
