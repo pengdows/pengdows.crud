@@ -241,6 +241,16 @@ public class TestProvider : IAsyncTestProvider
             await TestPoolIsolation();
             Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
 
+            stepSw.Restart();
+            Console.WriteLine("Running SingleConnection ordinary-command isolation");
+            await TestSingleConnectionModeOrdinaryCommandIsolation();
+            Console.WriteLine($"  SingleConnection ordinary-command isolation: {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
+            Console.WriteLine("Running SingleWriter concurrent write-transaction serialization");
+            await TestSingleWriterModeConcurrentWriteTransactionSerialization();
+            Console.WriteLine($"  SingleWriter concurrent write-transaction serialization: {stepSw.ElapsedMilliseconds}ms");
+
             await RunAdditionalTestsAsync();
         }
         catch (Exception ex)
@@ -2569,6 +2579,26 @@ INSERT INTO {table} (
     /// pool isolation (e.g., Oracle where ApplicationNameSettingName is not supported).
     /// </summary>
     protected virtual Task TestPoolIsolation() => Task.CompletedTask;
+
+    /// <summary>
+    /// Investigates a user-reported concern: under DbMode.SingleConnection, does an ordinary
+    /// (non-transaction-bound) command issued while a transaction is open on the same pinned
+    /// connection actually block until the transaction completes (the documented
+    /// DatabaseContext.GetSingleConnectionTransactionGate contract), or does it silently
+    /// interleave with / execute inside the still-open transaction? No-op by default — SQLite is
+    /// the primary real-world user of this mode (DbMode.Best auto-selects it for :memory:) and is
+    /// where this is overridden.
+    /// </summary>
+    protected virtual Task TestSingleConnectionModeOrdinaryCommandIsolation() => Task.CompletedTask;
+
+    /// <summary>
+    /// Investigates a related user-reported concern: under DbMode.SingleWriter, does starting a
+    /// second write transaction while a first is still open correctly block (serialize) via the
+    /// write turnstile, or does something go wrong (silent connection reuse, deadlock)? No-op by
+    /// default — SQLite is the primary real-world user of this mode (DbMode.Best auto-selects it
+    /// for file-based databases) and is where this is overridden.
+    /// </summary>
+    protected virtual Task TestSingleWriterModeConcurrentWriteTransactionSerialization() => Task.CompletedTask;
 
     /// <summary>
     /// Deletes a single row by ID.

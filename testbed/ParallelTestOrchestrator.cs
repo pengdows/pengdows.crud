@@ -230,7 +230,7 @@ public class ParallelTestOrchestrator
             }
         }
 
-        AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new TestProvider(db, sp), 1);
+        AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new SqliteTestProvider(db, sp), 1);
         AddLocal("DuckDB", new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
         AddDocker("PostgreSQL", 5, image => new PostgreSqlTestContainer(image), (db, sp) => new PostgreSQLTestProvider(db, sp));
         AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
