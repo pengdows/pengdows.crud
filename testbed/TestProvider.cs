@@ -251,6 +251,11 @@ public class TestProvider : IAsyncTestProvider
             await TestSingleWriterModeConcurrentWriteTransactionSerialization();
             Console.WriteLine($"  SingleWriter concurrent write-transaction serialization: {stepSw.ElapsedMilliseconds}ms");
 
+            stepSw.Restart();
+            Console.WriteLine("Running transaction-rollback-on-killed-connection probe");
+            await TestTransactionRollbackOnKilledConnection();
+            Console.WriteLine($"  Transaction rollback on killed connection: {stepSw.ElapsedMilliseconds}ms");
+
             await RunAdditionalTestsAsync();
         }
         catch (Exception ex)
@@ -2599,6 +2604,21 @@ INSERT INTO {table} (
     /// for file-based databases) and is where this is overridden.
     /// </summary>
     protected virtual Task TestSingleWriterModeConcurrentWriteTransactionSerialization() => Task.CompletedTask;
+
+    /// <summary>
+    /// Empirically proves the invariant TransactionContext's dispose-triggers-rollback design
+    /// relies on but cannot itself guarantee: that the SERVER, not just the client, rolls back an
+    /// uncommitted transaction when its connection dies before Commit() is ever sent. Deliberately
+    /// bypasses pengdows.crud entirely and drives raw ADO.NET connections, because this is a claim
+    /// about the underlying engine's own crash-recovery behavior, not about anything pengdows.crud
+    /// controls. No-op by default: this only makes sense for a genuine client/server engine with
+    /// its own session-kill mechanism and a session identifier independent of the ADO.NET
+    /// connection object (SQL Server KILL, PostgreSQL pg_terminate_backend, MySQL/MariaDB KILL
+    /// CONNECTION, ...). Embedded/in-process engines (SQLite, DuckDB) have no separate server
+    /// process whose independent behavior could diverge from the client-side Dispose() path
+    /// already covered by TestSingleConnectionModeOrdinaryCommandIsolation.
+    /// </summary>
+    protected virtual Task TestTransactionRollbackOnKilledConnection() => Task.CompletedTask;
 
     /// <summary>
     /// Deletes a single row by ID.

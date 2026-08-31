@@ -1,6 +1,7 @@
 #region
 
 using System.Data;
+using Npgsql;
 using pengdows.crud;
 using pengdows.crud.attributes;
 
@@ -17,6 +18,105 @@ public class PostgreSQLTestProvider
         serviceProvider)
     {
         this.context = context;
+    }
+
+    /// <summary>
+    /// Raw-ADO.NET probe (bypasses pengdows.crud entirely): opens a transaction, inserts a row,
+    /// then terminates the owning backend from a second connection without ever calling Commit()
+    /// or Rollback() on the first. Verifies via a third connection that the insert did not
+    /// survive — proof that PostgreSQL itself rolls back an in-flight transaction when its backend
+    /// dies, independent of anything the client does.
+    /// </summary>
+    protected override async Task TestTransactionRollbackOnKilledConnection()
+    {
+        var rawCs = (context as DatabaseContext)?.RawConnectionString ?? context.ConnectionString;
+
+        await using (var drop = context.CreateSqlContainer("DROP TABLE IF EXISTS kill_probe"))
+        {
+            await drop.ExecuteNonQueryAsync();
+        }
+
+        await using (var create = context.CreateSqlContainer(
+                         "CREATE TABLE kill_probe (id INT PRIMARY KEY, val TEXT)"))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
+
+        try
+        {
+            NpgsqlConnection? connA = null;
+            try
+            {
+                connA = new NpgsqlConnection(rawCs);
+                await connA.OpenAsync();
+
+                int pid;
+                await using (var pidCmd = connA.CreateCommand())
+                {
+                    pidCmd.CommandText = "SELECT pg_backend_pid()";
+                    pid = Convert.ToInt32(await pidCmd.ExecuteScalarAsync());
+                }
+
+                var txnA = await connA.BeginTransactionAsync();
+                await using (var insertCmd = connA.CreateCommand())
+                {
+                    insertCmd.Transaction = txnA;
+                    insertCmd.CommandText = "INSERT INTO kill_probe (id, val) VALUES (1, 'should-vanish')";
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
+                // Never Commit()/Rollback() txnA — the server-side terminate below must be what
+                // undoes this insert, not our own client-side cleanup.
+                await using (var connB = new NpgsqlConnection(rawCs))
+                {
+                    await connB.OpenAsync();
+                    await using var killCmd = connB.CreateCommand();
+                    killCmd.CommandText = "SELECT pg_terminate_backend(@pid)";
+                    killCmd.Parameters.AddWithValue("pid", pid);
+                    await killCmd.ExecuteScalarAsync();
+                }
+            }
+            finally
+            {
+                if (connA != null)
+                {
+                    try { connA.Close(); } catch { /* backend already terminated server-side */ }
+                    try { await connA.DisposeAsync(); } catch { /* tearing down an already-terminated backend's internal state */ }
+                }
+            }
+
+            long count = -1;
+            for (var i = 0; i < 20; i++)
+            {
+                await using var connC = new NpgsqlConnection(rawCs);
+                await connC.OpenAsync();
+                await using var checkCmd = connC.CreateCommand();
+                checkCmd.CommandText = "SELECT COUNT(*) FROM kill_probe WHERE id = 1";
+                count = Convert.ToInt64(await checkCmd.ExecuteScalarAsync());
+                if (count == 0)
+                {
+                    break;
+                }
+
+                await Task.Delay(250);
+            }
+
+            if (count == 0)
+            {
+                CheckOk("PostgreSQL.TransactionRollbackOnKilledConnection",
+                    "  [TransactionRollbackOnKilledConnection] Terminating the backend mid-transaction rolled back the uncommitted insert server-side: OK");
+            }
+            else
+            {
+                CheckFail("PostgreSQL.TransactionRollbackOnKilledConnection",
+                    $"row survived a terminated backend's uncommitted transaction (count={count}) — server did not roll back on connection death");
+            }
+        }
+        finally
+        {
+            await using var cleanup = context.CreateSqlContainer("DROP TABLE IF EXISTS kill_probe");
+            await cleanup.ExecuteNonQueryAsync();
+        }
     }
 
     public override async Task CreateTable()
