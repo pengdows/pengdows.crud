@@ -331,7 +331,7 @@ This is intentional design — it allows "last modified" queries without checkin
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production-supported** — pool per operation, client-server databases |
-| `KeepAlive` | 1 | **Production-supported for single-machine/embedded deployments** — SQL Server LocalDB, where the sentinel connection keeps the engine from unloading between requests (not SQLite/DuckDB — those coerce to SingleWriter instead) |
+| `PreventDatabaseUnload` (`KeepAlive` is an obsolete alias) | 1 | **Production-supported for single-machine/embedded deployments** — SQL Server LocalDB, where the sentinel connection keeps the engine from unloading between requests (not SQLite/DuckDB — those coerce to SingleWriter instead) |
 | `SingleWriter` | 2 | **Production-supported** — file-based SQLite/DuckDB, serializes writes via turnstile governor |
 | `SingleConnection` | 4 | Every read and write serializes through one pinned connection. **Never production-suitable for `:memory:` SQLite/DuckDB** — see below. Narrower, durable-storage uses (e.g. Firebird embedded to a `.fdb` file) are structurally viable but currently lack any connection-repair path; treat as scoped/niche rather than general production. |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
@@ -341,7 +341,7 @@ This is intentional design — it allows "last modified" queries without checkin
 
 **`SingleConnection` against an in-memory database (`:memory:`) is not production-suitable, and this is structural, not a current limitation to be fixed.** The entire database lives inside that one connection's process memory: no independent persistence, no crash recovery, no backup, and it cannot survive a process restart or even a dropped connection (a fresh connection to the same `:memory:` string creates a new, empty database). Reserve `:memory:` for tests and ephemeral scratch data.
 
-**`KeepAlive` has zero to do with performance or optimization — it exists to work around one specific piece of external engine behavior.** SQL Server LocalDB automatically unloads the entire database (shuts its own engine instance down) once it observes no active connections for a while. Under plain `Standard` mode (open late, close early), a quiet period with no traffic lets the pool drain to zero open connections, LocalDB unloads, and the next request pays the cost of LocalDB relaunching and reattaching the database file before it can even open a connection. `KeepAlive`'s entire job is to prevent exactly that: it holds one pinned, idle connection open for the life of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. That sentinel connection is **never used to run a single command** — every real read and write still goes through its own fresh, ephemeral connection exactly like `Standard` mode. Removing the sentinel wouldn't slow down a single query; it would just let LocalDB unload during idle periods again. That's the whole feature.
+**`PreventDatabaseUnload` has zero to do with performance or optimization — it exists to work around one specific piece of external engine behavior.** SQL Server LocalDB automatically unloads the entire database (shuts its own engine instance down) once it observes no active connections for a while. Under plain `Standard` mode (open late, close early), a quiet period with no traffic lets the pool drain to zero open connections, LocalDB unloads, and the next request pays the cost of LocalDB relaunching and reattaching the database file before it can even open a connection. `PreventDatabaseUnload`'s entire job is to prevent exactly that: it holds one pinned, idle connection open for the life of the `DatabaseContext`, purely so LocalDB always sees at least one active connection and never decides to unload. That sentinel connection is **never used to run a single command** — every real read and write still goes through its own fresh, ephemeral connection exactly like `Standard` mode. Removing the sentinel wouldn't slow down a single query; it would just let LocalDB unload during idle periods again. That's the whole feature. The old name `KeepAlive` is retained only as an `[Obsolete]` compatibility alias.
 
 ## Transactions
 
@@ -432,7 +432,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `KeepAlive`)
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `PreventDatabaseUnload`)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
