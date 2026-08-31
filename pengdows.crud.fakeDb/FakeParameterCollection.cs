@@ -10,9 +10,10 @@ namespace pengdows.crud.fakeDb;
 public class FakeParameterCollection : DbParameterCollection
 {
     private readonly List<DbParameter> _params = new();
+    private readonly object _syncRoot = new();
 
     public override int Count => _params.Count;
-    public override object SyncRoot => new();
+    public override object SyncRoot => _syncRoot;
 
     public new DbParameter this[int index]
     {
@@ -20,11 +21,20 @@ public class FakeParameterCollection : DbParameterCollection
         set => _params[index] = value;
     }
 
-    public new DbParameter this[string parameterName] => _params.First(p => p.ParameterName == parameterName);
+    // Case-insensitive by parameter name, matching real ADO.NET provider parameter collections
+    // (e.g. SqlParameterCollection), which resolve names case-insensitively.
+    public new DbParameter this[string parameterName] =>
+        _params.First(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
 
     protected override void SetParameter(string parameterName, DbParameter value)
     {
-        throw new NotImplementedException();
+        var index = _params.FindIndex(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            throw new IndexOutOfRangeException(parameterName);
+        }
+
+        _params[index] = value;
     }
 
     public override int Add(object value)
@@ -40,7 +50,7 @@ public class FakeParameterCollection : DbParameterCollection
 
     public override bool Contains(string value)
     {
-        return _params.Any(p => p.ParameterName == value);
+        return _params.Any(p => string.Equals(p.ParameterName, value, StringComparison.OrdinalIgnoreCase));
     }
 
     public override void RemoveAt(int index)
@@ -50,7 +60,7 @@ public class FakeParameterCollection : DbParameterCollection
 
     public override void RemoveAt(string parameterName)
     {
-        _params.RemoveAll(p => p.ParameterName == parameterName);
+        _params.RemoveAll(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
     }
 
     protected override void SetParameter(int index, DbParameter value)
@@ -70,7 +80,7 @@ public class FakeParameterCollection : DbParameterCollection
 
     protected override DbParameter GetParameter(string parameterName)
     {
-        var list = _params.Where(p => p.ParameterName == parameterName).ToList();
+        var list = _params.Where(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase)).ToList();
         if (list.Count < 1)
         {
             throw new IndexOutOfRangeException(parameterName);
@@ -81,7 +91,7 @@ public class FakeParameterCollection : DbParameterCollection
 
     public override int IndexOf(string parameterName)
     {
-        return _params.FindIndex(p => p.ParameterName == parameterName);
+        return _params.FindIndex(p => string.Equals(p.ParameterName, parameterName, StringComparison.OrdinalIgnoreCase));
     }
 
     public override bool Contains(object value)

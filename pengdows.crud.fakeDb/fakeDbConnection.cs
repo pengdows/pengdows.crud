@@ -590,6 +590,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw _closeFailureException;
         }
 
+        // Matches real DbConnection.Close(), which is a no-op on an already-closed connection —
+        // and keeps CloseCount an accurate count of real caller-initiated closes rather than
+        // being inflated by an internal redundant call (e.g. Dispose(bool) unconditionally
+        // calling Close()).
+        if (_state == ConnectionState.Closed)
+        {
+            return;
+        }
+
         CloseCount++;
         var original = _state;
         _state = ConnectionState.Closed;
@@ -625,7 +634,16 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public override async ValueTask DisposeAsync()
     {
         DisposeCount++;
-        await CloseAsync();
+        try
+        {
+            await CloseAsync();
+        }
+        catch
+        {
+            // Dispose should not throw, even if Close is configured to fail — matches
+            // Dispose(bool)'s existing swallow-on-close-failure behavior.
+        }
+
         await base.DisposeAsync();
     }
 
