@@ -125,15 +125,21 @@ database-agnostic policy decoupled from connection identity — is in
   resolution with a singleton gateway, a fully custom `ITenantConnectionResolver` setup for a
   dynamic tenant list (no `AddMultiTenancy` call — see
   [`docs/examples/CustomTenantResolver-example.cs`](docs/examples/CustomTenantResolver-example.cs)
-  for a worked control-plane-database-backed resolver), the non-blocking `GetContextAsync` method,
-  lifecycle events, application-name composition, and the `Invalidate`/`InvalidateAll` primitives
-  (not a designed live-rotation feature — shutdown is the intended disposal path).
+  for a worked control-plane-database-backed resolver), the single-flight non-blocking
+  `GetContextAsync` method, `AcquireLease`/`AcquireLeaseAsync` (a reference-counted lease that
+  protects a tenant's context from a concurrent `Invalidate`/`InvalidateAll` disposing it while
+  still in use — closing the one gap the bare-reference methods have), lifecycle events,
+  application-name composition, and the `Invalidate`/`InvalidateAll` live-rotation recipe (a
+  genuinely supported pattern, not just an accepted-risk primitive, provided anything holding a
+  tenant context across an `await` uses a lease).
 - [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md) —
   the architectural contract behind context-per-tenant multi-tenancy: what's library-enforced
   (context/admission isolation) vs. deployment-assumed (database-per-tenant, tenant-identity
-  trust), tenant-ID case-insensitivity, and why application shutdown — not live invalidation — is
-  the only designed context-disposal path (including the one documented, accepted residual race
-  in `Invalidate`'s fast lookup path, for anyone who calls it outside a shutdown sequence anyway).
+  trust), tenant-ID case-insensitivity, the CAS-based lease refcount mechanism behind
+  `AcquireLease`/`AcquireLeaseAsync` (and why a plain `Interlocked.Increment` counter isn't safe
+  for it), and why `Invalidate`'s dictionary eviction is synchronous/immediate while actual context
+  disposal is dispatched asynchronously (confirmed empirically to matter for thread-pool health
+  under concurrent load, not just in theory).
 - [`docs/entity-mapping.md`](docs/entity-mapping.md) — complete reference for all 15
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
@@ -253,11 +259,13 @@ per tenant, not an injected `WHERE tenant_id = @tenant`), and no `TransactionSco
 (incompatible with its open-late/close-early connection philosophy by design). The context-per-tenant
 model itself — configuration shape, DI registration via `AddMultiTenancy`, request-time
 resolution, and lifecycle events — is documented in
-[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md). There is no designed live
-tenant-ejection/rotation feature — application shutdown (disposing the registry) is the intended
-way a tenant's context gets disposed; `Invalidate`/`InvalidateAll` exist and are tested but using
-them for live rotation is an application-level choice outside their designed use case, not a
-recommended pattern. The deeper architectural contract (exactly what's library-enforced vs.
+[`docs/connection/multitenancy.md`](docs/connection/multitenancy.md). Application shutdown
+(disposing the registry) is the simplest way a tenant's context gets disposed, but live tenant
+ejection/rotation while the app keeps running is a genuinely supported pattern too:
+`Invalidate`/`InvalidateAll` evict a tenant's cached entry immediately, and `AcquireLease`/
+`AcquireLeaseAsync` give any code path that holds a tenant's context across an `await` a
+reference-counted lease guaranteeing it won't be disposed by a concurrent rotation until released.
+The deeper architectural contract (exactly what's library-enforced vs.
 deployment-assumed, tenant-ID case rules, and `Invalidate`'s concurrency semantics) is in
 [`docs/connection/multitenancy-architecture.md`](docs/connection/multitenancy-architecture.md).
 Per-tenant

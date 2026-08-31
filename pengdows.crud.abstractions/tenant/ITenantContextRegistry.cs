@@ -11,6 +11,14 @@ public interface ITenantContextRegistry
     /// <summary>
     /// Retrieves a database context for the specified tenant.
     /// </summary>
+    /// <remarks>
+    /// Returns a bare reference with no protection against a concurrent <see cref="Invalidate"/>/
+    /// <see cref="InvalidateAll"/> disposing this exact context immediately after it's returned.
+    /// Fine for the common case — resolve, then immediately pass the result into one gateway call
+    /// in the same synchronous/async flow. If you hold the context across an <c>await</c> boundary,
+    /// or otherwise can't guarantee your usage completes atomically with respect to a concurrent
+    /// rotation, use <see cref="AcquireLease"/> instead.
+    /// </remarks>
     /// <param name="tenant">Tenant identifier.</param>
     /// <returns>The associated database context.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
@@ -28,14 +36,46 @@ public interface ITenantContextRegistry
     /// duration of context construction. An already-cached tenant resolves immediately, just
     /// like <see cref="GetContext"/>.
     /// </remarks>
+    /// <remarks>
+    /// Same bare-reference caveat as <see cref="GetContext"/> — see <see cref="AcquireLeaseAsync"/>
+    /// for a version that protects the returned context from a concurrent <see cref="Invalidate"/>/
+    /// <see cref="InvalidateAll"/>.
+    /// </remarks>
     /// <param name="tenant">Tenant identifier.</param>
     /// <param name="cancellationToken">
     /// Observed only while a not-yet-cached tenant's context is being created; has no effect
-    /// once the tenant is cached.
+    /// once the tenant is cached. If another concurrent caller is already constructing the same
+    /// not-yet-cached tenant, cancelling this token stops only this caller's own wait — it does
+    /// not cancel the shared in-flight construction other callers are still waiting on.
     /// </param>
     /// <returns>The associated database context.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
     public Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Acquires a reference-counted lease on the tenant's context, protecting it from being
+    /// disposed by a concurrent <see cref="Invalidate"/>/<see cref="InvalidateAll"/> until the
+    /// lease itself is disposed. Prefer this over <see cref="GetContext"/> when you hold the
+    /// context across an <c>await</c> boundary or otherwise need a guarantee stronger than
+    /// "nothing concurrent will rotate this tenant while I'm using it."
+    /// </summary>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <returns>A lease wrapping the tenant's context. Dispose it when done.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
+    public ITenantContextLease AcquireLease(string tenant);
+
+    /// <summary>
+    /// Asynchronous, non-blocking counterpart to <see cref="AcquireLease"/> — see
+    /// <see cref="GetContextAsync"/> for the non-blocking-construction contract this shares.
+    /// </summary>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <param name="cancellationToken">
+    /// Observed only while a not-yet-cached tenant's context is being created, or while waiting on
+    /// a shared in-flight construction another caller started; has no effect once resolved.
+    /// </param>
+    /// <returns>A lease wrapping the tenant's context. Dispose it when done.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
+    public Task<ITenantContextLease> AcquireLeaseAsync(string tenant, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Disposes and removes the cached context for the specified tenant.

@@ -22,96 +22,108 @@ This distinction matters for anyone evaluating the isolation guarantee:
 | Library-enforced | Deployment/caller responsibility |
 |---|---|
 | Each tenant's `IDatabaseContext` has independent, non-shared `PoolGovernor` instances — one tenant's connection saturation cannot consume another tenant's admission slots. | **Database-per-tenant is a convention the library assumes, not one it verifies.** Nothing in `TenantContextRegistry`/`TenantConnectionResolver` checks that tenant A's and tenant B's connection strings point at physically distinct databases. If two tenant configurations point at the same database, the library isolates the *connections/admission*, not the *data* — that's an operator configuration error, not something the library detects or prevents. |
-| One context per tenant identifier is created and cached (`ConcurrentDictionary<string, Lazy<IDatabaseContext>>` with `Lazy<T>.ExecutionAndPublication` — the factory runs at most once per key even under concurrent first access). | **Tenant identity itself must be trusted before it reaches the registry.** `GetContext(tenant)` does not authenticate anything; it is a lookup key. Resolving `tenant` from validated authentication/authorization state upstream is the caller's job. |
+| One context per tenant identifier is created and cached (`ConcurrentDictionary<string, TenantContextEntry>`, each entry wrapping a `Lazy<Task<IDatabaseContext>>` with `Lazy<T>.ExecutionAndPublication` — the factory runs at most once per key even under concurrent first access, whether the racing callers are sync `GetContext`/`AcquireLease` or async `GetContextAsync`/`AcquireLeaseAsync`, any mix). | **Tenant identity itself must be trusted before it reaches the registry.** `GetContext(tenant)` does not authenticate anything; it is a lookup key. Resolving `tenant` from validated authentication/authorization state upstream is the caller's job. |
 | Tenant-ID comparison is case-insensitive (`StringComparer.OrdinalIgnoreCase`) end to end — `TenantConnectionResolver`'s configuration dictionary and `TenantContextRegistry`'s context cache use the same comparer, so `"acme"` and `"ACME"` always resolve to exactly one cached context, never two independently governed ones (fixed as CORE-009; this is not an accidental convenience, it's an invariant relied on to prevent duplicate-context/cardinality-evasion bugs). | No other normalization (trimming, casing conventions beyond ordinal case-insensitivity, Unicode normalization) is applied to the tenant identifier. Two strings that differ only by leading/trailing whitespace, for example, are treated as different tenants. |
 | An optional `maxTenantCount` cap (`MultiTenantOptions.MaxTenantCount`) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
 | Object identity *is* tenant identity for lifecycle events — `ContextCreated`/`ContextRemoved` pass the `IDatabaseContext` instance itself, nothing else (see CORE-011's resolution: this is a deliberate architectural decision, not a missing feature — there is no separate tenant-ID field threaded through the API for a subscriber to correlate against). | A subscriber that needs a human-readable tenant label must derive or capture it itself (e.g. from the same call site that invoked `GetContext(tenantId)`), since the event does not supply one. |
 | Each `DatabaseContext`'s own operational logging (connection lifecycle, dialect detection, session settings, etc.) uses the `ILoggerFactory` passed to *that* context's constructor/`CreateAsync`, so per-tenant sinks/scopes work correctly for everything the context itself logs. | **`TypeCoercionHelper`'s diagnostic logging is process-wide, not per-tenant.** It's an `internal static` utility with one static `Logger`, set once via first-caller-wins semantics (`SetLoggerIfUnset`, race-free but not per-context) the first time any `DatabaseContext` is constructed in the process. In a deployment with distinct per-tenant `ILoggerFactory` instances, every tenant *except* the first one to construct has its type-coercion warnings/errors logged through the *first* tenant's logger — misattributed, not lost. If per-tenant attribution of coercion diagnostics specifically matters, don't rely on this logger for it. |
 
-## Context disposal: application shutdown, not live ejection, is the designed path
+## Context disposal: application shutdown, or live rotation via leases
 
-There is no designed, recommended product feature for ejecting or reconfiguring a tenant while the
-application keeps running. The intended way a tenant's `IDatabaseContext` gets disposed is
-application shutdown — disposing `ITenantContextRegistry` disposes every context it created. If a
-deployment needs a tenant gone or reconfigured, restarting with updated configuration is the
-supported path today; there is no live-rotation feature this architecture doc is describing as
-recommended.
+Application shutdown remains the simplest path — disposing `ITenantContextRegistry` disposes every
+context it created. But **live ejection/reconfiguration of a tenant while the application keeps
+running is a genuinely supported pattern**, not just an accepted-risk primitive, for callers that
+follow one rule: anything holding a tenant context across an `await` boundary acquires a lease
+(`AcquireLease`/`AcquireLeaseAsync`) instead of caching a bare `GetContext`/`GetContextAsync`
+reference. See [`multitenancy.md`](./multitenancy.md#protecting-against-concurrent-rotation-acquirelease-acquireleaseasync)
+for the caller-facing contract; this doc covers the mechanism.
 
-## `Invalidate`/`InvalidateAll` mechanics — an implemented primitive, described precisely, not endorsed for live use
+## `Invalidate`/`InvalidateAll` mechanics
 
-`TenantContextRegistry.Invalidate`/`InvalidateAll` exist, are real, and their concurrency behavior
-is deliberately hardened (CORE-009/010/011) — this section documents exactly what they do so that
-if an application does choose to call them outside a shutdown sequence, the caller understands the
-guarantees and gaps precisely, not so that doing so is a recommended pattern. It is a two-step,
-caller-driven action — there is no polling, no background refresh, and no eventual-consistency
-window baked into the registry itself:
+`TenantContextRegistry.Invalidate`/`InvalidateAll`'s concurrency behavior is deliberately hardened
+(CORE-009/010/011, the last now closed via leasing — see below). It is a two-step, caller-driven
+action — there is no polling, no background refresh, and no eventual-consistency window baked into
+the registry itself:
 
 1. `TenantConnectionResolver.Register(tenant, newConfig)` replaces the stored configuration
    snapshot for that tenant identifier. This alone has no effect on any already-cached context.
 2. `TenantContextRegistry.Invalidate(tenant)` (or `InvalidateAll()`) synchronously removes the
-   tenant's entry from the internal `ConcurrentDictionary` and, if a context had actually been
-   constructed for it (`Lazy<T>.IsValueCreated`), disposes that context and raises `ContextRemoved`
-   — all before `Invalidate` returns. There is no drain phase: `Invalidate` does not wait for
-   in-flight operations on that context to complete before disposing it. (`IDatabaseContext.Dispose`
-   itself does wait for its own outstanding pool leases to drain before releasing governors and
-   owned data sources — see `docs/architecture.md`'s Reader-as-Lease Model and Connection
-   Lifecycle Management sections for that contract. `Invalidate` triggers that same
-   disposal, it does not add a separate drain step of its own.)
+   tenant's entry from the internal `ConcurrentDictionary<string, TenantContextEntry>` — this part
+   is always immediate, before `Invalidate` returns, and is what makes the *next*
+   `GetContext`/`AcquireLease` call for that tenant construct a fresh context right away, never
+   observing the superseded entry.
+3. Actual **disposal** of the superseded context is a separate, asynchronous step:
+   `TenantContextEntry.MarkRemoved` disposes immediately if the entry is idle (no outstanding
+   leases) — via `TenantContextRegistry.ScheduleDisposeEntry`, which dispatches the actual
+   `context.Dispose()` call onto the thread pool rather than running it inline on the invalidating
+   caller's thread. This is a deliberate, empirically-motivated choice, not an incidental
+   implementation detail: `IDatabaseContext.Dispose()` can itself block synchronously (its own
+   pool-governor drain wait — see `docs/architecture.md`'s Reader-as-Lease Model and Connection
+   Lifecycle Management sections), and running that inline on whichever thread happens to call
+   `Invalidate`/release the last lease measurably contributed to thread-pool contention once many
+   concurrent lease/release/invalidate cycles were in flight — confirmed directly, not assumed.
+   If the entry was leased when `Invalidate` ran, disposal is deferred further still, until every
+   outstanding lease releases (see "Concurrency semantics" below).
 
-The next `GetContext(tenant)` call after invalidation constructs a brand-new context from
-whatever configuration `TenantConnectionResolver` holds at that moment — so rotation is
-**immediate from the registry's perspective** (the stale context is gone the instant `Invalidate`
-returns), not "eventual" in the sense of a background refresh loop, but also not a coordinated,
-zero-downtime handoff: any caller still holding a reference to the disposed context from before
-invalidation is on its own once that context's own connections are torn down.
+**Practical consequence:** `Invalidate`/`InvalidateAll` never block the calling thread, and evict
+from the lookup immediately — but do not assume the superseded context has already finished
+disposing by the time `Invalidate` returns, or even by the time a lease's `Dispose()`/`DisposeAsync()`
+returns. If you need to observe completion, subscribe to `ContextRemoved`.
 
 ## Concurrency semantics: in-flight requests racing `Invalidate`
 
-Two distinct races are relevant if `Invalidate` is ever called during live operation (again: not a
-recommended pattern, but the guarantees below hold regardless), and they have different outcomes:
-
 **Creation racing invalidation (closed).** If `Invalidate`/registry disposal races a concurrent
-`GetContext` call that is still in the middle of *constructing* a new context for that same
-tenant, the registry does not leak an orphaned, untracked context. `GetContext` re-verifies after
-construction that its `Lazy` instance is still the one registered for that key; if a racing
-`Invalidate` already evicted it, the just-built context is disposed as an orphan and the call
-retries. This is closed with deterministic tests (`TenantTests.cs`:
+`GetContext`/`AcquireLease` call that is still in the middle of *constructing* a new context for
+that same tenant, the registry does not leak an orphaned, untracked context. The bare-reference
+methods (`GetContext`/`GetContextAsync`) re-verify after construction that the `TenantContextEntry`
+they resolved is still the one registered for that key; if a racing `Invalidate` already evicted
+it, the caller discards its reference and retries — the entry's own `MarkRemoved`/disposal logic
+(not the caller) owns tearing down the orphaned context, immediately or once construction is
+observed complete. Closed with deterministic tests (`TenantTests.cs`:
 `Invalidate_RacingWithInFlightCreate_DoesNotLeakOrphanedContext`,
 `Dispose_RacingWithInFlightCreate_ThrowsInsteadOfLeakingOrphanedContext`).
 
-**Two concurrent `GetContextAsync` calls racing to construct the same new tenant (closed).**
-`GetContext`'s blocking construction runs inside a `Lazy<T>` factory delegate, so
-`LazyThreadSafetyMode.ExecutionAndPublication` alone prevents duplicate construction there.
-`GetContextAsync` can't use that mechanism — its construction is `await`ed *before* any dictionary
-mutation, since real I/O can't run inside a `Lazy<T>` factory without reintroducing a blocking wait
-on the calling thread. Instead, whichever caller installs its already-built context into the
-shared dictionary first (`ConcurrentDictionary.GetOrAdd`) wins; the loser's redundant,
-fully-constructed context is disposed as an orphan and that caller transparently receives the
-winner's context instead of its own. Closed with a deterministic test in
-`TenantContextRegistryAsyncTests.cs`
-(`GetContextAsync_CalledConcurrentlyForSameNewTenant_ResultsInExactlyOneCachedContext`, which also
-confirms a subsequent sync `GetContext` call for that tenant observes the same winning instance).
-Both methods share one cache — an already-cached tenant resolves identically and immediately from
-either method (`GetContextAsync_ForAlreadyCachedTenant_ReturnsSameInstanceAsSyncGetContext`). The
-dedup mechanism is shared code, so a genuine race between a blocking `GetContext` call and a
-concurrent `GetContextAsync` call for the same not-yet-cached tenant should resolve the same way,
-but that exact mixed-mode race isn't independently exercised by a dedicated test the way the
-async-vs-async case is.
+**Concurrent callers racing to construct the same new tenant (closed, true single-flight).**
+`GetContext`, `GetContextAsync`, `AcquireLease`, and `AcquireLeaseAsync` all resolve through the
+same `TenantContextEntry.LazyContext` — a `Lazy<Task<IDatabaseContext>>` under
+`LazyThreadSafetyMode.ExecutionAndPublication`. The factory delegate only has to *start* the async
+construction (return a `Task`, non-blocking) rather than block a thread to produce a value
+directly, so this single mechanism gives every caller — sync or async, in any mix — genuine
+single-flight construction: the underlying connection/dialect-detection work happens exactly once
+per tenant generation, regardless of how many callers race for it, with no redundant construction
+to discard afterward. (An earlier design awaited construction fully before racing to install the
+result, discarding the loser's already-built context as an orphan — that meant N concurrent callers
+for a brand-new tenant each paid full connection/detection cost. The unified `Lazy<Task<T>>`
+mechanism eliminates that waste entirely; there is no "loser" to construct redundantly.) Closed with
+deterministic tests in `TenantContextRegistryAsyncTests.cs`
+(`GetContextAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce`,
+`AcquireLeaseAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce`) and
+`TenantContextLeaseTests.cs` (`AcquireLease_ConcurrentReleaseAndInvalidateHammer_DisposesExactlyOnce`,
+driving the *synchronous* `AcquireLease` at high fan-out).
 
-**Lookup racing invalidation (a documented, open limitation — not closed).** If a caller's
-`GetContext` call hits the fast, already-cached path and receives a live `IDatabaseContext`
-reference, there is **no protection** against a concurrent `Invalidate`/`Dispose()` disposing that
-exact context immediately afterward. The caller's reference can become a reference to a disposed
-context between the moment `GetContext` returns and the moment the caller actually uses it. This
-is an inherent consequence of handing out a bare object reference rather than a
-reference-counted/leased handle, and closing it fully would require either a leased-context API
-shape (a real public-contract change) or resolving the registry's disposal-ownership model further
-— deliberately not attempted as of this writing (see CORE-010 in
-`docs/planning/future-work.md` for the exact investigation and why a bigger redesign was judged
-out of scope rather than half-done). Practically: a caller that holds a tenant context across an
-`await` boundary during which a concurrent rotation could plausibly occur should re-resolve via
-`GetContext` rather than caching the reference itself, since the registry provides no staleness
-signal short of the context throwing `ObjectDisposedException` on its next use.
+**Lookup racing invalidation (closed via `AcquireLease`/`AcquireLeaseAsync`).** The bare-reference
+methods (`GetContext`/`GetContextAsync`) still carry the original, narrower gap: a caller that hits
+the fast, already-cached path and receives a live `IDatabaseContext` reference has no protection
+against a concurrent `Invalidate`/`Dispose()` disposing that exact context immediately afterward —
+inherent to handing out a bare object reference with no refcount. **This is now closed for callers
+who need the guarantee**, via a lease: `TenantContextEntry` carries a CAS-based lease refcount
+(`TryAddLease`/`ReleaseLease`, with a reserved `int.MinValue` sentinel meaning "disposal already
+committed") so that acquiring a lease and a concurrent `Invalidate` marking the entry removed can
+never race into handing back an already-disposed context — whichever side's CAS commits first is
+authoritative, and `MarkRemoved` finding an outstanding lease defers disposal to that lease's
+eventual release rather than disposing out from under it. This required more than a plain
+`Interlocked.Increment` counter: an increment alone cannot distinguish "add a lease to a live
+entry" from "resurrect a reference to an entry that already committed to disposal" — the CAS
+against the `Dead` sentinel is what makes that distinction safe. Closed with deterministic tests in
+`TenantContextLeaseTests.cs` covering lease-protects-context-across-`Invalidate`, multiple
+concurrent leases requiring all releases before disposal, and a concurrent
+acquire/release/invalidate hammer asserting exactly one disposal per constructed context (the exact
+scenario that caught the plain-increment flaw during design review, before it shipped).
+`GetContext`/`GetContextAsync` keep their original bare-reference contract unchanged — no lease is
+taken, so `Invalidate`'s behavior for callers who don't opt in is exactly as before. Practically: a
+caller that holds a tenant context across an `await` boundary during which a concurrent rotation
+could plausibly occur should use `AcquireLease`/`AcquireLeaseAsync`, not cache a bare
+`GetContext`/`GetContextAsync` reference.
 
 **Registry-wide disposal.** This is fully closed, not a residual race: the registry's own
 `IsDisposed` flag flips atomically at the very start of `Dispose()`/`DisposeAsync()`, before any

@@ -19,6 +19,19 @@ namespace pengdows.crud.Tests;
 
 public class TenantTests
 {
+    // Invalidate's disposal (via TenantContextRegistry.ScheduleDisposeEntry) is dispatched onto
+    // the thread pool rather than run inline on the invalidating caller's thread, so it can lag
+    // slightly behind Invalidate returning. Poll with a generous bound instead of asserting
+    // immediately.
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+    }
+
     private sealed class StubResolver : ITenantConnectionResolver
     {
         private readonly IDatabaseContextConfiguration _cfg;
@@ -765,6 +778,13 @@ public class TenantTests
         Assert.Equal(1, factory.CallCount);
 
         registry.Invalidate("tenant-recreate");
+        await WaitUntilAsync(() =>
+        {
+            lock (eventLock)
+            {
+                return removedEvents.Count > 0;
+            }
+        });
         Assert.Single(removedEvents);
         Assert.True(original.IsDisposed);
 

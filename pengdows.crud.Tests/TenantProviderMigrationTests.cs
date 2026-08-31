@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -18,6 +19,19 @@ namespace pengdows.crud.Tests;
 // than at the unit level of any one component in isolation.
 public class TenantProviderMigrationTests
 {
+    // Invalidate's disposal (via TenantContextRegistry.ScheduleDisposeEntry) is dispatched onto
+    // the thread pool rather than run inline on the invalidating caller's thread, so it can lag
+    // slightly behind Invalidate returning. Poll with a generous bound instead of asserting
+    // immediately.
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+    }
+
     [Table("migrate_items")]
     private class MigrateItem
     {
@@ -75,6 +89,7 @@ public class TenantProviderMigrationTests
         });
 
         registry.Invalidate("migrate-me");
+        await WaitUntilAsync(() => removedEvents.Count > 0);
         Assert.Single(removedEvents);
         Assert.Same(contextA, removedEvents[0]);
         Assert.True(contextA.IsDisposed);

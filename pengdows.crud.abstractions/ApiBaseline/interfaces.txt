@@ -22,6 +22,7 @@ interface pengdows.crud.infrastructure.ISafeAsyncDisposableBase : System.IAsyncD
 interface pengdows.crud.isolation.IIsolationResolver
 interface pengdows.crud.metrics.IMetricsOptions
 interface pengdows.crud.tenant.ITenantConnectionResolver
+interface pengdows.crud.tenant.ITenantContextLease : System.IAsyncDisposable, System.IDisposable
 interface pengdows.crud.tenant.ITenantContextRegistry
 interface pengdows.crud.wrappers.ITrackedReader : System.Data.IDataReader, System.Data.IDataRecord, System.IAsyncDisposable, System.IDisposable
 method pengdows.crud.IAuditValueResolver::Resolve() -> pengdows.crud.IAuditValues
@@ -243,6 +244,8 @@ method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.cr
 method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.crud.enums.IsolationProfile, pengdows.crud.enums.IsolationResolutionPolicy) -> pengdows.crud.isolation.IsolationResolution
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
+method pengdows.crud.tenant.ITenantContextRegistry::AcquireLease(string) -> pengdows.crud.tenant.ITenantContextLease
+method pengdows.crud.tenant.ITenantContextRegistry::AcquireLeaseAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.tenant.ITenantContextLease>
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
 method pengdows.crud.tenant.ITenantContextRegistry::GetContextAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.IDatabaseContext>
 method pengdows.crud.tenant.ITenantContextRegistry::Invalidate(string) -> void
@@ -436,3 +439,4 @@ property pengdows.crud.metrics.IMetricsOptions::EnableApproxPercentiles : bool {
 property pengdows.crud.metrics.IMetricsOptions::LongConnectionThreshold : System.TimeSpan { get; }
 property pengdows.crud.metrics.IMetricsOptions::PercentileWindowSize : int { get; }
 property pengdows.crud.metrics.IMetricsOptions::SlowCommandThreshold : System.TimeSpan { get; }
+property pengdows.crud.tenant.ITenantContextLease::Context : pengdows.crud.IDatabaseContext { get; }

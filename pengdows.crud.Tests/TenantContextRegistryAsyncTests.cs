@@ -133,8 +133,13 @@ public class TenantContextRegistryAsyncTests
     }
 
     [Fact]
-    public async Task GetContextAsync_CalledConcurrentlyForSameNewTenant_ResultsInExactlyOneCachedContext()
+    public async Task GetContextAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce()
     {
+        // Regression for the duplicate-construction race: under the old "await full construction,
+        // then race to install" design, both concurrent callers paid the full connection/dialect-
+        // detection cost before one was thrown away. True single-flight (Lazy<Task<T>>-based) means
+        // the factory is invoked exactly once no matter how many callers race for the same
+        // not-yet-cached tenant.
         var cfg = MakeConfig();
         using var provider = (ServiceProvider)BuildProvider();
         using var creationStarted = new SemaphoreSlim(0, 2);
@@ -147,13 +152,39 @@ public class TenantContextRegistryAsyncTests
         var second = registry.GetContextAsync("tenant-race");
 
         await creationStarted.WaitAsync();
-        await creationStarted.WaitAsync();
         proceedWithCreation.Release(2);
 
         var results = await Task.WhenAll(first, second);
 
+        Assert.Equal(1, factory.CallCount);
         Assert.Same(results[0], results[1]);
         Assert.Same(results[0], registry.GetContext("tenant-race"));
+    }
+
+    [Fact]
+    public async Task AcquireLeaseAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce()
+    {
+        var cfg = MakeConfig();
+        using var provider = (ServiceProvider)BuildProvider();
+        using var creationStarted = new SemaphoreSlim(0, 2);
+        using var proceedWithCreation = new SemaphoreSlim(0, 2);
+        var factory = new BlockingAsyncContextFactory(creationStarted, proceedWithCreation);
+        await using var registry = new TenantContextRegistry(provider, new StubResolver(cfg), factory,
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var first = registry.AcquireLeaseAsync("tenant-lease-race");
+        var second = registry.AcquireLeaseAsync("tenant-lease-race");
+
+        await creationStarted.WaitAsync();
+        proceedWithCreation.Release(2);
+
+        var leases = await Task.WhenAll(first, second);
+
+        Assert.Equal(1, factory.CallCount);
+        Assert.Same(leases[0].Context, leases[1].Context);
+
+        await leases[0].DisposeAsync();
+        await leases[1].DisposeAsync();
     }
 
     [Fact]

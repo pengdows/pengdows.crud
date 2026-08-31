@@ -1170,6 +1170,11 @@ public class PengdowsMetricsObserverTests
         public void Invalidate(string tenant) => throw new NotSupportedException();
         public void InvalidateAll() => throw new NotSupportedException();
 
+        public ITenantContextLease AcquireLease(string tenant) => throw new NotSupportedException();
+
+        public Task<ITenantContextLease> AcquireLeaseAsync(string tenant, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public void SimulateContextCreated(IDatabaseContext ctx) => ContextCreated?.Invoke(ctx);
         public void SimulateContextRemoved(IDatabaseContext ctx) => ContextRemoved?.Invoke(ctx);
     }

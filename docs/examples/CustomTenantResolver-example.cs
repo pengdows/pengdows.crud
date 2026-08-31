@@ -16,10 +16,13 @@
 // - LoadAsync() populates/refreshes an internal ConcurrentDictionary-backed
 //   TenantConnectionResolver; GetDatabaseContextConfiguration delegates to it.
 // - RefreshTenantAsync(tenantId) demonstrates the two-step
-//   Register-then-Invalidate rotation pattern documented in
-//   multitenancy.md's "Invalidate/InvalidateAll" section — shown here for
-//   completeness, not as an endorsement of live rotation as a routine
-//   workflow (see that doc for the residual race this pattern accepts).
+//   Register-then-Invalidate rotation pattern documented in multitenancy.md's
+//   "Invalidate/InvalidateAll" section — a genuinely supported live-rotation
+//   workflow. Any caller holding the affected tenant's context across an
+//   await during the rotation should use AcquireLease/AcquireLeaseAsync
+//   instead of a bare GetContext/GetContextAsync reference (see multitenancy.md's
+//   "Protecting against concurrent rotation" section) so it isn't disposed
+//   out from under it mid-use.
 // - Program.cs wiring at the bottom shows the full "Option A" DI setup:
 //   keyed DbProviderFactory registrations, IDatabaseContextFactory, and
 //   ITenantContextRegistry — everything AddMultiTenancy would otherwise do
@@ -94,10 +97,12 @@ public sealed class SqlControlPlaneTenantResolver : ITenantConnectionResolver
     /// <summary>
     /// Re-reads one tenant's row and, if found, re-registers its configuration and invalidates the
     /// cached context so the next <c>GetContext</c> call picks up the change. This is the same
-    /// two-step Register-then-Invalidate sequence documented in multitenancy.md — shown here for
-    /// completeness, not as a routine live-rotation workflow. Read that doc's caveat about the
-    /// residual race (a caller already holding the pre-invalidation context reference) before
-    /// wiring this into an admin-triggered "update tenant" endpoint.
+    /// two-step Register-then-Invalidate sequence documented in multitenancy.md — a genuinely
+    /// supported live-rotation workflow when wired into an admin-triggered "update tenant"
+    /// endpoint. Any request already mid-flight against the pre-rotation context is safe only if
+    /// it acquired that context via <c>AcquireLease</c>/<c>AcquireLeaseAsync</c> rather than a bare
+    /// <c>GetContext</c>/<c>GetContextAsync</c> reference — see multitenancy.md's "Protecting
+    /// against concurrent rotation" section.
     /// </summary>
     public async Task RefreshTenantAsync(string tenantId, ITenantContextRegistry registry,
         CancellationToken cancellationToken = default)

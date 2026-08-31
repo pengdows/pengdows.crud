@@ -115,26 +115,28 @@ Multi-tenancy itself is **context-per-tenant**, not row-filtering — no injecte
 `WHERE tenant_id = @tenant`, and no separate tenant-ID concept anywhere in the API; the
 `IDatabaseContext` a caller gets back from `ITenantContextRegistry.GetContext(tenantId)` *is* the
 tenant's identity (`ContextCreated`/`ContextRemoved` pass only that context, no tenant-ID
-parameter). **There is no designed live tenant-ejection/rotation feature** — the intended way a
-tenant's context gets disposed is application shutdown (disposing the registry disposes every
-context it created). `TenantContextRegistry.Invalidate`/`InvalidateAll` exist and are tested
-(concrete `TenantConnectionResolver.Register(tenant, newConfig)`, not on the interface, followed by
-`registry.Invalidate(tenant)`), but using them for live rotation is an application-level choice
-outside their designed use case, not a recommended pattern — there is no drain phase and no
-protection for a caller that already holds a live context reference when a concurrent `Invalidate`
-disposes it (a documented, accepted limitation, not a bug, and one more reason shutdown-only
-disposal is the intended model). `ITenantContextRegistry.GetContextAsync(tenant, ct)` is the
-non-blocking counterpart to `GetContext` — same cache, same tenant, but a not-yet-cached tenant's
-construction doesn't block the calling thread; two concurrent `GetContextAsync` calls racing the
-same new tenant dedup to one winner, the loser's already-built context disposed as an orphan. A
-tenant list that isn't static configuration (loaded from a control-plane database, provisioned
-externally) skips `AddMultiTenancy` entirely: implement `ITenantConnectionResolver` yourself and
-register it plus `IDatabaseContextFactory`/`ITenantContextRegistry` directly — see
+parameter). Application shutdown (disposing the registry disposes every context it created) is the
+simplest disposal path, but **live tenant ejection/rotation while the app keeps running is a
+genuinely supported pattern**: `TenantContextRegistry.Invalidate`/`InvalidateAll` (concrete
+`TenantConnectionResolver.Register(tenant, newConfig)`, not on the interface, followed by
+`registry.Invalidate(tenant)`) evict a tenant's cached entry immediately, and — for any code path
+that holds the tenant's context across an `await` — `ITenantContextRegistry.AcquireLease(tenant)`/
+`AcquireLeaseAsync(tenant, ct)` return an `ITenantContextLease` (`IDisposable`/`IAsyncDisposable`,
+`.Context` property) that's guaranteed not to be disposed by a concurrent `Invalidate` until the
+lease itself is released — closing the one gap `GetContext`'s bare reference always had. For the
+common "resolve, then immediately use in the same flow" case, plain `GetContext`/`GetContextAsync`
+remain the simpler default (no lease needed). `GetContext`, `GetContextAsync`,
+`AcquireLease`, and `AcquireLeaseAsync` all share one single-flight construction mechanism — any
+mix of concurrent callers racing a not-yet-cached tenant converges on exactly one physical
+construction, never duplicate work. A tenant list that isn't static configuration (loaded from a
+control-plane database, provisioned externally) skips `AddMultiTenancy` entirely: implement
+`ITenantConnectionResolver` yourself and register it plus
+`IDatabaseContextFactory`/`ITenantContextRegistry` directly — see
 `docs/examples/CustomTenantResolver-example.cs` in the repo for a worked example. See
 `docs/connection/multitenancy.md` in the repo for the full configuration shape, DI wiring,
-request-time usage pattern, custom-resolver setup, and lifecycle-event contract, and
+request-time usage pattern, custom-resolver setup, lease usage, and lifecycle-event contract, and
 `docs/connection/multitenancy-architecture.md` for the deeper library-enforced-vs-deployment-assumed
-contract and exact `Invalidate`/`GetContextAsync` concurrency semantics.
+contract and exact `Invalidate`/lease concurrency semantics.
 
 ---
 

@@ -18,6 +18,13 @@ exact concurrency semantics of rotation and in-flight requests — see
 This doc covers the standard, configuration-driven path: `AddMultiTenancy`, `MultiTenantOptions`,
 `TenantConfiguration`, `ITenantConnectionResolver`, and `ITenantContextRegistry`.
 
+**If you're building a new application and there's any realistic chance it will ever need more
+than one tenant, adopt context-per-tenant from the start** — even if you launch with exactly one
+tenant. Retrofitting it later is a low-effort change (wrap your existing single connection string
+in a one-entry `MultiTenant:Tenants` list and resolve through `ITenantContextRegistry` instead of
+a single `IDatabaseContext`), but the earlier you adopt the pattern, the less application code ever
+has to be rewritten to stop assuming a single, ambient database connection.
+
 ## Configuration shape
 
 ```json
@@ -122,15 +129,46 @@ the same lookup-or-create job without blocking the caller's thread on a not-yet-
 var tenantContext = await registry.GetContextAsync(tenantId, cancellationToken);
 ```
 
-Both methods share the same cache — an already-cached tenant resolves immediately and identically
-from either method. For two concurrent `GetContextAsync` calls racing to construct the *same*
-not-yet-cached tenant, only one wins and installs its context; the other's redundant,
-already-constructed context is disposed as an orphan and that caller transparently receives the
-winner's context instead — never a leaked, uncached duplicate (see
-[`multitenancy-architecture.md`](./multitenancy-architecture.md#concurrency-semantics-in-flight-requests-racing-invalidate)
-for the exact mechanism, including how it differs from `GetContext`'s own dedup). `CancellationToken`
-is honored only while a not-yet-cached tenant's context is actually being constructed; it has no
-effect once the tenant is cached (there is nothing left to cancel).
+Both methods share one cache and one construction mechanism — an already-cached tenant resolves
+immediately and identically from either method, and concurrent callers racing to construct the
+*same* not-yet-cached tenant (any mix of `GetContext` and `GetContextAsync`) genuinely single-flight:
+the underlying connection/dialect-detection work happens exactly once, and every caller converges
+on the same resulting context — never duplicate construction, never a leaked orphan. This matters
+in a multi-tenant webservice specifically because a burst of concurrent first-requests for a
+brand-new tenant is a real, common pattern; single-flighting it avoids paying connection/detection
+cost N times for N simultaneous requests. `CancellationToken` is honored only for *your own* wait —
+if another caller is already constructing the same not-yet-cached tenant, cancelling your token
+stops your wait without cancelling that shared construction for whoever else is still waiting on it.
+
+## Protecting against concurrent rotation (`AcquireLease`/`AcquireLeaseAsync`)
+
+`GetContext`/`GetContextAsync` return a bare `IDatabaseContext` reference with no protection
+against a concurrent `Invalidate`/`InvalidateAll` disposing that exact context immediately after —
+fine for the common case (resolve, then immediately use it in the same synchronous/async flow), but
+not if you hold the reference across an `await` boundary or otherwise can't guarantee your usage
+completes atomically with respect to a concurrent rotation. `AcquireLease`/`AcquireLeaseAsync` close
+that gap:
+
+```csharp
+using var lease = registry.AcquireLease(tenantId);
+// or: await using var lease = await registry.AcquireLeaseAsync(tenantId, cancellationToken);
+
+await gateway.RetrieveOneAsync(orderId, lease.Context);
+// lease.Context is guaranteed not to be disposed by a concurrent Invalidate/InvalidateAll until
+// this lease itself is disposed, however many awaits happen in between.
+```
+
+The lease is a reference count on the tenant's context: `Invalidate` on an actively-leased tenant
+still removes it from the registry's lookup immediately (so the *next* `GetContext`/`AcquireLease`
+call gets a fresh context right away), but defers actually disposing the superseded context until
+every outstanding lease on it has been released. Multiple concurrent leases on the same tenant are
+independent — the context is only disposed once the *last* one releases. Dispose the lease as soon
+as you're done; holding it longer than necessary delays a concurrent rotation's actual cleanup.
+
+This is what makes live tenant ejection/rotation a genuinely supported pattern rather than an
+accepted-risk primitive: any code path that holds a tenant context across an await (a long-running
+operation, a stream, a background job) should acquire a lease for it; anywhere else, the simpler
+`GetContext`/`GetContextAsync` remain the right default.
 
 ## Request-time resolution and singleton-gateway usage
 
@@ -162,41 +200,44 @@ public class OrderService
 upstream, not taken directly from unvalidated user input. `GetContext` does not authenticate
 anything; it looks up (or lazily creates) the `IDatabaseContext` registered under that string.
 
-## Disposal: application shutdown is the intended path
+## Disposal: application shutdown, or live rotation via `Invalidate` + leases
 
-The primary, designed way a tenant's `IDatabaseContext` gets disposed is **application shutdown**
-— disposing `ITenantContextRegistry` itself (directly, or via normal DI container teardown) disposes
-every context it has created. There is currently no designed, recommended product feature for
-*live* tenant ejection or configuration rotation while the application keeps running. If your
-process needs a tenant gone or reconfigured, restarting it (or the relevant subset of it) with
-updated configuration is the supported path today.
+Application shutdown remains the simplest way a tenant's `IDatabaseContext` gets disposed —
+disposing `ITenantContextRegistry` itself (directly, or via normal DI container teardown) disposes
+every context it has created. But **live tenant ejection/rotation while the application keeps
+running is now a genuinely supported pattern**, not just an accepted-risk primitive, provided any
+code path that holds a tenant context across an `await` uses `AcquireLease`/`AcquireLeaseAsync`
+(see above) rather than caching a bare `GetContext`/`GetContextAsync` reference.
 
-## `Invalidate`/`InvalidateAll`: implemented primitives, not a designed live-rotation feature
-
-`ITenantContextRegistry` does expose `Invalidate(tenant)` and `InvalidateAll()`, and they are real,
-tested APIs — CORE-009/010/011 in `docs/planning/future-work.md` hardened their concurrency
-behavior. Documenting their mechanics here for completeness, **not** as a recommended workflow:
+## `Invalidate`/`InvalidateAll`: the live-rotation recipe
 
 ```csharp
 ((TenantConnectionResolver)resolver).Register("acme", newConfig); // Register is on the concrete
                                                                     // class, not the interface
-registry.Invalidate("acme"); // disposes and evicts the cached context, if one exists
-// The next GetContext("acme") call constructs a fresh context from the newly registered config.
+registry.Invalidate("acme"); // evicts the cached context immediately; disposes it once idle
+// The next GetContext("acme")/AcquireLease("acme") call constructs a fresh context from the
+// newly registered config, right away — it does not wait for the superseded context to finish
+// disposing.
 ```
 
-`InvalidateAll()` does the same for every tenant at once. Invalidation disposes and evicts
-synchronously — there is no partial/eventual window, and the next `GetContext` call is what
-triggers (re-)creation.
+`InvalidateAll()` does the same for every tenant at once. Eviction from the registry's lookup is
+always synchronous and immediate — the very next `GetContext`/`AcquireLease` call for that tenant
+never sees the superseded entry. **Actual disposal of the superseded context is asynchronous**:
+`Invalidate` never blocks the calling thread waiting for it, and if the entry was leased when
+`Invalidate` ran, disposal is deferred until every outstanding lease releases (see "Protecting
+against concurrent rotation" above). Even for an idle (no-lease) tenant, the underlying
+`DatabaseContext.Dispose()` call — which can itself block synchronously on its own pool-governor
+drain wait — is dispatched off the calling thread rather than run inline; confirmed empirically
+that this matters under real concurrent load, not just as a theoretical nicety (running it inline
+measurably contributed to thread-pool contention under many concurrent lease/release/invalidate
+cycles). Don't assume a tenant's context is already disposed the instant `Invalidate`/lease-`Dispose`
+returns — if you need to observe completion, subscribe to `ContextRemoved`.
 
-**Calling this during live operation is an application-level choice, not a vetted pattern**, and
-it carries a known, accepted residual race: a caller that already obtained a live context via the
-registry's fast lookup path has no protection against a concurrent `Invalidate` disposing that
-exact context immediately afterward (see `docs/planning/future-work.md`'s CORE-010 entry). That
-race is a real gap in the primitive's live-operation safety — one more reason application shutdown,
-not live invalidation, is the only currently-designed disposal trigger. If you do call `Invalidate`
-outside of a shutdown sequence, you are taking on that risk yourself; treat it as an
-application-specific decision, not something this library has designed and hardened for routine
-use.
+**The one residual gap, by design, not oversight:** `GetContext`/`GetContextAsync`'s bare-reference
+callers still have no protection against a concurrent `Invalidate` disposing the exact context they
+just received — that's precisely what `AcquireLease`/`AcquireLeaseAsync` exist to close. For the
+common "resolve, then immediately use in the same flow" pattern, the plain bare-reference methods
+remain simpler and are still the right default.
 
 ## Heterogeneous providers behind one shared gateway
 
@@ -252,12 +293,11 @@ tenant's dialect built the entry first silently dictate SQL for every other same
 when a dialect property is legitimately version-gated — exactly the MySQL 8.0.19-vs-8.0.33 scenario
 the integration test above exercises.
 
-### Cross-provider migration: what the mechanism would look like
+### Cross-provider migration: what the mechanism looks like
 
-There is no designed, recommended live-migration *feature* (see "Disposal: application shutdown is
-the intended path" above) — but it's worth being precise about what happens mechanically if an
-application chose to use `Register`+`Invalidate` for this anyway, since the answer is "nothing
-provider-specific breaks, and no stale-cache cleanup step exists to forget":
+It's worth being precise about what happens mechanically when an application uses `Register`+
+`Invalidate` to migrate a live tenant to a different provider: nothing provider-specific breaks,
+and no stale-cache cleanup step exists to forget.
 
 ```csharp
 // Tenant "acme" is moving from SQL Server to PostgreSQL.
@@ -269,7 +309,7 @@ var newConfig = new DatabaseContextConfiguration
 };
 
 ((TenantConnectionResolver)resolver).Register("acme", newConfig);
-registry.Invalidate("acme"); // application-level choice, not a vetted pattern — see caveat above
+registry.Invalidate("acme"); // safe under concurrent use — see the live-rotation sections above
 
 // The next GetContext("acme") call — from the very same shared gateway used by every other
 // tenant — constructs a context against PostgreSQL and the gateway emits PostgreSQL SQL for it,
@@ -281,8 +321,9 @@ await gateway.UpsertAsync(order, tenantContext);
 Because dialect-derived caches are keyed by dialect instance/fingerprint (not by tenant identity),
 the old SQL Server-shaped cache entries for "acme" simply stop being referenced once its context is
 disposed — there is no stale-cache cleanup step to remember, and no risk of PostgreSQL SQL landing
-on the old SQL Server connection or vice versa. This is a statement about what the *caches* do, not
-an endorsement of live invalidation as a migration strategy — the same CORE-010 caveat applies.
+on the old SQL Server connection or vice versa. Any code path that might still be mid-flight against
+the old context when this migration runs should hold an `AcquireLease` rather than a bare
+`GetContext` reference, so it finishes safely against the old provider instead of racing disposal.
 
 ## Lifecycle events
 
@@ -294,8 +335,12 @@ registry.ContextRemoved += ctx => logger.LogInformation("Tenant context removed:
 Both events pass the `IDatabaseContext` itself — there is no separate tenant-ID parameter. Since
 the context *is* the tenant's identity, a subscriber that needs to know "which tenant" already
 knows, because it's the same code path that called `GetContext(tenantId)` in the first place.
-`ContextRemoved` fires for `Invalidate`, `InvalidateAll`, **and** registry disposal (which disposes
-and raises the event for every context the registry has created) — not just the first two.
+`ContextRemoved` fires for `Invalidate`, `InvalidateAll`, a leased context's last `AcquireLease`
+release finding its tenant already invalidated, **and** registry disposal (which disposes and
+raises the event for every context the registry has created) — not just the first two. For
+`Invalidate`/`InvalidateAll`/lease-release, the event fires asynchronously relative to the call
+that triggered it (see "Disposal" above) — don't assume it has already fired by the time
+`Invalidate` or a lease's `Dispose`/`DisposeAsync` returns.
 
 ## Application-name composition
 
