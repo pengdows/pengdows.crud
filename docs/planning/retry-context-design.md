@@ -212,6 +212,35 @@ it's narrower than `future-work.md`'s original "arbitrary delegate" framing, and
 updating to match once this shape is adopted, so a reader doesn't expect read-then-branch (or
 write-then-use-generated-value) support that was never built.
 
+### The flip side of that same boundary: no non-database side-effect duplication on retry
+
+The same property that produces the scope boundary above — all application code runs exactly once,
+when the queue is built, and nothing app-level re-executes once `StartAsync()`'s retry loop takes
+over — buys a real, structural guarantee no delegate-based design can make. A delegate-based
+coordinator (Polly, EF Core's `IExecutionStrategy`) re-invokes the delegate body on every attempt,
+and that body is arbitrary code: it can log, call an external API, mutate in-memory state, alongside
+its actual database work. Every one of those non-database side effects gets re-executed on every
+retry too — which is exactly why EF Core's own execution-strategy docs put "non-idempotent operations
+are the caller's problem" in bold text. They cannot structurally rule this out; a delegate can do
+anything.
+
+Under the queue shape, there is no delegate body to re-run — `StartAsync()`'s retry loop only ever
+replays an already-built `ISqlContainer`. The class of bug Polly/EF Core explicitly disclaim
+(retrying duplicates a log line, an API call, a counter increment) is **structurally impossible**
+here, not just discouraged by caller discipline. The only thing a retry can possibly duplicate is
+the SQL command itself landing on the server twice — which means shortcoming #1 isn't just the one
+blocking gap anymore, it is now the *entire* idempotency surface of this design. There is no other
+side-effect category left in scope to worry about, because there is no other code left in scope to
+re-run. Solve commit ambiguity for a bare SQL command/transaction and the design's idempotency story
+is complete — a materially smaller and better-bounded problem than "any arbitrary code might not be
+idempotent," which is what a delegate-shaped retry coordinator has to live with forever.
+
+This also simplifies what the executor actually has to *know* to be built: nothing about entities,
+gateways, or business rules — just a loop over `ISqlContainer`s, `DatabaseException.IsTransient`
+classification, and backoff. The entity-CRUD story above ("Entity CRUD composes for free") is purely
+a fact about how some containers in the queue happen to have been built; the executor itself doesn't
+need to care.
+
 ### Transient exception classification
 
 No new work needed here — `DatabaseException.IsTransient` (verified:
@@ -245,6 +274,12 @@ a feature that silently duplicates writes.
      retried past a commit attempt; or
    - surface an explicit "commit outcome unknown" terminal result distinct from ordinary failure,
      so the caller can decide rather than the library guessing.
+
+   **This is now the entire idempotency surface of the design, not one gap among several.** Because
+   no delegate is ever re-invoked (see "The flip side of that same boundary" above), a retry cannot
+   duplicate anything except the SQL command itself — there is no other side-effect category left in
+   scope. Solving commit ambiguity for a bare SQL command/transaction closes the design's idempotency
+   story completely.
 2. **RESOLVED by the queue shape — audit-rollback no longer needs a generic snapshot/restore
    mechanism.** The original concern: `RestoreAuditSnapshot` was described as if it were an
    existing, generically callable utility, when what actually exists (verified:
@@ -386,6 +421,7 @@ specifically should block starting on backoff mechanics until it has a decided a
 | **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Not yet decided — **blocking gap, see shortcoming #1** |
 | **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Not a rollback problem under the queue shape at all — commands are fully built (audit fields stamped once) before `StartAsync()` runs, so there's no shared mutable state to restore — see shortcoming #2 |
 | **Intermediate reads/generated-value writes affecting later commands, within one retry unit** | Fully supported — the retried delegate can read, branch, write, and use a just-generated ID freely | Same | **Not supported** — the queue must be fully built before execution starts, so neither a read result nor a DB-generated `Id` from an earlier queued command is available to a later one; see "Deliberate scope boundary" above |
+| **Non-database side-effect duplication on retry** (logging, external API calls, in-memory state mutations inside the retried unit) | Caller's problem entirely — the delegate is arbitrary code, re-invoked on every attempt; EF Core's docs put this in bold as the caller's responsibility for the same reason | Same | **Structurally impossible** — no delegate is re-invoked; a retry only ever replays an already-built `ISqlContainer`, so the only thing that can be duplicated is the SQL command itself (shortcoming #1's scope, and now its *entire* scope) — see "The flip side of that same boundary" above |
 
 Polly (used correctly, with a transaction scoped inside the retried delegate) is a legitimate,
 pool-safe choice today for an application that's willing to get that scoping right itself and
