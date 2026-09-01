@@ -198,29 +198,61 @@ tenants, see `docs/sql-container-templates.md`). "Build something now and hand i
 that decides when, and how many times, it actually runs" is a third reason, and `RetryContext` is
 the first concrete design that actually needs it.
 
+### Execution mechanism: `Clone(IDatabaseContext)` retargets queued templates, resolving two open questions
+
+Specified directly (2026-08-31, later same day) against the two remaining shortcoming-#3
+sub-questions below: how replay works, and what `RetryType.Sequential`'s transaction boundary is.
+The governing principle is the same one `ITransactionContext` already follows — a command executes
+against whichever context it is bound to, transaction or not, never against a different one — and
+`ISqlContainer.Clone(IDatabaseContext)` (already documented: "reuse SQL structure with different
+params or context... can also clone across a different `IDatabaseContext`") is the existing
+mechanism that lets one already-built container be retargeted to a different context without
+rebuilding it.
+
+- **Every queued container is built, and stays, bound to the plain parent context — never a
+  transaction.** `rc.CreateSqlContainer()`/Tier-1 `BuildX()` calls produce containers against the
+  underlying `IDatabaseContext`, not against any transaction. These are immutable templates; they
+  are never themselves executed or mutated by the retry loop.
+- **`RetryType.Transactional` execution:** `StartAsync()` begins a transaction via the parent
+  context's normal `BeginTransactionAsync()`. For each queued template, it produces
+  `sc.Clone(txn)` — a copy retargeted at that transaction — and executes the clone within it. If
+  every clone succeeds, commit. On a transient failure: roll back and dispose that transaction,
+  back off, then on the next attempt begin a **fresh** transaction and re-clone the **same original,
+  untouched templates** into it, restarting the whole queue from the first command. The templates
+  never change across attempts — only which transaction they get cloned into does.
+- **`RetryType.Sequential` execution: no transaction at all, and none is needed.** Each queued
+  template executes directly against the plain parent context, one at a time — there is no reason to
+  wrap it in an explicit transaction, because a single statement executed without one is already
+  atomically applied by the provider itself. This resolves the "one commit per successful command,
+  or one shared transaction with a cursor?" question from a different direction than either option
+  originally offered: there is no `.NET` transaction object involved in `Sequential` mode at all. A
+  command that succeeds is removed from the queue; one that fails transiently is retried (re-cloned
+  and re-executed against the plain context, not a transaction) with backoff, up to the retry budget.
+
 ### Dual retry modes, both queue-driven
 
-- **`RetryType.Transactional`** — the whole queue runs inside **one transaction**, all-or-nothing.
-  On a transient failure (`DatabaseException.IsTransient == true`) at any point: roll back, dispose
-  the transaction/connection lease immediately (returning its governor permit), sleep with
-  decorrelated exponential jitter while holding **zero** connection slots, then retry the **entire
-  queue from the first command**, in a fresh transaction opened via the normal public
-  `BeginTransactionAsync` (so re-admission goes back through the real fairness turnstile, not
-  around it).
-- **`RetryType.Sequential`** — commands execute **one at a time**. A command that succeeds is
-  **removed from the queue** and never re-executed. A command that fails transiently retries (with
-  backoff, holding zero slots between attempts) up to the configured retry budget. The loop
-  terminates on exactly one of three conditions:
+- **`RetryType.Transactional`** — the whole queue runs inside **one transaction**, all-or-nothing,
+  per the execution mechanism above. On a transient failure (`DatabaseException.IsTransient == true`)
+  at any point: roll back, dispose the transaction/connection lease immediately (returning its
+  governor permit), sleep with decorrelated exponential jitter while holding **zero** connection
+  slots, then retry the **entire queue from the first command**, in a fresh transaction opened via the
+  normal public `BeginTransactionAsync` (so re-admission goes back through the real fairness
+  turnstile, not around it).
+- **`RetryType.Sequential`** — commands execute **one at a time against the plain parent context, no
+  transaction involved** (see execution mechanism above). A command that succeeds is **removed from
+  the queue** and never re-executed. A command that fails transiently retries (with backoff, holding
+  zero slots between attempts) up to the configured retry budget. The loop terminates on exactly one
+  of three conditions:
   a. the queue is empty — every command eventually succeeded;
   b. an unrecoverable (non-transient) exception — stop immediately, whatever remains in the queue
      never runs;
   c. the retry budget is exhausted for the command currently being retried — stop.
 
-  Open questions this raises, not yet decided (see shortcoming #3 below): does each command commit
-  in its own transaction as it succeeds (matching "items `1..K-1` stay committed and are never
-  re-executed" from the original phrasing), or does the whole queue share one long-lived
-  transaction with a cursor advancing through it? And on termination via (b) or (c), what does the
-  caller get back — which commands succeeded, which one failed and why, and which never ran?
+  The transaction-boundary question this used to raise is answered above: neither "commit per
+  command" nor "shared transaction with a cursor" — no `.NET` transaction object is involved for
+  `Sequential` at all, since a single statement without one is already atomic. Still open (see
+  shortcoming #3 below): on termination via (b) or (c), what does the caller get back — which
+  commands succeeded, which one failed and why, and which never ran?
   Neither is specified yet.
 
 ### Deliberate scope boundary: no intermediate reads *or generated-value writes* inside one retry unit
@@ -239,6 +271,19 @@ a general-purpose "retry an arbitrary unit of work" wrapper. That's a legitimate
 it's narrower than `future-work.md`'s original "arbitrary delegate" framing, and that framing needs
 updating to match once this shape is adopted, so a reader doesn't expect read-then-branch (or
 write-then-use-generated-value) support that was never built.
+
+**This should not be written up as pure cost, though.** To someone arriving from EF Core's
+`IExecutionStrategy` — where the retried delegate can read, branch, and write freely — the inability
+to do that here reads as a step backward. Against this project's own stated philosophy (CLAUDE.md:
+"No LINQ, no tracking, no surprises — explicit SQL control"), it's arguably the *better* control, not
+a compromise grudgingly accepted for the sake of the other guarantees. A caller can look at the queue
+immediately before `StartAsync()` and know, completely and exactly, every command and every parameter
+value that will be attempted, in order — nothing dynamic is decided mid-retry based on what a prior
+attempt happened to read. That's the same determinism that makes the side-effect-duplication
+guarantee below possible in the first place: it isn't a separate, unrelated tradeoff sitting next to
+the boundary, it's the same property viewed from the other side. A design that let you branch on
+intermediate reads would necessarily reintroduce exactly the kind of per-attempt unpredictability the
+rest of this library is built to avoid.
 
 ### The flip side of that same boundary: no non-database side-effect duplication on retry
 
@@ -336,12 +381,13 @@ a feature that silently duplicates writes.
    for free, since those methods already do nothing but call `_context.CreateSqlContainer()`. Tier-3
    convenience methods (`CreateAsync`/`UpdateAsync`/`UpsertAsync`/`DeleteAsync`) are out of scope for
    the queue, because their "execute now, return a real result" contract cannot be honored under
-   deferred execution — see "Entity CRUD composes for free" above. What the shape decision does *not*
-   yet answer:
-   - Is retry of a single command implemented via `ISqlContainer.Clone()` (a fresh `DbCommand` per
-     attempt, reusing the already-bound parameter values) or some other mechanism?
-   - `RetryType.Sequential`'s transaction boundary — one commit per successful command, or one
-     shared transaction with a cursor? (See "Dual retry modes" above.)
+   deferred execution — see "Entity CRUD composes for free" above. **Also resolved (2026-08-31,
+   later same day):** replay is `ISqlContainer.Clone(IDatabaseContext)`, retargeting an untouched
+   original template at whatever context/transaction the current attempt needs, and
+   `RetryType.Sequential` has no transaction boundary question at all — no `.NET` transaction object
+   is involved for it, since each templated command executes directly against the plain parent
+   context and a single statement without an explicit transaction is already atomic. See "Execution
+   mechanism" above. What the shape decision does *not* yet answer:
    - What return shape reports partial progress when `Sequential` stops on an unrecoverable error or
      exhausted retry budget — succeeded/failed/never-ran per command?
    - This shape is deliberately narrower than "retry an arbitrary unit of work" — see "Deliberate
@@ -412,17 +458,40 @@ a feature that silently duplicates writes.
    `InfrastructureTimeoutExceptionIdentityTests.cs`). The design should state explicitly that
    cancellation during the backoff `Task.Delay` propagates unwrapped, consistent with everything
    else in the library — that's the correct answer by house style, but it isn't written down.
-9. **Multi-tenancy interaction unaddressed, including lease lifecycle across backoff.** Each tenant
-   gets an independently-governed `DatabaseContext`/`PoolGovernor`
-   (`docs/connection/multitenancy-architecture.md`), so `RetryContext` presumably needs to be
-   constructed per-context like everything else context-scoped — but the design doesn't say so, or
-   whether retry policy (attempt counts, backoff bounds) should be tenant-configurable. Separately:
-   if an attempt is running under a leased tenant context (`ITenantContextLease` from
-   `AcquireLease`/`AcquireLeaseAsync`, see `docs/connection/multitenancy.md`), holding that lease
-   across a backoff sleep blocks live tenant eviction/rotation for the whole sleep; releasing and
-   reacquiring the lease across retries needs a decided answer for a tenant invalidated or rotated
-   during the sleep (most likely: fail closed with `ObjectDisposedException` on wake-up, matching how
-   every other post-invalidation access already behaves).
+9. **Multi-tenancy interaction — proposed analysis below, not yet confirmed (2026-08-31, pending
+   review).** Each tenant gets an independently-governed `DatabaseContext`/`PoolGovernor`
+   (`docs/connection/multitenancy-architecture.md`). Original framing of this shortcoming assumed
+   `RetryContext` would need explicit tenant-awareness and a decided answer for what happens to a
+   held `ITenantContextLease` across a backoff sleep. Working through it against the queue shape
+   suggests both halves may already be resolved, for reasons that need a second look before being
+   treated as settled:
+
+   - **Per-tenant scoping — proposed as structurally automatic, not just true today.**
+     `CreateRetryContext(RetryType)` is a method *on* `IDatabaseContext`, and each tenant already has
+     its own independently-governed context (context-per-tenant, not query filtering). There is no
+     way to obtain a `RetryContext` without already holding a tenant-scoped `IDatabaseContext` —
+     `tenantCtx.CreateRetryContext(...)` cannot accidentally produce something cross-tenant, because
+     the method has nothing else to construct from. `RetryContext` itself would have zero internal
+     tenant-awareness — it just holds whatever `IDatabaseContext` it was handed and never touches
+     `ITenantContextRegistry`/`ITenantContextLease` at all. If that holds up, this stays safe
+     permanently, not just at first release, because there is no tenant-specific code path inside it
+     for a future change to get wrong.
+   - **Lease-across-backoff — proposed as not actually a new gap, but the lease system already
+     working as designed.** If a caller wraps `rc.StartAsync()` in
+     `using var lease = await registry.AcquireLeaseAsync(tenantId)`, the lease stays held for the
+     whole retry sequence, backoff included. A held lease is *supposed* to block disposal until
+     released (CORE-010's fix: reference-counted, "multiple leases require all released" before
+     disposal proceeds) — an operator rotating that tenant mid-retry just waits longer, the same as
+     for any other slow leased operation, retry or not. That reads as a latency tradeoff, not a
+     correctness risk; nothing gets torn down out from under the retry. A caller using the
+     *bare-reference* path (`GetContext`, no lease) instead would widen the window for the
+     already-documented, already-tracked "lookup-during-invalidate" residual race from CORE-010 —
+     proportionally to how long the retry sequence runs — but that is a pre-existing tenant-registry
+     gap this design would not be introducing or worsening in kind, only exposing for longer.
+
+   **Still needs an explicit decision either way, confirmed or not:** whether retry policy (attempt
+   counts, backoff bounds) should be tenant-configurable — nothing above resolves that question, it's
+   orthogonal to the safety analysis.
 10. **The two exception-classification systems need an explicit alignment statement.**
     `ISqlDialect.AnalyzeException` (`DbExceptionInfo.IsTransient`/`IsRetryable`) and
     `IDbExceptionTranslator` (which decides which typed `DatabaseException` subclass gets thrown in
@@ -510,31 +579,24 @@ scoped and ready to build in an afternoon" are different claims — only the fir
 1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
    `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
    `RetryType.Transactional` it governs whether a transient failure during the final commit is ever
-
-1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
-   `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
-   `RetryType.Transactional` it governs whether a transient failure during the final commit is ever
    safe to retry.
-2. Close `RetryType.Sequential`'s two remaining open sub-questions from shortcoming #3: per-command
-   commit vs. one shared transaction with a cursor, and the partial-progress return shape on early
-   termination.
-3. Decide whether single-command retry is implemented via `ISqlContainer.Clone()` or some other
-   mechanism (the other remaining shortcoming #3 sub-question).
-4. Update `future-work.md`'s FEAT-001 entry to match the queue shape (it currently still describes
+2. Decide the partial-progress return shape when `Sequential` stops on an unrecoverable error or
+   exhausted retry budget (the one remaining shortcoming #3 sub-question — replay mechanism and
+   transaction boundary are now both decided per "Execution mechanism" above).
+3. Update `future-work.md`'s FEAT-001 entry to match the queue shape (it currently still describes
    the superseded delegate-wrapper framing) so the two documents don't disagree about what's being
    built.
-5. Pick concrete backoff defaults (shortcoming #4) and make them configurable, not hardcoded.
-6. Add the `IExecutionGovernanceRejection` marker interface (or whatever it ends up named) to the
+4. Pick concrete backoff defaults (shortcoming #4) and make them configurable, not hardcoded.
+5. Add the `IExecutionGovernanceRejection` marker interface (or whatever it ends up named) to the
    three pool-admission exceptions — a small, low-risk, precedented change independent of the rest of
    `RetryContext` — then decide the actual retry *policy* for each (shortcoming #5), even if the
    decision is "out of scope for v1."
-7. Add metrics/tracing hooks (shortcoming #7) alongside the first implementation, not as a
+6. Add metrics/tracing hooks (shortcoming #7) alongside the first implementation, not as a
    follow-up — this project already has the plumbing for every other execution path; a retry
    subsystem with no visibility into attempt counts or backoff durations would be a real
    observability gap on day one.
-8. Verify unwrapped `OperationCanceledException` propagation through the backoff delay
+7. Verify unwrapped `OperationCanceledException` propagation through the backoff delay
    (shortcoming #8).
-9. Address tenant-lease lifecycle and rotation safety for multi-tenant applications
-   (shortcoming #9).
-10. State the `AnalyzeException`-vs-`DatabaseException.IsTransient` alignment explicitly
+8. Confirm the tenant-safety analysis below (shortcoming #9) — proposed, not yet reviewed.
+9. State the `AnalyzeException`-vs-`DatabaseException.IsTransient` alignment explicitly
     (shortcoming #10).
