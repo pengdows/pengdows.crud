@@ -1,9 +1,11 @@
 # RetryContext Subsystem — Design, Shortcomings, and Comparison (FEAT-001)
 
-**Status: designed, zero implementation — and not yet ready to implement.** Nothing described in
-this document exists in code yet, and the "Shortcomings" section below identifies a blocking issue
-(commit ambiguity) that needs a decided policy before backoff mechanics should be built at all.
-Tracked as `FEAT-001` in [`future-work.md`](./future-work.md)'s tracker (section 10); the original
+**Status: designed, zero implementation.** Nothing described in this document exists in code yet.
+The "Shortcomings" section below identifies commit ambiguity (shortcoming #1) as the one gap that
+had no policy at all when this document started — it now has a recommended, decided policy (see
+shortcoming #1's full writeup), so implementation can proceed against that policy rather than
+waiting on further design work. Tracked as `FEAT-001` in [`future-work.md`](./future-work.md)'s
+tracker (section 10); the original
 design write-up lives in that same file under "RetryContext Subsystem (Governor-Aware Resilient
 Execution)" and is reproduced/expanded here. [`exception-analysis.md`](../exception-analysis.md)'s
 "Retry-policy boundary" section points readers here for the full picture; it also shows the
@@ -21,9 +23,10 @@ been decided through direct design discussion and is now the specified shape bel
 rather than wrapping an arbitrary caller delegate. That decision resolves shortcoming #2 (audit
 mutation composition) outright and half of shortcoming #6 (materialization), but it is a
 **narrower** feature than "retry an arbitrary unit of work" — see the new "Deliberate scope
-boundary" subsection below. Shortcoming #1 (commit ambiguity) remains blocking and is, if anything,
-sharper under this shape: `RetryType.Sequential`'s "remove a command from the queue on success"
-mechanic only works if a transient exception reliably means "did not reach the server."
+boundary" subsection below. Shortcoming #1 (commit ambiguity) is sharper under this shape than it
+first appeared — `RetryType.Sequential`'s "remove a command from the queue on success" mechanic only
+works if a transient exception reliably means "did not reach the server" — but it now has a decided,
+recommended policy rather than being an open question; see shortcoming #1 below.
 
 ## The problem this is meant to solve
 
@@ -327,32 +330,57 @@ Hierarchy section) already distinguishes `DeadlockException`/`SerializationConfl
 ## Shortcomings and open gaps — resolve these before implementing
 
 `future-work.md`'s entry states the mechanism at a conceptual level. Building it — and a second
-review pass on this document — surfaced concrete gaps the prose doesn't address. **Item 1 is
-blocking**: implementing backoff mechanics before deciding a commit-ambiguity policy risks shipping
-a feature that silently duplicates writes.
+review pass on this document — surfaced concrete gaps the prose doesn't address. **Item 1 was the one
+blocking gap**: implementing backoff mechanics before deciding a commit-ambiguity policy risked
+shipping a feature that silently duplicates writes. It now has a recommended policy (see its full
+writeup below) rather than being an open question.
 
-1. **Blocking — commit ambiguity is not addressed, and the queue shape makes it concrete rather
-   than abstract.** If a command's execution (or, for `RetryType.Transactional`, the final
-   `CommitAsync`) throws a transient exception — a timeout, a dropped connection — the write may
-   have *already landed on the server* even though the caller never received confirmation. For
-   `RetryType.Sequential`, whose entire mechanism is "remove a command from the queue on success,
-   keep and retry it on failure," this is no longer a background risk: the removal decision **is**
-   the commit-ambiguity decision. If a transient exception doesn't reliably mean "did not reach the
-   server," retrying a kept command can double-apply it. The design as written has no policy for
-   this at all. Before backoff mechanics are implemented, the contract must explicitly choose one of:
-   - never retry a failure that occurred during commit (fail closed, surface it to the caller as-is);
-   - retry only when the specific provider/exception guarantees the outcome is known (e.g. the
-     connection never left the client before failing);
-   - require the caller to supply an idempotency key or outcome-verification step for anything
-     retried past a commit attempt; or
-   - surface an explicit "commit outcome unknown" terminal result distinct from ordinary failure,
-     so the caller can decide rather than the library guessing.
+1. **RESOLVED — policy decided (2026-08-31, later same day). Commit ambiguity, explained
+   concretely first, then the recommended policy.** If a command's execution (or, for
+   `RetryType.Transactional`, the final `CommitAsync`) throws a transient exception — a timeout, a
+   dropped connection — the write may have *already landed on the server* even though the caller
+   never received confirmation. Concretely: `CommitAsync` is two messages, not one — the client sends
+   COMMIT, the server durably persists it and releases locks, *then* sends an acknowledgment back. A
+   failure can land on either side of that gap. Before the server ever sees COMMIT, nothing happened
+   and retry is safe. After the server has already durably committed but before the acknowledgment
+   arrives, the transaction is done — the client just never heard about it. Both cases throw the
+   identical transient exception; nothing in it says which side of the gap the failure was on. And
+   rollback does not rescue the second case: if the commit actually succeeded, there is no open
+   transaction left to roll back — the call either fails outright or silently no-ops, giving no signal
+   that anything is wrong. For `RetryType.Sequential`, whose entire mechanism is "remove a command
+   from the queue on success, keep and retry it on failure," this is no longer a background risk: the
+   removal decision **is** the commit-ambiguity decision.
 
-   **This is now the entire idempotency surface of the design, not one gap among several.** Because
-   no delegate is ever re-invoked (see "The flip side of that same boundary" above), a retry cannot
-   duplicate anything except the SQL command itself — there is no other side-effect category left in
-   scope. Solving commit ambiguity for a bare SQL command/transaction closes the design's idempotency
-   story completely.
+   **Recommended policy — split by whether the SQL statement is naturally self-limiting under
+   re-application, not one blanket rule:**
+   - **`DELETE` retries automatically, unconditionally.** Deleting an already-deleted row affects 0
+     rows, not an error, not a duplicate effect. Nothing else needed.
+   - **`UPDATE` guarded by a `[Version]` (optimistic-concurrency) column retries automatically.** The
+     `WHERE version = @expected` clause is self-limiting: if the first attempt actually landed, the
+     version has already advanced, so the retry affects 0 rows instead of double-applying. This
+     library already has the primitive (`[Version]`/`ConcurrencyConflictException`); no new mechanism
+     needed, just recognizing it in the queue.
+   - **Everything else — bare `INSERT`, or `UPDATE` with no version guard — is genuinely unsafe to
+     retry blind, and no cleverness in the retry loop changes that.** For these, the caller opts in to
+     safety with an idempotency key: a unique column value attached to the command, where a
+     unique-constraint violation on retry means "already applied, treat as success," not a real
+     error — the same pattern Stripe's API uses for exactly this problem. Without an opt-in key, the
+     default is fail closed: surface a distinct "commit outcome unknown" result, not an ordinary
+     failure, so the caller's code can tell "definitely failed" from "might have succeeded, go check"
+     rather than the library guessing either way.
+
+   This is unusually tractable to build *here specifically*, not despite the queue shape but because
+   of it: `RetryContext` knows the exact shape of what it's retrying — is there a `[Version]` WHERE
+   clause, is it a DELETE, did the caller attach a key — in a way a delegate-based coordinator never
+   could, since a delegate is opaque code. The same structural property that eliminated non-database
+   side-effect duplication (see "The flip side of that same boundary" above) is what makes it possible
+   to shrink the genuinely-dangerous case down to "unguarded inserts and unguarded updates" instead of
+   "everything," rather than falling back to one uniform fail-closed rule for every statement shape.
+
+   **This is the design's entire idempotency surface, not one gap among several.** Because no
+   delegate is ever re-invoked, a retry cannot duplicate anything except the SQL command itself —
+   there is no other side-effect category left in scope. This policy, once implemented, closes the
+   design's idempotency story completely.
 2. **RESOLVED by the queue shape — audit-rollback no longer needs a generic snapshot/restore
    mechanism.** The original concern: `RestoreAuditSnapshot` was described as if it were an
    existing, generically callable utility, when what actually exists (verified:
@@ -515,7 +543,7 @@ specifically should block starting on backoff mechanics until it has a decided a
 | **Coordinated re-admission through the fairness turnstile** | Not reachable — `PoolGovernor`'s turnstile has no public seam | Same | **Yes** — reacquires through the same turnstile every other caller uses |
 | **Backoff algorithm** | Configurable (fixed, linear, exponential, jittered exponential via `Backoff.DecorrelatedJitterBackoffV2`) | Whatever the author writes, often a fixed sleep | Decorrelated exponential jitter (algorithm named, parameters unspecified — see shortcoming #4) |
 | **Exception classification** | Caller supplies a predicate (`Policy.Handle<T>(predicate)`) — no built-in database-transient-vs-permanent distinction | Caller supplies whatever check they write | Reuses `DatabaseException.IsTransient`, already correct for every shipped provider's typed exceptions |
-| **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Not yet decided — **blocking gap, see shortcoming #1** |
+| **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Decided, not yet implemented — retry automatically for naturally-idempotent shapes (`DELETE`, version-guarded `UPDATE`), require an opt-in idempotency key for everything else, fail closed with a distinct "outcome unknown" result otherwise — see shortcoming #1 |
 | **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Not a rollback problem under the queue shape at all — commands are fully built (audit fields stamped once) before `StartAsync()` runs, so there's no shared mutable state to restore — see shortcoming #2 |
 | **Intermediate reads/generated-value writes affecting later commands, within one retry unit** | Fully supported — the retried delegate can read, branch, write, and use a just-generated ID freely | Same | **Not supported** — the queue must be fully built before execution starts, so neither a read result nor a DB-generated `Id` from an earlier queued command is available to a later one; see "Deliberate scope boundary" above |
 | **Non-database side-effect duplication on retry** (logging, external API calls, in-memory state mutations inside the retried unit) | Caller's problem entirely — the delegate is arbitrary code, re-invoked on every attempt; EF Core's docs put this in bold as the caller's responsibility for the same reason | Same | **Structurally impossible** — no delegate is re-invoked; a retry only ever replays an already-built `ISqlContainer`, so the only thing that can be duplicated is the SQL command itself (shortcoming #1's scope, and now its *entire* scope) — see "The flip side of that same boundary" above |
@@ -528,16 +556,17 @@ correct behavior the only behavior, which is a real, valuable difference at the 
 even though it isn't a capability gap in the strict "Polly literally cannot do this" sense the first
 draft of this document claimed.
 
-**Where this design is already ahead of Polly/EF Core, and where it's currently only tied:**
-pool-slot release + real turnstile re-admission during backoff, and structural (not
-discipline-based) elimination of non-database side-effect duplication, are both unambiguous wins —
-neither Polly nor EF Core's `IExecutionStrategy` has an equivalent to either, by construction of
-their own architectures. Commit ambiguity is currently a **tie, not a win**: EF Core and Polly leave
-it entirely to the caller, and so does this design as specified, since shortcoming #1 has no policy
-yet. Deciding #1 would turn that tie into a third clean win rather than adding a new capability from
-scratch — the mechanism (a bare SQL command/transaction, no other side effects to reason about, per
-"The flip side of that same boundary" above) is already the easiest version of this problem any of
-these tools could face.
+**Where this design is already ahead of Polly/EF Core:** pool-slot release + real turnstile
+re-admission during backoff, structural (not discipline-based) elimination of non-database
+side-effect duplication, and now commit-ambiguity policy too — three unambiguous wins, not two.
+EF Core and Polly leave commit ambiguity entirely to the caller, with no mechanism to do otherwise
+(a delegate is opaque code; nothing about its statements' shape is visible to the coordinator). This
+design's queue shape makes the statement shape visible — `[Version]`-guarded updates and deletes
+retry safely by construction, an opt-in idempotency key covers everything else — which is exactly
+why this converts from a tie into a win once implemented, rather than needing a new capability
+invented from scratch: per "The flip side of that same boundary" above, a bare SQL
+command/transaction with no other side effects to reason about is already the easiest version of
+this problem any of these tools could face.
 
 ## Comparison to how other DALs handle this
 
@@ -551,12 +580,12 @@ these tools could face.
 | **Rust (`sqlx`, Diesel)** | No built-in retry in either. Compile-time query checking (`sqlx`) is orthogonal to runtime resilience. | Not comparable feature-for-feature; neither claims this space. |
 
 **Net position:** no DAL surveyed in this repo's own comparison doc (`dal-taxonomy-and-comparison.md`)
-claims pool-admission-aware retry today, and none of them has solved commit ambiguity either — that
-remains an open problem for this design to solve, not a gap relative to prior art. (Multi-entity
-audit rollback, the other originally-open problem, is now sidestepped rather than solved — the
-queue shape has no delegate re-invocation for it to apply to, at the cost of losing the
-read-then-branch expressiveness EF Core's delegate shape has.) If `RetryContext` is built with
-shortcoming #1 actually resolved (not just implemented around), it would be a genuinely
+claims pool-admission-aware retry today, and none of them has solved commit ambiguity either — this
+design now has a decided, recommended policy for it (shortcoming #1), which none of the surveyed
+alternatives offer at all. (Multi-entity audit rollback, the other originally-open problem, is
+sidestepped rather than solved — the queue shape has no delegate re-invocation for it to apply to, at
+the cost of losing the read-then-branch expressiveness EF Core's delegate shape has.) If
+`RetryContext` is built with shortcoming #1's policy actually implemented, it would be a genuinely
 differentiated capability. That comparison doc does not currently list retry/resilience as a pillar
 at all; if this gets built, it belongs there.
 
@@ -576,10 +605,12 @@ the four remaining plumbing items (backoff numbers, telemetry hooks, cancellatio
 tenant-lease interaction) are mechanical but not zero-cost. "The loop is easy" and "this is fully
 scoped and ready to build in an afternoon" are different claims — only the first is true yet.
 
-1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
-   `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
-   `RetryType.Transactional` it governs whether a transient failure during the final commit is ever
-   safe to retry.
+1. **Implement the commit-ambiguity policy first (shortcoming #1) — this is decided, not open, but
+   nothing else should be built ahead of it.** Statement-shape detection (is there a `[Version]`
+   WHERE clause, is it a `DELETE`, did the caller attach an idempotency key) needs to exist before
+   the retry loop can apply the right rule to each queued command; for `RetryType.Sequential` this
+   *is* the "remove from queue on success" decision rule, and for `RetryType.Transactional` it
+   governs whether a transient failure during the final commit is ever safe to retry.
 2. Decide the partial-progress return shape when `Sequential` stops on an unrecoverable error or
    exhausted retry budget (the one remaining shortcoming #3 sub-question — replay mechanism and
    transaction boundary are now both decided per "Execution mechanism" above).
