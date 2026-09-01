@@ -377,6 +377,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
 
+    // Compatibility member retained from the 2.0 API.
+    public DbDataSource? DataSource => _context.DataSource;
+
     /// <inheritdoc/>
     public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
 

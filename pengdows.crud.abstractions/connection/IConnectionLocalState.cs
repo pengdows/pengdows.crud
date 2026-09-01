@@ -5,7 +5,7 @@ namespace pengdows.crud.connection;
 /// <summary>
 /// Per-connection state for tracking prepare behavior and caching.
 /// </summary>
-internal interface IConnectionLocalState
+public interface IConnectionLocalState
 {
     /// <summary>
     /// Whether prepare has been disabled for this connection due to failures.

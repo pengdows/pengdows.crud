@@ -26,9 +26,9 @@ public class PublicApiSurfaceLeakageTests
     // an internal interface — a consumer can never obtain, construct, or meaningfully implement
     // one.
     [Fact]
-    public void ILockerAsync_IsNotPublic()
+    public void ILockerAsync_RemainsPublicFor20Compatibility()
     {
-        Assert.False(typeof(ILockerAsync).IsPublic,
+        Assert.True(typeof(ILockerAsync).IsPublic,
             "ILockerAsync has no reachable implementation, consumer, or construction path outside " +
             "pengdows.crud — it must not be part of the public API surface.");
     }
@@ -41,9 +41,9 @@ public class PublicApiSurfaceLeakageTests
     // found to be genuinely dead code (zero production call sites) and was deleted outright rather
     // than kept public or internal.
     [Fact]
-    public void IConnectionLocalState_IsNotPublic()
+    public void IConnectionLocalState_RemainsPublicFor20Compatibility()
     {
-        Assert.False(typeof(IConnectionLocalState).IsPublic,
+        Assert.True(typeof(IConnectionLocalState).IsPublic,
             "IConnectionLocalState has no reachable consumer outside pengdows.crud — it must not " +
             "be part of the public API surface.");
     }

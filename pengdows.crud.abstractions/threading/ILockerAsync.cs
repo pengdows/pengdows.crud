@@ -14,7 +14,7 @@ namespace pengdows.crud.threading;
 /// to avoid potential deadlocks in contexts with a SynchronizationContext.
 /// </para>
 /// </remarks>
-internal interface ILockerAsync : IDisposable, IAsyncDisposable
+public interface ILockerAsync : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Acquires the lock synchronously, blocking until the lock is available.

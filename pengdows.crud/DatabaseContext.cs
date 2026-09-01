@@ -312,6 +312,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public IDataSourceInformation DataSourceInfo => _dataSourceInfo;
 
+    // Compatibility member retained from the 2.0 API.
+    public DbDataSource? DataSource => _dataSource;
+
     /// <inheritdoc/>
     /// <inheritdoc/>
     public string GetBaseSessionSettings() => _dialect.GetBaseSessionSettings(null);

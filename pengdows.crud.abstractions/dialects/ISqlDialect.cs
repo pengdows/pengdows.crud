@@ -124,6 +124,11 @@ public interface ISqlDialect
     /// server-generated value (e.g. SQL Server <c>rowversion</c>/<c>timestamp</c>) that the database
     /// updates automatically on any row write — implementations must still add the WHERE/ON
     /// predicate but must not attempt to increment it in SET.</param>
+    // 2.0 compatibility overload.
+    void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns,
+        int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+        => BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue, null, false);
+
     void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns,
         int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
         string? versionColumnName = null, bool versionColumnIsOpaque = false);

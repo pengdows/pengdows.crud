@@ -23,14 +23,14 @@ public class IDatabaseContextPublicSurfaceTests
     }
 
     [Fact]
-    public void IDatabaseContext_DoesNotExposeDataSource()
+    public void IDatabaseContext_RetainsDataSourceCompatibility()
     {
-        Assert.False(ExposesDataSourceProperty(typeof(IDatabaseContext)));
+        Assert.True(ExposesDataSourceProperty(typeof(IDatabaseContext)));
     }
 
     [Fact]
-    public void ITransactionContext_DoesNotExposeDataSource()
+    public void ITransactionContext_RetainsDataSourceCompatibility()
     {
-        Assert.False(ExposesDataSourceProperty(typeof(ITransactionContext)));
+        Assert.True(ExposesDataSourceProperty(typeof(ITransactionContext)));
     }
 }

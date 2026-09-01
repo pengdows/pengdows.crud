@@ -45,6 +45,9 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// </summary>
     IDataSourceInformation DataSourceInfo { get; }
 
+    // Compatibility member retained from the 2.0 API; the broad 3.0 implementation still owns this source.
+    DbDataSource? DataSource => null;
+
     /// <summary>
     /// Timeout for internal mode locks (SingleConnection) and transaction completion locks
     /// (Commit / Rollback). <c>null</c> means wait indefinitely.
@@ -258,10 +261,14 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// available; the default (<see cref="IsolationResolutionPolicy.AllowHigher"/>) never silently
     /// weakens isolation.
     /// </summary>
+    // 2.0 compatibility overload; policy-aware overload above remains the implementation surface.
+    ITransactionContext BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write)
+        => BeginTransaction(isolationProfile, executionType, IsolationResolutionPolicy.AllowHigher);
+
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher);
+        ExecutionType executionType,
+        IsolationResolutionPolicy policy);
 
     /// <summary>
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
@@ -280,11 +287,15 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// available; the default (<see cref="IsolationResolutionPolicy.AllowHigher"/>) never silently
     /// weakens isolation.
     /// </summary>
+    // 2.0 compatibility overload.
+    ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write, CancellationToken cancellationToken = default)
+        => BeginTransactionAsync(isolationProfile, executionType, cancellationToken, IsolationResolutionPolicy.AllowHigher);
+
     ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,
-        ExecutionType executionType = ExecutionType.Write,
-        CancellationToken cancellationToken = default,
-        IsolationResolutionPolicy policy = IsolationResolutionPolicy.AllowHigher);
+        ExecutionType executionType,
+        CancellationToken cancellationToken,
+        IsolationResolutionPolicy policy);
 
     /// <summary>
     /// Generates a unique parameter name for the current operation (e.g., p1, p2, p42).
