@@ -290,17 +290,40 @@ a feature that silently duplicates writes.
    the term for `sleep = min(cap, random_between(base, previous_sleep * 3))`) but the design states
    no base delay, cap, jitter bounds, or maximum attempt count, and doesn't say whether these are
    fixed, configurable per `DatabaseContext`, or configurable per tenant.
-5. **No stated interaction with pool-admission exceptions.** `PoolSaturatedException`,
-   `ModeContentionException`, and `PoolForbiddenException` (verified:
-   `pengdows.crud/exceptions/PoolForbiddenException.cs`, thrown when a pool configured with zero
-   capacity — e.g. the write pool on a `ReadOnly`-promoted context — is accessed at all) are
-   deliberately *not* `DatabaseException` subclasses (see CLAUDE.md's "Not part of this hierarchy"
-   note), specifically so they're never mistaken for an ordinary transient database error.
+5. **No stated interaction with pool-admission exceptions — detection has a precedent, policy is
+   still undecided.** `PoolSaturatedException` (`: TimeoutException`), `ModeContentionException`
+   (`: TimeoutException`, thrown by `RealAsyncLocker` on a `SingleWriter`/`SingleConnection` mode-lock
+   timeout — verified: `pengdows.crud/threading/RealAsyncLocker.cs`), and `PoolForbiddenException`
+   (`: InvalidOperationException`, thrown when a zero-capacity pool — e.g. the write pool on a
+   `ReadOnly`-promoted context — is accessed at all; verified:
+   `pengdows.crud/exceptions/PoolForbiddenException.cs`) are deliberately **not** `DatabaseException`
+   subclasses and deliberately don't share a common base class with each other either (see CLAUDE.md's
+   "Not part of this hierarchy" note) — merging them into one base type would risk `SqlContainer`'s
+   exception-translation path reclassifying a `TimeoutException`-derived one of them into
+   `CommandTimeoutException`, destroying the exact distinction they exist to preserve.
    `DatabaseException.IsTransient` — the only classification the design currently cites — cannot see
-   any of the three by construction. Should exhausting `PoolAcquireTimeout` while trying to
-   *reacquire* a slot after backoff itself be retried, with its own distinct policy? The design is
-   silent, and `PoolForbiddenException` specifically should probably never be retried at all (it's a
-   configuration-level admission rejection, not a transient condition).
+   any of the three by construction, and none of them should be forced into a shared base class to fix
+   that.
+
+   **Detection precedent already exists in this codebase for exactly this shape of problem:**
+   `IReadOnlyViolation` (`pengdows.crud.abstractions/exceptions/IReadOnlyViolation.cs`) is an empty
+   marker interface implemented by three read-only-rejection exceptions that deliberately have three
+   different base types (`NotSupportedException`, `InvalidOperationException`,
+   `DatabaseOperationException`), letting a caller write one `catch (IReadOnlyViolation)` without the
+   library unifying their inheritance at all. The same pattern — a marker interface (e.g.
+   `IExecutionGovernanceRejection`, name not decided) implemented by all three of
+   `PoolSaturatedException`/`ModeContentionException`/`PoolForbiddenException` with zero change to
+   what each actually extends — would give `RetryContext` a single, cheap way to detect "this was
+   rejected before ever reaching the database" as distinct from an actual `DatabaseException`. This
+   resolves the *detection* half of this shortcoming.
+
+   **The policy half is still open even with detection solved:** should exhausting
+   `PoolAcquireTimeout` while trying to *reacquire* a slot after backoff itself be retried, with its
+   own distinct budget/backoff separate from `DatabaseException.IsTransient`'s? `PoolForbiddenException`
+   specifically should probably never be retried at all — it's a configuration-level admission
+   rejection (zero pool capacity), not a transient condition that backoff could ever resolve. The
+   marker interface makes these easy to catch as a group; it doesn't say what `RetryContext` should
+   then do with them.
 6. **`RetryType.Sequential`'s materialization question is RESOLVED by the queue shape; the
    idempotency half is not (it's shortcoming #1).** The original concern was whether the input
    sequence must be fully materialized up front or could be a one-shot/side-effecting source unsafe
@@ -413,8 +436,10 @@ for what's left:
    the superseded delegate-wrapper framing) so the two documents don't disagree about what's being
    built.
 5. Pick concrete backoff defaults (shortcoming #4) and make them configurable, not hardcoded.
-6. Decide the `PoolSaturatedException`/`ModeContentionException`/`PoolForbiddenException`
-   interaction (shortcoming #5) explicitly, even if the decision is "out of scope for v1."
+6. Add the `IExecutionGovernanceRejection` marker interface (or whatever it ends up named) to the
+   three pool-admission exceptions — a small, low-risk, precedented change independent of the rest of
+   `RetryContext` — then decide the actual retry *policy* for each (shortcoming #5), even if the
+   decision is "out of scope for v1."
 7. Add metrics/tracing hooks (shortcoming #7) alongside the first implementation, not as a
    follow-up — this project already has the plumbing for every other execution path; a retry
    subsystem with no visibility into attempt counts or backoff durations would be a real
