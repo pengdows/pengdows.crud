@@ -57,6 +57,34 @@ operational failure modes specific to a governed connection pool:
    waves that hit the database at the same moments, extending or worsening contention instead of
    resolving it.
 
+### How much the existing architecture already reduces this problem — precisely, not uniformly
+
+`PoolGovernor`'s admission control doesn't just complicate naive retry (the three failure modes
+above) — it also lowers the *rate* of the contention-caused transient errors a retry loop exists to
+handle in the first place. That reduction is real, but its size depends entirely on `DbMode`, and
+overstating it in either direction is a mistake:
+
+- **`SingleWriter` mode doesn't just reduce the need for retries — it eliminates one whole category
+  outright.** The write turnstile serializes writers to one at a time, so `SQLITE_BUSY` (the error a
+  raw SQLite application normally retries against constantly) structurally cannot occur. This is the
+  strongest form of the claim, and it's already a shipped, verified property of the library, not
+  something `RetryContext` would add.
+- **`Standard` mode against a real client-server engine is a smaller effect.** Bounding total
+  concurrent writers (default cap of 100 per `docs/connection/connection-pooling.md`, hard ceiling
+  512) reduces the *statistical opportunity* for deadlocks and serialization conflicts, but doesn't
+  eliminate them — two concurrent writers is already enough to deadlock each other. Real, worth
+  stating, but materially smaller than `SingleWriter`'s case.
+- **It does nothing at all for commit ambiguity.** Shortcoming #1's risk — a dropped connection or
+  timeout during the commit call itself, with the outcome genuinely unknown to the client — exists
+  regardless of concurrency level, because it's about a single connection's acknowledgment getting
+  lost, not about contention between callers. Admission control and commit ambiguity are orthogonal
+  concerns; solving one says nothing about the other.
+
+The practical upshot: `RetryContext` is least necessary exactly where the architecture already does
+the most work (`SingleWriter`), and most valuable exactly where the architecture does the least
+(`Standard` mode against a heavily-contended client-server engine, and always, regardless of mode,
+for the commit-ambiguity case once #1 has a policy).
+
 ### Why this has to be a first-party feature, not an external wrapper — narrowed
 
 The first draft of this document claimed `PoolGovernor` being `internal sealed` made it
@@ -431,6 +459,17 @@ correct behavior the only behavior, which is a real, valuable difference at the 
 even though it isn't a capability gap in the strict "Polly literally cannot do this" sense the first
 draft of this document claimed.
 
+**Where this design is already ahead of Polly/EF Core, and where it's currently only tied:**
+pool-slot release + real turnstile re-admission during backoff, and structural (not
+discipline-based) elimination of non-database side-effect duplication, are both unambiguous wins —
+neither Polly nor EF Core's `IExecutionStrategy` has an equivalent to either, by construction of
+their own architectures. Commit ambiguity is currently a **tie, not a win**: EF Core and Polly leave
+it entirely to the caller, and so does this design as specified, since shortcoming #1 has no policy
+yet. Deciding #1 would turn that tie into a third clean win rather than adding a new capability from
+scratch — the mechanism (a bare SQL command/transaction, no other side effects to reason about, per
+"The flip side of that same boundary" above) is already the easiest version of this problem any of
+these tools could face.
+
 ## Comparison to how other DALs handle this
 
 | DAL / ecosystem | Retry story | How it compares to designed `RetryContext` |
@@ -457,7 +496,20 @@ at all; if this gets built, it belongs there.
 Treat it as its own TDD-first effort, not a quick addition — per CLAUDE.md's mandatory-TDD rule,
 write the failing test for each behavior before implementing it. Shortcomings #2 and #3 (shape,
 including the Tier-1-only entity-CRUD question) are now decided in prose above; suggested sequencing
-for what's left:
+for what's left.
+
+**A calibration note before starting:** the core executor loop genuinely is small now — iterate
+`ISqlContainer`s, classify `IsTransient`, back off, replay via `Clone()`, no entity/gateway/business
+awareness needed anywhere in it (see "The flip side of that same boundary" above). That part is not
+where the remaining effort lives. The commit-ambiguity policy (#1) and `Sequential`'s
+transaction-boundary/return-shape questions are still real decisions, not implementation details;
+the four remaining plumbing items (backoff numbers, telemetry hooks, cancellation contract,
+tenant-lease interaction) are mechanical but not zero-cost. "The loop is easy" and "this is fully
+scoped and ready to build in an afternoon" are different claims — only the first is true yet.
+
+1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
+   `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
+   `RetryType.Transactional` it governs whether a transient failure during the final commit is ever
 
 1. **Decide the commit-ambiguity policy first (shortcoming #1).** Still blocking — for
    `RetryType.Sequential` it's literally the "remove from queue on success" decision rule; for
