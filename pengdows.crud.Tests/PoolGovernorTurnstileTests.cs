@@ -585,15 +585,35 @@ public sealed class PoolGovernorTurnstileTests
         // Occupy the one allowed queue slot with a background waiter that will not
         // return until the test disposes the writer's slot (it never will here —
         // it just blocks for the full 2s timeout in the background).
-        var occupier = Task.Run(() =>
+        //
+        // Runs on a dedicated OS thread rather than Task.Run/the ThreadPool: under heavy parallel
+        // load (e.g. the whole solution's test suite running alongside a live Docker database
+        // matrix competing for CPU), the ThreadPool's slow ramp-up when starved — it grows by
+        // roughly one new thread per ~500ms above the configured minimum — can delay a queued work
+        // item far longer than any fixed polling deadline expects. That previously made this test
+        // flaky under load even though the polling loop below already avoids guessing with a fixed
+        // sleep: the delay was in getting the occupier's delegate to START running at all, which no
+        // amount of polling afterward can compensate for. A dedicated Thread is scheduled by the OS
+        // immediately, independent of ThreadPool queue depth or ramp-up throttling.
+        var occupierDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var occupierThread = new Thread(() =>
         {
             try { reader.Acquire(); }
             catch (PoolSaturatedException) { /* expected eventually */ }
-        });
+            finally { occupierDone.SetResult(); }
+        })
+        {
+            IsBackground = true,
+            Name = "PoolGovernorTurnstileTests-Occupier"
+        };
+        occupierThread.Start();
 
         // Deterministically wait for the occupier to actually be queued on the turnstile
-        // (rather than guessing with a fixed sleep) before firing the second caller.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        // (rather than guessing with a fixed sleep) before firing the second caller. The generous
+        // deadline is a safety margin on top of the dedicated-thread fix above, not a substitute
+        // for it — it still only matters on the (now much less likely) failure path, since the
+        // loop exits the moment the metric is observed.
+        var deadline = DateTime.UtcNow.AddSeconds(15);
         while (reader.GetSnapshot().TurnstileQueued < 1)
         {
             if (DateTime.UtcNow > deadline)
@@ -613,7 +633,13 @@ public sealed class PoolGovernorTurnstileTests
             $"Expected an immediate PoolSaturatedException from queue-depth admission control, " +
             $"but the call took {sw.ElapsedMilliseconds}ms — it waited out (part of) the timeout instead.");
 
-        await occupier.WaitAsync(TimeSpan.FromSeconds(3));
+        // Not a correctness assertion — every assertion that matters already ran above. This is
+        // just winding down the occupier thread before the test method returns. Its own configured
+        // acquire timeout is 2s, but under severe scheduler contention (observed: 16 CPU-bound
+        // processes oversubscribing an 8-core box) actually getting scheduled to notice that
+        // timeout elapsed and call SetResult can take meaningfully longer than 2s of wall clock, so
+        // this needs real headroom above that 2s rather than a tight budget.
+        await occupierDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     // ── Constructor validation ─────────────────────────────────────────────
