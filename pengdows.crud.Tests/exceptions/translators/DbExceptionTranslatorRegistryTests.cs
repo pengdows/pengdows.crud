@@ -125,9 +125,15 @@ public class DbExceptionTranslatorRegistryTests
     // FallbackExceptionTranslator. Adding a SupportedDatabase value here is a REVIEWABLE decision,
     // not a silent default — see Registry_HasExplicitRoutingDecision_ForEveryDatabase below.
     //   - Unknown: not a real database, never a live connection target.
+    //   - FlatFile: pengdows.flatfile has no custom exception hierarchy at all — it throws plain
+    //     BCL exceptions (FormatException, InvalidOperationException, IOException, ...) with no
+    //     provider error codes or SQLSTATEs to pattern-match. There is nothing real to build a
+    //     dedicated IDbExceptionTranslator against yet; revisit once/if flatfile grows typed
+    //     exceptions for constraint/format/IO failures.
     private static readonly HashSet<SupportedDatabase> IntentionalFallbackDatabases = new()
     {
-        SupportedDatabase.Unknown
+        SupportedDatabase.Unknown,
+        SupportedDatabase.FlatFile
     };
 
     [Fact]

@@ -35,5 +35,6 @@ public enum SupportedDatabase
     Snowflake = 2048, // Cloud data warehouse with strong SQL:2016 compliance
     AuroraMySql = 4096, // AWS Aurora MySQL flavor
     AuroraPostgreSql = 8192, // AWS Aurora PostgreSQL flavor
-    Db2 = 16384 // IBM enterprise RDBMS with strong SQL standard compliance
+    Db2 = 16384, // IBM enterprise RDBMS with strong SQL standard compliance
+    FlatFile = 32768 // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
 }

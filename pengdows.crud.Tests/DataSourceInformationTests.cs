@@ -90,10 +90,16 @@ public static class DataSourceTestData
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
+            SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
-        var versionSql = dialect.GetVersionQuery();
+        // Mirrors SqlDialect.GetDatabaseVersionAsync's own fallback: when a dialect doesn't
+        // override GetVersionQuery() (e.g. FlatFile, which has no dedicated dialect yet and falls
+        // back to Sql92Dialect's empty default), the real code queries "SELECT version()" instead —
+        // the canned scalar must be registered under whichever query actually gets executed.
+        var rawVersionQuery = dialect.GetVersionQuery();
+        var versionSql = string.IsNullOrWhiteSpace(rawVersionQuery) ? "SELECT version()" : rawVersionQuery;
 
         var versionString = db switch
         {
@@ -153,6 +159,9 @@ public class DataSourceInformationTests
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@",
             SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
+            // FlatFile's own SQL grammar supports only positional ? parameters (see
+            // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
+            SupportedDatabase.FlatFile => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -211,6 +220,9 @@ public class DataSourceInformationTests
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
+            // FlatFile has no named parameters at all (positional ? only) and no stored-procedure
+            // support (ProcWrappingStyle.None), so there is nothing to name-match against.
+            SupportedDatabase.FlatFile => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -225,8 +237,10 @@ public class DataSourceInformationTests
         Assert.Equal(expectedWrap, info.ProcWrappingStyle);
 
         // Assert: named parameters flags
-        Assert.True(info.SupportsNamedParameters);
-        Assert.True(info.SupportsNamedParameters);
+        // FlatFile's own SQL grammar supports only positional ? parameters (see
+        // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
+        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile;
+        Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits
@@ -260,7 +274,14 @@ public class DataSourceInformationTests
         var info = new DataSourceInformation(dialect);
 
         var result = dialect.GetDatabaseVersion(tracked);
-        var expected = scalars.Values.First().ToString();
+
+        // FlatFile has no version()-style SQL function at all — its dialect reads ADO.NET's
+        // standard ServerVersion property directly instead of executing a canned scalar query
+        // (see FlatFileDialect.GetDatabaseVersionAsync). Every other dialect still executes a
+        // dialect-specific SQL version query, matched against the canned scalar below.
+        var expected = db == SupportedDatabase.FlatFile
+            ? tracked.ServerVersion
+            : scalars.Values.First().ToString();
         Assert.Equal(expected, result);
     }
 
