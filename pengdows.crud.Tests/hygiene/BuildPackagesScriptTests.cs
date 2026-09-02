@@ -80,7 +80,7 @@ public class BuildPackagesScriptTests
         Assert.True(File.Exists(propsPath), $"Directory.Build.props not found at {propsPath}");
 
         var contents = File.ReadAllText(propsPath);
-        Assert.Contains("<VersionPrefix>2.0.6</VersionPrefix>", contents, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>2.1.0</VersionPrefix>", contents, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>", contents, StringComparison.Ordinal);
         Assert.Contains("<FileVersion>$(VersionPrefix).0</FileVersion>", contents, StringComparison.Ordinal);
     }
