@@ -29,6 +29,47 @@ public interface ISqlDialect
     SupportedDatabase DatabaseType { get; }
 
     /// <summary>
+    /// True for a real client-server RDBMS with full write concurrency (the default for every
+    /// engine); false only for embedded, single-writer engines (SQLite, DuckDB) and the
+    /// unrecognized-database fallback. This is the single source of truth for that distinction —
+    /// callers that need it (mode-mismatch diagnostics, mode coercion) should consult this property
+    /// instead of maintaining their own SupportedDatabase switch.
+    /// </summary>
+    bool IsClientServerDatabase { get; }
+
+    /// <summary>
+    /// True only for SQLite/DuckDB-like embedded, single-writer engines. Deliberately narrower than
+    /// <c>!IsClientServerDatabase</c>, which is also false for the unrecognized-database fallback —
+    /// diagnostics that are specifically about embedded single-writer behavior (e.g. file-based
+    /// lock-contention warnings) should consult this instead, so they don't fire for an unknown
+    /// database that merely isn't confirmed client-server either.
+    /// </summary>
+    bool IsEmbeddedSingleWriterEngine { get; }
+
+    /// <summary>
+    /// Classifies whether <paramref name="connectionString"/> targets an in-memory database
+    /// instance for this engine, and if so, whether it is isolated (private to one connection) or
+    /// shared across connections. Every engine except SQLite/DuckDB has no in-memory concept and
+    /// always returns <see cref="InMemoryKind.None"/>. Single source of truth — callers should
+    /// consult this instead of parsing the connection string themselves.
+    /// </summary>
+    InMemoryKind DetectInMemoryKind(string? connectionString);
+
+    /// <summary>
+    /// Resolves the actual <see cref="DbMode"/> a connection should use, given what the caller
+    /// requested (including <see cref="DbMode.Best"/>) and this engine's real mode constraints —
+    /// this is the single source of truth for both "what does Best mean here" and "which explicit
+    /// modes are unsafe here", so <c>DatabaseContext</c> owns no per-database coercion rules of its
+    /// own. The returned reason is a human-readable string for diagnostic logging; it is only
+    /// examined by the caller when the resolved mode differs from what was requested.
+    /// </summary>
+    /// <param name="requested">The mode the caller asked for, or <see cref="DbMode.Best"/>.</param>
+    /// <param name="connectionString">The connection string, for engines whose decision depends on
+    /// in-memory detection (see <see cref="DetectInMemoryKind"/>).</param>
+    /// <param name="isLocalDb">True when topology detection identified this as SQL Server LocalDB.</param>
+    (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString, bool isLocalDb);
+
+    /// <summary>
     /// Marker prefix used for positional parameters.
     /// </summary>
     string ParameterMarker { get; }

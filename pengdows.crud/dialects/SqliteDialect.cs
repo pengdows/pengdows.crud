@@ -61,6 +61,68 @@ internal class SqliteDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sqlite;
+
+    /// <inheritdoc />
+    /// <remarks>Embedded, single-writer engine — not client-server.</remarks>
+    public override bool IsClientServerDatabase => false;
+
+    /// <inheritdoc />
+    public override bool IsEmbeddedSingleWriterEngine => true;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <c>:memory:</c> (or a bare <c>mode=memory</c>/<c>filename=:memory:</c>/<c>datasource=:memory:</c>
+    /// data source) is Isolated unless paired with <c>cache=shared</c>, in which case it's Shared.
+    /// </remarks>
+    public override InMemoryKind DetectInMemoryKind(string? connectionString)
+    {
+        var cs = (connectionString ?? string.Empty).Trim();
+        var normalized = cs.ToLowerInvariant().Replace(" ", string.Empty);
+
+        var dataSource = ExtractDataSourcePath(connectionString ?? string.Empty) ?? string.Empty;
+        var dataSourceLower = dataSource.ToLowerInvariant();
+        var dataSourceIsMemory = dataSourceLower.Contains(":memory:");
+        var modeMem = normalized.Contains("mode=memory") ||
+                      normalized.Contains("filename=:memory:") ||
+                      normalized.Contains("datasource=:memory:") ||
+                      dataSourceIsMemory;
+        if (!modeMem)
+        {
+            return InMemoryKind.None;
+        }
+
+        var cacheShared = normalized.Contains("cache=shared");
+        var dsIsLiteralMem = dataSourceIsMemory ||
+                              normalized.Contains("datasource=:memory:") ||
+                              normalized.Contains("filename=:memory:");
+        if (cacheShared && !dsIsLiteralMem)
+        {
+            return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
+        }
+
+        return InMemoryKind.Isolated;
+    }
+
+    /// <inheritdoc />
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb) =>
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+
+    private static string? ExtractDataSourcePath(string connectionString)
+    {
+        try
+        {
+            var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            return csb.ContainsKey(ConnectionStringHelper.DataSourceKey)
+                ? csb[ConnectionStringHelper.DataSourceKey]?.ToString()
+                : connectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
     public override string ParameterMarker => "@";
 
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()

@@ -121,11 +121,33 @@ public class DatabaseContextModeBranchTests
         Assert.True(result);
     }
 
+    [Theory]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void IsClientServerDatabase_NowDelegatesToDialect_CoversPreviouslyMissingDatabases(SupportedDatabase db)
+    {
+        // Regression: the old hardcoded switch only listed 8 databases, so every distributed/cloud
+        // variant added since (Yugabyte, TiDB, Snowflake, the Aurora flavors) silently fell to the
+        // `false` default and never got the SingleConnection/SingleWriter mode-mismatch warning.
+        // Now that this delegates to ISqlDialect.IsClientServerDatabase, any database whose dialect
+        // doesn't override the (true) base default is covered automatically.
+        var context = CreateContext("Server=localhost;Database=test");
+        var method = GetInstanceMethod("IsClientServerDatabase");
+
+        var result = (bool)method.Invoke(context, new object?[] { db })!;
+
+        Assert.True(result);
+    }
+
     private static DatabaseContext CreateContext(string connectionString)
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
         SetField(context, "_connectionString", connectionString);
         SetField(context, "_logger", NullLogger<IDatabaseContext>.Instance);
+        SetField(context, "_factory", new fakeDbFactory(SupportedDatabase.Unknown));
         return context;
     }
 

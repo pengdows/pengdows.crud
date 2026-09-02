@@ -64,6 +64,10 @@ internal class Sql92Dialect : SqlDialect
     /// <inheritdoc />
     public override SupportedDatabase DatabaseType => SupportedDatabase.Unknown;
 
+    /// <inheritdoc />
+    /// <remarks>The database wasn't recognized, so client-server can't be confirmed either.</remarks>
+    public override bool IsClientServerDatabase => false;
+
     /// <summary>
     /// Uses positional <c>?</c> placeholder. Named parameters are not assumed
     /// for an unknown database — positional is the safest ODBC-compatible fallback.

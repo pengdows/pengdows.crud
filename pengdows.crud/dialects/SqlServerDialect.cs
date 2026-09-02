@@ -111,6 +111,26 @@ internal class SqlServerDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// LocalDB genuinely requires PreventDatabaseUnload unconditionally — there is no production
+    /// LocalDB deployment shape where the auto-shutdown behavior is wanted, so this is forced
+    /// regardless of the requested mode (unlike Firebird/Db2's own idle-unload costs, which stay an
+    /// explicitly-honored opt-in knob rather than an auto-selected default — see CLAUDE.md's
+    /// "Connection Management and DbMode" section for the full policy). Non-LocalDB SQL Server is
+    /// an ordinary full server database and falls through to the base implementation.
+    /// </remarks>
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb)
+    {
+        if (isLocalDb)
+        {
+            return (DbMode.PreventDatabaseUnload, "LocalDB requires PreventDatabaseUnload");
+        }
+
+        return base.CoerceConnectionMode(requested, connectionString, isLocalDb);
+    }
+
     // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
     public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";
