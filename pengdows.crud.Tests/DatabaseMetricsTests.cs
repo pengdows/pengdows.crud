@@ -9,12 +9,38 @@ using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.metrics;
+using pengdows.crud.@internal;
 using Xunit;
 
 namespace pengdows.crud.Tests;
 
 public class DatabaseMetricsTests
 {
+    [Fact]
+    public void BrokenConnection_Dispose_CountsCloseExactlyOnce()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            EnableMetrics = true
+        };
+        using var context = new DatabaseContext(config, factory);
+
+        var tracked = context.GetConnection(ExecutionType.Write);
+        tracked.Open();
+        var underlying = (fakeDbConnection)((IInternalConnectionWrapper)tracked).UnderlyingConnection;
+        var closedBeforeBreak = context.Metrics.ConnectionsClosed;
+
+        underlying.BreakConnection();
+
+        Assert.Equal(closedBeforeBreak + 1, context.Metrics.ConnectionsClosed);
+
+        context.CloseAndDisposeConnection(tracked);
+
+        Assert.Equal(closedBeforeBreak + 1, context.Metrics.ConnectionsClosed);
+    }
+
     [Fact]
     public async Task ExecuteNonQueryAsync_UpdatesMetricsOnSuccess()
     {
