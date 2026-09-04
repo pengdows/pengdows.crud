@@ -116,6 +116,35 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     }
 
     /// <summary>
+    /// Async counterpart mirroring <see cref="GetConnection"/> exactly (sentinel health check,
+    /// eager open so open-time failures surface here, dispose-on-failure) but awaiting the base
+    /// strategy's genuinely non-blocking slot acquisition and using OpenAsync instead of the
+    /// blocking Open() — both matter on this path for the same reason: an async caller waiting on
+    /// a saturated pool, or on connection open, must not block a CLR ThreadPool thread.
+    /// </summary>
+    public override async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken = default)
+    {
+        EnsureSentinelHealthy();
+
+        var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            conn.Dispose();
+            throw;
+        }
+
+        return conn;
+    }
+
+    /// <summary>
     /// Detects and repairs a PreventDatabaseUnload sentinel connection that unexpectedly transitioned to
     /// Broken/Closed (e.g. a network blip, the embedded engine restarting) rather than via
     /// intentional context disposal. Called lazily at the top of every GetConnection request —

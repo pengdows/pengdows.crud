@@ -68,6 +68,28 @@ internal interface IConnectionStrategy
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared);
 
     /// <summary>
+    /// Asynchronously acquires a connection for the specified execution type.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation is a fake-async wrapper around the synchronous
+    /// <see cref="GetConnection"/> — it still blocks the calling thread and ignores
+    /// <paramref name="cancellationToken"/> (same caveat as <see cref="HandleDialectDetectionAsync"/>
+    /// below). <c>StandardConnectionStrategy</c> and <c>PreventDatabaseUnloadConnectionStrategy</c>
+    /// override this with a genuinely non-blocking implementation that awaits the underlying
+    /// PoolGovernor slot via <c>AcquireAsync</c>/<c>WaitAsync</c> instead of blocking in
+    /// <c>Acquire</c>/<c>SemaphoreSlim.Wait</c> — this matters because both are reached from
+    /// async command-execution and async transaction-creation paths, where blocking the calling
+    /// thread under pool contention starves the CLR ThreadPool. <c>SingleConnectionStrategy</c>
+    /// never contends on a governor at all (it always returns the same pinned connection), so the
+    /// default fake-async wrapper is correct and sufficient for it as-is.
+    /// </remarks>
+    ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        return new ValueTask<ITrackedConnection>(GetConnection(executionType, isShared));
+    }
+
+    /// <summary>
     /// Handles dialect detection and initialization for this strategy.
     /// Strategy decides whether to reuse initialization connection, create throwaway connection, etc.
     /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.

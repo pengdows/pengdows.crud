@@ -39,7 +39,21 @@ namespace pengdows.crud.Tests;
 public class SingleWriterFairnessTortureTests
 {
     private const int ReaderCount = 16;
-    private const int WriteCount = 40;
+
+    // PoolGovernor's turnstile admission control caps queued turnstile entrants at
+    // Math.Max(maxSlots * 8, 32) per governor (see infrastructure/PoolGovernor.cs); for
+    // DbMode.SingleWriter the writer governor's maxSlots is always 1, so that ceiling is a fixed
+    // 32 here, and every writer unconditionally gates on the turnstile (_holdTurnstile=true).
+    // WriteCount must stay safely under that ceiling -- this test's purpose is proving writers
+    // make progress under sustained READER pressure (see class doc), not exercising the writer
+    // governor's own turnstile queue-depth limit, which is a separate, already-correct admission
+    // boundary (PoolSaturatedException is exactly its designed, intentional fast-fail response).
+    // Historically this constant was 40, which happened to stay under that ceiling only because
+    // of an unrelated bug (SqlContainer's connection-acquisition hot path blocking a real thread
+    // per waiter instead of awaiting asynchronously) that artificially serialized how many
+    // writers could ever be simultaneously in flight — fixing that bug let all writers genuinely
+    // run concurrently, correctly exposing that 40 already exceeded the governor's real capacity.
+    private const int WriteCount = 20;
     private const int ReadHoldMs = 5;
     private static readonly TimeSpan ContentionWindow = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan OverallTimeout = TimeSpan.FromSeconds(20);

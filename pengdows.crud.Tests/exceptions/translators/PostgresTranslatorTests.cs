@@ -70,6 +70,25 @@ public class PostgresTranslatorTests
     }
 
     [Fact]
+    public void SqlState40003_MapsTo_AmbiguousResultException()
+    {
+        // SQLSTATE 40003 (statement_completion_unknown) -- CockroachDB's real-world "result is
+        // ambiguous" error, raised when its distributed consensus layer loses track of a commit's
+        // outcome (network partition/node failure under contention). Standard PostgreSQL defines
+        // but never actually raises this code; PostgresExceptionTranslator is shared across the
+        // whole PostgreSql/CockroachDb/YugabyteDb/AuroraPostgreSql wire-protocol family, so this
+        // classification lives here even though only CockroachDb is confirmed to trigger it.
+        // Deliberately NOT SerializationConflictException: unlike 40001, retry is not
+        // automatically safe here -- the write might have already applied.
+        var raw = new SqlStateDbException("40003", "result is ambiguous (error=context canceled [exhausted])");
+
+        var result = _translator.Translate(SupportedDatabase.CockroachDb, raw, DbOperationKind.Update);
+
+        Assert.IsType<AmbiguousResultException>(result);
+        Assert.IsNotType<SerializationConflictException>(result);
+    }
+
+    [Fact]
     public void TimeoutMessage_MapsTo_CommandTimeoutException()
     {
         var raw = new SqlStateDbException("57014", "canceling statement due to statement timeout");

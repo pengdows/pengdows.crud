@@ -55,7 +55,17 @@ public class CockroachDbTestContainer : TestContainer
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
+        // Timeout=30;CommandTimeout=60 matches YugabyteTestContainer's explicit values (its
+        // direct architectural sibling here -- both are distributed-consensus databases on the
+        // same Npgsql wire protocol). Left unset, this container silently fell back to Npgsql's
+        // single-node-oriented defaults (Timeout=15;CommandTimeout=30) -- identical to plain
+        // PostgreSql's explicit values -- even though CockroachDB's distributed commit path can
+        // genuinely take longer under contention than a single-node database ever would. This gap
+        // was implicated in a real "Exception while reading from stream... Timeout during reading
+        // attempt" failure observed under heavy parallel Docker load (12 providers' containers
+        // competing for CPU) running this exact test suite.
+        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;" +
+                 "Timeout=30;CommandTimeout=60;";
         var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance);
         return Task.FromResult<IDatabaseContext>(ctx);
     }

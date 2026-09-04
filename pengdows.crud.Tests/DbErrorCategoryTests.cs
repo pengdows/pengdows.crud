@@ -27,6 +27,7 @@ public class DbErrorCategoryTests
         _ = DbErrorCategory.SerializationFailure;
         _ = DbErrorCategory.ConstraintViolation;
         _ = DbErrorCategory.Timeout;
+        _ = DbErrorCategory.AmbiguousResult;
         _ = DbErrorCategory.Unknown;
     }
 
@@ -201,6 +202,29 @@ public class DbErrorCategoryTests
             dialect.ClassifyException(new SqlStateDbException("40001", "could not serialize access")));
         Assert.Equal(DbErrorCategory.Deadlock,
             dialect.ClassifyException(new SqlStateDbException("40P01", "deadlock detected")));
+        Assert.Equal(DbErrorCategory.AmbiguousResult,
+            dialect.ClassifyException(new SqlStateDbException("40003", "result is ambiguous (error=context canceled [exhausted])")));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void PostgreSqlFamily_ClassifyException_SqlState40003_ReturnsAmbiguousResult(SupportedDatabase database)
+    {
+        // The shared PostgreSql/CockroachDb/YugabyteDb/AuroraPostgreSql case block in SqlDialect
+        // (all four go through the same Npgsql driver) classifies 40003 for the whole family, not
+        // just CockroachDb -- see the AmbiguousResult doc comment / SqlDialect.cs for why: real
+        // PostgreSQL defines but never raises 40003 in practice, so this branch is inert (not
+        // wrong) for PostgreSql/AuroraPostgreSql, and CockroachDb/YugabyteDb are both
+        // distributed-consensus databases where it's a real, documented condition.
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={database}",
+            new fakeDbFactory(database));
+        var dialect = ctx.GetDialect();
+
+        Assert.Equal(DbErrorCategory.AmbiguousResult,
+            dialect.ClassifyException(new SqlStateDbException("40003", "result is ambiguous (error=context canceled [exhausted])")));
     }
 
     [Fact]

@@ -505,6 +505,17 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return GetConnection(executionType, isShared);
     }
 
+    /// <summary>
+    /// A transaction's connection is already acquired and pinned for its whole lifetime (see
+    /// <see cref="CreateAsync"/>/the sync constructor path) — no pool wait ever happens here, so
+    /// this is a trivial wrap, not a genuine async operation.
+    /// </summary>
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        return new ValueTask<ITrackedConnection>(GetConnection(executionType, isShared));
+    }
+
     internal void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
@@ -1059,7 +1070,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
             ResolveCreationParameters(context, isolationLevel, executionType);
 
-        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        // Async factory: must await the async acquisition path, not the sync GetConnection,
+        // which would block this thread inside PoolGovernor's blocking semaphore wait while a
+        // slot is unavailable (see IInternalConnectionProvider.GetConnectionAsync).
+        var connection = await connectionProvider.GetConnectionAsync(resolvedExecType, false, cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);

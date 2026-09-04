@@ -57,6 +57,26 @@ public partial class DatabaseContext
         return GetConnection(executionType, isShared);
     }
 
+    /// <summary>
+    /// Async counterpart of <see cref="GetConnection"/>. Genuinely non-blocking under pool
+    /// contention (see <see cref="GetStandardConnectionWithExecutionTypeAsync"/>/
+    /// <see cref="AcquireSlotAsync"/>) — callers on an async execution path (command execution,
+    /// async transaction creation) must use this instead of the sync <see cref="GetConnection"/>,
+    /// which blocks the calling thread inside <c>PoolGovernor.Acquire()</c>'s <c>SemaphoreSlim.Wait</c>
+    /// while waiting for a slot.
+    /// </summary>
+    internal ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
+        CancellationToken cancellationToken = default)
+    {
+        return _connectionStrategy.GetConnectionAsync(executionType, isShared, cancellationToken);
+    }
+
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        return GetConnectionAsync(executionType, isShared, cancellationToken);
+    }
+
     internal void CloseAndDisposeConnectionInternal(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
@@ -274,6 +294,35 @@ public partial class DatabaseContext
         // open a fresh physical connection and execute completely outside admission control.
         ThrowIfDisposed();
         var slot = AcquireSlot(executionType);
+        try
+        {
+            var roIntent = executionType == ExecutionType.Read;
+            var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
+            var connectionString = useReader ? _readerConnectionString : _connectionString;
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
+            return conn;
+        }
+        catch
+        {
+            slot.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="GetStandardConnectionWithExecutionType"/> — awaits the
+    /// pool slot via <see cref="AcquireSlotAsync"/> (PoolGovernor.AcquireAsync/WaitAsync) instead
+    /// of blocking the calling thread in the sync <c>PoolGovernor.Acquire</c>/SemaphoreSlim.Wait.
+    /// <see cref="FactoryCreateConnection(ExecutionType,string?,bool,PoolSlot?)"/> itself performs
+    /// no I/O (it only constructs the ADO.NET connection object; opening happens later, already
+    /// asynchronously, via <c>OpenConnectionAsync</c>), so it is safe to call synchronously here
+    /// once the slot has been acquired.
+    /// </summary>
+    internal async ValueTask<ITrackedConnection> GetStandardConnectionWithExecutionTypeAsync(
+        ExecutionType executionType, bool isShared, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        var slot = await AcquireSlotAsync(executionType, cancellationToken).ConfigureAwait(false);
         try
         {
             var roIntent = executionType == ExecutionType.Read;
@@ -629,6 +678,43 @@ public partial class DatabaseContext
         }
 
         return governor.Acquire();
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="AcquireSlot"/> — awaits <c>PoolGovernor.AcquireAsync</c>
+    /// (WaitAsync) instead of blocking the calling thread in the sync <c>PoolGovernor.Acquire</c>
+    /// (SemaphoreSlim.Wait). See <see cref="GetStandardConnectionWithExecutionTypeAsync"/> for why
+    /// this matters: an async caller waiting for a saturated pool must not pin a real CLR
+    /// ThreadPool worker thread for the duration of that wait.
+    /// </summary>
+    private async ValueTask<PoolSlot> AcquireSlotAsync(ExecutionType executionType, CancellationToken cancellationToken)
+    {
+        if (!_effectivePoolGovernorEnabled)
+        {
+            return default;
+        }
+
+        if (executionType == ExecutionType.Read)
+        {
+            _attributionStats.RecordReadRequest();
+        }
+        else
+        {
+            _attributionStats.RecordWriteRequest();
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            ThrowIfGovernorMissingAfterDisposal();
+            // Not yet disposed: this is the narrow bootstrap window before
+            // InitializePoolGovernors() has run (_effectivePoolGovernorEnabled defaults to
+            // true so the very first, pre-governor connection during construction still
+            // reaches here) — ungoverned by design, matching pre-existing behavior.
+            return default;
+        }
+
+        return await governor.AcquireAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

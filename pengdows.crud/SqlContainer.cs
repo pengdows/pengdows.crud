@@ -1171,7 +1171,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
-            conn = GetConnection(executionType, isShared);
+            conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
 
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
@@ -1537,7 +1537,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
-            conn = GetConnection(executionType, isShared);
+            conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
 
             // A reader keeps the shared connection occupied until it reaches EOF or is disposed.
             // Hold the transaction gate for that entire lifetime; otherwise an ordinary read can
@@ -2142,6 +2142,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         return provider.GetConnection(executionType, isShared);
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="GetConnection"/> — used by every async execution path
+    /// below (ExecuteReaderAsyncInternal, ExecuteNonQueryAsync, ...) instead of the sync version,
+    /// which blocks the calling CLR ThreadPool thread inside PoolGovernor's blocking semaphore
+    /// wait while a pool slot is unavailable.
+    /// </summary>
+    private ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken)
+    {
+        if (_context is not IInternalConnectionProvider provider)
+        {
+            throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
+        }
+
+        return provider.GetConnectionAsync(executionType, isShared, cancellationToken);
     }
 
     private static double TicksToMicroseconds(long ticks)

@@ -3016,6 +3016,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
 
+                // 40003 (statement_completion_unknown): standard SQL/PostgreSQL-catalog code that
+                // vanilla PostgreSQL defines but never actually raises (no ereport() call anywhere
+                // in its source) -- it is CockroachDB's real, documented "result is ambiguous"
+                // error, emitted when its distributed consensus layer loses track of a commit's
+                // outcome during a network partition/node failure under contention. Kept in this
+                // shared case block (not carved out to CockroachDb alone) because all four
+                // databases here go through the same Npgsql driver and the branch is simply inert
+                // -- not wrong -- for PostgreSql/AuroraPostgreSql, which never trigger it; YugabyteDb
+                // is architecturally similar to CockroachDb (distributed consensus) and may.
+                if (string.Equals(sqlState, "40003", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.AmbiguousResult;
+                    return true;
+                }
+
                 if (string.Equals(sqlState, "55P03", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(sqlState, "57014", StringComparison.OrdinalIgnoreCase))
                 {

@@ -14,6 +14,13 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+// [Collection("TypeRegistry")]: this class assigns TypeCoercionHelper.Logger (a process-global
+// static) directly rather than saving/restoring around a scoped try/finally in some tests (see
+// ConnectionString_PublicSurface_ReturnsRedactedValue's setup below) — sharing the "TypeRegistry"
+// collection with every other test class that touches that same static (see
+// TypeCoercionHelperLoggerRaceTests.cs for the full root-cause note) prevents this from racing
+// with them.
+[Collection("TypeRegistry")]
 public sealed class SecurityRegressionTests
 {
     [Fact]
