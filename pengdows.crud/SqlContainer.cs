@@ -1171,7 +1171,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
-            conn = GetConnection(executionType, isShared);
+            conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
 
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
@@ -1537,7 +1537,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
-            conn = GetConnection(executionType, isShared);
+            conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
 
             // A reader keeps the shared connection occupied until it reaches EOF or is disposed.
             // Hold the transaction gate for that entire lifetime; otherwise an ordinary read can
@@ -2134,14 +2134,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }));
     }
 
-    private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
+    /// <summary>
+    /// Async counterpart to the (now-removed, since every caller in this file is async) sync
+    /// GetConnection wrapper. Every async execution path
+    /// (ExecuteReaderAsyncInternal, ExecuteNonQueryAsync) must call this instead of the sync
+    /// overload -- the sync path can block the calling thread inside PoolGovernor.Acquire() while
+    /// waiting for a pool slot, starving the CLR ThreadPool under load.
+    /// </summary>
+    private ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken)
     {
         if (_context is not IInternalConnectionProvider provider)
         {
             throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
         }
 
-        return provider.GetConnection(executionType, isShared);
+        return provider.GetConnectionAsync(executionType, isShared, cancellationToken);
     }
 
     private static double TicksToMicroseconds(long ticks)

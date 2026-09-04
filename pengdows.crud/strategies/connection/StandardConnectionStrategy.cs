@@ -57,6 +57,12 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         return _context.GetStandardConnectionWithExecutionType(executionType, isShared);
     }
 
+    public virtual ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.GetStandardConnectionWithExecutionTypeAsync(executionType, isShared, cancellationToken);
+    }
+
     public virtual void PostInitialize(ITrackedConnection? connection)
     {
         connection?.Dispose();

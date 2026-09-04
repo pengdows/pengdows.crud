@@ -74,7 +74,17 @@ public class SingleWriterFairnessTortureTests
                 ReadWriteMode = ReadWriteMode.ReadWrite,
                 // Fairness is on by default (EnableSingleWriterFairness = true) — kept explicit
                 // here so this test still exercises the intended path if that default ever changes.
-                EnableSingleWriterFairness = true
+                EnableSingleWriterFairness = true,
+                // The writer turnstile's queue-depth admission cap defaults to
+                // max(writerSlots * 8, 32) = 32 for this single-writer pool. Now that the
+                // connection-acquisition path is genuinely async end-to-end (no more accidental
+                // CLR ThreadPool throttling papering over real concurrency -- see the
+                // AsyncPoolAcquisitionRegressionTests fix), all WriteCount=40 writers can
+                // legitimately queue on the turnstile at once, which exceeds the default cap and
+                // fast-fails the overflow with PoolSaturatedException. That's the queue-depth
+                // admission control working exactly as designed; it's this test's own
+                // concurrency (40) that needs a matching queue depth, not a product defect.
+                MaxQueuedWrites = WriteCount + 10
             };
 
             await using var context = new DatabaseContext(cfg, SqliteFactory.Instance, NullLoggerFactory.Instance, typeMap);

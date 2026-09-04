@@ -115,6 +115,33 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         return conn;
     }
 
+    public override async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureSentinelHealthy();
+
+        // Fail fast on acquisition to match GetConnection's factory/open failure behavior.
+        // NOTE: the actual connection.Open() call below stays synchronous, matching the sync
+        // path exactly -- only the pool-slot acquisition inside base.GetConnectionAsync is made
+        // non-blocking here. Open() itself blocking the calling thread is a separate, smaller,
+        // out-of-scope concern from the PoolGovernor sync-over-async defect this change targets.
+        var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (conn.State != ConnectionState.Open)
+            {
+                conn.Open();
+            }
+        }
+        catch
+        {
+            conn.Dispose();
+            throw;
+        }
+
+        return conn;
+    }
+
     /// <summary>
     /// Detects and repairs a PreventDatabaseUnload sentinel connection that unexpectedly transitioned to
     /// Broken/Closed (e.g. a network blip, the embedded engine restarting) rather than via

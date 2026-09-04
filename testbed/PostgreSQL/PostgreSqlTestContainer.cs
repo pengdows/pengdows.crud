@@ -29,6 +29,15 @@ public class PostgreSqlTestContainer : TestContainer
             .Build();
     }
 
+    /// <summary>
+    /// The raw, usable ADO.NET connection string for this container (real password included) --
+    /// distinct from <see cref="IDatabaseContext.ConnectionString"/>, which returns a
+    /// password-redacted string safe for logging. For tests that need to construct their own
+    /// DatabaseContext (e.g. with a custom pool size) directly against this container.
+    /// </summary>
+    public string ConnectionString =>
+        _connectionString ?? throw new InvalidOperationException("Container not started yet.");
+
     public override async Task StartAsync()
     {
         await _container.StartAsync();

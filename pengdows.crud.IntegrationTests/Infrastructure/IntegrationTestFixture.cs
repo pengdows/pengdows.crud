@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using testbed;
+using testbed.PostgreSQL;
 
 namespace pengdows.crud.IntegrationTests.Infrastructure;
 
@@ -181,6 +182,28 @@ public class IntegrationTestFixture : IAsyncLifetime
         }
 
         return container.GetDatabaseContextAsync(_host.Services);
+    }
+
+    /// <summary>
+    /// Raw, usable (real password included) connection string for a container -- needed by tests
+    /// that build their own DatabaseContext with custom configuration (e.g. a small pool size)
+    /// rather than using the shared fixture context. Unlike IDatabaseContext.ConnectionString,
+    /// this is NOT redacted. Currently only implemented for PostgreSQL; extend per-container as
+    /// other providers need it.
+    /// </summary>
+    public string GetRawConnectionString(SupportedDatabase provider)
+    {
+        if (!_containers.TryGetValue(provider, out var container))
+        {
+            throw new InvalidOperationException($"Provider {provider} is not available for testing.");
+        }
+
+        return container switch
+        {
+            PostgreSqlTestContainer pg => pg.ConnectionString,
+            _ => throw new NotSupportedException(
+                $"GetRawConnectionString is not implemented for provider {provider}.")
+        };
     }
 
     private async Task<IDatabaseContext> CreateAndCacheContextAsync(SupportedDatabase provider,

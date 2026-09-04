@@ -160,9 +160,23 @@ public class SqlContainerConnectionSharingTests
             return _context.GetConnection(executionType, isShared);
         }
 
+        public async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType,
+            bool isShared = false, CancellationToken cancellationToken = default)
+        {
+            LastIsShared = isShared;
+            return await _context.GetConnectionAsync(executionType, isShared, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
         {
             return GetConnection(executionType, isShared);
+        }
+
+        ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+            bool isShared, CancellationToken cancellationToken)
+        {
+            return GetConnectionAsync(executionType, isShared, cancellationToken);
         }
 
         public ITransactionContext BeginTransaction(IsolationLevel? isolationLevel = null,

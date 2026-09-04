@@ -269,6 +269,11 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         return Fixture.CreateAdditionalContextAsync(provider);
     }
 
+    protected string GetRawConnectionString(SupportedDatabase provider)
+    {
+        return Fixture.GetRawConnectionString(provider);
+    }
+
     /// <summary>
     /// Returns true for providers that enforce read-only at the transaction level.
     /// Delegates to <see cref="ISqlDialect.SupportsReadOnlyTransactions"/> so each dialect

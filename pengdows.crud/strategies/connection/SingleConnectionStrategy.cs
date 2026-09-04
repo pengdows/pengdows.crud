@@ -73,6 +73,13 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
         return _context.GetSingleConnection();
     }
 
+    public ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        // The single persistent connection is never gated by a PoolGovernor -- nothing to await.
+        return ValueTask.FromResult(GetConnection(executionType, isShared));
+    }
+
     public void PostInitialize(ITrackedConnection? connection)
     {
         _context.SetPersistentConnection(connection);

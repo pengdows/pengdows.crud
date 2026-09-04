@@ -111,6 +111,12 @@ public class TransactionContextAdditionalBranchTests
             return Connection;
         }
 
+        public ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(GetConnection(executionType, isShared));
+        }
+
         public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
             ITrackedConnection? initConnection,
             DbProviderFactory? factory,

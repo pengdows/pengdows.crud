@@ -68,6 +68,14 @@ internal interface IConnectionStrategy
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared);
 
     /// <summary>
+    /// Async counterpart to <see cref="GetConnection"/> for async callers. Must not block the
+    /// calling thread waiting for a pool slot -- implementations that go through a
+    /// <c>PoolGovernor</c> must use its async acquire path.
+    /// </summary>
+    ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Handles dialect detection and initialization for this strategy.
     /// Strategy decides whether to reuse initialization connection, create throwaway connection, etc.
     /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.

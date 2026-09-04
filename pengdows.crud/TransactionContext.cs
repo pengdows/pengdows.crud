@@ -503,9 +503,24 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return _connection;
     }
 
+    /// <inheritdoc/>
+    internal ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType type, bool isShared = false,
+        CancellationToken cancellationToken = default)
+    {
+        // A transaction pins a single connection for its whole lifetime -- already acquired,
+        // nothing to await here.
+        return ValueTask.FromResult(GetConnection(type, isShared));
+    }
+
     ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
     {
         return GetConnection(executionType, isShared);
+    }
+
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        return GetConnectionAsync(executionType, isShared, cancellationToken);
     }
 
     internal void AssertIsReadConnection()
@@ -1062,7 +1077,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
             ResolveCreationParameters(context, isolationLevel, executionType);
 
-        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        var connection = await connectionProvider.GetConnectionAsync(resolvedExecType, false, cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);

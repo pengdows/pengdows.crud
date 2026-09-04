@@ -52,9 +52,21 @@ public partial class DatabaseContext
         return _connectionStrategy.GetConnection(executionType, isShared);
     }
 
+    internal ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
+        CancellationToken cancellationToken = default)
+    {
+        return _connectionStrategy.GetConnectionAsync(executionType, isShared, cancellationToken);
+    }
+
     ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
     {
         return GetConnection(executionType, isShared);
+    }
+
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        return GetConnectionAsync(executionType, isShared, cancellationToken);
     }
 
     internal void CloseAndDisposeConnectionInternal(ITrackedConnection? connection)
@@ -274,6 +286,35 @@ public partial class DatabaseContext
         // open a fresh physical connection and execute completely outside admission control.
         ThrowIfDisposed();
         var slot = AcquireSlot(executionType);
+        try
+        {
+            var roIntent = executionType == ExecutionType.Read;
+            var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
+            var connectionString = useReader ? _readerConnectionString : _connectionString;
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
+            return conn;
+        }
+        catch
+        {
+            slot.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart to <see cref="GetStandardConnectionWithExecutionType"/>. Identical
+    /// except the pool-slot acquisition awaits <see cref="PoolGovernor.AcquireAsync"/> instead of
+    /// blocking the calling thread in <see cref="PoolGovernor.Acquire"/> -- the fix for the
+    /// sync-over-async ThreadPool-starvation defect covered by
+    /// AsyncPoolAcquisitionRegressionTests. <see cref="FactoryCreateConnection(ExecutionType,string,bool,PoolSlot?)"/>
+    /// only constructs the DbConnection object (no I/O, no Open()), so it stays a plain
+    /// synchronous call here exactly as in the sync path.
+    /// </summary>
+    internal async ValueTask<ITrackedConnection> GetStandardConnectionWithExecutionTypeAsync(
+        ExecutionType executionType, bool isShared, CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+        var slot = await AcquireSlotAsync(executionType, cancellationToken).ConfigureAwait(false);
         try
         {
             var roIntent = executionType == ExecutionType.Read;
@@ -629,6 +670,36 @@ public partial class DatabaseContext
         }
 
         return governor.Acquire();
+    }
+
+    /// <summary>
+    /// Async counterpart to <see cref="AcquireSlot"/> -- awaits <see cref="PoolGovernor.AcquireAsync"/>
+    /// instead of blocking the calling thread in the CLR ThreadPool while waiting for a slot.
+    /// </summary>
+    private async ValueTask<PoolSlot> AcquireSlotAsync(ExecutionType executionType, CancellationToken cancellationToken)
+    {
+        if (!_effectivePoolGovernorEnabled)
+        {
+            return default;
+        }
+
+        if (executionType == ExecutionType.Read)
+        {
+            _attributionStats.RecordReadRequest();
+        }
+        else
+        {
+            _attributionStats.RecordWriteRequest();
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            ThrowIfGovernorMissingAfterDisposal();
+            return default;
+        }
+
+        return await governor.AcquireAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
