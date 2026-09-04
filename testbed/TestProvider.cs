@@ -1841,19 +1841,19 @@ INSERT INTO {table} (
             try
             {
                 var ordinal = reader.GetOrdinal(unknownColumn);
-                CheckOk("Reader.GetOrdinalUnknownColumn",
+                CheckOk(
                     $"  [GetOrdinal] {_context.Product} does NOT throw for an unknown column name — " +
                     $"returned ordinal {ordinal} instead of the documented IndexOutOfRangeException.");
             }
             catch (IndexOutOfRangeException)
             {
-                CheckOk("Reader.GetOrdinalUnknownColumn",
+                CheckOk(
                     $"  [GetOrdinal] {_context.Product} throws IndexOutOfRangeException for an unknown " +
                     "column name (matches the documented IDataRecord.GetOrdinal contract): OK");
             }
             catch (Exception ex)
             {
-                CheckOk("Reader.GetOrdinalUnknownColumn",
+                CheckOk(
                     $"  [GetOrdinal] {_context.Product} throws {ex.GetType().Name} (not " +
                     "IndexOutOfRangeException) for an unknown column name: recorded, not enforced.");
             }

@@ -16,6 +16,8 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -71,6 +73,14 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
     public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
         return _context.GetSingleConnection();
+    }
+
+    public ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        // No blocking acquisition here -- the persistent connection is already resolved
+        // synchronously with no pool wait, so there is nothing to genuinely await.
+        return ValueTask.FromResult(_context.GetSingleConnection());
     }
 
     public void PostInitialize(ITrackedConnection? connection)

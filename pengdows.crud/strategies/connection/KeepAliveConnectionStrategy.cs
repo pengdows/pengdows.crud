@@ -16,6 +16,8 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -75,6 +77,29 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
             if (conn.State != ConnectionState.Open)
             {
                 conn.Open();
+            }
+        }
+        catch
+        {
+            // Dispose and rethrow to avoid leaking partially initialized connections
+            conn.Dispose();
+            throw;
+        }
+
+        return conn;
+    }
+
+    public override async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken = default)
+    {
+        // Fail fast on acquisition to match tests that expect factory/open failures
+        var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Try to open immediately so open-time failures surface here
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch

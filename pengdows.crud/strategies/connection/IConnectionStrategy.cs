@@ -15,6 +15,8 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -66,6 +68,16 @@ internal interface IConnectionStrategy
     /// Strategy determines whether to return persistent, ephemeral, or pooled connections.
     /// </summary>
     ITrackedConnection GetConnection(ExecutionType executionType, bool isShared);
+
+    /// <summary>
+    /// Async counterpart of <see cref="GetConnection"/>. Strategies that block on a
+    /// PoolGovernor slot (Standard and its subclasses) must genuinely await acquisition here
+    /// rather than blocking the calling thread -- see AsyncConnectionAcquisitionTests.
+    /// Strategies with no blocking acquisition (e.g. SingleConnection) may trivially wrap
+    /// their synchronous result.
+    /// </summary>
+    ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Handles dialect detection and initialization for this strategy.

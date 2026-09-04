@@ -997,6 +997,12 @@ public class TableGatewayBatchTests : IAsyncLifetime
         {
             return _context.GetConnection(executionType, isShared);
         }
+
+        ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+            bool isShared, CancellationToken cancellationToken)
+        {
+            return _context.GetConnectionAsync(executionType, isShared, cancellationToken);
+        }
     }
 
     private sealed class TrackingSqlContainer : ISqlContainer, ISqlDialectProvider

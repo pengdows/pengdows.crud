@@ -13,6 +13,8 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -55,6 +57,12 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
     public virtual ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
         return _context.GetStandardConnectionWithExecutionType(executionType, isShared);
+    }
+
+    public virtual ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.GetStandardConnectionWithExecutionTypeAsync(executionType, isShared, cancellationToken);
     }
 
     public virtual void PostInitialize(ITrackedConnection? connection)

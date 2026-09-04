@@ -18,6 +18,16 @@ public class PostgreSqlTestContainer : TestContainer
     private int _port = 5432;
     private string _username = "postgres";
 
+    /// <summary>
+    /// The real, usable connection string for this running container (host, dynamically mapped
+    /// port, real credentials). Unlike <c>IDatabaseContext.ConnectionString</c> (which is
+    /// deliberately redacted for safe logging/display), this is for test authors who need to
+    /// build a second, differently-configured DatabaseContext against the SAME running
+    /// container -- e.g. a custom pool size for connection-pooling/backpressure tests.
+    /// </summary>
+    public string ConnectionString =>
+        _connectionString ?? throw new InvalidOperationException("Container not started yet.");
+
     public PostgreSqlTestContainer()
     {
         _container = new ContainerBuilder()

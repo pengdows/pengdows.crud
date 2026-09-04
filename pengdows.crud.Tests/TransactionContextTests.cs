@@ -493,6 +493,12 @@ public class TransactionContextTests
             return GetConnection(executionType, isShared);
         }
 
+        public ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(GetConnection(executionType, isShared));
+        }
+
         MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => null;
 
         MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => null;
@@ -1065,6 +1071,12 @@ public class TransactionContextTests
         public ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
         {
             return _conn;
+        }
+
+        public ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(_conn);
         }
 
         public void ReleaseConnection(ITrackedConnection? connection)

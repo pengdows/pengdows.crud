@@ -454,6 +454,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return GetConnection(executionType, isShared);
     }
 
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        // Already-pinned transaction connection -- no pool wait, nothing to genuinely await.
+        return ValueTask.FromResult(GetConnection(executionType, isShared));
+    }
+
     internal void AssertIsReadConnection()
     {
         _context.AssertIsReadConnection();
@@ -937,7 +944,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         var (resolvedExecType, resolvedIsolation, connectionProvider) =
             ResolveCreationParameters(context, isolationLevel, executionType);
 
-        var connection = connectionProvider.GetConnection(resolvedExecType, false);
+        var connection = await connectionProvider.GetConnectionAsync(resolvedExecType, false, cancellationToken)
+            .ConfigureAwait(false);
         await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
 
         IDbTransaction transaction;

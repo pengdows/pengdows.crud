@@ -55,6 +55,19 @@ public partial class DatabaseContext
         return GetConnection(executionType, isShared);
     }
 
+    /// <inheritdoc/>
+    internal ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
+        CancellationToken cancellationToken = default)
+    {
+        return _connectionStrategy.GetConnectionAsync(executionType, isShared, cancellationToken);
+    }
+
+    ValueTask<ITrackedConnection> IInternalConnectionProvider.GetConnectionAsync(ExecutionType executionType,
+        bool isShared, CancellationToken cancellationToken)
+    {
+        return GetConnectionAsync(executionType, isShared, cancellationToken);
+    }
+
     internal void CloseAndDisposeConnectionInternal(ITrackedConnection? connection)
     {
         _connectionStrategy.ReleaseConnection(connection);
@@ -111,6 +124,32 @@ public partial class DatabaseContext
         bool isShared = false)
     {
         var slot = AcquireSlot(executionType);
+        try
+        {
+            var roIntent = executionType == ExecutionType.Read;
+            var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
+            var connectionString = useReader ? _readerConnectionString : _connectionString;
+            var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
+            return conn;
+        }
+        catch
+        {
+            slot.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="GetStandardConnectionWithExecutionType"/> -- awaits pool
+    /// slot acquisition via <see cref="AcquireSlotAsync"/> instead of blocking the calling thread
+    /// on the synchronous <see cref="AcquireSlot"/>. <see cref="FactoryCreateConnection"/> only
+    /// constructs the connection object (no I/O -- "open late" philosophy defers Open() to the
+    /// caller), so it is safe to call synchronously here.
+    /// </summary>
+    internal async ValueTask<ITrackedConnection> GetStandardConnectionWithExecutionTypeAsync(
+        ExecutionType executionType, bool isShared = false, CancellationToken cancellationToken = default)
+    {
+        var slot = await AcquireSlotAsync(executionType, cancellationToken).ConfigureAwait(false);
         try
         {
             var roIntent = executionType == ExecutionType.Read;
@@ -433,6 +472,38 @@ public partial class DatabaseContext
         }
 
         return governor.Acquire();
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="AcquireSlot"/> -- awaits <c>PoolGovernor.AcquireAsync</c>
+    /// (SemaphoreSlim.WaitAsync) instead of blocking the calling thread on the synchronous
+    /// <c>PoolGovernor.Acquire</c> (SemaphoreSlim.Wait). Every branch here mirrors AcquireSlot
+    /// exactly, aside from the final await.
+    /// </summary>
+    private async ValueTask<PoolSlot> AcquireSlotAsync(ExecutionType executionType,
+        CancellationToken cancellationToken)
+    {
+        if (!_effectivePoolGovernorEnabled)
+        {
+            return default;
+        }
+
+        if (executionType == ExecutionType.Read)
+        {
+            _attributionStats.RecordReadRequest();
+        }
+        else
+        {
+            _attributionStats.RecordWriteRequest();
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            return default;
+        }
+
+        return await governor.AcquireAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

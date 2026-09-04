@@ -182,6 +182,28 @@ public class IntegrationTestFixture : IAsyncLifetime
         return container.GetDatabaseContextAsync(_host.Services);
     }
 
+    /// <summary>
+    /// The real, usable connection string for the running container backing <paramref name="provider"/>
+    /// -- unlike <c>IDatabaseContext.ConnectionString</c> (deliberately redacted for safe
+    /// logging/display), for test authors who need to build a second, differently-configured
+    /// DatabaseContext (e.g. a custom pool size) against the same running container. Only
+    /// implemented for containers that expose a real connection string (currently PostgreSQL).
+    /// </summary>
+    public string GetRawConnectionString(SupportedDatabase provider)
+    {
+        if (!_containers.TryGetValue(provider, out var container))
+        {
+            throw new InvalidOperationException($"Provider {provider} is not available for testing.");
+        }
+
+        return container switch
+        {
+            testbed.PostgreSQL.PostgreSqlTestContainer pg => pg.ConnectionString,
+            _ => throw new NotSupportedException(
+                $"GetRawConnectionString is not implemented for provider {provider} ({container.GetType().Name}).")
+        };
+    }
+
     private async Task<IDatabaseContext> CreateAndCacheContextAsync(SupportedDatabase provider,
         ITestContainer container)
     {
