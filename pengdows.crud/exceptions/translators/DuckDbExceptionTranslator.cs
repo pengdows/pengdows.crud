@@ -35,12 +35,29 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
+        // Distinct from the missing/inaccessible-path case above: DuckDB is embedded and takes an
+        // OS-level file lock, so a second process opening the same (valid, existing) file for
+        // read-write while a first still holds it open fails at connection-open time with
+        // "IO Error: Could not set lock on file "...": Conflicting lock is held in <process>
+        // (PID <n>)" (confirmed empirically against DuckDB.NET.Data.Full 1.4.1 by racing two
+        // processes for the same file). Exactly the shape hit when a Hangfire worker process and
+        // a web request process both touch the same DuckDB-backed tenant file. Unlike a missing
+        // path, this is transient -- the holder releases the lock when it closes its connection.
+        if (message.Contains("Could not set lock on file", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ConnectionException(
+                $"{operationKind} could not open a DuckDB connection because another process holds the file lock: {message}",
+                database, exception, errorCode: errorCode, isTransient: true);
+        }
+
         // Confirmed against a real concurrent-write conflict: two connections each open a
         // transaction, both read row X, one commits an update, then the other's update on the
         // same row throws with message "TransactionContext Error: Conflict on update!" and
         // ErrorType == Transaction (NOT the "Serialization" enum member the name might suggest —
-        // verified empirically rather than assumed).
-        if (message.Contains("Conflict on update", StringComparison.OrdinalIgnoreCase))
+        // verified empirically rather than assumed). The same MVCC conflict occurs on DELETE
+        // ("Conflict on tuple deletion!") and INSERT ("Conflict on insert!") -- match the shared
+        // "Conflict on" prefix rather than "Conflict on update" alone so all three are covered.
+        if (message.Contains("Conflict on", StringComparison.OrdinalIgnoreCase))
         {
             return new SerializationConflictException(
                 $"{operationKind} encountered a serialization conflict on {database}: {message}",

@@ -227,4 +227,44 @@ public class DuckDbTranslatorTests
 
         Assert.IsType<SerializationConflictException>(result);
     }
+
+    [Theory]
+    [InlineData("TransactionContext Error: Conflict on tuple deletion!")]
+    [InlineData("TransactionContext Error: Conflict on insert!")]
+    public void ConflictOnOtherOperationMessage_Maps_SerializationConflictException(string message)
+    {
+        // The existing update-conflict check above only matches "Conflict on update" literally,
+        // so it misses the same MVCC conflict on DELETE/INSERT. Confirmed empirically against
+        // DuckDB.NET.Data.Full 1.4.1: two concurrent DELETEs of the same row throw
+        // "TransactionContext Error: Conflict on tuple deletion!" -- same failure family, same
+        // retry-appropriate semantics, but previously fell through to the non-transient fallback.
+        var raw = new SqliteMessageDbException(message);
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Delete);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.Equal(true, result.IsTransient);
+    }
+
+    // ── Cross-process file-lock (distinct from the file-open failure above) ───
+
+    [Fact]
+    public void FileLockMessage_Maps_ConnectionException_AndIsTransient()
+    {
+        // Distinct from ConnectionFailure_CannotOpenFileMessage_Maps_ConnectionException above:
+        // that one is a missing/inaccessible path ("Cannot open file"), non-retryable. This is a
+        // second process holding the OS-level file lock on an existing, valid DuckDB file --
+        // confirmed empirically against DuckDB.NET.Data.Full 1.4.1 by actually racing two
+        // processes for the same file. Unlike the missing-path case, this legitimately succeeds
+        // on retry once the lock holder closes its connection -- exactly the shape of a Hangfire
+        // worker and a web request both touching the same DuckDB-backed tenant file.
+        var raw = new SqliteMessageDbException(
+            "DuckDBOpen failed: IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
+            "See also https://duckdb.org/docs/stable/connect/concurrency");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+        Assert.Equal(true, result.IsTransient);
+    }
 }
