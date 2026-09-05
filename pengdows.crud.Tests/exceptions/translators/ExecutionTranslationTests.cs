@@ -94,11 +94,11 @@ public class ExecutionTranslationTests : SqlLiteContextTestBase
                 "IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). See also https://duckdb.org/docs/stable/connect/concurrency"));
         await using var sc = failing.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<ConnectionException>(async () =>
+        var ex = await Assert.ThrowsAsync<FileLockContentionException>(async () =>
             await sc.ExecuteReaderAsync(CommandType.Text));
 
         Assert.Equal(SupportedDatabase.DuckDB, ex.Database);
         Assert.IsType<NumberedDbException>(ex.InnerException);
-        Assert.Equal(true, ex.IsTransient);
+        Assert.Equal(false, ex.IsTransient);
     }
 }

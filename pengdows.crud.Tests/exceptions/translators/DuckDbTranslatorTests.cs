@@ -249,22 +249,31 @@ public class DuckDbTranslatorTests
     // ── Cross-process file-lock (distinct from the file-open failure above) ───
 
     [Fact]
-    public void FileLockMessage_Maps_ConnectionException_AndIsTransient()
+    public void FileLockMessage_Maps_FileLockContentionException_AndIsNotTransient()
     {
         // Distinct from ConnectionFailure_CannotOpenFileMessage_Maps_ConnectionException above:
         // that one is a missing/inaccessible path ("Cannot open file"), non-retryable. This is a
         // second process holding the OS-level file lock on an existing, valid DuckDB file --
         // confirmed empirically against DuckDB.NET.Data.Full 1.4.1 by actually racing two
-        // processes for the same file. Unlike the missing-path case, this legitimately succeeds
-        // on retry once the lock holder closes its connection -- exactly the shape of a Hangfire
-        // worker and a web request both touching the same DuckDB-backed tenant file.
+        // processes for the same file.
+        //
+        // Also distinct from the write-write MVCC conflict below: a conflict clears on its own
+        // (the loser can always retry and win eventually), but a file lock only clears if the
+        // other process closes its connection -- and if that other process is a second writer
+        // that was never supposed to exist against this file (the actual single-node invariant
+        // DuckDB's embedded model assumes), retrying never succeeds. A blanket IsTransient = true
+        // would let a generic retry loop quietly spin on a topology violation instead of
+        // surfacing it, so this gets its own type with IsTransient hardcoded false; a caller who
+        // has verified their specific deployment shape really is transient contention (e.g. a
+        // Hangfire job briefly holding the file) can catch this type specifically and retry.
         var raw = new SqliteMessageDbException(
             "DuckDBOpen failed: IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
             "See also https://duckdb.org/docs/stable/connect/concurrency");
 
         var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
-        Assert.Equal(true, result.IsTransient);
+        Assert.IsType<FileLockContentionException>(result);
+        Assert.IsAssignableFrom<ConnectionException>(result); // still catchable as a generic connection failure
+        Assert.Equal(false, result.IsTransient);
     }
 }
