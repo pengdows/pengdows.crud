@@ -109,6 +109,40 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
+        // DuckDB has no lock-based deadlock concept; concurrent writers instead race under MVCC
+        // and the loser's execute/commit throws "TransactionContext Error: Conflict on ...!" at
+        // commit/execute time (confirmed against DuckDB.NET.Data.Full: "Conflict on update!",
+        // "Conflict on tuple deletion!"). This is the DuckDB analog of the deadlock/serialization
+        // conflicts every other multi-writer-capable dialect here (Postgres/MySQL/SQL
+        // Server/Oracle) maps to a transient, retryable exception -- without this branch it fell
+        // through to the non-transient fallback, leaving callers with no retry signal for a
+        // condition that legitimately succeeds on retry (e.g. a Hangfire job and a web request
+        // racing to update the same row in a shared DuckDB file).
+        // Checked before timeout for the same false-positive-on-embedded-context-text reason as
+        // the other DuckDB categories above.
+        if (message.Contains("TransactionContext Error: Conflict on", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SerializationConflictException(
+                $"{operationKind} hit a write-write conflict on {database}: {message}",
+                database, exception, errorCode: errorCode);
+        }
+
+        // DuckDB is embedded and takes an OS-level file lock for the database file; a second
+        // process opening the same file for read-write while another still holds it open fails
+        // at connection-open time with "IO Error: Could not set lock on file "...": Conflicting
+        // lock is held in <process> (PID <n>)" (confirmed empirically against DuckDB.NET.Data.Full
+        // 1.4.1). This is exactly the shape hit when e.g. a Hangfire worker process and a web
+        // request process both touch the same DuckDB-backed tenant file concurrently. It is
+        // transient -- the holder releases the lock when it closes its connection -- so mark it
+        // retryable like the write-write conflict above, rather than letting it fall through to
+        // the non-transient fallback and giving the caller no retry signal.
+        if (message.Contains("Could not set lock on file", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ConnectionException(
+                $"{operationKind} could not open a DuckDB connection because another process holds the file lock: {message}",
+                database, exception, errorCode: errorCode, isTransient: true);
+        }
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);

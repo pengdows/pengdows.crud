@@ -195,4 +195,63 @@ public class DuckDbTranslatorTests
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.IsNotType<CommandTimeoutException>(result);
     }
+
+    // ── Write-write conflict detection (MVCC optimistic concurrency) ──────────
+    //
+    // DuckDB has no locking/deadlock concept (unlike Postgres/MySQL/SQL Server/Oracle, which
+    // all map an analogous condition to DeadlockException/SerializationConflictException here).
+    // Instead, two connections racing to modify the same row under DuckDB's MVCC model both
+    // proceed until commit, and the loser's ExecuteNonQuery/Commit throws a DuckDBException whose
+    // message starts with "TransactionContext Error: Conflict on ..." (confirmed empirically
+    // against DuckDB.NET.Data.Full 1.4.1: "Conflict on update!" for two concurrent UPDATEs of the
+    // same row, "Conflict on tuple deletion!" for two concurrent DELETEs). This is the real
+    // failure mode a caller hits when e.g. a Hangfire job and a web request write to the same row
+    // in a shared DuckDB file concurrently -- without this classification it fell through to
+    // CreateFallback (IsTransient = null), giving the caller no signal that retrying is
+    // appropriate, unlike every other multi-writer-capable dialect in this codebase.
+
+    [Theory]
+    [InlineData("TransactionContext Error: Conflict on update!")]
+    [InlineData("TransactionContext Error: Conflict on tuple deletion!")]
+    [InlineData("TransactionContext Error: Conflict on insert!")]
+    public void DuckDb_WriteWriteConflictMessage_MapsTo_SerializationConflictException(string message)
+    {
+        var raw = new SqliteMessageDbException(message);
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.Equal(true, result.IsTransient);
+    }
+
+    [Fact]
+    public void DuckDb_WriteWriteConflict_WithTimeoutKeywordInMessage_ClassifiesAsConflict_NotTimeout()
+    {
+        // Same precedence guard as the other DuckDB categories: a conflict message must not be
+        // misclassified as a timeout just because "timeout" appears in accompanying context.
+        var raw = new SqliteMessageDbException("TransactionContext Error: Conflict on update! (session_timeout_job)");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.IsNotType<CommandTimeoutException>(result);
+    }
+
+    // ── Cross-process file-lock detection (embedded, OS-level file lock) ──────
+
+    [Fact]
+    public void DuckDb_FileLockMessage_MapsTo_ConnectionException_AndIsTransient()
+    {
+        // Exact message confirmed empirically against DuckDB.NET.Data.Full 1.4.1: a second
+        // process opening the same DuckDB file for read-write while a first still holds it open
+        // fails at connection-open time with this message.
+        var raw = new SqliteMessageDbException(
+            "IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
+            "See also https://duckdb.org/docs/stable/connect/concurrency");
+
+        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+        Assert.Equal(true, result.IsTransient);
+    }
 }
