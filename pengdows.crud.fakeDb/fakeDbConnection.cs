@@ -745,6 +745,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void Open()
     {
+        OpenCore(countAsSyncOpen: true);
+    }
+
+    /// <summary>
+    /// Shared open state-machine (failure simulation, broken-connection handling, the
+    /// ParseEmulatedProduct/state-transition side effects) used by both the sync <see cref="Open"/>
+    /// and the successful-completion path of <see cref="OpenAsync"/>. OpenAsync's fake
+    /// implementation has no real I/O to await, so it performs the identical state transition
+    /// synchronously under the hood -- but it must NOT inflate the public <see cref="OpenCount"/>
+    /// counter when it does, or a test asserting "this code path used OpenAsync, not Open" (e.g.
+    /// verifying a sync-over-async regression fix) can never distinguish the two: every OpenAsync
+    /// call would silently also count as a sync Open call. <paramref name="countAsSyncOpen"/>
+    /// keeps that counter meaningful for its actual purpose (detecting a real, caller-issued
+    /// synchronous Open() call) while OpenAsyncCount remains the source of truth for async calls.
+    /// </summary>
+    private void OpenCore(bool countAsSyncOpen)
+    {
         if (_state == ConnectionState.Open)
         {
             // Matches real ADO.NET providers (SqlConnection, NpgsqlConnection, SqliteConnection):
@@ -827,7 +844,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Invoke custom open behavior if set
         _customOpenBehavior?.Invoke();
 
-        OpenCount++;
+        if (countAsSyncOpen)
+        {
+            OpenCount++;
+        }
+
         ParseEmulatedProduct(ConnectionString);
         var originalState = _state;
 
@@ -965,7 +986,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             try
             {
-                Open();
+                OpenCore(countAsSyncOpen: false);
                 return Task.CompletedTask;
             }
             catch (Exception ex)
@@ -980,7 +1001,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private async Task OpenAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken cancellationToken)
     {
         await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-        Open();
+        OpenCore(countAsSyncOpen: false);
     }
 
     private SupportedDatabase ParseEmulatedProduct(string? connStr)
