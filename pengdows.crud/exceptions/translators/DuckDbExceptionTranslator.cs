@@ -132,15 +132,18 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
         // at connection-open time with "IO Error: Could not set lock on file "...": Conflicting
         // lock is held in <process> (PID <n>)" (confirmed empirically against DuckDB.NET.Data.Full
         // 1.4.1). This is exactly the shape hit when e.g. a Hangfire worker process and a web
-        // request process both touch the same DuckDB-backed tenant file concurrently. It is
-        // transient -- the holder releases the lock when it closes its connection -- so mark it
-        // retryable like the write-write conflict above, rather than letting it fall through to
-        // the non-transient fallback and giving the caller no retry signal.
+        // request process both touch the same DuckDB-backed tenant file concurrently -- but
+        // unlike the write-write conflict above, it is NOT automatically transient: it only
+        // clears if the other process closes its connection, and if that other process is a
+        // second writer that was never supposed to exist against this file, retrying never
+        // succeeds. See FileLockContentionException for why this gets its own type with
+        // IsTransient hardcoded false, rather than being lumped in as a generic retryable
+        // ConnectionException.
         if (message.Contains("Could not set lock on file", StringComparison.OrdinalIgnoreCase))
         {
-            return new ConnectionException(
+            return new FileLockContentionException(
                 $"{operationKind} could not open a DuckDB connection because another process holds the file lock: {message}",
-                database, exception, errorCode: errorCode, isTransient: true);
+                database, exception, errorCode: errorCode);
         }
 
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))

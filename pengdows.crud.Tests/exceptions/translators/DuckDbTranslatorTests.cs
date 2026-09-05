@@ -240,18 +240,32 @@ public class DuckDbTranslatorTests
     // ── Cross-process file-lock detection (embedded, OS-level file lock) ──────
 
     [Fact]
-    public void DuckDb_FileLockMessage_MapsTo_ConnectionException_AndIsTransient()
+    public void DuckDb_FileLockMessage_MapsTo_FileLockContentionException_AndIsNotTransient()
     {
         // Exact message confirmed empirically against DuckDB.NET.Data.Full 1.4.1: a second
         // process opening the same DuckDB file for read-write while a first still holds it open
         // fails at connection-open time with this message.
+        //
+        // This is deliberately NOT the same as the write-write MVCC conflict above. A conflict
+        // clears on its own -- the loser can always retry and eventually win. A file lock only
+        // clears if the other process closes its connection; if that "other process" is a second
+        // long-running writer that was never supposed to exist against this file (the actual
+        // single-node invariant DuckDB's embedded model assumes), retrying never succeeds. A
+        // blanket IsTransient = true here would let a generic retry loop quietly spin on a
+        // topology violation instead of surfacing it. So: its own exception type (still a
+        // ConnectionException, since it does fail at connection-open time and existing
+        // `catch (ConnectionException)` callers should still see it), non-transient by default --
+        // a caller who has verified their specific deployment shape really is transient
+        // contention (e.g. a Hangfire job briefly holding the file) can catch this type
+        // specifically and choose to retry; nothing does so blindly.
         var raw = new SqliteMessageDbException(
             "IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
             "See also https://duckdb.org/docs/stable/connect/concurrency");
 
         var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
-        Assert.Equal(true, result.IsTransient);
+        Assert.IsType<FileLockContentionException>(result);
+        Assert.IsAssignableFrom<ConnectionException>(result); // still catchable as a generic connection failure
+        Assert.Equal(false, result.IsTransient);
     }
 }
