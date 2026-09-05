@@ -83,8 +83,8 @@ public class ExecutionTranslationTests : SqlLiteContextTestBase
     // Connection-open failures (as opposed to command-execute failures, covered above) go through
     // the same broad catch in SqlContainer's execution paths and so are translated the same way —
     // this proves it end to end rather than just at the translator-unit level (see
-    // DuckDbTranslatorTests.FileLockMessage_Maps_ConnectionException_AndIsTransient for the
-    // DuckDB-specific message-classification test).
+    // DuckDbTranslatorTests.FileLockMessage_Maps_FileLockContentionException_AndIsNotTransient for
+    // the DuckDB-specific message-classification test).
     [Fact]
     public async Task ExecuteReaderAsync_WrapsProviderException_WhenConnectionOpenFails()
     {
@@ -94,11 +94,11 @@ public class ExecutionTranslationTests : SqlLiteContextTestBase
                 "IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). See also https://duckdb.org/docs/stable/connect/concurrency"));
         await using var sc = failing.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<ConnectionException>(async () =>
+        var ex = await Assert.ThrowsAsync<FileLockContentionException>(async () =>
             await sc.ExecuteReaderAsync(CommandType.Text));
 
         Assert.Equal(SupportedDatabase.DuckDB, ex.Database);
         Assert.IsType<NumberedDbException>(ex.InnerException);
-        Assert.Equal(true, ex.IsTransient);
+        Assert.Equal(false, ex.IsTransient);
     }
 }

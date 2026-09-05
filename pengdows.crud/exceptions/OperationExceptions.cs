@@ -116,6 +116,39 @@ public class ConnectionException : DatabaseOperationException
 }
 
 /// <summary>
+/// Thrown when a connection cannot be opened because another process/connection holds an
+/// incompatible OS-level lock on the target database file (embedded, file-based engines only --
+/// DuckDB confirmed; SQLite's analogous SQLITE_BUSY/SQLITE_LOCKED are a different, always-
+/// transient case handled separately and are not this type).
+/// </summary>
+/// <remarks>
+/// Deliberately distinct from a generic <see cref="ConnectionException"/> and from
+/// <see cref="TransientWriteConflictException"/>: a write-write MVCC conflict clears on its own
+/// (the loser can always retry and eventually win), but a file lock only clears if the other
+/// process closes its connection. If that other process is a second writer that was never
+/// supposed to exist against this file -- the actual single-node invariant an embedded engine's
+/// file lock enforces -- retrying never succeeds. <see cref="DatabaseException.IsTransient"/> is
+/// hardcoded <see langword="false"/> so a generic retry policy never spins on what may be a
+/// permanent topology violation; a caller who has verified their specific deployment shape really
+/// is transient contention (e.g. a background job process briefly holding the file open) can
+/// catch this type specifically and choose to retry.
+/// Still a <see cref="ConnectionException"/> subtype -- it does fail at connection-open time, and
+/// existing <c>catch (ConnectionException)</c> handling should still see it.
+/// </remarks>
+public sealed class FileLockContentionException : ConnectionException
+{
+    public FileLockContentionException(
+        string message,
+        SupportedDatabase database,
+        Exception? innerException = null,
+        string? sqlState = null,
+        int? errorCode = null)
+        : base(message, database, innerException, sqlState, errorCode, constraintName: null, isTransient: false)
+    {
+    }
+}
+
+/// <summary>
 /// Thrown when a write operation is attempted on a connection opened in read-only mode.
 /// </summary>
 /// <remarks>
