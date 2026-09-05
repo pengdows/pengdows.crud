@@ -120,17 +120,16 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     {
         EnsureSentinelHealthy();
 
-        // Fail fast on acquisition to match GetConnection's factory/open failure behavior.
-        // NOTE: the actual connection.Open() call below stays synchronous, matching the sync
-        // path exactly -- only the pool-slot acquisition inside base.GetConnectionAsync is made
-        // non-blocking here. Open() itself blocking the calling thread is a separate, smaller,
-        // out-of-scope concern from the PoolGovernor sync-over-async defect this change targets.
+        // Fail fast on acquisition to match GetConnection's factory/open failure behavior, but
+        // via OpenAsync -- calling the blocking Open() from inside an async method is exactly the
+        // sync-over-async, ThreadPool-starving pattern the PoolGovernor fix (above) was meant to
+        // eliminate on this path; leaving it here just moved the same defect one line down.
         var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
         try
         {
             if (conn.State != ConnectionState.Open)
             {
-                conn.Open();
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch
