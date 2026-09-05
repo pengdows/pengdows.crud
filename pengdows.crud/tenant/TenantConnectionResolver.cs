@@ -156,6 +156,7 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             DbMode = source.DbMode,
             ReadWriteMode = source.ReadWriteMode,
             PrepareMode = source.PrepareMode,
+            ReaderPlanCacheSize = source.ReaderPlanCacheSize,
             EnableMetrics = source.EnableMetrics,
             MetricsOptions = source.MetricsOptions,
             MaxConcurrentWrites = source.MaxConcurrentWrites,

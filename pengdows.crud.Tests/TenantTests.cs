@@ -335,4 +335,143 @@ public class TenantTests
         Assert.Equal(20, caught.Count);
         Assert.All(caught, ex => Assert.IsType<InvalidOperationException>(ex));
     }
+
+    // TenantConnectionResolver's own tenant-key lookup is case-insensitive
+    // (StringComparer.OrdinalIgnoreCase). The registry's cache must match that, or "acme"/"ACME"
+    // become two independently governed DatabaseContext instances instead of one.
+    [Fact]
+    public void GetContext_TenantIdDiffersOnlyByCase_ResolvesSameCachedContext()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        using var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var lower = registry.GetContext("acme");
+        var upper = registry.GetContext("ACME");
+        var mixed = registry.GetContext("AcMe");
+
+        Assert.Same(lower, upper);
+        Assert.Same(lower, mixed);
+    }
+
+    private sealed class RecordingBlockingContextFactory : IDatabaseContextFactory
+    {
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public IDatabaseContext? CreatedContext { get; private set; }
+
+        public RecordingBlockingContextFactory(SemaphoreSlim creationStarted, SemaphoreSlim proceedWithCreation)
+        {
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            var context = new DatabaseContext(configuration, factory, loggerFactory);
+            CreatedContext = context;
+            return context;
+        }
+    }
+
+    // Regression: DisposeManaged()/DisposeManagedAsync() previously skipped any entry whose
+    // construction hadn't already completed (IsValueCreated == false) and attached no
+    // continuation for it before clearing _contexts. If GetContext's construction was still in
+    // flight when the registry itself was disposed, the resulting IDatabaseContext became
+    // completely unreachable once construction later succeeded — never disposed, a genuine leak
+    // — even though the racing GetContext caller correctly failed closed with
+    // ObjectDisposedException. This test captures the context a recording factory actually built
+    // and proves it is eventually disposed, not merely that the racing caller was turned away.
+    [Fact]
+    public async Task Dispose_RacingWithInFlightCreate_DisposesTheOrphanedContextOnceConstructionCompletes()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+        var factory = new RecordingBlockingContextFactory(creationStarted, proceedWithCreation);
+
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            factory,
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var getContextTask = Task.Run(() => registry.GetContext("dispose-race-tenant-orphan"));
+
+        await creationStarted.WaitAsync();
+
+        // Race: dispose the registry before the in-flight creation finishes.
+        registry.Dispose();
+
+        proceedWithCreation.Release();
+
+        try
+        {
+            await getContextTask;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expected — GetContext must fail closed for the racing caller. This test is about
+            // what happens to the context that was actually constructed, not the caller's outcome.
+        }
+
+        var created = factory.CreatedContext;
+        Assert.NotNull(created);
+
+        var isUsable = true;
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                await using var sc = created!.CreateSqlContainer("SELECT 1");
+                await sc.ExecuteNonQueryAsync();
+            }
+            catch (ObjectDisposedException)
+            {
+                isUsable = false;
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.False(isUsable,
+            "A context constructed while racing registry disposal must eventually be disposed, not leaked untracked.");
+    }
 }

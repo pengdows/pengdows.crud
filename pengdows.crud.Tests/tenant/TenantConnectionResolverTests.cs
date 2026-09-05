@@ -415,6 +415,26 @@ public class TenantConnectionResolverTests
         Assert.Equal("Server=original;", stored.ConnectionString);
     }
 
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesReaderPlanCacheSize()
+    {
+        // CloneConfiguration() previously dropped ReaderPlanCacheSize even though the interface
+        // already exposed it — a tenant's configured cache size silently reverted to null (the
+        // gateway's own default) once round-tripped through registration.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=A;",
+            ProviderName = "Microsoft.Data.Sqlite",
+            ReaderPlanCacheSize = 42
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-cache-size", config);
+        var result = resolver.GetDatabaseContextConfiguration("tenant-cache-size");
+
+        Assert.Equal(42, result.ReaderPlanCacheSize);
+    }
+
     private class TestTenantConnectionResolver : ITenantConnectionResolver
     {
         public IDatabaseContextConfiguration GetDatabaseContextConfiguration(string tenant)

@@ -905,6 +905,7 @@ public class PengdowsMetricsObserverTests
         public event Action<IDatabaseContext>? ContextRemoved;
 
         public IDatabaseContext GetContext(string tenant) => throw new NotSupportedException();
+        public ITenantContextLease AcquireLease(string tenant) => throw new NotSupportedException();
         public void Invalidate(string tenant) => throw new NotSupportedException();
         public void InvalidateAll() => throw new NotSupportedException();
 

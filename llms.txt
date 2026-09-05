@@ -1,0 +1,52 @@
+# pengdows.crud (2.0)
+
+> A SQL-first, strongly-typed, testable data access layer for .NET 8. Not an ORM — no LINQ,
+> no change tracking — with database-agnostic SQL, safe parameterization, and context-per-tenant
+> multi-tenancy across 15 supported database engines.
+
+This file is a curated index, not the full content — it links out to the canonical docs rather
+than duplicating them.
+
+Read [`CLAUDE.md`](CLAUDE.md) first for the full API surface, attribute rules (`[Table]`,
+`[Column]`, `[Id]` vs `[PrimaryKey]`), `DbMode` connection strategies, and TDD/testing
+requirements this repo enforces.
+
+## Multi-tenancy and dynamic provider loading
+
+pengdows.crud uses **context-per-tenant** multi-tenancy (a distinct `DatabaseContext` per
+tenant, not row-level `WHERE tenant_id` filtering), with `DbProviderFactory` resolution
+config-driven via `DbProviderLoader` for tenants whose provider isn't known at compile time. See
+[`docs/multitenancy-dynamic-providers.md`](docs/multitenancy-dynamic-providers.md) for:
+
+- Registering keyed `DbProviderFactory` instances (statically, or dynamically via
+  `DbProviderLoader`'s `"DatabaseProviders"` configuration section)
+- `AddMultiTenancy` DI registration and the `"MultiTenant"` configuration shape
+- Request-time resolution via `ITenantContextRegistry.GetContext(tenant)`
+- Protecting a held context from concurrent rotation via `AcquireLease(tenant)`
+  (reference-counted, CAS-based; synchronous only — no `AcquireLeaseAsync`/`GetContextAsync`
+  in this version, since 2.0's `IDatabaseContextFactory` has no async `CreateAsync`)
+- Lifecycle: `Invalidate`/`InvalidateAll`, `ContextCreated`/`ContextRemoved` events,
+  `maxTenantCount` cardinality cap (admission is atomic — safe under concurrent distinct-tenant
+  creation), case-insensitive tenant-ID lookup
+
+## Other documentation
+
+- [`RELEASE_NOTES_1.0_TO_2.0.md`](../RELEASE_NOTES_1.0_TO_2.0.md) — breaking changes from 1.0
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — overall architecture, including a simpler
+  DI-only (non-registry) multi-tenancy pattern
+- [`docs/connection-management-guide.md`](docs/connection-management-guide.md) — `DbMode`
+  connection strategies
+- [`docs/parameter-naming-convention.md`](docs/parameter-naming-convention.md) — per-operation
+  SQL parameter naming (`i{n}`, `s{n}`, `w{n}`, `k{n}`, `v{n}`, `j{n}`, `b{n}`)
+- [`docs/supported-databases.md`](docs/supported-databases.md) — the 15 supported database
+  engines and dialect capability notes
+- [`docs/transactions.md`](docs/transactions.md) — transaction/savepoint usage; do not use
+  `TransactionScope` (incompatible by design — see `CLAUDE.md`)
+
+## Related
+
+- **`pengdows.crud-2.0`** is one version of this library in a multi-version repository; a newer
+  version lives alongside it (`pengdows.crud-2.1`/`pengdows.crud`), with a further-expanded
+  tenant-context API (`GetContextAsync`, `AcquireLeaseAsync`, built on async `DatabaseContext`
+  creation) not present in 2.0 — do not assume API parity across versions without checking
+  source directly.

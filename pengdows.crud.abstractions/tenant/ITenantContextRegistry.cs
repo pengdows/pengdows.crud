@@ -8,10 +8,28 @@ public interface ITenantContextRegistry
     /// <summary>
     /// Retrieves a database context for the specified tenant.
     /// </summary>
+    /// <remarks>
+    /// Returns a bare reference with no protection against a concurrent <see cref="Invalidate"/>/
+    /// <see cref="InvalidateAll"/> disposing this exact context immediately after it's returned.
+    /// Fine for the common case — resolve, then immediately pass the result into one gateway call
+    /// in the same synchronous flow. If you hold the context across any later point where a
+    /// concurrent invalidation could race your usage, use <see cref="AcquireLease"/> instead.
+    /// </remarks>
     /// <param name="tenant">Tenant identifier.</param>
     /// <returns>The associated database context.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
     public IDatabaseContext GetContext(string tenant);
+
+    /// <summary>
+    /// Acquires a reference-counted lease on the tenant's context, protecting it from being
+    /// disposed by a concurrent <see cref="Invalidate"/>/<see cref="InvalidateAll"/> until the
+    /// lease itself is disposed. Prefer this over <see cref="GetContext"/> whenever you need a
+    /// guarantee stronger than "nothing concurrent will rotate this tenant while I'm using it."
+    /// </summary>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <returns>A lease wrapping the tenant's context. Dispose it when done.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
+    public ITenantContextLease AcquireLease(string tenant);
 
     /// <summary>
     /// Disposes and removes the cached context for the specified tenant.
