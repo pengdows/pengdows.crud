@@ -111,7 +111,11 @@ database-agnostic policy decoupled from connection identity — is in
   matrix (isolation levels, upsert strategy, GUID storage, stored-procedure wrapping style)
   across all 16 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
   DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
-  PostgreSQL, and TimescaleDB (the last three detected at runtime, no separate dialect).
+  PostgreSQL, and FlatFile ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)).
+  Aurora MySQL/PostgreSQL, TimescaleDB, Citus, Fujitsu Enterprise Postgres, and Percona
+  Server for MySQL are all detected at runtime and delegate to the MySQL/PostgreSQL
+  dialect — no separate dialect or `SupportedDatabase` value, verified live against real
+  containers (see the "Verified PostgreSQL/MySQL-compatible forks" note in that file).
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles, savepoints, and the concurrency contract (which commit/rollback/dispose/cancellation
   races are safe, which throw, and the one documented residual TOCTOU). Transactions are

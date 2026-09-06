@@ -1,16 +1,16 @@
 # Supported Databases
 
-pengdows.crud supports 15 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 16 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
-| `PostgreSql=1` | PostgreSQL (including TimescaleDB) |
+| `PostgreSql=1` | PostgreSQL (including TimescaleDB, Citus, and Fujitsu Enterprise Postgres — see note below) |
 | `SqlServer=2` | SQL Server / Express / LocalDB |
 | `Oracle=4` | Oracle |
 | `Firebird=8` | Firebird |
 | `CockroachDb=16` | CockroachDB |
 | `MariaDb=32` | MariaDB |
-| `MySql=64` | MySQL |
+| `MySql=64` | MySQL (including Percona Server for MySQL — see note below) |
 | `Sqlite=128` | SQLite |
 | `DuckDB=256` | DuckDB |
 | `YugabyteDb=512` | YugabyteDB |
@@ -19,10 +19,13 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 | `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
 | `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) |
+| `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
 > **Aurora variants:** `AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image. They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL dialect respectively. No separate integration suite is required.
+
+> **Verified PostgreSQL/MySQL-compatible forks:** Percona Server for MySQL, Citus, TimescaleDB, and Fujitsu Enterprise Postgres are not distinct `SupportedDatabase` values — each still reports itself via the standard `DataSourceProductName`/version-string mechanism as "MySQL" or "PostgreSQL", so `DatabaseDetectionService` resolves them to `SupportedDatabase.MySql`/`PostgreSql` and they run through the exact same dialect and test suite as the vanilla engine. All four were verified live (full test-provider suite, 100% pass, same check count as vanilla) and are always-on entries in the testbed (`testbed/ParallelTestOrchestrator.cs`'s `TestbedImageMatrix`) — not opt-in. Fujitsu Enterprise Postgres needs two non-default container settings to start at all: it listens on port **27500**, not 5432, and its entrypoint has no "skip if this is the default superuser" special-case, so configuring it via `PG_USER=postgres` crashes the container ("role postgres already exists") — use `PG_ADMIN_PASSWORD` instead to set the existing superuser's password (see `PostgreSqlTestContainer`'s `port`/`useAdminPasswordEnvVar` constructor parameters). **EDB Postgres Extended** is very likely also just `PostgreSql` (same wire-protocol/version-string shape), but has no public Docker image to verify against — EDB moved it behind a private, subscription-gated registry — so it is *not* claimed as verified here.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
