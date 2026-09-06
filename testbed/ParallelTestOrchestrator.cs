@@ -217,11 +217,52 @@ public class ParallelTestOrchestrator
                 Container = new PostgreSqlTestContainer(),
                 TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
             },
+            // Citus, TimescaleDB, and Fujitsu Enterprise Postgres are PostgreSQL forks/extensions,
+            // not distinct SupportedDatabase values - DatabaseDetectionService already resolves
+            // all three to SupportedDatabase.PostgreSql (their DataSourceProductName/version
+            // string still says "PostgreSQL"), so they run through the exact same
+            // PostgreSQLTestProvider suite as vanilla PostgreSQL. Verified live before adding
+            // here - same pattern CLAUDE.md already documents for Aurora MySQL/PostgreSQL.
+            new()
+            {
+                ContainerName = "PostgreSQL [Citus 12.1]",
+                DatabaseProvider = "PostgreSQL",
+                Container = new PostgreSqlTestContainer("citusdata/citus:12.1"),
+                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "PostgreSQL [TimescaleDB pg16]",
+                DatabaseProvider = "PostgreSQL",
+                Container = new PostgreSqlTestContainer("timescale/timescaledb:latest-pg16"),
+                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "PostgreSQL [Fujitsu Enterprise Postgres 17]",
+                DatabaseProvider = "PostgreSQL",
+                Container = new PostgreSqlTestContainer(
+                    "quay.io/fujitsu/fujitsu-enterprise-postgres-17-server:latest",
+                    port: 27500,
+                    useAdminPasswordEnvVar: true),
+                TestProviderFactory = (db, sp) => new PostgreSQLTestProvider(db, sp)
+            },
             new()
             {
                 ContainerName = "MySQL",
                 DatabaseProvider = "MySQL",
                 Container = new MySqlTestContainer(),
+                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+            },
+            // Percona Server for MySQL is a drop-in MySQL-compatible fork, not a distinct
+            // SupportedDatabase value - it reports itself as "MySQL" (no "percona" token anywhere
+            // in DataSourceProductName/version string), so it runs through the same suite as
+            // vanilla MySQL. Verified live before adding here.
+            new()
+            {
+                ContainerName = "MySQL [Percona 8.0]",
+                DatabaseProvider = "MySQL",
+                Container = new MySqlTestContainer("percona:8.0"),
                 TestProviderFactory = (db, sp) => new TestProvider(db, sp)
             },
             new()

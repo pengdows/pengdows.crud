@@ -20,10 +20,10 @@ public class MySqlTestContainer : TestContainer
 
     // run --name mysql-container -e MYSQL_ROOT_PASSWORD=rootpassword -e MYSQL_DATABASE=testdb -p 3306:3306 -d mysql:latest
 
-    public MySqlTestContainer()
+    public MySqlTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage("mysql:latest")
+            .WithImage(image ?? "mysql:latest")
             .WithEnvironment("MYSQL_ROOT_PASSWORD", _password)
             .WithEnvironment("MYSQL_DATABASE", _database)
             .WithEnvironment("MYSQL_SQL_MODE",

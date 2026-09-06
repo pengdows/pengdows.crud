@@ -39,7 +39,10 @@ config-driven via `DbProviderLoader` for tenants whose provider isn't known at c
 - [`docs/parameter-naming-convention.md`](docs/parameter-naming-convention.md) — per-operation
   SQL parameter naming (`i{n}`, `s{n}`, `w{n}`, `k{n}`, `v{n}`, `j{n}`, `b{n}`)
 - [`docs/supported-databases.md`](docs/supported-databases.md) — the 15 supported database
-  engines and dialect capability notes
+  engines and dialect capability notes. Percona Server for MySQL, Citus, TimescaleDB, and
+  Fujitsu Enterprise Postgres are not distinct `SupportedDatabase` values — all four are
+  detected at runtime and delegate to the MySQL/PostgreSQL dialect (verified live against
+  real containers; see the "Verified PostgreSQL/MySQL-compatible forks" note in that file).
 - [`docs/transactions.md`](docs/transactions.md) — transaction/savepoint usage; do not use
   `TransactionScope` (incompatible by design — see `CLAUDE.md`)
 
