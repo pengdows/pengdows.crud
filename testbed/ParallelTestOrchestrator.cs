@@ -232,7 +232,10 @@ public class ParallelTestOrchestrator
 
         AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new SqliteTestProvider(db, sp), 1);
         AddLocal("DuckDB", new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
-        AddDocker("PostgreSQL", 5, image => new PostgreSqlTestContainer(image), (db, sp) => new PostgreSQLTestProvider(db, sp));
+        AddDocker("PostgreSQL", 5, image => image.Contains("fujitsu", StringComparison.OrdinalIgnoreCase)
+                ? new PostgreSqlTestContainer(image, port: 27500, useAdminPasswordEnvVar: true)
+                : new PostgreSqlTestContainer(image),
+            (db, sp) => new PostgreSQLTestProvider(db, sp));
         AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
         AddDocker("MariaDB", 8, image => new MariaDbContainer(image), (db, sp) => new MariaDbTestProvider(db, sp));
         AddDocker("SQL Server", 25, image => new SqlServerTestContainer(image), (db, sp) => new SqlServerTestProvider(db, sp));
@@ -377,8 +380,26 @@ public static class TestbedImageMatrix
 {
     private static readonly IReadOnlyDictionary<string, ImageVersion[]> Defaults = new Dictionary<string, ImageVersion[]>(StringComparer.OrdinalIgnoreCase)
     {
-        ["PostgreSQL"] = [new("16.4", "postgres:16.4"), new("15.0", "postgres:15.0"), new("9.5", "postgres:9.5-alpine")],
-        ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36"), new("5.7", "mysql:5.7")],
+        // Citus, TimescaleDB, and Fujitsu Enterprise Postgres are PostgreSQL forks/extensions,
+        // not distinct SupportedDatabase values - DatabaseDetectionService already resolves all
+        // three to SupportedDatabase.PostgreSql (their DataSourceProductName/version string still
+        // says "PostgreSQL"), so they run through the exact same PostgreSQLTestProvider suite as
+        // vanilla PostgreSQL. Verified live before adding here - see PostgreSqlTestContainer's
+        // port/useAdminPasswordEnvVar overrides for the two real deployment quirks Fujitsu
+        // Enterprise Postgres needed (nonstandard port, PG_USER collides with initdb's own
+        // "postgres" role).
+        ["PostgreSQL"] = [
+            new("16.4", "postgres:16.4"), new("15.0", "postgres:15.0"), new("9.5", "postgres:9.5-alpine"),
+            new("Citus 12.1", "citusdata/citus:12.1"),
+            new("TimescaleDB pg16", "timescale/timescaledb:latest-pg16"),
+            new("Fujitsu Enterprise Postgres 17", "quay.io/fujitsu/fujitsu-enterprise-postgres-17-server:latest")
+        ],
+        // Percona Server for MySQL is a drop-in MySQL-compatible fork, not a distinct
+        // SupportedDatabase value - it reports itself as "MySQL" (no "percona" token anywhere in
+        // DataSourceProductName/version string), so DatabaseDetectionService already resolves it
+        // to SupportedDatabase.MySql and it runs through the same suite as vanilla MySQL. Verified
+        // live before adding here.
+        ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36"), new("5.7", "mysql:5.7"), new("Percona 8.0", "percona:8.0")],
         ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11"), new("10.4", "mariadb:10.4"), new("10.2", "mariadb:10.2")],
         ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2019", "mcr.microsoft.com/mssql/server:2019-latest"), new("2017", "mcr.microsoft.com/mssql/server:2017-latest")],
         ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0"), new("v23.2.14", "cockroachdb/cockroach:v23.2.14")],
