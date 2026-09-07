@@ -12,6 +12,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator Oracle = new OracleExceptionTranslator();
     private static readonly IDbExceptionTranslator Firebird = new FirebirdExceptionTranslator();
     private static readonly IDbExceptionTranslator Sybase = new SybaseExceptionTranslator();
+    private static readonly IDbExceptionTranslator Db2 = new Db2ExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
     public IDbExceptionTranslator Get(SupportedDatabase database)
@@ -20,6 +21,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
         {
             SupportedDatabase.SqlServer => SqlServer,
             SupportedDatabase.Sybase => Sybase,
+            SupportedDatabase.Db2 => Db2,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
                 SupportedDatabase.AuroraPostgreSql => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or

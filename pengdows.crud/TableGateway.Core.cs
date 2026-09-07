@@ -689,32 +689,48 @@ public partial class TableGateway<TEntity, TRowID> :
 
         var outputClause = string.Empty;
         var returningClause = string.Empty;
+        var wrapsEntireStatement = false;
+        string? idWrapped = null;
 
         if (withReturning && _idColumn != null && !_idColumn.IsIdWritable && dialect.SupportsInsertReturning)
         {
-            var idWrapped = dialect.WrapSimpleName(_idColumn.Name);
-            var clause = dialect.RenderInsertReturningClause(idWrapped);
+            idWrapped = dialect.WrapSimpleName(_idColumn.Name);
 
             if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
-                outputClause = clause; // SQL Server: OUTPUT goes before VALUES
+                outputClause = dialect.RenderInsertReturningClause(idWrapped); // SQL Server: OUTPUT goes before VALUES
             }
             else if (dialect.DatabaseType == SupportedDatabase.Oracle)
             {
+                var clause = dialect.RenderInsertReturningClause(idWrapped);
                 returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),
                     StringComparison.Ordinal);
                 sc.AddParameterWithValue<object?>(OracleReturningParameterName, _idColumn.DbType, null,
                     ParameterDirection.Output);
             }
+            else if (dialect.DatabaseType == SupportedDatabase.Db2)
+            {
+                // Db2 wraps the ENTIRE insert statement rather than appending a trailing
+                // clause: SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...)).
+                wrapsEntireStatement = true;
+            }
             else
             {
-                returningClause = clause; // Others: RETURNING goes after VALUES
+                returningClause = dialect.RenderInsertReturningClause(idWrapped); // Others: RETURNING goes after VALUES
             }
         }
 
         // Replace placeholders with actual clauses (or empty strings)
         sc.Query.Replace(OutputClausePlaceholder, outputClause);
         sc.Query.Replace(ReturningClausePlaceholder, returningClause);
+
+        if (wrapsEntireStatement)
+        {
+            // ISqlQueryBuilder has no Insert-at-position method, so rebuild via ToString/Clear.
+            var insertSql = sc.Query.ToString();
+            sc.Query.Clear();
+            sc.Query.Append($"SELECT {idWrapped} FROM FINAL TABLE (").Append(insertSql).Append(')');
+        }
 
         return sc;
     }

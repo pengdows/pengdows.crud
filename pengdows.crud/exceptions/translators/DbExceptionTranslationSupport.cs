@@ -131,14 +131,38 @@ internal static partial class DbExceptionTranslationSupport
             return dbException.SqlState;
         }
 
-        var property = exception.GetType().GetProperty("SqlState", BindingFlags.Public | BindingFlags.Instance);
-        if (property?.GetValue(exception) is string sqlState && !string.IsNullOrWhiteSpace(sqlState))
+        // Case-insensitive, ambiguity-safe lookup: IBM's DB2Exception declares its OWN
+        // "SQLState" (all-caps SQL) property alongside the inherited DbException.SqlState —
+        // a plain GetProperty(name, IgnoreCase) throws AmbiguousMatchException in that shape.
+        // Confirmed against a live ibmcom/db2 container during Phase 2 testbed validation.
+        foreach (var property in exception.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            return sqlState;
+            if (property.PropertyType == typeof(string) &&
+                string.Equals(property.Name, "SqlState", StringComparison.OrdinalIgnoreCase) &&
+                property.GetValue(exception) is string candidate &&
+                !string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
         }
 
-        return TryGetSqlStateFromErrorsCollection(exception);
+        var fromErrorsCollection = TryGetSqlStateFromErrorsCollection(exception);
+        if (fromErrorsCollection != null)
+        {
+            return fromErrorsCollection;
+        }
+
+        // Last-resort fallback: some providers embed the SQLSTATE directly in the exception
+        // message rather than exposing it as a queryable property, in one of two formats:
+        // trailing "... SQLSTATE=23505" (e.g. client-side CLI driver errors), or leading
+        // "ERROR [23505] ..." (e.g. IBM.Data.Db2's server-side error messages).
+        var match = SqlStateFromMessageRegex().Match(exception.Message ?? string.Empty);
+        return match.Success ? match.Groups["state"].Value : null;
     }
+
+    [GeneratedRegex("(?:SQLSTATE[=:]\\s*|ERROR \\[)(?<state>[0-9A-Za-z]{5})",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SqlStateFromMessageRegex();
 
     /// <summary>
     /// Fallback for providers (e.g. AdoNetCore.AseClient's AseException) that expose a collection

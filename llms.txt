@@ -47,8 +47,9 @@ config-driven via `DbProviderLoader` for tenants whose provider isn't known at c
   a generic, indistinguishable MySQL version string and needs its own runtime probe
   (`SELECT @@memsql_version`) to detect at all. FlatFile
   ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)) is also a distinct value
-  with its own partial dialect. Sybase has its own dedicated `SybaseDialect` (not a delegating
-  fork) — see the "SingleStore", "FlatFile", and "Sybase" notes in that file.
+  with its own partial dialect. Sybase and Db2 (IBM Db2 LUW) each have their own dedicated
+  `SybaseDialect`/`Db2Dialect` (not delegating forks) — see the "SingleStore", "FlatFile",
+  "Sybase", and "IBM Db2 (LUW)" notes in that file.
 - [`docs/transactions.md`](docs/transactions.md) — transaction/savepoint usage; do not use
   `TransactionScope` (incompatible by design — see `CLAUDE.md`)
 

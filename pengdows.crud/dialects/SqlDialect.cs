@@ -33,6 +33,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.types;
@@ -1542,6 +1543,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 return ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
                        ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Db2:
+                // IBM's DB2Exception doesn't populate SqlState via a plain "SqlState" property
+                // lookup (it's "SQLState", all-caps, ambiguous with the inherited
+                // DbException.SqlState) and often doesn't populate it via any property at all —
+                // needs DbExceptionTranslationSupport's fuller ambiguity-safe + message-regex
+                // fallback chain rather than the simpler TryGetProviderSqlState above.
+                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23505",
+                    StringComparison.OrdinalIgnoreCase);
+
             default:
                 return MessageIndicatesUniqueViolation(ex.Message);
         }
@@ -1582,6 +1592,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // DuckDB uses SQLSTATE 23503; fall back to message when driver doesn't populate SqlState
                 return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Db2:
+                // 23503: insert/update FK violation. 23504: deleting a parent row blocked by a
+                // RESTRICT foreign key — confirmed against a live ibmcom/db2 container.
+                var db2FkSqlState = DbExceptionTranslationSupport.TryGetSqlState(ex);
+                return string.Equals(db2FkSqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(db2FkSqlState, "23504", StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
@@ -1629,6 +1646,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
 
+            case SupportedDatabase.Db2:
+                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23502",
+                    StringComparison.OrdinalIgnoreCase);
+
             default:
                 return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("not null", StringComparison.OrdinalIgnoreCase);
@@ -1670,6 +1691,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // DuckDB uses SQLSTATE 23514; fall back to message when driver doesn't populate SqlState
                 return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase) ||
                        message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+            case SupportedDatabase.Db2:
+                // Db2 uses SQLSTATE 23513 for check constraint violations (Postgres/DuckDB use 23514).
+                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23513",
+                    StringComparison.OrdinalIgnoreCase);
 
             default:
                 return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
@@ -2609,6 +2635,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             query += " AND ROWNUM = 1";
         }
+        else if (DatabaseType == SupportedDatabase.Db2)
+        {
+            // Db2 has no LIMIT syntax; the ANSI equivalent is FETCH FIRST n ROWS ONLY.
+            query += " FETCH FIRST 1 ROWS ONLY";
+        }
         else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase)
         {
             query += " LIMIT 1";
@@ -2858,6 +2889,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
                     ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
                     ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Db2:
+                // IBM's DB2Exception doesn't populate SqlState via the simple property lookup
+                // used above (see IsUniqueViolation's Db2 case) — use the ambiguity-safe +
+                // message-regex fallback chain instead. SQLSTATE 40001 cannot by itself
+                // distinguish deadlock from lock timeout on Db2 (SQLCODE -911 vs -913); treated
+                // as SerializationFailure here, matching Db2ExceptionTranslator's classification.
+                var db2SqlState = DbExceptionTranslationSupport.TryGetSqlState(ex);
+
+                if (string.Equals(db2SqlState, "40001", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(db2SqlState) && db2SqlState.StartsWith("23", StringComparison.Ordinal))
                 {
                     category = DbErrorCategory.ConstraintViolation;
                     return true;

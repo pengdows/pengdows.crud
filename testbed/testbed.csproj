@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <PackageReference Include="AdoNetCore.AseClient" Version="0.19.2"/>
+        <PackageReference Include="Net.IBM.Data.Db2-lnx" Version="8.0.0.500"/>
         <PackageReference Include="coverlet.collector" Version="6.0.4">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
