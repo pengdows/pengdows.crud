@@ -57,6 +57,25 @@ public class DatabaseDetectionFlavorTests
     }
 
     [Fact]
+    public void DetectProduct_IdentifiesSingleStore_ViaMemsqlVersionProbe()
+    {
+        // SingleStore (formerly MemSQL) reports DataSourceProductName "MySQL" and SELECT VERSION()
+        // = a generic "5.7.32" with no distinguishing marker. @@memsql_version is a SingleStore-only
+        // system variable: it returns a version string on SingleStore, and throws "Unknown system
+        // variable" on standard MySQL/MariaDB/Aurora MySQL/TiDB — structurally identical to the
+        // existing @@aurora_version probe above.
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+
+        connection.EmulatedProduct = SupportedDatabase.Unknown;
+        connection.SetScalarResultForCommand("SELECT @@memsql_version", "9.1.1");
+
+        var detected = DatabaseDetectionService.DetectProduct(connection, factory);
+
+        Assert.Equal(SupportedDatabase.SingleStore, detected);
+    }
+
+    [Fact]
     public void DetectProduct_IdentifiesYugabyteDb_ViaPgSettingsProbe()
     {
         // Detection queries pg_settings for a YugabyteDB-only GUC. Using a plain SELECT (not

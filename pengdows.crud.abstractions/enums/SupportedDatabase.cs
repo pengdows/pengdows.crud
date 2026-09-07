@@ -36,5 +36,6 @@ public enum SupportedDatabase
     AuroraMySql = 4096, // AWS Aurora MySQL flavor
     AuroraPostgreSql = 8192, // AWS Aurora PostgreSQL flavor
     Db2 = 16384, // IBM enterprise RDBMS with strong SQL standard compliance
-    FlatFile = 32768 // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
+    FlatFile = 32768, // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
+    SingleStore = 65536 // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
 }

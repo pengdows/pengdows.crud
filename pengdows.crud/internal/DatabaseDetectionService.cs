@@ -356,6 +356,28 @@ internal static class DatabaseDetectionService
                 }
             }
 
+            if (isMySqlFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT @@memsql_version";
+                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
+                        return (SupportedDatabase.SingleStore, attempts);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", false, ex.Message));
+                }
+            }
+
             if (isMySqlFamily || isPgFamily)
             {
                 try
@@ -542,6 +564,28 @@ internal static class DatabaseDetectionService
                 {
                     /* not aurora mysql */
                     attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", false, ex.Message));
+                }
+            }
+
+            // SingleStore (formerly MemSQL): @@memsql_version returns a version string (e.g. "9.1.1")
+            // on SingleStore, throws "Unknown system variable" on standard MySQL/MariaDB/Aurora MySQL/TiDB.
+            // SELECT VERSION()/@@version report a generic MySQL-compatible version with no distinguishing
+            // marker on SingleStore, so this dedicated system-variable probe is required.
+            if (isMySqlFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT @@memsql_version";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
+                        return (SupportedDatabase.SingleStore, attempts);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    /* not singlestore */
+                    attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", false, ex.Message));
                 }
             }
 
