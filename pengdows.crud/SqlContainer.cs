@@ -978,6 +978,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             var paramList = string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}";
             var wrappedProcName = WrapObjectName(procName);
+
+            if (!_context.Dialect.SupportsSemicolonStatementSeparator)
+            {
+                return $"DECLARE @__ret INT\nEXEC @__ret = {wrappedProcName}{paramList}\nSELECT @__ret";
+            }
+
             return $"DECLARE @__ret INT;\nEXEC @__ret = {wrappedProcName}{paramList};\nSELECT @__ret;";
         }
 
@@ -1210,7 +1216,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex) when (ex is not DatabaseException)
         {
             commandFailed = true;
-            if (ex is not DbException)
+            if (!LooksLikeProviderException(ex))
             {
                 metrics?.CommandFailed(startTimestamp);
                 if (metrics != null)
@@ -1614,7 +1620,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex) when (ex is not DatabaseException)
         {
             commandFailed = true;
-            if (ex is not DbException)
+            if (!LooksLikeProviderException(ex))
             {
                 metrics?.CommandFailed(startTimestamp);
                 if (metrics != null)
@@ -1983,6 +1989,27 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
                (exception is DbException &&
                 exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Whether an exception looks like a database provider error worth translating into the
+    /// typed <see cref="DatabaseException"/> hierarchy, as opposed to an unrelated application
+    /// exception that happened to be thrown during command execution.
+    /// </summary>
+    /// <remarks>
+    /// Almost every ADO.NET provider's exception type derives from <see cref="DbException"/>,
+    /// but AdoNetCore.AseClient's <c>AseException</c> (used for Sybase ASE) does not — it derives
+    /// from <see cref="SystemException"/> directly and exposes its error number only via an
+    /// "Errors" collection. <see cref="DbExceptionTranslationSupport"/> already reflects over
+    /// that shape as a fallback for error-code/SQLSTATE extraction; reusing it here lets a
+    /// provider exception shaped like that be recognized as translatable without hardcoding the
+    /// concrete AseException type (and without pulling a dependency on it into this project).
+    /// </remarks>
+    private static bool LooksLikeProviderException(Exception exception)
+    {
+        return exception is DbException ||
+               DbExceptionTranslationSupport.TryGetErrorCode(exception).HasValue ||
+               DbExceptionTranslationSupport.TryGetSqlState(exception) != null;
     }
 
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)

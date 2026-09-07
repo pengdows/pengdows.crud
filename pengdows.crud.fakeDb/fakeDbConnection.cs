@@ -1,5 +1,6 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -12,6 +13,27 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbConnection : DbConnection, IFakeDbConnection
 {
+    /// <summary>
+    /// Real ADO.NET providers confirmed (against the live driver, not guessed) to not implement
+    /// <see cref="GetSchema()"/>/<see cref="GetSchema(string)"/> at all. FakeDb mirrors that by
+    /// throwing the same way the real provider does, instead of returning synthesized schema
+    /// data the real connection would never produce — so unit tests exercise the framework's
+    /// actual fallback behavior (e.g. <c>DatabaseDetectionService.DetectFromConnection</c>,
+    /// <c>SqlDialect.GetDataSourceInformationSchema</c>) rather than a fiction that happens to
+    /// diverge from production the moment a real connection is involved.
+    /// </summary>
+    /// <remarks>
+    /// Add an entry here — with a comment citing how it was verified — whenever a supported
+    /// provider is confirmed to lack schema support, rather than special-casing it inline.
+    /// AdoNetCore.AseClient's <c>AseConnection</c> (Sybase ASE): verified live against ASE 16 —
+    /// every <c>GetSchema</c> overload throws <see cref="NotSupportedException"/>
+    /// ("Specified method is not supported.").
+    /// </remarks>
+    private static readonly HashSet<SupportedDatabase> ProductsWithoutSchemaSupport = new()
+    {
+        SupportedDatabase.Sybase
+    };
+
     private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
@@ -1082,6 +1104,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override DataTable GetSchema()
     {
+        if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
+        {
+            throw new NotSupportedException("Specified method is not supported.");
+        }
+
         if (_schemaTable != null)
         {
             return _schemaTable;
@@ -1121,6 +1148,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override DataTable GetSchema(string meta)
     {
+        if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
+        {
+            throw new NotSupportedException("Specified method is not supported.");
+        }
+
         if (_schemaTable != null)
         {
             return _schemaTable;

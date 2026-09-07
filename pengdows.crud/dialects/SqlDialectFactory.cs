@@ -112,6 +112,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql),
             SupportedDatabase.Db2 => new Db2Dialect(factory, logger),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, logger),
+            SupportedDatabase.Sybase => new SybaseDialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
         };
     }

@@ -37,5 +37,6 @@ public enum SupportedDatabase
     AuroraPostgreSql = 8192, // AWS Aurora PostgreSQL flavor
     Db2 = 16384, // IBM enterprise RDBMS with strong SQL standard compliance
     FlatFile = 32768, // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
-    SingleStore = 65536 // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
+    SingleStore = 65536, // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
+    Sybase = 131072 // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database
 }

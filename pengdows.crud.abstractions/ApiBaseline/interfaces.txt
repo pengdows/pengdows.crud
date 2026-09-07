@@ -373,6 +373,7 @@ property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxRowsPerBatch : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxSupportedStandard : pengdows.crud.enums.SqlStandardLevel { get; }
+property pengdows.crud.dialects.ISqlDialect::MergeStatementRequiresSemicolon : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MergeUpdateRequiresTargetAlias : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MinPoolSizeSettingName : string { get; }
 property pengdows.crud.dialects.ISqlDialect::ParameterMarker : string { get; }

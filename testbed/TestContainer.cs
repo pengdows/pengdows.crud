@@ -1,6 +1,7 @@
 #region
 
 using System.Data.Common;
+using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
 using Oracle.ManagedDataAccess.Client;
@@ -130,6 +131,16 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                     }
                     lastError = currentError;
                 }
+            }
+            catch (AseException aseException)
+            {
+                var currentError = aseException.Message;
+                if (currentError != lastError)
+                {
+                    Console.WriteLine($"  [waiting] Sybase ASE not ready yet: {currentError}");
+                }
+                lastError = currentError;
+                await Task.Delay(1000);
             }
             catch (Exception ex)
             {

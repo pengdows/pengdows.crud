@@ -107,6 +107,33 @@ internal static partial class DbExceptionTranslationSupport
             return dbException.ErrorCode;
         }
 
+        return TryGetErrorCodeFromErrorsCollection(exception);
+    }
+
+    /// <summary>
+    /// Fallback for providers (e.g. AdoNetCore.AseClient's AseException) that expose a collection
+    /// of provider-specific error records via a public "Errors" property instead of a single
+    /// top-level error-code property, and whose exception type does not derive from
+    /// <see cref="DbException"/> at all (so the checks above never apply).
+    /// </summary>
+    private static int? TryGetErrorCodeFromErrorsCollection(Exception exception)
+    {
+        var errorsProperty = exception.GetType().GetProperty("Errors", BindingFlags.Public | BindingFlags.Instance);
+        if (errorsProperty?.GetValue(exception) is not System.Collections.IEnumerable errors)
+        {
+            return null;
+        }
+
+        foreach (var error in errors)
+        {
+            var numberProperty = error.GetType().GetProperty("MessageNumber", BindingFlags.Public | BindingFlags.Instance) ??
+                                  error.GetType().GetProperty("Number", BindingFlags.Public | BindingFlags.Instance);
+            if (numberProperty?.GetValue(error) is int number)
+            {
+                return number;
+            }
+        }
+
         return null;
     }
 
@@ -132,12 +159,44 @@ internal static partial class DbExceptionTranslationSupport
             }
         }
 
+        var fromErrorsCollection = TryGetSqlStateFromErrorsCollection(exception);
+        if (fromErrorsCollection != null)
+        {
+            return fromErrorsCollection;
+        }
+
         // Last-resort fallback: some providers embed the SQLSTATE directly in the exception
         // message rather than exposing it as a queryable property, in one of two formats:
         // trailing "... SQLSTATE=23505" (e.g. client-side CLI driver errors), or leading
         // "ERROR [23505] ..." (e.g. IBM.Data.Db2's server-side error messages).
         var match = SqlStateFromMessageRegex().Match(exception.Message ?? string.Empty);
         return match.Success ? match.Groups["state"].Value : null;
+    }
+
+    /// <summary>
+    /// Fallback for providers (e.g. AdoNetCore.AseClient's AseException) that expose a collection
+    /// of provider-specific error records via a public "Errors" property instead of a single
+    /// top-level SqlState property, and whose exception type does not derive from
+    /// <see cref="DbException"/> at all (so the checks above never apply).
+    /// </summary>
+    private static string? TryGetSqlStateFromErrorsCollection(Exception exception)
+    {
+        var errorsProperty = exception.GetType().GetProperty("Errors", BindingFlags.Public | BindingFlags.Instance);
+        if (errorsProperty?.GetValue(exception) is not System.Collections.IEnumerable errors)
+        {
+            return null;
+        }
+
+        foreach (var error in errors)
+        {
+            var sqlStateProperty = error.GetType().GetProperty("SqlState", BindingFlags.Public | BindingFlags.Instance);
+            if (sqlStateProperty?.GetValue(error) is string sqlState && !string.IsNullOrWhiteSpace(sqlState))
+            {
+                return sqlState;
+            }
+        }
+
+        return null;
     }
 
     [GeneratedRegex("(?:SQLSTATE[=:]\\s*|ERROR \\[)(?<state>[0-9A-Za-z]{5})",

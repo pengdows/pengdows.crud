@@ -2338,6 +2338,9 @@ public partial class DatabaseContext
         // ISqlDialect.CoerceConnectionMode and CLAUDE.md's "Adding a New Database" checklist. A new
         // client-server database needs no entry here at all; only a database with real mode
         // restrictions (embedded engines, LocalDB) overrides the dialect's base implementation.
+        // Sybase is a genuine client-server RDBMS and needs no override: the base SqlDialect's
+        // IsClientServerDatabase/CoerceConnectionMode defaults (honor explicit modes, Best -> Standard)
+        // are already correct for it, matching what the old hardcoded switch below used to do.
         var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
         var (mode, reason) = dialect.CoerceConnectionMode(requested, _connectionString, isLocalDb);
         LogModeOverride(requested, mode, reason);
@@ -2424,7 +2427,9 @@ public partial class DatabaseContext
         // Delegates to the dialect's own ISqlDialect.IsClientServerDatabase instead of
         // maintaining a second SupportedDatabase switch here — see CLAUDE.md's "Adding a New
         // Database" checklist for why that duplication used to silently miss new databases
-        // (Db2, then every distributed/cloud variant added after it).
+        // (Db2, then every distributed/cloud variant added after it). Sybase is a genuine
+        // client-server RDBMS, so the base SqlDialect's IsClientServerDatabase => true default
+        // (unoverridden by SybaseDialect) is already correct.
         return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).IsClientServerDatabase;
     }
 

@@ -74,6 +74,13 @@ public class DatabaseContextModeBranchTests
         var unknownBest = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Best, SupportedDatabase.Unknown, false })!;
         Assert.Equal(DbMode.Standard, unknownBest);
+
+        // Sybase ASE is a full client-server RDBMS like the others in this branch, not an
+        // "unknown provider" — same DbMode.Best -> Standard outcome as the default branch would
+        // give, but this asserts it's classified correctly rather than falling through by luck.
+        var bestSybase = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.Sybase, false, false })!;
+        Assert.Equal(DbMode.Standard, bestSybase);
     }
 
     [Fact]
@@ -85,6 +92,7 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.Sybase, false });
     }
 
     [Fact]
