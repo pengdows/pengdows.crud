@@ -44,8 +44,13 @@ reset statements, procedure calls, and the available HANA container or external 
 5. `pengdows.crud/pengdows.crud/dialects/SqlDialect.cs`: inspect product inference and every
    `DatabaseType ==`, `DatabaseType !=`, and `switch (DatabaseType)` branch, especially generated
    keys, first-row lookup, paging, read-only SQL, and special SQL.
-6. `pengdows.crud/pengdows.crud/DatabaseContext.Initialization.cs`: classify client/server versus
-   embedded, update `CoerceMode`, and check topology detection.
+6. `pengdows.crud/pengdows.crud/DatabaseContext.Initialization.cs`: check topology detection. Client/
+   server-vs-embedded classification, in-memory detection, and `DbMode` coercion (including what
+   `DbMode.Best` resolves to) are all owned by `ISqlDialect.IsClientServerDatabase` /
+   `DetectInMemoryKind` / `CoerceConnectionMode` now (base defaults: client-server, never in-memory,
+   honor any explicit mode and resolve `Best` to `Standard`) — no separate switch to update here.
+   Override only for a genuinely restricted engine (embedded single-writer: SQLite/DuckDB; a forced
+   topology-specific mode: SQL Server LocalDB).
 
 The dialect must explicitly decide standard compliance and capabilities; quoting and qualification;
 markers, named parameters, limits, names, prepare and cloning; isolation profiles, savepoints,

@@ -41,6 +41,18 @@ public enum DbErrorCategory
     ReadOnlyViolation = 5,
 
     /// <summary>
+    /// The database could not determine whether a statement/transaction actually committed
+    /// (e.g. CockroachDB's SQLSTATE 40003, raised when its distributed consensus layer loses
+    /// track of a commit's outcome during a network partition or node failure under
+    /// contention/overload). Unlike <see cref="SerializationFailure"/>, this does NOT mean the
+    /// operation is safe to blindly retry — it might have already taken effect. A caller should
+    /// check actual outcome/idempotency state before retrying or accepting the write as applied.
+    /// Deliberately excluded from the transient/retryable set in
+    /// <see cref="pengdows.crud.dialects.ISqlDialect.AnalyzeException"/>'s default implementation.
+    /// </summary>
+    AmbiguousResult = 6,
+
+    /// <summary>
     /// The exception could not be classified into a known category.
     /// </summary>
     Unknown = 99

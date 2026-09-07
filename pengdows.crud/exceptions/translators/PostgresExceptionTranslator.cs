@@ -41,6 +41,13 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
             "40001" => new SerializationConflictException(
                 $"{operationKind} hit a serialization conflict on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),
+            // See the matching comment in SqlDialect.cs's classification switch: 40003 is
+            // CockroachDB's real "result is ambiguous" error (kept in this shared translator
+            // since it's inert, not wrong, for PostgreSql/AuroraPostgreSql). Deliberately NOT
+            // SerializationConflictException -- retry is not automatically safe here.
+            "40003" => new AmbiguousResultException(
+                $"{operationKind} result is ambiguous on {database} (commit outcome unknown): {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
             _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
         };
     }

@@ -78,6 +78,23 @@ internal class FirebirdDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
 
+    // Deliberately does NOT override CoerceConnectionMode, so Best resolves to Standard here —
+    // same as any other full server database (base SqlDialect.CoerceConnectionMode). This is a
+    // considered choice, not an oversight: Firebird's default SuperServer RDB$LINGER=0 does cause a
+    // real, empirically-confirmed reconnect cost after an idle period
+    // (testbed.TestProvider.TestIdleUnloadProbe; ~5-10x cold/warm latency ratio against live
+    // 3.0/4.0/5.0 containers), and PreventDatabaseUnload genuinely mitigates it (confirmed by the
+    // same probe's sentinel-validation follow-up). But unlike SQL Server LocalDB, the cost only
+    // matters for deployments with real idle gaps — a heavily-trafficked Firebird instance may
+    // never actually drain its pool to zero, making the sentinel's permanent permit cost pure
+    // overhead, and forcing it on anyone deliberately running a scale-to-zero/cost-optimized
+    // deployment would be exactly the wrong call. Only the operator knows which situation applies,
+    // so PreventDatabaseUnload stays a fully-supported, explicitly-honored KNOB (same treatment
+    // given to Db2's implicit-activation lifecycle and SQL Server's opt-in AUTO_CLOSE) rather than
+    // an auto-selected default — see docs/connection/connection-modes.md and CLAUDE.md's
+    // "Connection Management and DbMode" section for the full policy, and CLAUDE.md's warning
+    // against casually extending Best's auto-selection list without the same empirical bar.
+
     protected override bool NeedsCommonConversions => true;
 
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()

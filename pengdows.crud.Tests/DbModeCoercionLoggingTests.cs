@@ -122,6 +122,31 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
+    public void TiDb_BestMode_AutoSelectsStandard_WithFullServerReason()
+    {
+        // Regression: TiDb (and every other distributed/cloud variant not on the old hardcoded
+        // "full server" case list) used to fall to CoerceMode's `default` branch and get the
+        // misleading "Unknown provider: Best defaults to Standard" info message even though it's
+        // a fully-supported client-server database. Now that the default branch asks the dialect
+        // (ISqlDialect.IsClientServerDatabase), it reports "Full server" instead — same fix
+        // already applied for Db2, generalized so it doesn't need a per-database case anymore.
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=TiDb",
+            ProviderName = SupportedDatabase.TiDb.ToString(),
+            DbMode = DbMode.Best
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.TiDb), lf);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Full server: Best selects Standard"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Unknown provider"));
+    }
+
+    [Fact]
     public void SqliteFile_StandardMode_CoercesToSingleWriter_WithWarning()
     {
         var provider = new ListLoggerProvider();

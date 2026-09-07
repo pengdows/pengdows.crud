@@ -282,6 +282,81 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
+
+    /// <inheritdoc cref="ISqlDialect.IsClientServerDatabase"/>
+    /// <remarks>
+    /// Defaults to true: most engines added here are real client-server RDBMSes. Override to
+    /// false only for embedded/single-writer engines (see SqliteDialect, DuckDbDialect) or the
+    /// unrecognized-database fallback (Sql92Dialect).
+    /// </remarks>
+    public virtual bool IsClientServerDatabase => true;
+
+    /// <inheritdoc cref="ISqlDialect.IsEmbeddedSingleWriterEngine"/>
+    /// <remarks>
+    /// Defaults to false. Override to true only for SqliteDialect/DuckDbDialect — deliberately not
+    /// derived from <see cref="IsClientServerDatabase"/> being false, since that's also false for
+    /// the unrecognized-database fallback (Sql92Dialect), which is not an embedded engine.
+    /// </remarks>
+    public virtual bool IsEmbeddedSingleWriterEngine => false;
+
+    /// <inheritdoc cref="ISqlDialect.DetectInMemoryKind"/>
+    /// <remarks>
+    /// Defaults to None: only SQLite and DuckDB have an in-memory concept at all. Override only
+    /// there (see SqliteDialect, DuckDbDialect).
+    /// </remarks>
+    public virtual InMemoryKind DetectInMemoryKind(string? connectionString) => InMemoryKind.None;
+
+    /// <inheritdoc cref="ISqlDialect.CoerceConnectionMode"/>
+    /// <remarks>
+    /// Base policy for an ordinary client-server engine (and the unrecognized-database fallback):
+    /// <see cref="DbMode.Best"/> resolves to <see cref="DbMode.Standard"/>, and any explicit
+    /// request is honored as-is — every mode is safe on a real client-server database, so there is
+    /// nothing to coerce. Override only where an engine has real mode restrictions: embedded
+    /// single-writer engines (SqliteDialect, DuckDbDialect) or a topology-specific requirement like
+    /// SQL Server LocalDB (SqlServerDialect).
+    /// </remarks>
+    public virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb)
+    {
+        if (requested == DbMode.Best)
+        {
+            var reason = IsClientServerDatabase
+                ? "Full server: Best selects Standard"
+                : "Unknown provider: Best defaults to Standard";
+            return (DbMode.Standard, reason);
+        }
+
+        return (requested, string.Empty);
+    }
+
+    /// <summary>
+    /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB): isolated
+    /// in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the most
+    /// functional safe mode (Best selects it, and the unsafe Standard/PreventDatabaseUnload modes
+    /// coerce to it), while SingleConnection/SingleWriter explicit requests are honored as-is.
+    /// Factored out so SqliteDialect and DuckDbDialect — which only differ in how they recognize
+    /// an in-memory connection string — don't duplicate this decision.
+    /// </summary>
+    protected static (DbMode Mode, string Reason) CoerceEmbeddedSingleWriterMode(DbMode requested, InMemoryKind kind)
+    {
+        if (kind == InMemoryKind.Isolated)
+        {
+            return (DbMode.SingleConnection, "Isolated in-memory requires SingleConnection");
+        }
+
+        if (requested == DbMode.Best)
+        {
+            return (DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
+        }
+
+        if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
+        {
+            return (DbMode.SingleWriter, "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
+        }
+
+        return (requested, string.Empty);
+    }
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -2938,6 +3013,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
                 {
                     category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                // 40003 (statement_completion_unknown): standard SQL/PostgreSQL-catalog code that
+                // vanilla PostgreSQL defines but never actually raises (no ereport() call anywhere
+                // in its source) -- it is CockroachDB's real, documented "result is ambiguous"
+                // error, emitted when its distributed consensus layer loses track of a commit's
+                // outcome during a network partition/node failure under contention. Kept in this
+                // shared case block (not carved out to CockroachDb alone) because all four
+                // databases here go through the same Npgsql driver and the branch is simply inert
+                // -- not wrong -- for PostgreSql/AuroraPostgreSql, which never trigger it; YugabyteDb
+                // is architecturally similar to CockroachDb (distributed consensus) and may.
+                if (string.Equals(sqlState, "40003", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.AmbiguousResult;
                     return true;
                 }
 

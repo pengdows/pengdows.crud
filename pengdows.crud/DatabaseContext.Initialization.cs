@@ -2333,115 +2333,15 @@ public partial class DatabaseContext
 
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb)
     {
-        // Key principle:
-        // 1. COERCE when requested mode is UNSAFE for the provider
-        // 2. HONOR when requested mode is SAFE but less functional (for testing)
-        // 3. Best mode always selects most functional safe mode
-
-        switch (product)
-        {
-            case SupportedDatabase.Sqlite or SupportedDatabase.DuckDB:
-                {
-                    var kind = DetectInMemoryKind(product, _connectionString);
-
-                    // Isolated in-memory REQUIRES SingleConnection (no other mode works)
-                    if (kind == InMemoryKind.Isolated)
-                    {
-                        if (requested != DbMode.SingleConnection)
-                        {
-                            LogModeOverride(requested, DbMode.SingleConnection,
-                                "Isolated in-memory requires SingleConnection");
-                        }
-
-                        return DbMode.SingleConnection;
-                    }
-
-                    // For shared in-memory and file-based SQLite/DuckDB:
-                    // Most functional: SingleWriter
-                    // UNSAFE: Standard/PreventDatabaseUnload (lock contention)
-                    // Safe but less functional: SingleConnection
-
-                    if (requested == DbMode.Best)
-                    {
-                        LogModeOverride(requested, DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
-                        return DbMode.SingleWriter;
-                    }
-
-                    // Coerce UNSAFE modes (Standard, PreventDatabaseUnload) to SingleWriter
-                    if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
-                    {
-                        LogModeOverride(requested, DbMode.SingleWriter,
-                            "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
-                        return DbMode.SingleWriter;
-                    }
-
-                    // Honor safe but less functional modes (SingleConnection, SingleWriter)
-                    return requested;
-                }
-
-            case SupportedDatabase.SqlServer when isLocalDb:
-                {
-                    // LocalDB REQUIRES PreventDatabaseUnload to prevent unload
-                    if (requested != DbMode.PreventDatabaseUnload)
-                    {
-                        LogModeOverride(requested, DbMode.PreventDatabaseUnload,
-                            "LocalDB requires PreventDatabaseUnload");
-                    }
-
-                    return DbMode.PreventDatabaseUnload;
-                }
-
-            case SupportedDatabase.PostgreSql
-                or SupportedDatabase.CockroachDb
-                or SupportedDatabase.MySql
-                or SupportedDatabase.MariaDb
-                or SupportedDatabase.Oracle
-                or SupportedDatabase.SqlServer
-                or SupportedDatabase.Db2
-                or SupportedDatabase.Firebird:
-                {
-                    // Full server databases: all modes are SAFE
-                    // Most functional: Standard
-                    // Safe but less functional: SingleWriter, SingleConnection, PreventDatabaseUnload
-                    //
-                    // Firebird lives here deliberately, not in a dedicated auto-selecting case:
-                    // its default SuperServer RDB$LINGER=0 does cause a real, empirically-confirmed
-                    // reconnect cost after an idle period (testbed.TestProvider.TestIdleUnloadProbe;
-                    // ~5-10x cold/warm latency ratio against live 3.0/4.0/5.0 containers), and
-                    // PreventDatabaseUnload genuinely mitigates it (confirmed by the same probe's
-                    // sentinel-validation follow-up). But unlike LocalDB, the cost only matters for
-                    // deployments with real idle gaps — a heavily-trafficked Firebird instance may
-                    // never actually drain its pool to zero, making the sentinel's permanent permit
-                    // cost pure overhead — and forcing it by default would be exactly the wrong call
-                    // for anyone deliberately running a scale-to-zero/cost-optimized deployment.
-                    // Only the operator knows which situation applies, so PreventDatabaseUnload
-                    // stays a fully-supported, explicitly-honored KNOB here (same treatment already
-                    // correctly given to Db2's implicit-activation lifecycle and SQL Server's
-                    // opt-in AUTO_CLOSE) rather than an auto-selected default — see
-                    // docs/connection/connection-modes.md and CLAUDE.md for the full policy.
-                    if (requested == DbMode.Best)
-                    {
-                        LogModeOverride(requested, DbMode.Standard, "Full server: Best selects Standard");
-                        return DbMode.Standard;
-                    }
-
-                    // Honor ANY explicit choice - all modes are safe on full servers
-                    // Users can force less functional modes for testing
-                    return requested;
-                }
-
-            default:
-                {
-                    // Unknown provider
-                    if (requested == DbMode.Best)
-                    {
-                        LogModeOverride(requested, DbMode.Standard, "Unknown provider: Best defaults to Standard");
-                        return DbMode.Standard;
-                    }
-
-                    return requested;
-                }
-        }
+        // All per-database coercion policy (what Best resolves to, which explicit modes are unsafe
+        // and get coerced, which are safe and honored as-is) lives on the dialect now — see
+        // ISqlDialect.CoerceConnectionMode and CLAUDE.md's "Adding a New Database" checklist. A new
+        // client-server database needs no entry here at all; only a database with real mode
+        // restrictions (embedded engines, LocalDB) overrides the dialect's base implementation.
+        var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
+        var (mode, reason) = dialect.CoerceConnectionMode(requested, _connectionString, isLocalDb);
+        LogModeOverride(requested, mode, reason);
+        return mode;
     }
 
     private void LogModeOverride(DbMode requested, DbMode resolved, string reason)
@@ -2472,8 +2372,10 @@ public partial class DatabaseContext
             return;
         }
 
+        var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
+
         // Pattern 1: Client-server database with overly restrictive mode
-        if (IsClientServerDatabase(product))
+        if (dialect.IsClientServerDatabase)
         {
             if (resolved == DbMode.SingleConnection)
             {
@@ -2498,10 +2400,13 @@ public partial class DatabaseContext
             }
         }
 
-        // Pattern 2: SQLite/DuckDB file with Standard (potential lock contention)
-        if ((product == SupportedDatabase.Sqlite || product == SupportedDatabase.DuckDB) &&
+        // Pattern 2: SQLite/DuckDB-like embedded engine, file-based, with Standard (potential lock
+        // contention). Deliberately checks IsEmbeddedSingleWriterEngine rather than
+        // !IsClientServerDatabase — the latter is also true for the Unknown-database fallback,
+        // which would wrongly get this SQLite/DuckDB-specific "SQLITE_BUSY" wording.
+        if (dialect.IsEmbeddedSingleWriterEngine &&
             resolved == DbMode.Standard &&
-            DetectInMemoryKind(product, _connectionString) == InMemoryKind.None)
+            dialect.DetectInMemoryKind(_connectionString) == InMemoryKind.None)
         {
             _logger.LogWarning(
                 diagnostics.EventIds.ModeMismatch,
@@ -2516,69 +2421,19 @@ public partial class DatabaseContext
 
     private bool IsClientServerDatabase(SupportedDatabase product)
     {
-        return product switch
-        {
-            SupportedDatabase.PostgreSql => true,
-            SupportedDatabase.CockroachDb => true,
-            SupportedDatabase.SqlServer => true,
-            SupportedDatabase.MySql => true,
-            SupportedDatabase.MariaDb => true,
-            SupportedDatabase.Oracle => true,
-            SupportedDatabase.Firebird => true, // Usually client-server; embedded is rare
-            SupportedDatabase.Db2 => true,
-            _ => false
-        };
+        // Delegates to the dialect's own ISqlDialect.IsClientServerDatabase instead of
+        // maintaining a second SupportedDatabase switch here — see CLAUDE.md's "Adding a New
+        // Database" checklist for why that duplication used to silently miss new databases
+        // (Db2, then every distributed/cloud variant added after it).
+        return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).IsClientServerDatabase;
     }
 
-    private enum InMemoryKind
+    private InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
     {
-        None,
-        Isolated,
-        Shared
-    }
-
-    private static InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
-    {
-        var cs = (connectionString ?? string.Empty).Trim();
-        var s = cs.ToLowerInvariant();
-        var normalized = s.Replace(" ", string.Empty);
-        if (product == SupportedDatabase.Sqlite)
-        {
-            var dataSource = TryGetDataSourcePath(connectionString ?? string.Empty) ?? string.Empty;
-            var dataSourceLower = dataSource.ToLowerInvariant();
-            var dataSourceIsMemory = dataSourceLower.Contains(":memory:");
-            var modeMem = normalized.Contains("mode=memory") ||
-                          normalized.Contains("filename=:memory:") ||
-                          normalized.Contains("datasource=:memory:") ||
-                          dataSourceIsMemory;
-            if (!modeMem)
-            {
-                return InMemoryKind.None;
-            }
-
-            var cacheShared = normalized.Contains("cache=shared");
-            var dsIsLiteralMem = dataSourceIsMemory ||
-                                 normalized.Contains("datasource=:memory:") ||
-                                 normalized.Contains("filename=:memory:");
-            if (cacheShared && !dsIsLiteralMem)
-            {
-                return InMemoryKind.Shared; // e.g., file:name?mode=memory&cache=shared
-            }
-
-            return InMemoryKind.Isolated;
-        }
-
-        if (product == SupportedDatabase.DuckDB)
-        {
-            if (!s.Contains("data source=:memory:"))
-            {
-                return InMemoryKind.None;
-            }
-
-            return s.Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
-        }
-
-        return InMemoryKind.None;
+        // Delegates to the dialect's own ISqlDialect.DetectInMemoryKind instead of maintaining a
+        // second per-product connection-string parser here — see CLAUDE.md's "Adding a New
+        // Database" checklist. Only SQLite/DuckDB override the base (always-None) behavior.
+        return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).DetectInMemoryKind(connectionString);
     }
 
     private bool IsMemoryDataSource()

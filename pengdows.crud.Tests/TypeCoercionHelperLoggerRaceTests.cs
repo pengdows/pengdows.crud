@@ -14,6 +14,22 @@ namespace pengdows.crud.Tests;
 // designed for concurrent construction (e.g. multiple tenants constructed via
 // Task.WhenAll(DatabaseContext.CreateAsync(...), ...)). TypeCoercionHelper.SetLoggerIfUnset
 // closes this with a single Interlocked.CompareExchange instead of separate read-then-write steps.
+//
+// Root-cause note (found investigating a real, reproducible full-suite-only failure of
+// SetLoggerIfUnset_CalledConcurrentlyByManyDistinctLoggers_ExactlyOneWinsAndNoneAreLost below,
+// which passed reliably in isolation): TypeCoercionHelper.Logger is a process-global static
+// mutable field. Six other test classes that read/write it (DataReaderMapperNegativeTests,
+// DataReaderMapperBranchTests, DataReaderMapperCoercionTests, TypeCoercionHelperExtensiveTests,
+// TypeCoercionHelperBehaviorTests, TypeCoercionHelperBranchTests) already share
+// [Collection("TypeRegistry")] specifically to serialize against each other for exactly this
+// reason — this file (and SecurityRegressionTests, which has the identical gap) were simply
+// missing that attribute, so xUnit was free to run them concurrently with the "TypeRegistry"
+// collection and with each other, letting an unrelated test's TypeCoercionHelper.Logger = ...
+// assignment race with this test's own 32-way CompareExchange contest and occasionally win with a
+// logger not in `candidates`, failing Assert.Contains(winner, candidates) — a test-isolation gap,
+// not a defect in the atomic SetLoggerIfUnset implementation itself (which the tests below already
+// correctly prove is atomic in isolation).
+[Collection("TypeRegistry")]
 public class TypeCoercionHelperLoggerRaceTests
 {
     [Fact]

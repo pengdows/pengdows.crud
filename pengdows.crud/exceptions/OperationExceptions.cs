@@ -40,6 +40,42 @@ public class ConcurrencyConflictException : DatabaseOperationException
     }
 }
 
+/// <summary>
+/// Thrown when the database itself cannot determine whether a statement/transaction actually
+/// committed (SQLSTATE 40003, <c>statement_completion_unknown</c>) — e.g. CockroachDB's
+/// distributed consensus layer loses track of a commit's outcome during a network partition or
+/// node failure under contention/overload. Distinct from <see cref="TransientWriteConflictException"/>
+/// (and its <see cref="SerializationConflictException"/>/<see cref="DeadlockException"/>
+/// subclasses), whose "transient" contract means the operation definitely did NOT take effect and
+/// a retry is safe: an ambiguous result means the operation MIGHT have already taken effect, so a
+/// blind retry can double-apply a non-idempotent write.
+/// </summary>
+/// <remarks>
+/// Deliberately NOT a <see cref="TransientWriteConflictException"/> subclass — a caller with an
+/// existing <c>catch (TransientWriteConflictException) { retry(); }</c> handler must not silently
+/// start retrying ambiguous results too. Inherits <see cref="DatabaseOperationException"/> →
+/// <see cref="DatabaseException"/>, so a <c>catch (DatabaseException)</c> block still catches it.
+/// <see cref="DatabaseException.IsTransient"/> is <see langword="false"/> by default (not
+/// <see langword="null"/>): this is a definite, known "do not blindly retry" condition, not an
+/// unclassified one. A caller that wants to recover should first check the actual outcome (e.g.
+/// query for the row/idempotency key the write was supposed to produce) before deciding whether to
+/// retry or accept the write as already applied.
+/// </remarks>
+public sealed class AmbiguousResultException : DatabaseOperationException
+{
+    public AmbiguousResultException(
+        string message,
+        SupportedDatabase database,
+        Exception? innerException = null,
+        string? sqlState = null,
+        int? errorCode = null,
+        string? constraintName = null,
+        bool? isTransient = false)
+        : base(message, database, innerException, sqlState, errorCode, constraintName, isTransient)
+    {
+    }
+}
+
 public class CommandTimeoutException : DatabaseOperationException
 {
     public CommandTimeoutException(
