@@ -9,6 +9,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
@@ -54,6 +55,62 @@ public class SybaseDialectTests
     [Fact]
     public void RequiresMergeStatementTerminator_IsFalse()
         => Assert.False(Dialect().RequiresMergeStatementTerminator);
+
+    [Fact]
+    public void BuildBatchUpdateSql_NoVersionColumn_OmitsVersionClauses()
+    {
+        using var query = new SqlQueryBuilder();
+        Dialect().BuildBatchUpdateSql(
+            "\"t\"",
+            new[] { "\"col\"" },
+            new[] { "\"id\"" },
+            1,
+            query,
+            (row, col) => 42);
+
+        var sql = query.ToString();
+        Assert.Contains("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(';', sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdateSql_NonOpaqueVersionColumn_AddsOnPredicateAndIncrementsInSet()
+    {
+        using var query = new SqlQueryBuilder();
+        Dialect().BuildBatchUpdateSql(
+            "\"t\"",
+            new[] { "\"col\"" },
+            new[] { "\"id\"" },
+            1,
+            query,
+            (row, col) => 1,
+            versionColumnName: "\"version\"",
+            versionColumnIsOpaque: false);
+
+        var sql = query.ToString();
+        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
+        Assert.Contains("\"version\" = t.\"version\" + 1", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain(';', sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdateSql_OpaqueVersionColumn_AddsOnPredicateButNoIncrement()
+    {
+        using var query = new SqlQueryBuilder();
+        Dialect().BuildBatchUpdateSql(
+            "\"t\"",
+            new[] { "\"col\"" },
+            new[] { "\"id\"" },
+            1,
+            query,
+            (row, col) => 1,
+            versionColumnName: "\"version\"",
+            versionColumnIsOpaque: true);
+
+        var sql = query.ToString();
+        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("+ 1", sql, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void SupportsInsertReturning_IsFalse()

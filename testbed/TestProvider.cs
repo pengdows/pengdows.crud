@@ -2472,7 +2472,7 @@ INSERT INTO {table} (
     {
         if (!_context.Dialect.SupportsOffsetFetch && !_context.Dialect.SupportsLimitOffset)
         {
-            CheckSkip($"  [Capabilities] Paging: not supported by {_context.Product} — skip");
+            CheckSkip("Capabilities.Paging", $"Paging not supported by {_context.Product}");
             return;
         }
 

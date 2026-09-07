@@ -79,7 +79,7 @@ public class DatabaseContextModeBranchTests
         // "unknown provider" — same DbMode.Best -> Standard outcome as the default branch would
         // give, but this asserts it's classified correctly rather than falling through by luck.
         var bestSybase = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Sybase, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Sybase, false })!;
         Assert.Equal(DbMode.Standard, bestSybase);
     }
 

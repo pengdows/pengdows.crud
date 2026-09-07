@@ -134,7 +134,8 @@ internal class SybaseDialect : SqlDialect
 
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
-        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        string? versionColumnName = null, bool versionColumnIsOpaque = false)
     {
         if (rowCount <= 0)
         {
@@ -147,6 +148,10 @@ internal class SybaseDialect : SqlDialect
 
         var allCols = new List<string>(keyColumns);
         allCols.AddRange(columnNames);
+        if (versionColumnName != null)
+        {
+            allCols.Add(versionColumnName);
+        }
 
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
@@ -205,6 +210,14 @@ internal class SybaseDialect : SqlDialect
             query.Append(keyColumns[i]);
         }
 
+        if (versionColumnName != null)
+        {
+            query.Append(" AND t.");
+            query.Append(versionColumnName);
+            query.Append(" = s.");
+            query.Append(versionColumnName);
+        }
+
         query.Append(") WHEN MATCHED THEN UPDATE SET ");
         for (var i = 0; i < columnNames.Count; i++)
         {
@@ -216,6 +229,22 @@ internal class SybaseDialect : SqlDialect
             query.Append(columnNames[i]);
             query.Append(" = s.");
             query.Append(columnNames[i]);
+        }
+
+        if (versionColumnName != null && !versionColumnIsOpaque)
+        {
+            if (columnNames.Count > 0)
+            {
+                query.Append(", ");
+            }
+
+            // RHS must be qualified with the target alias — the USING source's "s" alias also
+            // projects a same-named version column (needed for the ON predicate above), so an
+            // unqualified reference here would be ambiguous, same as SQL Server's equivalent.
+            query.Append(versionColumnName);
+            query.Append(" = t.");
+            query.Append(versionColumnName);
+            query.Append(" + 1");
         }
 
         // Deliberately no trailing ';' — ASE rejects it after a MERGE statement.
