@@ -38,6 +38,39 @@ public class PreventDatabaseUnloadConnectionStrategyBehaviorTests
             await strategy.GetConnectionAsync(ctx, ExecutionType.Read, false));
     }
 
+    // Regression guard: GetConnectionAsync must open the connection via OpenAsync, not the
+    // blocking sync Open() -- calling Open() from inside an async method is exactly the
+    // sync-over-async CLR ThreadPool-starvation pattern the "connection acquisition blocked
+    // calling thread under async load" fix was meant to eliminate everywhere. Found as a real
+    // regression on the 2.1.0 branch (same method still called sync Open()); this test locks
+    // the correct behavior down here too.
+    [Fact]
+    public async Task GetConnectionAsync_OpensConnectionAsynchronously_NotSynchronously()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive-asyncopen;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+
+        var conn = await strategy.GetConnectionAsync(ExecutionType.Read, false);
+        try
+        {
+            var underlying = (fakeDbConnection)((IInternalConnectionWrapper)conn).UnderlyingConnection;
+            Assert.Equal(1, underlying.OpenAsyncCount);
+            Assert.Equal(0, underlying.OpenCount);
+        }
+        finally
+        {
+            conn.Dispose();
+        }
+    }
+
     [Fact]
     public async Task ReleaseConnectionAsync_DoesNotDisposePersistentConnection()
     {
