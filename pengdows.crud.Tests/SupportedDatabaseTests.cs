@@ -57,7 +57,8 @@ public class SupportedDatabaseTests
                 "Snowflake",
                 "AuroraMySql",
                 "AuroraPostgreSql",
-                "SingleStore"
+                "SingleStore",
+                "FlatFile"
             },
             names);
     }

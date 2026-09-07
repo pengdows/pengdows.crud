@@ -105,7 +105,11 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var result = context.CreateDbParameter("p1", DbType.Int32, 123, ParameterDirection.Output);
 
-        Assert.Equal("p1", result.ParameterName);
+        // Positional-only providers (e.g. FlatFile, which has no dedicated dialect yet and falls
+        // back to Sql92Dialect) deliberately blank the parameter name — see
+        // SqlDialect.CreateDbParameter's "Positional providers use ? placeholders" comment.
+        var expectedName = context.Dialect.SupportsNamedParameters ? "p1" : string.Empty;
+        Assert.Equal(expectedName, result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
         Assert.Equal(ParameterDirection.Output, result.Direction);

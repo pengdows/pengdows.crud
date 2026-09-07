@@ -2,7 +2,7 @@
 
 > A SQL-first, strongly-typed, testable data access layer for .NET 8. Not an ORM — no LINQ,
 > no change tracking — with database-agnostic SQL, safe parameterization, and context-per-tenant
-> multi-tenancy across 16 supported database engines.
+> multi-tenancy across 17 supported database engines.
 
 This file is a curated index, not the full content — it links out to the canonical docs rather
 than duplicating them.
@@ -38,14 +38,16 @@ config-driven via `DbProviderLoader` for tenants whose provider isn't known at c
   connection strategies
 - [`docs/parameter-naming-convention.md`](docs/parameter-naming-convention.md) — per-operation
   SQL parameter naming (`i{n}`, `s{n}`, `w{n}`, `k{n}`, `v{n}`, `j{n}`, `b{n}`)
-- [`docs/supported-databases.md`](docs/supported-databases.md) — the 16 supported database
+- [`docs/supported-databases.md`](docs/supported-databases.md) — the 17 supported database
   engines and dialect capability notes. Percona Server for MySQL, Citus, TimescaleDB, and
   Fujitsu Enterprise Postgres are not distinct `SupportedDatabase` values — all four are
   detected at runtime and delegate to the MySQL/PostgreSQL dialect (verified live against
   real containers; see the "Verified PostgreSQL/MySQL-compatible forks" note in that file).
   SingleStore *is* a distinct `SupportedDatabase` value (unlike those four) because it reports
   a generic, indistinguishable MySQL version string and needs its own runtime probe
-  (`SELECT @@memsql_version`) to detect at all — see the "SingleStore" note in that file.
+  (`SELECT @@memsql_version`) to detect at all. FlatFile
+  ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)) is also a distinct value
+  with its own partial dialect — see the "SingleStore" and "FlatFile" notes in that file.
 - [`docs/transactions.md`](docs/transactions.md) — transaction/savepoint usage; do not use
   `TransactionScope` (incompatible by design — see `CLAUDE.md`)
 

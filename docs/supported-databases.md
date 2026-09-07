@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 15 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 16 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -19,6 +19,7 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 | `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
 | `SingleStore=16384` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
+| `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -27,6 +28,8 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 > **Verified PostgreSQL/MySQL-compatible forks:** Percona Server for MySQL, Citus, TimescaleDB, and Fujitsu Enterprise Postgres are not distinct `SupportedDatabase` values — each still reports itself via the standard `DataSourceProductName`/version-string mechanism as "MySQL" or "PostgreSQL", so `DatabaseDetectionService` resolves them to `SupportedDatabase.MySql`/`PostgreSql` and they run through the exact same dialect and test suite as the vanilla engine. All four were verified live (full `PostgreSQLTestProvider`/MySQL test-provider suite, 100% pass, same check count as vanilla) and are always-on entries in the testbed (`testbed/ParallelTestOrchestrator.cs`) — not opt-in. Fujitsu Enterprise Postgres needs two non-default container settings to start at all: it listens on port **27500**, not 5432, and its entrypoint has no "skip if this is the default superuser" special-case, so configuring it via `PG_USER=postgres` crashes the container ("role postgres already exists") — use `PG_ADMIN_PASSWORD` instead to set the existing superuser's password. **EDB Postgres Extended** is very likely also just `PostgreSql` (same wire-protocol/version-string shape), but has no public Docker image to verify against — EDB moved it behind a private, subscription-gated registry — so it is *not* claimed as verified here.
 
 > **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SELECT @@memsql_version` probe (a SingleStore-only system variable, structurally identical to the existing `@@aurora_version` Aurora MySQL probe) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is not yet wired into the testbed orchestrator as an always-on container entry — that remains open work, distinct from the detection/dialect support described here.
+
+> **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files, registered as a real, partial dialect — three deliberate, cited decisions: positional-only parameters (no named `@name` support, per its README), no stored procedures (`ProcWrappingStyle.None`), and embedded/not-client-server classification. Reads `FlatFileConnection.ServerVersion` directly rather than guessing a non-standard `SELECT version()` query, since flatfile's SQL grammar has no `version()` function at all. No dependency on the `pengdows.flatfile` package itself is needed in `pengdows.crud` — the dialect only reads `ITrackedConnection.ServerVersion`. Isolation levels/profiles, generated-key/identity plan, session settings, and `CoerceConnectionMode`/`DbMode.Best` selection remain genuinely undecided and left open pending real research against pengdows.flatfile's actual transaction/concurrency model.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 

@@ -38,5 +38,6 @@ public enum SupportedDatabase
     Snowflake = 2048, // Cloud data warehouse with strong SQL:2016 compliance
     AuroraMySql = 4096, // AWS Aurora MySQL flavor
     AuroraPostgreSql = 8192, // AWS Aurora PostgreSQL flavor
-    SingleStore = 16384 // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
+    SingleStore = 16384, // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
+    FlatFile = 32768 // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
 }
