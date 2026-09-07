@@ -53,6 +53,32 @@ internal class DuckDbDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.DuckDB;
+
+    /// <inheritdoc />
+    /// <remarks>Embedded, single-writer engine — not client-server.</remarks>
+    public override bool IsClientServerDatabase => false;
+
+    /// <inheritdoc />
+    public override bool IsEmbeddedSingleWriterEngine => true;
+
+    /// <inheritdoc />
+    /// <remarks><c>data source=:memory:</c> is Isolated unless paired with <c>cache=shared</c>.</remarks>
+    public override InMemoryKind DetectInMemoryKind(string? connectionString)
+    {
+        var s = (connectionString ?? string.Empty).Trim().ToLowerInvariant();
+        if (!s.Contains("data source=:memory:"))
+        {
+            return InMemoryKind.None;
+        }
+
+        return s.Replace(" ", string.Empty).Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
+    }
+
+    /// <inheritdoc />
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb) =>
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+
     public override string ParameterMarker => "$";
 
     public override bool SupportsNamedParameters => true;

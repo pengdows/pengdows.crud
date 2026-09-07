@@ -77,6 +77,18 @@ internal class FirebirdDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
+
+    // Deliberately does NOT override CoerceConnectionMode, so Best resolves to Standard here —
+    // same as any other full server database (base SqlDialect.CoerceConnectionMode).
+    //
+    // Bug fix: embedded Firebird was previously forced into SingleConnection mode by a dedicated
+    // DatabaseContext-level special case (serializing every read/write through one pinned
+    // connection). That was based on incorrect assumptions about embedded Firebird's concurrency
+    // model — real testing showed it behaves like an ordinary client-server database and does not
+    // need to be pinned to a single connection. KeepAlive remains available as a fully-supported,
+    // explicitly-honored KNOB (never an auto-selected default) for deployments that specifically
+    // want to avoid Firebird's idle-unload reconnect cost — the operator decides that tradeoff,
+    // not this dialect.
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

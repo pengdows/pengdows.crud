@@ -194,8 +194,11 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_BestMode_AutoSelectsSingleConnection_WithInfo()
+    public void FirebirdEmbedded_BestMode_AutoSelectsStandard_WithInfo()
     {
+        // Bug fix: embedded Firebird used to be forced into SingleConnection regardless of the
+        // requested mode. Real testing showed it behaves like an ordinary client-server database —
+        // it's now treated as a full server database like any other (see FirebirdDialect.cs).
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -205,16 +208,19 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
         Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Information && e.Message.Contains("DbMode auto-selection"));
+            e => e.Level == LogLevel.Information && e.Message.Contains("Full server: Best selects Standard"));
         Assert.DoesNotContain(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]
-    public void FirebirdEmbedded_StandardMode_CoercesToSingleConnection_WithWarning()
+    public void FirebirdEmbedded_StandardMode_IsHonoredAsIs_NoWarning()
     {
+        // Bug fix: an explicit Standard request for embedded Firebird used to be forcibly coerced
+        // to SingleConnection with a warning. Now that Firebird is treated as an ordinary
+        // full-server database, any explicit mode is honored as-is — same as PostgreSQL/MySQL/etc.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -224,8 +230,8 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
     [Fact]

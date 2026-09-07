@@ -16,16 +16,16 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var isolated = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false })!;
         Assert.Equal(DbMode.SingleConnection, isolated);
 
         var contextShared = CreateContext("Data Source=file:memdb1?mode=memory&cache=shared");
         var shared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false })!;
         Assert.Equal(DbMode.SingleWriter, shared);
 
         var duckShared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false })!;
         Assert.Equal(DbMode.SingleWriter, duckShared);
     }
 
@@ -35,12 +35,16 @@ public class DatabaseContextModeBranchTests
         var context = CreateContext("ServerType=Embedded;Database=C:\\data\\test.fdb;");
         var coerce = GetInstanceMethod("CoerceMode");
 
+        // Bug fix: embedded Firebird used to be forcibly coerced to SingleConnection regardless
+        // of the requested mode. Real testing showed it behaves like an ordinary client-server
+        // database — it's now treated as a full server database (see FirebirdDialect.cs), so an
+        // explicit Standard request is honored as-is.
         var firebird = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false, true })!;
-        Assert.Equal(DbMode.SingleConnection, firebird);
+            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
+        Assert.Equal(DbMode.Standard, firebird);
 
         var localDb = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
         Assert.Equal(DbMode.KeepAlive, localDb);
     }
 
@@ -51,15 +55,15 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestPostgres = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false })!;
         Assert.Equal(DbMode.Standard, bestPostgres);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
 
         var unknownBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false })!;
         Assert.Equal(DbMode.Standard, unknownBest);
     }
 
@@ -79,6 +83,7 @@ public class DatabaseContextModeBranchTests
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));
         SetField(context, "_connectionString", connectionString);
         SetField(context, "_logger", NullLogger<IDatabaseContext>.Instance);
+        SetField(context, "_factory", new fakeDbFactory(SupportedDatabase.Unknown));
         return context;
     }
 

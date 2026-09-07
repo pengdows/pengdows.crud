@@ -365,7 +365,10 @@ public class DatabaseContextConstructorTests
         // Assert
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
-        Assert.Equal(DbMode.SingleConnection, context.ConnectionMode);
+        // Bug fix: embedded Firebird is no longer forced into SingleConnection regardless of the
+        // requested mode — it's an ordinary full-server database now (see FirebirdDialect.cs),
+        // so an explicit SingleWriter request is honored as-is like any other full-server database.
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadOnly, context.ReadWriteMode);
     }
 
