@@ -109,12 +109,16 @@ database-agnostic policy decoupled from connection identity — is in
   found in the competitive research.
 - [`docs/supported-databases.md`](docs/supported-databases.md) — per-database capability
   matrix (isolation levels, upsert strategy, GUID storage, stored-procedure wrapping style)
-  across all 15 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
-  DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, and Aurora
-  PostgreSQL. Aurora MySQL/PostgreSQL, TimescaleDB, Citus, Fujitsu Enterprise Postgres, and
-  Percona Server for MySQL are all detected at runtime and delegate to the MySQL/PostgreSQL
-  dialect — no separate dialect or `SupportedDatabase` value, verified live against real
-  containers (see the "Verified PostgreSQL/MySQL-compatible forks" note in that file).
+  across all 16 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
+  DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
+  PostgreSQL, and SingleStore. Aurora MySQL/PostgreSQL, TimescaleDB, Citus, Fujitsu Enterprise
+  Postgres, and Percona Server for MySQL are all detected at runtime and delegate to the
+  MySQL/PostgreSQL dialect — no separate dialect or `SupportedDatabase` value, verified live
+  against real containers (see the "Verified PostgreSQL/MySQL-compatible forks" note in that
+  file). SingleStore *is* a distinct `SupportedDatabase` value (unlike those five) because it
+  reports a generic, indistinguishable MySQL version string and needs its own runtime probe
+  (`SELECT @@memsql_version`, a SingleStore-only system variable) to detect at all — see the
+  "SingleStore" note in that file.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles, savepoints, and the concurrency contract (which commit/rollback/dispose/cancellation
   races are safe, which throw, and the one documented residual TOCTOU). Transactions are
@@ -156,7 +160,7 @@ database-agnostic policy decoupled from connection identity — is in
   (not once per row), and failed-write rollback of in-memory audit properties.
 - [`docs/testing-with-fakedb.md`](docs/testing-with-fakedb.md) — `pengdows.crud.fakeDb`, a
   complete in-process `DbProviderFactory` (not an interface mock) for testing without a real
-  database: dialect emulation across all 15 supported products (schema/version-probe responses),
+  database: dialect emulation across all 16 supported products (schema/version-probe responses),
   result injection (queued readers/scalars, exact-text-keyed `SetScalarResultForCommand`, a
   `ScalarResolver` for total command-text-routed control, multi-result-set readers), three-layer
   failure injection (command/connection/factory — exact-text or connection-string-scoped, N-th-call

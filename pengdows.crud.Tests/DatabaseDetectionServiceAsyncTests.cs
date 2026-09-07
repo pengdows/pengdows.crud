@@ -57,6 +57,25 @@ public class DatabaseDetectionServiceAsyncTests
     }
 
     [Fact]
+    public async Task DetectFromConnectionAsync_SingleStore_UsesGenuineAsyncProbe()
+    {
+        using var connection = new fakeDbConnection
+        {
+            BlockSynchronousCommandExecution = true,
+            ScalarResolver = commandText => commandText switch
+            {
+                "SELECT @@aurora_version" => throw new InvalidOperationException("Unknown system variable"),
+                "SELECT @@memsql_version" => "9.1.1",
+                _ => throw new InvalidOperationException($"Unexpected probe for this scenario: {commandText}")
+            }
+        };
+
+        var product = await DatabaseDetectionService.DetectFromConnectionAsync(connection);
+
+        Assert.Equal(SupportedDatabase.SingleStore, product);
+    }
+
+    [Fact]
     public async Task DetectFromConnectionAsync_YugabyteViaPgSettings_UsesGenuineAsyncProbe()
     {
         using var connection = new fakeDbConnection
