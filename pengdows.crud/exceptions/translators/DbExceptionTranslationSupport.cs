@@ -94,6 +94,33 @@ internal static partial class DbExceptionTranslationSupport
             return dbException.ErrorCode;
         }
 
+        return TryGetErrorCodeFromErrorsCollection(exception);
+    }
+
+    /// <summary>
+    /// Fallback for providers (e.g. AdoNetCore.AseClient's AseException) that expose a collection
+    /// of provider-specific error records via a public "Errors" property instead of a single
+    /// top-level error-code property, and whose exception type does not derive from
+    /// <see cref="DbException"/> at all (so the checks above never apply).
+    /// </summary>
+    private static int? TryGetErrorCodeFromErrorsCollection(Exception exception)
+    {
+        var errorsProperty = exception.GetType().GetProperty("Errors", BindingFlags.Public | BindingFlags.Instance);
+        if (errorsProperty?.GetValue(exception) is not System.Collections.IEnumerable errors)
+        {
+            return null;
+        }
+
+        foreach (var error in errors)
+        {
+            var numberProperty = error.GetType().GetProperty("MessageNumber", BindingFlags.Public | BindingFlags.Instance) ??
+                                  error.GetType().GetProperty("Number", BindingFlags.Public | BindingFlags.Instance);
+            if (numberProperty?.GetValue(error) is int number)
+            {
+                return number;
+            }
+        }
+
         return null;
     }
 
@@ -105,7 +132,32 @@ internal static partial class DbExceptionTranslationSupport
         }
 
         var property = exception.GetType().GetProperty("SqlState", BindingFlags.Public | BindingFlags.Instance);
-        return property?.GetValue(exception) as string;
+        if (property?.GetValue(exception) is string sqlState && !string.IsNullOrWhiteSpace(sqlState))
+        {
+            return sqlState;
+        }
+
+        return TryGetSqlStateFromErrorsCollection(exception);
+    }
+
+    private static string? TryGetSqlStateFromErrorsCollection(Exception exception)
+    {
+        var errorsProperty = exception.GetType().GetProperty("Errors", BindingFlags.Public | BindingFlags.Instance);
+        if (errorsProperty?.GetValue(exception) is not System.Collections.IEnumerable errors)
+        {
+            return null;
+        }
+
+        foreach (var error in errors)
+        {
+            var sqlStateProperty = error.GetType().GetProperty("SqlState", BindingFlags.Public | BindingFlags.Instance);
+            if (sqlStateProperty?.GetValue(error) is string sqlState && !string.IsNullOrWhiteSpace(sqlState))
+            {
+                return sqlState;
+            }
+        }
+
+        return null;
     }
 
     public static string? TryGetConstraintName(Exception exception)

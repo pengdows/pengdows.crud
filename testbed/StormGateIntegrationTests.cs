@@ -24,6 +24,10 @@ public static class StormGateIntegrationTests
         }
         finally
         {
+            // Microsoft.Data.Sqlite pools connections by default; the underlying file handle
+            // is not necessarily released the instant a connection is disposed, which can race
+            // with the delete below. Clear the pool first so the file is actually free.
+            SqliteConnection.ClearAllPools();
             if (File.Exists(dbPath)) File.Delete(dbPath);
         }
     }

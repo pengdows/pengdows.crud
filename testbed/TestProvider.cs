@@ -387,6 +387,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "BOOLEAN",
             SupportedDatabase.TiDb => "BOOLEAN",
             SupportedDatabase.SqlServer => "BIT",
+            SupportedDatabase.Sybase => "BIT",
             _ => "BOOLEAN"
         };
     }
@@ -406,6 +407,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "VARBINARY(64)",
+            SupportedDatabase.Sybase => "VARBINARY(64)",
             SupportedDatabase.PostgreSql => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
@@ -761,6 +763,36 @@ CREATE TABLE {tableName} (
 
                     sc.Clear();
                     sc.Query.Append($"DROP PROCEDURE {firebirdProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
+            case SupportedDatabase.Sybase:
+                {
+                    var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // ASE lacks SQL Server's "CREATE OR ALTER" shorthand — drop first if present,
+                    // using the single-argument OBJECT_ID() form (the 2-argument overload fails
+                    // with "wrong number or type of argument(s)" on this build, verified live).
+                    sc.Query.Append($"IF OBJECT_ID('sp_pengdows_test') IS NOT NULL DROP PROCEDURE {sybaseProcName}");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append($"CREATE PROCEDURE {sybaseProcName} AS BEGIN RETURN 5 END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var sybaseWrapped = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
+                    sc.Clear();
+                    sc.Query.Append(sybaseWrapped);
+                    var sybaseValue = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (sybaseValue != 5)
+                    {
+                        throw new Exception($"[Sybase proc] Expected return value 5 but got {sybaseValue}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {sybaseProcName}");
                     await sc.ExecuteNonQueryAsync();
                     break;
                 }
@@ -1286,6 +1318,17 @@ INSERT INTO {table} (
                             $"[RoundTrip] Empty string mismatch: expected '{emptyText}' or NULL, got '{actualEmpty}'");
                     }
                 }
+                else if (_context.Product == SupportedDatabase.Sybase)
+                {
+                    // ASE pads an empty string literal to a single space on insert into a
+                    // CHAR/VARCHAR column — long-documented Sybase/T-SQL behavior, not a
+                    // driver or framework bug.
+                    if (actualEmpty != emptyText && actualEmpty != " ")
+                    {
+                        throw new Exception(
+                            $"[RoundTrip] Empty string mismatch: expected '{emptyText}' or a single space, got '{actualEmpty}'");
+                    }
+                }
                 else if (actualEmpty != emptyText)
                 {
                     throw new Exception(
@@ -1294,8 +1337,18 @@ INSERT INTO {table} (
                 if (!actualNullIsDbNull)
                     throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
                 if (actualPadded != paddedText)
-                    throw new Exception(
-                        $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
+                {
+                    // ASE right-trims trailing blanks from VARCHAR values on storage — long-
+                    // documented Sybase behavior (distinct from SQL Server, which preserves
+                    // them). Leading spaces are preserved either way.
+                    var toleratesRightTrim = _context.Product == SupportedDatabase.Sybase &&
+                                              actualPadded == paddedText.TrimEnd();
+                    if (!toleratesRightTrim)
+                    {
+                        throw new Exception(
+                            $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
+                    }
+                }
                 if (actualDecimal != decimalValue)
                     throw new Exception($"[RoundTrip] Decimal mismatch: expected {decimalValue}, got {actualDecimal}");
                 if (actualDecimalEdge != decimalEdge)
@@ -1821,8 +1874,35 @@ INSERT INTO {table} (
                              || _context.DataSourceInfo.SupportsInsertOnConflict
                              || _context.DataSourceInfo.SupportsOnDuplicateKey;
 
+        var supportsPaging = _context.Dialect.SupportsOffsetFetch || _context.Dialect.SupportsLimitOffset;
+
         await RunCapabilityTest("Upsert", supportsUpsert, TestUpsertCapability);
-        await RunCapabilityTest("Paging", true, TestPagingCapability);
+        await RunCapabilityTest("Paging", supportsPaging, TestPagingCapability);
+        await RunCapabilityTest("ParenthesizedJoin", true, TestParenthesizedJoinCapability);
+    }
+
+    /// <summary>
+    /// Proves that a fully parenthesized multi-table join — standard SQL-92 grammar (the
+    /// <c>&lt;joined table&gt;</c> production explicitly allows a parenthesized form), and the
+    /// syntax Microsoft Access <em>requires</em> for any join beyond two tables — parses and
+    /// executes identically across every supported database. No real tables are needed: each
+    /// side of the join is itself a one-row derived table, so this is a pure syntax/grammar
+    /// check, not a DDL/type-mapping check.
+    /// </summary>
+    protected virtual async Task TestParenthesizedJoinCapability()
+    {
+        var sc = _context.CreateSqlContainer();
+        sc.Query.Append(
+            "SELECT a.v FROM ((SELECT 1 AS v) a INNER JOIN (SELECT 1 AS v) b ON a.v = b.v) " +
+            "INNER JOIN (SELECT 1 AS v) c ON a.v = c.v");
+
+        var result = await sc.ExecuteScalarOrNullAsync<int>();
+        if (result != 1)
+        {
+            throw new Exception($"[Capabilities] Parenthesized join: expected 1 but got {result}");
+        }
+
+        CheckOk("  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK");
     }
 
     protected virtual async Task TestUpsertCapability()
@@ -1877,6 +1957,12 @@ INSERT INTO {table} (
 
     protected virtual async Task TestPagingCapability()
     {
+        if (!_context.Dialect.SupportsOffsetFetch && !_context.Dialect.SupportsLimitOffset)
+        {
+            CheckSkip($"  [Capabilities] Paging: not supported by {_context.Product} — skip");
+            return;
+        }
+
         // Insert 10 rows so we can page through exactly our rows
         var ids = new List<long>();
         for (var i = 0; i < 10; i++)
