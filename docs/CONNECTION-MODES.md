@@ -5,7 +5,7 @@ It resolves ambiguities so future contributors cannot bikeshed these rules.
 
 ## 1. Modes & Lifecycle
 
-The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`.
+The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWriter=2`, `SingleConnection=4`, `Best=15`.
 
 ### Standard
 
@@ -16,7 +16,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
   - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect (SQL-92 is a fallback behavior, not a distinct DbMode or supported database product).
 - Transactions: All reads/writes inside a transaction share the same connection.
 
-### KeepAlive
+### PreventDatabaseUnload
 
 - Semantics: Identical to Standard, except a single pinned idle connection is kept open to prevent unload (e.g. SQL Server LocalDb).
 - Pinned connection is never used for commands.
@@ -43,7 +43,7 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
   - Full servers → Standard
-  - LocalDb → KeepAlive
+  - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
   - Firebird embedded → SingleConnection
@@ -60,9 +60,9 @@ The `DbMode` enum values are: `Standard=0`, `KeepAlive=1`, `SingleWriter=2`, `Si
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/KeepAlive → coerced to SingleWriter with a Warning log
+- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log
 
-### LocalDb: coerced to KeepAlive.
+### LocalDb: coerced to PreventDatabaseUnload.
 
 ### Full servers: always Standard.
 
@@ -96,7 +96,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - All commands inside a transaction (read or write) share the same physical connection.
 - Rules by mode:
-  - Standard / KeepAlive: `BeginTransaction()` creates a pinned connection for that scope.
+  - Standard / PreventDatabaseUnload: `BeginTransaction()` creates a pinned connection for that scope.
   - Write tx → acquires the single write permit and reuses the transaction connection for the scope.
   - Read-only tx → ephemeral read-only connection that still respects governor fairness when writes queue.
   - SingleConnection: all tx use the single pinned connection.
@@ -105,7 +105,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 - Non-transactional ephemeral connections: errors bubble at `Execute…` (open-late / close-early).
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
-- Persistent modes (KeepAlive/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
+- Persistent modes (PreventDatabaseUnload/SingleConnection): if pinned connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
 
 ## 7. Heuristics & Tests

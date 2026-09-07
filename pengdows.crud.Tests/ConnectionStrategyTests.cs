@@ -360,7 +360,7 @@ public class ConnectionStrategyTests
         ctx.CloseAndDisposeConnection(read);
     }
 
-    // Additional tests for KeepAliveConnectionStrategy methods
+    // Additional tests for PreventDatabaseUnloadConnectionStrategy methods
 
     [Fact]
     public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotThrow()

@@ -81,7 +81,13 @@ public enum DbMode
     ///   <item><description>Eliminates cold-start latency for subsequent operations</description></item>
     /// </list>
     /// </remarks>
-    KeepAlive = 1,
+    PreventDatabaseUnload = 1,
+
+    /// <summary>
+    /// Compatibility alias for <see cref="PreventDatabaseUnload"/>.
+    /// </summary>
+    [System.Obsolete("Use PreventDatabaseUnload.")]
+    KeepAlive = PreventDatabaseUnload,
 
     /// <summary>
     /// Serializes writes via a pool governor (WriteSlots=1); both reads and writes use ephemeral connections.
@@ -161,7 +167,7 @@ public enum DbMode
     ///   <item><description>SQLite file or "mode=memory;cache=shared" → <see cref="SingleWriter"/> (single-writer database)</description></item>
     ///   <item><description>DuckDB :memory: → <see cref="SingleConnection"/></description></item>
     ///   <item><description>DuckDB file → <see cref="SingleWriter"/></description></item>
-    ///   <item><description>SQL Server LocalDB → <see cref="KeepAlive"/> (prevents unload)</description></item>
+    ///   <item><description>SQL Server LocalDB → <see cref="PreventDatabaseUnload"/> (prevents unload)</description></item>
     ///   <item><description>All other databases → <see cref="Standard"/> (client-server databases)</description></item>
     /// </list>
     /// <para><b>Benefits:</b></para>

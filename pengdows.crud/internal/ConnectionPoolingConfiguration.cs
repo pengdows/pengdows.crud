@@ -11,7 +11,7 @@
 //   * ApplyApplicationName(): Adds application name to connection string
 //   * ClampMinPoolSize(): Silently corrects Min Pool Size to [0, MaxPoolSize]
 // - Pooling=false is not allowed — throws InvalidOperationException.
-// - Only applies to Standard, KeepAlive, and SingleWriter modes with external pooling.
+// - Only applies to Standard, PreventDatabaseUnload, and SingleWriter modes with external pooling.
 // - Skips raw connection strings like ":memory:" or file paths.
 // =============================================================================
 
@@ -108,7 +108,7 @@ internal static class ConnectionPoolingConfiguration
 
     /// <summary>
     /// Applies default pooling settings to a connection string.
-    /// Only modifies connection strings for Standard, KeepAlive, and SingleWriter modes with external pooling support.
+    /// Only modifies connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes with external pooling support.
     /// </summary>
     public static string ApplyPoolingDefaults(
         string connectionString,
@@ -119,7 +119,7 @@ internal static class ConnectionPoolingConfiguration
         DbConnectionStringBuilder? builder = null)
     {
         // Only apply to modes that use provider-managed connection pooling
-        if (mode is not (DbMode.Standard or DbMode.KeepAlive or DbMode.SingleWriter))
+        if (mode is not (DbMode.Standard or DbMode.PreventDatabaseUnload or DbMode.SingleWriter))
         {
             return connectionString;
         }

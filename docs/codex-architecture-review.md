@@ -50,7 +50,7 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 - Production call sites:
   - Create: `DatabaseContext.InitializePoolGovernors/CreateGovernor`.
   - Acquire: `DatabaseContext.AcquireSlot`.
-  - KeepAlive pinned attach: `AttachPinnedSlotIfNeeded`.
+  - PreventDatabaseUnload pinned attach: `AttachPinnedSlotIfNeeded`.
   - Snapshot: `DatabaseContext.GetPoolStatisticsSnapshot`.
 - Extensive test call sites under `pengdows.crud.Tests/PoolGovernor*Tests.cs`.
 
@@ -112,7 +112,7 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 15. Close vs retain decision:
 - Strategy decides release semantics:
   - `StandardConnectionStrategy`: dispose on release
-  - `KeepAliveConnectionStrategy`: retain persistent sentinel
+  - `PreventDatabaseUnloadConnectionStrategy`: retain persistent sentinel
   - `SingleConnectionStrategy`: retain persistent connection
 - Transaction pinned connection retained until transaction complete/dispose.
 
@@ -121,7 +121,7 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 - Active transaction exception: `TransactionContext.CloseAndDisposeConnection*` returns early when `conn` is the pinned `_connection`.
 
 17. Other hidden retention cases:
-- KeepAlive sentinel.
+- PreventDatabaseUnload sentinel.
 - SingleConnection mode persistent connection.
 - Active reader lease (connection held until `TrackedReader` disposal).
 

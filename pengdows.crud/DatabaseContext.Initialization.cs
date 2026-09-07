@@ -11,7 +11,7 @@
 //   1. Parse connection string for pool settings and mode hints
 //   2. Detect database product (SQL Server, PostgreSQL, etc.)
 //   3. Create appropriate SQL dialect
-//   4. Initialize connection strategy (Standard, KeepAlive, etc.)
+//   4. Initialize connection strategy (Standard, PreventDatabaseUnload, etc.)
 //   5. Set up metrics collector if enabled
 // - Auto-detection of DbMode for embedded databases:
 //   * SQLite :memory: -> SingleConnection
@@ -368,7 +368,7 @@ public partial class DatabaseContext
             }
 
             // Special case: SingleConnection's pinned connection opened before detection.
-            // KeepAlive sentinel doesn't need settings — it's never used for work.
+            // PreventDatabaseUnload sentinel doesn't need settings — it's never used for work.
             if (ConnectionMode == DbMode.SingleConnection)
             {
                 var target = initialConnection ?? PersistentConnection;
@@ -566,7 +566,7 @@ public partial class DatabaseContext
             {
                 // Note: SingleWriter no longer uses persistent connections - it uses
                 // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
-                if (ConnectionMode is DbMode.KeepAlive or DbMode.SingleConnection)
+                if (ConnectionMode is DbMode.PreventDatabaseUnload or DbMode.SingleConnection)
                 {
                     SetPersistentConnection(initConn);
                     initConn = null; // context owns it now
@@ -753,7 +753,7 @@ public partial class DatabaseContext
             ownsTurnstile: false); // Readers touch-and-release turnstile
 
         // Attach slot for modes with persistent connections.
-        if (ConnectionMode == DbMode.KeepAlive)
+        if (ConnectionMode == DbMode.PreventDatabaseUnload)
         {
             AttachPinnedSlotIfNeeded();
         }
@@ -850,7 +850,7 @@ public partial class DatabaseContext
         }
         else
         {
-            // Standard/KeepAlive: reader and writer always use separate ADO.NET pools
+            // Standard/PreventDatabaseUnload: reader and writer always use separate ADO.NET pools
             // (differentiated via ApplicationName suffix or Connection Timeout delta).
             // Stamp the resolved write size so the governor and the provider pool agree.
             // Configuration wins over connection-string, which wins over the dialect default.

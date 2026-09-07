@@ -113,17 +113,17 @@ internal class SqlServerDialect : SqlDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// LocalDB genuinely requires KeepAlive unconditionally — there is no production LocalDB
-    /// deployment shape where the auto-shutdown behavior is wanted, so this is forced regardless
-    /// of the requested mode. Non-LocalDB SQL Server is an ordinary full server database and
-    /// falls through to the base implementation.
+    /// LocalDB genuinely requires PreventDatabaseUnload unconditionally — there is no production
+    /// LocalDB deployment shape where the auto-shutdown behavior is wanted, so this is forced
+    /// regardless of the requested mode. Non-LocalDB SQL Server is an ordinary full server
+    /// database and falls through to the base implementation.
     /// </remarks>
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
     {
         if (isLocalDb)
         {
-            return (DbMode.KeepAlive, "LocalDB requires KeepAlive");
+            return (DbMode.PreventDatabaseUnload, "LocalDB requires PreventDatabaseUnload");
         }
 
         return base.CoerceConnectionMode(requested, connectionString, isLocalDb);

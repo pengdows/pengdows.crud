@@ -68,11 +68,11 @@ public class ConnectionStrategyAsyncOpenContractTests
             ctx => new StandardConnectionStrategy(ctx),
             ReturnsFreshConnection: true),
 
-        [typeof(KeepAliveConnectionStrategy)] = new StrategyFixture(
+        [typeof(PreventDatabaseUnloadConnectionStrategy)] = new StrategyFixture(
             DbMode.KeepAlive,
             "Data Source=contract-keepalive;EmulatedProduct=SqlServer",
             SupportedDatabase.SqlServer,
-            ctx => new KeepAliveConnectionStrategy(ctx),
+            ctx => new PreventDatabaseUnloadConnectionStrategy(ctx),
             ReturnsFreshConnection: true),
 
         [typeof(SingleConnectionStrategy)] = new StrategyFixture(

@@ -2,25 +2,60 @@
 
 using System;
 using System.Threading.Tasks;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
+using pengdows.crud.@internal;
 using Xunit;
 
 #endregion
 
 namespace pengdows.crud.Tests;
 
-public class KeepAliveConnectionStrategyTests
+public class PreventDatabaseUnloadConnectionStrategyTests
 {
     [Fact]
     public void Constructor_Should_Initialize_Strategy()
     {
         // Arrange & Act
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Assert
         Assert.NotNull(strategy);
+    }
+
+    // Regression guard: GetConnectionAsync must open the connection via OpenAsync, not the
+    // blocking sync Open() -- calling Open() from inside an async method is exactly the
+    // sync-over-async CLR ThreadPool-starvation pattern the "connection acquisition blocked
+    // calling thread under async load" fix was meant to eliminate everywhere. Found as a real
+    // regression on the 2.1.0 branch's equivalent (PreventDatabaseUnloadConnectionStrategy)
+    // method; this test locks the correct behavior down here too.
+    [Fact]
+    public async Task GetConnectionAsync_OpensConnectionAsynchronously_NotSynchronously()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive-asyncopen;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+        var conn = await strategy.GetConnectionAsync(ExecutionType.Read, false);
+        try
+        {
+            var underlying = (fakeDbConnection)((IInternalConnectionWrapper)conn).UnderlyingConnection;
+            Assert.Equal(1, underlying.OpenAsyncCount);
+            Assert.Equal(0, underlying.OpenCount);
+        }
+        finally
+        {
+            conn.Dispose();
+        }
     }
 
     [Fact]
@@ -29,7 +64,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
@@ -44,7 +79,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Write, false);
@@ -59,7 +94,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, true);
@@ -75,7 +110,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
 
@@ -89,7 +124,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - should not throw
         await strategy.CloseConnectionAsync(null, context);
@@ -99,7 +134,7 @@ public class KeepAliveConnectionStrategyTests
     public void Dispose_Should_Cleanup_Resources()
     {
         // Arrange
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - should not throw
         strategy.Dispose();
@@ -109,7 +144,7 @@ public class KeepAliveConnectionStrategyTests
     public async Task DisposeAsync_Should_Cleanup_Resources_Async()
     {
         // Arrange
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - should not throw
         await strategy.DisposeAsync();
@@ -121,7 +156,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - Get multiple connections
         var connection1 = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
@@ -139,7 +174,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
 
@@ -158,7 +193,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Oracle);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - Test all execution types
         var readConnection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
@@ -175,7 +210,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act - Simulate concurrent requests
         var task1 = strategy.GetConnectionAsync(context, ExecutionType.Read, false);
@@ -198,7 +233,7 @@ public class KeepAliveConnectionStrategyTests
         var context1 = new DatabaseContext("server=test1", factory1);
         var context2 = new DatabaseContext("host=test2", factory2);
 
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act
         var connection1 = await strategy.GetConnectionAsync(context1, ExecutionType.Read, false);
@@ -215,7 +250,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         var connection = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);
 
@@ -230,7 +265,7 @@ public class KeepAliveConnectionStrategyTests
     public void Strategy_Should_Implement_IDisposable_Pattern()
     {
         // Arrange
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Act & Assert - Test disposable pattern
         Assert.True(strategy is IDisposable);
@@ -247,7 +282,7 @@ public class KeepAliveConnectionStrategyTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("test", factory);
-        var strategy = new KeepAliveConnectionStrategy();
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
 
         // Simulate sentinel connection failure after initial success
         var connection1 = await strategy.GetConnectionAsync(context, ExecutionType.Read, false);

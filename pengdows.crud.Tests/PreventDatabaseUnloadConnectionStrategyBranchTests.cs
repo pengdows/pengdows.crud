@@ -12,7 +12,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class KeepAliveConnectionStrategyBranchTests
+public class PreventDatabaseUnloadConnectionStrategyBranchTests
 {
     [Fact]
     public void GetConnection_OpenFailure_Rethrows_WhenDisposalAlsoFails()
@@ -26,7 +26,7 @@ public class KeepAliveConnectionStrategyBranchTests
         };
 
         using var context = new DatabaseContext(config, factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         factory.FailOpen = true;
         factory.ThrowOnDispose = true;
@@ -47,7 +47,7 @@ public class KeepAliveConnectionStrategyBranchTests
         };
 
         using var context = new DatabaseContext(config, factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var before = factory.CreatedCount;
         var result = strategy.HandleDialectDetection(null, null, NullLoggerFactory.Instance);
@@ -70,7 +70,7 @@ public class KeepAliveConnectionStrategyBranchTests
         };
 
         using var context = new DatabaseContext(config, factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         factory.FailOpen = true;
         var result = strategy.HandleDialectDetection(null, factory, NullLoggerFactory.Instance);
@@ -94,7 +94,7 @@ public class KeepAliveConnectionStrategyBranchTests
         };
 
         using var context = new DatabaseContext(config, factory);
-        var strategy = new KeepAliveConnectionStrategy(context);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
 
         var result = strategy.HandleDialectDetection(null, null, NullLoggerFactory.Instance);
 

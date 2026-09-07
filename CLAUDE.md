@@ -155,7 +155,7 @@ await gateway.BatchDeleteAsync(new[] { item });
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
 - Audit fields via `[CreatedBy]`/`[CreatedOn]`, `[LastUpdatedBy]`/`[LastUpdatedOn]` attributes
 - SQL dialect abstraction supports 15 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, TimescaleDB)
-- Connection strategies: Standard, KeepAlive, SingleWriter, SingleConnection
+- Connection strategies: Standard, PreventDatabaseUnload, SingleWriter, SingleConnection
 - Multi-tenancy via context-per-tenant (not query filtering)
 
 ## Development Commands
@@ -441,13 +441,14 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
+| `PreventDatabaseUnload` | 1 | Embedded DBs needing sentinel connection |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
 - **SingleWriter**: The turnstile governor serializes write *tasks* (not connections) preventing database locking errors. Note: readers already queued before a writer grabs the turnstile are not displaced.
 - **Best**: Automatically selects the safest and most performant `DbMode` based on the provider and connection string.
+- **`PreventDatabaseUnload`** is the current name for the mode that keeps one unused sentinel connection open to prevent an embedded/local database from unloading between operations. The old name `KeepAlive` is retained only as an `[Obsolete]` compatibility alias (identical underlying value `1`) — new code should use `PreventDatabaseUnload`.
 
 ## Transactions
 

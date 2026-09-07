@@ -256,7 +256,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB): isolated
     /// in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the most
-    /// functional safe mode (Best selects it, and the unsafe Standard/KeepAlive modes coerce to
+    /// functional safe mode (Best selects it, and the unsafe Standard/PreventDatabaseUnload modes coerce to
     /// it), while SingleConnection/SingleWriter explicit requests are honored as-is. Factored out
     /// so SqliteDialect and DuckDbDialect — which only differ in how they recognize an in-memory
     /// connection string — don't duplicate this decision.
@@ -273,9 +273,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return (DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
         }
 
-        if (requested == DbMode.Standard || requested == DbMode.KeepAlive)
+        if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
         {
-            return (DbMode.SingleWriter, "SQLite/DuckDB: Standard/KeepAlive unsafe, using SingleWriter");
+            return (DbMode.SingleWriter, "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
         }
 
         return (requested, string.Empty);

@@ -9,7 +9,7 @@
 //   * GetConnection(ExecutionType) - Acquire connection (persistent or ephemeral)
 //   * ReleaseConnection() - Return/dispose connection based on policy
 //   * HandleDialectDetection() - Strategy-specific dialect initialization
-// - Implementations: StandardConnectionStrategy, KeepAliveConnectionStrategy,
+// - Implementations: StandardConnectionStrategy, PreventDatabaseUnloadConnectionStrategy,
 //   SingleConnectionStrategy.
 // - DatabaseContext delegates all connection decisions to the active strategy.
 // =============================================================================

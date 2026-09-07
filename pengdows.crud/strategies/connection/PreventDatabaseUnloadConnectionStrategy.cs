@@ -1,5 +1,5 @@
 // =============================================================================
-// FILE: KeepAliveConnectionStrategy.cs
+// FILE: PreventDatabaseUnloadConnectionStrategy.cs
 // PURPOSE: Connection strategy that maintains a sentinel connection to prevent database unload.
 //
 // AI SUMMARY:
@@ -27,7 +27,7 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.strategies.connection;
 
 /// <summary>
-/// KEEP-ALIVE CONNECTION STRATEGY - DESIGN INTENT:
+/// PREVENT-DATABASE-UNLOAD CONNECTION STRATEGY - DESIGN INTENT:
 ///
 /// PURPOSE: Identical to Standard strategy except maintains one unused "sentinel" connection to prevent
 /// database engine from unloading in embedded/local database scenarios.
@@ -51,14 +51,14 @@ namespace pengdows.crud.strategies.connection;
 ///
 /// DO NOT MODIFY: This strategy is specifically tuned for embedded database engine behavior
 /// </summary>
-internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
+internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrategy
 {
-    internal KeepAliveConnectionStrategy(DatabaseContext context) : base(context)
+    internal PreventDatabaseUnloadConnectionStrategy(DatabaseContext context) : base(context)
     {
     }
 
     // Parameterless ctor for tests that pass context per call
-    public KeepAliveConnectionStrategy() : base(null!)
+    public PreventDatabaseUnloadConnectionStrategy() : base(null!)
     {
     }
 
@@ -177,22 +177,22 @@ internal class KeepAliveConnectionStrategy : StandardConnectionStrategy
     }
 }
 
-internal static class KeepAliveConnectionStrategyTestExtensions
+internal static class PreventDatabaseUnloadConnectionStrategyTestExtensions
 {
     // Convenience async helpers expected by tests
-    internal static Task<ITrackedConnection> GetConnectionAsync(this KeepAliveConnectionStrategy _,
+    internal static Task<ITrackedConnection> GetConnectionAsync(this PreventDatabaseUnloadConnectionStrategy _,
         DatabaseContext context, ExecutionType executionType, bool isShared)
     {
-        var strat = new KeepAliveConnectionStrategy(context);
+        var strat = new PreventDatabaseUnloadConnectionStrategy(context);
         var conn = strat.GetConnection(executionType, isShared);
         strat.PostInitialize(conn);
         return Task.FromResult(conn);
     }
 
-    internal static Task CloseConnectionAsync(this KeepAliveConnectionStrategy _, ITrackedConnection? connection,
+    internal static Task CloseConnectionAsync(this PreventDatabaseUnloadConnectionStrategy _, ITrackedConnection? connection,
         DatabaseContext context)
     {
-        var strat = new KeepAliveConnectionStrategy(context);
+        var strat = new PreventDatabaseUnloadConnectionStrategy(context);
         return strat.ReleaseConnectionAsync(connection).AsTask();
     }
 }
