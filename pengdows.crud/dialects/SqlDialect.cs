@@ -547,6 +547,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual bool MergeUpdateRequiresTargetAlias => true; // SQL-92 MERGE allows it (SQL Server, Oracle)
 
+    // See ISqlDialect.RequiresMergeStatementTerminator for the full rationale — Oracle and Sybase
+    // override this to false.
+    public virtual bool RequiresMergeStatementTerminator => true;
+
+    public virtual bool SupportsSemicolonStatementSeparator => true;
+
     /// <summary>
     /// Indicates whether this dialect represents an unknown database using the SQL-92 fallback.
     /// </summary>
@@ -2490,6 +2496,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             SupportedDatabase.MariaDb => true, // LAST_INSERT_ID() is per-connection safe
             SupportedDatabase.Sqlite => true, // last_insert_rowid() is per-connection safe
             SupportedDatabase.SqlServer => true, // SCOPE_IDENTITY() is per-batch/scope safe
+            SupportedDatabase.Sybase => true, // @@IDENTITY is per-connection safe (verified live)
             SupportedDatabase.PostgreSql => false, // lastval() can point at wrong sequence
             SupportedDatabase.DuckDB => false, // prefer RETURNING over lastval()
             _ => false
@@ -2583,7 +2590,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         var selectClause = DatabaseType switch
         {
-            SupportedDatabase.SqlServer => $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
+            SupportedDatabase.SqlServer or SupportedDatabase.Sybase => $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
             _ => $"SELECT {WrapObjectName(idColumnName)}"
         };
 
@@ -2596,12 +2603,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
             query += $" ORDER BY {WrapObjectName(idColumnName)} DESC";
         }
 
-        // Add LIMIT clause for non-SQL Server databases
+        // Add LIMIT clause for databases that need one (TOP-based dialects — SQL Server, Sybase —
+        // were already limited above; Oracle uses ROWNUM instead)
         if (DatabaseType == SupportedDatabase.Oracle)
         {
             query += " AND ROWNUM = 1";
         }
-        else if (DatabaseType != SupportedDatabase.SqlServer)
+        else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase)
         {
             query += " LIMIT 1";
         }

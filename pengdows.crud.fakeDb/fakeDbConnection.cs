@@ -1,5 +1,6 @@
 #region
 
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -12,6 +13,27 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbConnection : DbConnection, IFakeDbConnection
 {
+    /// <summary>
+    /// Real ADO.NET providers confirmed (against the live driver, not guessed) to not implement
+    /// <see cref="GetSchema()"/>/<see cref="GetSchema(string)"/> at all. FakeDb mirrors that by
+    /// throwing the same way the real provider does, instead of returning synthesized schema
+    /// data the real connection would never produce — so unit tests exercise the framework's
+    /// actual fallback behavior (e.g. <c>DatabaseDetectionService.DetectFromConnection</c>,
+    /// <c>SqlDialect.GetDataSourceInformationSchema</c>) rather than a fiction that happens to
+    /// diverge from production the moment a real connection is involved.
+    /// </summary>
+    /// <remarks>
+    /// Add an entry here — with a comment citing how it was verified — whenever a supported
+    /// provider is confirmed to lack schema support, rather than special-casing it inline.
+    /// AdoNetCore.AseClient's <c>AseConnection</c> (Sybase ASE): verified live against ASE 16 —
+    /// every <c>GetSchema</c> overload throws <see cref="NotSupportedException"/>
+    /// ("Specified method is not supported.").
+    /// </remarks>
+    private static readonly HashSet<SupportedDatabase> ProductsWithoutSchemaSupport = new()
+    {
+        SupportedDatabase.Sybase
+    };
+
     private string? _connectionString;
     private SupportedDatabase? _emulatedProduct;
     private DataTable? _schemaTable;
@@ -543,6 +565,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void Open()
     {
+        OpenCore(countAsSyncOpen: true);
+    }
+
+    /// <summary>
+    /// Shared open state-machine (failure simulation, broken-connection handling, the
+    /// ParseEmulatedProduct/state-transition side effects) used by both the sync <see cref="Open"/>
+    /// and the successful-completion path of <see cref="OpenAsync"/>. OpenAsync's fake
+    /// implementation has no real I/O to await, so it performs the identical state transition
+    /// synchronously under the hood -- but it must NOT inflate the public <see cref="OpenCount"/>
+    /// counter when it does, or a test asserting "this code path used OpenAsync, not Open" (e.g.
+    /// verifying a sync-over-async regression fix) can never distinguish the two: every OpenAsync
+    /// call would silently also count as a sync Open call. <paramref name="countAsSyncOpen"/>
+    /// keeps that counter meaningful for its actual purpose (detecting a real, caller-issued
+    /// synchronous Open() call) while OpenAsyncCount remains the source of truth for async calls.
+    /// </summary>
+    private void OpenCore(bool countAsSyncOpen)
+    {
         if (_state == ConnectionState.Open)
         {
             return; // Already open, don't change state again
@@ -610,7 +649,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Invoke custom open behavior if set
         _customOpenBehavior?.Invoke();
 
-        OpenCount++;
+        if (countAsSyncOpen)
+        {
+            OpenCount++;
+        }
+
         ParseEmulatedProduct(ConnectionString);
         var originalState = _state;
 
@@ -699,7 +742,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
         try
         {
-            Open();
+            OpenCore(countAsSyncOpen: false);
             return Task.CompletedTask;
         }
         catch (Exception ex)
@@ -805,6 +848,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override DataTable GetSchema()
     {
+        if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
+        {
+            throw new NotSupportedException("Specified method is not supported.");
+        }
+
         if (_schemaTable != null)
         {
             return _schemaTable;
@@ -844,6 +892,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override DataTable GetSchema(string meta)
     {
+        if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
+        {
+            throw new NotSupportedException("Specified method is not supported.");
+        }
+
         if (_schemaTable != null)
         {
             return _schemaTable;

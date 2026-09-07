@@ -404,7 +404,12 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(insertColSb.AsSpan())
                 .Append(") VALUES (")
                 .Append(insertValSb.AsSpan())
-                .Append(");");
+                .Append(")");
+
+            if (dialect.RequiresMergeStatementTerminator)
+            {
+                sc.Query.Append(';');
+            }
 
             sc.AddParameters(parameters);
             return sc;

@@ -48,6 +48,12 @@ internal class OracleDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Oracle;
+
+    // Verified live: ODP.NET executes a single MERGE as one bare SQL statement (not inside a
+    // PL/SQL block), and a trailing semicolon there is rejected as an invalid character —
+    // "ORA-00933: SQL command not properly ended".
+    public override bool RequiresMergeStatementTerminator => false;
+
     public override string ParameterMarker => ":";
 
     public override bool SupportsNamedParameters => true;

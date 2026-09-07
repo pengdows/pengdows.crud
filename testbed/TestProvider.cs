@@ -811,6 +811,36 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.Sybase:
+                {
+                    var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // ASE lacks SQL Server's "CREATE OR ALTER" shorthand — drop first if present,
+                    // using the single-argument OBJECT_ID() form (the 2-argument overload fails
+                    // with "wrong number or type of argument(s)" on this build, verified live).
+                    sc.Query.Append($"IF OBJECT_ID('sp_pengdows_test') IS NOT NULL DROP PROCEDURE {sybaseProcName}");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append($"CREATE PROCEDURE {sybaseProcName} AS BEGIN RETURN 5 END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var sybaseWrapped = sc.WrapForStoredProc(ExecutionType.Read, captureReturn: true);
+                    sc.Clear();
+                    sc.Query.Append(sybaseWrapped);
+                    var sybaseValue = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (sybaseValue != 5)
+                    {
+                        throw new Exception($"[Sybase proc] Expected return value 5 but got {sybaseValue}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {sybaseProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             default:
                 throw new Exception(
                     $"[StoredProc] Unhandled database {_context.Product} in stored proc test — add a case or override ProcWrappingStyle.None.");

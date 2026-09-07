@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 16 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 17 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -20,6 +20,7 @@ pengdows.crud supports 16 directly supported databases via the `SupportedDatabas
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
 | `SingleStore=16384` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
+| `Sybase=65536` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -30,6 +31,8 @@ pengdows.crud supports 16 directly supported databases via the `SupportedDatabas
 > **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SELECT @@memsql_version` probe (a SingleStore-only system variable, structurally identical to the existing `@@aurora_version` Aurora MySQL probe) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is not yet wired into the testbed orchestrator as an always-on container entry — that remains open work, distinct from the detection/dialect support described here.
 
 > **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files, registered as a real, partial dialect — three deliberate, cited decisions: positional-only parameters (no named `@name` support, per its README), no stored procedures (`ProcWrappingStyle.None`), and embedded/not-client-server classification. Reads `FlatFileConnection.ServerVersion` directly rather than guessing a non-standard `SELECT version()` query, since flatfile's SQL grammar has no `version()` function at all. No dependency on the `pengdows.flatfile` package itself is needed in `pengdows.crud` — the dialect only reads `ITrackedConnection.ServerVersion`. Isolation levels/profiles, generated-key/identity plan, session settings, and `CoerceConnectionMode`/`DbMode.Best` selection remain genuinely undecided and left open pending real research against pengdows.flatfile's actual transaction/concurrency model.
+
+> **Sybase (SAP ASE):** has its own dedicated `SybaseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses — this branch's Oracle MERGE-terminator fix was added alongside this Sybase support, since Sybase needed the same mechanism); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 

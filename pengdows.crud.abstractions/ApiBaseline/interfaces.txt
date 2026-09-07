@@ -391,6 +391,7 @@ property pengdows.crud.dialects.ISqlDialect::ProductInfo : pengdows.crud.dialect
 property pengdows.crud.dialects.ISqlDialect::QuotePrefix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::QuoteSuffix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::ReadCommittedCompatibleIsolationLevel : System.Data.IsolationLevel { get; }
+property pengdows.crud.dialects.ISqlDialect::RequiresMergeStatementTerminator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchInsert : bool { get; }
@@ -421,6 +422,7 @@ property pengdows.crud.dialects.ISqlDialect::SupportsRegularExpressions : bool {
 property pengdows.crud.dialects.ISqlDialect::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRowPatternMatching : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSavepoints : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SupportsSemicolonStatementSeparator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSetValuedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSqlJsonConstructors : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSubqueries : bool { get; }

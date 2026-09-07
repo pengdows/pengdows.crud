@@ -49,6 +49,18 @@ public class DatabaseContextTests
         Assert.NotNull(conn);
         Assert.Equal(ConnectionState.Closed, conn.State);
 
+        if (product == SupportedDatabase.Sybase)
+        {
+            // AdoNetCore.AseClient's AseConnection does not implement GetSchema at all —
+            // verified live: every overload throws NotSupportedException. FakeDb mirrors that
+            // (see fakeDbConnection.ProductsWithoutSchemaSupport) so this proves the context
+            // still initializes correctly even though a direct GetSchema() call fails, the way
+            // it does against the real driver — without needing a live Docker container to
+            // exercise that path.
+            Assert.Throws<NotSupportedException>(() => conn.GetSchema());
+            return;
+        }
+
         var schema = conn.GetSchema();
         Assert.NotNull(schema);
         Assert.True(schema.Rows.Count > 0);

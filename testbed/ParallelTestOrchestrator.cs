@@ -10,6 +10,7 @@ using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
+using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
 using testbed.Yugabyte;
@@ -48,6 +49,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
+            SupportedDatabase.Sybase => new SybaseTestContainer(),
             _ => null
         };
 
@@ -314,7 +316,13 @@ public class ParallelTestOrchestrator
                 Container = new OracleTestContainer(),
                 TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
             },
-            // Add Sybase as needed
+            new()
+            {
+                ContainerName = "Sybase ASE",
+                DatabaseProvider = "Sybase ASE",
+                Container = new SybaseTestContainer(),
+                TestProviderFactory = (db, sp) => new SybaseTestProvider(db, sp)
+            },
         };
 
         // Snowflake — requires cloud credentials; no Docker image; opt-in via INCLUDE_SNOWFLAKE=true
@@ -331,7 +339,6 @@ public class ParallelTestOrchestrator
 
         // Additional databases can be added here:
         // - DB2 (ibmcom/db2) - requires IBM.Data.DB2 package
-        // - Sybase ASE - requires AdoNetCore.AseClient (already available)
         // - Others as needed
 
         return configurations;

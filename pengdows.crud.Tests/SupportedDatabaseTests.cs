@@ -58,7 +58,8 @@ public class SupportedDatabaseTests
                 "AuroraMySql",
                 "AuroraPostgreSql",
                 "SingleStore",
-                "FlatFile"
+                "FlatFile",
+                "Sybase"
             },
             names);
     }
