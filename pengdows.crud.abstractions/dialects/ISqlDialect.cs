@@ -359,6 +359,24 @@ public interface ISqlDialect
     bool MergeUpdateRequiresTargetAlias { get; }
 
     /// <summary>
+    /// Whether a MERGE statement built by BuildUpsertMerge should end with a trailing
+    /// semicolon. Default true (SQL Server and most SQL-92-family dialects accept and
+    /// generally expect it).
+    /// Sybase ASE: false — a trailing semicolon after MERGE is rejected with
+    /// "Incorrect syntax near ';'".
+    /// </summary>
+    bool MergeStatementRequiresSemicolon { get; }
+
+    /// <summary>
+    /// Whether the provider accepts ';'-separated multiple statements sent as a single batch
+    /// (e.g. building a return-value capture as "DECLARE @x INT; EXEC @x = proc; SELECT @x;").
+    /// Default true. Sybase ASE: false — rejects a ';' between statements in a batch entirely
+    /// ("Incorrect syntax near ';'"), so multi-statement batches must be newline-separated with
+    /// no terminator at all instead.
+    /// </summary>
+    bool SupportsSemicolonStatementSeparator { get; }
+
+    /// <summary>
     /// True when the dialect supports namespaces or schemas.
     /// </summary>
     bool SupportsNamespaces { get; }
