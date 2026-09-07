@@ -978,6 +978,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             var paramList = string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}";
             var wrappedProcName = WrapObjectName(procName);
+
+            if (!_context.Dialect.SupportsSemicolonStatementSeparator)
+            {
+                return $"DECLARE @__ret INT\nEXEC @__ret = {wrappedProcName}{paramList}\nSELECT @__ret";
+            }
+
             return $"DECLARE @__ret INT;\nEXEC @__ret = {wrappedProcName}{paramList};\nSELECT @__ret;";
         }
 

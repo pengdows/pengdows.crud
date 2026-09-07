@@ -11,6 +11,7 @@ using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
+using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
 using testbed.Yugabyte;
@@ -49,6 +50,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Db2 => new Db2TestContainer(),
+            SupportedDatabase.Sybase => new SybaseTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             _ => null
         };
@@ -245,6 +247,11 @@ public class ParallelTestOrchestrator
         AddDocker("YugabyteDB", 20, image => new YugabyteTestContainer(image), (db, sp) => new YugabyteTestProvider(db, sp));
         AddDocker("Oracle", 45, image => new OracleTestContainer(image), (db, sp) => new OracleTestProvider(db, sp));
         AddDocker("Db2", 60, image => new Db2TestContainer(image), (db, sp) => new Db2TestProvider(db, sp));
+        // SybaseTestContainer has no per-image constructor (unlike AddDocker's providers) — it
+        // pins one verified image internally (nguoianphu/docker-sybase) and handles ASE 16's
+        // SIGSEGV-on-boot workaround (SAP KBA 3018138: trace flag -T11889 + restart) as part of
+        // its own startup sequence, so it goes through AddLocal like SQLite/DuckDB/Snowflake.
+        AddLocal("Sybase ASE", new SybaseTestContainer(), (db, sp) => new SybaseTestProvider(db, sp), 45);
 
         if (_includeSnowflake)
             AddLocal("Snowflake", new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);

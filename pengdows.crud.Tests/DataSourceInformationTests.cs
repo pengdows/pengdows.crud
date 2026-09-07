@@ -49,6 +49,7 @@ public static class DataSourceTestData
             SupportedDatabase.Firebird => "Firebird",
             SupportedDatabase.Oracle => "Oracle Database",
             SupportedDatabase.Snowflake => "Snowflake",
+            SupportedDatabase.Sybase => "Adaptive Server Enterprise",
             _ => db.ToString()
         };
 
@@ -93,6 +94,7 @@ public static class DataSourceTestData
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -181,7 +183,8 @@ public class DataSourceInformationTests
                        || db == SupportedDatabase.Db2
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
-                       || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14);
+                       || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14)
+                       || db == SupportedDatabase.Sybase;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -213,7 +216,7 @@ public class DataSourceInformationTests
         // Assert: proc wrap style
         var expectedWrap = db switch
         {
-            SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
+            SupportedDatabase.SqlServer or SupportedDatabase.Sybase => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
@@ -233,7 +236,7 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
                 or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore => false,
+                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore or SupportedDatabase.Sybase => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,
