@@ -38,6 +38,7 @@ public static class DataSourceTestData
             SupportedDatabase.SqlServer => "SQL Server",
             SupportedDatabase.MySql => "MySQL",
             SupportedDatabase.AuroraMySql => "MySQL",
+            SupportedDatabase.SingleStore => "MySQL",
             SupportedDatabase.MariaDb => "MariaDB",
             SupportedDatabase.PostgreSql => "PostgreSQL",
             SupportedDatabase.AuroraPostgreSql => "PostgreSQL",
@@ -78,6 +79,7 @@ public static class DataSourceTestData
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
             SupportedDatabase.MySql => new MySqlDialect(factory, NullLogger.Instance),
             SupportedDatabase.AuroraMySql => new MySqlDialect(factory, NullLogger.Instance, SupportedDatabase.AuroraMySql),
+            SupportedDatabase.SingleStore => new MySqlDialect(factory, NullLogger.Instance, SupportedDatabase.SingleStore),
             SupportedDatabase.MariaDb => new MariaDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.TiDb => new TiDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, NullLogger.Instance),
@@ -179,12 +181,16 @@ public class DataSourceInformationTests
         }.Contains(db);
         Assert.Equal(canConflict, info.SupportsInsertOnConflict);
 
+        // SingleStore supports ON DUPLICATE KEY UPDATE as part of its MySQL wire-compatible SQL
+        // surface (documented SingleStore feature, not just an assumption from delegating to
+        // MySqlDialect).
         var canOnDuplicateKey = new[]
         {
             SupportedDatabase.MySql,
             SupportedDatabase.AuroraMySql,
             SupportedDatabase.MariaDb,
-            SupportedDatabase.TiDb
+            SupportedDatabase.TiDb,
+            SupportedDatabase.SingleStore
         }.Contains(db);
         Assert.Equal(canOnDuplicateKey, info.SupportsOnDuplicateKey);
 
@@ -194,7 +200,8 @@ public class DataSourceInformationTests
             SupportedDatabase.SqlServer => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
-                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake => ProcWrappingStyle.Call,
+                or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
+                or SupportedDatabase.SingleStore => ProcWrappingStyle.Call,
             SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
@@ -206,7 +213,8 @@ public class DataSourceInformationTests
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
-                or SupportedDatabase.TiDb or SupportedDatabase.Snowflake => false,
+                or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
+                or SupportedDatabase.SingleStore => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,
@@ -226,7 +234,7 @@ public class DataSourceInformationTests
             SupportedDatabase.SqlServer => 1024,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
-                or SupportedDatabase.Snowflake => 65535,
+                or SupportedDatabase.Snowflake or SupportedDatabase.SingleStore => 65535,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
             SupportedDatabase.Oracle => 1024,

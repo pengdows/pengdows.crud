@@ -216,6 +216,26 @@ internal static class DatabaseDetectionService
                 }
             }
 
+            // SingleStore (formerly MemSQL): @@memsql_version returns a version string (e.g. "9.1.1")
+            // on SingleStore, throws "Unknown system variable" on standard MySQL/MariaDB/Aurora MySQL/TiDB.
+            // SELECT VERSION()/@@version report a generic MySQL-compatible version with no distinguishing
+            // marker on SingleStore, so this dedicated system-variable probe is required.
+            if (isMySqlFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SELECT @@memsql_version";
+                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    {
+                        return SupportedDatabase.SingleStore;
+                    }
+                }
+                catch
+                {
+                    /* not singlestore */
+                }
+            }
+
             // SELECT version() — safe probe that never throws; used first for PG-family because
             // function-call probes (aurora_version, aurora_version()) can leave a YugabyteDB YSQL
             // connection in an aborted state, silently swallowing subsequent queries.

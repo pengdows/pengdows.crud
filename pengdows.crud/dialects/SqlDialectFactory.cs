@@ -80,6 +80,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.TiDb => new TiDbDialect(factory, logger),
             SupportedDatabase.MySql => new MySqlDialect(factory, logger),
             SupportedDatabase.AuroraMySql => new MySqlDialect(factory, logger, SupportedDatabase.AuroraMySql),
+            SupportedDatabase.SingleStore => new MySqlDialect(factory, logger, SupportedDatabase.SingleStore),
             SupportedDatabase.MariaDb => new MariaDbDialect(factory, logger),
             SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
             SupportedDatabase.Oracle => new OracleDialect(factory, logger),

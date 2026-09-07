@@ -28,6 +28,7 @@ public class DbExceptionTranslatorRegistryTests
         Assert.IsType<MySqlExceptionTranslator>(registry.Get(SupportedDatabase.MariaDb));
         Assert.IsType<MySqlExceptionTranslator>(registry.Get(SupportedDatabase.AuroraMySql));
         Assert.IsType<MySqlExceptionTranslator>(registry.Get(SupportedDatabase.TiDb));
+        Assert.IsType<MySqlExceptionTranslator>(registry.Get(SupportedDatabase.SingleStore));
     }
 
     [Fact]

@@ -650,9 +650,12 @@ CREATE TABLE {tableName} (
                     // MySqlConnector handles CREATE PROCEDURE with BEGIN...END as a single statement;
                     // no DELIMITER change needed over ADO.NET.
                     //
-                    // Note: TiDB identifies itself as MySQL but its Go AST parser does not support
-                    // stored procedure DDL (*ast.ProcedureInfo is unimplemented). We catch that
-                    // error and skip gracefully so TiDB does not fail the run.
+                    // Note: TiDB is not handled here — it identifies itself as MySql/Unknown at the
+                    // ADO.NET connection level, but this switch is on _context.Product (the resolved
+                    // SupportedDatabase, e.g. SupportedDatabase.TiDb), not the underlying wire
+                    // protocol. TiDb has ProcWrappingStyle.None (verified against real behavior — see
+                    // DataSourceInformationTests), so the ProcWrappingStyle.None check at the top of
+                    // this method already skips TiDB before this switch is ever reached.
                     sc.Query.Append(
                         $"CREATE PROCEDURE {mysqlProcName}()\n" +
                         "BEGIN\n" +
@@ -674,6 +677,42 @@ CREATE TABLE {tableName} (
 
                     sc.Clear();
                     sc.Query.Append($"DROP PROCEDURE {mysqlProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
+            case SupportedDatabase.SingleStore:
+                {
+                    var singleStoreProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // SingleStore does NOT accept MySQL's "BEGIN...SELECT 42;...END" form (real
+                    // syntax error: "unexpected end of function definition" / "syntax error at or
+                    // near SELECT" — confirmed against a live singlestoredb-dev container).
+                    // SingleStore's own procedural SQL dialect requires the SingleStore-specific
+                    // ECHO statement to return a result set from a procedure, rather than a bare
+                    // SELECT. CALL syntax and quoted-identifier handling are otherwise identical to
+                    // MySQL/MariaDB, and this is a single ADO.NET command (embedded semicolons
+                    // included) exactly like the MySQL/MariaDB case above — no DELIMITER handling
+                    // needed, confirmed via a real MySqlConnector round trip against SingleStore.
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {singleStoreProcName}() AS\n" +
+                        "BEGIN\n" +
+                        "  ECHO SELECT 42;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var singleStoreWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(singleStoreWrapped);
+                    var singleStoreResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (singleStoreResult != 42)
+                    {
+                        throw new Exception($"[SingleStore proc] Expected 42 but got {singleStoreResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {singleStoreProcName}");
                     await sc.ExecuteNonQueryAsync();
                     break;
                 }

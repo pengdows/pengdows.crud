@@ -21,7 +21,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
                 SupportedDatabase.AuroraPostgreSql => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or
-                SupportedDatabase.TiDb => MySql,
+                SupportedDatabase.TiDb or SupportedDatabase.SingleStore => MySql,
             SupportedDatabase.Sqlite => Sqlite,
             SupportedDatabase.DuckDB => DuckDb,
             SupportedDatabase.Oracle => Oracle,

@@ -56,7 +56,8 @@ public class SupportedDatabaseTests
                 "TiDb",
                 "Snowflake",
                 "AuroraMySql",
-                "AuroraPostgreSql"
+                "AuroraPostgreSql",
+                "SingleStore"
             },
             names);
     }

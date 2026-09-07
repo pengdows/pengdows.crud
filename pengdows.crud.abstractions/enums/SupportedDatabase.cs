@@ -37,5 +37,6 @@ public enum SupportedDatabase
     TiDb = 1024, // Distributed SQL database (MySQL-compatible)
     Snowflake = 2048, // Cloud data warehouse with strong SQL:2016 compliance
     AuroraMySql = 4096, // AWS Aurora MySQL flavor
-    AuroraPostgreSql = 8192 // AWS Aurora PostgreSQL flavor
+    AuroraPostgreSql = 8192, // AWS Aurora PostgreSQL flavor
+    SingleStore = 16384 // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
 }
