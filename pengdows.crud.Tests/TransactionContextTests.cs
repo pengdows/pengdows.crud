@@ -1125,14 +1125,17 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public async Task SavepointAsync_WithUnsupportedDialect_DoesNothing()
+    public async Task SavepointAsync_WithUnsupportedDialect_ThrowsNotSupported()
     {
-        var context = CreateContext(SupportedDatabase.SqlServer);
+        // SqlServer actually supports savepoints (SupportsSavepoints=true) and was a wrong choice
+        // of "unsupported" dialect here — this test never exercised the unsupported branch at
+        // all. DuckDB (SupportsSavepoints=false) is genuinely unsupported. Also updated the
+        // expectation: SavepointAsync used to silently no-op on an unsupported dialect; it now
+        // fails fast instead.
+        var context = CreateContext(SupportedDatabase.DuckDB);
         using var tx = context.BeginTransaction();
 
-        await tx.SavepointAsync("test_savepoint");
-
-        Assert.False(tx.IsCompleted);
+        await Assert.ThrowsAsync<NotSupportedException>(() => tx.SavepointAsync("test_savepoint").AsTask());
     }
 
     [Fact]
@@ -1148,14 +1151,16 @@ public class TransactionContextTests
     }
 
     [Fact]
-    public async Task RollbackToSavepointAsync_WithUnsupportedDialect_DoesNothing()
+    public async Task RollbackToSavepointAsync_WithUnsupportedDialect_ThrowsNotSupported()
     {
-        var context = CreateContext(SupportedDatabase.SqlServer);
+        // Same SqlServer→DuckDB fix as SavepointAsync_WithUnsupportedDialect_ThrowsNotSupported
+        // above — SqlServer is actually a supported dialect, so this never tested the unsupported
+        // branch. RollbackToSavepointAsync now fails fast instead of silently no-op-ing.
+        var context = CreateContext(SupportedDatabase.DuckDB);
         using var tx = context.BeginTransaction();
 
-        await tx.RollbackToSavepointAsync("test_savepoint");
-
-        Assert.False(tx.IsCompleted);
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => tx.RollbackToSavepointAsync("test_savepoint").AsTask());
     }
 
     [Fact]

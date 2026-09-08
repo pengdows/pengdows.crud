@@ -196,6 +196,8 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(System.Collec
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.ITransactionContext::Commit() -> void
 method pengdows.crud.ITransactionContext::CommitAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::ReleaseSavepointAsync(string) -> System.Threading.Tasks.ValueTask
+method pengdows.crud.ITransactionContext::ReleaseSavepointAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.ITransactionContext::Rollback() -> void
 method pengdows.crud.ITransactionContext::RollbackAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.ITransactionContext::RollbackToSavepointAsync(string) -> System.Threading.Tasks.ValueTask
@@ -228,6 +230,7 @@ method pengdows.crud.dialects.ISqlDialect::GetGeneratedKeyPlan() -> pengdows.cru
 method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdFromCommand(System.Data.Common.DbCommand) -> object
 method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::GetNaturalKeyLookupQuery(string, string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>) -> string
+method pengdows.crud.dialects.ISqlDialect::GetReleaseSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetRollbackToSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetSequenceNextValQuery(string) -> string
@@ -393,6 +396,7 @@ property pengdows.crud.dialects.ISqlDialect::QuoteSuffix : string { get; }
 property pengdows.crud.dialects.ISqlDialect::ReadCommittedCompatibleIsolationLevel : System.Data.IsolationLevel { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresMergeStatementTerminator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::SavepointCapabilities : pengdows.crud.enums.SavepointCapabilities { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchInsert : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchUpdate : bool { get; }

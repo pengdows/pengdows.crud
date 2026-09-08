@@ -368,6 +368,12 @@ public interface ISqlDialect
     bool SupportsSavepoints { get; }
 
     /// <summary>
+    /// Which savepoint operations this dialect actually supports — more granular than
+    /// <see cref="SupportsSavepoints"/>. See <see cref="SavepointCapabilities"/>.
+    /// </summary>
+    SavepointCapabilities SavepointCapabilities { get; }
+
+    /// <summary>
     /// True when the database supports DROP TABLE IF EXISTS syntax.
     /// Oracle requires a PL/SQL exception block instead.
     /// </summary>
@@ -386,6 +392,15 @@ public interface ISqlDialect
     /// <param name="name">The savepoint name.</param>
     /// <returns>The SQL statement (e.g., "ROLLBACK TO SAVEPOINT name" or "ROLLBACK TRANSACTION name").</returns>
     string GetRollbackToSavepointSql(string name);
+
+    /// <summary>
+    /// Gets the SQL statement to explicitly release a savepoint with the given name. Only called
+    /// when <see cref="SavepointCapabilities"/> includes <see cref="pengdows.crud.enums.SavepointCapabilities.Release"/> —
+    /// dialects without release support (SQL Server, Sybase) never need to implement this.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "RELEASE SAVEPOINT name").</returns>
+    string GetReleaseSavepointSql(string name);
 
     /// <summary>
     /// Indicates whether stored procedure parameter names must match exactly.

@@ -161,6 +161,12 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
     public override bool SupportsIdentityColumns => true;
     public override bool SupportsSavepoints => true;
+
+    // Oracle has no RELEASE SAVEPOINT statement at all — a savepoint is implicitly released on
+    // commit/rollback or superseded by a later savepoint with the same name.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     public override bool SupportsInsertReturning => true;
 
     public override GeneratedKeyPlan GetGeneratedKeyPlan()

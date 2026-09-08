@@ -602,7 +602,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (!_dialect.SupportsSavepoints)
         {
-            return;
+            // Silently no-op-ing here used to seem harmless ("creating a savepoint that's never
+            // used is harmless"), but it means the caller finds out savepoints aren't actually
+            // supported only when the later RollbackToSavepointAsync throws — potentially after a
+            // lot of destructive work it believed was protected. Fail at the first unsupported
+            // operation instead, matching RollbackToSavepointAsync/ReleaseSavepointAsync.
+            throw new NotSupportedException(
+                $"{_context.Product} does not support savepoints; SavepointAsync is unavailable.");
         }
 
         using var cmd = _connection.CreateCommand();
@@ -628,12 +634,47 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (!_dialect.SupportsSavepoints)
         {
-            return;
+            // Unlike SavepointAsync's old no-op (creating a savepoint that's never used is
+            // harmless), silently no-op-ing a rollback here would let the caller believe partial
+            // work was undone when nothing happened — throw instead of lying about the outcome.
+            throw new NotSupportedException(
+                $"{_context.Product} does not support savepoints; RollbackToSavepointAsync is unavailable.");
         }
 
         using var cmd = _connection.CreateCommand();
         cmd.Transaction = _transaction;
         cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
+        if (cmd is DbCommand db)
+        {
+            await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <inheritdoc/>
+    public ValueTask ReleaseSavepointAsync(string name)
+    {
+        return ReleaseSavepointAsync(name, default);
+    }
+
+    public async ValueTask ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (!_dialect.SavepointCapabilities.HasFlag(SavepointCapabilities.Release))
+        {
+            // Never fake this with a no-op: on a dialect where release IS supported, releasing a
+            // savepoint makes RollbackToSavepointAsync fail afterward (the savepoint is gone) — a
+            // no-op here would silently give T-SQL/Oracle different observable semantics than
+            // PostgreSQL/MySQL/etc. under an allegedly normalized API.
+            throw new NotSupportedException(
+                $"{_context.Product} does not support releasing savepoints; ReleaseSavepointAsync is unavailable.");
+        }
+
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = _transaction;
+        cmd.CommandText = _dialect.GetReleaseSavepointSql(name);
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

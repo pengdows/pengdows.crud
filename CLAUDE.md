@@ -431,7 +431,7 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 - `WasCommitted` / `WasRolledBack` / `IsCompleted` - Transaction state
 - `IsolationLevel` - Current isolation level
 - `Commit()` / `Rollback()` - Transaction control; throw `TransactionException` on failure
-- `SavepointAsync(string name)` / `RollbackToSavepointAsync(string name)` - Savepoints
+- `SavepointAsync(string name)` / `RollbackToSavepointAsync(string name)` / `ReleaseSavepointAsync(string name)` - Savepoints; all three throw `NotSupportedException` when the dialect's `SavepointCapabilities` lacks the corresponding flag (`Create`/`Rollback`/`Release`) rather than silently no-op-ing
 - **After a commit or rollback failure**: `IsCompleted` is `true` (the connection has been released). `Dispose` will not attempt a second rollback.
 
 ## Connection Management and DbMode

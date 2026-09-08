@@ -32,8 +32,9 @@ await using var tx = await context.BeginTransactionAsync(
 | `IsolationLevel` | The `IsolationLevel` active for this transaction. |
 | `CommitAsync(CancellationToken)` | Commits the transaction. Returns `ValueTask`. |
 | `RollbackAsync(CancellationToken)` | Rolls back the transaction. Returns `ValueTask`. |
-| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint (dialect must support savepoints). Returns `ValueTask`. |
-| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Returns `ValueTask`. |
+| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Create`. Returns `ValueTask`. |
+| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Rollback`. Returns `ValueTask`. |
+| `ReleaseSavepointAsync(string name, CancellationToken)` | Explicitly releases a savepoint before the transaction ends. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Release` (SQL Server, Sybase, Oracle — none have an explicit release statement). Returns `ValueTask`. |
 
 ## Error handling — TransactionException
 
@@ -58,7 +59,7 @@ catch (TransactionException ex)
 
 ## Committing, rolling back, and savepoints
 
-`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore so commits/rollbacks never overlap. Savepoints and rollbacks-to-savepoint run as long as the dialect advertises support, and the dialect's SQL is executed on the same transaction so you can roll back a subset of work without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.
+`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore so commits/rollbacks never overlap. `SavepointAsync`, `RollbackToSavepointAsync`, and `ReleaseSavepointAsync` each fail fast with `NotSupportedException` the moment the dialect's `SavepointCapabilities` lacks the corresponding flag, rather than silently doing nothing — a caller only discovers non-support once, at the first unsupported call, instead of after later destructive work it believed was protected. When the capability IS present, the dialect's SQL is executed on the same transaction so you can create, roll back to, or explicitly release a savepoint without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.
 
 ## Disposal and cleanup
 
@@ -87,6 +88,9 @@ catch
 await tx.SavepointAsync("checkpoint1", ct);
 // ... some work ...
 await tx.RollbackToSavepointAsync("checkpoint1", ct);
+// ...or, if the work succeeded and the checkpoint is no longer needed (dialect permitting —
+// check ctx.Dialect.SavepointCapabilities for Release; SQL Server/Sybase/Oracle don't have it):
+await tx.ReleaseSavepointAsync("checkpoint1", ct);
 ```
 
 **CRITICAL:** Do not use `TransactionScope`. It is incompatible with pengdows.crud's open-late/close-early connection management and will cause MSDTC promotion or broken transactional guarantees.
