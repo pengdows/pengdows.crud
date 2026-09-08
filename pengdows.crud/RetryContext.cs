@@ -43,14 +43,16 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     private int _started;
     private int _completed;
 
-    // Sequential timer-driven run state — only ever touched by one attempt's worth of callback
-    // chain at a time (see the class-level "EXECUTION MODEL" note above), so plain fields are
-    // safe: nothing else can be concurrently mutating them while a run is in flight.
-    private Timer? _sequentialTimer;
-    private TaskCompletionSource? _sequentialCompletion;
-    private Stopwatch? _sequentialStopwatch;
-    private TimeSpan _sequentialPreviousDelay;
-    private int _sequentialAttempt;
+    // Timer-driven run state — only ever touched by one attempt's worth of callback chain at a
+    // time (see the class-level "EXECUTION MODEL" note above), so plain fields are safe: nothing
+    // else can be concurrently mutating them while a run is in flight. A RetryContext instance
+    // only ever runs one RetryContextType for its whole lifetime (decided at construction), so
+    // there is exactly one timer/backoff/attempt-counter set here, not one per mode.
+    private Timer? _timer;
+    private TaskCompletionSource? _completion;
+    private Stopwatch? _stopwatch;
+    private TimeSpan _previousDelay;
+    private int _attempt;
 
     public RetryContext(IDatabaseContext context, RetryContextType retryContextType, RetryContextOptions? options = null)
     {
@@ -112,7 +114,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             switch (RetryContextType)
             {
                 case RetryContextType.Sequential:
-                    await RunSequentialTimerDrivenAsync(cancellationToken).ConfigureAwait(false);
+                    await RunTimerDrivenAsync(cancellationToken).ConfigureAwait(false);
                     break;
                 case RetryContextType.Transactional:
                     // TODO(FEAT-001): not implemented. See "Execution mechanism," "Dual retry
@@ -139,45 +141,23 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     }
 
     /// <summary>
-    /// RetryContextType.Sequential: commands execute one at a time against the plain parent
-    /// context, no transaction involved. A command that succeeds is removed from the queue and
-    /// never re-executed; a command that fails transiently is retried in place, up to
-    /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
-    /// See "Dual retry modes" in the design doc.
+    /// Arms the single timer-driven attempt loop and returns once the whole run resolves — see
+    /// the class-level "EXECUTION MODEL" note. A RetryContext instance runs exactly one
+    /// <see cref="RetryContextType"/> for its entire lifetime (<see cref="StartAsync"/> already
+    /// rejected any unimplemented mode before this is ever reached), so there is exactly one
+    /// timer and one backoff/attempt-counter set here, not one per mode. This method only arms
+    /// the first attempt; it does not itself execute anything — <see cref="RunStepAsync"/>'s
+    /// callback chain does the actual work and resolves <c>_completion</c> when the run concludes.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Timer-driven, not one continuous awaited loop — see the class-level "EXECUTION MODEL" note.
-    /// This method only arms the first attempt and returns a <see cref="ValueTask"/> that
-    /// completes once <see cref="RunSequentialStepAsync"/>'s callback chain resolves
-    /// <c>_sequentialCompletion</c>; it does not itself execute anything.
-    /// </para>
-    /// <para>
-    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented.
-    /// Every DatabaseException classified transient is retried unconditionally here — the design
-    /// doc only actually decides that's safe for DELETE and version-guarded UPDATE. Do not treat
-    /// this as implementing the design's full idempotency story yet.
-    /// </para>
-    /// </remarks>
-    private ValueTask RunSequentialTimerDrivenAsync(CancellationToken cancellationToken) =>
-        RunTimerDrivenAsync(cancellationToken, OnSequentialTimerFired);
-
-    /// <summary>
-    /// Shared timer-arming scaffolding for both retry modes — see the class-level "EXECUTION
-    /// MODEL" note. The only thing that varies between <see cref="RetryContextType.Sequential"/>
-    /// and (once implemented) <see cref="RetryContextType.Transactional"/> is which callback the
-    /// timer fires; everything else (linked-token setup, run-state reset, the completion source,
-    /// cancellation wiring, arming the first attempt) is identical, so it lives here once.
-    /// </summary>
-    private ValueTask RunTimerDrivenAsync(CancellationToken cancellationToken, TimerCallback onTimerFired)
+    private ValueTask RunTimerDrivenAsync(CancellationToken cancellationToken)
     {
         var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
-        _sequentialStopwatch = Stopwatch.StartNew();
-        _sequentialAttempt = 0;
-        _sequentialPreviousDelay = TimeSpan.Zero;
+        _stopwatch = Stopwatch.StartNew();
+        _attempt = 0;
+        _previousDelay = TimeSpan.Zero;
 
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _sequentialCompletion = completion;
+        _completion = completion;
 
         // Responds to cancellation immediately, independent of whatever the timer is currently
         // doing — without this, a cancel requested while the timer is idle mid-backoff wouldn't be
@@ -186,14 +166,15 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             static state => ((TaskCompletionSource)state!).TrySetCanceled(),
             completion);
 
-        _sequentialTimer = new Timer(onTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
+        _timer = new Timer(OnTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
 
         // The only place StartAsync itself schedules anything — every attempt after this one is
         // scheduled by the timer callback chain below, not by this method.
-        ScheduleNextSequentialAttempt(TimeSpan.Zero);
+        ScheduleNextAttempt(TimeSpan.Zero);
 
         return AwaitAndCleanUpAsync(completion, linked, cancelRegistration);
     }
+
     private async ValueTask AwaitAndCleanUpAsync(
         TaskCompletionSource completion,
         CancellationTokenSource linked,
@@ -206,8 +187,8 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         finally
         {
             cancelRegistration.Dispose();
-            _sequentialTimer?.Dispose();
-            _sequentialTimer = null;
+            _timer?.Dispose();
+            _timer = null;
             linked.Dispose();
         }
     }
@@ -219,12 +200,12 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// with the timer's one-shot (<see cref="Timeout.Infinite"/> period) configuration, kept for
     /// the same discipline/documentation value regardless.
     /// </summary>
-    private void OnSequentialTimerFired(object? state)
+    private void OnTimerFired(object? state)
     {
         try
         {
-            _sequentialTimer?.Change(Timeout.Infinite, Timeout.Infinite);
-            _ = RunSequentialStepAsync((CancellationToken)state!);
+            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            _ = RunStepAsync((CancellationToken)state!);
         }
         catch (ObjectDisposedException)
         {
@@ -235,15 +216,32 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
     /// <summary>
     /// Executes exactly one attempt of the current queue head, then either resolves
-    /// <c>_sequentialCompletion</c> (queue empty / non-transient or budget-exhausted failure /
+    /// <c>_completion</c> (queue empty / non-transient or budget-exhausted failure /
     /// cancellation) or re-arms the timer for the next step (success moving to the next command,
     /// or a transient failure's backoff wait) and returns. Never throws past its own boundary —
-    /// every exception is funneled into <c>_sequentialCompletion</c> instead, since this runs as a
-    /// timer callback's fire-and-forget continuation, not something anyone awaits directly.
+    /// every exception is funneled into <c>_completion</c> instead, since this runs as a timer
+    /// callback's fire-and-forget continuation, not something anyone awaits directly.
     /// </summary>
-    private async Task RunSequentialStepAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// <para>
+    /// Only <see cref="RetryContextType.Sequential"/> is implemented — commands execute one at a
+    /// time against the plain parent context, no transaction involved. A command that succeeds is
+    /// removed from the queue and never re-executed; a command that fails transiently is retried
+    /// in place, up to
+    /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
+    /// See "Dual retry modes" in the design doc. <see cref="RetryContextType.Transactional"/> never
+    /// reaches this method — <see cref="StartAsync"/> throws before arming the timer for it.
+    /// </para>
+    /// <para>
+    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented.
+    /// Every DatabaseException classified transient is retried unconditionally here — the design
+    /// doc only actually decides that's safe for DELETE and version-guarded UPDATE. Do not treat
+    /// this as implementing the design's full idempotency story yet.
+    /// </para>
+    /// </remarks>
+    private async Task RunStepAsync(CancellationToken cancellationToken)
     {
-        var completion = _sequentialCompletion!;
+        var completion = _completion!;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -262,7 +260,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             if (Options.MaxElapsedTime is { } budget)
             {
-                var remaining = budget - _sequentialStopwatch!.Elapsed;
+                var remaining = budget - _stopwatch!.Elapsed;
                 if (remaining <= TimeSpan.Zero)
                 {
                     throw new OperationCanceledException(
@@ -273,7 +271,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                 attemptCts.CancelAfter(remaining);
             }
 
-            _sequentialAttempt++;
+            _attempt++;
 
             await using var clone = template.Clone();
             try
@@ -282,21 +280,21 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                     .ConfigureAwait(false);
                 EnforceRowCountPolicy(template, rowsAffected);
                 _queue.Dequeue();
-                _sequentialAttempt = 0;
-                _sequentialPreviousDelay = TimeSpan.Zero;
-                ScheduleNextSequentialAttempt(TimeSpan.Zero);
+                _attempt = 0;
+                _previousDelay = TimeSpan.Zero;
+                ScheduleNextAttempt(TimeSpan.Zero);
             }
             catch (DatabaseException ex) when (IsTransient(ex))
             {
                 var budgetExceeded =
-                    Options.MaxElapsedTime is { } maxElapsed && _sequentialStopwatch!.Elapsed >= maxElapsed;
-                if (_sequentialAttempt >= Options.MaxAttempts || budgetExceeded)
+                    Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
+                if (_attempt >= Options.MaxAttempts || budgetExceeded)
                 {
                     throw;
                 }
 
-                _sequentialPreviousDelay = NextDelay(_sequentialPreviousDelay);
-                ScheduleNextSequentialAttempt(_sequentialPreviousDelay);
+                _previousDelay = NextDelay(_previousDelay);
+                ScheduleNextAttempt(_previousDelay);
             }
         }
         catch (Exception ex)
@@ -311,15 +309,15 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// finished run would resurrect it and risk a stray extra attempt after the caller already
     /// observed <see cref="StartAsync"/> complete.
     /// </summary>
-    private void ScheduleNextSequentialAttempt(TimeSpan delay)
+    private void ScheduleNextAttempt(TimeSpan delay)
     {
-        if (_sequentialCompletion?.Task.IsCompleted == true)
+        if (_completion?.Task.IsCompleted == true)
         {
             return;
         }
 
         var dueMs = delay <= TimeSpan.Zero ? 0L : (long)Math.Ceiling(delay.TotalMilliseconds);
-        _sequentialTimer?.Change(dueMs, Timeout.Infinite);
+        _timer?.Change(dueMs, Timeout.Infinite);
     }
 
     private bool IsTransient(DatabaseException ex) =>
@@ -331,7 +329,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// violation is a data-integrity decision, not a database-error classification: it throws
     /// <see cref="RowCountPolicyViolationException"/>, which is deliberately not a
     /// <see cref="DatabaseException"/>, so it is never caught/retried by
-    /// <see cref="RunSequentialStepAsync"/>'s transient-classification catch clause — it always
+    /// <see cref="RunStepAsync"/>'s transient-classification catch clause — it always
     /// propagates immediately and aborts execution. See "Per-command affected-row policy" in the
     /// design doc.
     /// </summary>
