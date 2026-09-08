@@ -362,6 +362,25 @@ public class SqlContainerCloningTests : IDisposable
         Assert.Equal(3, clone.ParameterCount);
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task Clone_WithContextOverride_GoesThroughTargetContextsCreateSqlContainer()
+    {
+        // Clone(context) must route the clone's creation through targetContext.CreateSqlContainer()
+        // rather than constructing a SqlContainer directly - otherwise any context-specific
+        // behavior tied to that entrypoint (e.g. RetryContext's queue registration) is silently
+        // bypassed for every clone. See docs/planning/retry-context-design.md - this is the
+        // "Clone() bypasses CreateSqlContainer()" gap found while testing RetryContext against
+        // real databases: every queued entity command silently never executed on any provider.
+        await using var rc = new RetryContext(_sqliteContext, RetryContextType.Sequential);
+
+        using var original = _sqliteContext.CreateSqlContainer("SELECT * FROM users WHERE id = @id");
+        original.AddParameterWithValue("id", DbType.Int32, 123);
+
+        using var clone = original.Clone(rc);
+
+        Assert.Equal(1, rc.QueuedCommandCount);
+    }
+
     public void Dispose()
     {
         _sqliteContext?.Dispose();

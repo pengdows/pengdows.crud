@@ -90,6 +90,15 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
     public RetryContextOptions Options { get; }
 
+    /// <summary>
+    /// The plain <see cref="IDatabaseContext"/> this RetryContext wraps and forwards everything
+    /// to. Not part of the public contract - internal escape hatch for infrastructure (currently
+    /// <see cref="TableGateway{TEntity,TRowID}"/>'s per-dialect template-priming) that needs a
+    /// context whose <c>CreateSqlContainer()</c> has no side effect, for a container that is never
+    /// actually executed itself. See docs/planning/retry-context-design.md.
+    /// </summary>
+    internal IDatabaseContext WrappedContext => _inner;
+
     public bool IsStarted => Volatile.Read(ref _started) != 0;
 
     public bool IsCompleted => Volatile.Read(ref _completed) != 0;

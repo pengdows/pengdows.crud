@@ -167,6 +167,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Extended transactions: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running RetryContext");
+            SnowflakeStep("RetryContext: start");
+            await TestRetryContext();
+            Console.WriteLine($"  RetryContext: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"RetryContext: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running concurrency");
             SnowflakeStep("Concurrency: start");
             await TestConcurrency();
@@ -1912,6 +1919,94 @@ INSERT INTO {table} (
         }
 
         CheckOk("ExtendedTx.SavepointRollback", "  [ExtendedTx] Savepoint rollback: OK");
+    }
+
+    // -------------------------------------------------------------------------
+    // § 9b  RetryContext (FEAT-001) — real per-provider transaction lifecycle
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Happy-path validation of RetryContext's two modes against a real provider. fakeDb can
+    /// simulate the retry/backoff/classification logic, but it cannot prove that
+    /// BeginTransactionAsync -> ISqlContainer.Clone(txn) -> ExecuteNonQueryAsync -> CommitAsync
+    /// actually works end-to-end against this specific ADO.NET provider — which is exactly the
+    /// mechanism both RetryContextType.Sequential (one transaction per command, since
+    /// 2026-09-07) and RetryContextType.Transactional (one transaction per whole batch) now
+    /// depend on for every attempt.
+    /// </summary>
+    protected virtual async Task TestRetryContext()
+    {
+        await TestRetryContextSequential();
+        await TestRetryContextTransactional();
+    }
+
+    private async Task TestRetryContextSequential()
+    {
+        var before = await CountTestRows();
+
+        await using var rc = new RetryContext(_context, RetryContextType.Sequential);
+        var id1 = Interlocked.Increment(ref _nextId);
+        var id2 = Interlocked.Increment(ref _nextId);
+        var t1 = new TestTable { Id = id1, Name = NameEnum.Test, Description = _context.GenerateRandomName() };
+        var t2 = new TestTable { Id = id2, Name = NameEnum.Test, Description = _context.GenerateRandomName() };
+
+        using var c1 = _helper.BuildCreate(t1, rc);
+        using var c2 = _helper.BuildCreate(t2, rc);
+
+        await rc.StartAsync();
+
+        if (rc.QueuedCommandCount != 0)
+        {
+            throw new Exception(
+                "[RetryContext] Sequential: commands remained queued after a successful StartAsync");
+        }
+
+        var after = await CountTestRows();
+        if (after != before + 2)
+        {
+            throw new Exception(
+                $"[RetryContext] Sequential: expected {before + 2} rows after two queued inserts, got {after}");
+        }
+
+        await _helper.DeleteAsync(id1);
+        await _helper.DeleteAsync(id2);
+
+        CheckOk("RetryContext.SequentialSuccess",
+            "  [RetryContext] Sequential: two real inserts, each committed in its own transaction: OK");
+    }
+
+    private async Task TestRetryContextTransactional()
+    {
+        var before = await CountTestRows();
+
+        await using var rc = new RetryContext(_context, RetryContextType.Transactional);
+        var id1 = Interlocked.Increment(ref _nextId);
+        var id2 = Interlocked.Increment(ref _nextId);
+        var t1 = new TestTable { Id = id1, Name = NameEnum.Test, Description = _context.GenerateRandomName() };
+        var t2 = new TestTable { Id = id2, Name = NameEnum.Test, Description = _context.GenerateRandomName() };
+
+        using var c1 = _helper.BuildCreate(t1, rc);
+        using var c2 = _helper.BuildCreate(t2, rc);
+
+        await rc.StartAsync();
+
+        if (!rc.IsCompleted)
+        {
+            throw new Exception("[RetryContext] Transactional: StartAsync did not reach a completed state");
+        }
+
+        var after = await CountTestRows();
+        if (after != before + 2)
+        {
+            throw new Exception(
+                $"[RetryContext] Transactional: expected {before + 2} rows after the batch committed, got {after}");
+        }
+
+        await _helper.DeleteAsync(id1);
+        await _helper.DeleteAsync(id2);
+
+        CheckOk("RetryContext.TransactionalSuccess",
+            "  [RetryContext] Transactional: two real inserts committed together in one transaction: OK");
     }
 
     // -------------------------------------------------------------------------

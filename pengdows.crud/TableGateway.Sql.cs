@@ -414,6 +414,22 @@ public partial class TableGateway<TEntity, TRowID>
     private CachedContainerTemplates BuildCachedContainerTemplatesForDialect(ISqlDialect dialect,
         IDatabaseContext context)
     {
+        // These templates are pure dialect-scoped SQL/parameter-shape artifacts, cached once per
+        // dialect for this TableGateway instance's lifetime (see _containersByDialect) and never
+        // executed themselves - every real per-call use clones from them via Clone(realContext).
+        // If the context that happens to trigger this one-time build is a RetryContext, priming
+        // against it directly would queue these throwaway samples into its retry queue as if they
+        // were real commands (RetryContext.CreateSqlContainer() has no way to tell the difference
+        // between the two). Unwrap to the RetryContext's own wrapped plain context instead - it is
+        // valid for as long as the RetryContext itself is (unlike this gateway's own _context,
+        // which can legitimately be stale/disposed in a shared-gateway/tenant-rotation scenario -
+        // see TenantProviderMigrationTests - so that was tried and reverted), and has no such side
+        // effect. See docs/planning/retry-context-design.md.
+        if (context is RetryContext retryContext)
+        {
+            context = retryContext.WrappedContext;
+        }
+
         // Build pre-configured containers with parameters for common operations
         var templates = new CachedContainerTemplates();
 

@@ -2264,9 +2264,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Use the provided context or fallback to the original context
         var targetContext = context ?? _context;
 
-        // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = context != null ? targetContext.GetDialect() : _dialect;
-        var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
+        // Route the clone's creation through the target context's own CreateSqlContainer()
+        // entrypoint, rather than constructing a SqlContainer directly, so any context-specific
+        // behavior tied to that entrypoint (e.g. RetryContext's queue registration) fires for a
+        // clone exactly as it would for a container built the normal way. Constructing directly
+        // here was the root cause of every RetryContext-queued entity command (built via
+        // TableGateway's cached-template Clone() fast path) silently never executing on any
+        // provider — see docs/planning/retry-context-design.md.
+        var clone = (SqlContainer)targetContext.CreateSqlContainer();
 
         // OPTIMIZATION: Share cached command text instead of re-rendering
         // This is a massive win for template cloning patterns - avoids Query.ToString() on every clone
