@@ -144,6 +144,37 @@ public class RetryContextTransactionalExecutionTests
     }
 
     [Fact]
+    public async Task StartAsync_TransientCommitFailure_FailsClosedInsteadOfRetryingWholeBatch()
+    {
+        // A transient failure DURING execution (before CommitAsync is ever reached) is always
+        // safe to retry as a whole, since rollback undoes everything — see
+        // StartAsync_TransientFailure_RollsBackThenRetriesEntireQueueAndSucceeds above. A transient
+        // failure AT the commit itself is different: the transaction may have already committed
+        // server-side despite the exception, so blindly retrying the whole batch again risks
+        // duplicating every write in it. RetryContext must fail closed here instead.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var rc = new RetryContext(ctx, RetryContextType.Transactional, FastOptions);
+
+        using var first = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        using var second = rc.CreateSqlContainer("UPDATE \"t2\" SET \"x\" = 2");
+
+        var conn = new fakeDbConnection();
+        conn.SetTransactionCommitException(
+            new DeadlockException("simulated deadlock at commit", SupportedDatabase.Sqlite));
+        factory.Connections.Add(conn);
+
+        var ex = await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
+
+        Assert.Equal(1, ex.Attempt);
+        Assert.IsType<TransactionException>(ex.InnerException);
+        // Both commands executed (the batch got as far as CommitAsync), but only one connection
+        // was ever consumed — proof the whole-batch retry never actually happened.
+        Assert.Contains("UPDATE \"t1\" SET \"x\" = 1", conn.ExecutedNonQueryTexts);
+        Assert.Contains("UPDATE \"t2\" SET \"x\" = 2", conn.ExecutedNonQueryTexts);
+    }
+
+    [Fact]
     public async Task StartAsync_CancellationDuringBackoffPropagatesUnwrapped()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

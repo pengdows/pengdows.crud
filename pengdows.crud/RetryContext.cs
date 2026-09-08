@@ -8,15 +8,16 @@
 // queued commands re-run as one transaction per attempt, all-or-nothing) are implemented, both
 // using DatabaseException.IsTransient-based retry with decorrelated exponential jitter backoff and
 // per-command RowCountPolicy enforcement, per "Dual retry modes" and "Per-command affected-row
-// policy" in the design doc. Commit-ambiguity statement-shape detection (shortcoming #1) IS
-// implemented for Sequential: a transiently-failing command not provably safe to retry blind
-// (not a DELETE, not a [Version]-guarded UPDATE) fails closed with RetryOutcomeUnknownException
-// unless the caller declared RetrySafety.IdempotentViaUniqueConstraint via SetRetrySafety — see
-// RunSequentialAttemptAsync. NOT implemented for either mode: a CommitAsync that itself throws
-// transiently is still classified the same as any other transient failure, even though the
-// transaction may have already committed server-side — this narrower window is a known,
-// deliberately separate gap from the per-command statement-shape policy — see "Commit ambiguity"
-// in the design doc.
+// policy" in the design doc. Commit-ambiguity (shortcoming #1) IS implemented for both modes, in
+// two different shapes matching how each mode is actually vulnerable to it: for Sequential, a
+// transiently-failing command not provably safe to retry blind (not a DELETE, not a
+// [Version]-guarded UPDATE) fails closed with RetryOutcomeUnknownException unless the caller
+// declared RetrySafety.IdempotentViaUniqueConstraint via SetRetrySafety — see
+// RunSequentialAttemptAsync; for Transactional, a mid-batch execution failure is always safe to
+// retry as a whole (rollback already undid everything), so the only real risk is a CommitAsync
+// itself throwing transiently — detected via TransactionException.Phase == TransactionPhase.Commit
+// and, likewise, failed closed with RetryOutcomeUnknownException rather than blindly re-running
+// the entire batch — see RunTransactionalAttemptAsync.
 //
 // EXECUTION MODEL: Timer-driven, not one continuous awaited loop, for either mode. StartAsync arms
 // a one-shot System.Threading.Timer for the first attempt and returns only once a
@@ -454,13 +455,16 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// See "Dual retry modes" in the design doc.
     /// </summary>
     /// <remarks>
-    /// KNOWN GAP: unlike <see cref="RunSequentialAttemptAsync"/>, statement-shape commit-ambiguity
-    /// detection (shortcoming #1) does not apply here, and deliberately so — a mid-transaction
-    /// failure here is always safe to retry as a whole (rollback already undid every command in
-    /// this attempt), so the only remaining ambiguity is narrower than Sequential's per-command
-    /// one: a <c>CommitAsync</c> that itself throws transiently is currently classified the same
-    /// as any other transient failure, even though the transaction may have already committed
-    /// server-side.
+    /// Unlike <see cref="RunSequentialAttemptAsync"/>, statement-shape commit-ambiguity detection
+    /// (shortcoming #1) does not apply here, and deliberately so — a mid-transaction failure
+    /// (anywhere in the <c>foreach</c> loop, before <c>CommitAsync</c> is ever reached) is always
+    /// safe to retry as a whole, since rollback already undid every command in this attempt. The
+    /// narrower remaining ambiguity — a <c>CommitAsync</c> that itself throws transiently, where
+    /// the transaction may have already committed server-side despite the exception — IS handled:
+    /// a <see cref="TransactionException"/> whose <see cref="TransactionException.Phase"/> is
+    /// <see cref="TransactionPhase.Commit"/> fails closed with
+    /// <see cref="RetryOutcomeUnknownException"/> unconditionally, rather than blindly retrying
+    /// the entire batch in a brand-new transaction.
     /// </remarks>
     private async Task RunTransactionalAttemptAsync(CancellationToken cancellationToken)
     {
@@ -507,6 +511,17 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         catch (DatabaseException ex) when (IsTransient(ex))
         {
             await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+
+            // A transient failure at the commit itself is never safe to blindly retry as a whole
+            // batch — unlike a mid-loop execution failure (rollback genuinely undid everything),
+            // the transaction may have already committed server-side despite this exception, and
+            // retrying would duplicate the entire batch's writes. Checked before the budget/
+            // attempt-count gate below: "outcome unknown" is a strictly more useful signal than
+            // "ran out of retries," so it takes priority even if this was the last allowed attempt.
+            if (ex is TransactionException { Phase: TransactionPhase.Commit })
+            {
+                throw new RetryOutcomeUnknownException(ex, _attempt);
+            }
 
             var budgetExceeded =
                 Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
@@ -783,22 +798,23 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     // whether that command ever ran, succeeded, or is still sitting in the queue — and releases
     // all of them here, once, rather than piecemeal as each attempt finishes. Containers don't
     // hold a live connection at rest (only a brief per-attempt Clone() does, and that's disposed
-    // immediately after each attempt in RunSequentialAsync), so deferring their disposal to this
-    // single point costs nothing in practice.
+    // immediately after each attempt in RunSequentialAttemptAsync/RunTransactionalAttemptAsync),
+    // so deferring their disposal to this single point costs nothing in practice.
     //
     // Lifetime hazard this guards against: if Dispose/DisposeAsync is called while StartAsync is
     // still actually running (a caller bug — StartAsync should always be awaited to completion
     // before disposing), it is not safe to enumerate/dispose _queue/_allContainers concurrently
-    // with RunSequentialAsync mutating them. IsStarted && !IsCompleted is exactly that "still
-    // running" window, so both paths below check it first and throw loudly instead of silently
-    // leaving orphaned background work or corrupting the collections — see "Required
+    // with RunStepAsync's callback chain mutating them. IsStarted && !IsCompleted is exactly that
+    // "still running" window, so both paths below check it first and throw loudly instead of
+    // silently leaving orphaned background work or corrupting the collections — see "Required
     // implementation corrections" in the design doc ("must not silently convert failure into
     // success").
     //
-    // TODO(FEAT-001): once RetryContextType.Transactional owns a live transaction attempt,
-    // disposal must roll it back, never commit it — see "Commit ambiguity" in the design doc:
-    // "Disposal never intentionally commits." No such state exists yet (Sequential mode never
-    // opens a transaction — see "Execution mechanism" in the design doc). ----
+    // Both attempt methods now roll back (never commit) on any failure path before disposing their
+    // per-attempt transaction — see SafeRollbackAsync — so "Disposal never intentionally commits"
+    // (the design doc's commit-ambiguity note) already holds for the transactions RetryContext
+    // itself opens; this Dispose only ever tears down queued ISqlContainer templates, not a live
+    // transaction. ----
     protected override void DisposeManaged()
     {
         if (IsStarted && !IsCompleted)

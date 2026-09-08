@@ -248,7 +248,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             context.CloseAndDisposeConnection(connection);
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
-                context.Product, ex);
+                context.Product, ex, phase: TransactionPhase.Begin);
         }
 
         singleConnectionTransactionGate = gate;
@@ -845,7 +845,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
                 throw new TransactionException(
                     $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex);
+                    _context.Product, ex,
+                    isTransient: (ex as DatabaseException)?.IsTransient,
+                    phase: markCommitted ? TransactionPhase.Commit : TransactionPhase.Rollback);
             }
             finally
             {
@@ -903,7 +905,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
                 throw new TransactionException(
                     $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex);
+                    _context.Product, ex,
+                    isTransient: (ex as DatabaseException)?.IsTransient,
+                    phase: markCommitted ? TransactionPhase.Commit : TransactionPhase.Rollback);
             }
             finally
             {
@@ -1105,7 +1109,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
-                context.Product, ex);
+                context.Product, ex, phase: TransactionPhase.Begin);
         }
 
         var tx = new TransactionContext(context, connection, transaction, resolvedIsolation, resolvedExecType, logger, gate);

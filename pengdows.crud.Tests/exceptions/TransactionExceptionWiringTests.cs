@@ -27,6 +27,7 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("begin transaction", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Begin, ex.Phase);
     }
 
     [Fact]
@@ -41,6 +42,7 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("begin transaction", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Begin, ex.Phase);
     }
 
     // -------------------------------------------------------------------------
@@ -60,6 +62,7 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("commit", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Commit, ex.Phase);
     }
 
     [Fact]
@@ -76,6 +79,7 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("commit", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Commit, ex.Phase);
     }
 
     // -------------------------------------------------------------------------
@@ -95,6 +99,7 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Rollback, ex.Phase);
     }
 
     [Fact]
@@ -111,11 +116,29 @@ public class TransactionExceptionWiringTests
 
         Assert.NotNull(ex.InnerException);
         Assert.Contains("rollback", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(TransactionPhase.Rollback, ex.Phase);
     }
 
     // -------------------------------------------------------------------------
     // State after failure
     // -------------------------------------------------------------------------
+
+    [Fact]
+    public void CommitAsync_WhenInnerExceptionIsTransient_WrappingExceptionIsAlsoTransient()
+    {
+        // Without this, a genuinely transient commit failure (deadlock, timeout) looks
+        // non-transient once wrapped, and no caller classifying retry-safety via
+        // DatabaseException.IsTransient (RetryContext included) would ever attempt to retry it.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetGlobalTransactionCommitException(
+            new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        using var ctx = CreateContext(factory);
+        using var tx = ctx.BeginTransaction();
+
+        var ex = Assert.Throws<TransactionException>(() => tx.Commit());
+
+        Assert.True(ex.IsTransient);
+    }
 
     [Fact]
     public void AfterCommitFailure_TransactionContext_IsCompleted()

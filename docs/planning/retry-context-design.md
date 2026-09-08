@@ -419,9 +419,20 @@ writeup below) rather than being an open question.
    a retry-attempt `UniqueConstraintViolationException` count as confirmed success. Sequential was
    also reworked the same day to wrap each command in its own individual transaction (rather than
    relying on implicit auto-commit), making its failure/rollback path structurally match
-   Transactional's. Still open: a transiently-throwing `CommitAsync` itself is classified the same
-   as any other transient failure in both modes — for `RetryContextType.Transactional` this is a
-   narrower, separate window (see "Execution mechanism" above) not addressed by this work.
+   Transactional's.
+
+   **`RetryContextType.Transactional`'s narrower commit-phase window closed too (2026-09-08).**
+   Added `TransactionException.Phase` (`Begin`/`Commit`/`Rollback`), set at all four
+   `TransactionContext` throw sites, so a caller can tell a commit-phase failure apart from an
+   ordinary one instead of parsing the exception message. `RunTransactionalAttemptAsync` fails
+   closed with `RetryOutcomeUnknownException` whenever a transient failure's `Phase == Commit`; a
+   mid-batch execution failure (any earlier phase) still retries the whole batch safely, since
+   rollback already undid it. Found and fixed in the same pass: `TransactionContext` never
+   propagated the *inner* exception's own `IsTransient` onto the wrapping `TransactionException` —
+   so a genuinely transient underlying failure looked non-transient once wrapped, meaning no
+   caller anywhere in the library classifying retry-safety via `DatabaseException.IsTransient`
+   would ever have retried a transaction begin/commit/rollback failure at all, independent of the
+   Phase work. Both modes' commit-ambiguity handling is now believed complete.
 
    **Commit ambiguity, explained concretely first, then the recommended policy.** If a command's execution (or, for
    `RetryContextType.Transactional`, the final `CommitAsync`) throws a transient exception — a timeout, a

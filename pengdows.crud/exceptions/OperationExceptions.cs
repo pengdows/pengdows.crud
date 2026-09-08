@@ -187,8 +187,20 @@ public class TransactionException : DatabaseOperationException
         string? sqlState = null,
         int? errorCode = null,
         string? constraintName = null,
-        bool? isTransient = null)
+        bool? isTransient = null,
+        TransactionPhase? phase = null)
         : base(message, database, innerException, sqlState, errorCode, constraintName, isTransient)
     {
+        Phase = phase;
     }
+
+    /// <summary>
+    /// Which transaction lifecycle phase this failure occurred in, when known. Only
+    /// <see cref="TransactionPhase.Commit"/> carries commit-ambiguity risk (the write may already
+    /// have been durably applied server-side despite this exception) — see
+    /// <see cref="TransactionPhase"/>'s remarks and "Commit ambiguity" in
+    /// <c>docs/planning/retry-context-design.md</c>. Null for a <c>TransactionException</c>
+    /// constructed without this information (e.g. by older/external code).
+    /// </summary>
+    public TransactionPhase? Phase { get; }
 }
