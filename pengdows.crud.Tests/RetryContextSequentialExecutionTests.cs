@@ -53,7 +53,10 @@ public class RetryContextSequentialExecutionTests
         await using var ctx = CreateContext(factory);
         var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
 
-        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        // DELETE is one of the two statement shapes RetryContext recognizes as naturally safe to
+        // retry blind (see RetryContextStatementSafetyTests.cs for the commit-ambiguity policy
+        // itself) — this test is only exercising the retry-in-place mechanics, not that policy.
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         var failingConn = new fakeDbConnection();
         failingConn.SetNonQueryExecuteException(
@@ -65,7 +68,7 @@ public class RetryContextSequentialExecutionTests
         await rc.StartAsync();
 
         Assert.Equal(0, rc.QueuedCommandCount);
-        Assert.Contains("UPDATE \"t1\" SET \"x\" = 1", succeedingConn.ExecutedNonQueryTexts);
+        Assert.Contains("DELETE FROM \"t1\"", succeedingConn.ExecutedNonQueryTexts);
     }
 
     [Fact]
@@ -98,7 +101,7 @@ public class RetryContextSequentialExecutionTests
         var options = new RetryContextOptions { MaxAttempts = 2, BaseDelay = TimeSpan.Zero, MaxDelay = TimeSpan.Zero };
         var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
 
-        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         var conn1 = new fakeDbConnection();
         conn1.SetNonQueryExecuteException(new DeadlockException("deadlock #1", SupportedDatabase.Sqlite));
@@ -125,7 +128,7 @@ public class RetryContextSequentialExecutionTests
         };
         var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
 
-        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         var failingConn = new fakeDbConnection();
         failingConn.SetNonQueryExecuteException(
@@ -179,7 +182,7 @@ public class RetryContextSequentialExecutionTests
         };
         var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
 
-        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         var failingConn = new fakeDbConnection();
         failingConn.SetNonQueryExecuteException(
@@ -207,7 +210,7 @@ public class RetryContextSequentialExecutionTests
         };
         var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
 
-        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         // Only one connection is seeded: the first attempt fails transiently almost instantly
         // (well within the 30ms budget), but the 100ms backoff delay that follows blows past it.

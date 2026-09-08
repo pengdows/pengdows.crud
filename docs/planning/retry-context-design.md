@@ -410,8 +410,20 @@ blocking gap**: implementing backoff mechanics before deciding a commit-ambiguit
 shipping a feature that silently duplicates writes. It now has a recommended policy (see its full
 writeup below) rather than being an open question.
 
-1. **RESOLVED — policy decided (2026-08-31, later same day). Commit ambiguity, explained
-   concretely first, then the recommended policy.** If a command's execution (or, for
+1. **RESOLVED — policy decided (2026-08-31, later same day), and implemented for
+   `RetryContextType.Sequential` (2026-09-07).** `RetryContext.ClassifyStatementShape` detects
+   `DELETE` and a `[Version]`-guarded `UPDATE` (via this library's own `v0` version-parameter
+   naming convention, not SQL-text guessing) as naturally safe; everything else fails closed with
+   `RetryOutcomeUnknownException` unless the caller declares
+   `RetrySafety.IdempotentViaUniqueConstraint` via `IRetryContext.SetRetrySafety`, which also makes
+   a retry-attempt `UniqueConstraintViolationException` count as confirmed success. Sequential was
+   also reworked the same day to wrap each command in its own individual transaction (rather than
+   relying on implicit auto-commit), making its failure/rollback path structurally match
+   Transactional's. Still open: a transiently-throwing `CommitAsync` itself is classified the same
+   as any other transient failure in both modes — for `RetryContextType.Transactional` this is a
+   narrower, separate window (see "Execution mechanism" above) not addressed by this work.
+
+   **Commit ambiguity, explained concretely first, then the recommended policy.** If a command's execution (or, for
    `RetryContextType.Transactional`, the final `CommitAsync`) throws a transient exception — a timeout, a
    dropped connection — the write may have *already landed on the server* even though the caller
    never received confirmation. Concretely: `CommitAsync` is two messages, not one — the client sends

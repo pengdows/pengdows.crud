@@ -3,18 +3,20 @@
 // PURPOSE: RetryContext subsystem (FEAT-001) — see docs/planning/retry-context-design.md for the
 //          full design.
 //
-// STATUS: Both RetryContextType.Sequential (FIFO execution against the plain parent context,
+// STATUS: Both RetryContextType.Sequential (FIFO, one command per individual transaction,
 // dequeuing each command as it succeeds) and RetryContextType.Transactional (the whole set of
 // queued commands re-run as one transaction per attempt, all-or-nothing) are implemented, both
 // using DatabaseException.IsTransient-based retry with decorrelated exponential jitter backoff and
 // per-command RowCountPolicy enforcement, per "Dual retry modes" and "Per-command affected-row
-// policy" in the design doc. Commit-ambiguity statement-shape detection (shortcoming #1) is NOT
-// implemented for either mode — every transient failure is currently treated as safe to retry,
-// which is only actually decided-safe for DELETE and version-guarded UPDATE per the design doc;
-// this is a known gap, not a decided relaxation of that policy. For Transactional specifically,
-// this also means a CommitAsync that itself throws transiently is currently retried the same as
-// any other transient failure, even though the transaction may have already committed
-// server-side — see "Commit ambiguity" in the design doc.
+// policy" in the design doc. Commit-ambiguity statement-shape detection (shortcoming #1) IS
+// implemented for Sequential: a transiently-failing command not provably safe to retry blind
+// (not a DELETE, not a [Version]-guarded UPDATE) fails closed with RetryOutcomeUnknownException
+// unless the caller declared RetrySafety.IdempotentViaUniqueConstraint via SetRetrySafety — see
+// RunSequentialAttemptAsync. NOT implemented for either mode: a CommitAsync that itself throws
+// transiently is still classified the same as any other transient failure, even though the
+// transaction may have already committed server-side — this narrower window is a known,
+// deliberately separate gap from the per-command statement-shape policy — see "Commit ambiguity"
+// in the design doc.
 //
 // EXECUTION MODEL: Timer-driven, not one continuous awaited loop, for either mode. StartAsync arms
 // a one-shot System.Threading.Timer for the first attempt and returns only once a
@@ -45,6 +47,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     private readonly Queue<ISqlContainer> _queue = new();
     private readonly List<ISqlContainer> _allContainers = new();
     private readonly Dictionary<ISqlContainer, RowCountPolicy> _rowCountPolicies = new();
+    private readonly Dictionary<ISqlContainer, RetrySafety> _retrySafety = new();
     private readonly CancellationTokenSource _stopCts = new();
     private int _started;
     private int _completed;
@@ -103,6 +106,20 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         }
 
         _rowCountPolicies[container] = policy;
+    }
+
+    /// <inheritdoc cref="IRetryContext.SetRetrySafety"/>
+    public void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(container);
+        if (!_queue.Contains(container))
+        {
+            throw new ArgumentException(
+                "The container is not part of this RetryContext's queue.", nameof(container));
+        }
+
+        _retrySafety[container] = retrySafety;
     }
 
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
@@ -244,17 +261,37 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     }
 
     /// <summary>
-    /// One Sequential attempt: executes the current queue head against the plain parent context,
-    /// no transaction involved. A command that succeeds is removed from the queue and never
-    /// re-executed; a command that fails transiently is retried in place, up to
+    /// One Sequential attempt: opens a fresh transaction, executes and commits the current queue
+    /// head against it individually, then either dequeues on success or rolls back on failure. A
+    /// command that succeeds is removed from the queue and never re-executed; a command that
+    /// fails transiently is retried in place — subject to the statement-shape safety check below
+    /// — up to
     /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
     /// See "Dual retry modes" in the design doc.
     /// </summary>
     /// <remarks>
-    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented.
-    /// Every DatabaseException classified transient is retried unconditionally here — the design
-    /// doc only actually decides that's safe for DELETE and version-guarded UPDATE. Do not treat
-    /// this as implementing the design's full idempotency story yet.
+    /// <para>
+    /// Each command gets its own individual transaction rather than relying on implicit
+    /// per-statement auto-commit — this makes the failure/rollback path here structurally
+    /// identical to <see cref="RunTransactionalAttemptAsync"/> (just scoped to one command instead
+    /// of the whole queue), and gives the same explicit commit-failure surface that method already
+    /// has instead of a bare, un-rollback-able auto-commit.
+    /// </para>
+    /// <para>
+    /// Statement-shape commit-ambiguity handling (shortcoming #1) IS implemented here: a
+    /// transiently-failing command that is not provably safe to retry blind — not a
+    /// <c>DELETE</c>, not a <c>[Version]</c>-guarded <c>UPDATE</c>, and not declared
+    /// <see cref="RetrySafety.IdempotentViaUniqueConstraint"/> via
+    /// <see cref="SetRetrySafety"/> — fails closed with
+    /// <see cref="RetryOutcomeUnknownException"/> instead of blindly retrying. A command that *is*
+    /// declared idempotent-via-unique-constraint additionally treats a
+    /// <see cref="UniqueConstraintViolationException"/> on a retry attempt (never on the first
+    /// attempt) as confirmation of success rather than a real conflict. Still NOT implemented: a
+    /// <c>CommitAsync</c> that itself throws transiently is currently classified the same as any
+    /// other transient failure by this same statement-shape check — see
+    /// <see cref="RunTransactionalAttemptAsync"/>'s identical disclaimer for why that narrower
+    /// window remains a known, separate gap.
+    /// </para>
     /// </remarks>
     private async Task RunSequentialAttemptAsync(CancellationToken cancellationToken)
     {
@@ -287,12 +324,30 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
         _attempt++;
 
-        await using var clone = template.Clone();
+        var txn = await _inner.BeginTransactionAsync(cancellationToken: attemptCts.Token).ConfigureAwait(false);
         try
         {
+            await using var clone = template.Clone(txn);
             var rowsAffected = await clone.ExecuteNonQueryAsync(CommandType.Text, attemptCts.Token)
                 .ConfigureAwait(false);
             EnforceRowCountPolicy(template, rowsAffected);
+
+            await txn.CommitAsync(attemptCts.Token).ConfigureAwait(false);
+
+            _queue.Dequeue();
+            _attempt = 0;
+            _previousDelay = TimeSpan.Zero;
+            ScheduleNextAttempt(TimeSpan.Zero);
+        }
+        catch (UniqueConstraintViolationException) when (
+            _attempt > 1 && GetRetrySafety(template) == RetrySafety.IdempotentViaUniqueConstraint)
+        {
+            // Not the first attempt, and the caller declared this command safe to retry via its
+            // own unique constraint — an earlier attempt's execution already landed server-side
+            // before that attempt's failure, and this constraint violation is the proof of that,
+            // not a real conflict.
+            await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+
             _queue.Dequeue();
             _attempt = 0;
             _previousDelay = TimeSpan.Zero;
@@ -300,6 +355,8 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         }
         catch (DatabaseException ex) when (IsTransient(ex))
         {
+            await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+
             var budgetExceeded =
                 Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
             if (_attempt >= Options.MaxAttempts || budgetExceeded)
@@ -307,10 +364,85 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                 throw;
             }
 
+            if (ClassifyStatementShape(template) == StatementShape.Other &&
+                GetRetrySafety(template) != RetrySafety.IdempotentViaUniqueConstraint)
+            {
+                throw new RetryOutcomeUnknownException(ex, _attempt);
+            }
+
             _previousDelay = NextDelay(_previousDelay);
             ScheduleNextAttempt(_previousDelay);
         }
+        catch
+        {
+            await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            await txn.DisposeAsync().ConfigureAwait(false);
+        }
     }
+
+    private enum StatementShape
+    {
+        /// <summary>Naturally safe to retry: deleting an already-deleted row affects 0 rows.</summary>
+        Delete,
+
+        /// <summary>
+        /// Naturally safe to retry: the <c>[Version]</c> WHERE clause is self-limiting — if the
+        /// earlier attempt already landed, the version already advanced, so the retry affects 0
+        /// rows instead of double-applying.
+        /// </summary>
+        VersionGuardedUpdate,
+
+        /// <summary>
+        /// Not provably safe to retry blind (bare <c>INSERT</c>, or an <c>UPDATE</c>/anything else
+        /// with no version guard) — requires <see cref="RetrySafety.IdempotentViaUniqueConstraint"/>
+        /// to retry at all.
+        /// </summary>
+        Other
+    }
+
+    /// <summary>
+    /// Classifies a queued command's SQL shape for the commit-ambiguity policy (see the
+    /// class-level remarks on <see cref="RunSequentialAttemptAsync"/>). <c>DELETE</c> is detected
+    /// from the statement's leading keyword; a version-guarded <c>UPDATE</c> is detected via the
+    /// presence of a "v0" parameter — this library's own documented, stable naming convention
+    /// (see <c>docs/parameter-naming-convention.md</c>) for a <see cref="TableGateway{TEntity,TRowID}"/>-built
+    /// version-guard WHERE clause, not a guess at arbitrary caller SQL structure.
+    /// </summary>
+    private static StatementShape ClassifyStatementShape(ISqlContainer container)
+    {
+        var sql = container.Query.ToString().AsSpan().TrimStart();
+        if (sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatementShape.Delete;
+        }
+
+        if (sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && HasVersionGuardParameter(container))
+        {
+            return StatementShape.VersionGuardedUpdate;
+        }
+
+        return StatementShape.Other;
+    }
+
+    private static bool HasVersionGuardParameter(ISqlContainer container)
+    {
+        try
+        {
+            container.GetParameterValue("v0");
+            return true;
+        }
+        catch (KeyNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private RetrySafety GetRetrySafety(ISqlContainer container) =>
+        _retrySafety.TryGetValue(container, out var safety) ? safety : RetrySafety.Unspecified;
 
     /// <summary>
     /// One Transactional attempt: opens a fresh transaction against the plain parent context,
@@ -322,9 +454,11 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// See "Dual retry modes" in the design doc.
     /// </summary>
     /// <remarks>
-    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented —
-    /// see <see cref="RunSequentialAttemptAsync"/>'s identical disclaimer. For Transactional this
-    /// also means a <c>CommitAsync</c> that itself throws transiently is currently retried the same
+    /// KNOWN GAP: unlike <see cref="RunSequentialAttemptAsync"/>, statement-shape commit-ambiguity
+    /// detection (shortcoming #1) does not apply here, and deliberately so — a mid-transaction
+    /// failure here is always safe to retry as a whole (rollback already undid every command in
+    /// this attempt), so the only remaining ambiguity is narrower than Sequential's per-command
+    /// one: a <c>CommitAsync</c> that itself throws transiently is currently classified the same
     /// as any other transient failure, even though the transaction may have already committed
     /// server-side.
     /// </remarks>

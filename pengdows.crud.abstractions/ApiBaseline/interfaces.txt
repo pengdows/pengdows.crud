@@ -88,6 +88,7 @@ method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, bo
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IRetryContext::SetRetrySafety(pengdows.crud.ISqlContainer, pengdows.crud.enums.RetrySafety) -> void
 method pengdows.crud.IRetryContext::SetRowCountPolicy(pengdows.crud.ISqlContainer, pengdows.crud.enums.RowCountPolicy) -> void
 method pengdows.crud.IRetryContext::StartAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask
 method pengdows.crud.IRetryContext::StopAsync(System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask

@@ -66,6 +66,20 @@ public interface IRetryContext : IDatabaseContext
     void SetRowCountPolicy(ISqlContainer container, RowCountPolicy policy);
 
     /// <summary>
+    /// Declares a queued command's retry-safety classification for
+    /// <see cref="RetryContextType.Sequential"/>'s commit-ambiguity policy (see "Commit ambiguity"
+    /// in the design doc — shortcoming #1). A transiently-failing command is retried automatically
+    /// with no declaration needed when it is provably safe (a <c>DELETE</c>, or an <c>UPDATE</c>
+    /// guarded by a <c>[Version]</c> column) — this call only matters for a command that is
+    /// <i>not</i> one of those shapes (a bare <c>INSERT</c>, or an <c>UPDATE</c> with no version
+    /// guard), which otherwise fails closed with <see cref="pengdows.crud.exceptions.RetryOutcomeUnknownException"/>
+    /// instead of retrying blind.
+    /// </summary>
+    /// <param name="container">A container already present in this context's queue.</param>
+    /// <param name="retrySafety">The retry-safety classification to apply when that command executes.</param>
+    void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety);
+
+    /// <summary>
     /// Runs the queued command plan per <see cref="RetryContextType"/>'s semantics. Only one
     /// executor may run a given context, and only once — a second call must throw.
     /// </summary>
