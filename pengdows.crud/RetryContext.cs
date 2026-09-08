@@ -3,22 +3,28 @@
 // PURPOSE: RetryContext subsystem (FEAT-001) — see docs/planning/retry-context-design.md for the
 //          full design.
 //
-// STATUS: RetryContextType.Sequential is implemented (FIFO execution against the plain parent
-// context, DatabaseException.IsTransient-based retry with decorrelated exponential jitter backoff,
-// per-command RowCountPolicy enforcement) per "Dual retry modes" and "Per-command affected-row
-// policy" in the design doc. RetryContextType.Transactional is NOT implemented — see its
-// NotImplementedException below. Commit-ambiguity statement-shape detection (shortcoming #1) is
-// NOT implemented — every transient failure is currently treated as safe to retry, which is only
-// actually decided-safe for DELETE and version-guarded UPDATE per the design doc; this is a known
-// gap, not a decided relaxation of that policy.
+// STATUS: Both RetryContextType.Sequential (FIFO execution against the plain parent context,
+// dequeuing each command as it succeeds) and RetryContextType.Transactional (the whole set of
+// queued commands re-run as one transaction per attempt, all-or-nothing) are implemented, both
+// using DatabaseException.IsTransient-based retry with decorrelated exponential jitter backoff and
+// per-command RowCountPolicy enforcement, per "Dual retry modes" and "Per-command affected-row
+// policy" in the design doc. Commit-ambiguity statement-shape detection (shortcoming #1) is NOT
+// implemented for either mode — every transient failure is currently treated as safe to retry,
+// which is only actually decided-safe for DELETE and version-guarded UPDATE per the design doc;
+// this is a known gap, not a decided relaxation of that policy. For Transactional specifically,
+// this also means a CommitAsync that itself throws transiently is currently retried the same as
+// any other transient failure, even though the transaction may have already committed
+// server-side — see "Commit ambiguity" in the design doc.
 //
-// EXECUTION MODEL: Sequential is timer-driven, not one continuous awaited loop. StartAsync arms a
-// one-shot System.Threading.Timer for the first attempt and returns only once a
+// EXECUTION MODEL: Timer-driven, not one continuous awaited loop, for either mode. StartAsync arms
+// a one-shot System.Threading.Timer for the first attempt and returns only once a
 // TaskCompletionSource the timer callback chain resolves. Every firing disarms the timer FIRST
 // (Change(Infinite, Infinite)) before doing anything else, and only re-arms it once that attempt's
 // outcome is fully decided — the classic "stop the timer on entry, conditionally re-enable it on
 // exit" discipline, so attempt N+1 (or its backoff wait) can never start while attempt N is still
-// actually in flight.
+// actually in flight. A RetryContext instance runs exactly one RetryContextType for its whole
+// lifetime, so exactly one timer/backoff/attempt-counter set is armed — see RunStepAsync for where
+// the two modes' actual per-attempt work diverges.
 // =============================================================================
 
 using System.Data;
@@ -109,23 +115,15 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                 "run a given context.");
         }
 
+        if (RetryContextType != RetryContextType.Sequential && RetryContextType != RetryContextType.Transactional)
+        {
+            Volatile.Write(ref _completed, 1);
+            throw new NotSupportedException($"Unknown RetryContextType: {RetryContextType}");
+        }
+
         try
         {
-            switch (RetryContextType)
-            {
-                case RetryContextType.Sequential:
-                    await RunTimerDrivenAsync(cancellationToken).ConfigureAwait(false);
-                    break;
-                case RetryContextType.Transactional:
-                    // TODO(FEAT-001): not implemented. See "Execution mechanism," "Dual retry
-                    // modes," shortcoming #1 (commit ambiguity), and "Implementation-correctness
-                    // corrections" in docs/planning/retry-context-design.md.
-                    throw new NotImplementedException(
-                        "RetryContext.StartAsync for RetryContextType.Transactional is not " +
-                        "implemented yet — see docs/planning/retry-context-design.md.");
-                default:
-                    throw new NotSupportedException($"Unknown RetryContextType: {RetryContextType}");
-            }
+            await RunTimerDrivenAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -215,30 +213,13 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     }
 
     /// <summary>
-    /// Executes exactly one attempt of the current queue head, then either resolves
-    /// <c>_completion</c> (queue empty / non-transient or budget-exhausted failure /
-    /// cancellation) or re-arms the timer for the next step (success moving to the next command,
-    /// or a transient failure's backoff wait) and returns. Never throws past its own boundary —
-    /// every exception is funneled into <c>_completion</c> instead, since this runs as a timer
-    /// callback's fire-and-forget continuation, not something anyone awaits directly.
+    /// Executes exactly one attempt, dispatched by <see cref="RetryContextType"/>, then either
+    /// resolves <c>_completion</c> (nothing left to do / non-transient or budget-exhausted failure
+    /// / cancellation) or re-arms the timer for the next step (success moving on, or a transient
+    /// failure's backoff wait) and returns. Never throws past its own boundary — every exception is
+    /// funneled into <c>_completion</c> instead, since this runs as a timer callback's
+    /// fire-and-forget continuation, not something anyone awaits directly.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Only <see cref="RetryContextType.Sequential"/> is implemented — commands execute one at a
-    /// time against the plain parent context, no transaction involved. A command that succeeds is
-    /// removed from the queue and never re-executed; a command that fails transiently is retried
-    /// in place, up to
-    /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
-    /// See "Dual retry modes" in the design doc. <see cref="RetryContextType.Transactional"/> never
-    /// reaches this method — <see cref="StartAsync"/> throws before arming the timer for it.
-    /// </para>
-    /// <para>
-    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented.
-    /// Every DatabaseException classified transient is retried unconditionally here — the design
-    /// doc only actually decides that's safe for DELETE and version-guarded UPDATE. Do not treat
-    /// this as implementing the design's full idempotency story yet.
-    /// </para>
-    /// </remarks>
     private async Task RunStepAsync(CancellationToken cancellationToken)
     {
         var completion = _completion!;
@@ -246,60 +227,197 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (_queue.Count == 0)
+            switch (RetryContextType)
             {
-                completion.TrySetResult();
-                return;
-            }
-
-            var template = _queue.Peek();
-
-            // Bound this attempt to whatever's left of MaxElapsedTime — otherwise a single
-            // slow/hanging command could run indefinitely, past the overall retry budget, with
-            // nothing but the provider's own (often unset) command timeout to stop it.
-            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            if (Options.MaxElapsedTime is { } budget)
-            {
-                var remaining = budget - _stopwatch!.Elapsed;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    throw new OperationCanceledException(
-                        "RetryContext's MaxElapsedTime budget was already exhausted before this " +
-                        "attempt could start.");
-                }
-
-                attemptCts.CancelAfter(remaining);
-            }
-
-            _attempt++;
-
-            await using var clone = template.Clone();
-            try
-            {
-                var rowsAffected = await clone.ExecuteNonQueryAsync(CommandType.Text, attemptCts.Token)
-                    .ConfigureAwait(false);
-                EnforceRowCountPolicy(template, rowsAffected);
-                _queue.Dequeue();
-                _attempt = 0;
-                _previousDelay = TimeSpan.Zero;
-                ScheduleNextAttempt(TimeSpan.Zero);
-            }
-            catch (DatabaseException ex) when (IsTransient(ex))
-            {
-                var budgetExceeded =
-                    Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
-                if (_attempt >= Options.MaxAttempts || budgetExceeded)
-                {
-                    throw;
-                }
-
-                _previousDelay = NextDelay(_previousDelay);
-                ScheduleNextAttempt(_previousDelay);
+                case RetryContextType.Sequential:
+                    await RunSequentialAttemptAsync(cancellationToken).ConfigureAwait(false);
+                    break;
+                case RetryContextType.Transactional:
+                    await RunTransactionalAttemptAsync(cancellationToken).ConfigureAwait(false);
+                    break;
             }
         }
         catch (Exception ex)
         {
             completion.TrySetException(ex);
+        }
+    }
+
+    /// <summary>
+    /// One Sequential attempt: executes the current queue head against the plain parent context,
+    /// no transaction involved. A command that succeeds is removed from the queue and never
+    /// re-executed; a command that fails transiently is retried in place, up to
+    /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
+    /// See "Dual retry modes" in the design doc.
+    /// </summary>
+    /// <remarks>
+    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented.
+    /// Every DatabaseException classified transient is retried unconditionally here — the design
+    /// doc only actually decides that's safe for DELETE and version-guarded UPDATE. Do not treat
+    /// this as implementing the design's full idempotency story yet.
+    /// </remarks>
+    private async Task RunSequentialAttemptAsync(CancellationToken cancellationToken)
+    {
+        var completion = _completion!;
+
+        if (_queue.Count == 0)
+        {
+            completion.TrySetResult();
+            return;
+        }
+
+        var template = _queue.Peek();
+
+        // Bound this attempt to whatever's left of MaxElapsedTime — otherwise a single
+        // slow/hanging command could run indefinitely, past the overall retry budget, with
+        // nothing but the provider's own (often unset) command timeout to stop it.
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (Options.MaxElapsedTime is { } budget)
+        {
+            var remaining = budget - _stopwatch!.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new OperationCanceledException(
+                    "RetryContext's MaxElapsedTime budget was already exhausted before this " +
+                    "attempt could start.");
+            }
+
+            attemptCts.CancelAfter(remaining);
+        }
+
+        _attempt++;
+
+        await using var clone = template.Clone();
+        try
+        {
+            var rowsAffected = await clone.ExecuteNonQueryAsync(CommandType.Text, attemptCts.Token)
+                .ConfigureAwait(false);
+            EnforceRowCountPolicy(template, rowsAffected);
+            _queue.Dequeue();
+            _attempt = 0;
+            _previousDelay = TimeSpan.Zero;
+            ScheduleNextAttempt(TimeSpan.Zero);
+        }
+        catch (DatabaseException ex) when (IsTransient(ex))
+        {
+            var budgetExceeded =
+                Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
+            if (_attempt >= Options.MaxAttempts || budgetExceeded)
+            {
+                throw;
+            }
+
+            _previousDelay = NextDelay(_previousDelay);
+            ScheduleNextAttempt(_previousDelay);
+        }
+    }
+
+    /// <summary>
+    /// One Transactional attempt: opens a fresh transaction against the plain parent context,
+    /// clones and executes every queued command against it in order, and commits only if all of
+    /// them succeed. Nothing is ever dequeued — a failed attempt's transaction is rolled back in
+    /// full and, if the failure is transient, the *entire* set of commands is retried again from
+    /// scratch in a brand-new transaction on the next attempt (subject to
+    /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>).
+    /// See "Dual retry modes" in the design doc.
+    /// </summary>
+    /// <remarks>
+    /// KNOWN GAP: statement-shape commit-ambiguity detection (shortcoming #1) is not implemented —
+    /// see <see cref="RunSequentialAttemptAsync"/>'s identical disclaimer. For Transactional this
+    /// also means a <c>CommitAsync</c> that itself throws transiently is currently retried the same
+    /// as any other transient failure, even though the transaction may have already committed
+    /// server-side.
+    /// </remarks>
+    private async Task RunTransactionalAttemptAsync(CancellationToken cancellationToken)
+    {
+        var completion = _completion!;
+
+        if (_allContainers.Count == 0)
+        {
+            completion.TrySetResult();
+            return;
+        }
+
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (Options.MaxElapsedTime is { } budget)
+        {
+            var remaining = budget - _stopwatch!.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new OperationCanceledException(
+                    "RetryContext's MaxElapsedTime budget was already exhausted before this " +
+                    "attempt could start.");
+            }
+
+            attemptCts.CancelAfter(remaining);
+        }
+
+        _attempt++;
+
+        var txn = await _inner.BeginTransactionAsync(cancellationToken: attemptCts.Token).ConfigureAwait(false);
+        try
+        {
+            foreach (var template in _allContainers)
+            {
+                await using var clone = template.Clone(txn);
+                var rowsAffected = await clone.ExecuteNonQueryAsync(CommandType.Text, attemptCts.Token)
+                    .ConfigureAwait(false);
+                EnforceRowCountPolicy(template, rowsAffected);
+            }
+
+            await txn.CommitAsync(attemptCts.Token).ConfigureAwait(false);
+            _attempt = 0;
+            _previousDelay = TimeSpan.Zero;
+            completion.TrySetResult();
+        }
+        catch (DatabaseException ex) when (IsTransient(ex))
+        {
+            await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+
+            var budgetExceeded =
+                Options.MaxElapsedTime is { } maxElapsed && _stopwatch!.Elapsed >= maxElapsed;
+            if (_attempt >= Options.MaxAttempts || budgetExceeded)
+            {
+                throw;
+            }
+
+            _previousDelay = NextDelay(_previousDelay);
+            ScheduleNextAttempt(_previousDelay);
+        }
+        catch
+        {
+            await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            await txn.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Best-effort rollback used when an attempt's transaction fails partway through. Skips the
+    /// call entirely if the transaction is already <see cref="ITransactionContext.IsCompleted"/> —
+    /// notably, a <c>CommitAsync</c> that itself throws already leaves the transaction completed
+    /// (the connection released) per its own documented contract, so attempting a second
+    /// commit/rollback on it is neither necessary nor safe. A rollback failure here is swallowed:
+    /// the original exception that triggered the rollback is what must propagate, and there is
+    /// nothing more this method could do about a rollback that itself fails.
+    /// </summary>
+    private static async ValueTask SafeRollbackAsync(ITransactionContext txn, CancellationToken cancellationToken)
+    {
+        if (txn.IsCompleted)
+        {
+            return;
+        }
+
+        try
+        {
+            await txn.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort — see summary above.
         }
     }
 

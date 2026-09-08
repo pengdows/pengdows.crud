@@ -465,6 +465,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
+    /// The most recently created <see cref="fakeDbTransaction"/> on this connection (null if none
+    /// has been created yet), so a test can assert on it directly (e.g. CommitCallCount,
+    /// RollbackCallCount) rather than only observing its side effects indirectly.
+    /// </summary>
+    public fakeDbTransaction? LastTransaction { get; private set; }
+
+    /// <summary>
     /// Sets a custom exception to throw instead of the default InvalidOperationException
     /// </summary>
     public void SetCustomFailureException(Exception exception)
@@ -1092,6 +1099,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             tx.RollbackException = _transactionRollbackException;
         }
 
+        LastTransaction = tx;
         return tx;
     }
 
