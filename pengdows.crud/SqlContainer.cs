@@ -2234,9 +2234,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Use the provided context or fallback to the original context
         var targetContext = context ?? _context;
 
-        // Create a new container with the target context - let it get a StringBuilder from the pool
-        var targetDialect = context != null ? targetContext.GetDialect() : _dialect;
-        var clone = new SqlContainer(targetContext, targetDialect, null, _logger);
+        // Route the clone's creation through the target context's own CreateSqlContainer()
+        // entrypoint, rather than constructing a SqlContainer directly, so any context-specific
+        // behavior tied to that entrypoint fires for a clone exactly as it would for a container
+        // built the normal way. Ported from 3.0 (docs/planning/retry-context-design.md): a
+        // direct-construction Clone() there was the root cause of every RetryContext-queued
+        // entity command silently never executing on any provider. 2.1 has no RetryContext yet,
+        // so this is a zero-behavior-change consistency fix today (ContextBase.CreateSqlContainer()
+        // has no side effects beyond what direct construction already did) - but the bypass would
+        // resurface the same way here the moment any context with stateful container creation is
+        // added.
+        var clone = (SqlContainer)targetContext.CreateSqlContainer();
 
         // OPTIMIZATION: Share cached command text instead of re-rendering
         // This is a massive win for template cloning patterns - avoids Query.ToString() on every clone
