@@ -484,6 +484,20 @@ public interface ISqlDialect
     string GetRollbackToSavepointSql(string name);
 
     /// <summary>
+    /// Fine-grained savepoint capabilities for this dialect — more granular than
+    /// <see cref="SupportsSavepoints"/>. SQL Server, Sybase, and Oracle support Create/Rollback but
+    /// have no explicit release statement; every other savepoint-capable dialect supports all three.
+    /// </summary>
+    SavepointCapabilities SavepointCapabilities { get; }
+
+    /// <summary>
+    /// Gets the SQL statement to release a savepoint with the given name.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "RELEASE SAVEPOINT name").</returns>
+    string GetReleaseSavepointSql(string name);
+
+    /// <summary>
     /// Indicates whether stored procedure parameter names must match exactly.
     /// </summary>
     bool RequiresStoredProcParameterNameMatch { get; }

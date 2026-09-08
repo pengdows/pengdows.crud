@@ -89,4 +89,23 @@ public interface ITransactionContext : IDatabaseContext
         cancellationToken.ThrowIfCancellationRequested();
         return RollbackToSavepointAsync(name);
     }
+
+    /// <summary>
+    /// Releases a named savepoint within the transaction scope. Throws
+    /// <see cref="NotSupportedException"/> if the dialect's savepoint capabilities do not include
+    /// an explicit release statement (e.g. SQL Server, Sybase, Oracle).
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    ValueTask ReleaseSavepointAsync(string name);
+
+    /// <summary>
+    /// Releases a named savepoint within the transaction scope.
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask ReleaseSavepointAsync(string name, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReleaseSavepointAsync(name);
+    }
 }

@@ -335,6 +335,11 @@ internal class OracleDialect : SqlDialect
     public override bool SupportsJsonTypes => IsInitialized && ProductInfo.ParsedVersion?.Major >= 12;
     public override bool SupportsIdentityColumns => true;
     public override bool SupportsSavepoints => true;
+
+    // Oracle's savepoints have no explicit release statement at all.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     public override bool SupportsInsertReturning => true;
 
     // Oracle's RETURNING ... INTO binds the generated value through an ADO.NET OUTPUT

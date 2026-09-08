@@ -155,4 +155,18 @@ public class TransactionCompletionReaderGuardTests
 
         await reader.DisposeAsync();
     }
+
+    [Fact]
+    public async Task ReleaseSavepointAsync_WhileReaderOpen_ThrowsInsteadOfRacingTheConnection()
+    {
+        using var tx = CreateContext().BeginTransaction();
+        var container = tx.CreateSqlContainer("SELECT 1");
+        var reader = await container.ExecuteReaderAsync();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await tx.ReleaseSavepointAsync("sp1"));
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        await reader.DisposeAsync();
+    }
 }

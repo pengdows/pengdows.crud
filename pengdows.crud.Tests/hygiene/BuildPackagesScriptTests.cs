@@ -73,14 +73,14 @@ public class BuildPackagesScriptTests
     // =========================================================================
 
     [Fact]
-    public void DirectoryBuildProps_Version_Is_2_0_6()
+    public void DirectoryBuildProps_Version_Is_2_2_0()
     {
         var root = GetRepoRoot();
         var propsPath = Path.Combine(root, "Directory.Build.props");
         Assert.True(File.Exists(propsPath), $"Directory.Build.props not found at {propsPath}");
 
         var contents = File.ReadAllText(propsPath);
-        Assert.Contains("<VersionPrefix>2.1.0</VersionPrefix>", contents, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>2.2.0</VersionPrefix>", contents, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>", contents, StringComparison.Ordinal);
         Assert.Contains("<FileVersion>$(VersionPrefix).0</FileVersion>", contents, StringComparison.Ordinal);
     }

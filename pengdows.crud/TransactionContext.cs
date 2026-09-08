@@ -689,7 +689,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (!_dialect.SupportsSavepoints)
         {
-            return;
+            // Used to silently no-op here ("creating a savepoint that's never used is
+            // harmless"), but that just meant the caller found out savepoints weren't actually
+            // supported only when a later RollbackToSavepointAsync threw — possibly after a lot
+            // of destructive work it believed was protected. Fail fast instead, matching
+            // RollbackToSavepointAsync/ReleaseSavepointAsync's existing behavior.
+            throw new NotSupportedException(
+                $"{_context.Product} does not support savepoints; SavepointAsync is unavailable.");
         }
 
         // CORE-023: a savepoint is a command against the shared connection like any other — it
@@ -741,6 +747,42 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             using var cmd = _connection.CreateCommand();
             cmd.Transaction = _transaction;
             cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
+            if (cmd is DbCommand db)
+            {
+                await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+        finally
+        {
+            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc/>
+    public ValueTask ReleaseSavepointAsync(string name)
+    {
+        return ReleaseSavepointAsync(name, default);
+    }
+
+    public async ValueTask ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (!_dialect.SavepointCapabilities.HasFlag(SavepointCapabilities.Release))
+        {
+            throw new NotSupportedException(
+                $"{_context.Product} does not support releasing savepoints; ReleaseSavepointAsync is unavailable.");
+        }
+
+        // See SavepointAsync for why this must go through the same reader-aware lock.
+        await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = _transaction;
+            cmd.CommandText = _dialect.GetReleaseSavepointSql(name);
             if (cmd is DbCommand db)
             {
                 await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

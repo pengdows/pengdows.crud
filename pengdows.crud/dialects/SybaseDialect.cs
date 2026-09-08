@@ -117,6 +117,10 @@ internal class SybaseDialect : SqlDialect
         return $"ROLLBACK TRANSACTION {WrapObjectName(name)}";
     }
 
+    // T-SQL's SAVE TRANSACTION has no explicit release statement at all.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     // Verified live: MERGE works (both WHEN MATCHED / WHEN NOT MATCHED), but a trailing
     // semicolon is rejected ("Incorrect syntax near ';'"), unlike SQL Server.
     public override bool SupportsMerge => true;

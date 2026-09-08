@@ -32,8 +32,9 @@ await using var tx = await context.BeginTransactionAsync(
 | `IsolationLevel` | The `IsolationLevel` active for this transaction. |
 | `CommitAsync(CancellationToken)` | Commits the transaction. Returns `ValueTask`. |
 | `RollbackAsync(CancellationToken)` | Rolls back the transaction. Returns `ValueTask`. |
-| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint (dialect must support savepoints). Returns `ValueTask`. |
-| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Returns `ValueTask`. |
+| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint. Throws `NotSupportedException` if the dialect doesn't support savepoints. Returns `ValueTask`. |
+| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Throws `NotSupportedException` if the dialect doesn't support savepoints. Returns `ValueTask`. |
+| `ReleaseSavepointAsync(string name, CancellationToken)` | Releases a named savepoint. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks an explicit release statement (e.g. SQL Server, Sybase, Oracle). Returns `ValueTask`. |
 
 ## Error handling — TransactionException
 
@@ -58,7 +59,7 @@ catch (TransactionException ex)
 
 ## Committing, rolling back, and savepoints
 
-`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore so commits/rollbacks never overlap. Savepoints and rollbacks-to-savepoint run as long as the dialect advertises support, and the dialect's SQL is executed on the same transaction so you can roll back a subset of work without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.
+`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore so commits/rollbacks never overlap. `SavepointAsync`, `RollbackToSavepointAsync`, and `ReleaseSavepointAsync` each fail fast with `NotSupportedException` rather than silently no-op-ing when the dialect doesn't support the operation — `SavepointCapabilities` (`Create`/`Rollback`/`Release`) is more granular than the plain `SupportsSavepoints` flag: SQL Server, Sybase, and Oracle support create/rollback but have no explicit release statement at all, so `ReleaseSavepointAsync` throws there even though savepoints themselves work. When supported, the dialect's SQL is executed on the same transaction so you can roll back or release a subset of work without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.
 
 ## Disposal and cleanup
 
@@ -91,6 +92,8 @@ catch
 await tx.SavepointAsync("checkpoint1", ct);
 // ... some work ...
 await tx.RollbackToSavepointAsync("checkpoint1", ct);
+// or, if the work succeeded and the dialect's SavepointCapabilities include Release:
+await tx.ReleaseSavepointAsync("checkpoint1", ct);
 ```
 
 **CRITICAL:** Do not use `TransactionScope`. It is incompatible with pengdows.crud's open-late/close-early connection management and will cause MSDTC promotion or broken transactional guarantees.
@@ -111,7 +114,7 @@ All commands issued with the same `ITransactionContext` share the single physica
 
 ## Concurrency contract
 
-`TransactionContext` is **single-flow by design, not built for concurrent use from multiple threads/tasks against the same instance.** Every operation — an ordinary command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, and `RollbackToSavepointAsync` — serializes through the same internal lock before touching the pinned connection. This section states exactly what happens when that design assumption is violated, since the enforced behavior (fail fast in some cases, block in others, one clean winner in a genuine race) needs to match what's documented here rather than be discovered by trial and error.
+`TransactionContext` is **single-flow by design, not built for concurrent use from multiple threads/tasks against the same instance.** Every operation — an ordinary command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, `RollbackToSavepointAsync`, and `ReleaseSavepointAsync` — serializes through the same internal lock before touching the pinned connection. This section states exactly what happens when that design assumption is violated, since the enforced behavior (fail fast in some cases, block in others, one clean winner in a genuine race) needs to match what's documented here rather than be discovered by trial and error.
 
 ### Ordinary concurrent commands: serialized, not parallel
 
@@ -121,7 +124,7 @@ Two commands issued concurrently against the same `TransactionContext` do not co
 
 `ExecuteReaderAsync` on a transaction holds that same lock for as long as the returned reader stays open (until it reaches EOF or is disposed) — not just for the duration of executing the command. While a reader is open:
 
-- **Any other operation on the same transaction — a command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, `RollbackToSavepointAsync`, or `Dispose`/`DisposeAsync` — throws `InvalidOperationException` immediately** ("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active. Dispose the reader (or finish consuming it) first.") rather than blocking. This applies identically whether the second attempt comes from the same logical flow (a bug — nested reentrant use) or a genuinely different thread sharing the same `TransactionContext` reference — the lock has no way to distinguish the two, and blocking in either case would either hang forever or eventually fail at the provider anyway (most providers reject a second command while a reader is open on the same connection). Proven for both cases: `TransactionReaderLockLifetimeTests.ExecuteReaderAsync_InTransaction_NestedOperationOnSameFlow_ThrowsImmediately_WhileReaderOpen` and `..._AnotherThread_AlsoThrowsImmediately_WhileReaderOpen`; the completion/savepoint side is covered by `TransactionCompletionReaderGuardTests.cs` (`Commit`/`CommitAsync`/`Rollback`/`RollbackAsync`/`Dispose`/`SavepointAsync`/`RollbackToSavepointAsync` all `_WhileReaderOpen_Throws...`).
+- **Any other operation on the same transaction — a command, `CommitAsync`, `RollbackAsync`, `SavepointAsync`, `RollbackToSavepointAsync`, `ReleaseSavepointAsync`, or `Dispose`/`DisposeAsync` — throws `InvalidOperationException` immediately** ("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active. Dispose the reader (or finish consuming it) first.") rather than blocking. This applies identically whether the second attempt comes from the same logical flow (a bug — nested reentrant use) or a genuinely different thread sharing the same `TransactionContext` reference — the lock has no way to distinguish the two, and blocking in either case would either hang forever or eventually fail at the provider anyway (most providers reject a second command while a reader is open on the same connection). Proven for both cases: `TransactionReaderLockLifetimeTests.ExecuteReaderAsync_InTransaction_NestedOperationOnSameFlow_ThrowsImmediately_WhileReaderOpen` and `..._AnotherThread_AlsoThrowsImmediately_WhileReaderOpen`; the completion/savepoint side is covered by `TransactionCompletionReaderGuardTests.cs` (`Commit`/`CommitAsync`/`Rollback`/`RollbackAsync`/`Dispose`/`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync` all `_WhileReaderOpen_Throws...`).
 - Dispose the reader (or finish consuming it) before issuing another operation on that transaction. This is the same rule that applies to a plain `IDatabaseContext`'s reader leases — a `TransactionContext` doesn't relax it, and the fail-fast behavior here is specifically there to surface that mistake immediately instead of hanging.
 - A failed attempt (rejected because a reader is open) leaves the transaction otherwise unaffected and retryable — it does not mark the transaction completed, and does not touch `_committed`/`_rolledBack`.
 
@@ -139,7 +142,7 @@ A `CancellationToken` passed to `CommitAsync`/`RollbackAsync` that is already ca
 
 ### Savepoints share the same lock as ordinary commands
 
-`SavepointAsync`/`RollbackToSavepointAsync` acquire the identical internal lock an ordinary command does before running their SQL — they are not a separate, lighter-weight operation. This means they queue behind a concurrent command exactly like any other operation, and fail fast with the same `InvalidOperationException` if a reader is currently open on the transaction.
+`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync` acquire the identical internal lock an ordinary command does before running their SQL — they are not a separate, lighter-weight operation. This means they queue behind a concurrent command exactly like any other operation, and fail fast with the same `InvalidOperationException` if a reader is currently open on the transaction.
 
 ### Mode locks: `DbMode.SingleConnection`'s transaction gate
 

@@ -350,6 +350,10 @@ internal class SqlServerDialect : SqlDialect
         return $"ROLLBACK TRANSACTION {WrapObjectName(name)}";
     }
 
+    // T-SQL's SAVE TRANSACTION has no explicit release statement at all.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     public override bool SupportsInsertReturning => true;
     public override bool SupportsIdentityColumns => true;
 

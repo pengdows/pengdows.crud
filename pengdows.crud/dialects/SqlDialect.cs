@@ -686,6 +686,25 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return $"ROLLBACK TO SAVEPOINT {WrapObjectName(name)}";
     }
 
+    /// <summary>
+    /// Derived from <see cref="SupportsSavepoints"/> by default: full support (Create/Rollback/
+    /// Release) when savepoints are supported at all, none otherwise. Override individually for a
+    /// dialect whose savepoint syntax has no explicit release statement (SQL Server, Sybase, Oracle).
+    /// </summary>
+    public virtual SavepointCapabilities SavepointCapabilities =>
+        SupportsSavepoints
+            ? SavepointCapabilities.Create | SavepointCapabilities.Rollback | SavepointCapabilities.Release
+            : SavepointCapabilities.None;
+
+    /// <summary>
+    /// Gets the SQL statement to release a savepoint with the given name.
+    /// Override for databases with non-standard syntax.
+    /// </summary>
+    public virtual string GetReleaseSavepointSql(string name)
+    {
+        return $"RELEASE SAVEPOINT {WrapObjectName(name)}";
+    }
+
     public virtual bool RequiresStoredProcParameterNameMatch => false;
     public virtual bool SupportsNamespaces => false; // SQL-92 does not require schema support
 
