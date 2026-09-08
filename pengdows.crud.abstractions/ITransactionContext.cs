@@ -89,4 +89,24 @@ public interface ITransactionContext : IDatabaseContext
         cancellationToken.ThrowIfCancellationRequested();
         return RollbackToSavepointAsync(name);
     }
+
+    /// <summary>
+    /// Explicitly releases a savepoint, discarding it before the transaction ends. Throws
+    /// <see cref="NotSupportedException"/> if the dialect's <see cref="pengdows.crud.dialects.ISqlDialect.SavepointCapabilities"/>
+    /// does not include <see cref="pengdows.crud.enums.SavepointCapabilities.Release"/> (SQL Server,
+    /// Sybase, Oracle — none of which have an explicit release statement).
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    ValueTask ReleaseSavepointAsync(string name);
+
+    /// <summary>
+    /// Explicitly releases a savepoint, discarding it before the transaction ends.
+    /// </summary>
+    /// <param name="name">Savepoint identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask ReleaseSavepointAsync(string name, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ReleaseSavepointAsync(name);
+    }
 }

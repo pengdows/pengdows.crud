@@ -339,6 +339,12 @@ internal class SqlServerDialect : SqlDialect
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
     public override bool SupportsSavepoints => true;
 
+    // T-SQL's SAVE TRANSACTION has no explicit release statement at all — a savepoint is
+    // implicitly valid until superseded by a later one with the same name or the transaction
+    // ends, so there is nothing to call ReleaseSavepointAsync against.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     // SQL Server uses SAVE TRANSACTION / ROLLBACK TRANSACTION instead of SAVEPOINT
     public override string GetSavepointSql(string name)
     {

@@ -107,6 +107,10 @@ internal class SybaseDialect : SqlDialect
     // Verified live: SAVE TRANSACTION / ROLLBACK TRANSACTION work exactly as in SQL Server.
     public override bool SupportsSavepoints => true;
 
+    // Same T-SQL family as SQL Server: SAVE TRANSACTION has no explicit release statement.
+    public override SavepointCapabilities SavepointCapabilities =>
+        SavepointCapabilities.Create | SavepointCapabilities.Rollback;
+
     public override string GetSavepointSql(string name)
     {
         return $"SAVE TRANSACTION {WrapObjectName(name)}";

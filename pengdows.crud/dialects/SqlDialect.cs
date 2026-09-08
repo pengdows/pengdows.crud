@@ -610,6 +610,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual bool SupportsOnConflictWhere => false; // PostgreSQL/CockroachDB only
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
+
+    /// <summary>
+    /// Defaults to full ANSI-style support (Create|Rollback|Release) whenever
+    /// <see cref="SupportsSavepoints"/> is true, since every dialect that doesn't override this
+    /// property uses the base ANSI SAVEPOINT/ROLLBACK TO SAVEPOINT/RELEASE SAVEPOINT syntax
+    /// (PostgreSQL, MySQL/MariaDB/TiDB, CockroachDB/YugabyteDB, SQLite, Firebird, Db2). T-SQL
+    /// dialects (SQL Server, Sybase) override this to Create|Rollback — SAVE TRANSACTION has no
+    /// explicit release statement — and Oracle overrides it the same way for the same reason
+    /// (Oracle savepoints have no RELEASE SAVEPOINT statement either).
+    /// </summary>
+    public virtual SavepointCapabilities SavepointCapabilities => SupportsSavepoints
+        ? SavepointCapabilities.Create | SavepointCapabilities.Rollback | SavepointCapabilities.Release
+        : SavepointCapabilities.None;
+
     public virtual bool SupportsDropTableIfExists => true;
 
     // Only meaningful when SupportsMerge is true. Every dialect that currently sets
@@ -684,6 +698,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual string GetRollbackToSavepointSql(string name)
     {
         return $"ROLLBACK TO SAVEPOINT {WrapObjectName(name)}";
+    }
+
+    /// <summary>
+    /// Gets the SQL statement to release a savepoint with the given name.
+    /// Only called when <see cref="SavepointCapabilities"/> includes
+    /// <see cref="enums.SavepointCapabilities.Release"/> — override for databases with
+    /// non-standard syntax, or don't override at all for dialects (SQL Server, Sybase, Oracle)
+    /// that override <see cref="SavepointCapabilities"/> to exclude Release entirely, since this
+    /// is then never called.
+    /// </summary>
+    public virtual string GetReleaseSavepointSql(string name)
+    {
+        return $"RELEASE SAVEPOINT {WrapObjectName(name)}";
     }
 
     public virtual bool RequiresStoredProcParameterNameMatch => false;
