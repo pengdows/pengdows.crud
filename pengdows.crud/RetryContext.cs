@@ -159,7 +159,17 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// this as implementing the design's full idempotency story yet.
     /// </para>
     /// </remarks>
-    private ValueTask RunSequentialTimerDrivenAsync(CancellationToken cancellationToken)
+    private ValueTask RunSequentialTimerDrivenAsync(CancellationToken cancellationToken) =>
+        RunTimerDrivenAsync(cancellationToken, OnSequentialTimerFired);
+
+    /// <summary>
+    /// Shared timer-arming scaffolding for both retry modes — see the class-level "EXECUTION
+    /// MODEL" note. The only thing that varies between <see cref="RetryContextType.Sequential"/>
+    /// and (once implemented) <see cref="RetryContextType.Transactional"/> is which callback the
+    /// timer fires; everything else (linked-token setup, run-state reset, the completion source,
+    /// cancellation wiring, arming the first attempt) is identical, so it lives here once.
+    /// </summary>
+    private ValueTask RunTimerDrivenAsync(CancellationToken cancellationToken, TimerCallback onTimerFired)
     {
         var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
         _sequentialStopwatch = Stopwatch.StartNew();
@@ -176,7 +186,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             static state => ((TaskCompletionSource)state!).TrySetCanceled(),
             completion);
 
-        _sequentialTimer = new Timer(OnSequentialTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
+        _sequentialTimer = new Timer(onTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
 
         // The only place StartAsync itself schedules anything — every attempt after this one is
         // scheduled by the timer callback chain below, not by this method.
@@ -184,7 +194,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
         return AwaitAndCleanUpAsync(completion, linked, cancelRegistration);
     }
-
     private async ValueTask AwaitAndCleanUpAsync(
         TaskCompletionSource completion,
         CancellationTokenSource linked,
