@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -15,8 +17,10 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class SnowflakeExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
@@ -29,8 +33,12 @@ internal sealed class SnowflakeExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        if (string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
-            exception.Message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase))
+        // NOT NULL is the one constraint Snowflake actually enforces at runtime — delegated to
+        // the dialect (see IDbExceptionTranslator.Translate's doc comment). Unique/FK/Check are
+        // not checked here at all: SnowflakeDialect.IsUniqueViolation/IsForeignKeyViolation/
+        // IsCheckConstraintViolation are hardcoded false (Snowflake parses but never enforces
+        // those constraint types), so there is nothing to delegate for them.
+        if (exception is DbException dbEx && dialect.IsNotNullViolation(dbEx))
         {
             var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
             var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);

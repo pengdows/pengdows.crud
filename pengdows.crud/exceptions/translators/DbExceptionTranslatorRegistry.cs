@@ -22,7 +22,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
         {
             SupportedDatabase.SqlServer => SqlServer,
             SupportedDatabase.Sybase => Sybase,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
                 SupportedDatabase.AuroraPostgreSql => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or
                 SupportedDatabase.TiDb or SupportedDatabase.SingleStore => MySql,

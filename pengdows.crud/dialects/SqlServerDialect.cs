@@ -174,6 +174,71 @@ internal class SqlServerDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    public override bool IsUniqueViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) is 2601 or 2627;
+
+    // "FOREIGN KEY constraint" wording covers INSERT/UPDATE blocked by a missing parent row;
+    // "REFERENCE constraint" wording covers DELETE blocked by an existing child row — both are
+    // real SQL Server 547 message shapes for the same underlying constraint family (confirmed
+    // live: "The DELETE statement conflicted with the REFERENCE constraint ..."). Missing the
+    // second form was a live-caught regression during the exception-classification unification
+    // that made SqlServerExceptionTranslator delegate here instead of unconditionally assuming
+    // FK for any 547 that wasn't CHECK.
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 547 &&
+        (ex.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase) ||
+         ex.Message.Contains("REFERENCE constraint", StringComparison.OrdinalIgnoreCase));
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 515;
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 547 &&
+        ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+    protected override GeneratedKeyPlan GetInsertReturningKeyPlan() => GeneratedKeyPlan.OutputInserted;
+
+    // SCOPE_IDENTITY() is per-batch/scope safe.
+    public override bool HasSessionScopedLastIdFunction() => true;
+
+    protected override string GetNaturalKeySelectClause(string wrappedIdColumn) => $"SELECT TOP 1 {wrappedIdColumn}";
+    protected override string GetNaturalKeyFirstRowOnlyClause() => string.Empty;
+
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" OUTPUT INSERTED.{idColumnWrapped}";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+
+        if (errorCode == 1205)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (errorCode == 3960)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        if (errorCode == -2)
+        {
+            category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        if (errorCode is 515 or 547 or 2601 or 2627)
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     // IMMUTABLE: SQL Server VALUES clause limit - do not change without extensive testing
     public override int MaxRowsPerBatch => 1000;
 

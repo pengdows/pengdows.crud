@@ -48,6 +48,13 @@ internal static class SqlDialectFactory
             throw new InvalidOperationException("Dialect must support internal detection operations.");
         }
 
+        // Trust the detection pass we just ran instead of letting DetectDatabaseInfoAsync
+        // independently re-derive (and potentially disagree with) the same answer.
+        if (dialect is SqlDialect concreteDialect)
+        {
+            concreteDialect.PreDeterminedDatabaseType = inferredType;
+        }
+
         await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
     }
@@ -84,6 +91,13 @@ internal static class SqlDialectFactory
             throw new InvalidOperationException("Dialect must support internal detection operations.");
         }
 
+        // Trust the detection pass we just ran instead of letting DetectDatabaseInfoAsync
+        // independently re-derive (and potentially disagree with) the same answer.
+        if (dialect is SqlDialect concreteDialect)
+        {
+            concreteDialect.PreDeterminedDatabaseType = inferredType;
+        }
+
         internalDialect.DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
         return dialect;
     }
@@ -97,6 +111,7 @@ internal static class SqlDialectFactory
         {
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, logger),
             SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, logger),
+            SupportedDatabase.Spanner => new SpannerDialect(factory, logger),
             SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, logger),
             SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, logger),
             SupportedDatabase.TiDb => new TiDbDialect(factory, logger),

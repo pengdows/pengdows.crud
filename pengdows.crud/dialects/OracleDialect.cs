@@ -101,6 +101,44 @@ internal class OracleDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    public override bool IsUniqueViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 1;
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) is 2291 or 2292;
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 1400;
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 2290;
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+
+        if (errorCode == 60)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (errorCode == 8177)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        if (errorCode is 1 or 1400 or 2290 or 2291 or 2292)
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     /// <inheritdoc />
     public override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
         ISqlQueryBuilder query)
@@ -432,19 +470,11 @@ internal class OracleDialect : SqlDialect
         return "SELECT * FROM v$version WHERE banner LIKE 'Oracle%'";
     }
 
-    public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
-        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
-    {
-        const string rownumClause = " AND ROWNUM = 1";
-        var query = base.GetNaturalKeyLookupQuery(tableName, idColumnName, columnNames, parameterNames);
-
-        if (query.EndsWith(rownumClause, StringComparison.Ordinal))
-        {
-            query = query[..^rownumClause.Length];
-        }
-
-        return $"{query.TrimEnd()} FETCH FIRST 1 ROWS ONLY";
-    }
+    // Modern ANSI FETCH FIRST syntax, not ROWNUM = 1. This used to be a post-processing override
+    // that called the base implementation and string-replaced its "AND ROWNUM = 1" suffix after
+    // the fact; the base class's hook methods make that indirection unnecessary.
+    protected override bool ExcludeOrderByInNaturalKeyLookup => true;
+    protected override string GetNaturalKeyFirstRowOnlyClause() => " FETCH FIRST 1 ROWS ONLY";
 
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
 

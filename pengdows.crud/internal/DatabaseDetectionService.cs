@@ -41,6 +41,7 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.CockroachDb, new[] { "cockroach" }),
         (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
         (SupportedDatabase.Snowflake, new[] { "snowflake" }),
+        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" }),
         (SupportedDatabase.PostgreSql, new[] { "postgres", "npgsql" }),
         (SupportedDatabase.Oracle, new[] { "oracle" }),
         (SupportedDatabase.Sqlite, new[] { "sqlite" }),
@@ -54,6 +55,7 @@ internal static class DatabaseDetectionService
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
     {
         (SupportedDatabase.SqlServer, new[] { "sqlserver", "system.data.sqlclient", "microsoft.data.sqlclient" }),
+        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" }),
         (SupportedDatabase.PostgreSql, new[] { "npgsql", "postgres" }),
         (SupportedDatabase.YugabyteDb, new[] { "yugabyte" }),
         (SupportedDatabase.MySql, new[] { "mysql" }),
@@ -417,6 +419,36 @@ internal static class DatabaseDetectionService
                 }
             }
 
+            // Spanner PostgreSQL interface: this Spanner-specific setting is exposed by
+            // Spanner/PGAdapter but not by PostgreSQL. Gated on isPgFamily (not just
+            // `detected == PostgreSql`) to match every other probe in this method and the sync
+            // twin (DetectFlavorWithDetail) — a real, previously-shipped discrepancy: this gate
+            // used to be `detected == SupportedDatabase.PostgreSql` only, so a connection whose
+            // schema-based classification landed on Unknown got Spanner-probed synchronously but
+            // never asynchronously. See DatabaseDetectionSyncAsyncParityTests for the regression
+            // test that would have caught this.
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
+                    if (await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false) is string)
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                        return (SupportedDatabase.Spanner, attempts);
+                    }
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", false, ex.Message));
+                }
+            }
+
             if (isPgFamily)
             {
                 try
@@ -626,6 +658,34 @@ internal static class DatabaseDetectionService
                 {
                     /* version() not available */
                     attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
+                }
+            }
+
+            // Spanner PostgreSQL interface discriminator; ordinary PostgreSQL rejects this
+            // Spanner-specific setting. Must run before the YugabyteDB pg_settings probe below —
+            // that probe's fakeDb-style fallback semantics aside, on live Spanner this SHOW
+            // returns an empty string (verified against a real Spanner Omni + PGAdapter
+            // instance), not null, so `is string` (no length check, unlike the other probes here)
+            // matches even that empty-string case. This is the synchronous twin of the identical
+            // probe in DetectFlavorWithDetailAsync — DatabaseContext's normal constructor path
+            // goes through this synchronous method, not the async one, so without this block here
+            // real Spanner connections silently fell through to plain PostgreSql and never got
+            // SpannerDialect's overrides applied at all.
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
+                    if (cmd.ExecuteScalar() is string)
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                        return (SupportedDatabase.Spanner, attempts);
+                    }
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", false, ex.Message));
                 }
             }
 

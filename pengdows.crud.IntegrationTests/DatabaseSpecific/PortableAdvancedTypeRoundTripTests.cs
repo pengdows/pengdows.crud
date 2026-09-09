@@ -26,7 +26,7 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
         var sql = provider switch
         {
             SupportedDatabase.SqlServer => "CREATE TABLE [dbo].[portable_advanced_types] ([id] INT NOT NULL PRIMARY KEY, [payload] NVARCHAR(MAX) NOT NULL, [bytes] VARBINARY(MAX) NOT NULL, [content] VARBINARY(MAX) NOT NULL, [notes] NVARCHAR(MAX) NOT NULL)",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload JSON NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.TiDb => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.DuckDB => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload JSON NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes VARCHAR NOT NULL)",

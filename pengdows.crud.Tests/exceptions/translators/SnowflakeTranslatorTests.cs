@@ -1,12 +1,17 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
 
 public class SnowflakeTranslatorTests
 {
+    private static SnowflakeDialect Dialect() => new(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
+
     // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at runtime
     // (SnowflakeDialect.SupportsUniqueConstraints = false), so a Postgres-style "23505" sqlState
     // must never be misclassified as UniqueConstraintViolationException for Snowflake — it isn't
@@ -19,7 +24,7 @@ public class SnowflakeTranslatorTests
         var translator = new SnowflakeExceptionTranslator();
         var raw = new SqlStateDbException("23505", "duplicate key value violates unique constraint");
 
-        var result = translator.Translate(SupportedDatabase.Snowflake, raw, DbOperationKind.Insert);
+        var result = translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);

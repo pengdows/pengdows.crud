@@ -53,6 +53,21 @@ public class SqlDialectFactoryTests
     }
 
     [Fact]
+    public void CreateDialectForType_Spanner_ReturnsSpannerDialect()
+    {
+        var dialect = SqlDialectFactory.CreateDialectForType(
+            SupportedDatabase.Spanner, new fakeDbFactory(SupportedDatabase.Spanner), NullLogger.Instance);
+
+        Assert.IsType<SpannerDialect>(dialect);
+        Assert.Equal(SupportedDatabase.Spanner, dialect.DatabaseType);
+        Assert.False(dialect.SupportsMerge);
+        Assert.False(dialect.SupportsSavepoints);
+        Assert.False(dialect.SupportsOverridingSystemValue);
+        Assert.False(dialect.SupportsSetValuedParameters);
+        Assert.Equal(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
+    }
+
+    [Fact]
     public void CreateDialectForType_Oracle_ReturnsOracleDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Oracle);

@@ -140,6 +140,59 @@ internal class DuckDbDialect : SqlDialect
     public override bool SupportsEnhancedWindowFunctions => true; // Advanced window functions including FILL
     public override bool SupportsCommonTableExpressions => true; // Full CTE support
     public override bool SupportsNamespaces => true; // Schema support
+
+    // DuckDB uses standard SQLSTATE codes; fall back to message when the driver doesn't
+    // populate SqlState.
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" RETURNING {idColumnWrapped}";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        // DuckDB uses ANSI SQLSTATE codes; class 23 = constraint violations
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        // Message fallback: DuckDB drivers may not always populate SqlState
+        if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        // Confirmed against a real concurrent-write conflict: DuckDBException.ErrorType reports
+        // "Transaction" (not "Serialization") with this exact message text.
+        if (ex.Message.Contains("Conflict on update", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
     public override bool SupportsXmlTypes => false; // No XML support
     public override bool SupportsTemporalData => false; // No temporal tables yet
     public override bool SupportsRowPatternMatching => false; // Not yet supported

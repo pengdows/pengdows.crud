@@ -120,7 +120,9 @@ public class SerializationConflictTests
             Assert.NotNull(thrown);
 
             var translator = new DuckDbExceptionTranslator();
-            var translated = translator.Translate(SupportedDatabase.DuckDB, thrown!, DbOperationKind.Update);
+            var dialect = pengdows.crud.dialects.SqlDialectFactory.CreateDialectForType(
+                SupportedDatabase.DuckDB, factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            var translated = translator.Translate(dialect, thrown!, DbOperationKind.Update);
 
             Assert.IsType<SerializationConflictException>(translated);
         }
@@ -240,7 +242,9 @@ public class SerializationConflictTests
             try { await tx2.RollbackAsync(); } catch { /* best-effort cleanup */ }
 
             var translator = new FirebirdExceptionTranslator();
-            var translated = translator.Translate(SupportedDatabase.Firebird, thrown!, DbOperationKind.Update);
+            var dialect = pengdows.crud.dialects.SqlDialectFactory.CreateDialectForType(
+                SupportedDatabase.Firebird, factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            var translated = translator.Translate(dialect, thrown!, DbOperationKind.Update);
 
             Assert.IsType<SerializationConflictException>(translated);
         }

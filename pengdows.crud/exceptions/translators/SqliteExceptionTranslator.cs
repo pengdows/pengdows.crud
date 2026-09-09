@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -11,12 +13,18 @@ namespace pengdows.crud.exceptions.translators;
 /// unique/PK constraint → check constraint → not-null → foreign-key → fallback.
 /// Error codes are extracted via reflection on the <c>SqliteException.SqliteErrorCode</c>
 /// property (Microsoft.Data.Sqlite), so this translator works without a hard reference
-/// to the SQLite driver assembly.
+/// to the SQLite driver assembly. Constraint-kind classification is delegated to
+/// SqliteDialect.IsXxxViolation (see IDbExceptionTranslator.Translate's doc comment) —
+/// this translator previously used a bare message-substring check here that could
+/// disagree with the dialect's extended-result-code-based check (see
+/// SqliteTranslatorTests.MessageWithIncidentalUniqueSubstring_AgreesWithDialectClassification).
 /// </remarks>
 internal sealed class SqliteExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
@@ -37,33 +45,35 @@ internal sealed class SqliteExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
-        if (message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
+        if (exception is DbException dbEx)
         {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsUniqueViolation(dbEx))
+            {
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
+                return new ForeignKeyViolationException(
+                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase))
-        {
-            return new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsNotNullViolation(dbEx))
+            {
+                return new NotNullViolationException(
+                    $"{operationKind} violated a not-null constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("CHECK", StringComparison.OrdinalIgnoreCase))
-        {
-            return new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
+                return new CheckConstraintViolationException(
+                    $"{operationKind} violated a check constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

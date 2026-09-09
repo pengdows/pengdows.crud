@@ -169,6 +169,74 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    // Inherited by MariaDb/TiDb/AuroraMySql — all share MySQL's error-number space for these
+    // constraint-violation categories, and none override them independently.
+    public override bool IsUniqueViolation(DbException ex)
+    {
+        // 1169 (ER_DUP_UNIQUE): duplicate entry violating a unique index, distinct from 1062's
+        // primary-key/unique-key path — MySqlExceptionTranslator already treats both as unique
+        // violations.
+        return TryGetProviderErrorCode(ex) is 1062 or 1169;
+    }
+
+    public override bool IsForeignKeyViolation(DbException ex)
+    {
+        // 1216 (ER_NO_REFERENCED_ROW): insert/update violates a foreign key constraint, distinct
+        // from 1451/1452's delete/update-on-parent path — MySqlExceptionTranslator already treats
+        // all three as foreign-key violations.
+        return TryGetProviderErrorCode(ex) is 1216 or 1451 or 1452;
+    }
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 1048;
+
+    // 3819/4025 are the numeric error codes; MariaDB's message-only shape ("CONSTRAINT `x`
+    // failed for `schema`.`table`") sometimes surfaces with no numeric code at all — this
+    // message-pattern fallback matches MySqlExceptionTranslator's own equivalent so the two
+    // can't disagree (architecture-cleanup: previously error-code-only here).
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) is 3819 or 4025 ||
+        (ex.Message.Contains("constraint", StringComparison.OrdinalIgnoreCase) &&
+         ex.Message.Contains("failed for", StringComparison.OrdinalIgnoreCase));
+
+    // LAST_INSERT_ID() is per-connection safe. Inherited by MariaDb via inheritance.
+    public override bool HasSessionScopedLastIdFunction() => true;
+
+    // Inherited by MariaDb/TiDb/AuroraMySql — all share MySQL's error-number space here, and none
+    // override this independently.
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+        var sqlState = TryGetProviderSqlState(ex);
+
+        if (errorCode == 1213)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (errorCode == 1205)
+        {
+            category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        if (errorCode is 1048 or 1062 or 1169 or 1216 or 1451 or 1452 or 3819 or 4025)
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     // MySQL uses LIMIT/OFFSET only — it does not support SQL:2008 OFFSET/FETCH NEXT syntax.
     // MariaDB (a separate fork) added OFFSET/FETCH in 10.6+ and overrides this property.
     public override bool SupportsOffsetFetch => false;

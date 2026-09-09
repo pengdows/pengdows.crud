@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -9,6 +12,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class SqlServerTranslatorTests
 {
     private readonly SqlServerExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     [Theory]
     [InlineData(2601)]
@@ -17,7 +22,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(number, "duplicate key");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.SqlServer, result.Database);
@@ -29,7 +34,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(547, "The INSERT statement conflicted with the FOREIGN KEY constraint");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -39,7 +44,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(515, "Cannot insert the value NULL");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -49,7 +54,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(547, "The INSERT statement conflicted with the CHECK constraint");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -59,7 +64,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(1205, "deadlock victim");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
     }
@@ -69,7 +74,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(-2, "Execution timeout expired");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
     }
@@ -79,7 +84,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(50000, "some database failure");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<ConcurrencyConflictException>(result);
@@ -95,7 +100,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(number, "connection failure");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
         Assert.Equal(SupportedDatabase.SqlServer, result.Database);
@@ -110,7 +115,7 @@ public class SqlServerTranslatorTests
     {
         var raw = new NumberedDbException(50000, message);
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
     }
@@ -122,7 +127,7 @@ public class SqlServerTranslatorTests
         // LooksLikeTimeout fires first via the `exception is TimeoutException` branch.
         var raw = new TimeoutException("wait for lock expired");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
         Assert.True(result.IsTransient);
@@ -141,7 +146,7 @@ public class SqlServerTranslatorTests
                   $"The duplicate key value is (lock-timeout-8daaef85-02cb-4691-b8b4-187049fc3618).";
         var raw = new NumberedDbException(errorCode, msg);
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -161,7 +166,7 @@ public class SqlServerTranslatorTests
             "'AppDb' to update, delete, or insert the row that has been modified or deleted by " +
             "another transaction. Retry the transaction or change the isolation level.");
 
-        var result = _translator.Translate(SupportedDatabase.SqlServer, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SqlServer), raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
         Assert.True(result.IsTransient);

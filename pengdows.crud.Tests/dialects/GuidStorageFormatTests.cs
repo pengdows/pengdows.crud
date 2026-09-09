@@ -112,6 +112,24 @@ public class GuidStorageFormatTests
         Assert.Equal(36, param.Size);
     }
 
+    // Live-verified: Spanner's PostgreSQL interface (PGAdapter) doesn't register a "uuid" type
+    // Npgsql recognizes — binding DbType.Guid PassThrough (inherited from PostgreSqlDialect) fails
+    // with "The NpgsqlDbType 'Uuid' isn't present in your database." at execution time, even
+    // though the DDL text "UUID" is accepted at CREATE TABLE time. Store as a hyphenated string
+    // instead, matching every other dialect without genuine native Guid/UUID wire support.
+    [Fact]
+    public void Spanner_Guid_ConvertsToString_HyphenatedFormat()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Spanner);
+        var dialect = new SpannerDialect(factory, NullLoggerFactory.Instance.CreateLogger(nameof(SpannerDialect)));
+
+        var param = dialect.CreateDbParameter("p", DbType.Guid, TestGuid);
+
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal(TestGuid.ToString("D"), param.Value);
+        Assert.Equal(36, param.Size);
+    }
+
     // ─── Firebird (mode-configurable) ────────────────────────────────────────
 
     [Fact]

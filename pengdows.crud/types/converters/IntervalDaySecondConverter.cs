@@ -88,7 +88,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
         return provider switch
         {
             SupportedDatabase.Oracle => FormatOracle(value),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb => FormatIso(value),
             _ => value.TotalTime
         };
     }

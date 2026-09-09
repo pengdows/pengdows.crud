@@ -1,20 +1,26 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
 
 public class DbExceptionTranslatorRegistryTests
 {
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
     [Fact]
     public void Registry_Routes_Postgres_Family_To_PostgresTranslator()
     {
         var registry = new DbExceptionTranslatorRegistry();
 
         Assert.IsType<PostgresExceptionTranslator>(registry.Get(SupportedDatabase.PostgreSql));
+        Assert.IsType<PostgresExceptionTranslator>(registry.Get(SupportedDatabase.Spanner));
         Assert.IsType<PostgresExceptionTranslator>(registry.Get(SupportedDatabase.CockroachDb));
         Assert.IsType<PostgresExceptionTranslator>(registry.Get(SupportedDatabase.YugabyteDb));
         Assert.IsType<PostgresExceptionTranslator>(registry.Get(SupportedDatabase.AuroraPostgreSql));
@@ -61,10 +67,15 @@ public class DbExceptionTranslatorRegistryTests
     [InlineData("violation of UNIQUE KEY constraint \"UQ_Job_State\" on table \"Job\"")]
     public void FirebirdTranslator_UniqueConstraintViolation_Returns_UniqueConstraintViolationException(string message)
     {
+        // A real Firebird driver exception (FbException) is always a DbException — architecture-
+        // cleanup: constraint-kind classification is now delegated to FirebirdDialect.IsUniqueViolation,
+        // which requires a DbException, so this fixture must be one too (see SqliteMessageDbException
+        // in TranslatorTestDbExceptions.cs — a generic message-only DbException reused across
+        // translator test files despite its name).
         var translator = new FirebirdExceptionTranslator();
-        var inner = new InvalidOperationException(message);
+        var inner = new SqliteMessageDbException(message);
 
-        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Firebird), inner, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -80,9 +91,9 @@ public class DbExceptionTranslatorRegistryTests
             "violation of PRIMARY or UNIQUE KEY constraint \"PK_HangFire_hf_lock\" on table \"hf_lock\"\n" +
             "Problematic key value is (\"resource\" = 'lock-timeout-abc123')";
         var translator = new FirebirdExceptionTranslator();
-        var inner = new InvalidOperationException(message);
+        var inner = new SqliteMessageDbException(message);
 
-        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Firebird), inner, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -93,7 +104,7 @@ public class DbExceptionTranslatorRegistryTests
         var translator = new FirebirdExceptionTranslator();
         var inner = new InvalidOperationException("some unrecognized Firebird error");
 
-        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Firebird), inner, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
     }
@@ -155,7 +166,7 @@ public class DbExceptionTranslatorRegistryTests
         var translator = new SnowflakeExceptionTranslator();
         var inner = new SqlStateDbException("23502", "NULL result in a non-nullable column");
 
-        var result = translator.Translate(SupportedDatabase.Snowflake, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Snowflake), inner, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -168,7 +179,7 @@ public class DbExceptionTranslatorRegistryTests
         var translator = new SnowflakeExceptionTranslator();
         var inner = new InvalidOperationException("SQL compilation error: syntax error");
 
-        var result = translator.Translate(SupportedDatabase.Snowflake, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Snowflake), inner, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
     }
@@ -203,7 +214,7 @@ public class DbExceptionTranslatorRegistryTests
         var translator = new FallbackExceptionTranslator();
         var inner = new InvalidOperationException("some error");
 
-        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Firebird), inner, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.Equal(SupportedDatabase.Firebird, result.Database);
@@ -216,7 +227,7 @@ public class DbExceptionTranslatorRegistryTests
         var translator = new FallbackExceptionTranslator();
         var inner = new TimeoutException("query timed out");
 
-        var result = translator.Translate(SupportedDatabase.DuckDB, inner, DbOperationKind.Query);
+        var result = translator.Translate(TestDialect(SupportedDatabase.DuckDB), inner, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
         Assert.Equal(SupportedDatabase.DuckDB, result.Database);

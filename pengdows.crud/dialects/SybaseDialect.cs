@@ -48,6 +48,12 @@ internal class SybaseDialect : SqlDialect
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
     public override bool PrepareStatements => false;
 
+    // @@IDENTITY is per-connection safe (verified live).
+    public override bool HasSessionScopedLastIdFunction() => true;
+
+    protected override string GetNaturalKeySelectClause(string wrappedIdColumn) => $"SELECT TOP 1 {wrappedIdColumn}";
+    protected override string GetNaturalKeyFirstRowOnlyClause() => string.Empty;
+
     // ASE has no CTEs or window functions even at 16.0; keep the standard-compliance
     // gate conservative so the base class's generic capability flags do not over-claim.
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => new();

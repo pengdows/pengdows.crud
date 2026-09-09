@@ -57,7 +57,15 @@ public class TypeHydrationTableCreator
         var sql = _context.Product switch
         {
             SupportedDatabase.Sqlite => CreateSqliteSql(),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgreSqlSql(),
+            // Pre-existing gap found while regression-checking Spanner's fixes against the full
+            // always-on provider matrix (CLAUDE.md item 20's exact pattern recurring): YugabyteDb
+            // is PostgreSQL-wire-compatible like CockroachDb but was never added to this switch at
+            // all, throwing NotSupportedException for every TypeHydrationTests run against it.
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => CreatePostgreSqlSql(),
+            // Spanner's PostgreSQL interface has no plain TIMESTAMP type (verified live:
+            // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner
+            // always stores instants in UTC internally.
+            SupportedDatabase.Spanner => CreateSpannerSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
@@ -115,6 +123,33 @@ CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "type_hy
     col_datetime       TIMESTAMP        NOT NULL,
     col_datetimeoffset TIMESTAMPTZ      NOT NULL,
     col_guid           UUID             NOT NULL,
+    col_binary         BYTEA,
+    col_enum_int       INTEGER          NOT NULL,
+    col_enum_str       VARCHAR(50)      NOT NULL
+)";
+
+    // col_short is BIGINT, not SMALLINT: Spanner's PostgreSQL interface rejects int2 outright —
+    // verified live: "P0001: Type <int2> is not supported; use bigint or int8 instead." col_decimal
+    // is a bare NUMERIC, not DECIMAL(18,8): Spanner also rejects a precision/scale modifier on
+    // NUMERIC/DECIMAL — "P0001: Type modifier is not supported for type <numeric>." (see
+    // IntegrationObjectNameHelper.DecimalType's Spanner case for the same finding).
+    private string CreateSpannerSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "type_hydration")} (
+    id                 BIGINT           NOT NULL PRIMARY KEY,
+    col_string         VARCHAR(500)     NOT NULL,
+    col_string_null    VARCHAR(500),
+    col_short          BIGINT           NOT NULL,
+    col_int            INTEGER          NOT NULL,
+    col_int_null       INTEGER,
+    col_long           BIGINT           NOT NULL,
+    col_float          REAL             NOT NULL,
+    col_double         DOUBLE PRECISION NOT NULL,
+    col_decimal        NUMERIC          NOT NULL,
+    col_bool           BOOLEAN          NOT NULL,
+    col_bool_null      BOOLEAN,
+    col_datetime       TIMESTAMPTZ      NOT NULL,
+    col_datetimeoffset TIMESTAMPTZ      NOT NULL,
+    col_guid           VARCHAR(36)      NOT NULL,
     col_binary         BYTEA,
     col_enum_int       INTEGER          NOT NULL,
     col_enum_str       VARCHAR(50)      NOT NULL

@@ -1,9 +1,12 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Reflection;
 using AdoNetCore.AseClient;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -11,6 +14,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class SybaseTranslatorTests
 {
     private readonly SybaseExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // AseError's MessageNumber/Message setters are non-public (real driver code populates them
     // internally when parsing a TDS error token), so tests fill them via reflection to build a
@@ -35,7 +40,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(2601, "Attempt to insert duplicate key row in object 'parent_t' with unique index 'ux'");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Sybase, result.Database);
@@ -47,7 +52,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(546, "Foreign key constraint violation occurred, dbname = 'testdb', table name = 'child_t', constraint name = 'fk1'.");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -57,7 +62,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(548, "Check constraint violation occurred, dbname = 'testdb', table name = 'parent_t', constraint name = 'ck1'.");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -67,7 +72,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(233, "The column name in table dbo.parent_t does not allow null values.");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -77,7 +82,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(1205, "Your server command encountered a deadlock situation. Please re-run your command.");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
     }
@@ -87,7 +92,7 @@ public class SybaseTranslatorTests
     {
         var raw = Ase(99999, "some unrecognized ASE failure");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<ConcurrencyConflictException>(result);
@@ -98,7 +103,7 @@ public class SybaseTranslatorTests
     {
         var raw = new TimeoutException("wait for lock expired");
 
-        var result = _translator.Translate(SupportedDatabase.Sybase, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Sybase), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
         Assert.True(result.IsTransient);

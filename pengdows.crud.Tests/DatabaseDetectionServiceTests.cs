@@ -84,6 +84,15 @@ public class DatabaseDetectionServiceTests
     }
 
     [Fact]
+    public void DetectFromFactory_Spanner_ReturnsCorrectProduct()
+    {
+        var result = DatabaseDetectionService.DetectFromFactory(
+            new fakeDbFactory(SupportedDatabase.Spanner));
+
+        Assert.Equal(SupportedDatabase.Spanner, result);
+    }
+
+    [Fact]
     public void DetectFromFactory_Null_ReturnsUnknown()
     {
         var result = DatabaseDetectionService.DetectFromFactory(null);

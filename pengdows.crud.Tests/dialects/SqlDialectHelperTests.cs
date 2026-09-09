@@ -120,7 +120,12 @@ public class SqlDialectHelperTests
     [Fact]
     public void GetNaturalKeyLookupQuery_IncludesSqlServerTopClause()
     {
-        var dialect = CreateNaturalKeyDialect(SupportedDatabase.SqlServer, true);
+        // Real SqlServerDialect, not the generic DatabaseType-claiming stub: after the
+        // switch(DatabaseType)-to-virtual-override refactor (CLAUDE.md checklist item 10),
+        // dispatch is by actual runtime type, not by a stub merely overriding DatabaseType to
+        // claim "I am SqlServer" — see NaturalKeyLookupQueryCharacterizationTests.cs for the
+        // full per-dialect exact-SQL characterization this refactor was verified against.
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLoggerFactory.Instance.CreateLogger(nameof(SqlServerDialect)));
         var sql = dialect.GetNaturalKeyLookupQuery("orders", "id", new[] { "name" }, new[] { ":name" });
 
         Assert.Contains("SELECT TOP 1", sql, StringComparison.OrdinalIgnoreCase);
@@ -131,8 +136,9 @@ public class SqlDialectHelperTests
     [Fact]
     public void GetNaturalKeyLookupQuery_IncludesTopClauseForSybase()
     {
-        // ASE has no LIMIT clause but does support TOP N (verified live) — same shape as SQL Server.
-        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Sybase, true);
+        // ASE has no LIMIT clause but does support TOP N (verified live) — same shape as SQL
+        // Server. Real SybaseDialect — see the SqlServer test above for why.
+        var dialect = new SybaseDialect(new fakeDbFactory(SupportedDatabase.Sybase), NullLoggerFactory.Instance.CreateLogger(nameof(SybaseDialect)));
         var sql = dialect.GetNaturalKeyLookupQuery("orders", "id", new[] { "name" }, new[] { ":name" });
 
         Assert.Contains("SELECT TOP 1", sql, StringComparison.OrdinalIgnoreCase);
@@ -143,6 +149,11 @@ public class SqlDialectHelperTests
     [Fact]
     public void GetNaturalKeyLookupQuery_AppendsLimitForNonSqlServer()
     {
+        // Deliberately still the generic stub, not a real PostgreSqlDialect: this tests the base
+        // class's own generic fallback (SupportsIdentityColumns=true, no dialect-specific
+        // override) in isolation. No real dialect happens to have exactly that combination today
+        // (real PostgreSqlDialect.SupportsIdentityColumns is false), so the stub is the only way
+        // to exercise this base-class code path at all.
         var dialect = CreateNaturalKeyDialect(SupportedDatabase.PostgreSql, true);
         var sql = dialect.GetNaturalKeyLookupQuery("customers", "id", new[] { "email" }, new[] { ":email" });
 
@@ -151,12 +162,21 @@ public class SqlDialectHelperTests
     }
 
     [Fact]
-    public void GetNaturalKeyLookupQuery_AddsRowNumForOracle()
+    public void GetNaturalKeyLookupQuery_UsesFetchFirstForOracle()
     {
-        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Oracle, true);
+        // Real OracleDialect. Oracle's actual, current behavior uses modern ANSI "FETCH FIRST 1
+        // ROWS ONLY", not "ROWNUM = 1" — OracleDialect has its own override for this (see
+        // NaturalKeyLookupQueryCharacterizationTests.cs for the exact-SQL characterization the
+        // switch-to-virtual-override refactor was verified against). The generic stub this test
+        // used to construct (claiming DatabaseType=Oracle without being OracleDialect) got the
+        // base class's now-removed literal "AND ROWNUM = 1" switch case instead — a case that was
+        // already unreachable in production before this refactor, since a real OracleDialect
+        // instance's own override always ran first.
+        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLoggerFactory.Instance.CreateLogger(nameof(OracleDialect)));
         var sql = dialect.GetNaturalKeyLookupQuery("items", "id", new[] { "sku" }, new[] { ":sku" });
 
-        Assert.Contains("AND ROWNUM = 1", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FETCH FIRST 1 ROWS ONLY", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ROWNUM", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -168,7 +188,8 @@ public class SqlDialectHelperTests
         // (Db2Dialect.GetGeneratedKeyPlan() always returns Returning), but GetNaturalKeyLookupQuery
         // is a public virtual member of ISqlDialect — any external consumer calling it directly
         // would already hit the bug today, not just in some hypothetical future.
-        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Db2, true);
+        // Real Db2Dialect — see the SqlServer test above for why.
+        var dialect = new Db2Dialect(new fakeDbFactory(SupportedDatabase.Db2), NullLoggerFactory.Instance.CreateLogger(nameof(Db2Dialect)));
         var sql = dialect.GetNaturalKeyLookupQuery("items", "id", new[] { "sku" }, new[] { ":sku" });
 
         Assert.Contains("FETCH FIRST 1 ROWS ONLY", sql, StringComparison.OrdinalIgnoreCase);

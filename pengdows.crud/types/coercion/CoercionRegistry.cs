@@ -32,7 +32,6 @@ internal class CoercionRegistry
     public static CoercionRegistry Shared { get; } = new();
 
     private readonly ConcurrentDictionary<Type, IDbCoercion> _coercions = new();
-    private readonly ConcurrentDictionary<(Type, SupportedDatabase), IDbCoercion> _providerSpecificCoercions = new();
     private readonly ConcurrentDictionary<(Type, SupportedDatabase), ProviderTypeMapping> _legacyMappings = new();
     private readonly ConcurrentDictionary<Type, IAdvancedTypeConverter> _legacyConverters = new();
     private readonly ConcurrentDictionary<Type, byte> _legacyMappedTypes = new();
@@ -48,14 +47,6 @@ internal class CoercionRegistry
     public void Register<T>(IDbCoercion<T> coercion)
     {
         _coercions[typeof(T)] = coercion;
-    }
-
-    /// <summary>
-    /// Register a provider-specific coercion for a type.
-    /// </summary>
-    public void Register<T>(SupportedDatabase provider, IDbCoercion<T> coercion)
-    {
-        _providerSpecificCoercions[(typeof(T), provider)] = coercion;
     }
 
     // Compatibility registration for the original provider-mapping API. The
@@ -119,21 +110,15 @@ internal class CoercionRegistry
     }
 
     /// <summary>
-    /// Get coercion for a type, optionally provider-specific.
+    /// Get the registered coercion for a type. <paramref name="provider"/> is accepted for call-site
+    /// stability (TryRead/TryWrite pass it through) but unused here — the provider-specific coercion
+    /// feature this parameter used to select between was dead code (a <c>Register&lt;T&gt;(SupportedDatabase,
+    /// IDbCoercion&lt;T&gt;)</c> overload with zero callers anywhere in the codebase, including tests)
+    /// and was removed. Per-provider variation is handled by <see cref="AdvancedTypeRegistry"/>'s
+    /// <c>RegisterMapping&lt;T&gt;</c> system instead, which runs before this registry is ever consulted.
     /// </summary>
     public IDbCoercion? GetCoercion(Type type, SupportedDatabase? provider = null)
     {
-        // Try provider-specific first if specified
-        if (provider.HasValue)
-        {
-            var key = (type, provider.Value);
-            if (_providerSpecificCoercions.TryGetValue(key, out var providerCoercion))
-            {
-                return providerCoercion;
-            }
-        }
-
-        // Fall back to general coercion
         return _coercions.TryGetValue(type, out var coercion) ? coercion : null;
     }
 

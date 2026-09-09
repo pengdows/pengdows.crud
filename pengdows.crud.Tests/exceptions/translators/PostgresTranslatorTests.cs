@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -8,13 +11,15 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class PostgresTranslatorTests
 {
     private readonly PostgresExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     [Fact]
     public void SqlState23505_MapsTo_UniqueConstraintViolationException()
     {
         var raw = new SqlStateDbException("23505", "duplicate key value violates unique constraint");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -24,7 +29,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("23503", "insert or update violates foreign key constraint");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -34,7 +39,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("23502", "null value violates not-null constraint");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -44,7 +49,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("23514", "new row violates check constraint");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -54,7 +59,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("40P01", "deadlock detected");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
     }
@@ -64,7 +69,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("40001", "could not serialize access due to concurrent update");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
     }
@@ -82,7 +87,7 @@ public class PostgresTranslatorTests
         // automatically safe here -- the write might have already applied.
         var raw = new SqlStateDbException("40003", "result is ambiguous (error=context canceled [exhausted])");
 
-        var result = _translator.Translate(SupportedDatabase.CockroachDb, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.CockroachDb), raw, DbOperationKind.Update);
 
         Assert.IsType<AmbiguousResultException>(result);
         Assert.IsNotType<SerializationConflictException>(result);
@@ -93,7 +98,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("57014", "canceling statement due to statement timeout");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
     }
@@ -103,7 +108,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException("XX000", "internal error");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<ConcurrencyConflictException>(result);
@@ -118,7 +123,7 @@ public class PostgresTranslatorTests
     {
         var raw = new SqlStateDbException(sqlState, "connection failure");
 
-        var result = _translator.Translate(SupportedDatabase.PostgreSql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
         Assert.Equal(SupportedDatabase.PostgreSql, result.Database);

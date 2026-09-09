@@ -114,34 +114,13 @@ public class AdvancedTypeRegistryExtensiveTests
 
     #region Enhanced Parameter Configuration
 
-    [Fact]
-    public void TryConfigureParameterEnhanced_FallsBackToProviderParameterFactory()
-    {
-        var registry = new AdvancedTypeRegistry();
-        var param = new fakeDbParameter();
-
-        // Try with a type that isn't registered in AdvancedTypeRegistry
-        // but might be handled by ProviderParameterFactory
-        var result =
-            registry.TryConfigureParameterEnhanced(param, typeof(decimal), 42.5m, SupportedDatabase.PostgreSql);
-
-        // Should fall back to ProviderParameterFactory or ParameterBindingRules
-        // The exact behavior depends on the implementation, but it should not throw
-        Assert.True(result || !result); // Either succeeds or fails gracefully
-    }
-
-    [Fact]
-    public void TryConfigureParameterEnhanced_FallsBackToParameterBindingRules()
-    {
-        var registry = new AdvancedTypeRegistry();
-        var param = new fakeDbParameter();
-
-        // Try with a simple type that should be handled by binding rules
-        var result = registry.TryConfigureParameterEnhanced(param, typeof(string), "test", SupportedDatabase.SqlServer);
-
-        // Should either work via advanced types or fall back to binding rules
-        Assert.True(result);
-    }
+    // TryConfigureParameterEnhanced itself was deleted (dead code — an internal-only, zero-caller
+    // duplicate of AdvancedTypeRegistry.TryConfigureParameterForDialect with identical 3-step
+    // fallback logic; not a breaking change, since AdvancedTypeRegistry is `internal`, not part of
+    // any public API). The two tests that used to live here only ever exercised that duplicate
+    // method — one via a tautological assertion (`Assert.True(result || !result)`, always true
+    // regardless of behavior) — so neither carried regression value once the method they targeted
+    // was gone.
 
     [Fact]
     public void CoercionRegistry_Property_ReturnsSharedInstance()
@@ -609,6 +588,50 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal(MockNpgsqlDbType.Uuid, param.NpgsqlDbType);
     }
 
+    [Fact]
+    public void DateTime_Spanner_ConfiguresTimestampTz()
+    {
+        // Cloud Spanner's PostgreSQL interface has no plain "timestamp" (without time zone) type
+        // at all — verified live against a real Spanner Omni + PGAdapter instance: a parameter
+        // bound with Npgsql's default inferred type for DbType.DateTime (NpgsqlDbType.Timestamp)
+        // is rejected outright with "P0001: Type <timestamp> is not supported.", regardless of the
+        // target column's own declared type (even a TIMESTAMPTZ column — real PostgreSQL
+        // tolerates this mismatch via an implicit assignment cast; PGAdapter does not). Spanner
+        // always stores instants in UTC, so every DateTime parameter must be bound as
+        // NpgsqlDbType.TimestampTz explicitly.
+        var registry = AdvancedTypeRegistry.Shared;
+        var mapping = registry.GetMapping(typeof(DateTime), SupportedDatabase.Spanner);
+
+        Assert.NotNull(mapping);
+        Assert.Equal(DbType.DateTime, mapping.DbType);
+        Assert.NotNull(mapping.ConfigureParameter);
+
+        var param = new PostgreSqlLikeParameter();
+        mapping.ConfigureParameter(param, new DateTime(2024, 1, 1, 8, 30, 0, DateTimeKind.Utc));
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        Assert.Equal(MockNpgsqlDbType.TimestampTz, param.NpgsqlDbType);
+    }
+
+    [Fact]
+    public void DateTimeOffset_Spanner_ConfiguresTimestampTz()
+    {
+        var registry = AdvancedTypeRegistry.Shared;
+        var mapping = registry.GetMapping(typeof(DateTimeOffset), SupportedDatabase.Spanner);
+
+        Assert.NotNull(mapping);
+        Assert.NotNull(mapping.ConfigureParameter);
+
+        var param = new PostgreSqlLikeParameter();
+        var dto = new DateTimeOffset(2024, 1, 1, 8, 30, 0, TimeSpan.FromHours(-5));
+        mapping.ConfigureParameter(param, dto);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(dto.UtcDateTime, (DateTime)param.Value);
+        Assert.Equal(MockNpgsqlDbType.TimestampTz, param.NpgsqlDbType);
+    }
+
     #endregion
 
     #region MappingKey Tests
@@ -732,7 +755,8 @@ public class AdvancedTypeRegistryExtensiveTests
         MacAddr = 512,
         MacAddr8 = 4096,
         Jsonb = 1024,
-        JSON = 2048
+        JSON = 2048,
+        TimestampTz = 8192
     }
 
     private class MySqlLikeParameter : fakeDbParameter

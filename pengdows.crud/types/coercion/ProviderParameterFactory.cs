@@ -106,6 +106,7 @@ internal static class ProviderParameterFactory
         switch (provider)
         {
             case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.Spanner:
                 ApplyPostgreSqlOptimizations(parameter, valueType);
                 break;
             case SupportedDatabase.SqlServer:
@@ -257,8 +258,15 @@ internal static class ProviderParameterFactory
         // MySQL specific optimizations
         if (valueType == typeof(bool) || valueType == typeof(bool?))
         {
-            // Use TINYINT(1) for better compatibility
+            // Use TINYINT(1) for better compatibility. The DbType change alone previously left
+            // parameter.Value as a raw C# bool — found while mapping the layered type-coercion
+            // system's real call order; see MySqlBooleanParameterValueTests for the regression
+            // test this fixes.
             parameter.DbType = DbType.Byte;
+            if (parameter.Value is bool boolValue)
+            {
+                parameter.Value = boolValue ? (byte)1 : (byte)0;
+            }
         }
         else if (IsJsonType(valueType))
         {
@@ -407,7 +415,7 @@ internal static class ParameterBindingRules
             parameter.DbType = DbType.DateTime;
 
             // Set DateTimeKind expectations based on provider
-            if (value is DateTime dt && provider == SupportedDatabase.PostgreSql)
+            if (value is DateTime dt && provider is SupportedDatabase.PostgreSql or SupportedDatabase.Spanner)
             {
                 // PostgreSQL prefers UTC for timestamp with time zone
                 if (dt.Kind == DateTimeKind.Unspecified)
@@ -415,16 +423,26 @@ internal static class ParameterBindingRules
                     // Log warning about unspecified DateTimeKind
                 }
             }
+
+            if (provider == SupportedDatabase.Spanner)
+            {
+                TrySetNpgsqlTimestampTz(parameter);
+            }
         }
         else if (underlyingType == typeof(DateTimeOffset))
         {
-            if (value is DateTimeOffset dto && (provider is SupportedDatabase.PostgreSql
+            if (value is DateTimeOffset dto && (provider is SupportedDatabase.PostgreSql or SupportedDatabase.Spanner
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb))
             {
                 // Npgsql 6+ rejects non-UTC DateTimeOffset values for timestamptz. Store the
                 // instant as a UTC DateTime; the database type remains timestamp with time zone.
                 parameter.DbType = DbType.DateTime;
                 parameter.Value = dto.UtcDateTime;
+
+                if (provider == SupportedDatabase.Spanner)
+                {
+                    TrySetNpgsqlTimestampTz(parameter);
+                }
             }
             else
             {
@@ -434,6 +452,33 @@ internal static class ParameterBindingRules
         else if (underlyingType == typeof(TimeSpan))
         {
             parameter.DbType = DbType.Time;
+        }
+    }
+
+    // Cloud Spanner's PostgreSQL interface has no plain "timestamp" (without time zone) type at
+    // all — verified live against a real Spanner Omni + PGAdapter instance: a parameter bound
+    // with Npgsql's default inferred type for DbType.DateTime (NpgsqlDbType.Timestamp = 21) is
+    // rejected outright with "P0001: Type <timestamp> is not supported.", regardless of the
+    // target column's own declared type (even a TIMESTAMPTZ column — real PostgreSQL tolerates
+    // this mismatch via an implicit assignment cast; PGAdapter does not). Force
+    // NpgsqlDbType.TimestampTz (26) explicitly via the same reflection pattern
+    // ApplyPostgreSqlOptimizations uses, since Spanner always stores instants in UTC.
+    private static void TrySetNpgsqlTimestampTz(DbParameter parameter)
+    {
+        var paramType = parameter.GetType();
+        if (!paramType.Name.StartsWith("Npgsql"))
+        {
+            return;
+        }
+
+        try
+        {
+            // NpgsqlDbType.TimestampTz = 26
+            paramType.GetProperty("NpgsqlDbType")?.SetValue(parameter, 26);
+        }
+        catch
+        {
+            // Fall back to standard DbType if provider-specific setup fails
         }
     }
 
@@ -484,6 +529,7 @@ internal static class ParameterBindingRules
         switch (provider)
         {
             case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.Spanner:
                 // PostgreSQL enums stored as text by default
                 parameter.Value = enumValue.ToString();
                 parameter.DbType = DbType.String;
@@ -521,6 +567,7 @@ internal static class ParameterBindingRules
         switch (provider)
         {
             case SupportedDatabase.PostgreSql:
+            case SupportedDatabase.Spanner:
                 // Native array support
                 parameter.Value = value;
                 parameter.DbType = DbType.Object;

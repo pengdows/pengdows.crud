@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -23,34 +25,54 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
-        switch (errorCode)
+        if (errorCode == 50201)
         {
-            case 50201:
-                return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
-            case 1:
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —
+        // see IDbExceptionTranslator.Translate's doc comment.
+        if (exception is DbException dbEx)
+        {
+            if (dialect.IsUniqueViolation(dbEx))
+            {
                 return new UniqueConstraintViolationException(
                     $"{operationKind} violated a unique constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 1400:
+            }
+
+            if (dialect.IsNotNullViolation(dbEx))
+            {
                 return new NotNullViolationException(
                     $"{operationKind} violated a not-null constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 2290:
+            }
+
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
                 return new CheckConstraintViolationException(
                     $"{operationKind} violated a check constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 2291:
-            case 2292:
+            }
+
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
                 return new ForeignKeyViolationException(
                     $"{operationKind} violated a foreign key constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
+            }
+        }
+
+        switch (errorCode)
+        {
             case 60:
                 return new DeadlockException(
                     $"{operationKind} deadlocked on {database}: {message}",

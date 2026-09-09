@@ -48,6 +48,60 @@ internal sealed class Db2Dialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Db2;
+
+    // Db2 SQLCODE -803 / SQLSTATE 23505. Falls back to the numeric SQLCODE magnitude when no
+    // SqlState is available at all — IBM.Data.Db2's DB2Exception often doesn't populate SqlState
+    // (see TryGetProviderSqlState's message-embedded-SQLSTATE fallback, which itself can miss if
+    // the driver's message shape has neither "ERROR [nnnnn]" nor "SQLSTATE=nnnnn"). Matches
+    // Db2ExceptionTranslator's own numeric fallback so this dialect classification and that
+    // translator can't silently disagree (architecture-cleanup: previously SqlState-only here).
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 803;
+
+    // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(TryGetProviderSqlState(ex), "23504", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 530 or 531 or 532;
+
+    // Db2 SQLCODE -407 / SQLSTATE 23502
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 407;
+
+    // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23513", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 545;
+
+    // Db2 has no LIMIT syntax; the ANSI equivalent is FETCH FIRST n ROWS ONLY.
+    protected override string GetNaturalKeyFirstRowOnlyClause() => " FETCH FIRST 1 ROWS ONLY";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        // Db2 SQLSTATE 40001 covers both deadlock (SQLCODE -911 reason 2) and lock timeout
+        // (SQLCODE -911 reason 68 / -913) — SQLSTATE alone can't disambiguate; treated as
+        // SerializationFailure here, matching other ANSI-SQLSTATE dialects. Verify against real
+        // DB2Exception shape in Phase 2.
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

@@ -267,6 +267,74 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override bool SupportsNamespaces => true;
 
+    // Inherited by Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql — all share Postgres's SQLSTATE
+    // codes for these constraint-violation categories, and none override them independently.
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
+
+    // Inherited by Spanner/CockroachDb/YugabyteDb — all support RETURNING with the same syntax.
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" RETURNING {idColumnWrapped}";
+
+    // Inherited by Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql — all share Postgres's SQLSTATE
+    // codes here, and none override this independently.
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        if (string.Equals(sqlState, "40P01", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // 40003 (statement_completion_unknown): standard SQL/PostgreSQL-catalog code that vanilla
+        // PostgreSQL defines but never actually raises (no ereport() call anywhere in its source)
+        // -- it is CockroachDB's real, documented "result is ambiguous" error, emitted when its
+        // distributed consensus layer loses track of a commit's outcome during a network
+        // partition/node failure under contention. Kept in this shared override (not carved out
+        // to CockroachDbDialect alone) because all four databases here go through the same Npgsql
+        // driver and the branch is simply inert -- not wrong -- for PostgreSql/AuroraPostgreSql,
+        // which never trigger it; YugabyteDb is architecturally similar to CockroachDb
+        // (distributed consensus) and may.
+        if (string.Equals(sqlState, "40003", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.AmbiguousResult;
+            return true;
+        }
+
+        if (string.Equals(sqlState, "55P03", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sqlState, "57014", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     public override bool SupportsInsertOnConflict => true;
 
     // CockroachDB is PostgreSQL-wire-compatible and supports GENERATED ALWAYS AS IDENTITY at the

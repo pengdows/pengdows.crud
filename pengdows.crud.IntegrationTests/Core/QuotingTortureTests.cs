@@ -17,8 +17,24 @@ public class QuotingTortureTests : DatabaseTestBase
     {
     }
 
+    // Spanner's identifier naming rules reject a space in a table/column name outright, even
+    // through the PostgreSQL interface and even when properly double-quoted — verified live:
+    // "P0001: ... table name not valid: Default Order." (the literal, unquoted identifier text
+    // appears in Spanner's own error, not a quoting bug on pengdows.crud's side). This is a real
+    // Spanner platform limitation distinct from every column-type/constraint gap found elsewhere
+    // this session — real PostgreSQL, and every other provider this test runs against, accepts a
+    // quoted identifier containing a space without complaint.
+    private const string SpannerSkipReason =
+        "Spanner's identifier naming rules reject a space in a table/column name, even when quoted";
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        if (provider == SupportedDatabase.Spanner)
+        {
+            Output.WriteLine($"Skipping torture-table setup for {provider} ({SpannerSkipReason})");
+            return;
+        }
+
         var tableCreator = new TestTableCreator(context);
         await tableCreator.CreateTortureTableAsync();
     }
@@ -28,6 +44,12 @@ public class QuotingTortureTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.Spanner)
+            {
+                Output.WriteLine($"Skipping torture CRUD test for {provider} ({SpannerSkipReason})");
+                return;
+            }
+
             // Arrange
             var helper = new TableGateway<TortureEntity, long>(context);
             var entity = new TortureEntity

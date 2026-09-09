@@ -169,16 +169,8 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
         var nameColumn = context.WrapObjectName("name");
         var versionColumn = context.WrapObjectName("version");
 
-        var idType = provider switch
-        {
-            SupportedDatabase.Firebird => "BIGINT",
-            _ => "BIGINT"
-        };
-        var stringType = provider switch
-        {
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
         var versionType = "INT";
 
         var versionDefinition = provider switch

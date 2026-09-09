@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -31,8 +33,9 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
     // actual SQLCODE — confirmed against a live ibmcom/db2 container. The real SQLSTATE is only
     // available embedded in the message text (leading "ERROR [nnnnn]" or trailing
     // "SQLSTATE=nnnnn" — DbExceptionTranslationSupport.TryGetSqlState handles both forms).
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
@@ -44,34 +47,39 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        if (string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) || code == 803)
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —
+        // see IDbExceptionTranslator.Translate's doc comment. Db2Dialect's overrides check the
+        // identical SqlState-or-numeric-SQLCODE-magnitude signals this translator used to check
+        // directly, so this is a behavior-preserving delegation, not a narrowing.
+        if (exception is DbException dbEx)
         {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {message}",
-                database, exception, sqlState, errorCode, constraintName);
-        }
+            if (dialect.IsUniqueViolation(dbEx))
+            {
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
 
-        if (string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) || code == 407)
-        {
-            return new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {message}",
-                database, exception, sqlState, errorCode, constraintName);
-        }
+            if (dialect.IsNotNullViolation(dbEx))
+            {
+                return new NotNullViolationException(
+                    $"{operationKind} violated a not-null constraint on {database}: {message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
 
-        if (string.Equals(sqlState, "23513", StringComparison.OrdinalIgnoreCase) || code == 545)
-        {
-            return new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {message}",
-                database, exception, sqlState, errorCode, constraintName);
-        }
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
+                return new CheckConstraintViolationException(
+                    $"{operationKind} violated a check constraint on {database}: {message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
 
-        if (string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(sqlState, "23504", StringComparison.OrdinalIgnoreCase) ||
-            code is 530 or 531 or 532)
-        {
-            return new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                database, exception, sqlState, errorCode, constraintName);
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
+                return new ForeignKeyViolationException(
+                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
         }
 
         if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) || code is 911 or 913)

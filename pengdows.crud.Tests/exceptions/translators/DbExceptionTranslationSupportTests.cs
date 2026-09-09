@@ -1,7 +1,10 @@
 using System;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -11,6 +14,9 @@ namespace pengdows.crud.Tests.exceptions.translators;
 /// </summary>
 public class DbExceptionTranslationSupportTests
 {
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
+
     // -------------------------------------------------------------------------
     // Custom exception types for reflection-based property tests
     // -------------------------------------------------------------------------
@@ -164,7 +170,7 @@ public class DbExceptionTranslationSupportTests
         var translator = new FallbackExceptionTranslator();
         var inner = new ShortNumberException("db error with short code");
 
-        var result = translator.Translate(SupportedDatabase.Firebird, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.Firebird), inner, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.Equal(1234, result.ErrorCode);
@@ -176,7 +182,7 @@ public class DbExceptionTranslationSupportTests
         var translator = new FallbackExceptionTranslator();
         var inner = new ConstraintPropertyException("constraint error");
 
-        var result = translator.Translate(SupportedDatabase.DuckDB, inner, DbOperationKind.Insert);
+        var result = translator.Translate(TestDialect(SupportedDatabase.DuckDB), inner, DbOperationKind.Insert);
 
         Assert.Equal("uq_my_table_col", result.ConstraintName);
     }

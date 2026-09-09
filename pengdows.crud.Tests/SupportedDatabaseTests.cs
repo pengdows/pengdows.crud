@@ -22,6 +22,7 @@ public class SupportedDatabaseTests
     [InlineData("Sqlite", SupportedDatabase.Sqlite)]
     [InlineData("SqlServer", SupportedDatabase.SqlServer)]
     [InlineData("DuckDB", SupportedDatabase.DuckDB)]
+    [InlineData("Spanner", SupportedDatabase.Spanner)]
     [InlineData("Unknown", SupportedDatabase.Unknown)]
     public void EnumParse_ShouldReturnCorrectValue(string input, SupportedDatabase expected)
     {
@@ -60,7 +61,8 @@ public class SupportedDatabaseTests
                 "Db2",
                 "FlatFile",
                 "SingleStore",
-                "Sybase"
+                "Sybase",
+                "Spanner"
             },
             names);
     }

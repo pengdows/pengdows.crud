@@ -235,7 +235,10 @@ public class ProviderParameterFactoryTests
 
         Assert.True(configured);
         Assert.Equal(DbType.Byte, parameter.DbType);
-        Assert.Equal(true, parameter.Value);
+        // Was `Assert.Equal(true, parameter.Value)` — a real bug this test locked in as
+        // "correct": ApplyMySqlOptimizations set DbType.Byte but left Value as a raw C# bool.
+        // See MySqlBooleanParameterValueTests for the full writeup and the fix.
+        Assert.Equal((byte)1, parameter.Value);
     }
 
     [Fact]

@@ -187,7 +187,8 @@ public class MergeConflictTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context));
+            await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context),
+                BuildMergeRecordUniqueIndexSql(provider, context));
 
             var helper = new TableGateway<MergeRecord, long>(context);
             var baseRecord = new MergeRecord
@@ -231,11 +232,17 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
-    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
+    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql, string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
         await using var container = context.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
+
+        if (extraSql is not null)
+        {
+            await using var extraContainer = context.CreateSqlContainer(extraSql);
+            await extraContainer.ExecuteNonQueryAsync();
+        }
     }
 
     private static string BuildVersionedEntityTableSql(SupportedDatabase provider, IDatabaseContext context)
@@ -245,9 +252,9 @@ public class MergeConflictTests : DatabaseTestBase
         var nameColumn = context.WrapObjectName("name");
         var versionColumn = context.WrapObjectName("version");
 
-        var idType = GetBigIntType(provider);
-        var stringType = GetStringType(provider);
-        var versionType = GetIntType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
+        var versionType = IntegrationObjectNameHelper.IntType(provider);
 
         var versionDefinition = provider switch
         {
@@ -272,65 +279,27 @@ CREATE TABLE {table} (
         var valueColumn = context.WrapObjectName("value");
         var updatedColumn = context.WrapObjectName("last_updated");
 
-        var idType = GetBigIntType(provider);
-        var stringType = GetStringType(provider);
-        var intType = GetIntType(provider);
-        var dateType = GetDateTimeType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
+        var intType = IntegrationObjectNameHelper.IntType(provider);
+        var dateType = IntegrationObjectNameHelper.DateTimeType(provider);
+
+        var uniqueClause = IntegrationObjectNameHelper.InlineUniqueConstraintClause(provider, keyColumn);
 
         return $@"
 CREATE TABLE {table} (
     {idColumn} {idType} NOT NULL PRIMARY KEY,
     {keyColumn} {stringType} NOT NULL,
     {valueColumn} {intType} NOT NULL,
-    {updatedColumn} {dateType} NOT NULL,
-    UNIQUE ({keyColumn})
+    {updatedColumn} {dateType} NOT NULL{uniqueClause}
 )";
     }
 
-    private static string GetBigIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            SupportedDatabase.Firebird => "BIGINT",
-            _ => "BIGINT"
-        };
-    }
+    private static string? BuildMergeRecordUniqueIndexSql(SupportedDatabase provider, IDatabaseContext context) =>
+        IntegrationObjectNameHelper.SpannerUniqueIndexSql(provider, context,
+            IntegrationObjectNameHelper.Table(context, "merge_records"),
+            "ux_merge_records_record_key", context.WrapObjectName("record_key"));
 
-    private static string GetIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Firebird => "INTEGER",
-            _ => "INT"
-        };
-    }
-
-    private static string GetStringType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "NVARCHAR(255)",
-            SupportedDatabase.Oracle => "VARCHAR2(255)",
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
-    }
-
-    private static string GetDateTimeType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "DATETIME2",
-            SupportedDatabase.MySql => "DATETIME",
-            SupportedDatabase.MariaDb => "DATETIME",
-            _ => "TIMESTAMP"
-        };
-    }
 }
 
 [Table("versioned_entities")]

@@ -2015,7 +2015,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
     {
         return ExceptionTranslatorRegistry.Get(_dialect.DatabaseType)
-            .Translate(_dialect.DatabaseType, exception, operationKind);
+            .Translate(_dialect, exception, operationKind);
     }
 
     private static DbErrorCategory ClassifyTranslatedException(DatabaseException exception)

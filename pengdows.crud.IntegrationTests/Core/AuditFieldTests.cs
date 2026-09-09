@@ -317,9 +317,9 @@ public class AuditFieldTests : DatabaseTestBase
         var updatedAtColumn = context.WrapObjectName("updated_at");
         var updatedByColumn = context.WrapObjectName("updated_by");
 
-        var idType = GetIdType(provider);
-        var stringType = GetStringType(provider);
-        var dateType = GetDateTimeType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
+        var dateType = IntegrationObjectNameHelper.DateTimeType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -330,40 +330,6 @@ CREATE TABLE {table} (
     {updatedAtColumn} {dateType},
     {updatedByColumn} {stringType}
 )";
-    }
-
-    private static string GetIdType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            _ => "BIGINT"
-        };
-    }
-
-    private static string GetStringType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "NVARCHAR(255)",
-            SupportedDatabase.Oracle => "VARCHAR2(255)",
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
-    }
-
-    private static string GetDateTimeType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "DATETIME",
-            SupportedDatabase.SqlServer => "DATETIME2",
-            SupportedDatabase.MySql => "DATETIME",
-            SupportedDatabase.MariaDb => "DATETIME",
-            _ => "TIMESTAMP"
-        };
     }
 
     private static async Task EnsureFirebirdAuditTableAsync(IDatabaseContext context)

@@ -91,6 +91,7 @@ internal class AdvancedTypeRegistry
         public const string MacAddr = "MacAddr8";
         public const string Interval = "Interval";
         public const string Uuid = "Uuid";
+        public const string TimestampTz = "TimestampTz";
     }
 
     private static class OracleNames
@@ -207,29 +208,6 @@ internal class AdvancedTypeRegistry
         // than allowing a mapping registered for another provider to block it.
         return ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider) ||
                ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
-    }
-
-    /// <summary>
-    /// Enhanced parameter configuration using both legacy converters and new coercion system.
-    /// Provides fallback mechanism and optimal performance.
-    /// </summary>
-    public bool TryConfigureParameterEnhanced(DbParameter parameter, Type clrType, object? value,
-        SupportedDatabase provider)
-    {
-        // First try the legacy advanced type system for backward compatibility
-        if (TryConfigureParameter(parameter, clrType, value, provider))
-        {
-            return true;
-        }
-
-        // Fall back to the new coercion system for "weird" types
-        if (ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider))
-        {
-            return true;
-        }
-
-        // Final fallback: try parameter binding rules
-        return ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
     }
 
     /// <summary>
@@ -416,6 +394,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<JsonDocument>(SupportedDatabase.PostgreSql, pgJson);
+        RegisterMapping<JsonDocument>(SupportedDatabase.Spanner, pgJson);
         RegisterMapping<JsonDocument>(SupportedDatabase.CockroachDb, pgJson);
         RegisterMapping<JsonDocument>(SupportedDatabase.YugabyteDb, pgJson);
 
@@ -491,6 +470,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<int[]>(SupportedDatabase.PostgreSql, pgIntArray);
+        RegisterMapping<int[]>(SupportedDatabase.Spanner, pgIntArray);
         RegisterMapping<int[]>(SupportedDatabase.CockroachDb, pgIntArray);
         RegisterMapping<int[]>(SupportedDatabase.YugabyteDb, pgIntArray);
 
@@ -504,6 +484,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<string[]>(SupportedDatabase.PostgreSql, pgTextArray);
+        RegisterMapping<string[]>(SupportedDatabase.Spanner, pgTextArray);
         RegisterMapping<string[]>(SupportedDatabase.CockroachDb, pgTextArray);
         RegisterMapping<string[]>(SupportedDatabase.YugabyteDb, pgTextArray);
     }
@@ -651,6 +632,39 @@ internal class AdvancedTypeRegistry
                 SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ);
             }
         });
+
+        // Cloud Spanner's PostgreSQL interface has no plain "timestamp" (without time zone) type
+        // at all — verified live against a real Spanner Omni + PGAdapter instance: a parameter
+        // bound with Npgsql's default inferred type for DbType.DateTime (NpgsqlDbType.Timestamp)
+        // is rejected outright with "P0001: Type <timestamp> is not supported.", regardless of
+        // the target column's own declared type (even a TIMESTAMPTZ column — real PostgreSQL
+        // tolerates this mismatch via an implicit assignment cast; PGAdapter does not). Spanner
+        // always stores instants in UTC, so every DateTime/DateTimeOffset parameter must be
+        // bound as NpgsqlDbType.TimestampTz explicitly — plain PostgreSQL, CockroachDb, and
+        // YugabyteDb have no such restriction and are left on the generic DbType.DateTime path.
+        RegisterMapping<DateTime>(SupportedDatabase.Spanner, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TimestampTz);
+            }
+        });
+
+        RegisterMapping<DateTimeOffset>(SupportedDatabase.Spanner, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                if (value is DateTimeOffset dto)
+                {
+                    param.Value = dto.UtcDateTime;
+                }
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TimestampTz);
+            }
+        });
     }
 
     private void RegisterLobMappings()
@@ -683,6 +697,7 @@ internal class AdvancedTypeRegistry
             ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
         };
         RegisterMapping<Stream>(SupportedDatabase.PostgreSql, pgStream);
+        RegisterMapping<Stream>(SupportedDatabase.Spanner, pgStream);
         RegisterMapping<Stream>(SupportedDatabase.CockroachDb, pgStream);
         RegisterMapping<Stream>(SupportedDatabase.YugabyteDb, pgStream);
 
@@ -696,6 +711,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<TextReader>(SupportedDatabase.PostgreSql, pgTextReader);
+        RegisterMapping<TextReader>(SupportedDatabase.Spanner, pgTextReader);
         RegisterMapping<TextReader>(SupportedDatabase.CockroachDb, pgTextReader);
         RegisterMapping<TextReader>(SupportedDatabase.YugabyteDb, pgTextReader);
 
@@ -743,6 +759,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<Guid>(SupportedDatabase.PostgreSql, pgGuid);
+        RegisterMapping<Guid>(SupportedDatabase.Spanner, pgGuid);
         RegisterMapping<Guid>(SupportedDatabase.CockroachDb, pgGuid);
         RegisterMapping<Guid>(SupportedDatabase.YugabyteDb, pgGuid);
     }

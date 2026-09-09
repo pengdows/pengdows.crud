@@ -14,6 +14,7 @@ using testbed.SqlServer;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
+using testbed.Spanner;
 using testbed.Yugabyte;
 
 namespace testbed;
@@ -40,6 +41,7 @@ public class ParallelTestOrchestrator
         {
             SupportedDatabase.Sqlite => new SqliteTestContainer(),
             SupportedDatabase.PostgreSql => new PostgreSqlTestContainer(),
+            SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
             SupportedDatabase.SqlServer => new SqlServerTestContainer(),
             SupportedDatabase.MySql => new MySqlTestContainer(),
             SupportedDatabase.MariaDb => new MariaDbContainer(),
@@ -238,6 +240,7 @@ public class ParallelTestOrchestrator
                 ? new PostgreSqlTestContainer(image, port: 27500, useAdminPasswordEnvVar: true)
                 : new PostgreSqlTestContainer(image),
             (db, sp) => new PostgreSQLTestProvider(db, sp));
+        AddLocal("Spanner", new SpannerOmniTestContainer(), (db, sp) => new PostgreSQLTestProvider(db, sp), 30);
         AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
         AddDocker("MariaDB", 8, image => new MariaDbContainer(image), (db, sp) => new MariaDbTestProvider(db, sp));
         AddDocker("SQL Server", 25, image => new SqlServerTestContainer(image), (db, sp) => new SqlServerTestProvider(db, sp));

@@ -468,6 +468,60 @@ public class SqlDialectEdgeCaseTests
     }
 
     // =========================================================================
+    // Architecture-cleanup characterization: SqlDialect.TryGetProviderErrorCode/
+    // TryGetProviderSqlState are a weaker duplicate of
+    // DbExceptionTranslationSupport.TryGetErrorCode/TryGetSqlState — they lack the
+    // "Errors" collection reflection fallback that exists specifically for provider
+    // exceptions (e.g. AdoNetCore.AseClient's AseException for Sybase) that don't
+    // derive from DbException at all and expose error info only via a public
+    // "Errors" collection. These two tests characterize today's gap: they assert the
+    // value DbExceptionTranslationSupport already finds, run against SqlDialect's
+    // weaker helpers, and are expected to be RED until SqlDialect delegates to
+    // DbExceptionTranslationSupport instead of maintaining its own subset logic.
+    // =========================================================================
+
+    private sealed class ErrorsCollectionRecord
+    {
+        public int MessageNumber { get; }
+        public string SqlState { get; }
+        public ErrorsCollectionRecord(int messageNumber, string sqlState)
+        {
+            MessageNumber = messageNumber;
+            SqlState = sqlState;
+        }
+    }
+
+    /// <summary>Simulates AdoNetCore.AseClient's AseException shape: not a DbException,
+    /// no top-level Number/SqlState property, error info only in an "Errors" collection.</summary>
+    private sealed class ErrorsCollectionOnlyException : Exception
+    {
+        public ErrorsCollectionRecord[] Errors { get; }
+        public ErrorsCollectionOnlyException(int messageNumber, string sqlState, string message)
+            : base(message)
+        {
+            Errors = new[] { new ErrorsCollectionRecord(messageNumber, sqlState) };
+        }
+    }
+
+    [Fact]
+    public void TryGetProviderErrorCode_ExceptionWithOnlyErrorsCollection_FallsBackAndReturnsCode()
+    {
+        var method = typeof(SqlDialect).GetMethod("TryGetProviderErrorCode", NonPublicStatic)!;
+        var ex = new ErrorsCollectionOnlyException(2601, "23000", "duplicate key");
+        var result = (int?)method.Invoke(null, new object[] { ex });
+        Assert.Equal(2601, result);
+    }
+
+    [Fact]
+    public void TryGetProviderSqlState_ExceptionWithOnlyErrorsCollection_FallsBackAndReturnsState()
+    {
+        var method = typeof(SqlDialect).GetMethod("TryGetProviderSqlState", NonPublicStatic)!;
+        var ex = new ErrorsCollectionOnlyException(2601, "23000", "duplicate key");
+        var result = (string?)method.Invoke(null, new object[] { ex });
+        Assert.Equal("23000", result);
+    }
+
+    // =========================================================================
     // GetReadOnlyConnectionString with empty input (line 1308)
     // =========================================================================
 

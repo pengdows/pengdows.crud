@@ -78,6 +78,59 @@ internal class FirebirdDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
 
+    // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"
+    public override bool IsUniqueViolation(DbException ex) =>
+        ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
+
+    // IsForeignKeyViolation/IsCheckConstraintViolation are NOT overridden here — Firebird's real
+    // messages ("violation of FOREIGN KEY constraint...", "check constraint failed") already
+    // match the base class's generic message-based default.
+
+    // Firebird: "validation error for column X, value \"*** null ***\""
+    public override bool IsNotNullViolation(DbException ex) =>
+        ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
+
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" RETURNING {idColumnWrapped}";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        // Firebird cannot distinguish a true lock-cycle deadlock from an optimistic update
+        // conflict — confirmed against a live container, both scenarios produce the identical
+        // SQLSTATE 40001 / "update conflicts with concurrent update" signature. Classified as
+        // SerializationFailure here, matching the same ambiguous-40001 precedent used for Db2.
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        // Message fallback for drivers that do not populate SqlState
+        if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     // Deliberately does NOT override CoerceConnectionMode, so Best resolves to Standard here —
     // same as any other full server database (base SqlDialect.CoerceConnectionMode). This is a
     // considered choice, not an oversight: Firebird's default SuperServer RDB$LINGER=0 does cause a

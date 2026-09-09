@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -23,8 +25,9 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var message = exception.Message;
@@ -69,78 +72,45 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
                 database, exception, errorCode: errorCode);
         }
 
-        // SQLSTATE-first: DuckDB uses standard ANSI SQL class-23 codes (same as PostgreSQL)
-        if (!string.IsNullOrWhiteSpace(sqlState))
+        // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection
+        if (sqlState == "25006")
         {
-            if (sqlState == "23505")
+            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
+        }
+
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —
+        // see IDbExceptionTranslator.Translate's doc comment. DuckDbDialect's overrides check the
+        // identical SQLSTATE-first-then-message-pattern signals this translator used to check
+        // directly, so this is a behavior-preserving delegation, not a narrowing.
+        if (exception is DbException dbEx)
+        {
+            if (dialect.IsUniqueViolation(dbEx))
             {
                 return new UniqueConstraintViolationException(
                     $"{operationKind} violated a unique constraint on {database}: {message}",
                     database, exception, errorCode: errorCode);
             }
 
-            if (sqlState == "23503")
+            if (dialect.IsForeignKeyViolation(dbEx))
             {
                 return new ForeignKeyViolationException(
                     $"{operationKind} violated a foreign key constraint on {database}: {message}",
                     database, exception, errorCode: errorCode);
             }
 
-            if (sqlState == "23502")
+            if (dialect.IsNotNullViolation(dbEx))
             {
                 return new NotNullViolationException(
                     $"{operationKind} violated a not-null constraint on {database}: {message}",
                     database, exception, errorCode: errorCode);
             }
 
-            if (sqlState == "23514")
+            if (dialect.IsCheckConstraintViolation(dbEx))
             {
                 return new CheckConstraintViolationException(
                     $"{operationKind} violated a check constraint on {database}: {message}",
                     database, exception, errorCode: errorCode);
             }
-
-            // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection
-            if (sqlState == "25006")
-            {
-                return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
-            }
-        }
-
-        // Message-based fallback for cases where the driver does not populate SqlState.
-        // DuckDB constraint error messages follow the pattern:
-        //   "Constraint Error: Duplicate key 'x' violates unique constraint 'name'"
-        //   "Constraint Error: NOT NULL constraint failed: table.column"
-        //   "Constraint Error: CHECK constraint failed: constraint_name"
-        //   "Constraint Error: Violates foreign key constraint ..."
-        if (message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase))
-        {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
-
-        if (message.Contains("foreign key", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
-
-        if (message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase))
-        {
-            return new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
-
-        if (message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
-        {
-            return new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
         }
 
         // DuckDB read-only access mode violation (message-based fallback when SqlState is absent).

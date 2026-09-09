@@ -82,7 +82,11 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
 
         var configs = orchestrator.GetTestConfigurations();
 
-        Assert.Equal(3, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
+        // PostgreSQL's matrix has grown to 6 entries (16.4/15.0/9.5-alpine plus the Citus/
+        // TimescaleDB/Fujitsu Enterprise Postgres wire-compatible forks — see
+        // ParallelTestOrchestrator.cs's TestbedImageMatrix.PostgreSQL entry) since this assertion
+        // was first written for 3 — stale, not a real regression.
+        Assert.Equal(6, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
         Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "Db2"));
         Assert.All(configs.Where(c => c.DatabaseProvider == "PostgreSQL"), c =>
         {
@@ -120,7 +124,8 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
             "PostgreSQL"
         });
 
-        Assert.Equal(3, configs.Count);
+        // See GetTestConfigurations_HasTwoVersionsForDockerEngines's comment — 6, not 3, is current.
+        Assert.Equal(6, configs.Count);
         Assert.All(configs, c => Assert.Equal("PostgreSQL", c.DatabaseProvider));
     }
 

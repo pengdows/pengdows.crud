@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -9,6 +12,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class OracleTranslatorTests
 {
     private readonly OracleExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // ── Unique constraint ─────────────────────────────────────────────────────
 
@@ -17,7 +22,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(1, "ORA-00001: unique constraint (SYSTEM.SYS_C008590) violated");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Oracle, result.Database);
@@ -31,7 +36,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(1400, "ORA-01400: cannot insert NULL into (\"SYSTEM\".\"TEST_TABLE\".\"NAME\")");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
         Assert.Equal(SupportedDatabase.Oracle, result.Database);
@@ -45,7 +50,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(2291, "ORA-02291: integrity constraint violated - parent key not found");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
         Assert.Equal(SupportedDatabase.Oracle, result.Database);
@@ -57,7 +62,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(2292, "ORA-02292: integrity constraint violated - child record found");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Delete);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Delete);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -69,7 +74,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(2290, "ORA-02290: check constraint (SYSTEM.CHK_VALUE_POSITIVE) violated");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Oracle, result.Database);
@@ -83,7 +88,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(60, "ORA-00060: deadlock detected while waiting for resource");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
         Assert.True(result.IsTransient);
@@ -96,7 +101,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(8177, "ORA-08177: can't serialize access for this transaction");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
         Assert.True(result.IsTransient);
@@ -109,7 +114,7 @@ public class OracleTranslatorTests
     {
         var raw = new TimeoutException("query timed out");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
         Assert.True(result.IsTransient);
@@ -122,7 +127,7 @@ public class OracleTranslatorTests
     {
         var raw = new NumberedDbException(4031, "ORA-04031: unable to allocate shared memory");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
@@ -137,7 +142,7 @@ public class OracleTranslatorTests
         // contains "timeout" must not be misclassified as CommandTimeoutException.
         var raw = new NumberedDbException(1, "ORA-00001: unique constraint (SYS.UK_JOBS) violated; row value was 'timeout'");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -153,7 +158,7 @@ public class OracleTranslatorTests
         var raw = new NumberedDbException(50201,
             "ORA-50201: Oracle Communication: Failed to connect to server or failed to parse connect string");
 
-        var result = _translator.Translate(SupportedDatabase.Oracle, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
     }

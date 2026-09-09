@@ -259,7 +259,7 @@ public class TransactionIsolationAndContextModeEdgeCaseTests
         public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotSupportedException();
         public void ChangeDatabase(string databaseName) { }
         public void Close() { }
-        public IDbCommand CreateCommand() => new ScalarCommand(string.Empty);
+        public IDbCommand CreateCommand() => new ScalarCommand(null);
         public void Open() { }
         public void Dispose() { }
     }
@@ -286,7 +286,7 @@ public class TransactionIsolationAndContextModeEdgeCaseTests
         public override void Close() { }
         public override void Open() { }
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) => throw new NotSupportedException();
-        protected override DbCommand CreateDbCommand() => new ScalarCommand(string.Empty);
+        protected override DbCommand CreateDbCommand() => new ScalarCommand(null);
 
         public override DataTable GetSchema(string collectionName)
         {

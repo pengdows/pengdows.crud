@@ -123,6 +123,30 @@ internal static class DatabaseSchemaHelper
                 return;
             }
 
+            // Spanner's PostgreSQL interface refuses to drop a table that still has a
+            // secondary (non-PK) index on it — verified live: "Cannot drop table
+            // merge_records with indices: ux_merge_records_record_key." Real PostgreSQL drops
+            // dependent indices automatically; Spanner requires them dropped first. The message
+            // lists the exact index name(s), so drop each one and retry rather than hardcoding
+            // any particular table/index pair here.
+            if (context.Product == SupportedDatabase.Spanner && TryGetSpannerBlockingIndices(ex.Message) is { Count: > 0 } indices)
+            {
+                foreach (var index in indices)
+                {
+                    await using var dropIndex = context.CreateSqlContainer($"DROP INDEX {context.WrapObjectName(index)}");
+                    await dropIndex.ExecuteNonQueryAsync();
+                }
+
+                if (traceEnabled)
+                {
+                    IntegrationTraceLog.Write(context.Product,
+                        $"DROP fallback-drop-indices table={tableName} indices={string.Join(",", indices)} elapsedMs={sw!.ElapsedMilliseconds}");
+                }
+
+                await TryDropTableAsync(context, tableName);
+                return;
+            }
+
             if (IsTableMissing(ex.Message))
             {
                 if (traceEnabled)
@@ -192,6 +216,37 @@ internal static class DatabaseSchemaHelper
                || text.Contains("object table")
                || text.Contains("metadata update")
                || text.Contains("table is in use");
+    }
+
+    // Parses Spanner's "Cannot drop table <name> with indices: <idx1>, <idx2>" message shape to
+    // recover the exact index name(s) that need dropping first. Returns null (not empty) when the
+    // message doesn't match at all, so the caller can distinguish "not this error" from "matched,
+    // but somehow zero names" (which would be a parsing bug worth investigating rather than
+    // silently no-op'ing a retry loop).
+    private static List<string>? TryGetSpannerBlockingIndices(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+        {
+            return null;
+        }
+
+        const string marker = "with indices:";
+        var markerIndex = message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return null;
+        }
+
+        var tail = message[(markerIndex + marker.Length)..];
+        var end = tail.IndexOfAny(['.', '\n', '\r']);
+        if (end >= 0)
+        {
+            tail = tail[..end];
+        }
+
+        return tail.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(name => name.Length > 0)
+            .ToList();
     }
 
     private static async Task TryDeleteTableAsync(IDatabaseContext context, string tableName)

@@ -15,6 +15,86 @@ internal static class IntegrationObjectNameHelper
             parts.Select(context.WrapObjectName));
     }
 
+    // Consolidated from previously independent, copy-pasted private helpers in
+    // Core/AuditFieldTests.cs, Core/CompositeKeyTests.cs, Core/MergeConflictTests.cs, and
+    // Core/VersionedUpsertConflictTests.cs — see CLAUDE.md's "Adding a New Database" checklist
+    // item 19. A new database's column-type quirk only needs fixing here now, not independently
+    // rediscovered in every test file that builds its own table.
+
+    public static string BigIntType(SupportedDatabase provider) => provider switch
+    {
+        SupportedDatabase.Sqlite => "INTEGER",
+        SupportedDatabase.Oracle => "NUMBER(19)",
+        _ => "BIGINT"
+    };
+
+    public static string IntType(SupportedDatabase provider) => provider switch
+    {
+        SupportedDatabase.Sqlite => "INTEGER",
+        SupportedDatabase.Firebird => "INTEGER",
+        _ => "INT"
+    };
+
+    public static string StringType(SupportedDatabase provider) => provider switch
+    {
+        SupportedDatabase.Sqlite => "TEXT",
+        SupportedDatabase.SqlServer => "NVARCHAR(255)",
+        SupportedDatabase.Oracle => "VARCHAR2(255)",
+        SupportedDatabase.Firebird => "VARCHAR(255)",
+        _ => "VARCHAR(255)"
+    };
+
+    public static string DecimalType(SupportedDatabase provider) => provider switch
+    {
+        SupportedDatabase.Sqlite => "NUMERIC(18,2)",
+        // Spanner's PostgreSQL interface rejects a precision/scale modifier on NUMERIC/DECIMAL
+        // outright — verified live: "P0001: Type modifier is not supported for type <numeric>."
+        // Spanner's NUMERIC is a fixed-precision type; declare it bare, with no modifier.
+        SupportedDatabase.Spanner => "NUMERIC",
+        _ => "DECIMAL(18,2)"
+    };
+
+    public static string DateTimeType(SupportedDatabase provider) => provider switch
+    {
+        // SqliteDialect.CreateDbParameter always stores DateTime values as ISO-8601 text
+        // (DbType.String, "o" format), so TEXT is the technically correct declared affinity —
+        // not DATETIME, which one of the four source helpers this was consolidated from used
+        // inconsistently (harmless only because SQLite's NUMERIC affinity for "DATETIME" happens
+        // to leave a non-numeric-looking ISO-8601 string stored as text anyway).
+        SupportedDatabase.Sqlite => "TEXT",
+        SupportedDatabase.SqlServer => "DATETIME2",
+        SupportedDatabase.MySql => "DATETIME",
+        SupportedDatabase.MariaDb => "DATETIME",
+        // Spanner's PostgreSQL interface has no plain TIMESTAMP type at all (verified live:
+        // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner always
+        // stores instants in UTC internally.
+        SupportedDatabase.Spanner => "TIMESTAMPTZ",
+        _ => "TIMESTAMP"
+    };
+
+    // Spanner's PostgreSQL interface rejects an inline table-level UNIQUE constraint outright —
+    // verified live: "P0001: <UNIQUE> constraint is not supported, create a unique index
+    // instead." Every other provider gets the normal inline clause; for Spanner, use this (empty)
+    // plus SpannerUniqueIndexSql's separate CREATE UNIQUE INDEX statement as a follow-up.
+    public static string InlineUniqueConstraintClause(SupportedDatabase provider, params string[] wrappedColumns) =>
+        provider == SupportedDatabase.Spanner
+            ? string.Empty
+            : $",\n    UNIQUE ({string.Join(", ", wrappedColumns)})";
+
+    // Pairs with InlineUniqueConstraintClause: null for every provider except Spanner, which
+    // needs this run as a separate statement after CREATE TABLE (see DatabaseSchemaHelper's
+    // Spanner-specific "with indices" drop fallback for the matching cleanup-side handling).
+    public static string? SpannerUniqueIndexSql(SupportedDatabase provider, IDatabaseContext context,
+        string qualifiedTable, string indexName, params string[] wrappedColumns)
+    {
+        if (provider != SupportedDatabase.Spanner)
+        {
+            return null;
+        }
+
+        return $"CREATE UNIQUE INDEX {context.WrapObjectName(indexName)} ON {qualifiedTable} ({string.Join(", ", wrappedColumns)})";
+    }
+
     private static List<string> GetNamespaceParts(IDatabaseContext context)
     {
         if (!context.Dialect.SupportsNamespaces)
@@ -26,7 +106,7 @@ internal static class IntegrationObjectNameHelper
         return context.Product switch
         {
             SupportedDatabase.Snowflake => GetSnowflakeParts(builder),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 => [GetPostgreSqlSchema(builder) ?? "public"],
             SupportedDatabase.SqlServer => [GetValue(builder, "Current Schema", "Schema") ?? "dbo"],
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb

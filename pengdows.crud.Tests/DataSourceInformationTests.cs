@@ -128,6 +128,16 @@ public static class DataSourceTestData
             const string pgSettingsProbe =
                 "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
             scalars[pgSettingsProbe] = DBNull.Value;
+
+            // Same false-positive shape as the YugabyteDB probe above, for
+            // DatabaseDetectionService's Spanner-vs-real-PostgreSQL discriminator: without this
+            // entry the fakeDb fallback scalar answers "SHOW SPANNER.OPTIMIZER_VERSION" with a
+            // non-null string and DetectFlavorWithDetailAsync misreads plain PostgreSQL/Aurora as
+            // Spanner. Verified against a real Spanner Omni + PGAdapter instance that ordinary
+            // PostgreSQL has no such setting (real Spanner returns a string; real PostgreSQL
+            // would error, which the fake models as DBNull rather than a thrown exception).
+            const string spannerOptimizerVersionProbe = "SHOW SPANNER.OPTIMIZER_VERSION";
+            scalars[spannerOptimizerVersionProbe] = DBNull.Value;
         }
 
         return (schema, scalars);
@@ -189,12 +199,16 @@ public class DataSourceInformationTests
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
         // Assert: insert-on-conflict support
+        // Spanner included: verified against a real Spanner Omni + PGAdapter instance —
+        // `INSERT ... ON CONFLICT (id) DO UPDATE`/`DO NOTHING` both execute correctly against
+        // Spanner's PostgreSQL interface, unlike MERGE (see SpannerDialect.SupportsMerge).
         var canConflict = new[]
         {
             SupportedDatabase.PostgreSql,
             SupportedDatabase.AuroraPostgreSql,
             SupportedDatabase.CockroachDb,
             SupportedDatabase.YugabyteDb,
+            SupportedDatabase.Spanner,
             SupportedDatabase.Sqlite,
             SupportedDatabase.DuckDB
         }.Contains(db);
@@ -260,7 +274,8 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
                 or SupportedDatabase.Snowflake or SupportedDatabase.SingleStore => 65535,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
-                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => 100,
+                or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                or SupportedDatabase.Spanner => 100,
             SupportedDatabase.Oracle => 1024,
             SupportedDatabase.Sqlite => 0,
             SupportedDatabase.Firebird => 1499,

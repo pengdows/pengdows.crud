@@ -737,6 +737,15 @@ public class ConstraintViolationTests : DatabaseTestBase
                     name VARCHAR(255) NOT NULL,
                     FOREIGN KEY (test_table_id) REFERENCES test_table(id)
                 )",
+            // Spanner's PostgreSQL interface has no SERIAL/sequence support the same way real
+            // Postgres does — plain BIGINT PRIMARY KEY, matching TestTableCreator.CreateSpannerTableSql().
+            SupportedDatabase.Spanner => @"
+                CREATE TABLE IF NOT EXISTS test_related (
+                    id BIGINT PRIMARY KEY,
+                    test_table_id BIGINT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+                )",
             SupportedDatabase.SqlServer => @"
                 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[test_related]') AND type in (N'U'))
                 CREATE TABLE [dbo].[test_related] (
@@ -821,6 +830,13 @@ public class ConstraintViolationTests : DatabaseTestBase
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
             SupportedDatabase.Db2 =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
+            // Spanner rejects a table-level UNIQUE constraint via ALTER TABLE the same way it
+            // rejects one inline in CREATE TABLE ("P0001: <UNIQUE> constraint is not supported,
+            // create a unique index instead.") — see IntegrationObjectNameHelper.SpannerUniqueIndexSql
+            // for the same fix applied elsewhere. This was previously missing entirely (fell to the
+            // `_ => null` default), meaning no unique constraint was ever added for Spanner at all —
+            // the real root cause of the Unique-classification gap tracked as CLAUDE.md item 21.
+            SupportedDatabase.Spanner => "CREATE UNIQUE INDEX uq_name ON test_table (name)",
             _ => null
         };
 
@@ -856,6 +872,12 @@ public class ConstraintViolationTests : DatabaseTestBase
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
             SupportedDatabase.Db2 =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
+            // Unlike UNIQUE (see AddUniqueConstraintAsync above), Spanner's PostgreSQL interface
+            // has no documented restriction on table-level CHECK constraints via ALTER TABLE —
+            // this was simply missing (fell to the `_ => null` default), never verified either
+            // way. Uses the same syntax as PostgreSql/CockroachDb/YugabyteDb; verify live.
+            SupportedDatabase.Spanner =>
+                "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             _ => null
         };
 

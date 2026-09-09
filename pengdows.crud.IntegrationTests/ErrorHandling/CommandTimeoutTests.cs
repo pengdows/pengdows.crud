@@ -63,8 +63,10 @@ public class CommandTimeoutTests
 
         Assert.NotNull(ex);
         var translator = new pengdows.crud.exceptions.translators.PostgresExceptionTranslator();
-        var translated = translator.Translate(
-            pengdows.crud.enums.SupportedDatabase.PostgreSql, ex!, pengdows.crud.enums.DbOperationKind.Query);
+        var dialect = pengdows.crud.dialects.SqlDialectFactory.CreateDialectForType(
+            pengdows.crud.enums.SupportedDatabase.PostgreSql, Npgsql.NpgsqlFactory.Instance,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var translated = translator.Translate(dialect, ex!, pengdows.crud.enums.DbOperationKind.Query);
         Assert.IsType<pengdows.crud.exceptions.CommandTimeoutException>(translated);
     }
 
@@ -91,8 +93,10 @@ public class CommandTimeoutTests
 
         Assert.NotNull(ex);
         var translator = new pengdows.crud.exceptions.translators.SqlServerExceptionTranslator();
-        var translated = translator.Translate(
-            pengdows.crud.enums.SupportedDatabase.SqlServer, ex!, pengdows.crud.enums.DbOperationKind.Query);
+        var dialect = pengdows.crud.dialects.SqlDialectFactory.CreateDialectForType(
+            pengdows.crud.enums.SupportedDatabase.SqlServer, Microsoft.Data.SqlClient.SqlClientFactory.Instance,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var translated = translator.Translate(dialect, ex!, pengdows.crud.enums.DbOperationKind.Query);
         Assert.IsType<pengdows.crud.exceptions.CommandTimeoutException>(translated);
     }
 

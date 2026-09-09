@@ -69,6 +69,39 @@ public class SqlDialectFactoryAsyncDetectionTests
     }
 
     /// <summary>
+    /// Verified live against a real Spanner Omni + PGAdapter instance: when
+    /// <see cref="SqlDialect.DetectDatabaseInfoAsync(ITrackedConnection)"/> re-derives
+    /// <c>DatabaseType</c> from scratch (the fallback exercised by the Aurora MySQL test above),
+    /// it can non-deterministically disagree with a detection pass that already correctly picked
+    /// <see cref="SpannerDialect"/> as the dialect subclass — silently reporting the resulting
+    /// <see cref="IDatabaseProductInfo.DatabaseType"/> (and thus <c>IDatabaseContext.Product</c>)
+    /// back as plain PostgreSql. <see cref="SqlDialectFactory.CreateDialectAsync"/>/<c>CreateDialect</c>
+    /// now set <see cref="SqlDialect.PreDeterminedDatabaseType"/> immediately after their own
+    /// detection pass specifically to prevent this: this fixture leaves the SHOW
+    /// SPANNER.OPTIMIZER_VERSION probe entirely unstubbed, so an unguarded second detection pass
+    /// here would misclassify as PostgreSql exactly like the live bug did — proving the hint, not
+    /// a lucky repeat probe result, is what keeps this correct.
+    /// </summary>
+    [Fact]
+    public async Task DetectDatabaseInfoAsync_WithPreDeterminedType_DoesNotRederiveAndDisagree()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var conn = (fakeDbConnection)factory.CreateConnection();
+        conn.ConnectionString = "EmulatedProduct=PostgreSql";
+        conn.SetScalarResultForCommand("SELECT version()", "PostgreSQL 14.1");
+
+        await conn.OpenAsync();
+        var tracked = new TrackedConnection(conn);
+
+        var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Spanner, factory, NullLogger<SqlDialect>.Instance);
+        ((SqlDialect)dialect).PreDeterminedDatabaseType = SupportedDatabase.Spanner;
+
+        var info = await dialect.DetectDatabaseInfoAsync(tracked);
+
+        Assert.Equal(SupportedDatabase.Spanner, info.DatabaseType);
+    }
+
+    /// <summary>
     /// Locks down the other half of the contract: the fully synchronous
     /// <see cref="SqlDialectFactory.CreateDialect(ITrackedConnection, DbProviderFactory, ILoggerFactory)"/>
     /// entry point (used by <c>DatabaseContext</c>'s sync constructor via each

@@ -12,6 +12,7 @@ internal static class IntegrationTestConfiguration
     {
         SupportedDatabase.Sqlite,
         SupportedDatabase.PostgreSql,
+        SupportedDatabase.Spanner,
         SupportedDatabase.SqlServer,
         SupportedDatabase.MySql,
         SupportedDatabase.MariaDb,

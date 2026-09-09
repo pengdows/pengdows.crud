@@ -343,6 +343,49 @@ internal class SqliteDialect : SqlDialect
                dbEx.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
     }
 
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        ex.ErrorCode == 787 ||
+        ex.Message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        ex.ErrorCode == 1299 ||
+        ex.Message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        ex.ErrorCode == 275 ||
+        ex.Message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    // last_insert_rowid() is per-connection safe.
+    public override bool HasSessionScopedLastIdFunction() => true;
+
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" RETURNING {idColumnWrapped}";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+
+        // SQLITE_READONLY = 8: write attempted on a read-only connection.
+        // SqliteExceptionTranslator already classifies this as ReadOnlyViolation.
+        if (errorCode == 8)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        if (errorCode == 19 ||
+            errorCode == 1555 ||
+            errorCode == 2067 ||
+            (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
+
     private static bool IsNumericDbType(DbType type)
     {
         return type is DbType.Byte or DbType.SByte

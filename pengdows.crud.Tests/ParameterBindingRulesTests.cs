@@ -16,6 +16,36 @@ public class ParameterBindingRulesTests
         Value = 1
     }
 
+    // NpgsqlDbType-shaped stub: ProviderParameterFactory's Npgsql optimizations gate on the
+    // parameter's runtime type name starting with "Npgsql" (see ProviderParameterFactoryTests'
+    // identically-shaped NpgsqlParameterStub) before touching this property via reflection.
+    private sealed class NpgsqlParameterStub : fakeDbParameter
+    {
+        public int NpgsqlDbType { get; set; }
+    }
+
+    [Fact]
+    public void ApplyBindingRules_Spanner_DateTime_UsesNpgsqlTimestampTz()
+    {
+        // Cloud Spanner's PostgreSQL interface has no plain "timestamp" (without time zone) type
+        // at all — verified live against a real Spanner Omni + PGAdapter instance: any parameter
+        // bound with Npgsql's default inferred type for DbType.DateTime (NpgsqlDbType.Timestamp =
+        // 21) is rejected outright with "P0001: Type <timestamp> is not supported.", regardless of
+        // the target column's own declared type (even a TIMESTAMPTZ column). Spanner always stores
+        // instants in UTC, so every DateTime parameter must be bound as NpgsqlDbType.TimestampTz
+        // (26) explicitly for this provider — real PostgreSQL has no such restriction (implicit
+        // assignment casts make DbType.DateTime work fine there), so this is Spanner-specific.
+        var parameter = new NpgsqlParameterStub();
+        var value = new DateTime(2024, 1, 1, 8, 30, 0, DateTimeKind.Utc);
+
+        var applied =
+            ParameterBindingRules.ApplyBindingRules(parameter, typeof(DateTime), value, SupportedDatabase.Spanner);
+
+        Assert.True(applied);
+        Assert.Equal(value, parameter.Value);
+        Assert.Equal(26, parameter.NpgsqlDbType);
+    }
+
     [Fact]
     public void ApplyBindingRules_DateTime_SetsDbType()
     {

@@ -26,8 +26,14 @@ public class CompositeKeyTests : DatabaseTestBase
         context.RegisterEntity<OrderItem>();
         context.RegisterEntity<UserRole>();
 
-        await RecreateTableAsync(context, "order_items", BuildOrderItemsTableSql(provider, context));
-        await RecreateTableAsync(context, "user_roles", BuildUserRolesTableSql(provider, context));
+        await RecreateTableAsync(context, "order_items", BuildOrderItemsTableSql(provider, context),
+            IntegrationObjectNameHelper.SpannerUniqueIndexSql(provider, context,
+                IntegrationObjectNameHelper.Table(context, "order_items"), "ux_order_items_order_product",
+                context.WrapObjectName("order_id"), context.WrapObjectName("product_id")));
+        await RecreateTableAsync(context, "user_roles", BuildUserRolesTableSql(provider, context),
+            IntegrationObjectNameHelper.SpannerUniqueIndexSql(provider, context,
+                IntegrationObjectNameHelper.Table(context, "user_roles"), "ux_user_roles_tenant_user_role",
+                context.WrapObjectName("tenant_id"), context.WrapObjectName("user_id"), context.WrapObjectName("role_id")));
     }
 
     #region Two-Column Composite Key Tests
@@ -347,11 +353,17 @@ public class CompositeKeyTests : DatabaseTestBase
         };
     }
 
-    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
+    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql, string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
         await using var container = context.CreateSqlContainer(createSql);
         await container.ExecuteNonQueryAsync();
+
+        if (extraSql is not null)
+        {
+            await using var extraContainer = context.CreateSqlContainer(extraSql);
+            await extraContainer.ExecuteNonQueryAsync();
+        }
     }
 
     private static string BuildOrderItemsTableSql(SupportedDatabase provider, IDatabaseContext context)
@@ -363,9 +375,9 @@ public class CompositeKeyTests : DatabaseTestBase
         var quantityColumn = context.WrapObjectName("quantity");
         var unitPriceColumn = context.WrapObjectName("unit_price");
 
-        var idType = GetBigIntType(provider);
-        var integerType = GetIntType(provider);
-        var decimalType = GetDecimalType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var integerType = IntegrationObjectNameHelper.IntType(provider);
+        var decimalType = IntegrationObjectNameHelper.DecimalType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -373,8 +385,7 @@ CREATE TABLE {table} (
     {orderIdColumn} {integerType} NOT NULL,
     {productIdColumn} {integerType} NOT NULL,
     {quantityColumn} {integerType} NOT NULL,
-    {unitPriceColumn} {decimalType} NOT NULL,
-    UNIQUE ({orderIdColumn}, {productIdColumn})
+    {unitPriceColumn} {decimalType} NOT NULL{IntegrationObjectNameHelper.InlineUniqueConstraintClause(provider, orderIdColumn, productIdColumn)}
 )";
     }
 
@@ -388,10 +399,10 @@ CREATE TABLE {table} (
         var grantedAtColumn = context.WrapObjectName("granted_at");
         var grantedByColumn = context.WrapObjectName("granted_by");
 
-        var idType = GetBigIntType(provider);
-        var integerType = GetIntType(provider);
-        var dateTimeType = GetDateTimeType(provider);
-        var stringType = GetStringType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var integerType = IntegrationObjectNameHelper.IntType(provider);
+        var dateTimeType = IntegrationObjectNameHelper.DateTimeType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -400,62 +411,8 @@ CREATE TABLE {table} (
     {userColumn} {integerType} NOT NULL,
     {roleColumn} {integerType} NOT NULL,
     {grantedAtColumn} {dateTimeType} NOT NULL,
-    {grantedByColumn} {stringType},
-    UNIQUE ({tenantColumn}, {userColumn}, {roleColumn})
+    {grantedByColumn} {stringType}{IntegrationObjectNameHelper.InlineUniqueConstraintClause(provider, tenantColumn, userColumn, roleColumn)}
 )";
-    }
-
-    private static string GetIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Firebird => "INTEGER",
-            _ => "INT"
-        };
-    }
-
-    private static string GetDecimalType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "NUMERIC(18,2)",
-            _ => "DECIMAL(18,2)"
-        };
-    }
-
-    private static string GetBigIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            _ => "BIGINT"
-        };
-    }
-
-    private static string GetStringType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "NVARCHAR(255)",
-            SupportedDatabase.Oracle => "VARCHAR2(255)",
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
-    }
-
-    private static string GetDateTimeType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "DATETIME2",
-            SupportedDatabase.MySql => "DATETIME",
-            SupportedDatabase.MariaDb => "DATETIME",
-            _ => "TIMESTAMP"
-        };
     }
 
     private static async Task<int> DeleteOrderItemAsync(IDatabaseContext context, int orderId, int productId)

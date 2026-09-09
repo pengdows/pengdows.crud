@@ -421,7 +421,7 @@ CREATE TABLE {tableName} (
     {
         return product switch
         {
-            SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "TIMESTAMP WITH TIME ZONE",
             // Db2 has no DATETIME type — TIMESTAMP is the equivalent.
             SupportedDatabase.Db2 => "TIMESTAMP",
             _ => "DATETIME"
@@ -454,7 +454,7 @@ CREATE TABLE {tableName} (
     {
         return product switch
         {
-            SupportedDatabase.PostgreSql => "BOOLEAN",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "BOOLEAN",
             SupportedDatabase.CockroachDb => "BOOLEAN",
             SupportedDatabase.YugabyteDb => "BOOLEAN",
             SupportedDatabase.Sqlite => "INTEGER",
@@ -486,7 +486,7 @@ CREATE TABLE {tableName} (
         {
             SupportedDatabase.SqlServer => "VARBINARY(64)",
             SupportedDatabase.Sybase => "VARBINARY(64)",
-            SupportedDatabase.PostgreSql => "BYTEA",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
             SupportedDatabase.Oracle => "RAW(64)",
@@ -535,7 +535,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => true,
-            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => true,
             SupportedDatabase.CockroachDb => true,
             SupportedDatabase.YugabyteDb => true,
             SupportedDatabase.DuckDB => true,
@@ -560,7 +560,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => true,
-            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => true,
             SupportedDatabase.CockroachDb => true,
             SupportedDatabase.YugabyteDb => true,
             SupportedDatabase.DuckDB => true,
@@ -600,7 +600,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "UNIQUEIDENTIFIER",
-            SupportedDatabase.PostgreSql => "UUID",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "UUID",
             SupportedDatabase.CockroachDb => "UUID",
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
@@ -623,7 +623,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "DATETIMEOFFSET(7)",
-            SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.CockroachDb => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.YugabyteDb => "TIMESTAMP WITH TIME ZONE",
             SupportedDatabase.DuckDB => "TIMESTAMP WITH TIME ZONE",
@@ -639,7 +639,7 @@ CREATE TABLE {tableName} (
     {
         return product switch
         {
-            SupportedDatabase.PostgreSql => "@",
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "@",
             SupportedDatabase.CockroachDb => "@",
             SupportedDatabase.YugabyteDb => "@",
             SupportedDatabase.Snowflake => ":",
@@ -653,7 +653,7 @@ CREATE TABLE {tableName} (
     {
         return product switch
         {
-            SupportedDatabase.PostgreSql => true,
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => true,
             SupportedDatabase.CockroachDb => true,
             SupportedDatabase.YugabyteDb => true,
             SupportedDatabase.DuckDB => true,

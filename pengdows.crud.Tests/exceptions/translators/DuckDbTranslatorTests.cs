@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -8,6 +11,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class DuckDbTranslatorTests
 {
     private readonly DuckDbExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // ── SQLSTATE-based detection ──────────────────────────────────────────────
 
@@ -17,7 +22,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException(sqlState, "Constraint Error: Duplicate key 'x' violates unique constraint 'pk'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -27,7 +32,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23503", "Constraint Error: Violates foreign key constraint");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -37,7 +42,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23502", "Constraint Error: NOT NULL constraint failed: jobs.name");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -47,7 +52,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23514", "Constraint Error: CHECK constraint failed: jobs");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -61,7 +66,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -71,7 +76,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("Violates foreign key constraint because key does not exist");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -81,7 +86,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("NOT NULL constraint failed: jobs.name");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -91,7 +96,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("CHECK constraint failed: jobs");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -105,7 +110,7 @@ public class DuckDbTranslatorTests
         // must not be misclassified as CommandTimeoutException when SQLSTATE is present.
         var raw = new SqlStateDbException("23505", "Constraint Error: Duplicate key 'timeout_value' violates unique constraint 'pk'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -116,7 +121,7 @@ public class DuckDbTranslatorTests
         // Same scenario using the message-pattern fallback (no SqlState populated).
         var raw = new SqliteMessageDbException("Duplicate key 'session_timeout' violates unique constraint 'pk_sessions'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -128,7 +133,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("connection timeout waiting for lock");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CommandTimeoutException>(result);
     }
@@ -138,7 +143,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("some unexpected database error");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
@@ -152,7 +157,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("25006", "Cannot execute statement of type 'INSERT' in read-only transaction");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
     }
@@ -167,7 +172,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
     }
@@ -177,7 +182,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("25006", "read-only transaction");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.Equal(false, result.IsTransient);
@@ -190,7 +195,7 @@ public class DuckDbTranslatorTests
         // misclassified as a timeout just because the read-only check comes first.
         var raw = new SqliteMessageDbException("Cannot execute in read-only transaction for session_timeout_user");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.IsNotType<CommandTimeoutException>(result);
@@ -207,7 +212,7 @@ public class DuckDbTranslatorTests
         var raw = new SqliteMessageDbException(
             "DuckDBOpen failed: IO Error: Cannot open file \"/nonexistent_dir/db.duckdb\": No such file or directory");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
     }
@@ -223,7 +228,7 @@ public class DuckDbTranslatorTests
         // update!". Message text is the reliable trigger here, not ErrorType.
         var raw = new SqliteMessageDbException("TransactionContext Error: Conflict on update!");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
     }
@@ -240,7 +245,7 @@ public class DuckDbTranslatorTests
         // retry-appropriate semantics, but previously fell through to the non-transient fallback.
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Delete);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Delete);
 
         Assert.IsType<SerializationConflictException>(result);
         Assert.Equal(true, result.IsTransient);
@@ -270,7 +275,7 @@ public class DuckDbTranslatorTests
             "DuckDBOpen failed: IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
             "See also https://duckdb.org/docs/stable/connect/concurrency");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Query);
 
         Assert.IsType<FileLockContentionException>(result);
         Assert.IsAssignableFrom<ConnectionException>(result); // still catchable as a generic connection failure
