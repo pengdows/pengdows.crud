@@ -35,6 +35,7 @@
     <ItemGroup>
         <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
         <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj"/>
+        <ProjectReference Include="..\..\pengdows.flatfile\pengdows.flatfile\pengdows.flatfile.csproj"/>
     </ItemGroup>
 
 </Project>

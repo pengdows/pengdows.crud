@@ -34,20 +34,47 @@ internal static class IntegrationTestConfiguration
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
         FilterIntegrationOnly(
-            GetEnabledProviders(ShouldIncludeSnowflake),
+            GetEnabledProviders(ShouldIncludeSnowflake, ShouldIncludeFlatFile),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
     public static bool ShouldIncludeSnowflake =>
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
-    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake)
+    /// <summary>
+    /// FlatFile is deliberately excluded from <see cref="BaseProviders"/> (see its own comment)
+    /// but must still be directly testable via <c>INTEGRATION_ONLY=FlatFile</c> - unlike
+    /// <see cref="ShouldIncludeSnowflake"/>'s separate opt-in env var, this reuses
+    /// <c>INTEGRATION_ONLY</c> itself as the opt-in signal, since there is no separate credential
+    /// gate to guard here the way there is for Snowflake.
+    /// </summary>
+    public static bool ShouldIncludeFlatFile =>
+        ComputeShouldIncludeFlatFile(Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
+
+    internal static bool ComputeShouldIncludeFlatFile(string? integrationOnly)
+    {
+        if (string.IsNullOrWhiteSpace(integrationOnly))
+        {
+            return false;
+        }
+
+        return integrationOnly
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(token => string.Equals(token, nameof(SupportedDatabase.FlatFile), StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake, bool includeFlatFile = false)
     {
         var providers = BaseProviders.ToList();
 
         if (includeSnowflake)
         {
             providers.Add(SupportedDatabase.Snowflake);
+        }
+
+        if (includeFlatFile)
+        {
+            providers.Add(SupportedDatabase.FlatFile);
         }
 
         return providers;

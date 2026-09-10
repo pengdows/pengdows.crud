@@ -89,7 +89,8 @@ public class TransientErrorTests : DatabaseTestBase
 
         return provider switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                or SupportedDatabase.Spanner =>
                 new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"), Npgsql.NpgsqlFactory.Instance),
 
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>

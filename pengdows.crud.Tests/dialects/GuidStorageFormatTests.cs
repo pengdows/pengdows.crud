@@ -73,6 +73,24 @@ public class GuidStorageFormatTests
         Assert.Equal(36, param.Size);
     }
 
+    /// <summary>
+    /// pengdows.flatfile's ClrTypeParser has no Guid support at all (verified: Guid is absent
+    /// from its 17 supported CLR types) - so a Guid column must round-trip as a plain string
+    /// (VARCHAR(36)), same as Oracle/Spanner/Db2's approach for the same underlying reason.
+    /// </summary>
+    [Fact]
+    public void FlatFile_Guid_ConvertsToString_HyphenatedFormat()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.FlatFile);
+        var dialect = new FlatFileDialect(factory, NullLoggerFactory.Instance.CreateLogger(nameof(FlatFileDialect)));
+
+        var param = dialect.CreateDbParameter("p", DbType.Guid, TestGuid);
+
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal(TestGuid.ToString("D"), param.Value);
+        Assert.Equal(36, param.Size);
+    }
+
     [Fact]
     public void DuckDb_Guid_ConvertsToString_HyphenatedFormat()
     {

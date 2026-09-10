@@ -799,15 +799,56 @@ public class ConstraintViolationTests : DatabaseTestBase
         var fkColumn = container.WrapObjectName("test_table_id");
         var nameColumn = container.WrapObjectName("name");
 
-        container.Query.Append("INSERT INTO ")
-            .Append(table)
-            .Append(" (")
-            .Append(fkColumn)
-            .Append(", ")
-            .Append(nameColumn)
-            .Append(") VALUES (");
-        container.Query.Append(container.MakeParameterName("fk_id")).Append(", ");
-        container.Query.Append(container.MakeParameterName("name")).Append(")");
+        // Verified live: omitting "id" here relies on auto-generation, which every other provider
+        // has (BIGSERIAL/AUTO_INCREMENT/IDENTITY/sequence) but Spanner's plain
+        // "id BIGINT PRIMARY KEY" does not (see CreateRelatedTableAsync's Spanner branch above).
+        // For Spanner, the resulting NOT-NULL-with-no-default insert doesn't fail fast the way a
+        // real Postgres NOT NULL violation would — PGAdapter hangs until the command timeout
+        // instead, which is what made every FK/constraint test using this helper look like an
+        // unrelated "Spanner is slow to detect constraint violations" issue. Reproduced with a
+        // minimal raw Npgsql insert with no pengdows.crud involved at all, confirming this is a
+        // platform-level gap, not a connection/pooling/prepare-caching issue on our side.
+        //
+        // Supplying an explicit id was first tried unconditionally (matching every other insert
+        // in this file), on the assumption an explicit id is harmless for a
+        // generated-by-default/serial/auto_increment column everywhere. That assumption is wrong
+        // for exactly one provider: SQL Server's IDENTITY, unlike every other engine's "GENERATED
+        // BY DEFAULT"-style semantics (Oracle/Db2/Firebird all use BY DEFAULT, not ALWAYS; MySQL/
+        // MariaDb/TiDb AUTO_INCREMENT and Postgres-family BIGSERIAL never restrict explicit values
+        // at all), unconditionally rejects an explicit value into an identity column unless
+        // IDENTITY_INSERT is turned on for that table — verified live via the exact regression
+        // this caused: "Cannot insert explicit value for identity column in table 'test_related'
+        // when IDENTITY_INSERT is set to OFF." Scope the explicit id to Spanner specifically,
+        // leaving every other provider's own auto-generation working as it always did.
+        if (provider == SupportedDatabase.Spanner)
+        {
+            var idColumn = container.WrapObjectName("id");
+            container.Query.Append("INSERT INTO ")
+                .Append(table)
+                .Append(" (")
+                .Append(idColumn)
+                .Append(", ")
+                .Append(fkColumn)
+                .Append(", ")
+                .Append(nameColumn)
+                .Append(") VALUES (");
+            container.Query.Append(container.MakeParameterName("id")).Append(", ");
+            container.Query.Append(container.MakeParameterName("fk_id")).Append(", ");
+            container.Query.Append(container.MakeParameterName("name")).Append(")");
+            container.AddParameterWithValue("id", DbType.Int64, Interlocked.Increment(ref _nextId));
+        }
+        else
+        {
+            container.Query.Append("INSERT INTO ")
+                .Append(table)
+                .Append(" (")
+                .Append(fkColumn)
+                .Append(", ")
+                .Append(nameColumn)
+                .Append(") VALUES (");
+            container.Query.Append(container.MakeParameterName("fk_id")).Append(", ");
+            container.Query.Append(container.MakeParameterName("name")).Append(")");
+        }
 
         container.AddParameterWithValue("fk_id", DbType.Int64, testTableId);
         container.AddParameterWithValue("name", DbType.String, name);

@@ -182,11 +182,28 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
+    // Confirmed live (was previously an open question — see CLAUDE.md's "Adding a New Database"
+    // checklist item 30): Spanner's INSERT ... ON CONFLICT works when the conflict target is the
+    // primary key (SpannerDialectTests.SupportsInsertOnConflict_IsTrue), but targeting a secondary
+    // unique index — record_key here, not the primary key — fails with a genuine server-side
+    // "P0001: io.grpc.StatusRuntimeException: UNIMPLEMENTED" on the INSERT itself. This is a real,
+    // unimplemented Spanner feature gap, not a client-side or pengdows.crud SQL-generation bug —
+    // there is no workaround from the client side for a server that returns UNIMPLEMENTED.
+    private const string SpannerSkipReason =
+        "Spanner's INSERT ... ON CONFLICT targeting a secondary unique index (not the primary " +
+        "key) is unimplemented server-side (\"UNIMPLEMENTED\" gRPC status, verified live)";
+
     [SkippableFact]
     public Task MergeRecord_UpsertAfterRemoteChange_ProducesCombinedValue()
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (provider == SupportedDatabase.Spanner)
+            {
+                Output.WriteLine($"Skipping merge-conflict test for {provider} ({SpannerSkipReason})");
+                return;
+            }
+
             await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context),
                 BuildMergeRecordUniqueIndexSql(provider, context));
 

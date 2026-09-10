@@ -43,6 +43,7 @@ public class TestTableCreator
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             SupportedDatabase.Db2 => CreateDb2TableSql(),
+            SupportedDatabase.FlatFile => CreateFlatFileTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -114,6 +115,28 @@ public class TestTableCreator
                     {guidCol} TEXT NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
+            // pengdows.flatfile parses only ISO SQL - "TEXT" (vendor syntax) is rejected;
+            // "VARCHAR(n)" is the standard form. No native GUID type - a plain VARCHAR(36) round-
+            // trips it as a string (FlatFileDialect.GuidFormat => GuidStorageFormat.String).
+            // WITH (NULLTOKEN = ...): without it, NULL and '' both write as an empty CSV field for
+            // VARCHAR columns and round-trip indistinguishably (ClrTypeParser.Parse only treats an
+            // empty field as NULL for non-string columns) - an explicit sentinel makes NULL
+            // distinguishable from '' for text_nullable, as ParameterBindingTests.NullSemantics_
+            // EqualityVsIsNull requires.
+            SupportedDatabase.FlatFile => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INT NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} BLOB NOT NULL
+                ) WITH (NULLTOKEN = '<<NULL>>')",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -433,6 +456,26 @@ public class TestTableCreator
 
         await using var container = _context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
+    }
+
+    private string CreateFlatFileTableSql()
+    {
+        // pengdows.flatfile parses only ISO SQL - "TEXT"/"DATETIME" (vendor syntax) are rejected;
+        // "VARCHAR(n)"/"TIMESTAMP" are the standard forms. See
+        // pengdows.flatfile/SQL_STANDARDS_STATUS.md.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value INT NOT NULL,
+            description VARCHAR(1000),
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_by VARCHAR(100),
+            updated_at TIMESTAMP,
+            updated_by VARCHAR(100)
+        )";
     }
 
     private string CreateSqliteTableSql()

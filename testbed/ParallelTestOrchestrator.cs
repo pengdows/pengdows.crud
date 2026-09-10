@@ -5,6 +5,7 @@ using pengdows.crud.infrastructure;
 using testbed.Cockroach;
 using testbed.Db2;
 using testbed.DuckDb;
+using testbed.FlatFile;
 using testbed.Firebird;
 using testbed.mariaDb;
 using testbed.MySQL;
@@ -40,6 +41,7 @@ public class ParallelTestOrchestrator
         ITestContainer? container = provider switch
         {
             SupportedDatabase.Sqlite => new SqliteTestContainer(),
+            SupportedDatabase.FlatFile => new FlatFileTestContainer(),
             SupportedDatabase.PostgreSql => new PostgreSqlTestContainer(),
             SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
             SupportedDatabase.SqlServer => new SqlServerTestContainer(),
@@ -236,6 +238,7 @@ public class ParallelTestOrchestrator
 
         AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new SqliteTestProvider(db, sp), 1);
         AddLocal("DuckDB", new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
+        AddLocal("FlatFile", new FlatFileTestContainer(), (db, sp) => new FlatFileTestProvider(db, sp), 1);
         AddDocker("PostgreSQL", 5, image => image.Contains("fujitsu", StringComparison.OrdinalIgnoreCase)
                 ? new PostgreSqlTestContainer(image, port: 27500, useAdminPasswordEnvVar: true)
                 : new PostgreSqlTestContainer(image),

@@ -424,6 +424,9 @@ CREATE TABLE {tableName} (
             SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "TIMESTAMP WITH TIME ZONE",
             // Db2 has no DATETIME type — TIMESTAMP is the equivalent.
             SupportedDatabase.Db2 => "TIMESTAMP",
+            // pengdows.flatfile parses only ISO SQL - "DATETIME" is rejected as vendor syntax;
+            // "TIMESTAMP" is the standard form (see pengdows.flatfile/SQL_STANDARDS_STATUS.md).
+            SupportedDatabase.FlatFile => "TIMESTAMP",
             _ => "DATETIME"
         };
     }
@@ -656,9 +659,22 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
             SupportedDatabase.Oracle => ":",
+            // pengdows.flatfile supports named parameters via ":name" — the ISO SQL dynamic-SQL
+            // host-variable form, same marker character as Oracle. Verified directly against the
+            // engine's parser/binder (see FlatFileDialect.SupportsNamedParameters/ParameterMarker).
+            SupportedDatabase.FlatFile => ":",
             _ => "@"
         };
     }
+
+    // Without an explicit NULLTOKEN, pengdows.flatfile writes both NULL and "" as an empty CSV
+    // field for a nullable VARCHAR column, and they round-trip indistinguishably (ClrTypeParser
+    // only treats an empty field as NULL for non-string columns) — the exact ambiguity
+    // TestRowRoundTripFidelity's null_text/empty_text columns exist to catch. Matches the fix
+    // already applied to pengdows.crud.IntegrationTests/Infrastructure/TestTableCreator.cs for the
+    // same reason.
+    private static string FlatFileNullTokenClause(SupportedDatabase product) =>
+        product == SupportedDatabase.FlatFile ? " WITH (NULLTOKEN = '<<NULL>>')" : string.Empty;
 
     private static bool RequiresUtcDateTimeOffset(SupportedDatabase product)
     {
@@ -1427,7 +1443,7 @@ CREATE TABLE {table} (
     {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product, supportsGuid)},
     {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)} NOT NULL,
     PRIMARY KEY ({_context.WrapObjectName("id")})
-)");
+){FlatFileNullTokenClause(_context.Product)}");
         await sc.ExecuteNonQueryAsync();
 
         var id = Interlocked.Increment(ref _nextId);

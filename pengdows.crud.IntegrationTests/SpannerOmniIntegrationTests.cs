@@ -46,7 +46,10 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
         // with its own "P0001: Invalid SET statement... Expected TO or =." — verified live; see
         // the identical fix and comment on testbed/Spanner/SpannerOmniTestContainer.cs.
         _connectionString = $"Host=localhost;Port={_adapter.GetMappedPublicPort(5432)};Username=postgres;Database={Database};Pooling=true;Timeout=30;CommandTimeout=30;No Reset On Close=true";
-        var ready = DateTime.UtcNow.AddSeconds(60);
+        // 120s, not 60s: each failed DML-inclusive probe attempt below can itself take up to the
+        // connection string's own CommandTimeout=30 before this loop retries, so the old 60s
+        // budget allowed only ~2 attempts once DML checking was added.
+        var ready = DateTime.UtcNow.AddSeconds(120);
         Exception? lastError = null;
         while (DateTime.UtcNow < ready)
         {
@@ -54,6 +57,45 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
             {
                 await using var probe = new NpgsqlConnection(_connectionString);
                 await probe.OpenAsync();
+
+                // Verified live: a plain OpenAsync() succeeding does not mean the backend is ready
+                // to serve DML yet — PostgreSqlCrud_WorksAgainstSpannerOmni's own CREATE TABLE +
+                // INSERT (run immediately after this readiness check previously declared success on
+                // connection-open alone) reproducibly hung for the full 30s CommandTimeout on a
+                // freshly-started container, with no pengdows.crud code involved at all. Extend the
+                // readiness check to a full scratch DDL+DML+cleanup round trip so a cold backend
+                // that accepts connections but isn't yet ready for commands keeps retrying here
+                // instead of failing inside the actual test.
+                //
+                // DROP TABLE IF EXISTS first: a prior retry attempt can succeed at CREATE but then
+                // fail/hang on INSERT or DROP (the exact backend flakiness this probe exists to
+                // wait out), leaving the table behind — without this, the next attempt's own CREATE
+                // fails with "Duplicate name in schema" instead of retrying cleanly.
+                await using (var dropFirstProbe = probe.CreateCommand())
+                {
+                    dropFirstProbe.CommandText = "DROP TABLE IF EXISTS pengdows_readiness_probe";
+                    await dropFirstProbe.ExecuteNonQueryAsync();
+                }
+
+                await using (var createProbe = probe.CreateCommand())
+                {
+                    createProbe.CommandText =
+                        "CREATE TABLE pengdows_readiness_probe (id INT8 NOT NULL, PRIMARY KEY (id))";
+                    await createProbe.ExecuteNonQueryAsync();
+                }
+
+                await using (var insertProbe = probe.CreateCommand())
+                {
+                    insertProbe.CommandText = "INSERT INTO pengdows_readiness_probe (id) VALUES (1)";
+                    await insertProbe.ExecuteNonQueryAsync();
+                }
+
+                await using (var dropProbe = probe.CreateCommand())
+                {
+                    dropProbe.CommandText = "DROP TABLE pengdows_readiness_probe";
+                    await dropProbe.ExecuteNonQueryAsync();
+                }
+
                 return;
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
@@ -63,7 +105,7 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
             }
         }
         var logs = await _adapter.GetLogsAsync();
-        throw new TimeoutException($"PGAdapter did not become ready within 60 seconds. Last error: {lastError?.Message}\nSTDOUT:\n{logs.Stdout}\nSTDERR:\n{logs.Stderr}", lastError);
+        throw new TimeoutException($"PGAdapter did not become ready within 120 seconds. Last error: {lastError?.Message}\nSTDOUT:\n{logs.Stdout}\nSTDERR:\n{logs.Stderr}", lastError);
     }
 
     public async Task DisposeAsync()

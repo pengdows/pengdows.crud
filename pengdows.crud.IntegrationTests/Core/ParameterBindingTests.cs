@@ -2,6 +2,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data;
+using System.Linq;
 using testbed;
 using Xunit.Abstractions;
 
@@ -31,7 +32,16 @@ public class ParameterBindingTests : DatabaseTestBase
             // Arrange
             var helper = new TableGateway<RoundTripEntity, long>(context);
             var id = DateTime.UtcNow.Ticks;
-            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "DualBind" }, context);
+            // Verified live: leaving DateTimeOffsetValue at its CLR default (0001-01-01, the
+            // extreme early edge of DateTimeOffset's range) makes the INSERT itself fail against
+            // Spanner ("P0001: timestamp out of range: ...") even though the column is otherwise
+            // irrelevant to what this test checks (repeated-parameter binding in a WHERE clause).
+            // Every other provider tolerates the year-1 default; Spanner's PostgreSQL interface
+            // does not — a real, narrow value-range platform limitation, not a binding bug. Supply
+            // an ordinary value instead, same as the round-trip tests already do.
+            await helper.CreateAsync(
+                new RoundTripEntity { Id = id, TextValue = "DualBind", DateTimeOffsetValue = DateTimeOffset.UtcNow },
+                context);
 
             // Derive specific marker from MakeParameterName
             var marker = context.MakeParameterName("p").Substring(0, 1);
@@ -68,7 +78,13 @@ public class ParameterBindingTests : DatabaseTestBase
             // Arrange
             var helper = new TableGateway<RoundTripEntity, long>(context);
             var id = DateTime.UtcNow.Ticks + 1;
-            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "NullTest", TextNullable = null },
+            // See BindSameParameterMultipleTimes_WorksSuccessfully for why DateTimeOffsetValue is
+            // set explicitly here: its CLR default (year 1) fails the INSERT on Spanner.
+            await helper.CreateAsync(
+                new RoundTripEntity
+                {
+                    Id = id, TextValue = "NullTest", TextNullable = null, DateTimeOffsetValue = DateTimeOffset.UtcNow
+                },
                 context);
 
             var p0 = context.MakeParameterName("p0");
@@ -108,7 +124,21 @@ public class ParameterBindingTests : DatabaseTestBase
                     // Db2 rejects a bare "?" in a SELECT list as an untyped parameter marker
                     // (SQL0418N) unless it has other type context — same requirement as Firebird.
                     ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM SYSIBM.SYSDUMMY1"
-                    : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
+                    : provider == SupportedDatabase.Spanner
+                        // Verified live: for a bare parameter echo with no real column context,
+                        // Spanner's PostgreSQL interface reports the wrong result-column type/format
+                        // back to Npgsql for int/long/decimal/bool (Npgsql then decodes the raw
+                        // binary payload as text, corrupting that column and misaligning every
+                        // column after it — confirmed by isolating each parameter individually and
+                        // bisecting which casts were required). The string column alone is safe
+                        // uncast; each of the other four needs an explicit CAST to give the server
+                        // enough type context to report itself correctly. This is a server-side
+                        // type-inference gap in untyped-parameter echoing, not a pengdows.crud
+                        // parameter-binding bug — real pengdows.crud SQL generation always binds
+                        // against real declared columns, so this shape never occurs outside a raw,
+                        // column-free echo query like this test's.
+                        ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS NUMERIC), CAST({pBool} AS BOOLEAN), {pString}"
+                        : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
 
             if (provider == SupportedDatabase.Oracle)
             {

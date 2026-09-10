@@ -9,8 +9,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.514119,
-    "totalTimeSeconds": 3.058948,
+    "testTimeSeconds": 0.6258311,
+    "totalTimeSeconds": 3.2061117,
     "error": null,
     "checks": [
       {
@@ -210,8 +210,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.4696451,
-    "totalTimeSeconds": 2.8108307,
+    "testTimeSeconds": 0.6742232,
+    "totalTimeSeconds": 3.095077,
     "error": null,
     "checks": [
       {
@@ -411,8 +411,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.544423,
-    "totalTimeSeconds": 2.0562061,
+    "testTimeSeconds": 0.6289743,
+    "totalTimeSeconds": 3.0512368,
     "error": null,
     "checks": [
       {
@@ -605,32 +605,444 @@
   {
     "engine": "Db2",
     "container": "Db2 [11.5.0.0a]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 49.5089474,
-    "error": "Query failed on Db2: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N  An unexpected token \u0022)\u0022 was found following \u0022FROM ((SELECT 1 AS v\u0022.  Expected tokens may include:  \u0022\u003Ctable_expr\u003E\u0022.",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 39,
+    "checksPassed": 39,
+    "checksFailed": 0,
+    "checksSkipped": 2,
+    "totalChecks": 41,
+    "testTimeSeconds": 3.7631626,
+    "totalTimeSeconds": 50.6649637,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.FinalTableInsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.FinalTableRetrieve",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.UniqueConstraintExceptionType",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.TypedMergeParams",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "Db2",
     "container": "Db2 [11.5.8.0]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 56.102254,
-    "error": "Query failed on Db2: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N  An unexpected token \u0022)\u0022 was found following \u0022FROM ((SELECT 1 AS v\u0022.  Expected tokens may include:  \u0022\u003Ctable_expr\u003E\u0022.",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 39,
+    "checksPassed": 39,
+    "checksFailed": 0,
+    "checksSkipped": 2,
+    "totalChecks": 41,
+    "testTimeSeconds": 3.6747647,
+    "totalTimeSeconds": 56.5223453,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.FinalTableInsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.FinalTableRetrieve",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.UniqueConstraintExceptionType",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Db2.TypedMergeParams",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "DuckDB",
@@ -642,8 +1054,8 @@
     "checksFailed": 0,
     "checksSkipped": 5,
     "totalChecks": 39,
-    "testTimeSeconds": 1.1252837,
-    "totalTimeSeconds": 1.2766107,
+    "testTimeSeconds": 1.0740852,
+    "totalTimeSeconds": 1.1195863,
     "error": null,
     "checks": [
       {
@@ -846,47 +1258,821 @@
   {
     "engine": "Firebird",
     "container": "Firebird [3.0.9]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 7.7571932,
-    "error": "Query failed on Firebird: Dynamic SQL Error\nSQL error code = -104\nToken unknown - line 1, column 32\n)",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 34,
+    "checksPassed": 34,
+    "checksFailed": 0,
+    "checksSkipped": 4,
+    "totalChecks": 38,
+    "testTimeSeconds": 6.5510435,
+    "totalTimeSeconds": 7.7691645,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset binding not supported by Firebird"
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset not supported by Firebird (FirebirdClient GetTimeZoneId constraint)"
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "Firebird",
     "container": "Firebird [4.0.5]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 7.7695424,
-    "error": "Query failed on Firebird: Dynamic SQL Error\nSQL error code = -104\nToken unknown - line 1, column 32\n)",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 34,
+    "checksPassed": 34,
+    "checksFailed": 0,
+    "checksSkipped": 4,
+    "totalChecks": 38,
+    "testTimeSeconds": 6.7083302,
+    "totalTimeSeconds": 7.9572648,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset binding not supported by Firebird"
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset not supported by Firebird (FirebirdClient GetTimeZoneId constraint)"
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "Firebird",
     "container": "Firebird [5.0.2]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 8.0063265,
-    "error": "Query failed on Firebird: Dynamic SQL Error\nSQL error code = -104\nToken unknown - line 1, column 32\n)",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 34,
+    "checksPassed": 34,
+    "checksFailed": 0,
+    "checksSkipped": 4,
+    "totalChecks": 38,
+    "testTimeSeconds": 6.9317261,
+    "totalTimeSeconds": 8.2950046,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset binding not supported by Firebird"
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset not supported by Firebird (FirebirdClient GetTimeZoneId constraint)"
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.SentinelPreventsUnload",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
+  },
+  {
+    "engine": "FlatFile",
+    "container": "FlatFile",
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 27,
+    "checksPassed": 27,
+    "checksFailed": 0,
+    "checksSkipped": 10,
+    "totalChecks": 37,
+    "testTimeSeconds": 0.2590618,
+    "totalTimeSeconds": 0.2830446,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "skipped",
+        "reason": "Stored procedures not supported by FlatFile"
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset binding not supported by FlatFile"
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "skipped",
+        "reason": "Guid binding not supported by FlatFile"
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "skipped",
+        "reason": "Guid not supported by FlatFile"
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset not supported by FlatFile (FirebirdClient GetTimeZoneId constraint)"
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "skipped",
+        "reason": "Savepoints not supported by database"
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "skipped",
+        "reason": "No database-specific unsupported level test for FlatFile"
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "skipped",
+        "reason": "No known fast idle-unload knob for FlatFile \u2014 not empirically tested, DbMode.Best policy unchanged"
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "MariaDB",
@@ -898,8 +2084,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.098117,
-    "totalTimeSeconds": 4.227457,
+    "testTimeSeconds": 0.1083148,
+    "totalTimeSeconds": 4.2563557,
     "error": null,
     "checks": [
       {
@@ -1114,8 +2300,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.0860271,
-    "totalTimeSeconds": 7.2272018,
+    "testTimeSeconds": 0.1054928,
+    "totalTimeSeconds": 7.2812776,
     "error": null,
     "checks": [
       {
@@ -1330,8 +2516,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.078953,
-    "totalTimeSeconds": 6.2031383,
+    "testTimeSeconds": 0.1139481,
+    "totalTimeSeconds": 6.2674519,
     "error": null,
     "checks": [
       {
@@ -1546,8 +2732,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1540386,
-    "totalTimeSeconds": 4.3060746,
+    "testTimeSeconds": 0.1939576,
+    "totalTimeSeconds": 3.4178842,
     "error": null,
     "checks": [
       {
@@ -1762,8 +2948,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.0876931,
-    "totalTimeSeconds": 7.2369195,
+    "testTimeSeconds": 0.1126529,
+    "totalTimeSeconds": 7.2840897,
     "error": null,
     "checks": [
       {
@@ -1963,8 +3149,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1471296,
-    "totalTimeSeconds": 7.2883584,
+    "testTimeSeconds": 0.1850167,
+    "totalTimeSeconds": 7.3708979,
     "error": null,
     "checks": [
       {
@@ -2164,8 +3350,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1594732,
-    "totalTimeSeconds": 6.3936968,
+    "testTimeSeconds": 0.2261698,
+    "totalTimeSeconds": 7.4997002,
     "error": null,
     "checks": [
       {
@@ -2365,8 +3551,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1263796,
-    "totalTimeSeconds": 6.259699,
+    "testTimeSeconds": 0.1759018,
+    "totalTimeSeconds": 8.3629068,
     "error": null,
     "checks": [
       {
@@ -2559,32 +3745,414 @@
   {
     "engine": "Oracle",
     "container": "Oracle [18c]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 11.9919883,
-    "error": "Query failed on Oracle: ORA-00923: FROM keyword not found where expected\nhttps://docs.oracle.com/error-help/db/ora-00923/",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 36,
+    "checksPassed": 36,
+    "checksFailed": 0,
+    "checksSkipped": 2,
+    "totalChecks": 38,
+    "testTimeSeconds": 1.0542798,
+    "totalTimeSeconds": 11.4420815,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "skipped",
+        "reason": "No known fast idle-unload knob for Oracle \u2014 not empirically tested, DbMode.Best policy unchanged"
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.PoolIsolation",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "Oracle",
     "container": "Oracle [21c]",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 8.8790251,
-    "error": "Query failed on Oracle: ORA-00923: FROM keyword not found where expected\nhttps://docs.oracle.com/error-help/db/ora-00923/",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 36,
+    "checksPassed": 36,
+    "checksFailed": 0,
+    "checksSkipped": 2,
+    "totalChecks": 38,
+    "testTimeSeconds": 0.7215663,
+    "totalTimeSeconds": 9.1145245,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "skipped",
+        "reason": "No known fast idle-unload knob for Oracle \u2014 not empirically tested, DbMode.Best policy unchanged"
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.PoolIsolation",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "Oracle",
@@ -2596,8 +4164,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 38,
-    "testTimeSeconds": 0.9112404,
-    "totalTimeSeconds": 8.5878643,
+    "testTimeSeconds": 1.3240829,
+    "totalTimeSeconds": 9.067526,
     "error": null,
     "checks": [
       {
@@ -2802,8 +4370,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1123966,
-    "totalTimeSeconds": 1.2592786,
+    "testTimeSeconds": 0.118252,
+    "totalTimeSeconds": 1.2572751,
     "error": null,
     "checks": [
       {
@@ -3013,8 +4581,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1698475,
-    "totalTimeSeconds": 1.314899,
+    "testTimeSeconds": 0.156269,
+    "totalTimeSeconds": 1.3038686,
     "error": null,
     "checks": [
       {
@@ -3224,8 +4792,8 @@
     "checksFailed": 0,
     "checksSkipped": 5,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1199154,
-    "totalTimeSeconds": 4.2708145,
+    "testTimeSeconds": 0.1056411,
+    "totalTimeSeconds": 4.2818958,
     "error": null,
     "checks": [
       {
@@ -3440,8 +5008,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1760062,
-    "totalTimeSeconds": 2.3311763,
+    "testTimeSeconds": 0.1475486,
+    "totalTimeSeconds": 2.3337277,
     "error": null,
     "checks": [
       {
@@ -3651,8 +5219,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1120116,
-    "totalTimeSeconds": 2.2758081,
+    "testTimeSeconds": 0.1213394,
+    "totalTimeSeconds": 1.2829385,
     "error": null,
     "checks": [
       {
@@ -3862,8 +5430,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.2264403,
-    "totalTimeSeconds": 2.3798772,
+    "testTimeSeconds": 0.2259758,
+    "totalTimeSeconds": 2.3760024,
     "error": null,
     "checks": [
       {
@@ -4066,17 +5634,213 @@
   {
     "engine": "Spanner",
     "container": "Spanner",
-    "success": false,
-    "outcome": "Unavailable",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 147.7080506,
-    "error": "Could not connect after 120s.",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 30,
+    "checksPassed": 30,
+    "checksFailed": 0,
+    "checksSkipped": 9,
+    "totalChecks": 39,
+    "testTimeSeconds": 59.5804249,
+    "totalTimeSeconds": 91.0113343,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "skipped",
+        "reason": "Stored procedures not supported by Spanner"
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "skipped",
+        "reason": "Savepoints not supported by database"
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "skipped",
+        "reason": "No database-specific unsupported level test for Spanner"
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "skipped",
+        "reason": "No known fast idle-unload knob for Spanner \u2014 not empirically tested, DbMode.Best policy unchanged"
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.SpaceInIdentifier",
+        "outcome": "skipped",
+        "reason": "Spanner rejects an identifier containing a space even when correctly double-quoted (verified live) \u2014 a genuine platform limitation, not a testbed/SQL-generation gap."
+      },
+      {
+        "name": "Spanner.TransactionRollbackOnKilledConnection",
+        "outcome": "skipped",
+        "reason": "Spanner\u0027s PostgreSQL interface (PGAdapter) does not implement pg_backend_pid()/pg_terminate_backend() (verified live) \u2014 a genuine platform limitation."
+      },
+      {
+        "name": "Spanner.GeneratedAlwaysIdentity",
+        "outcome": "skipped",
+        "reason": "Spanner only supports GENERATED BY DEFAULT AS IDENTITY, not GENERATED ALWAYS AS IDENTITY (verified live) \u2014 the explicit-identity-upsert test\u0027s premise (overriding a GENERATED ALWAYS value) doesn\u0027t apply the same way under BY DEFAULT semantics."
+      }
+    ]
   },
   {
     "engine": "SQL Server",
@@ -4088,8 +5852,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.2229844,
-    "totalTimeSeconds": 11.5197276,
+    "testTimeSeconds": 6.2721122,
+    "totalTimeSeconds": 11.5653707,
     "error": null,
     "checks": [
       {
@@ -4309,8 +6073,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.2403246,
-    "totalTimeSeconds": 11.5352531,
+    "testTimeSeconds": 6.2405609,
+    "totalTimeSeconds": 11.6010997,
     "error": null,
     "checks": [
       {
@@ -4530,8 +6294,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.3788903,
-    "totalTimeSeconds": 21.9593496,
+    "testTimeSeconds": 6.4271403,
+    "totalTimeSeconds": 11.9501469,
     "error": null,
     "checks": [
       {
@@ -4751,8 +6515,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 42,
-    "testTimeSeconds": 1.4668271,
-    "totalTimeSeconds": 1.484506,
+    "testTimeSeconds": 1.4620154,
+    "totalTimeSeconds": 1.4765401,
     "error": null,
     "checks": [
       {
@@ -4970,17 +6734,203 @@
   {
     "engine": "Sybase ASE",
     "container": "Sybase ASE",
-    "success": false,
-    "outcome": "Failed",
-    "checksAttempted": 1,
-    "checksPassed": 0,
-    "checksFailed": 1,
-    "checksSkipped": 0,
-    "totalChecks": 1,
-    "testTimeSeconds": null,
-    "totalTimeSeconds": 18.6506196,
-    "error": "Insert failed on Sybase: Incorrect syntax near the keyword \u0027VALUES\u0027.\n",
-    "checks": []
+    "success": true,
+    "outcome": "Passed",
+    "checksAttempted": 28,
+    "checksPassed": 28,
+    "checksFailed": 0,
+    "checksSkipped": 9,
+    "totalChecks": 37,
+    "testTimeSeconds": 0.1281976,
+    "totalTimeSeconds": 18.5648484,
+    "error": null,
+    "checks": [
+      {
+        "name": "Lifecycle.CreateTable",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.InsertRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.RetrieveRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.DeleteRows",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Lifecycle.Transactions",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "StoredProc.Execution",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.MarkerPrefix",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.NullSemantics",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DuplicateParam",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.TypeMatrixBasic",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ParamBinding.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset binding not supported by Sybase"
+      },
+      {
+        "name": "ParamBinding.Guid",
+        "outcome": "skipped",
+        "reason": "Guid binding not supported by Sybase"
+      },
+      {
+        "name": "ParamBinding.TypeMatrixFull",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RoundTrip.Guid",
+        "outcome": "skipped",
+        "reason": "Guid not supported by Sybase"
+      },
+      {
+        "name": "RoundTrip.DateTimeOffset",
+        "outcome": "skipped",
+        "reason": "DateTimeOffset not supported by Sybase (FirebirdClient GetTimeZoneId constraint)"
+      },
+      {
+        "name": "RoundTrip.Fidelity",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.RollbackOnException",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ReadYourWrites",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.SavepointRollback",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.ChaosRejected",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ExtendedTx.UnsupportedIsolationRejected",
+        "outcome": "skipped",
+        "reason": "No database-specific unsupported level test for Sybase"
+      },
+      {
+        "name": "RetryContext.SequentialSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "RetryContext.TransactionalSuccess",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Concurrency.ParallelLoops",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.CommandReuse",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Batch.BatchUpdate",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "DbMode.IdleUnloadProbe",
+        "outcome": "skipped",
+        "reason": "No known fast idle-unload knob for Sybase \u2014 not empirically tested, DbMode.Best policy unchanged"
+      },
+      {
+        "name": "ReaderDisposal.Compatibility",
+        "outcome": "skipped",
+        "reason": "MySql.Data specific EOF disposal check"
+      },
+      {
+        "name": "Reader.GetOrdinalUnknownColumn",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Oracle.BooleanDbTypeServerVersionBehavior",
+        "outcome": "skipped",
+        "reason": "Oracle-specific probe"
+      },
+      {
+        "name": "Capabilities.Upsert",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Capabilities.Paging",
+        "outcome": "skipped",
+        "reason": "Paging not supported by Sybase"
+      },
+      {
+        "name": "  [Capabilities] Parenthesized join (3-table, Access-mandatory syntax): OK",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.UniqueViolation",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.ConnectionHealth",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "ErrorMapping.SyntaxError",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
+        "name": "Quoting.ReservedWordsAndCase",
+        "outcome": "passed",
+        "reason": null
+      }
+    ]
   },
   {
     "engine": "TiDB",
@@ -4992,8 +6942,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.3551297,
-    "totalTimeSeconds": 1.551784,
+    "testTimeSeconds": 0.4047705,
+    "totalTimeSeconds": 1.6526745,
     "error": null,
     "checks": [
       {
@@ -5193,8 +7143,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.3680661,
-    "totalTimeSeconds": 2.7051181,
+    "testTimeSeconds": 0.4558486,
+    "totalTimeSeconds": 2.824885,
     "error": null,
     "checks": [
       {
@@ -5392,10 +7342,10 @@
     "checksAttempted": 34,
     "checksPassed": 34,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 37,
-    "testTimeSeconds": 1.1556963,
-    "totalTimeSeconds": 6.6334934,
+    "checksSkipped": 4,
+    "totalChecks": 38,
+    "testTimeSeconds": 1.4781001,
+    "totalTimeSeconds": 8.0741673,
     "error": null,
     "checks": [
       {
@@ -5422,6 +7372,11 @@
         "name": "Lifecycle.Transactions",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "StoredProc.ProcedureInOut",
+        "outcome": "skipped",
+        "reason": "Skipped PostgreSQL real PROCEDURE test on PostgreSQL 15.12-YB-2.25.2.0-b0 on x86_64-pc-linux-gnu, compiled by clang version 19.1.0 (https://github.com/yugabyte/llvm-project.git a2a6b655e14e7fa1fcf1011a6cb29cb8575249c0), 64-bit (CREATE PROCEDURE requires PostgreSQL 11\u002B)"
       },
       {
         "name": "StoredProc.Execution",
@@ -5531,7 +7486,7 @@
       {
         "name": "DbMode.IdleUnloadProbe",
         "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for PostgreSql \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "reason": "No known fast idle-unload knob for YugabyteDb \u2014 not empirically tested, DbMode.Best policy unchanged"
       },
       {
         "name": "ReaderDisposal.Compatibility",
@@ -5593,10 +7548,10 @@
     "checksAttempted": 34,
     "checksPassed": 34,
     "checksFailed": 0,
-    "checksSkipped": 3,
-    "totalChecks": 37,
-    "testTimeSeconds": 1.5289381,
-    "totalTimeSeconds": 8.1680784,
+    "checksSkipped": 4,
+    "totalChecks": 38,
+    "testTimeSeconds": 1.8962795,
+    "totalTimeSeconds": 8.6478241,
     "error": null,
     "checks": [
       {
@@ -5623,6 +7578,11 @@
         "name": "Lifecycle.Transactions",
         "outcome": "passed",
         "reason": null
+      },
+      {
+        "name": "StoredProc.ProcedureInOut",
+        "outcome": "skipped",
+        "reason": "Skipped PostgreSQL real PROCEDURE test on PostgreSQL 15.12-YB-2025.2.5.2-b0 on x86_64-pc-linux-gnu, compiled by clang version 19.1.0 (https://github.com/yugabyte/llvm-project.git a2a6b655e14e7fa1fcf1011a6cb29cb8575249c0), 64-bit (CREATE PROCEDURE requires PostgreSQL 11\u002B)"
       },
       {
         "name": "StoredProc.Execution",
@@ -5732,7 +7692,7 @@
       {
         "name": "DbMode.IdleUnloadProbe",
         "outcome": "skipped",
-        "reason": "No known fast idle-unload knob for PostgreSql \u2014 not empirically tested, DbMode.Best policy unchanged"
+        "reason": "No known fast idle-unload knob for YugabyteDb \u2014 not empirically tested, DbMode.Best policy unchanged"
       },
       {
         "name": "ReaderDisposal.Compatibility",

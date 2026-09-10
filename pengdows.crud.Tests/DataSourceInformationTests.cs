@@ -173,9 +173,12 @@ public class DataSourceInformationTests
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@",
             SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
             SupportedDatabase.DuckDB => "$",
-            // FlatFile's own SQL grammar supports only positional ? parameters (see
-            // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
-            SupportedDatabase.FlatFile => "?",
+            // pengdows.flatfile supports named parameters via ":name" — the ISO SQL dynamic-SQL
+            // host-variable form, same marker character as Oracle. Verified directly against the
+            // engine's parser/binder (see FlatFileDialect.SupportsNamedParameters/ParameterMarker);
+            // an earlier version of this test encoded a stale README claim that flatfile was
+            // positional-only, which was simply wrong.
+            SupportedDatabase.FlatFile => ":",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -194,7 +197,10 @@ public class DataSourceInformationTests
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14)
-                       || db == SupportedDatabase.Sybase;
+                       || db == SupportedDatabase.Sybase
+                        // FlatFile genuinely implements MERGE INTO (see pengdows.sql/SqlParser.cs's
+                        // ParseMerge) — verified real feature, not assumed.
+                        || db == SupportedDatabase.FlatFile;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -243,8 +249,8 @@ public class DataSourceInformationTests
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
-            // FlatFile has no named parameters at all (positional ? only) and no stored-procedure
-            // support (ProcWrappingStyle.None), so there is nothing to name-match against.
+            // FlatFile has no stored-procedure support at all (ProcWrappingStyle.None), so there
+            // is nothing to name-match against — independent of its named-parameter support.
             SupportedDatabase.FlatFile => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
@@ -260,10 +266,10 @@ public class DataSourceInformationTests
         Assert.Equal(expectedWrap, info.ProcWrappingStyle);
 
         // Assert: named parameters flags
-        // FlatFile's own SQL grammar supports only positional ? parameters (see
-        // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
-        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile;
-        Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
+        // Every database in this matrix supports named parameters, FlatFile included — it uses
+        // ":name" (see FlatFileDialect.SupportsNamedParameters/ParameterMarker), verified directly
+        // against the engine's parser/binder.
+        Assert.True(info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits

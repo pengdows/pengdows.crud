@@ -55,6 +55,20 @@ internal sealed class SpannerDialect : PostgreSqlDialect
         ex.Message.Contains("Check constraint", StringComparison.OrdinalIgnoreCase) &&
         ex.Message.Contains("is violated", StringComparison.OrdinalIgnoreCase);
 
+    // Foreign key violations are inconsistent between INSERT and DELETE on Spanner, verified live:
+    // an INSERT referencing a nonexistent parent row genuinely does use the real ANSI SqlState
+    // "23503" (inherited PostgreSqlDialect.IsForeignKeyViolation already classifies it correctly —
+    // no override needed for that shape). But a DELETE blocked by a child row instead returns the
+    // generic "P0001" code with message "Foreign key constraint violation when deleting or
+    // updating referenced row(s): referencing row(s) found in table `...`." — the inherited
+    // SqlState-only check misses this shape entirely, surfacing as a generic
+    // DatabaseOperationException instead of ForeignKeyViolationException. Keep the inherited
+    // SqlState check (covers INSERT) and add the message pattern for DELETE.
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        base.IsForeignKeyViolation(ex) ||
+        (ex.Message.Contains("Foreign key constraint violation", StringComparison.OrdinalIgnoreCase) &&
+         ex.Message.Contains("referenced row", StringComparison.OrdinalIgnoreCase));
+
     // ClassifyException's base-class generic message fallback (SqlDialect.cs) only recognizes a
     // constraint violation via keywords like "constraint"/"violates" — Spanner's real NotNull
     // message ("... must not be NULL in table ...") contains neither, so without this override it

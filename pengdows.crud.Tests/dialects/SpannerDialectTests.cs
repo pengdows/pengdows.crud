@@ -128,4 +128,55 @@ public class SpannerDialectTests
         // consistent with the rest of the Postgres-wire family rather than silently drift.
         Assert.Equal(100, CreateDialect().MaxOutputParameters);
     }
+
+    // ── IsForeignKeyViolation ────────────────────────────────────────────────
+    // Verified live against a real Spanner Omni + PGAdapter instance: an INSERT referencing a
+    // nonexistent parent row uses the real ANSI SqlState "23503" (inherited PostgreSqlDialect
+    // check already handles it), but a DELETE blocked by a still-referencing child row instead
+    // returns the generic "P0001" code with a distinct message — without the message-pattern
+    // override, that DELETE case surfaced as a generic DatabaseOperationException instead of
+    // ForeignKeyViolationException.
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_SqlState23503_ReturnsTrue()
+    {
+        // The INSERT-side shape — confirms the inherited PostgreSqlDialect SqlState check still
+        // applies; this override must not narrow it.
+        var ex = new SqlStateDbException("23503", "Foreign key constraint `fk_x` is violated on table `t`.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_DeleteBlockedMessage_ReturnsTrue()
+    {
+        // Real captured message (SqlState "P0001", not 23503).
+        var ex = new PlainDbException(
+            "P0001: Foreign key constraint violation when deleting or updating referenced row(s): " +
+            "referencing row(s) found in table `test_related`.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_UnrelatedMessage_ReturnsFalse()
+    {
+        var ex = new PlainDbException("P0001: Check constraint `t`.`chk_x` is violated for key (1)");
+        Assert.False(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    private sealed class PlainDbException : System.Data.Common.DbException
+    {
+        public PlainDbException(string message) : base(message)
+        {
+        }
+    }
+
+    private sealed class SqlStateDbException : System.Data.Common.DbException
+    {
+        public SqlStateDbException(string sqlState, string message) : base(message)
+        {
+            SqlState = sqlState;
+        }
+
+        public override string? SqlState { get; }
+    }
 }
