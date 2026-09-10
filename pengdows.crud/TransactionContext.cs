@@ -992,11 +992,16 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return;
         }
 
+        // Branch on which outcome actually happened, not "committed or else rolled back" — a
+        // commit/rollback attempt that throws (CompleteTransaction's catch block) leaves BOTH
+        // _committed and _rolledBack at 0: nothing was actually rolled back, so counting it as a
+        // rollback would misreport a faulted, ambiguous outcome as a definite one. Leave it
+        // uncounted in either bucket rather than lie about what happened.
         if (Volatile.Read(ref _committed) == 1)
         {
             _metricsCollector.TransactionCommitted(_transactionMetricsStart);
         }
-        else
+        else if (Volatile.Read(ref _rolledBack) == 1)
         {
             _metricsCollector.TransactionRolledBack(_transactionMetricsStart);
         }
