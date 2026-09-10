@@ -71,14 +71,12 @@ internal class DataSourceInformation : IDataSourceInformation
             {
                 ProductName = "Unknown",
                 ProductVersion = string.Empty,
-                DatabaseType = dialect.DatabaseType,
-                StandardCompliance = SqlStandardLevel.Sql92
+                DatabaseType = dialect.DatabaseType
             };
         DatabaseProductName = info.ProductName;
         DatabaseProductVersion = info.ProductVersion;
         ParsedVersion = info.ParsedVersion;
         Product = info.DatabaseType;
-        StandardCompliance = info.StandardCompliance;
         ParameterMarkerPattern = BuildParameterMarkerPattern(dialect);
         ParameterNamePatternRegex = dialect.ParameterNamePattern;
     }
@@ -100,9 +98,6 @@ internal class DataSourceInformation : IDataSourceInformation
 
     /// <inheritdoc />
     public SupportedDatabase Product { get; }
-
-    /// <inheritdoc />
-    public SqlStandardLevel StandardCompliance { get; }
 
     /// <inheritdoc />
     public string ParameterMarkerPattern { get; }

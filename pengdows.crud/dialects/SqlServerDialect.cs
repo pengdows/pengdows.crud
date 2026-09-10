@@ -169,9 +169,6 @@ internal class SqlServerDialect : SqlDialect
     public override bool PrepareStatements => false;
     public override bool SupportsReadOnlyTransactions => true;
 
-    public override SqlStandardLevel MaxSupportedStandard =>
-        IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
-
     public override bool SupportsNamespaces => true;
 
     public override bool IsUniqueViolation(DbException ex) =>
@@ -400,6 +397,8 @@ internal class SqlServerDialect : SqlDialect
     };
 
     // Version-specific overrides
+    public override bool SupportsWindowFunctions => !IsInitialized || IsVersionAtLeast(9);
+    public override bool SupportsCommonTableExpressions => !IsInitialized || IsVersionAtLeast(9);
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
     public override bool SupportsSavepoints => true;
@@ -608,22 +607,6 @@ internal class SqlServerDialect : SqlDialect
                 new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
                 true),
             "Failed to configure SQL Server session settings");
-    }
-
-    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-    {
-        return new Dictionary<int, SqlStandardLevel>
-        {
-            { 13, SqlStandardLevel.Sql2016 }, // SQL Server 2016+
-            { 12, SqlStandardLevel.Sql2011 }, // SQL Server 2014
-            { 10, SqlStandardLevel.Sql2008 }, // SQL Server 2008+
-            { 8, SqlStandardLevel.Sql2003 } // SQL Server 2000+
-        };
-    }
-
-    public override SqlStandardLevel GetDefaultStandardLevel()
-    {
-        return SqlStandardLevel.Sql2008;
     }
 
     // Connection pooling properties for SQL Server

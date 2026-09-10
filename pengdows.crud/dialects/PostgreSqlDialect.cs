@@ -262,8 +262,9 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool PrepareStatements => true;
     public override bool SupportsReadOnlyTransactions => true;
 
-    public override SqlStandardLevel MaxSupportedStandard =>
-        IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
+    public override bool SupportsWindowFunctions => !IsInitialized || IsVersionAtLeast(8, 4);
+    public override bool SupportsCommonTableExpressions => !IsInitialized || IsVersionAtLeast(8, 4);
+    public override bool SupportsArrayTypes => true;
 
     public override bool SupportsNamespaces => true;
 
@@ -802,22 +803,6 @@ internal class PostgreSqlDialect : SqlDialect
         }
     }
 
-    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-    {
-        return new Dictionary<int, SqlStandardLevel>
-        {
-            { 15, SqlStandardLevel.Sql2016 },
-            { 13, SqlStandardLevel.Sql2011 },
-            { 11, SqlStandardLevel.Sql2008 },
-            { 9, SqlStandardLevel.Sql2003 },
-            { 8, SqlStandardLevel.Sql92 }
-        };
-    }
-
-    public override SqlStandardLevel GetDefaultStandardLevel()
-    {
-        return SqlStandardLevel.Sql2008;
-    }
 
     public override string UpsertIncomingColumn(string columnName)
     {
@@ -860,13 +845,6 @@ internal class PostgreSqlDialect : SqlDialect
         {
             // Not an Npgsql parameter or the property is absent — ignore.
         }
-    }
-
-    // Tests access a protected member via reflection; provide a protected facade that
-    // delegates to the public base implementation without changing API surface.
-    protected new SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        return base.DetermineStandardCompliance(version);
     }
 
     // Connection pooling properties for PostgreSQL (Npgsql)

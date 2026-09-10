@@ -305,28 +305,6 @@ internal class SqliteDialect : SqlDialect
         return "SQLite";
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql92;
-        }
-
-        if (version.Major == 3)
-        {
-            return version.Minor switch
-            {
-                >= 45 => SqlStandardLevel.Sql2016,
-                >= 35 => SqlStandardLevel.Sql2011,
-                >= 25 => SqlStandardLevel.Sql2008,
-                >= 8 => SqlStandardLevel.Sql2003,
-                _ => SqlStandardLevel.Sql92
-            };
-        }
-
-        return SqlStandardLevel.Sql92;
-    }
-
     public override bool IsUniqueViolation(DbException ex)
     {
         if (ex is not DbException dbEx)

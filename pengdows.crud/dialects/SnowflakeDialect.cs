@@ -76,9 +76,10 @@ internal class SnowflakeDialect : SqlDialect
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
 
-    // Snowflake has strong SQL:2016 compliance
-    public override SqlStandardLevel MaxSupportedStandard =>
-        IsInitialized ? base.MaxSupportedStandard : SqlStandardLevel.Sql2016;
+    public override bool SupportsWindowFunctions => true;
+    public override bool SupportsCommonTableExpressions => true;
+    public override bool SupportsArrayTypes => true;
+    public override bool SupportsJsonTypes => true;
 
     public override bool PrepareStatements => true;
 
@@ -323,19 +324,6 @@ internal class SnowflakeDialect : SqlDialect
         return base.ParseVersion(versionString);
     }
 
-    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-    {
-        return new Dictionary<int, SqlStandardLevel>
-        {
-            { 8, SqlStandardLevel.Sql2019 },
-            { 7, SqlStandardLevel.Sql2016 }
-        };
-    }
-
-    public override SqlStandardLevel GetDefaultStandardLevel()
-    {
-        return SqlStandardLevel.Sql2016;
-    }
 
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {

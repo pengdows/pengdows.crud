@@ -109,20 +109,6 @@ public class SqlDialectDetectDatabaseInfoTests
         Assert.Equal(35, result.ParsedVersion.Build);
     }
 
-    [Fact]
-    public async Task DetectDatabaseInfoAsync_Should_Determine_StandardCompliance()
-    {
-        _factory.SetScalarResult("5.7.35");
-        var dialect = new TestSqlDialect(_factory, _logger);
-        var connection = (fakeDbConnection)_factory.CreateConnection();
-        var trackedConnection = new TrackedConnection(connection);
-        await trackedConnection.OpenAsync();
-
-        var result = await dialect.DetectDatabaseInfoAsync(trackedConnection);
-
-        Assert.NotNull(result);
-        Assert.Equal(SqlStandardLevel.Sql99, result.StandardCompliance); // From TestSqlDialect
-    }
 
     [Fact]
     public async Task DetectDatabaseInfoAsync_Should_Handle_Exception_Gracefully()
@@ -224,11 +210,6 @@ public class SqlDialectDetectDatabaseInfoTests
         public override string ExtractProductNameFromVersion(string versionString)
         {
             return "Extracted Product";
-        }
-
-        public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-        {
-            return SqlStandardLevel.Sql99;
         }
 
         public override Version? ParseVersion(string versionString)

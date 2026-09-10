@@ -12,8 +12,7 @@
 //   * No INSERT ... AS alias syntax for upserts
 //   * Prepared statements default ON (vs OFF for MySQL)
 //   * OFFSET/FETCH syntax in 10.6+ (MySQL never supported it)
-//   * Version numbering is 10.x era (different from MySQL's simple major versioning);
-//     DetermineStandardCompliance uses MariaDB-specific major/minor thresholds
+//   * Version numbering is 10.x era (different from MySQL's simple major versioning)
 // - Uses LAST_INSERT_ID() for returning generated IDs.
 // - Session settings: Inherits ANSI_QUOTES mode from MySqlDialect.
 // - AUTO_INCREMENT for identity columns.
@@ -45,7 +44,6 @@ namespace pengdows.crud.dialects;
 /// <item><description>No <c>INSERT ... AS</c> alias syntax for upserts</description></item>
 /// <item><description>Prepared statements enabled by default (vs conservative MySQL default)</description></item>
 /// <item><description>OFFSET/FETCH syntax supported in 10.6+ (MySQL never supported it)</description></item>
-/// <item><description>Version numbering uses 10.x era scheme; <see cref="DetermineStandardCompliance"/> uses MariaDB-specific major/minor thresholds</description></item>
 /// </list>
 /// </remarks>
 internal class MariaDbDialect : MySqlDialect
@@ -118,35 +116,6 @@ internal class MariaDbDialect : MySqlDialect
         }
 
         return name;
-    }
-
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql92;
-        }
-
-        // MariaDB version mapping (different from MySQL's simpler major version approach)
-        // 10.2+: CTEs/window functions → ~SQL:2008
-        if (version.Major > 10 || (version.Major == 10 && version.Minor >= 2))
-        {
-            return SqlStandardLevel.Sql2008;
-        }
-
-        // 10.0/10.1 era: improved standards vs 5.x
-        if (version.Major >= 10)
-        {
-            return SqlStandardLevel.Sql2003;
-        }
-
-        // 5.x family
-        if (version.Major >= 5)
-        {
-            return SqlStandardLevel.Sql99;
-        }
-
-        return SqlStandardLevel.Sql92;
     }
 
     public override string GetFinalSessionSettings(bool readOnly)

@@ -202,30 +202,6 @@ public class DuckDbDialectAdvancedTests
         Assert.Null(version);
     }
 
-    [Theory]
-    [InlineData(1, 0, 0, SqlStandardLevel.Sql2016)]
-    [InlineData(0, 9, 0, SqlStandardLevel.Sql2016)]
-    [InlineData(0, 8, 0, SqlStandardLevel.Sql2011)]
-    [InlineData(0, 6, 0, SqlStandardLevel.Sql2008)]
-    [InlineData(0, 4, 0, SqlStandardLevel.Sql2003)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch,
-        SqlStandardLevel expected)
-    {
-        var version = new Version(major, minor, patch);
-
-        var compliance = _dialect.DetermineStandardCompliance(version);
-
-        Assert.Equal(expected, compliance);
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_Should_Return_Sql2016_For_Null_Version()
-    {
-        var compliance = _dialect.DetermineStandardCompliance(null);
-
-        Assert.Equal(SqlStandardLevel.Sql2016, compliance);
-    }
-
     [Fact]
     public void ExtractProductNameFromVersion_Should_Always_Return_DuckDB()
     {

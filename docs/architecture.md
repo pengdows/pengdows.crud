@@ -446,11 +446,11 @@ app.Use(async (context, next) =>
 
 ---
 
-## Capability Flags Derive From One Enum: `SqlStandardLevel`
+## Explicit Capability Properties
 
-`ISqlDialect` exposes roughly 20 independent-looking `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more. Reading them in isolation, each looks like it might be individually implemented per dialect. In the base `SqlDialect` class, **all of them are actually one mechanism**: each is `MaxSupportedStandard >= SqlStandardLevel.SqlXXXX` for a specific standard-year threshold (`SqlStandardLevel` is a plain year-numbered enum, `Sql86` through `Sql2023`). `MaxSupportedStandard` itself defaults to `ProductInfo.StandardCompliance` once the dialect is initialized (probed against the live server), falling back to `Sql92` before initialization.
+`ISqlDialect` exposes concrete `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more. Rather than deriving capabilities heuristically from a single SQL standard year enum, each capability is explicitly modeled as a boolean property.
 
-This means a new dialect gets most of these ~20 flags correct "for free" simply by having an accurate `MaxSupportedStandard`/`ProductInfo.StandardCompliance` — no per-flag implementation needed for the common case. Overriding an individual `Supports*` property is only necessary when a specific database's real behavior diverges from what its claimed standard-year compliance would predict — e.g. YugabyteDB reports as PostgreSQL 15-compatible (which would imply `SupportsMerge => true` under the standard-level default) but doesn't actually implement MERGE, so `YugabyteDbDialect` overrides `SupportsMerge` to `false` explicitly (see the per-database gotchas doc). When adding a new database (see `CLAUDE.md`'s checklist), get `MaxSupportedStandard` right first, then verify each derived flag against the engine's *actual* behavior rather than assuming standard-year compliance is uniformly accurate — some engines claim more compliance than they implement.
+In the base `SqlDialect` class, universal baseline capabilities (`SupportsJoins`, `SupportsSubqueries`, `SupportsUnion`, `SupportsGroupBy`, `SupportsOrderBy`, `SupportsTransactions`, etc.) default safely to `true`. Advanced or vendor-specific features (`SupportsMerge`, `SupportsWindowFunctions`, `SupportsCommonTableExpressions`, `SupportsArrayTypes`, `SupportsJsonTypes`, `SupportsRegularExpressions`, etc.) default safely to `false`. Concrete dialects override these capabilities directly — often with version-aware expressions (such as `SupportsWindowFunctions => !IsInitialized || IsVersionAtLeast(9);` for SQL Server) to guarantee accurate capability reporting before and after server metadata discovery.
 
 ## Strategy Pattern Architecture
 

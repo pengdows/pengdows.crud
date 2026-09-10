@@ -34,8 +34,7 @@ public class MariaDbDialectTests
             ProductName = "MariaDB",
             ProductVersion = version.ToString(),
             ParsedVersion = version,
-            DatabaseType = SupportedDatabase.MariaDb,
-            StandardCompliance = dialect.DetermineStandardCompliance(version)
+            DatabaseType = SupportedDatabase.MariaDb
         });
     }
 
@@ -84,19 +83,6 @@ public class MariaDbDialectTests
 
         SetVersion(d, new Version(5, 7));
         Assert.False(d.SupportsWindowFunctions);
-        Assert.Equal(SqlStandardLevel.Sql99, d.DetermineStandardCompliance(new Version(5, 7)));
-
-        Assert.Equal(SqlStandardLevel.Sql92, d.DetermineStandardCompliance(null));
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_Handles_MariaDb_10_x()
-    {
-        var d = CreateDialect();
-        Assert.Equal(SqlStandardLevel.Sql2008, d.DetermineStandardCompliance(new Version(10, 2)));
-        Assert.Equal(SqlStandardLevel.Sql2008, d.DetermineStandardCompliance(new Version(11, 0)));
-        Assert.Equal(SqlStandardLevel.Sql2003, d.DetermineStandardCompliance(new Version(10, 0)));
-        Assert.Equal(SqlStandardLevel.Sql2003, d.DetermineStandardCompliance(new Version(10, 1)));
     }
 
     [Fact]

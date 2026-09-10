@@ -67,7 +67,7 @@ public class SqlDialectCapabilityTests
     }
 
     [Fact]
-    public void CanUseModernFeatures_FollowsStandardCompliance()
+    public void CanUseModernFeatures_EvaluatesCteAndWindowFunctions()
     {
         var modernSchema = DataSourceInformation.BuildEmptySchema(
             "Microsoft SQL Server",
@@ -161,66 +161,5 @@ public class SqlDialectCapabilityTests
 
         Assert.Contains(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("SQL-92 fallback"));
-    }
-
-    private sealed class Sql89Dialect : Sql92Dialect
-    {
-        public Sql89Dialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
-        {
-        }
-
-        public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-        {
-            return SqlStandardLevel.Sql89;
-        }
-    }
-
-    [Fact]
-    public void HasBasicCompatibility_FollowsStandardCompliance()
-    {
-        var compliantSchema = DataSourceInformation.BuildEmptySchema(
-            "MySQL",
-            "5.0",
-            "@[0-9]+",
-            "@{0}",
-            64,
-            "@\\w+",
-            "@\\w+",
-            true);
-        var compliantScalars = new Dictionary<string, object> { ["SELECT VERSION()"] = "5.0" };
-        var compliantFactory = new fakeDbFactory(SupportedDatabase.MySql);
-        var compliantConn = compliantFactory.CreateConnection();
-        compliantConn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}";
-        var compliantTracked = new FakeTrackedConnection(compliantConn, compliantSchema, compliantScalars);
-        var compliantDialect = SqlDialectFactory.CreateDialectForType(
-            SupportedDatabase.MySql,
-            compliantFactory,
-            NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
-        compliantDialect.DetectDatabaseInfo(compliantTracked);
-
-        var scalars = new Dictionary<string, object>
-        {
-            ["SELECT 'SQL-92 Compatible Database' AS version"] = "SQL-92 Compatible Database"
-        };
-        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
-        var conn = factory.CreateConnection();
-        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
-        var tracked = new FakeTrackedConnection(
-            conn,
-            DataSourceInformation.BuildEmptySchema(
-                "LegacyDB",
-                "0.1",
-                "?",
-                "?{0}",
-                18,
-                "?",
-                "?",
-                false),
-            scalars);
-        var nonDialect = new Sql89Dialect(factory, NullLoggerFactory.Instance.CreateLogger<SqlDialect>());
-        nonDialect.DetectDatabaseInfo(tracked);
-
-        Assert.True(compliantDialect.HasBasicCompatibility);
-        Assert.False(nonDialect.HasBasicCompatibility);
     }
 }

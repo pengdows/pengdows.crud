@@ -180,11 +180,6 @@ public interface ISqlDialect
     ProcWrappingStyle ProcWrappingStyle { get; }
 
     /// <summary>
-    /// The highest SQL standard level this database/version supports.
-    /// </summary>
-    SqlStandardLevel MaxSupportedStandard { get; }
-
-    /// <summary>
     /// Opening quote used for identifiers.
     /// </summary>
     string QuotePrefix { get; }

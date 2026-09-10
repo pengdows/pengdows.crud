@@ -127,34 +127,6 @@ public class DialectAsyncErrorPathTests
         Assert.Equal("Firebird", result);
     }
 
-    [Fact]
-    public void FirebirdDialect_DetermineStandardCompliance_NullVersion_ReturnsSql92()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
-        var dialect = new FirebirdDialect(factory, NullLogger.Instance);
-
-        var result = dialect.DetermineStandardCompliance(null);
-
-        Assert.Equal(SqlStandardLevel.Sql92, result);
-    }
-
-    [Theory]
-    [InlineData(5, 0, 0, SqlStandardLevel.Sql2016)]
-    [InlineData(4, 0, 0, SqlStandardLevel.Sql2011)]
-    [InlineData(3, 0, 0, SqlStandardLevel.Sql2008)]
-    [InlineData(2, 0, 0, SqlStandardLevel.Sql2003)]
-    [InlineData(1, 0, 0, SqlStandardLevel.Sql92)]
-    public void FirebirdDialect_DetermineStandardCompliance_VariousVersions_ReturnsCorrectLevel(int major, int minor,
-        int build, SqlStandardLevel expected)
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
-        var dialect = new FirebirdDialect(factory, NullLogger.Instance);
-        var version = new Version(major, minor, build);
-
-        var result = dialect.DetermineStandardCompliance(version);
-
-        Assert.Equal(expected, result);
-    }
 
     [Fact]
     public void DuckDbDialect_ErrorPaths_HandleGracefully()

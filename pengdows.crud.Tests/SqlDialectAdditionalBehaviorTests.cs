@@ -131,7 +131,6 @@ public class SqlDialectAdditionalBehaviorTests
         Assert.True(dialect.IsInitialized);
         Assert.Equal("Unknown", dialect.ProductInfo.ProductName);
         Assert.Equal(SupportedDatabase.Unknown, dialect.ProductInfo.DatabaseType);
-        Assert.Equal(SqlStandardLevel.Sql92, dialect.ProductInfo.StandardCompliance);
         Assert.Contains("SQL-92", dialect.GetCompatibilityWarning(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -235,7 +234,6 @@ public class SqlDialectAdditionalBehaviorTests
         var info = await dialect.CallDetectDatabaseInfoAsync(tracked);
 
         Assert.Equal("Unknown", info.ProductName);
-        Assert.Equal(SqlStandardLevel.Sql92, info.StandardCompliance);
     }
 
     [Fact]
@@ -315,17 +313,6 @@ public class SqlDialectAdditionalBehaviorTests
         Assert.True(name.Length <= 3);
     }
 
-    [Fact]
-    public void DetermineStandardCompliance_UsesMapping()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var mapping = new Dictionary<int, SqlStandardLevel> { [2] = SqlStandardLevel.Sql2011 };
-        var dialect = new MappingDialect(factory, NullLoggerFactory.Instance.CreateLogger<MappingDialect>(), mapping);
-
-        var level = dialect.DetermineStandardCompliance(new Version(3, 0, 0));
-        Assert.Equal(SqlStandardLevel.Sql2011, level);
-        Assert.Equal(SqlStandardLevel.Sql92, dialect.DetermineStandardCompliance(null));
-    }
 
     private static FakeTrackedConnection CreateTrackedConnection(
         fakeDbFactory factory,
@@ -407,22 +394,6 @@ public class SqlDialectAdditionalBehaviorTests
         public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
         {
             throw new InvalidOperationException("boom");
-        }
-    }
-
-    private sealed class MappingDialect : TestableDialect
-    {
-        private readonly Dictionary<int, SqlStandardLevel> _mapping;
-
-        public MappingDialect(DbProviderFactory factory, ILogger logger, Dictionary<int, SqlStandardLevel> mapping)
-            : base(factory, logger)
-        {
-            _mapping = mapping;
-        }
-
-        public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-        {
-            return _mapping;
         }
     }
 }

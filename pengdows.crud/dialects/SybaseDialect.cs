@@ -13,8 +13,7 @@
 //     * No OFFSET/FETCH or LIMIT/OFFSET; paging requires a statement-level
 //       SET ROWCOUNT n / SET ROWCOUNT 0 pair that cannot be expressed as a suffix.
 //     * OBJECT_ID() only accepts the single-argument form in this build.
-//     * No CTEs or window functions even at 16.0 — MaxSupportedStandard is kept at
-//       Sql92 so the generic capability gates in the base class do not over-claim.
+//     * No CTEs or window functions even at 16.0.
 // - AseException (AdoNetCore.AseClient) does not derive from DbException and has no
 //   top-level error-code property; the real ASE error number lives on
 //   AseException.Errors[0].MessageNumber. DbExceptionTranslationSupport.TryGetErrorCode
@@ -53,11 +52,6 @@ internal class SybaseDialect : SqlDialect
 
     protected override string GetNaturalKeySelectClause(string wrappedIdColumn) => $"SELECT TOP 1 {wrappedIdColumn}";
     protected override string GetNaturalKeyFirstRowOnlyClause() => string.Empty;
-
-    // ASE has no CTEs or window functions even at 16.0; keep the standard-compliance
-    // gate conservative so the base class's generic capability flags do not over-claim.
-    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => new();
-    public override SqlStandardLevel GetDefaultStandardLevel() => SqlStandardLevel.Sql92;
     public override bool SupportsWindowFunctions => false;
     public override bool SupportsCommonTableExpressions => false;
     public override bool SupportsJsonTypes => false;

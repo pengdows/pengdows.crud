@@ -5,9 +5,8 @@
 // AI SUMMARY:
 // - Populated by SqlDialect.DetectDatabaseInfoAsync from connection metadata.
 // - Contains: ProductName (e.g., "PostgreSQL"), ProductVersion (e.g., "14.2"),
-//   ParsedVersion (as System.Version), DatabaseType enum, StandardCompliance.
-// - Used by DataSourceInformation to expose database capabilities.
-// - StandardCompliance indicates SQL standard level (Sql92, Sql99, Sql2003, etc.).
+//   ParsedVersion (as System.Version), DatabaseType enum.
+// - Used by DataSourceInformation to expose database metadata.
 // =============================================================================
 
 using pengdows.crud.enums;
@@ -45,9 +44,4 @@ internal class DatabaseProductInfo : IDatabaseProductInfo
     /// Gets or sets the database type enum for dialect selection.
     /// </summary>
     public SupportedDatabase DatabaseType { get; set; }
-
-    /// <summary>
-    /// Gets or sets the SQL standard compliance level.
-    /// </summary>
-    public SqlStandardLevel StandardCompliance { get; set; } = SqlStandardLevel.Sql92;
 }

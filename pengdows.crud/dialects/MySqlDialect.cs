@@ -503,22 +503,6 @@ internal class MySqlDialect : SqlDialect
         return SetSessionReadWriteSql;
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql92;
-        }
-
-        return version.Major switch
-        {
-            >= 8 => SqlStandardLevel.Sql2008,
-            >= 6 => SqlStandardLevel.Sql2003,
-            >= 5 => SqlStandardLevel.Sql99,
-            _ => SqlStandardLevel.Sql92
-        };
-    }
-
     public override string UpsertIncomingColumn(string columnName)
     {
         var alias = UpsertIncomingAlias;

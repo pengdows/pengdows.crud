@@ -156,9 +156,10 @@ internal sealed class Db2Dialect : SqlDialect
         return base.CreateDbParameter(name, type, value);
     }
 
-    // Db2 LUW supports ANSI MERGE regardless of detected version (supported since Db2 v8) — matches Oracle's
-    // pattern of not gating this behind MaxSupportedStandard/IsInitialized.
+    // Db2 LUW supports ANSI MERGE regardless of detected version (supported since Db2 v8).
     public override bool SupportsMerge => true;
+    public override bool SupportsWindowFunctions => true;
+    public override bool SupportsCommonTableExpressions => true;
 
     public override bool SupportsSavepoints => true;
 

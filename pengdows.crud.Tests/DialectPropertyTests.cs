@@ -124,7 +124,7 @@ public class DialectPropertyTests
                     false,
                     true,
                     true,
-                    true,
+                    false,
                     true,
                     true)),
             SupportedDatabase.Sqlite => new DialectPropertyConfig(

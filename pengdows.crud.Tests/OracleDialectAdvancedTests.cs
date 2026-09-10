@@ -281,16 +281,6 @@ public class OracleDialectAdvancedTests
     }
 
     [Fact]
-    public void SqlStandardLevel_Should_Return_Supported_Level()
-    {
-        // Act
-        var level = _dialect.SqlStandardLevel;
-
-        // Assert
-        Assert.True(level >= SqlStandardLevel.Sql92);
-    }
-
-    [Fact]
     public void SupportsIdentityColumns_Should_Return_Expected_Value()
     {
         // Oracle 12c+ supports identity columns
@@ -376,32 +366,6 @@ public class OracleDialectAdvancedTests
         Assert.Equal(DbType.String, clobParam.DbType);
     }
 
-    [Theory]
-    [InlineData(21, 0, SqlStandardLevel.Sql2016)]
-    [InlineData(19, 0, SqlStandardLevel.Sql2016)]
-    [InlineData(18, 0, SqlStandardLevel.Sql2011)]
-    [InlineData(12, 0, SqlStandardLevel.Sql2008)]
-    [InlineData(11, 0, SqlStandardLevel.Sql2003)]
-    [InlineData(10, 0, SqlStandardLevel.Sql99)]
-    [InlineData(9, 0, SqlStandardLevel.Sql99)]
-    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor,
-        SqlStandardLevel expected)
-    {
-        var version = new Version(major, minor);
-
-        var compliance = _dialect.DetermineStandardCompliance(version);
-
-        Assert.Equal(expected, compliance);
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_Should_Return_Sql2003_For_Null_Version()
-    {
-        var compliance = _dialect.DetermineStandardCompliance(null);
-
-        Assert.Equal(SqlStandardLevel.Sql2003, compliance);
-    }
-
     [Fact]
     public void GetVersionQuery_Should_Return_Oracle_Version_Query()
     {
@@ -461,17 +425,6 @@ public class OracleDialectAdvancedTests
         Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(1024, _dialect.MaxOutputParameters);
         Assert.Equal(30, _dialect.ParameterNameMaxLength);
-    }
-
-    [Fact]
-    public void MaxSupportedStandard_Should_Work_When_Not_Initialized()
-    {
-        var newDialect = new OracleDialect(_factory, NullLogger<OracleDialect>.Instance);
-
-        // Should return the result of DetermineStandardCompliance(null) when not initialized
-        var maxStandard = newDialect.MaxSupportedStandard;
-
-        Assert.Equal(SqlStandardLevel.Sql2003, maxStandard);
     }
 
     [Fact]

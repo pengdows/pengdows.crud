@@ -307,16 +307,6 @@ public class PostgreSqlDialectTests
         Assert.Equal(SupportedDatabase.PostgreSql, _dialect.DatabaseType);
     }
 
-    [Fact]
-    public void SqlStandardLevel_Should_Return_Supported_Level()
-    {
-        // Act
-        var level = _dialect.SqlStandardLevel;
-
-        // Assert
-        Assert.True(level >= SqlStandardLevel.Sql92);
-    }
-
     [Theory]
     [InlineData("test", "@test")]
     [InlineData("p1", "@p1")]
@@ -403,33 +393,6 @@ public class PostgreSqlDialectTests
         Assert.Contains("Options='-c default_transaction_read_only=on'", connection.ConnectionString);
     }
 
-    [Theory]
-    [InlineData("15.0.0", SqlStandardLevel.Sql2016)]
-    [InlineData("13.5.0", SqlStandardLevel.Sql2011)]
-    [InlineData("11.2.0", SqlStandardLevel.Sql2008)]
-    [InlineData("9.6.0", SqlStandardLevel.Sql2003)]
-    [InlineData("8.4.0", SqlStandardLevel.Sql92)]
-    public void DetermineStandardCompliance_ReturnsCorrectStandardLevel(string versionString, SqlStandardLevel expected)
-    {
-        var version = new Version(versionString);
-
-        // Use reflection to call the protected method
-        var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object[] { version })!;
-
-        Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_NullVersion_ReturnsDefault()
-    {
-        var method = typeof(PostgreSqlDialect).GetMethod("DetermineStandardCompliance",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (SqlStandardLevel)method!.Invoke(_dialect, new object?[] { null })!;
-
-        Assert.Equal(SqlStandardLevel.Sql2008, result);
-    }
 
     [Fact]
     public void ConnectionStringBuilder_IsNotNull()
@@ -598,29 +561,6 @@ public class PostgreSqlDialectTests
         Assert.Equal("Options='-c default_transaction_read_only=on'", parameter);
     }
 
-    [Theory]
-    [InlineData(15, SqlStandardLevel.Sql2016)]
-    [InlineData(13, SqlStandardLevel.Sql2011)]
-    [InlineData(11, SqlStandardLevel.Sql2008)]
-    [InlineData(9, SqlStandardLevel.Sql2003)]
-    [InlineData(8, SqlStandardLevel.Sql92)]
-    public void GetMajorVersionToStandardMapping_Should_Return_Correct_Mappings(int majorVersion,
-        SqlStandardLevel expectedLevel)
-    {
-        var mappings = _dialect.GetMajorVersionToStandardMapping();
-
-        Assert.True(mappings.ContainsKey(majorVersion));
-        Assert.Equal(expectedLevel, mappings[majorVersion]);
-    }
-
-    [Fact]
-    public void GetDefaultStandardLevel_Should_Return_Sql2008()
-    {
-        var defaultLevel = _dialect.GetDefaultStandardLevel();
-
-        Assert.Equal(SqlStandardLevel.Sql2008, defaultLevel);
-    }
-
     [Fact]
     public void Version_Dependent_Features_Should_Work_When_Not_Initialized()
     {
@@ -664,17 +604,6 @@ public class PostgreSqlDialectTests
         var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, NullLogger<PostgreSqlDialect>.Instance);
         await dialect.DetectDatabaseInfoAsync(tracked);
         Assert.Equal(expected, dialect.SupportsOverridingSystemValue);
-    }
-
-    [Fact]
-    public void MaxSupportedStandard_Should_Work_When_Not_Initialized()
-    {
-        var newDialect = new PostgreSqlDialect(_factory, NullLogger<PostgreSqlDialect>.Instance);
-
-        // Should return the result of GetDefaultStandardLevel() when not initialized
-        var maxStandard = newDialect.MaxSupportedStandard;
-
-        Assert.Equal(SqlStandardLevel.Sql2008, maxStandard);
     }
 
     [Fact]

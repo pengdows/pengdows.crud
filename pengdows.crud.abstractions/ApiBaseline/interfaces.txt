@@ -284,7 +284,6 @@ property pengdows.crud.IDataSourceInformation::Product : pengdows.crud.enums.Sup
 property pengdows.crud.IDataSourceInformation::QuotePrefix : string { get; }
 property pengdows.crud.IDataSourceInformation::QuoteSuffix : string { get; }
 property pengdows.crud.IDataSourceInformation::RequiresStoredProcParameterNameMatch : bool { get; }
-property pengdows.crud.IDataSourceInformation::StandardCompliance : pengdows.crud.enums.SqlStandardLevel { get; }
 property pengdows.crud.IDataSourceInformation::SupportsDropTableIfExists : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsInsertOnConflict : bool { get; }
 property pengdows.crud.IDataSourceInformation::SupportsMerge : bool { get; }
@@ -370,7 +369,6 @@ property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.cr
 property pengdows.crud.dialects.IDatabaseProductInfo::ParsedVersion : System.Version { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ProductName : string { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ProductVersion : string { get; set; }
-property pengdows.crud.dialects.IDatabaseProductInfo::StandardCompliance : pengdows.crud.enums.SqlStandardLevel { get; set; }
 property pengdows.crud.dialects.ISqlDialect::BooleanDbType : System.Data.DbType { get; }
 property pengdows.crud.dialects.ISqlDialect::CanUseModernFeatures : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::CompositeIdentifierSeparator : string { get; }
@@ -389,7 +387,6 @@ property pengdows.crud.dialects.ISqlDialect::MaxOutputParameters : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxRowsPerBatch : int { get; }
-property pengdows.crud.dialects.ISqlDialect::MaxSupportedStandard : pengdows.crud.enums.SqlStandardLevel { get; }
 property pengdows.crud.dialects.ISqlDialect::MergeUpdateRequiresTargetAlias : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::MinPoolSizeSettingName : string { get; }
 property pengdows.crud.dialects.ISqlDialect::ParameterMarker : string { get; }

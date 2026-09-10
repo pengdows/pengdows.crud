@@ -493,12 +493,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual int ParameterNameMaxLength => 128;
     public virtual ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-    /// <summary>
-    /// The highest SQL standard level this database/version supports
-    /// </summary>
-    public virtual SqlStandardLevel MaxSupportedStandard =>
-        IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
-
     // SQL standard defaults - can be overridden for database-specific behavior
     public virtual string QuotePrefix => "\""; // SQL-92 standard
     public virtual string QuoteSuffix => "\""; // SQL-92 standard
@@ -552,20 +546,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     protected virtual bool NeedsCommonConversions => !SupportsNamedParameters;
 
-    // Feature support based on SQL standards and database capabilities
-    public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
-    public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
-    public virtual bool SupportsSubqueries => MaxSupportedStandard >= SqlStandardLevel.Sql92;
-    public virtual bool SupportsUnion => MaxSupportedStandard >= SqlStandardLevel.Sql92;
+    // Feature support based on database capabilities
+    public virtual bool SupportsJoins => true;
+    public virtual bool SupportsOuterJoins => true;
+    public virtual bool SupportsSubqueries => true;
+    public virtual bool SupportsUnion => true;
 
-    // SQL:1999 (SQL3) features
-    public virtual bool SupportsUserDefinedTypes => MaxSupportedStandard >= SqlStandardLevel.Sql99;
-    public virtual bool SupportsArrayTypes => MaxSupportedStandard >= SqlStandardLevel.Sql99;
-    public virtual bool SupportsRegularExpressions => MaxSupportedStandard >= SqlStandardLevel.Sql99;
+    // Advanced type and function features
+    public virtual bool SupportsUserDefinedTypes => false;
+    public virtual bool SupportsArrayTypes => false;
+    public virtual bool SupportsRegularExpressions => false;
 
-    // SQL:2003 features
-    public virtual bool SupportsMerge => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
-    public virtual bool SupportsXmlTypes => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
+    public virtual bool SupportsMerge => false;
+    public virtual bool SupportsXmlTypes => false;
     public virtual bool SupportsReadOnlyTransactions => false;
 
     // See ISqlDialect docs for the full rationale on each — all three are DuckDB-only overrides.
@@ -578,26 +571,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual bool SupportsUniqueConstraints => true;
     public virtual bool SupportsCheckConstraints => true;
     public virtual DbType BooleanDbType => DbType.Boolean;
-    public virtual bool SupportsWindowFunctions => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
-    public virtual bool SupportsCommonTableExpressions => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
+    public virtual bool SupportsWindowFunctions => false;
+    public virtual bool SupportsCommonTableExpressions => false;
 
-    // SQL:2008 features
-    public virtual bool SupportsInsteadOfTriggers => MaxSupportedStandard >= SqlStandardLevel.Sql2008;
-    public virtual bool SupportsTruncateTable => MaxSupportedStandard >= SqlStandardLevel.Sql2008;
+    public virtual bool SupportsInsteadOfTriggers => false;
+    public virtual bool SupportsTruncateTable => true;
 
-    // SQL:2011 features
-    public virtual bool SupportsTemporalData => MaxSupportedStandard >= SqlStandardLevel.Sql2011;
-    public virtual bool SupportsEnhancedWindowFunctions => MaxSupportedStandard >= SqlStandardLevel.Sql2011;
+    public virtual bool SupportsTemporalData => false;
+    public virtual bool SupportsEnhancedWindowFunctions => false;
 
-    // SQL:2016 features
-    public virtual bool SupportsJsonTypes => MaxSupportedStandard >= SqlStandardLevel.Sql2016;
-    public virtual bool SupportsRowPatternMatching => MaxSupportedStandard >= SqlStandardLevel.Sql2016;
+    public virtual bool SupportsJsonTypes => false;
+    public virtual bool SupportsRowPatternMatching => false;
 
-    // SQL:2019 features
-    public virtual bool SupportsMultidimensionalArrays => MaxSupportedStandard >= SqlStandardLevel.Sql2019;
+    public virtual bool SupportsMultidimensionalArrays => false;
 
-    // SQL:2023 features
-    public virtual bool SupportsPropertyGraphQueries => MaxSupportedStandard >= SqlStandardLevel.Sql2023;
+    public virtual bool SupportsPropertyGraphQueries => false;
 
     // Modern SQL/JSON feature gates (safe defaults)
     public virtual bool SupportsSqlJsonConstructors => false;
@@ -761,20 +749,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             ProductName = "Unknown",
             ProductVersion = string.Empty,
-            DatabaseType = DatabaseType,
-            StandardCompliance = SqlStandardLevel.Sql92
+            DatabaseType = DatabaseType
         };
     }
 
     /// <summary>
-    /// Indicates whether SQL:2003 or later features may be used.
+    /// Indicates whether modern SQL features (CTEs and window functions) may be used.
     /// </summary>
-    public bool CanUseModernFeatures => MaxSupportedStandard >= SqlStandardLevel.Sql2003;
+    public virtual bool CanUseModernFeatures => SupportsCommonTableExpressions && SupportsWindowFunctions;
 
     /// <summary>
     /// Indicates whether the database meets SQL-92 compatibility.
     /// </summary>
-    public bool HasBasicCompatibility => MaxSupportedStandard >= SqlStandardLevel.Sql92;
+    public virtual bool HasBasicCompatibility => true;
 
     public virtual string WrapSimpleName(string name)
     {
@@ -1916,19 +1903,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 }
             }
 
-            var standardCompliance = DetermineStandardCompliance(parsedVersion);
-
             _productInfo = new DatabaseProductInfo
             {
                 ProductName = productName,
                 ProductVersion = versionString,
                 ParsedVersion = parsedVersion,
-                DatabaseType = databaseType,
-                StandardCompliance = standardCompliance
+                DatabaseType = databaseType
             };
 
-            Logger.LogInformation("Detected database: {ProductName} {Version} (SQL Standard: {Standard})", productName,
-                versionString, standardCompliance);
+            Logger.LogInformation("Detected database: {ProductName} {Version}", productName, versionString);
             return _productInfo;
         }
         catch (Exception ex)
@@ -1940,8 +1923,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 ProductName = "Unknown",
                 // Surface meaningful context for tests/diagnostics when version retrieval fails
                 ProductVersion = $"Error retrieving version: {ex.Message}",
-                DatabaseType = DatabaseType,
-                StandardCompliance = SqlStandardLevel.Sql92
+                DatabaseType = DatabaseType
             };
             return _productInfo;
         }
@@ -2064,24 +2046,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
-    /// Gets a mapping of major versions to SQL standard levels. Override in derived classes.
-    /// </summary>
-    /// <returns>Dictionary mapping major version numbers to standard compliance levels</returns>
-    public virtual Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-    {
-        return new Dictionary<int, SqlStandardLevel>();
-    }
-
-    /// <summary>
-    /// Gets the default SQL standard level when version information is unavailable
-    /// </summary>
-    /// <returns>Default SQL standard level</returns>
-    public virtual SqlStandardLevel GetDefaultStandardLevel()
-    {
-        return SqlStandardLevel.Sql92;
-    }
-
-    /// <summary>
     /// Hook for database-specific connection configuration. Override to provide custom logic.
     /// </summary>
     /// <param name="connection">Database connection to configure</param>
@@ -2127,37 +2091,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     #endregion
 
-    /// <summary>
-    /// Determines SQL standard compliance based on database version.
-    /// Default implementation uses version mapping from GetMajorVersionToStandardMapping().
-    /// Override for complex version logic.
-    /// </summary>
-    public virtual SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return GetDefaultStandardLevel();
-        }
-
-        var mapping = GetMajorVersionToStandardMapping();
-        if (mapping.Count == 0)
-        {
-            return GetDefaultStandardLevel();
-        }
-
-        // Find the highest version that the current version meets or exceeds
-        var applicableVersions = mapping
-            .Where(kvp => version.Major >= kvp.Key)
-            .OrderByDescending(kvp => kvp.Key)
-            .ToList();
-
-        if (applicableVersions.Count == 0)
-        {
-            return GetDefaultStandardLevel();
-        }
-
-        return applicableVersions[0].Value;
-    }
 
     public virtual IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
     {
@@ -2825,7 +2758,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // ---- Legacy utility helpers (kept for test compatibility) ----
     public virtual bool SupportsIdentityColumns => false;
     public virtual bool SupportsReturningClause => SupportsInsertReturning;
-    public SqlStandardLevel SqlStandardLevel => MaxSupportedStandard;
 
     public virtual bool IsUniqueViolation(Exception ex)
     {

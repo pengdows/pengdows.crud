@@ -96,8 +96,9 @@ internal class OracleDialect : SqlDialect
     // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
-    public override SqlStandardLevel MaxSupportedStandard =>
-        IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
+    public override bool SupportsWindowFunctions => true;
+    public override bool SupportsCommonTableExpressions => true;
+    public override bool SupportsArrayTypes => true;
 
     public override bool SupportsNamespaces => true;
 
@@ -586,23 +587,6 @@ internal class OracleDialect : SqlDialect
         }
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql2003;
-        }
-
-        return version.Major switch
-        {
-            >= 21 => SqlStandardLevel.Sql2016,
-            >= 19 => SqlStandardLevel.Sql2016,
-            >= 18 => SqlStandardLevel.Sql2011,
-            >= 12 => SqlStandardLevel.Sql2008,
-            >= 11 => SqlStandardLevel.Sql2003,
-            _ => SqlStandardLevel.Sql99
-        };
-    }
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {

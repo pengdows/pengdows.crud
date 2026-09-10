@@ -25,7 +25,7 @@ metadata-flavored subset: detected product name/version, parsed `Version`, quoti
 parameter marker pattern/regex/max length, named/repeated-parameter support, parameter/output
 limits, default-prepare recommendation, procedure wrapping style, a handful of DDL-capability
 flags (`SupportsDropTableIfExists`, `SupportsTruncateTable`, `SupportsMerge`,
-`SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), `StandardCompliance`, fallback-dialect
+`SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), fallback-dialect
 status, and `GetCompatibilityWarning()`. Everything on it also appears on `ISqlDialect`, which is
 the larger and more current surface — reach for `context.Dialect` first; `DataSourceInfo` exists
 for callers that only need this narrower metadata view.
@@ -67,15 +67,13 @@ don't call it directly.
 ## Consumer-facing capability flags, by category
 
 This groups the actual capability surface. For per-database values, see
-`docs/supported-databases.md`'s matrix; for *why* ~20 of these derive from one detected value
-instead of being independently implemented per dialect, see `docs/architecture.md`'s "Capability
-Flags Derive From One Enum" section — get `MaxSupportedStandard`/`ProductInfo.StandardCompliance`
-right and most `Supports*` flags below follow automatically, with explicit per-dialect overrides
-only where a real engine's behavior diverges from its claimed standard-year compliance.
+`docs/supported-databases.md`'s matrix; for the architectural design, see `docs/architecture.md`'s
+"Explicit Capability Properties" section — universal baseline capabilities default to `true`,
+advanced features default safely to `false`, and individual dialects override concrete capabilities
+explicitly with version-aware logic.
 
 **Identity & versioning:** `DatabaseType`, `ProductInfo` (`IDatabaseProductInfo`), `IsInitialized`,
-`MaxSupportedStandard` / `StandardCompliance`, `IsFallbackDialect`, `GetCompatibilityWarning()`,
-`CanUseModernFeatures`, `HasBasicCompatibility`.
+`IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, `HasBasicCompatibility`.
 
 **Parameters & identifiers:** `ParameterMarker`, `SupportsNamedParameters`,
 `SupportsRepeatedNamedParameters`, `SupportsSetValuedParameters`, `MaxParameterLimit`,

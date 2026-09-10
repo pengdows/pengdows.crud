@@ -495,23 +495,6 @@ internal class FirebirdDialect : SqlDialect
         return "Firebird";
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql92;
-        }
-
-        return version.Major switch
-        {
-            >= 5 => SqlStandardLevel.Sql2016,
-            >= 4 => SqlStandardLevel.Sql2011,
-            >= 3 => SqlStandardLevel.Sql2008,
-            >= 2 => SqlStandardLevel.Sql2003,
-            _ => SqlStandardLevel.Sql92
-        };
-    }
-
     public override Version? ParseVersion(string versionString)
     {
         if (string.IsNullOrWhiteSpace(versionString))

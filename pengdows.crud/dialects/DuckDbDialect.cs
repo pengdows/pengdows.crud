@@ -330,24 +330,6 @@ internal class DuckDbDialect : SqlDialect
         return "DuckDB";
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
-    {
-        if (version == null)
-        {
-            // DuckDB has excellent SQL standard compliance even in early versions
-            return SqlStandardLevel.Sql2016;
-        }
-
-        // DuckDB version mapping (major.minor.patch)
-        return version.Major switch
-        {
-            >= 1 => SqlStandardLevel.Sql2016, // v1.0+ has excellent SQL:2016 compliance
-            0 when version.Minor >= 9 => SqlStandardLevel.Sql2016, // v0.9+ modern features
-            0 when version.Minor >= 7 => SqlStandardLevel.Sql2011, // v0.7+ good compliance
-            0 when version.Minor >= 5 => SqlStandardLevel.Sql2008, // v0.5+ basic modern features
-            _ => SqlStandardLevel.Sql2003 // Early versions
-        };
-    }
 
     public override Version? ParseVersion(string versionString)
     {
