@@ -123,28 +123,13 @@ internal class SnowflakeDialect : SqlDialect
     // (SupportsCheckConstraints = false) — this exception category structurally cannot occur.
     public override bool IsCheckConstraintViolation(DbException ex) => false;
 
-    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
-    {
-        var sqlState = TryGetProviderSqlState(ex);
-
-        // NOT NULL (SQLSTATE 23502) is the one constraint Snowflake actually enforces — see
-        // IsUniqueViolation/IsForeignKeyViolation/IsCheckConstraintViolation for why the other
-        // ANSI class-23 codes can't occur here.
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
-        {
-            category = DbErrorCategory.ConstraintViolation;
-            return true;
-        }
-
-        if (ex.Message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase))
-        {
-            category = DbErrorCategory.ConstraintViolation;
-            return true;
-        }
-
-        category = DbErrorCategory.Unknown;
-        return false;
-    }
+    // No TryClassifyProviderException override: its only prior branch was ConstraintViolation
+    // (NOT NULL, SQLSTATE 23502 or message "non-nullable" — the one constraint Snowflake actually
+    // enforces), now redundant since SqlDialect.ClassifyException already checks
+    // IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation before
+    // ever calling this method. Snowflake has no dialect-specific Deadlock/SerializationFailure/
+    // Timeout/ReadOnlyViolation/AmbiguousResult signal, so the base SqlDialect default (always
+    // false) is correct as-is.
 
     // Snowflake optimized batching
     public override int MaxRowsPerBatch => 16384; // Optimized for cloud warehouse bulk loads

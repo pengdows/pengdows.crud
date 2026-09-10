@@ -114,6 +114,10 @@ internal class OracleDialect : SqlDialect
     public override bool IsCheckConstraintViolation(DbException ex) =>
         TryGetProviderErrorCode(ex) == 2290;
 
+    // ConstraintViolation is deliberately not checked here — SqlDialect.ClassifyException already
+    // checks IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation
+    // before ever calling this method, so a redundant error-code-list re-check here would just be
+    // a second, independently-maintained copy of the same "is this a constraint violation" signal.
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var errorCode = TryGetProviderErrorCode(ex);
@@ -127,12 +131,6 @@ internal class OracleDialect : SqlDialect
         if (errorCode == 8177)
         {
             category = DbErrorCategory.SerializationFailure;
-            return true;
-        }
-
-        if (errorCode is 1 or 1400 or 2290 or 2291 or 2292)
-        {
-            category = DbErrorCategory.ConstraintViolation;
             return true;
         }
 

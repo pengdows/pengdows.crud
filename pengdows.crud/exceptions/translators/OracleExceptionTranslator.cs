@@ -71,21 +71,13 @@ internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        switch (errorCode)
+        // Deadlock (60)/SerializationFailure (8177)/Timeout classification is delegated to the
+        // dialect's single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            case 60:
-                return new DeadlockException(
-                    $"{operationKind} deadlocked on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
-            case 8177:
-                return new SerializationConflictException(
-                    $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
-        }
-
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
-        {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

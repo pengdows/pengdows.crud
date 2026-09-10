@@ -897,11 +897,26 @@ public interface ISqlDialect
     /// The default implementation uses message heuristics; database-specific dialects
     /// should override this to use error codes for accurate classification.
     /// </returns>
+    // This default is dead code for every dialect shipped in this library — SqlDialect (the base
+    // every real dialect derives from) always overrides it with a stronger implementation that
+    // checks constraint-kind first via IsXxxViolation and uses DbExceptionTranslationSupport.
+    // LooksLikeTimeout (an internal helper this abstractions-only interface can't reference) for
+    // timeout detection. Kept structurally in sync with that override (constraint-kind checked
+    // before the message-based fallbacks) for a genuinely external ISqlDialect implementation
+    // that doesn't override this method itself, even though it can't share the stronger internal
+    // timeout heuristic.
     DbErrorCategory ClassifyException(Exception exception)
     {
         if (exception is OperationCanceledException)
         {
             return DbErrorCategory.None;
+        }
+
+        if (exception is DbException dbEx &&
+            (IsUniqueViolation(dbEx) || IsForeignKeyViolation(dbEx) || IsNotNullViolation(dbEx) ||
+             IsCheckConstraintViolation(dbEx)))
+        {
+            return DbErrorCategory.ConstraintViolation;
         }
 
         var message = exception.Message;

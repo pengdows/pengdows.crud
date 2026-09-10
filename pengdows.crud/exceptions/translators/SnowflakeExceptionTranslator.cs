@@ -21,9 +21,15 @@ internal sealed class SnowflakeExceptionTranslator : IDbExceptionTranslator
     {
         var database = dialect.DatabaseType;
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        // Timeout classification is delegated to the dialect's single ClassifyException/
+        // TryClassifyProviderException source (Snowflake has no dialect-specific
+        // Deadlock/SerializationFailure signal, so this only ever resolves via the generic
+        // LooksLikeTimeout fallback inside ClassifyException itself) — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);

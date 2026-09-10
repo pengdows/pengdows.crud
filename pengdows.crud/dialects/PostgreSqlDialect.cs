@@ -326,6 +326,12 @@ internal class PostgreSqlDialect : SqlDialect
             return true;
         }
 
+        // Checked as a generic category-level fallback, distinct from IsUniqueViolation/
+        // IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation (already checked
+        // earlier in SqlDialect.ClassifyException, before this method is ever called) — those four
+        // each match one exact SqlState (23505/23503/23502/23514), so a different or generic
+        // class-23 SqlState (e.g. bare "23000", or "23P01" exclusion_violation) matches none of
+        // them individually but is still, generically, a constraint violation.
         if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
         {
             category = DbErrorCategory.ConstraintViolation;

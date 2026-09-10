@@ -8,12 +8,11 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates DuckDB-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: connection (message-based) → SQLSTATE (23505/23503/23502/23514/25006) →
-/// message patterns (constraint violations, then read-only) → timeout → fallback.
-/// SQLSTATE and message patterns are checked first because DuckDB error messages include
-/// the violating row values, which may contain user data such as "timeout" and would
-/// otherwise trigger a false-positive timeout classification.
-/// Message-pattern fallback covers drivers that do not populate SqlState.
+/// Detection order: connection (message-based) → file-lock contention → constraint-kind
+/// (delegated to the dialect) → ReadOnlyViolation/SerializationFailure/Timeout (delegated to the
+/// dialect's ClassifyException) → fallback. Checked before the delegated category classification
+/// because DuckDB error messages include the violating row values, which may contain user data
+/// such as "timeout" and would otherwise trigger a false-positive timeout classification.
 /// DuckDB is an embedded, file-based engine with no TCP connection concept — its closest
 /// analog to a "connection failure" is a file-open failure (bad path, permissions, corrupt
 /// file), matching how SqliteExceptionTranslator treats SQLITE_CANTOPEN/SQLITE_NOTADB.
@@ -28,7 +27,6 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
     public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
         var database = dialect.DatabaseType;
-        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var message = exception.Message;
 
@@ -56,26 +54,6 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             return new FileLockContentionException(
                 $"{operationKind} could not open a DuckDB connection because another process holds the file lock: {message}",
                 database, exception, errorCode: errorCode);
-        }
-
-        // Confirmed against a real concurrent-write conflict: two connections each open a
-        // transaction, both read row X, one commits an update, then the other's update on the
-        // same row throws with message "TransactionContext Error: Conflict on update!" and
-        // ErrorType == Transaction (NOT the "Serialization" enum member the name might suggest —
-        // verified empirically rather than assumed). The same MVCC conflict occurs on DELETE
-        // ("Conflict on tuple deletion!") and INSERT ("Conflict on insert!") -- match the shared
-        // "Conflict on" prefix rather than "Conflict on update" alone so all three are covered.
-        if (message.Contains("Conflict on", StringComparison.OrdinalIgnoreCase))
-        {
-            return new SerializationConflictException(
-                $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
-
-        // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection
-        if (sqlState == "25006")
-        {
-            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
         // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —
@@ -113,23 +91,17 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        // DuckDB read-only access mode violation (message-based fallback when SqlState is absent).
-        // DuckDB enforces read-only at the connection/binder level and rejects writes before execution:
-        //   "Binder Error: Cannot execute statement of type "INSERT" on database "..." which is attached in read-only mode!"
-        //   "Binder Error: Cannot execute statement of type "UPDATE" on database "..." which is attached in read-only mode!"
-        // The error fires at bind time, not after partial execution, and is non-retryable.
-        // Also catches other drivers/wrappers that surface similar messages.
-        // Checked before timeout to prevent false-positive timeout classification when
-        // the word "timeout" appears in a read-only error message.
-        if (message.Contains("read-only", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("read only", StringComparison.OrdinalIgnoreCase))
+        // ReadOnlyViolation (both SqlState 25006 and the message-based "Binder Error: ... attached
+        // in read-only mode!" fallback), SerializationFailure ("Conflict on" MVCC conflicts), and
+        // Timeout classification are delegated to the dialect's single ClassifyException/
+        // TryClassifyProviderException source — see DbExceptionTranslationSupport.
+        // TryCreateFromCategory's doc comment. DuckDbDialect's override checks the identical
+        // signals this translator used to check directly, so this is a behavior-preserving
+        // delegation, not a narrowing.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
-        }
-
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
-        {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

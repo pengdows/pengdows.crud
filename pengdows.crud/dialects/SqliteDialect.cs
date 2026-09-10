@@ -351,6 +351,13 @@ internal class SqliteDialect : SqlDialect
             return true;
         }
 
+        // Checked as a generic category-level fallback, distinct from IsUniqueViolation/
+        // IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation (already checked
+        // earlier in SqlDialect.ClassifyException, before this method is ever called) — those four
+        // each require a specific extended result code (1555/2067/787/1299/275) or specific message
+        // wording to identify ONE kind, so a bare SQLITE_CONSTRAINT (19, with no more specific
+        // extended code and no matching message text) matches none of them individually but is
+        // still, generically, a constraint violation.
         if (errorCode == 19 ||
             errorCode == 1555 ||
             errorCode == 2067 ||

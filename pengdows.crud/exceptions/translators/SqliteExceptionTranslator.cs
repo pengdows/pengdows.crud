@@ -8,8 +8,8 @@ namespace pengdows.crud.exceptions.translators;
 /// Translates SQLite-specific exceptions into the pengdows.crud exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: timeout → connection (SQLITE_CANTOPEN/SQLITE_NOTADB) →
-/// read-only violation (SQLITE_READONLY = 8) →
+/// Detection order: timeout/read-only violation (delegated to the dialect) →
+/// connection (SQLITE_CANTOPEN/SQLITE_NOTADB) →
 /// unique/PK constraint → check constraint → not-null → foreign-key → fallback.
 /// Error codes are extracted via reflection on the <c>SqliteException.SqliteErrorCode</c>
 /// property (Microsoft.Data.Sqlite), so this translator works without a hard reference
@@ -25,9 +25,14 @@ internal sealed class SqliteExceptionTranslator : IDbExceptionTranslator
     {
         var database = dialect.DatabaseType;
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        // Timeout (generic LooksLikeTimeout heuristic) and ReadOnlyViolation (SQLITE_READONLY = 8)
+        // classification is delegated to the dialect's single ClassifyException/
+        // TryClassifyProviderException source — see DbExceptionTranslationSupport.
+        // TryCreateFromCategory's doc comment.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         var message = exception.Message;
@@ -37,12 +42,6 @@ internal sealed class SqliteExceptionTranslator : IDbExceptionTranslator
         if (errorCode is 14 or 26)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
-        }
-
-        // SQLITE_READONLY = 8: write attempted on a read-only connection
-        if (errorCode is 8)
-        {
-            return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);
         }
 
         if (exception is DbException dbEx)

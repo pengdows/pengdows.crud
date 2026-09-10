@@ -111,14 +111,21 @@ internal class FirebirdDialect : SqlDialect
             return true;
         }
 
-        // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations
+        // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations, with a
+        // message fallback for drivers that don't populate SqlState. Checked as a generic
+        // category-level fallback, distinct from IsUniqueViolation/IsForeignKeyViolation/
+        // IsNotNullViolation/IsCheckConstraintViolation (already checked earlier in
+        // SqlDialect.ClassifyException, before this method is ever called) — those four are all
+        // message-substring based and each need specific wording to identify ONE kind, so a bare
+        // SqlState with no matching message text (or an empty message) still needs to register as
+        // a constraint violation at the category level even though Translate's kind-specific
+        // dispatch cannot name which kind it is.
         if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;
         }
 
-        // Message fallback for drivers that do not populate SqlState
         if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))

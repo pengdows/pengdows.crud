@@ -226,6 +226,14 @@ internal class SqlServerDialect : SqlDialect
             return true;
         }
 
+        // Checked as a generic category-level fallback, distinct from IsUniqueViolation/
+        // IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation (already checked
+        // earlier in SqlDialect.ClassifyException, before this method is ever called) — 547 is
+        // shared by both FK and CHECK violations there, disambiguated only by specific message
+        // wording ("FOREIGN KEY"/"REFERENCE constraint" vs "CHECK constraint"), so a 547 (or
+        // 515/2601/2627) that doesn't match either message shape still needs to register as a
+        // constraint violation at the category level even though Translate's kind-specific
+        // dispatch cannot name which kind it is.
         if (errorCode is 515 or 547 or 2601 or 2627)
         {
             category = DbErrorCategory.ConstraintViolation;

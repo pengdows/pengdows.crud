@@ -24,9 +24,16 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
                 database, exception, sqlState, errorCode, constraintName);
         }
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) || errorCode == -2)
+        // Deadlock (1205)/SerializationFailure (3960)/Timeout (-2, or the generic LooksLikeTimeout
+        // heuristic) classification is delegated to the dialect's single ClassifyException/
+        // TryClassifyProviderException source — see DbExceptionTranslationSupport.
+        // TryCreateFromCategory's doc comment. Checked here (before Connection, matching this
+        // method's original ordering) so a PK-violation message containing "timeout" in its
+        // payload is still caught by the uniqueness check above first.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         if (errorCode is 10053 or 10054 or 10060 or 233 or 10061)
@@ -66,18 +73,6 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        return errorCode switch
-        {
-            1205 => new DeadlockException(
-                $"{operationKind} deadlocked on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            // 3960: snapshot isolation transaction aborted due to update conflict — another
-            // transaction modified/deleted the row since this transaction's snapshot was taken.
-            // Only reachable under SNAPSHOT or READ_COMMITTED_SNAPSHOT isolation.
-            3960 => new SerializationConflictException(
-                $"{operationKind} encountered a serialization conflict on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
-        };
+        return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
     }
 }

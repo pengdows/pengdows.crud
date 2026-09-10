@@ -221,6 +221,48 @@ public class DbExceptionTranslatorRegistryTests
         Assert.Same(inner, result.InnerException);
     }
 
+    // -------------------------------------------------------------------------
+    // Exception-classification unification: Deadlock/SerializationFailure/Timeout/
+    // ReadOnlyViolation/AmbiguousResult classification now flows through each dialect's
+    // ClassifyException/TryClassifyProviderException (the same method metrics/AnalyzeException
+    // already used) instead of a second, independently hand-maintained switch inside each
+    // translator. These two regression tests prove translator behavior genuinely changed, not
+    // just that ClassifyException reports the right category in isolation — before this
+    // unification, neither of these cases was reachable from Translate() at all and both fell
+    // through to the generic DatabaseOperationException fallback.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void PostgresTranslator_LockNotAvailableSqlState_Returns_CommandTimeoutException()
+    {
+        // 55P03 (lock_not_available): PostgreSqlDialect.TryClassifyProviderException already
+        // recognized this for metrics, but PostgresExceptionTranslator's own Timeout check
+        // (LooksLikeTimeout, or 57014 + a "timeout"-containing message) never covered it —
+        // genuinely new translator behavior from the unification, not a refactor.
+        var translator = new PostgresExceptionTranslator();
+        var inner = new SqlStateDbException("55P03", "canceling statement due to lock timeout");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.PostgreSql), inner, DbOperationKind.Query);
+
+        Assert.IsType<CommandTimeoutException>(result);
+    }
+
+    [Fact]
+    public void MySqlTranslator_SerializationFailureSqlState_Returns_SerializationConflictException()
+    {
+        // SqlState 40001 without errorCode 1213: MySqlDialect.TryClassifyProviderException already
+        // recognized this for metrics, but MySqlExceptionTranslator itself never checked SqlState
+        // at all (only errorCode 1213, whose own SqlState happens to already be 40001) — genuinely
+        // new translator behavior from the unification, reachable for whatever other MySQL-family
+        // error carries this SqlState without that specific errorCode.
+        var translator = new MySqlExceptionTranslator();
+        var inner = new SqlStateDbException("40001", "some other lock-related failure");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.MySql), inner, DbOperationKind.Query);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
+
     [Fact]
     public void FallbackTranslator_TimeoutException_Returns_CommandTimeoutException()
     {

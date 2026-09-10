@@ -40,7 +40,6 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
-        var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
 
         if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
         {
@@ -82,16 +81,15 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) || code is 911 or 913)
+        // Deadlock/SerializationFailure/Timeout classification is delegated to the dialect's
+        // single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. Db2Dialect's override
+        // checks the identical SqlState-or-SQLCODE-magnitude signals this translator used to check
+        // directly, so this is a behavior-preserving delegation, not a narrowing.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return new SerializationConflictException(
-                $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                database, exception, sqlState, errorCode, constraintName);
-        }
-
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
-        {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

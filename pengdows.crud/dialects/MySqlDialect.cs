@@ -221,12 +221,21 @@ internal class MySqlDialect : SqlDialect
             return true;
         }
 
+        // 1213's own SqlState is already "40001"; since errorCode is checked first above, this
+        // only ever fires for some other MySQL-family error that carries SqlState 40001 without
+        // errorCode 1213.
         if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.SerializationFailure;
             return true;
         }
 
+        // Checked as a generic category-level fallback, distinct from IsUniqueViolation/
+        // IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation (already checked
+        // earlier in SqlDialect.ClassifyException, before this method is ever called) — those four
+        // each need to positively identify ONE specific kind from its own error code, so a
+        // constraint-shaped error code not in any of their individual lists still needs to
+        // register as a constraint violation at the category level.
         if (errorCode is 1048 or 1062 or 1169 or 1216 or 1451 or 1452 or 3819 or 4025)
         {
             category = DbErrorCategory.ConstraintViolation;

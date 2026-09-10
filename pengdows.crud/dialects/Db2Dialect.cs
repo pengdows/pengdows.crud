@@ -81,18 +81,30 @@ internal sealed class Db2Dialect : SqlDialect
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var sqlState = TryGetProviderSqlState(ex);
+        var errorCode = TryGetProviderErrorCode(ex);
+        var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
 
         // Db2 SQLSTATE 40001 covers both deadlock (SQLCODE -911 reason 2) and lock timeout
         // (SQLCODE -911 reason 68 / -913) — SQLSTATE alone can't disambiguate; treated as
-        // SerializationFailure here, matching other ANSI-SQLSTATE dialects. Verify against real
-        // DB2Exception shape in Phase 2.
-        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
+        // SerializationFailure here, matching other ANSI-SQLSTATE dialects. The SQLCODE-magnitude
+        // fallback (911/913) matches Db2ExceptionTranslator's own check, for whenever SqlState
+        // isn't populated but the numeric code is (see DB2Exception's message-embedded-SQLSTATE
+        // situation documented on that translator).
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) || code is 911 or 913)
         {
             category = DbErrorCategory.SerializationFailure;
             return true;
         }
 
-        // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations
+        // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations. Checked here as a
+        // generic category-level fallback distinct from IsUniqueViolation/IsForeignKeyViolation/
+        // IsNotNullViolation/IsCheckConstraintViolation (already checked earlier, in
+        // SqlDialect.ClassifyException, before this method is ever called): those four each need
+        // to positively identify ONE specific kind, so a bare class-23 SqlState with no more
+        // specific signal (e.g. a raw SQLCODE the message-based kind checks don't recognize)
+        // matches none of them individually but is still, generically, a constraint violation —
+        // this branch is what lets ClassifyException's category answer stay accurate for that case
+        // even though Translate's kind-specific dispatch cannot name which kind it is.
         if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
         {
             category = DbErrorCategory.ConstraintViolation;

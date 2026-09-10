@@ -44,12 +44,17 @@ internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+        // Deadlock/SerializationFailure/Timeout classification is delegated to the dialect's
+        // single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. FirebirdDialect's
+        // override checks the identical SqlState-or-message signals this translator used to check
+        // directly, so this is a behavior-preserving delegation, not a narrowing. Checked before
+        // constraint-kind so the ambiguous-40001 case isn't shadowed by a coincidental constraint
+        // message match.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return new SerializationConflictException(
-                $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                database, exception, errorCode: errorCode);
+            return classified;
         }
 
         // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect

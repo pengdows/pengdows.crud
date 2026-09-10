@@ -1725,6 +1725,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return ex.Message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
     }
 
+    // Single source of truth for "what category is this raw provider exception" — consumed by
+    // both this method's own callers (metrics/AnalyzeException) AND, as of the exception-
+    // classification unification, every IDbExceptionTranslator.Translate implementation for
+    // Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult dispatch, the same
+    // way constraint-kind (Unique/FK/NotNull/Check) was already unified via IsXxxViolation
+    // delegation (see CLAUDE.md "Adding a New Database" checklist item 22). Previously,
+    // TryClassifyProviderException and each translator's own hardcoded SqlState/error-code
+    // switch were two independently hand-maintained lists for the same raw-exception → category
+    // question — the same kind of drift risk that already bit the constraint-kind system once
+    // (SqliteExceptionTranslator's old bare message check disagreeing with SqliteDialect.
+    // IsUniqueViolation). Constraint-kind is checked first here (via the same IsXxxViolation
+    // predicates the translators already delegate to) so a dialect's TryClassifyProviderException
+    // override no longer needs its own redundant SqlState-range check for "is this some kind of
+    // constraint violation" — see each dialect's override, simplified accordingly.
     public virtual DbErrorCategory ClassifyException(Exception exception)
     {
         if (exception is OperationCanceledException)
@@ -1732,10 +1746,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return DbErrorCategory.None;
         }
 
-        if (exception is DbException dbEx &&
-            TryClassifyProviderException(dbEx, out var providerCategory))
+        if (exception is DbException dbEx)
         {
-            return providerCategory;
+            if (IsUniqueViolation(dbEx) || IsForeignKeyViolation(dbEx) || IsNotNullViolation(dbEx) ||
+                IsCheckConstraintViolation(dbEx))
+            {
+                return DbErrorCategory.ConstraintViolation;
+            }
+
+            if (TryClassifyProviderException(dbEx, out var providerCategory))
+            {
+                return providerCategory;
+            }
+        }
+
+        // DbExceptionTranslationSupport.LooksLikeTimeout walks the InnerException chain and checks
+        // the exception's real type (not just its own message) — strictly more capable than a bare
+        // message.Contains("timeout") here, and it's what every translator already uses, so this
+        // fallback now agrees with them instead of independently under-detecting timeouts.
+        if (pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        {
+            return DbErrorCategory.Timeout;
         }
 
         var message = exception.Message;
@@ -1758,12 +1789,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
             message.Contains("violates", StringComparison.OrdinalIgnoreCase))
         {
             return DbErrorCategory.ConstraintViolation;
-        }
-
-        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
-        {
-            return DbErrorCategory.Timeout;
         }
 
         return DbErrorCategory.Unknown;

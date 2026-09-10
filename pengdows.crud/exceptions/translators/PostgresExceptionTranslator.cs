@@ -13,10 +13,18 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) ||
-            (sqlState == "57014" && exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+        // Deadlock (40P01)/SerializationFailure (40001)/AmbiguousResult (40003, CockroachDB's real
+        // "result is ambiguous" error, kept in this shared translator since it's inert for
+        // PostgreSql/AuroraPostgreSql)/Timeout (55P03 lock_not_available, 57014 query_canceled, or
+        // the generic LooksLikeTimeout heuristic) classification is delegated to the dialect's
+        // single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. Deliberately not
+        // SerializationConflictException for 40003 — retry is not automatically safe there (see
+        // AmbiguousResultException's own remarks).
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
@@ -57,22 +65,6 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        return sqlState switch
-        {
-            "40P01" => new DeadlockException(
-                $"{operationKind} deadlocked on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "40001" => new SerializationConflictException(
-                $"{operationKind} hit a serialization conflict on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            // See the matching comment in SqlDialect.cs's classification switch: 40003 is
-            // CockroachDB's real "result is ambiguous" error (kept in this shared translator
-            // since it's inert, not wrong, for PostgreSql/AuroraPostgreSql). Deliberately NOT
-            // SerializationConflictException -- retry is not automatically safe here.
-            "40003" => new AmbiguousResultException(
-                $"{operationKind} result is ambiguous on {database} (commit outcome unknown): {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
-        };
+        return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
     }
 }

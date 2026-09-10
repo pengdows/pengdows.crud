@@ -168,25 +168,51 @@ internal class DuckDbDialect : SqlDialect
     {
         var sqlState = TryGetProviderSqlState(ex);
 
-        // DuckDB uses ANSI SQLSTATE codes; class 23 = constraint violations
+        // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection.
+        if (sqlState == "25006")
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        // DuckDB enforces read-only at the connection/binder level and rejects writes before
+        // execution, with no SqlState populated for this shape — confirmed live: "Binder Error:
+        // Cannot execute statement of type "INSERT" on database "..." which is attached in
+        // read-only mode!"
+        if (ex.Message.Contains("read-only", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("read only", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        // Confirmed against a real concurrent-write conflict: DuckDBException.ErrorType reports
+        // "Transaction" (not "Serialization") with this message shape across all three mutation
+        // kinds ("Conflict on insert!"/"Conflict on update!"/"Conflict on tuple deletion!") — match
+        // the shared "Conflict on" prefix rather than "Conflict on update" alone so all three are
+        // covered, matching DuckDbExceptionTranslator's own check.
+        if (ex.Message.Contains("Conflict on", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // DuckDB uses ANSI SQLSTATE class 23 for constraint violations, with a message fallback
+        // for drivers that don't populate SqlState. Checked as a generic category-level fallback,
+        // distinct from IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/
+        // IsCheckConstraintViolation (already checked earlier in SqlDialect.ClassifyException,
+        // before this method is ever called) — those four each need to positively identify ONE
+        // specific kind, so a constraint signal too generic for any of them individually still
+        // needs to register as a constraint violation at the category level.
         if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;
         }
 
-        // Message fallback: DuckDB drivers may not always populate SqlState
         if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.ConstraintViolation;
-            return true;
-        }
-
-        // Confirmed against a real concurrent-write conflict: DuckDBException.ErrorType reports
-        // "Transaction" (not "Serialization") with this exact message text.
-        if (ex.Message.Contains("Conflict on update", StringComparison.OrdinalIgnoreCase))
-        {
-            category = DbErrorCategory.SerializationFailure;
             return true;
         }
 

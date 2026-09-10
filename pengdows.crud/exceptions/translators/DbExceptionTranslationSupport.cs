@@ -63,6 +63,85 @@ internal static partial class DbExceptionTranslationSupport
             errorCode: TryGetErrorCode(exception));
     }
 
+    public static DeadlockException CreateDeadlock(
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return new DeadlockException(
+            $"{operationKind} deadlocked on {database}: {exception.Message}",
+            database,
+            exception,
+            sqlState: TryGetSqlState(exception),
+            errorCode: TryGetErrorCode(exception),
+            constraintName: TryGetConstraintName(exception));
+    }
+
+    public static SerializationConflictException CreateSerializationConflict(
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return new SerializationConflictException(
+            $"{operationKind} encountered a serialization conflict on {database}: {exception.Message}",
+            database,
+            exception,
+            sqlState: TryGetSqlState(exception),
+            errorCode: TryGetErrorCode(exception),
+            constraintName: TryGetConstraintName(exception));
+    }
+
+    public static AmbiguousResultException CreateAmbiguousResult(
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return new AmbiguousResultException(
+            $"{operationKind} result is ambiguous on {database} (commit outcome unknown): {exception.Message}",
+            database,
+            exception,
+            sqlState: TryGetSqlState(exception),
+            errorCode: TryGetErrorCode(exception),
+            constraintName: TryGetConstraintName(exception));
+    }
+
+    /// <summary>
+    /// Single dispatch point from a <see cref="DbErrorCategory"/> (as returned by
+    /// <see cref="pengdows.crud.dialects.ISqlDialect.ClassifyException"/>) to the matching typed
+    /// <see cref="DatabaseException"/> subtype — the second half of the exception-classification
+    /// unification alongside constraint-kind's existing IsXxxViolation delegation. Every
+    /// <see cref="IDbExceptionTranslator"/> implementation calls this instead of independently
+    /// re-deriving Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult from its
+    /// own hardcoded SqlState/error-code switch, so there is exactly one place per dialect
+    /// (<c>TryClassifyProviderException</c>) that decides what a raw exception means for these
+    /// categories, not two independently hand-maintained copies.
+    /// </summary>
+    /// <returns>
+    /// The typed exception for a category with a distinct <see cref="DatabaseException"/> subtype,
+    /// or <see langword="null"/> for <see cref="DbErrorCategory.None"/>,
+    /// <see cref="DbErrorCategory.ConstraintViolation"/> (already handled earlier in
+    /// <c>Translate</c> via the more precise <c>IsXxxViolation</c> predicates, which know WHICH
+    /// constraint kind), and <see cref="DbErrorCategory.Unknown"/> — callers fall through to their
+    /// own remaining provider-specific checks (e.g. connection failures, which aren't a
+    /// <see cref="DbErrorCategory"/> at all) and finally <see cref="CreateFallback"/>.
+    /// </returns>
+    public static DatabaseException? TryCreateFromCategory(
+        DbErrorCategory category,
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return category switch
+        {
+            DbErrorCategory.Deadlock => CreateDeadlock(database, exception, operationKind),
+            DbErrorCategory.SerializationFailure => CreateSerializationConflict(database, exception, operationKind),
+            DbErrorCategory.Timeout => CreateTimeout(database, exception, operationKind),
+            DbErrorCategory.ReadOnlyViolation => CreateReadOnlyViolation(database, exception, operationKind),
+            DbErrorCategory.AmbiguousResult => CreateAmbiguousResult(database, exception, operationKind),
+            _ => null
+        };
+    }
+
     public static bool LooksLikeTimeout(Exception exception)
     {
         // Some providers (e.g. Npgsql on a client-side CommandTimeout) wrap the real
@@ -75,7 +154,8 @@ internal static partial class DbExceptionTranslationSupport
             if (current is TimeoutException ||
                 current.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
                 (current is DbException &&
-                 current.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+                 (current.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                  current.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase))))
             {
                 return true;
             }

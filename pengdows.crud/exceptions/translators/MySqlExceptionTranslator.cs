@@ -24,9 +24,22 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
                 database, exception, sqlState, errorCode, constraintName);
         }
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) || errorCode == 1205)
+        // Deadlock (1213)/Timeout (1205, or the generic LooksLikeTimeout heuristic)/
+        // SerializationFailure classification is delegated to the dialect's single
+        // ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. Checked here (before
+        // Connection, matching this method's original ordering) so a PK-violation message
+        // containing "timeout" in its payload is still caught by the uniqueness check above first.
+        // MySqlDialect.TryClassifyProviderException also recognizes SqlState "40001" as
+        // SerializationFailure — genuinely new behavior for this translator (previously
+        // unreachable here, since 1213's own SqlState is already "40001" and errorCode is checked
+        // first), not just a refactor: any future MySQL-family error that carries SqlState 40001
+        // without errorCode 1213 now correctly becomes SerializationConflictException instead of
+        // falling through to the generic fallback.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         if (errorCode is 1040 or 1042 or 1043 or 1044)
@@ -58,12 +71,6 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
             }
         }
 
-        return errorCode switch
-        {
-            1213 => new DeadlockException(
-                $"{operationKind} deadlocked on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
-        };
+        return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
     }
 }
