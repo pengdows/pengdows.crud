@@ -5,6 +5,19 @@
 // AI SUMMARY:
 // - T-SQL family (shared heritage with SQL Server): @ parameter marker, EXEC proc
 //   wrapping, SAVE TRANSACTION / ROLLBACK TRANSACTION savepoints.
+// - Deliberately does NOT derive from SqlServerDialect despite that shared heritage.
+//   Sybase SQL Server (1987) predates Microsoft's license of the same code, but the
+//   two codebases split ~1993 and have had zero coordinated development since - unlike
+//   MariaDb/TiDb inheriting MySqlDialect (still the same driver/wire protocol today) or
+//   CockroachDb/YugabyteDb inheriting PostgreSqlDialect (an actively, continuously
+//   maintained compatibility target), there is no current, checkable foundation left to
+//   inherit: separate ADO.NET providers entirely (AdoNetCore.AseClient vs
+//   Microsoft.Data.SqlClient - different connection strings, parameter binding,
+//   exception types), and the engine behavior itself has diverged on everything but
+//   invocation syntax (see the OUTPUT/RETURNING, CTE, and window-function gaps below).
+//   `Exec`-style ProcWrappingStyle is the one genuine coincidence left; it is not
+//   evidence of a relationship worth encoding in the type system. Inherit from
+//   SqlDialect directly, like every other from-scratch dialect.
 // - Verified live against ASE 16.0 SP02 (nguoianphu/docker-sybase, AdoNetCore.AseClient
 //   0.19.2) rather than assumed from SQL Server parity — several details differ:
 //     * MERGE is supported but rejects a trailing semicolon ("Incorrect syntax near ';'").
