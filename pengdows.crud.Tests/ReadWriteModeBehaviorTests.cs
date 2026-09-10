@@ -59,21 +59,19 @@ public class ReadWriteModeBehaviorTests
         Assert.Equal(PoolLabel.Writer, ex.PoolLabel);
     }
 
+    // SwitchingFromReadOnlyToReadWrite_EnablesReadAndWrite removed: ReadWriteMode is write-once,
+    // set from DatabaseContextConfiguration.ReadWriteMode during construction only. Its setter was
+    // public, letting a caller flip _isReadConnection/_isWriteConnection post-construction while
+    // the connection string, pool sizing, and connection-strategy selection - all baked in at
+    // construction from the original mode - stayed exactly as they were, silently desyncing from
+    // the flag this test asserted actually worked. The setter is now `private`; a context that
+    // needs ReadWrite access must be constructed with it, not switched into it afterward.
     [Fact]
-    public void SwitchingFromReadOnlyToReadWrite_EnablesReadAndWrite()
+    public void ReadWriteMode_HasNoPublicSetter()
     {
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
-            ReadWriteMode = ReadWriteMode.ReadOnly
-        };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
-
-        ctx.ReadWriteMode = ReadWriteMode.ReadWrite;
-
-        Assert.Equal(ReadWriteMode.ReadWrite, ctx.ReadWriteMode);
-        Assert.False(ctx.IsReadOnlyConnection);
-        ctx.AssertIsReadConnection();
-        ctx.AssertIsWriteConnection();
+        var property = typeof(DatabaseContext).GetProperty(nameof(DatabaseContext.ReadWriteMode));
+        Assert.NotNull(property);
+        Assert.False(property!.SetMethod?.IsPublic ?? false,
+            "ReadWriteMode must be write-once from configuration, not mutable after construction.");
     }
 }

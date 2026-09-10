@@ -222,10 +222,18 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private ReadWriteMode _readWriteMode = ReadWriteMode.ReadWrite;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Write-once, set from <see cref="configuration.DatabaseContextConfiguration.ReadWriteMode"/>
+    /// during construction (see Initialization.cs) - deliberately not settable after that.
+    /// _isReadConnection/_isWriteConnection are baked into the connection string, pool sizing,
+    /// and connection-strategy selection at construction (Initialization.cs), none of which
+    /// re-run on a later change, so allowing one here would desync those from this flag rather
+    /// than actually reconfigure anything.
+    /// </remarks>
     public ReadWriteMode ReadWriteMode
     {
         get => _readWriteMode;
-        set
+        private set
         {
             _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
             _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
@@ -363,10 +371,19 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
 
+    /// <remarks>
+    /// Write-once, set from the detected dialect's real ProcWrappingStyle after DB detection
+    /// completes (DatabaseContext.Initialization.cs assigns the backing field directly at each
+    /// of its detection call sites - Standard/SingleWriter, sync/async - never through this
+    /// setter). The setter is internal, not private, purely so test fixtures that construct a
+    /// context against a fake dialect (or reflectively swap the dialect post-construction) can
+    /// force a specific style without going through real detection - never intended for use by
+    /// real callers, which is why IDatabaseContext.ProcWrappingStyle itself is get-only.
+    /// </remarks>
     public ProcWrappingStyle ProcWrappingStyle
     {
         get => _procWrappingStyle;
-        set
+        internal set
         {
             _procWrappingStyle = value;
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(value);
