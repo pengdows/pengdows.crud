@@ -57,59 +57,16 @@ public class SybaseDialectTests
         => Assert.False(Dialect().RequiresMergeStatementTerminator);
 
     [Fact]
-    public void BuildBatchUpdateSql_NoVersionColumn_OmitsVersionClauses()
+    public void SupportsBatchUpdate_IsFalse()
     {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 42);
-
-        var sql = query.ToString();
-        Assert.Contains("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(';', sql);
-    }
-
-    [Fact]
-    public void BuildBatchUpdateSql_NonOpaqueVersionColumn_AddsOnPredicateAndIncrementsInSet()
-    {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 1,
-            versionColumnName: "\"version\"",
-            versionColumnIsOpaque: false);
-
-        var sql = query.ToString();
-        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"version\" = t.\"version\" + 1", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain(';', sql);
-    }
-
-    [Fact]
-    public void BuildBatchUpdateSql_OpaqueVersionColumn_AddsOnPredicateButNoIncrement()
-    {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 1,
-            versionColumnName: "\"version\"",
-            versionColumnIsOpaque: true);
-
-        var sql = query.ToString();
-        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("+ 1", sql, StringComparison.Ordinal);
+        // Verified live: the dialect previously set this true with a BuildBatchUpdateSql override
+        // generating "MERGE INTO t USING (VALUES (...), (...)) AS s(...)" — ASE has no
+        // VALUES-derived-table-as-MERGE-source support and rejects it with "Incorrect syntax near
+        // the keyword 'VALUES'." (the single-row SELECT-derived USING source BuildUpsertMerge uses
+        // for ordinary upsert is a different, supported construct). Falls back to one BuildUpdate
+        // container per entity instead, the same safe fallback SQLite/MySQL/MariaDB/Firebird/Spanner
+        // use.
+        Assert.False(Dialect().SupportsBatchUpdate);
     }
 
     [Fact]

@@ -16,6 +16,10 @@
 // - DatabaseTopology record: IsLocalDb, IsEmbedded flags.
 // - Firebird embedded detection: checks ServerType, ClientLibrary, path patterns.
 // - Used by DatabaseContext to select appropriate SqlDialect.
+// - Sync (DetectFromConnectionWithDetail) and async (DetectFromConnectionWithDetailAsync) entry
+//   points share ALL branching logic via DetectSchemaProduct + DetectFlavorCoreAsync; the only
+//   sync/async difference (blocking vs. real-async scalar execution) is isolated behind an
+//   executeScalar delegate, so a new probe is added in exactly one place for both paths.
 // =============================================================================
 
 using System.Data;
@@ -99,7 +103,12 @@ internal static class DatabaseDetectionService
     }
 
     /// <summary>
-    /// Async twin of <see cref="DetectFromConnectionWithDetail"/>.
+    /// Async twin of <see cref="DetectFromConnectionWithDetail"/>. Shares every branching/gating
+    /// decision with the sync path through <see cref="DetectSchemaProduct"/> and
+    /// <see cref="DetectFlavorCoreAsync"/> — the only genuine sync/async difference (the flavor
+    /// probes' scalar execution) is isolated behind the <c>executeScalar</c> delegate passed to
+    /// <see cref="DetectFlavorCoreAsync"/>, so there is exactly one place that decides which probe
+    /// runs for which base product.
     /// </summary>
     internal static async Task<DatabaseDetectionResult> DetectFromConnectionWithDetailAsync(
         IDbConnection? connection, CancellationToken cancellationToken = default)
@@ -113,57 +122,15 @@ internal static class DatabaseDetectionService
 
         try
         {
-            // Step 1: Schema-based detection — no true async GetSchema equivalent in ADO.NET,
-            // so this step stays synchronous. It is a fast, typically-cached, no-round-trip
-            // metadata lookup, unlike the flavor probes below which are real queries.
-            var detected = SupportedDatabase.Unknown;
-            try
+            var (detected, schemaAttempt, shortCircuit) = DetectSchemaProduct(connection);
+            attempts.Add(schemaAttempt);
+            if (shortCircuit != null)
             {
-                DataTable schema;
-                if (connection is DbConnection dbConn)
-                {
-                    schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                }
-                else if (connection is ITrackedConnection trackedConn)
-                {
-                    schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                }
-                else
-                {
-                    schema = new DataTable();
-                }
-
-                if (schema.Rows.Count > 0)
-                {
-                    var productName = schema.Rows[0].Field<string>("DataSourceProductName");
-                    var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
-
-                    detected = Match(productName, SchemaProductTokens);
-
-                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
-                        productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-                        return new DatabaseDetectionResult(SupportedDatabase.MariaDb, attempts);
-                    }
-
-                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
-                        productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-                        return new DatabaseDetectionResult(SupportedDatabase.TiDb, attempts);
-                    }
-                }
-
-                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-            }
-            catch (Exception ex)
-            {
-                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message));
+                return new DatabaseDetectionResult(shortCircuit.Value, attempts);
             }
 
-            var (flavor, flavorAttempts) = await DetectFlavorWithDetailAsync(connection, detected, cancellationToken)
-                .ConfigureAwait(false);
+            var (flavor, flavorAttempts) = await DetectFlavorCoreAsync(
+                connection, detected, ExecuteScalarAsyncCore, cancellationToken).ConfigureAwait(false);
             attempts.AddRange(flavorAttempts);
             if (flavor != SupportedDatabase.Unknown)
             {
@@ -190,6 +157,8 @@ internal static class DatabaseDetectionService
     /// <summary>
     /// Same detection as <see cref="DetectFromConnection"/>, but returns the full trail of
     /// probes attempted (and why any of them failed) instead of discarding that evidence.
+    /// Shares <see cref="DetectSchemaProduct"/> and <see cref="DetectFlavorCoreAsync"/> with the
+    /// async twin above — see its remarks for how the sync/async split is kept to one place.
     /// </summary>
     internal static DatabaseDetectionResult DetectFromConnectionWithDetail(IDbConnection? connection)
     {
@@ -202,61 +171,22 @@ internal static class DatabaseDetectionService
 
         try
         {
-            // Step 1: Schema-based detection — identifies the base product without SQL queries.
-            // For fakeDb, GetSchema() returns a DataTable based on EmulatedProduct.
-            var detected = SupportedDatabase.Unknown;
-            try
+            var (detected, schemaAttempt, shortCircuit) = DetectSchemaProduct(connection);
+            attempts.Add(schemaAttempt);
+            if (shortCircuit != null)
             {
-                DataTable schema;
-                if (connection is DbConnection dbConn)
-                {
-                    schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                }
-                else if (connection is ITrackedConnection trackedConn)
-                {
-                    schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
-                }
-                else
-                {
-                    schema = new DataTable();
-                }
-
-                if (schema.Rows.Count > 0)
-                {
-                    var productName = schema.Rows[0].Field<string>("DataSourceProductName");
-                    var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
-
-                    detected = Match(productName, SchemaProductTokens);
-
-                    // MariaDB reports DataSourceProductName = "MySQL" but its version contains "MariaDB"
-                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
-                        productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-                        return new DatabaseDetectionResult(SupportedDatabase.MariaDb, attempts);
-                    }
-
-                    // TiDB reports DataSourceProductName = "MySQL" but its version contains "TiDB"
-                    if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
-                        productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-                        return new DatabaseDetectionResult(SupportedDatabase.TiDb, attempts);
-                    }
-                }
-
-                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
-            }
-            catch (Exception ex)
-            {
-                // Schema unavailable — continue to flavor detection
-                attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message));
+                return new DatabaseDetectionResult(shortCircuit.Value, attempts);
             }
 
-            // Step 2: Flavor refinement — runs probes gated on the base product.
-            // Aurora MySQL probe only runs for MySql/Unknown base; Aurora PG only for PostgreSql/Unknown.
-            // This avoids unnecessary round-trips to SQLite, Oracle, SQL Server, etc.
-            var (flavor, flavorAttempts) = DetectFlavorWithDetail(connection, detected);
+            // DetectFlavorCoreAsync only ever awaits ExecuteScalarSyncAsCompletedTask below, which
+            // never performs real asynchronous I/O — it wraps a blocking ADO.NET ExecuteScalar()
+            // call in an already-completed Task. So this await always completes synchronously,
+            // and GetAwaiter().GetResult() never blocks a thread waiting on anything: it just
+            // unwraps a result that is already there. This keeps this method genuinely
+            // synchronous end-to-end while still sharing all branching logic with the async path.
+            var (flavor, flavorAttempts) = DetectFlavorCoreAsync(
+                connection, detected, ExecuteScalarSyncAsCompletedTask, CancellationToken.None)
+                .GetAwaiter().GetResult();
             attempts.AddRange(flavorAttempts);
             if (flavor != SupportedDatabase.Unknown)
             {
@@ -278,14 +208,84 @@ internal static class DatabaseDetectionService
     }
 
     /// <summary>
-    /// Async twin of <see cref="DetectFlavorWithDetail"/>. The round-trip probe queries use
-    /// <see cref="DbCommand.ExecuteScalarAsync(CancellationToken)"/> via <see cref="ExecuteScalarAsyncCore"/>
-    /// instead of blocking <c>ExecuteScalar()</c>. <c>ServerVersion</c> access is a plain property
-    /// read (no I/O), so it stays synchronous like the sync version.
+    /// Step 1 of detection: schema-based base-product lookup, shared verbatim by the sync and
+    /// async entry points above. There is no true async <c>GetSchema</c> equivalent in ADO.NET, so
+    /// this step is always synchronous — it is a fast, typically-cached, no-round-trip metadata
+    /// lookup, unlike the flavor probes which are real queries.
     /// </summary>
-    private static async Task<(SupportedDatabase Product, List<DetectionProbeAttempt> Attempts)> DetectFlavorWithDetailAsync(
+    private static (SupportedDatabase Detected, DetectionProbeAttempt Attempt, SupportedDatabase? ShortCircuit)
+        DetectSchemaProduct(IDbConnection connection)
+    {
+        // Identifies the base product without SQL queries. For fakeDb, GetSchema() returns a
+        // DataTable based on EmulatedProduct.
+        var detected = SupportedDatabase.Unknown;
+        try
+        {
+            DataTable schema;
+            if (connection is DbConnection dbConn)
+            {
+                schema = dbConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            }
+            else if (connection is ITrackedConnection trackedConn)
+            {
+                schema = trackedConn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            }
+            else
+            {
+                schema = new DataTable();
+            }
+
+            if (schema.Rows.Count > 0)
+            {
+                var productName = schema.Rows[0].Field<string>("DataSourceProductName");
+                var productVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+
+                detected = Match(productName, SchemaProductTokens);
+
+                // MariaDB reports DataSourceProductName = "MySQL" but its version contains "MariaDB"
+                if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                    productVersion.Contains("mariadb", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (detected, new DetectionProbeAttempt("SchemaDataSourceInformation", true, null),
+                        SupportedDatabase.MariaDb);
+                }
+
+                // TiDB reports DataSourceProductName = "MySQL" but its version contains "TiDB"
+                if (detected == SupportedDatabase.MySql && !string.IsNullOrEmpty(productVersion) &&
+                    productVersion.Contains("tidb", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (detected, new DetectionProbeAttempt("SchemaDataSourceInformation", true, null),
+                        SupportedDatabase.TiDb);
+                }
+            }
+
+            return (detected, new DetectionProbeAttempt("SchemaDataSourceInformation", true, null), null);
+        }
+        catch (Exception ex)
+        {
+            // Schema unavailable — continue to flavor detection
+            return (detected, new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message), null);
+        }
+    }
+
+    /// <summary>
+    /// The single, shared flavor-refinement core used by both <see cref="DetectFromConnectionWithDetail"/>
+    /// (sync) and <see cref="DetectFromConnectionWithDetailAsync"/> (async). Every gating decision —
+    /// which probe runs for which base product, and in what order — lives here exactly once; the
+    /// <paramref name="executeScalar"/> delegate is the only seam between the two callers, letting the
+    /// sync path run a genuinely blocking <c>ExecuteScalar()</c> and the async path genuinely await
+    /// <see cref="DbCommand.ExecuteScalarAsync(CancellationToken)"/> without duplicating the branching
+    /// logic itself. This is what closed a real, previously-shipped bug: a probe added to only one of
+    /// the two old hand-written twins would compile clean and pass whichever twin's own tests happened
+    /// to run, then silently misclassify the database on the other path in production (see
+    /// CLAUDE.md's "Adding a New Database" checklist item 15, and
+    /// <c>DatabaseDetectionSyncAsyncParityTests</c>) — adding a probe here now takes effect on both
+    /// paths by construction, not by remembering to touch two files.
+    /// </summary>
+    private static async Task<(SupportedDatabase Product, List<DetectionProbeAttempt> Attempts)> DetectFlavorCoreAsync(
         IDbConnection? connection,
         SupportedDatabase detected,
+        Func<IDbCommand, CancellationToken, Task<object?>> executeScalar,
         CancellationToken cancellationToken)
     {
         var attempts = new List<DetectionProbeAttempt>();
@@ -299,246 +299,6 @@ internal static class DatabaseDetectionService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var serverVersion = string.Empty;
-            if (connection is DbConnection dbConn)
-            {
-                serverVersion = dbConn.ServerVersion;
-            }
-            else if (connection is ITrackedConnection tracked)
-            {
-                serverVersion = tracked.ServerVersion;
-            }
-            else if (connection.GetType().GetProperty("ServerVersion") is { } prop)
-            {
-                serverVersion = prop.GetValue(connection)?.ToString() ?? string.Empty;
-            }
-
-            if (!string.IsNullOrEmpty(serverVersion))
-            {
-                if (serverVersion.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
-                {
-                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
-                    return (SupportedDatabase.TiDb, attempts);
-                }
-                if (serverVersion.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
-                    serverVersion.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
-                {
-                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
-                    return (SupportedDatabase.YugabyteDb, attempts);
-                }
-                if (serverVersion.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
-                {
-                    attempts.Add(new DetectionProbeAttempt("ServerVersion", true, null));
-                    return (SupportedDatabase.CockroachDb, attempts);
-                }
-            }
-
-            var isMySqlFamily = detected == SupportedDatabase.MySql || detected == SupportedDatabase.Unknown;
-            var isPgFamily = detected == SupportedDatabase.PostgreSql || detected == SupportedDatabase.Unknown;
-
-            using var cmd = connection.CreateCommand();
-
-            if (isMySqlFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT @@aurora_version";
-                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
-                    if (scalar is string { Length: > 0 })
-                    {
-                        attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
-                        return (SupportedDatabase.AuroraMySql, attempts);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", false, ex.Message));
-                }
-            }
-
-            if (isMySqlFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT @@memsql_version";
-                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
-                    if (scalar is string { Length: > 0 })
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
-                        return (SupportedDatabase.SingleStore, attempts);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", false, ex.Message));
-                }
-            }
-
-            if (isMySqlFamily || isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT version()";
-                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
-                    var version = scalar?.ToString() ?? string.Empty;
-
-                    if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
-                        return (SupportedDatabase.TiDb, attempts);
-                    }
-                    if (version.Contains("-YB-", StringComparison.OrdinalIgnoreCase) ||
-                        version.Contains("Yugabyte", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
-                        return (SupportedDatabase.YugabyteDb, attempts);
-                    }
-                    if (version.Contains("Cockroach", StringComparison.OrdinalIgnoreCase))
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
-                        return (SupportedDatabase.CockroachDb, attempts);
-                    }
-
-                    attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
-                }
-            }
-
-            // Spanner PostgreSQL interface: this Spanner-specific setting is exposed by
-            // Spanner/PGAdapter but not by PostgreSQL. Gated on isPgFamily (not just
-            // `detected == PostgreSql`) to match every other probe in this method and the sync
-            // twin (DetectFlavorWithDetail) — a real, previously-shipped discrepancy: this gate
-            // used to be `detected == SupportedDatabase.PostgreSql` only, so a connection whose
-            // schema-based classification landed on Unknown got Spanner-probed synchronously but
-            // never asynchronously. See DatabaseDetectionSyncAsyncParityTests for the regression
-            // test that would have caught this.
-            if (isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
-                    if (await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false) is string)
-                    {
-                        attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
-                        return (SupportedDatabase.Spanner, attempts);
-                    }
-                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", false, ex.Message));
-                }
-            }
-
-            if (isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText =
-                        "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
-                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
-                    if (scalar is string { Length: > 0 })
-                    {
-                        attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
-                        return (SupportedDatabase.YugabyteDb, attempts);
-                    }
-
-                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", false, ex.Message));
-                }
-            }
-
-            if (isPgFamily)
-            {
-                try
-                {
-                    cmd.CommandText = "SELECT aurora_version()";
-                    var scalar = await ExecuteScalarAsyncCore(cmd, cancellationToken).ConfigureAwait(false);
-                    if (scalar is string { Length: > 0 })
-                    {
-                        attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
-                        return (SupportedDatabase.AuroraPostgreSql, attempts);
-                    }
-
-                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", false, ex.Message));
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            attempts.Add(new DetectionProbeAttempt("DetectFlavor", false, ex.Message));
-        }
-
-        return (SupportedDatabase.Unknown, attempts);
-    }
-
-    /// <summary>
-    /// Executes a scalar command asynchronously when the command supports it (the normal ADO.NET
-    /// case), falling back to the synchronous path only for an <see cref="IDbCommand"/> that isn't
-    /// a real <see cref="DbCommand"/> — which no supported provider's <c>CreateCommand()</c> returns.
-    /// </summary>
-    private static Task<object?> ExecuteScalarAsyncCore(IDbCommand cmd, CancellationToken cancellationToken)
-    {
-        if (cmd is DbCommand dbCommand)
-        {
-            return dbCommand.ExecuteScalarAsync(cancellationToken);
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(cmd.ExecuteScalar());
-    }
-
-    private static (SupportedDatabase Product, List<DetectionProbeAttempt> Attempts) DetectFlavorWithDetail(
-        IDbConnection? connection,
-        SupportedDatabase detected)
-    {
-        var attempts = new List<DetectionProbeAttempt>();
-
-        if (connection == null)
-        {
-            return (SupportedDatabase.Unknown, attempts);
-        }
-
-        try
-        {
             // ServerVersion-based checks (no query needed)
             var serverVersion = string.Empty;
             if (connection is DbConnection dbConn)
@@ -588,11 +348,16 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT @@aurora_version";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    var scalar = await executeScalar(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
                         return (SupportedDatabase.AuroraMySql, attempts);
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -610,11 +375,16 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT @@memsql_version";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    var scalar = await executeScalar(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
                         return (SupportedDatabase.SingleStore, attempts);
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -633,7 +403,8 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT version()";
-                    var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+                    var scalar = await executeScalar(cmd, cancellationToken).ConfigureAwait(false);
+                    var version = scalar?.ToString() ?? string.Empty;
 
                     if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
                     {
@@ -654,6 +425,10 @@ internal static class DatabaseDetectionService
 
                     attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     /* version() not available */
@@ -666,22 +441,25 @@ internal static class DatabaseDetectionService
             // that probe's fakeDb-style fallback semantics aside, on live Spanner this SHOW
             // returns an empty string (verified against a real Spanner Omni + PGAdapter
             // instance), not null, so `is string` (no length check, unlike the other probes here)
-            // matches even that empty-string case. This is the synchronous twin of the identical
-            // probe in DetectFlavorWithDetailAsync — DatabaseContext's normal constructor path
-            // goes through this synchronous method, not the async one, so without this block here
-            // real Spanner connections silently fell through to plain PostgreSql and never got
-            // SpannerDialect's overrides applied at all.
+            // matches even that empty-string case. Gated on isPgFamily (not just
+            // `detected == PostgreSql`) so a connection whose schema-based classification landed
+            // on Unknown still gets Spanner-probed — see this method's own doc comment for why
+            // that distinction used to matter across two separate implementations.
             if (isPgFamily)
             {
                 try
                 {
                     cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
-                    if (cmd.ExecuteScalar() is string)
+                    if (await executeScalar(cmd, cancellationToken).ConfigureAwait(false) is string)
                     {
                         attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
                         return (SupportedDatabase.Spanner, attempts);
                     }
                     attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -698,13 +476,18 @@ internal static class DatabaseDetectionService
                 {
                     cmd.CommandText =
                         "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    var scalar = await executeScalar(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
                         return (SupportedDatabase.YugabyteDb, attempts);
                     }
 
                     attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -721,13 +504,18 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT aurora_version()";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    var scalar = await executeScalar(cmd, cancellationToken).ConfigureAwait(false);
+                    if (scalar is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
                         return (SupportedDatabase.AuroraPostgreSql, attempts);
                     }
 
                     attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -736,6 +524,10 @@ internal static class DatabaseDetectionService
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             // Ignore
@@ -743,6 +535,39 @@ internal static class DatabaseDetectionService
         }
 
         return (SupportedDatabase.Unknown, attempts);
+    }
+
+    /// <summary>
+    /// Executes a scalar command asynchronously when the command supports it (the normal ADO.NET
+    /// case), falling back to the synchronous path only for an <see cref="IDbCommand"/> that isn't
+    /// a real <see cref="DbCommand"/> — which no supported provider's <c>CreateCommand()</c> returns.
+    /// Passed to <see cref="DetectFlavorCoreAsync"/> as its <c>executeScalar</c> delegate by the
+    /// async entry point.
+    /// </summary>
+    private static Task<object?> ExecuteScalarAsyncCore(IDbCommand cmd, CancellationToken cancellationToken)
+    {
+        if (cmd is DbCommand dbCommand)
+        {
+            return dbCommand.ExecuteScalarAsync(cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(cmd.ExecuteScalar());
+    }
+
+    /// <summary>
+    /// Executes a scalar command synchronously (blocking <see cref="IDbCommand.ExecuteScalar"/>)
+    /// and wraps the already-available result in a completed <see cref="Task{TResult}"/>. Passed to
+    /// <see cref="DetectFlavorCoreAsync"/> as its <c>executeScalar</c> delegate by the sync entry
+    /// point — because this delegate never performs real asynchronous I/O, every <c>await</c>
+    /// inside <see cref="DetectFlavorCoreAsync"/> completes synchronously when driven by this
+    /// delegate, so the sync caller's <c>GetAwaiter().GetResult()</c> never blocks a thread waiting
+    /// on anything.
+    /// </summary>
+    private static Task<object?> ExecuteScalarSyncAsCompletedTask(IDbCommand cmd, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(cmd.ExecuteScalar());
     }
 
     /// <summary>

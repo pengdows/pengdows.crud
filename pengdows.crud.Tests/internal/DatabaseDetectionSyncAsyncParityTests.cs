@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -60,6 +61,15 @@ public class DatabaseDetectionSyncAsyncParityTests
         };
         yield return new object[]
             { "AuroraPostgreSql", SupportedDatabase.PostgreSql, "SELECT aurora_version()", "1.2.3", SupportedDatabase.AuroraPostgreSql };
+        // MySql-family "via Unknown base" gate — the same real-world shape as
+        // SpannerViaUnknownBase above (schema-based classification lands on Unknown before the
+        // flavor probes run), but exercised for the MySql-family gate instead of the PG-family
+        // one. Both sync and async use `detected == MySql || detected == Unknown` for this gate
+        // today, so this currently passes on both sides — it exists to keep it that way.
+        yield return new object[]
+            { "AuroraMySqlViaUnknownBase", SupportedDatabase.Unknown, "SELECT @@aurora_version", "3.04.0.1", SupportedDatabase.AuroraMySql };
+        yield return new object[]
+            { "SingleStoreViaUnknownBase", SupportedDatabase.Unknown, "SELECT @@memsql_version", "9.1.1", SupportedDatabase.SingleStore };
     }
 
     [Theory]
@@ -86,5 +96,55 @@ public class DatabaseDetectionSyncAsyncParityTests
         Assert.Equal(expected, syncResult);
         Assert.Equal(expected, asyncResult);
         Assert.Equal(syncResult, asyncResult);
+    }
+
+    public static IEnumerable<object[]> ServerVersionMarkerScenarios()
+    {
+        // The ServerVersion-based markers run before any family gate and don't consult `detected`
+        // at all in either implementation — the base emulated product here is deliberately the
+        // "wrong" family to prove the marker wins regardless.
+        yield return new object[] { SupportedDatabase.MySql, "5.7.25-TiDB-v6.5.0", SupportedDatabase.TiDb };
+        yield return new object[] { SupportedDatabase.PostgreSql, "12.4-YB-2.9.0.0", SupportedDatabase.YugabyteDb };
+        yield return new object[] { SupportedDatabase.PostgreSql, "v22.1.0 (Cockroach)", SupportedDatabase.CockroachDb };
+    }
+
+    [Theory]
+    [MemberData(nameof(ServerVersionMarkerScenarios))]
+    public async Task SyncAndAsyncDetection_AgreeOnResult_ForServerVersionMarker(
+        SupportedDatabase emulated, string serverVersion, SupportedDatabase expected)
+    {
+        var (syncFactory, syncConn) = CreateConnection(emulated);
+        syncConn.SetServerVersion(serverVersion);
+        var syncResult = DatabaseDetectionService.DetectProduct(syncConn, syncFactory);
+
+        var (asyncFactory, asyncConn) = CreateConnection(emulated);
+        asyncConn.SetServerVersion(serverVersion);
+        var asyncResult = await DatabaseDetectionService.DetectProductAsync(asyncConn, asyncFactory);
+
+        Assert.Equal(expected, syncResult);
+        Assert.Equal(expected, asyncResult);
+        Assert.Equal(syncResult, asyncResult);
+    }
+
+    [Fact]
+    public async Task SyncAndAsyncDetection_ProduceIdenticalProbeAttemptTrails()
+    {
+        // Guards structural parity, not just the final resolved product: two implementations
+        // could agree on the answer while taking a different path to get there. Locking the
+        // probe-name trail down means any future edit to one path without the other fails here
+        // even if it happens not to change the final resolved product for this scenario.
+        var (syncFactory, syncConn) = CreateConnection(SupportedDatabase.MySql);
+        syncConn.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        var syncResult = DatabaseDetectionService.DetectFromConnectionWithDetail(syncConn);
+
+        var (asyncFactory, asyncConn) = CreateConnection(SupportedDatabase.MySql);
+        asyncConn.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        var asyncResult = await DatabaseDetectionService.DetectFromConnectionWithDetailAsync(asyncConn);
+
+        Assert.Equal(SupportedDatabase.AuroraMySql, syncResult.ResolvedProduct);
+        Assert.Equal(syncResult.ResolvedProduct, asyncResult.ResolvedProduct);
+        Assert.Equal(
+            syncResult.Attempts.Select(a => (a.ProbeName, a.Succeeded)),
+            asyncResult.Attempts.Select(a => (a.ProbeName, a.Succeeded)));
     }
 }

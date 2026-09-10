@@ -240,7 +240,7 @@ public class ParallelTestOrchestrator
                 ? new PostgreSqlTestContainer(image, port: 27500, useAdminPasswordEnvVar: true)
                 : new PostgreSqlTestContainer(image),
             (db, sp) => new PostgreSQLTestProvider(db, sp));
-        AddLocal("Spanner", new SpannerOmniTestContainer(), (db, sp) => new PostgreSQLTestProvider(db, sp), 30);
+        AddLocal("Spanner", new SpannerOmniTestContainer(), (db, sp) => new SpannerTestProvider(db, sp), 30);
         AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
         AddDocker("MariaDB", 8, image => new MariaDbContainer(image), (db, sp) => new MariaDbTestProvider(db, sp));
         AddDocker("SQL Server", 25, image => new SqlServerTestContainer(image), (db, sp) => new SqlServerTestProvider(db, sp));

@@ -476,6 +476,11 @@ CREATE TABLE {tableName} (
         {
             SupportedDatabase.Sqlite => "NUMERIC(18,6)",
             SupportedDatabase.Oracle => "NUMBER(18,6)",
+            // Verified live: Spanner's PostgreSQL interface rejects a precision/scale modifier
+            // outright ("P0001: Type modifier is not supported for type <numeric>.") — its NUMERIC
+            // is fixed-precision, so it must be declared bare. See CLAUDE.md's "Adding a New
+            // Database" checklist item 27.
+            SupportedDatabase.Spanner => "NUMERIC",
             _ => "DECIMAL(18,6)"
         };
     }
@@ -600,7 +605,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "UNIQUEIDENTIFIER",
-            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "UUID",
+            SupportedDatabase.PostgreSql => "UUID",
             SupportedDatabase.CockroachDb => "UUID",
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
@@ -609,6 +614,12 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => "CHAR(36)",
+            // Verified live (CLAUDE.md item 17/27): a `uuid` DDL column is accepted at CREATE
+            // TABLE time, but SpannerDialect.GuidFormat stores Guid parameter values as strings
+            // (Npgsql can't bind a real "uuid"-typed parameter against Spanner's PostgreSQL
+            // interface) — the column type has to match that string storage, not the Postgres
+            // "UUID" type name it rides on for everything else.
+            SupportedDatabase.Spanner => "VARCHAR(36)",
             _ => "UUID"
         };
     }
@@ -2490,19 +2501,51 @@ INSERT INTO {table} (
     }
 
     /// <summary>
+    /// FROM clause needed only by databases that reject a table-less <c>SELECT</c> expression —
+    /// Oracle (pre-23c; 23c relaxed this but <c>DUAL</c> still works), Db2, and Firebird each
+    /// require their own "dummy table" for exactly this reason. Verified live: every other
+    /// supported database accepts <c>(SELECT 1 AS v)</c> as a derived table with no FROM clause at
+    /// all. This has nothing to do with join-tree parenthesization — see
+    /// <see cref="TestParenthesizedJoinCapability"/>'s remarks for how that got conflated.
+    /// </summary>
+    private static string GetDummyFromClause(SupportedDatabase product)
+    {
+        return product switch
+        {
+            SupportedDatabase.Oracle => " FROM DUAL",
+            SupportedDatabase.Db2 => " FROM SYSIBM.SYSDUMMY1",
+            SupportedDatabase.Firebird => " FROM RDB$DATABASE",
+            _ => string.Empty
+        };
+    }
+
+    /// <summary>
     /// Proves that a fully parenthesized multi-table join — standard SQL-92 grammar (the
     /// <c>&lt;joined table&gt;</c> production explicitly allows a parenthesized form), and the
     /// syntax Microsoft Access <em>requires</em> for any join beyond two tables — parses and
     /// executes identically across every supported database. No real tables are needed: each
     /// side of the join is itself a one-row derived table, so this is a pure syntax/grammar
     /// check, not a DDL/type-mapping check.
+    ///
+    /// This originally failed live on Db2, Firebird, and Oracle 18c/21c with parser errors
+    /// ("SQL0104N unexpected token )", "Dynamic SQL Error... Token unknown", "ORA-00923: FROM
+    /// keyword not found") that looked like a join-parenthesization rejection — but a live
+    /// diagnostic (trying the same 3-table join with no grouping parens at all, and nested the
+    /// other direction) failed identically in every form on all three, including the flat one.
+    /// The real cause: each subquery was a table-less <c>SELECT 1 AS v</c>, which is invalid
+    /// syntax on these three engines specifically (they require a "dummy table" —
+    /// <c>DUAL</c>/<c>SYSIBM.SYSDUMMY1</c>/<c>RDB$DATABASE</c> respectively) — unrelated to the
+    /// join structure entirely. Adding <see cref="GetDummyFromClause"/> made every join-tree shape
+    /// (including this test's original, fully parenthesized one) pass on all three; Oracle 23c
+    /// passed even before the fix, because it relaxed the FROM-less SELECT restriction.
     /// </summary>
     protected virtual async Task TestParenthesizedJoinCapability()
     {
+        var subquery = $"(SELECT 1 AS v{GetDummyFromClause(_context.Product)})";
         var sc = _context.CreateSqlContainer();
         sc.Query.Append(
-            "SELECT a.v FROM ((SELECT 1 AS v) a INNER JOIN (SELECT 1 AS v) b ON a.v = b.v) " +
-            "INNER JOIN (SELECT 1 AS v) c ON a.v = c.v");
+            $"SELECT a.v FROM ({subquery} a INNER JOIN {subquery} b ON a.v = b.v) " +
+            $"INNER JOIN {subquery} c ON a.v = c.v");
 
         var result = await sc.ExecuteScalarOrNullAsync<int>();
         if (result != 1)
