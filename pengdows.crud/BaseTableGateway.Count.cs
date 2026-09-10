@@ -21,8 +21,9 @@ public abstract partial class BaseTableGateway<TEntity>
     public async ValueTask<long> CountAllAsync(IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("SELECT COUNT(*) FROM ").Append(WrappedTableName);
+        sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect));
         return await sc.ExecuteScalarOrNullAsync<long?>() ?? 0;
     }
 
@@ -36,8 +37,9 @@ public abstract partial class BaseTableGateway<TEntity>
         IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("SELECT COUNT(*) FROM ").Append(WrappedTableName)
+        sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
             .Append(" WHERE ").Append(sc.WrapObjectName(column))
             .Append(isLike ? " LIKE " : " = ");
         var p = sc.AddParameterWithValue("v", DbType.String, value);
@@ -51,8 +53,9 @@ public abstract partial class BaseTableGateway<TEntity>
         IDatabaseContext? context = null)
     {
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("SELECT COUNT(*) FROM ").Append(WrappedTableName)
+        sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
             .Append(" WHERE ").Append(sc.WrapObjectName(column)).Append(" IS NULL");
         return await sc.ExecuteScalarOrNullAsync<long?>() ?? 0;
     }
@@ -80,8 +83,9 @@ public abstract partial class BaseTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
-        sc.Query.Append("SELECT COUNT(*) FROM ").Append(WrappedTableName)
+        sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
             .Append(" WHERE ").Append(sc.WrapObjectName(column)).Append(" = ");
         var p = sc.AddParameterWithValue("v", DbType.String, value);
         sc.Query.Append(sc.MakeParameterName(p));
