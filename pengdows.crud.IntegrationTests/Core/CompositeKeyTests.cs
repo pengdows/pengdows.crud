@@ -2,6 +2,7 @@ using System.Data;
 using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
@@ -356,13 +357,39 @@ public class CompositeKeyTests : DatabaseTestBase
     private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql, string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
-        await using var container = context.CreateSqlContainer(createSql);
-        await container.ExecuteNonQueryAsync();
+        await ExecuteDdlWithTransientRetryAsync(context, createSql);
 
         if (extraSql is not null)
         {
-            await using var extraContainer = context.CreateSqlContainer(extraSql);
-            await extraContainer.ExecuteNonQueryAsync();
+            await ExecuteDdlWithTransientRetryAsync(context, extraSql);
+        }
+    }
+
+    // Verified live: Spanner's CREATE TABLE / CREATE INDEX is a distributed, globally-coordinated
+    // schema change that Spanner serializes one at a time per database — under a long integration
+    // run where many test classes each issue their own DROP/CREATE cycle back-to-back against the
+    // same database, that queue can grow deep enough that a trivially small CREATE TABLE exceeds
+    // even the client's command timeout (reproduced: 3 CompositeKeyTests setup calls failed this
+    // way ~30 minutes into a full Spanner+SqlServer integration run). CommandTimeoutException
+    // already defaults IsTransient=true for exactly this reason (see OperationExceptions.cs) — retry
+    // on it the same way DropTableIfExistsAsync (DatabaseTestBase.cs) already retries transient
+    // DatabaseExceptions, just with a longer backoff since Spanner's schema-change queue drains on
+    // the order of seconds, not the 200ms used there for ordinary transient connection resets.
+    private static async Task ExecuteDdlWithTransientRetryAsync(IDatabaseContext context, string sql)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            await using var container = context.CreateSqlContainer(sql);
+            try
+            {
+                await container.ExecuteNonQueryAsync().ConfigureAwait(false);
+                return;
+            }
+            catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
+            }
         }
     }
 
