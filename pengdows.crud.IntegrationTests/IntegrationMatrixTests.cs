@@ -28,6 +28,11 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         var only = ParseList(Environment.GetEnvironmentVariable("TESTBED_ONLY"));
         var exclude = ParseList(Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
 
+        // FlatFile temporarily disabled here too, same reason as IntegrationTestConfiguration.
+        // BaseProviders (see IntegrationTestFixture.cs): this test uses ParallelTestOrchestrator's
+        // provider list directly rather than BaseProviders, so it needed its own exclusion.
+        exclude.Add("FlatFile");
+
         var results = await orchestrator.RunAllTestsAsync(only, exclude);
         Assert.NotEmpty(results);
 
