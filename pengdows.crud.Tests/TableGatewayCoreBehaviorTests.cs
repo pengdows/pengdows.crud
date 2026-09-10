@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using pengdows.crud;
 using pengdows.crud.attributes;
 using pengdows.crud.dialects;
+using pengdows.crud.enums;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -74,6 +75,54 @@ public class TableGatewayCoreBehaviorTests : SqlLiteContextTestBase
 
         // SQLite does not support namespaces, so schema is dropped — verify table name present
         Assert.Contains(dialect.WrapSimpleName("core_schema"), result1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Regression: _wrappedTableNameCache used to key on the ISqlDialect instance itself
+    // (ConcurrentDictionary<ISqlDialect, string>), unlike every neighboring cache in this class
+    // (_queryCache, _whereParameterNames, the template caches in TableGateway.Sql.cs and
+    // PrimaryKeyTableGateway.Core.cs), which all key on dialect.GetCacheFingerprint()
+    // (DatabaseType+ParsedVersion) specifically because that's bounded. Keying on the instance
+    // meant a new dialect instance of the exact same engine/version — e.g. a fresh tenant
+    // context TenantContextRegistry creates and later disposes — got its own permanent cache
+    // entry that a ConcurrentDictionary never evicts, growing without bound in proportion to
+    // tenant/transaction-context churn rather than the actual (small, fixed) number of distinct
+    // engine/version combinations ever seen. Fixed by keying on the fingerprint instead.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void BuildWrappedTableName_DifferentDialectInstances_SameFingerprint_ShareOneCacheEntry()
+    {
+        TypeMap.Register<CoreCoverageEntity>();
+        var gateway = new TableGateway<CoreCoverageEntity, int>(Context);
+
+        var method = typeof(TableGateway<CoreCoverageEntity, int>).GetMethod(
+                         "BuildWrappedTableName",
+                         BindingFlags.NonPublic | BindingFlags.Instance) ??
+                     throw new InvalidOperationException("Missing helper");
+
+        // A second, independent context/dialect instance for the same engine — the same
+        // situation as a second tenant context created against the same database product.
+        using var secondContext = new DatabaseContext(
+            "Data Source=:memory:;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
+        var firstDialect = Context.GetDialect();
+        var secondDialect = secondContext.GetDialect();
+        Assert.NotSame(firstDialect, secondDialect);
+        Assert.Equal(firstDialect.GetCacheFingerprint(), secondDialect.GetCacheFingerprint());
+
+        var result1 = (string)method.Invoke(gateway, new object[] { firstDialect })!;
+        var result2 = (string)method.Invoke(gateway, new object[] { secondDialect })!;
+
+        // Same fingerprint → the second, distinct dialect instance reuses the first's cached
+        // string instead of allocating (and permanently retaining) its own entry.
+        Assert.True(ReferenceEquals(result1, result2),
+            "Expected two different dialect instances with the same fingerprint to share one cache entry");
+
+        var cacheField = typeof(BaseTableGateway<CoreCoverageEntity>).GetField(
+                              "_wrappedTableNameCache", BindingFlags.NonPublic | BindingFlags.Instance) ??
+                          throw new InvalidOperationException("Missing cache field");
+        var cache = (System.Collections.IDictionary)cacheField.GetValue(gateway)!;
+        Assert.Single(cache);
     }
 
     [Fact]

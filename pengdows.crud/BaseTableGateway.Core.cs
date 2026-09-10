@@ -105,7 +105,16 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         new();
 
     // Cache for wrapped table names per dialect
-    private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
+    // Keyed on dialect.GetCacheFingerprint() (DatabaseType+ParsedVersion), not the dialect
+    // instance itself — every neighboring cache in this class (_queryCache,
+    // _whereParameterNames, and TableGateway.Sql.cs's/PrimaryKeyTableGateway.Core.cs's template
+    // caches) already keys this way specifically because it's bounded: a fixed number of real
+    // engine/version combinations, not one per dialect instance ever constructed. Keying on the
+    // instance instead let this one cache grow without bound — every tenant/transaction context
+    // disposes its own dialect instance, but a strong reference to it (and whatever it
+    // transitively retains) lived here forever, proportional to tenant churn, since a
+    // ConcurrentDictionary never evicts.
+    private readonly ConcurrentDictionary<string, string> _wrappedTableNameCache = new();
 
     // Thread-safe cache for hybrid reader plans by recordset shape hash
     private BoundedCache<RecordsetShape, HybridRecordsetPlan> _readerPlans =
@@ -389,19 +398,19 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     protected string BuildWrappedTableName(ISqlDialect dialect)
     {
-        return _wrappedTableNameCache.GetOrAdd(dialect, d =>
+        return _wrappedTableNameCache.GetOrAdd(dialect.GetCacheFingerprint(), _ =>
         {
-            if (string.IsNullOrWhiteSpace(_tableInfo.Schema) || !d.SupportsNamespaces)
+            if (string.IsNullOrWhiteSpace(_tableInfo.Schema) || !dialect.SupportsNamespaces)
             {
-                return d.WrapSimpleName(_tableInfo.Name);
+                return dialect.WrapSimpleName(_tableInfo.Name);
             }
 
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
             try
             {
-                sb.Append(d.WrapSimpleName(_tableInfo.Schema));
-                sb.Append(d.CompositeIdentifierSeparator);
-                sb.Append(d.WrapSimpleName(_tableInfo.Name));
+                sb.Append(dialect.WrapSimpleName(_tableInfo.Schema));
+                sb.Append(dialect.CompositeIdentifierSeparator);
+                sb.Append(dialect.WrapSimpleName(_tableInfo.Name));
                 return sb.ToString();
             }
             finally
