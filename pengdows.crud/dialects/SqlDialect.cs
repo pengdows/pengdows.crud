@@ -511,6 +511,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
     protected virtual GuidStorageFormat GuidFormat => GuidStorageFormat.PassThrough;
 
     /// <summary>
+    /// Declares whether this provider's own temporal type lacks UTC-offset awareness, so a
+    /// <see cref="DateTimeOffset"/> parameter must be converted to its UTC <see cref="DateTime"/>
+    /// instant before being sent (otherwise the raw wall-clock component would be stored with
+    /// its offset silently dropped by the driver). Default <c>false</c> (PassThrough, matching
+    /// SQL Server/SQLite/Oracle/Firebird/Db2/DuckDB/Snowflake, all of which have a genuinely
+    /// offset-aware temporal type or their own dedicated coercion path). Overridden <c>true</c>
+    /// on <see cref="PostgreSqlDialect"/> and <see cref="MySqlDialect"/> — inherited from there
+    /// by every dialect/instance in each wire-compatible family (Spanner/CockroachDb/
+    /// YugabyteDb/AuroraPostgreSql; MariaDb/TiDb/AuroraMySql/SingleStore) automatically, with no
+    /// per-database enum listing to keep in sync. This used to be a hardcoded
+    /// <c>DatabaseType is SupportedDatabase.X or SupportedDatabase.Y or ...</c> switch in
+    /// <see cref="CreateDbParameter{T}"/> itself, which silently missed AuroraPostgreSql and
+    /// SingleStore (both plain PostgreSqlDialect/MySqlDialect instances constructed with a
+    /// different <see cref="DatabaseType"/> tag, not subclasses) — see
+    /// <c>DialectBoundaryTests.PostgresFamilyDialect_CreateDbParameter_NormalizesDateTimeOffsetToUtc</c>/
+    /// <c>MySqlFamilyDialect_CreateDbParameter_NormalizesDateTimeOffsetToUtc</c> for the
+    /// regression coverage that caught it.
+    /// </summary>
+    protected virtual bool NormalizeDateTimeOffsetToUtc => false;
+
+    /// <summary>
     /// Serializes a <see cref="Guid"/> to the 16-byte representation used when
     /// <see cref="GuidFormat"/> is <see cref="GuidStorageFormat.Binary"/>.
     /// <para>
@@ -1487,16 +1508,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
             parameter.Scale = (byte)inferredScale;
         }
 
-        // MySQL/MariaDB/TiDB/Aurora MySQL have no offset-aware temporal type either, exactly
-        // like the Postgres-family databases below - without this, DateTimeOffsetCoercion's
-        // generic TryWrite (which has no provider awareness) leaves the raw, non-UTC value
-        // untouched for this family, since none of MySqlDialect/MariaDbDialect/TiDbDialect
+        // Neither the Postgres family nor the MySQL family has an offset-aware temporal type -
+        // without this, DateTimeOffsetCoercion's generic TryWrite (which has no provider
+        // awareness) leaves the raw, non-UTC value untouched, since none of these dialects
         // override NeedsCommonConversions (SupportsNamedParameters is true for all of them) and
-        // no AdvancedTypeRegistry mapping exists for this family's DateTimeOffset writes.
-        if (!valueIsNull && value is DateTimeOffset dto && (DatabaseType is SupportedDatabase.PostgreSql
-            or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-            or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
-            or SupportedDatabase.AuroraMySql))
+        // no AdvancedTypeRegistry mapping exists for this write. See NormalizeDateTimeOffsetToUtc.
+        if (!valueIsNull && value is DateTimeOffset dto && NormalizeDateTimeOffsetToUtc)
         {
             parameter.DbType = DbType.DateTime;
             parameter.Value = dto.UtcDateTime;

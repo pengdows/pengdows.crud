@@ -86,11 +86,39 @@ namespace pengdows.crud.Tests
         [InlineData(SupportedDatabase.MariaDb)]
         [InlineData(SupportedDatabase.TiDb)]
         [InlineData(SupportedDatabase.AuroraMySql)]
+        [InlineData(SupportedDatabase.SingleStore)]
         public void MySqlFamilyDialect_CreateDbParameter_NormalizesDateTimeOffsetToUtc(SupportedDatabase db)
         {
-            // MySQL/MariaDB/TiDB/Aurora MySQL have no offset-aware temporal type, exactly like
-            // Postgres/Spanner/CockroachDb/YugabyteDb - the real UTC instant must be stored, not
-            // the raw local wall-clock component with its offset silently dropped by the driver.
+            // MySQL/MariaDB/TiDB/Aurora MySQL/SingleStore have no offset-aware temporal type,
+            // exactly like Postgres/Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql - the real
+            // UTC instant must be stored, not the raw local wall-clock component with its offset
+            // silently dropped by the driver. Regression: SingleStore is a plain MySqlDialect
+            // instance (SqlDialectFactory.CreateDialectForType) constructed with a different
+            // DatabaseType tag — the old family check here was a hardcoded SupportedDatabase
+            // enum-value switch that never listed SupportedDatabase.SingleStore, so it silently
+            // never normalized for this database despite being wire-identical to plain MySQL.
+            var dialect = SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db), NullLogger.Instance);
+            var dto = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(5));
+
+            var parameter = dialect.CreateDbParameter("p", DbType.DateTimeOffset, dto);
+
+            Assert.Equal(DbType.DateTime, parameter.DbType);
+            Assert.Equal(dto.UtcDateTime, parameter.Value);
+        }
+
+        [Theory]
+        [InlineData(SupportedDatabase.PostgreSql)]
+        [InlineData(SupportedDatabase.Spanner)]
+        [InlineData(SupportedDatabase.CockroachDb)]
+        [InlineData(SupportedDatabase.YugabyteDb)]
+        [InlineData(SupportedDatabase.AuroraPostgreSql)]
+        public void PostgresFamilyDialect_CreateDbParameter_NormalizesDateTimeOffsetToUtc(SupportedDatabase db)
+        {
+            // Regression: AuroraPostgreSql is a plain PostgreSqlDialect instance
+            // (SqlDialectFactory.CreateDialectForType) constructed with a different DatabaseType
+            // tag — the old family check here was a hardcoded SupportedDatabase enum-value
+            // switch that never listed SupportedDatabase.AuroraPostgreSql, so it silently never
+            // normalized for this database despite being wire-identical to plain PostgreSQL.
             var dialect = SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db), NullLogger.Instance);
             var dto = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(5));
 

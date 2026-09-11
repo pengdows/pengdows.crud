@@ -145,6 +145,11 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsNamedParameters => true;
 
+    // No offset-aware temporal type — inherited by MariaDb/TiDb (subclasses) and
+    // AuroraMySql/SingleStore (plain MySqlDialect instances with a different DatabaseType tag)
+    // automatically. See SqlDialect.NormalizeDateTimeOffsetToUtc.
+    protected override bool NormalizeDateTimeOffsetToUtc => true;
+
     // IMMUTABLE: MySQL theoretical maximum parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
 

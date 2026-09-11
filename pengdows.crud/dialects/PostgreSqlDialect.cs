@@ -87,6 +87,11 @@ internal class PostgreSqlDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 
+    // No offset-aware temporal type — inherited by Spanner/CockroachDb/YugabyteDb (subclasses)
+    // and AuroraPostgreSql (a plain PostgreSqlDialect instance with a different DatabaseType
+    // tag) automatically. See SqlDialect.NormalizeDateTimeOffsetToUtc.
+    protected override bool NormalizeDateTimeOffsetToUtc => true;
+
     public override bool SupportsSetValuedParameters => true;
 
     public override void ConfigureSetValuedParameter(DbParameter parameter, Array value)
