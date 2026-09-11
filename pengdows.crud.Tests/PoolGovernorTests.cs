@@ -11,6 +11,23 @@ namespace pengdows.crud.Tests;
 
 public sealed class PoolGovernorTests
 {
+    // Fix for flaky failures under system load: a fixed `Task.Delay(50)` assumes the background
+    // AcquireAsync task has already been scheduled and reached the point where it registers as
+    // queued within that window — under heavy load (CPU contention, GC pauses, thread-pool
+    // starvation) that assumption can be false, failing the test for a reason unrelated to the
+    // behavior being verified. Poll the actual condition instead, with a generous deadline, so
+    // the test is as fast as possible in the common case and robust under load. Same convention
+    // as TenantTests.cs/TenantContextLeaseTests.cs/TenantProviderMigrationTests.cs's own
+    // WaitUntilAsync helpers.
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+    }
+
     [Fact]
     public async Task AcquireAsync_WhenCapacityAvailable_TracksStats()
     {
@@ -33,7 +50,7 @@ public sealed class PoolGovernorTests
         await using var first = await governor.AcquireAsync();
 
         var waiter = governor.AcquireAsync();
-        await Task.Delay(50);
+        await WaitUntilAsync(() => governor.GetSnapshot().Queued >= 1);
 
         var queuedSnapshot = governor.GetSnapshot();
         Assert.True(queuedSnapshot.Queued >= 1);
@@ -246,7 +263,7 @@ public sealed class PoolGovernorTests
         var waiter = governor.AcquireAsync(cts.Token);
 
         // Give the waiter time to enter the semaphore queue
-        await Task.Delay(50);
+        await WaitUntilAsync(() => governor.GetSnapshot().Queued >= 1);
         Assert.True(governor.GetSnapshot().Queued >= 1);
 
         cts.Cancel();
@@ -323,7 +340,7 @@ public sealed class PoolGovernorTests
         {
             // Give the queued waiters a moment to actually register as queued before
             // sending the one that should be rejected immediately.
-            await Task.Delay(50);
+            await WaitUntilAsync(() => governor.GetSnapshot().Queued >= cap);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             await Assert.ThrowsAsync<PoolSaturatedException>(async () => await governor.AcquireAsync());
