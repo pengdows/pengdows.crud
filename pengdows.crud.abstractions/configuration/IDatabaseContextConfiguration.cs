@@ -30,14 +30,13 @@ public interface IDatabaseContextConfiguration
     /// </summary>
     /// <remarks>
     /// <b>When this configuration is resolved through <c>ITenantContextRegistry</c>/<c>DbProviderLoader</c>-based
-    /// dependency injection:</b> this value is looked up as a keyed <c>DbProviderFactory</c> DI
-    /// registration, and <c>DbProviderLoader</c> registers each factory under its
-    /// <c>DatabaseProviders</c> configuration section <em>key</em> — not the
-    /// <c>DatabaseProviderConfig.ProviderName</c> field configured inside that section. In that
-    /// path, this property must equal the <c>DatabaseProviders</c> section key
-    /// (e.g. <c>"DatabaseProviders:MyProviderKey": { ... }</c> requires
-    /// <c>ProviderName = "MyProviderKey"</c>), not the underlying ADO.NET invariant name, even
-    /// though that name is what the section's own <c>ProviderName</c> field typically holds.
+    /// dependency injection:</b> <c>DbProviderLoader</c> registers each loaded factory under
+    /// both its <c>DatabaseProviders</c> configuration section <em>key</em> and, when different,
+    /// the section's own <c>DatabaseProviderConfig.ProviderName</c> value — so this property may
+    /// be set to either spelling and resolves to the same factory. This matches classic
+    /// ADO.NET/.NET Framework dynamic provider loading (a connection string's
+    /// <c>providerName</c> reliably resolves the provider) rather than requiring the caller to
+    /// track two separate identities.
     /// </remarks>
     string ProviderName { get; set; }
 

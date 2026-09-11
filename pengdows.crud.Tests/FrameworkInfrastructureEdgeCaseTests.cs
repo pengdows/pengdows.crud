@@ -150,8 +150,17 @@ public class FrameworkInfrastructureEdgeCaseTests
     // requirement. This test locks in the current, intentional identity (section key wins) and
     // proves the error message is now actionable rather than a bare failure.
     [Fact]
-    public void TenantContextRegistry_WhenTenantProviderNameIsInvariantNameNotSectionKey_ThrowsActionableError()
+    public void TenantContextRegistry_ResolvesProviderFactory_ByInvariantNameNotJustSectionKey()
     {
+        // Regression: DbProviderLoader used to register its keyed DI service ONLY under the
+        // DatabaseProviders configuration section's own key, never under the section's
+        // ProviderName value — so a tenant configured with the natural, classic-ADO.NET choice
+        // (ProviderName = the actual invariant name) got a confusing "no factory registered"
+        // failure unless it happened to equal the section key. Fixed in DbProviderLoader to
+        // register under both when they differ (see DbProviderLoaderInvariantNameResolutionTests.cs
+        // for the focused coverage of that fix); this test locks in the same expectation from
+        // TenantContextRegistry's own resolution path. Section key ("loader") deliberately
+        // differs from ProviderName ("Coverage94.LoaderProvider").
         var assemblyName = typeof(LoaderFactory).Assembly.GetName().Name!;
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -169,8 +178,7 @@ public class FrameworkInfrastructureEdgeCaseTests
 
         using var provider = services.BuildServiceProvider();
 
-        // A tenant configured with ProviderName set to the ADO.NET invariant name — the natural
-        // (but, for this loader-based DI resolution path, wrong) value to put there.
+        // A tenant configured with ProviderName set to the ADO.NET invariant name.
         var tenantConfig = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test",
@@ -183,11 +191,15 @@ public class FrameworkInfrastructureEdgeCaseTests
             new PassthroughContextFactory(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>());
 
-        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetContext("tenant-x"));
-
-        Assert.Contains("Coverage94.LoaderProvider", ex.Message);
-        Assert.Contains("DatabaseProviders", ex.Message);
-        Assert.Contains("section key", ex.Message, StringComparison.OrdinalIgnoreCase);
+        // LoaderFactory is a bare DbProviderFactory stub with no real connection capability, so
+        // constructing a full DatabaseContext from it still fails — but NOT with the provider-
+        // resolution error this test exists to guard against. Assert the failure (if any) is
+        // unrelated to factory resolution by name.
+        var ex = Record.Exception(() => registry.GetContext("tenant-x"));
+        if (ex != null)
+        {
+            Assert.DoesNotContain("No DbProviderFactory registered", ex.Message, StringComparison.Ordinal);
+        }
     }
 
     private sealed class SingleTenantResolver : pengdows.crud.tenant.ITenantConnectionResolver

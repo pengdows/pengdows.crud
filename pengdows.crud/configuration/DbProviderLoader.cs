@@ -58,15 +58,25 @@ public class DbProviderLoader : IDbProviderLoader
 
             var factory = LoadProviderFactory(providerKey, kvp.Value);
 
-            // CORE-006: the keyed DI registration below uses `providerKey` (this configuration
-            // section's own dictionary key, e.g. "loader" in "DatabaseProviders:loader:...") —
-            // deliberately NOT kvp.Value.ProviderName (the ADO.NET invariant name configured
-            // inside the section). This lets one section key host any invariant-named provider,
-            // but it also means a consumer resolving this factory via keyed DI (see
-            // TenantContextRegistry.CreateDatabaseContext) must look it up by this same section
-            // key — see IDatabaseContextConfiguration.ProviderName's remarks for the consumer
-            // side of this same contract.
+            // Register under the configuration section's own key (lets one section key host any
+            // invariant-named provider, e.g. "loader" in "DatabaseProviders:loader:...") AND,
+            // when it differs, under the provider's own ProviderName (the ADO.NET invariant
+            // name) too — matching classic ADO.NET/.NET Framework dynamic provider loading,
+            // where a connectionStrings entry's single providerName reliably resolves the
+            // provider regardless of how it happens to be registered elsewhere. Before this,
+            // only the section-key registration existed, so a caller who (reasonably) set
+            // IDatabaseContextConfiguration.ProviderName to the real invariant name instead of
+            // an arbitrary section key got a confusing "no factory registered" failure —
+            // TenantContextRegistry.ResolveProviderFactory's own comment already documented
+            // this gap without closing it. One physical factory instance now answers to both
+            // keys; this is not a caller-visible distinction to keep straight, just a more
+            // reliable single identity.
             services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory);
+            if (!string.IsNullOrEmpty(kvp.Value.ProviderName) &&
+                !string.Equals(kvp.Value.ProviderName, providerKey, StringComparison.Ordinal))
+            {
+                services.AddKeyedSingleton<DbProviderFactory>(kvp.Value.ProviderName, factory);
+            }
 
             // Register with DbProviderFactories for legacy compatibility
             DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);

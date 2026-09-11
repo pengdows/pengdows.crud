@@ -526,19 +526,18 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
     private DbProviderFactory ResolveProviderFactory(IDatabaseContextConfiguration config)
     {
-        // CORE-006: DbProviderLoader registers its keyed DI service under the DatabaseProviders
-        // configuration section KEY, not the ProviderName field inside that section (see
-        // DbProviderLoader.LoadAndRegisterProviders) — so a tenant's ProviderName must equal
-        // that section key, not necessarily the ADO.NET invariant name its own name suggests.
-        // A caller who (reasonably) sets it to the invariant name gets a confusing bare failure
-        // otherwise; spell out the actual requirement here instead.
+        // DbProviderLoader.LoadAndRegisterProviders registers its keyed DI service under BOTH
+        // the DatabaseProviders configuration section's own key AND the section's ProviderName
+        // value (when they differ) — matching classic ADO.NET/.NET Framework dynamic provider
+        // loading, where a single providerName reliably resolves the provider. A tenant's
+        // ProviderName here can be either the section key or the ADO.NET invariant name
+        // configured inside it; both resolve to the same factory instance.
         return _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
                ?? throw new InvalidOperationException(
                    $"No DbProviderFactory registered for the key '{config.ProviderName}'. " +
-                   "The tenant configuration's ProviderName must match a DatabaseProviders " +
-                   "configuration section key (e.g. \"DatabaseProviders:" +
-                   $"{config.ProviderName}\": {{ ... }}), not necessarily the ADO.NET " +
-                   "provider invariant name configured inside that section.");
+                   "The tenant configuration's ProviderName must match either a " +
+                   "DatabaseProviders configuration section key or that section's own " +
+                   "ProviderName value.");
     }
 
     // CORE-011: invoke every subscriber individually rather than a single multicast-delegate
