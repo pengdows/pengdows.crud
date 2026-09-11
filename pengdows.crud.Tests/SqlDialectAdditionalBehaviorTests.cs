@@ -193,6 +193,14 @@ public class SqlDialectAdditionalBehaviorTests
     }
 
     [Fact]
+    public void JoinParenthesization_DefaultsToOptional()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+        Assert.Equal(JoinParenthesization.Optional, dialect.JoinParenthesization);
+    }
+
+    [Fact]
     public void ParameterHelpers_AreInvokable()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

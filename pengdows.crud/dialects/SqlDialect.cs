@@ -570,6 +570,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Feature support based on database capabilities
     public virtual bool SupportsJoins => true;
     public virtual bool SupportsOuterJoins => true;
+    public virtual JoinParenthesization JoinParenthesization => JoinParenthesization.Optional;
     public virtual bool SupportsSubqueries => true;
     public virtual bool SupportsUnion => true;
 

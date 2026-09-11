@@ -224,6 +224,14 @@ public interface ISqlDialect
     bool SupportsOuterJoins { get; }
 
     /// <summary>
+    /// Whether the dialect requires, allows, or forbids parenthesizing a nested join
+    /// expression in a FROM clause (e.g. <c>A JOIN (B JOIN C ON ...) ON ...</c>).
+    /// Most ANSI SQL databases treat this as optional; some (e.g. MS Access/Jet)
+    /// require it once three or more tables are joined; a small few reject it outright.
+    /// </summary>
+    JoinParenthesization JoinParenthesization { get; }
+
+    /// <summary>
     /// Indicates support for subquery expressions.
     /// </summary>
     bool SupportsSubqueries { get; }
