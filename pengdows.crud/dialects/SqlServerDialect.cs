@@ -438,6 +438,19 @@ internal class SqlServerDialect : SqlDialect
         return $"OUTPUT INSERTED.{WrapObjectName(idColumnName)}";
     }
 
+    // SQL Server-specific generated-key protocol: a plain "OUTPUT INSERTED.col" clause breaks
+    // when the target table has triggers (the trigger's own DML consumes the OUTPUT result set),
+    // so the value is routed through a table variable instead. This lives here — not in generic
+    // TableGateway code — because it's SQL Server's own wire protocol, not gateway policy.
+    public override (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped, string clause)
+    {
+        const string outputTable = "@__pengdows_output";
+        var prefix = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
+        var output = $"{clause} INTO {outputTable} ({idWrapped})";
+        var returning = $"; SELECT {idWrapped} FROM {outputTable}";
+        return (prefix, output, returning);
+    }
+
     public override string GetLastInsertedIdQuery()
     {
         // Fallback method - prefer OUTPUT clause

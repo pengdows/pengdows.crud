@@ -63,6 +63,22 @@ internal interface IInternalSqlDialect : ISqlDialect
     }
 
 
+    /// <summary>
+    /// Splits an insert-returning clause that must render before VALUES into its
+    /// prefix/output/returning pieces. <paramref name="clause"/> is the dialect's own
+    /// <see cref="ISqlDialect.RenderInsertReturningClause"/> output (e.g. SQL Server's
+    /// <c>OUTPUT INSERTED.col</c>). Only called when <see cref="ISqlDialect.InsertReturningClauseBeforeValues"/>
+    /// is true. Default: no prefix, the whole clause becomes the pre-VALUES piece, no
+    /// post-VALUES piece — the ordinary "OUTPUT/RETURNING before VALUES" shape. Override when a
+    /// dialect's real protocol needs something split across all three positions (SQL Server's
+    /// OUTPUT INTO a table variable, required so triggers on the target table don't break a
+    /// plain <c>OUTPUT INSERTED.col</c> result set).
+    /// </summary>
+    (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped, string clause)
+    {
+        return (string.Empty, clause, string.Empty);
+    }
+
     void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly);
 
     bool ShouldDisablePrepareOn(Exception ex);

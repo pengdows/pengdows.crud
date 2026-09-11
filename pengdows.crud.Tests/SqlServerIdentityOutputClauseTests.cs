@@ -187,6 +187,43 @@ public class SqlServerIdentityOutputClauseTests
     }
 
     [Fact]
+    public void SqlServerDialect_RenderOutputInsertClauses_UsesTableVariableWorkaround()
+    {
+        // Locks in the generated-key protocol at the dialect level directly, independent of
+        // TableGateway's own wiring — the OUTPUT-into-a-table-variable workaround (needed
+        // because a plain OUTPUT INSERTED.col result set breaks when the target table has
+        // triggers) belongs to SqlServerDialect, not to generic gateway code.
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var dialect = (pengdows.crud.dialects.IInternalSqlDialect)context.GetDialect();
+
+        var (prefix, output, returning) = dialect.RenderOutputInsertClauses("\"id\"", "OUTPUT INSERTED.\"id\"");
+
+        Assert.Contains("DECLARE @__pengdows_output TABLE", prefix, StringComparison.Ordinal);
+        Assert.Equal("OUTPUT INSERTED.\"id\" INTO @__pengdows_output (\"id\")", output);
+        Assert.Contains("SELECT \"id\" FROM @__pengdows_output", returning, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.Firebird)]
+    public void OtherDialects_RenderOutputInsertClauses_DefaultsToPlainOutputClause(SupportedDatabase provider)
+    {
+        // Every dialect other than SQL Server that could theoretically set
+        // InsertReturningClauseBeforeValues should get the ordinary, unsplit shape from the
+        // base SqlDialect implementation, not SQL Server's table-variable workaround.
+        var factory = new fakeDbFactory(provider);
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={provider}", factory);
+        var dialect = (pengdows.crud.dialects.IInternalSqlDialect)context.GetDialect();
+
+        var (prefix, output, returning) = dialect.RenderOutputInsertClauses("\"id\"", "RETURNING \"id\"");
+
+        Assert.Equal(string.Empty, prefix);
+        Assert.Equal("RETURNING \"id\"", output);
+        Assert.Equal(string.Empty, returning);
+    }
+
+    [Fact]
     public void SqlServerDialect_InsertReturningClauseBeforeValues_IsTrue()
     {
         // Arrange

@@ -857,17 +857,14 @@ public partial class TableGateway<TEntity, TRowID> :
                 }
                 else if (dialect.InsertReturningClauseBeforeValues)
                 {
-                    if (dialect is SqlServerDialect)
-                    {
-                        const string outputTable = "@__pengdows_output";
-                        prefixClause = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
-                        outputClause = $"{clause} INTO {outputTable} ({idWrapped})";
-                        returningClause = $"; SELECT {idWrapped} FROM {outputTable}";
-                    }
-                    else
-                    {
-                        outputClause = clause;
-                    }
+                    // Delegate to the dialect's own generated-key protocol — e.g. SQL Server
+                    // routes the value through a table variable so triggers on the target table
+                    // don't break a plain OUTPUT INSERTED.col result set — rather than special-
+                    // casing a concrete dialect type here. See
+                    // IInternalSqlDialect.RenderOutputInsertClauses.
+                    (prefixClause, outputClause, returningClause) = dialect is IInternalSqlDialect internalDialect
+                        ? internalDialect.RenderOutputInsertClauses(idWrapped, clause)
+                        : (string.Empty, clause, string.Empty);
                 }
                 else
                 {

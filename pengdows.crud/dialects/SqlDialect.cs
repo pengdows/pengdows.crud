@@ -2791,6 +2791,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual bool InsertReturningClauseBeforeValues => false;
 
+    /// <summary>
+    /// Splits an insert-returning clause that must render before VALUES into its
+    /// prefix/output/returning pieces. Only called when <see cref="InsertReturningClauseBeforeValues"/>
+    /// is true. Default: no prefix, the whole clause becomes the pre-VALUES piece, no
+    /// post-VALUES piece — the ordinary "OUTPUT/RETURNING before VALUES" shape. Override when a
+    /// dialect's real protocol needs the clause split across all three positions (see
+    /// SqlServerDialect for why: a plain OUTPUT INSERTED.col breaks when the target table has
+    /// triggers, so the value is routed through a table variable instead).
+    /// </summary>
+    public virtual (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped, string clause)
+    {
+        return (string.Empty, clause, string.Empty);
+    }
+
     // True only for Oracle, whose RETURNING ... INTO binds the generated value through an
     // ADO.NET OUTPUT parameter rather than a result set.
     public virtual bool RequiresOutputParameterForReturning => false;
