@@ -42,10 +42,13 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// </summary>
     /// <remarks>
     /// Per the project's DI lifetime rules, gateway instances are registered as singletons.
-    /// Setting this property mutates shared state visible to every concurrent caller of this
-    /// gateway instance — set it once at startup/registration time, not per-call.
+    /// <c>init</c>-only rather than settable: this is shared state visible to every concurrent
+    /// caller of this gateway instance, so it is fixed once at construction (via a constructor
+    /// call's object-initializer syntax, e.g. <c>new PrimaryKeyTableGateway&lt;T&gt;(ctx) { AuditCreationPolicy = ... }</c>)
+    /// rather than mutable per-call — no caller/tenant can change another's policy after the
+    /// gateway is built.
     /// </remarks>
-    AuditCreationPolicy AuditCreationPolicy { get; set; }
+    AuditCreationPolicy AuditCreationPolicy { get; init; }
     // =========================================================================
     // CREATE
     // =========================================================================
