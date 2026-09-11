@@ -134,6 +134,74 @@ public class TableGatewayMultiTenantDialectCacheTests
         Assert.Equal(1, cacheEntryCount);
     }
 
+    /// <summary>
+    /// Extends the MySQL-server-version isolation proof above to genuinely different
+    /// provider/dialect families sharing one singleton gateway — per
+    /// docs/planning/3.0-architectural-review-backlog.md's P1 item: "The point is not 'all DBs
+    /// produce identical SQL'; it is 'one shared application abstraction safely selects the
+    /// right semantics for each context.'" PostgreSQL's ON CONFLICT and MySQL's ON DUPLICATE
+    /// KEY UPDATE are about as structurally different as two upsert dialects get.
+    /// </summary>
+    [Fact]
+    public async Task BuildUpsert_TwoTenantsOnDifferentProviderFamilies_EachGetsCorrectSyntax()
+    {
+        var typeMap = new TypeMapRegistry();
+        var baseFactory = new fakeDbFactory(SupportedDatabase.MySql);
+        await using var baseContext = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", baseFactory, typeMap);
+
+        var gateway = new TableGateway<Widget, int>(baseContext);
+
+        var mysqlDialect = await BuildMySqlDialect("8.0.33");
+        // Pre-15: PostgreSqlDialect.SupportsMerge is version-gated to >= 15 (real MERGE support),
+        // and BuildUpsert prefers native MERGE over ON CONFLICT once both are available — that's
+        // PostgreSQL's own version-gated behavior (already covered elsewhere), not what this
+        // test is about. 12.4 deterministically exercises the ON CONFLICT path.
+        var postgresDialect = await BuildPostgresDialect("12.4");
+
+        var mysqlTenant = new TenantDialectOverrideContext(baseContext, mysqlDialect);
+        var postgresTenant = new TenantDialectOverrideContext(baseContext, postgresDialect);
+
+        var entity = new Widget { Id = 1, Name = "gadget" };
+
+        // The gateway itself was constructed against a MySQL base context — proving the
+        // per-call tenant context's own dialect governs SQL generation regardless of what the
+        // gateway happened to be constructed against, not just regardless of server version
+        // within one family.
+        using var mysqlSql = gateway.BuildUpsert(entity, mysqlTenant);
+        using var postgresSql = gateway.BuildUpsert(entity, postgresTenant);
+
+        var mysqlText = mysqlSql.Query.ToString();
+        var postgresText = postgresSql.Query.ToString();
+
+        Assert.Contains("ON DUPLICATE KEY UPDATE", mysqlText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ON CONFLICT", mysqlText, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("ON CONFLICT", postgresText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ON DUPLICATE KEY UPDATE", postgresText, StringComparison.OrdinalIgnoreCase);
+
+        // And re-running the MySQL tenant afterward must still be correct — proving the
+        // Postgres call didn't poison the shared gateway's cache for the MySQL family either.
+        using var mysqlSqlAgain = gateway.BuildUpsert(entity, mysqlTenant);
+        Assert.Contains("ON DUPLICATE KEY UPDATE", mysqlSqlAgain.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<ISqlDialect> BuildPostgresDialect(string serverVersion)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connection = new fakeDbConnection();
+        connection.EmulatedProduct = SupportedDatabase.PostgreSql;
+        connection.SetServerVersion(serverVersion);
+        connection.SetScalarResultForCommand("SELECT version()",
+            $"PostgreSQL {serverVersion} on x86_64-pc-linux-gnu, compiled by gcc");
+
+        var tracked = new TrackedConnection(connection);
+        tracked.Open();
+
+        var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(tracked);
+        return dialect;
+    }
+
     private static async Task<ISqlDialect> BuildMySqlDialect(string serverVersion)
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
