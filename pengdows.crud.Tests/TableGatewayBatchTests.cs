@@ -846,6 +846,38 @@ public class TableGatewayBatchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BatchUpsertAsync_Firebird_ZeroAffectedRow_DoesNotThrow_MatchingSingleEntityUpsertAsync()
+    {
+        // Firebird's UPDATE OR INSERT ... MATCHING never emits a version-guard predicate
+        // (EmitsAnsiMergeSyntax is false for Firebird), so a 0-affected row there can't reliably
+        // mean "version mismatch" - single-entity UpsertAsync already excludes Firebird from this
+        // detection (TableGateway.Upsert.cs's canDetect check requires SupportsOnConflictWhere OR
+        // (SupportsMerge AND EmitsAnsiMergeSyntax)). The batch path must agree with the
+        // single-entity path for the same dialect, not disagree.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<VersionedUpsertBatchEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var connection = new fakeDbConnection();
+        connection.EnqueueNonQueryResult(1); // entity a: succeeds
+        connection.EnqueueNonQueryResult(0); // entity b: e.g. a BEFORE trigger silently skipped it
+        factory.Connections.Add(connection);
+        await using var context = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=test;EmulatedProduct=Firebird", DbMode = DbMode.SingleConnection
+            },
+            factory, NullLoggerFactory.Instance, typeMap);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context);
+
+        var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
+        var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 1 };
+
+        var ex = await Record.ExceptionAsync(() => helper.BatchUpsertAsync(new[] { a, b }, context).AsTask());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public async Task BatchUpsertAsync_MultipleEntities_DisposesBuiltContainers()
     {
         await using var recordingContext = new RecordingBatchContext((DatabaseContext)_pgContext);

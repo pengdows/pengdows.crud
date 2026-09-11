@@ -232,6 +232,17 @@ public partial class TableGateway<TEntity, TRowID>
             ? 1
             : (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)nonNullIds.Count);
 
+        // The power-of-2 round-up is purely a cache-key optimization and must never be allowed
+        // to exceed the dialect's real, provider-enforced parameter cap (e.g. SQL Server's 2100
+        // is not itself a power of two). CheckParameterLimit above already guarantees
+        // nonNullIds.Count <= dialect.MaxParameterLimit, so capping here can never drop an id -
+        // every real id still gets its own parameter slot, just without the extra padding
+        // parameters the uncapped bucket size would otherwise require.
+        if (dialect.MaxParameterLimit > 0 && bucket > dialect.MaxParameterLimit)
+        {
+            bucket = dialect.MaxParameterLimit;
+        }
+
         // Parameter names are dialect-specific (e.g. "@w0" vs ":w0"), so cache per dialect + bucket.
         var paramNamesCache = GetOrCreateParamNamesCache(dialect);
         var paramNamesKey = $"WhereParams:{bucket}";

@@ -852,10 +852,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 builder.Append(separator);
             }
 
-            // IDEMPOTENCY: If segment is already wrapped in prefix/suffix, leave it alone.
-            if (segment.Length >= (prefixSpan.Length + suffixSpan.Length) &&
-                segment.StartsWith(prefixSpan) &&
-                segment.EndsWith(suffixSpan))
+            // IDEMPOTENCY: If segment is already a validly-wrapped, validly-escaped identifier,
+            // leave it alone rather than double-wrapping it. Merely starting/ending with the
+            // quote char is NOT sufficient - a segment like `"a"; DROP TABLE Users;--"` also
+            // starts and ends with `"` but contains an unescaped quote in the middle, which would
+            // let it break out of the identifier if passed through verbatim. IsValidlyPreWrapped
+            // additionally verifies every quote char between the outer prefix/suffix appears as
+            // a properly-doubled (escaped) pair, matching AppendWithEscaping's own scheme.
+            if (IsValidlyPreWrapped(segment, prefixSpan, suffixSpan))
             {
                 builder.Append(segment);
             }
@@ -1048,6 +1052,55 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 builder.Append(c); // Double it
             }
         }
+    }
+
+    // Returns true only if `segment` is a genuinely well-formed, already-escaped quoted
+    // identifier: starts with prefix, ends with suffix, and every occurrence of the quote
+    // (suffix) char strictly between those outer delimiters is part of a doubled ("escaped")
+    // pair - never a lone, unescaped quote. A lone unescaped quote anywhere before the true
+    // final character means the segment is not one single valid identifier (it would let an
+    // attacker-controlled string terminate the identifier early), so it must fall through to
+    // the normal escape-and-wrap path instead of being appended verbatim.
+    private static bool IsValidlyPreWrapped(ReadOnlySpan<char> segment, ReadOnlySpan<char> prefix,
+        ReadOnlySpan<char> suffix)
+    {
+        if (segment.Length < prefix.Length + suffix.Length ||
+            !segment.StartsWith(prefix) ||
+            !segment.EndsWith(suffix))
+        {
+            return false;
+        }
+
+        var quoteChar = suffix.Length == 1 ? suffix[0] : (char)0;
+        var interior = segment.Slice(prefix.Length, segment.Length - prefix.Length - suffix.Length);
+
+        if (quoteChar == 0)
+        {
+            // Multi-char suffix: no shipped dialect uses one today, so there is no doubling
+            // scheme to validate against. Be conservative - only accept it if the suffix
+            // literal doesn't reappear anywhere in the interior at all.
+            return IndexOf(interior, suffix) < 0;
+        }
+
+        var i = 0;
+        while (i < interior.Length)
+        {
+            if (interior[i] == quoteChar)
+            {
+                if (i + 1 >= interior.Length || interior[i + 1] != quoteChar)
+                {
+                    return false;
+                }
+
+                i += 2;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        return true;
     }
 
     private static int IndexOf(ReadOnlySpan<char> span, ReadOnlySpan<char> value)
@@ -1417,8 +1470,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
             parameter.Scale = (byte)inferredScale;
         }
 
+        // MySQL/MariaDB/TiDB/Aurora MySQL have no offset-aware temporal type either, exactly
+        // like the Postgres-family databases below - without this, DateTimeOffsetCoercion's
+        // generic TryWrite (which has no provider awareness) leaves the raw, non-UTC value
+        // untouched for this family, since none of MySqlDialect/MariaDbDialect/TiDbDialect
+        // override NeedsCommonConversions (SupportsNamedParameters is true for all of them) and
+        // no AdvancedTypeRegistry mapping exists for this family's DateTimeOffset writes.
         if (!valueIsNull && value is DateTimeOffset dto && (DatabaseType is SupportedDatabase.PostgreSql
-            or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb))
+            or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            or SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+            or SupportedDatabase.AuroraMySql))
         {
             parameter.DbType = DbType.DateTime;
             parameter.Value = dto.UtcDateTime;

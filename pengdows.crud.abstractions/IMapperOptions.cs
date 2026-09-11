@@ -10,8 +10,18 @@ namespace pengdows.crud;
 public interface IMapperOptions
 {
     /// <summary>
-    /// When true, throws if a column in the result set has no matching property.
+    /// When true, throws <see cref="pengdows.crud.exceptions.DataMappingException"/> if mapping a
+    /// column's value onto its matched property's setter fails (e.g. a type-coercion failure).
+    /// When false (the default), the failure is only logged as a warning and that one property is
+    /// left at its default value — the row is still returned, with no exception raised.
     /// </summary>
+    /// <remarks>
+    /// This does not govern unmatched columns/properties at all — nothing in the mapper throws
+    /// for a column with no matching property or a property with no matching column, regardless
+    /// of this setting; unmatched members are simply skipped. Callers who need a hard failure on
+    /// any coercion problem (rather than a silently-defaulted property) should set this to true;
+    /// the alternative is a per-row, best-effort mapping that never throws for this reason.
+    /// </remarks>
     bool Strict { get; }
 
     /// <summary>

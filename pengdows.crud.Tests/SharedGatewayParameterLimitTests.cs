@@ -63,4 +63,26 @@ public class SharedGatewayParameterLimitTests
         Assert.Throws<TooManyParametersException>(
             () => gateway.BuildRetrieve(ids, "t", lowLimitContext));
     }
+
+    [Fact]
+    public void BuildRetrieve_IdCountAtDialectsExactLimit_NeverBindsMoreParametersThanTheLimitAllows()
+    {
+        // SQL Server's MaxParameterLimit (2100) is not a power of two. BuildWhereInternal's
+        // IN-list bucketing rounds the id count up to the next power of two for cache
+        // efficiency (2100 -> 4096) purely as an internal implementation detail - that rounding
+        // must never be allowed to exceed the dialect's real, provider-enforced parameter cap,
+        // or a request already validated by CheckParameterLimit as "exactly at the limit" would
+        // still get more real DbParameters bound than the provider accepts.
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var context = new DatabaseContext("Server=s;Database=test;EmulatedProduct=SqlServer", factory);
+        var gateway = new TableGateway<TestEntity, int>(context);
+
+        var ids = Enumerable.Range(1, context.MaxParameterLimit).ToList();
+
+        using var sc = gateway.BuildRetrieve(ids, "t", context);
+
+        Assert.True(sc.ParameterCount <= context.MaxParameterLimit,
+            $"Bound {sc.ParameterCount} parameters, which exceeds SQL Server's real MaxParameterLimit of {context.MaxParameterLimit}.");
+        Assert.Equal(context.MaxParameterLimit, sc.ParameterCount);
+    }
 }

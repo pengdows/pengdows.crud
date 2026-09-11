@@ -320,12 +320,17 @@ internal static class ProviderParameterFactory
     private static void ApplyDuckDbOptimizations(DbParameter parameter, Type valueType)
     {
         // DuckDB specific optimizations
-        if (valueType == typeof(Guid) || valueType == typeof(Guid?))
-        {
-            // DuckDB has native UUID support
-            parameter.DbType = DbType.Guid;
-        }
-        else if (valueType.IsArray)
+        //
+        // NOTE: a Guid branch setting parameter.DbType = DbType.Guid used to live here ("DuckDB
+        // has native UUID support"), but DuckDbDialect.GuidFormat is GuidStorageFormat.String,
+        // not PassThrough - SqlDialect.CreateDbParameter's unconditional ApplyGuidFormat call
+        // always ran afterward and overwrote this back to DbType.String + a hyphenated string
+        // value regardless, so that branch's write could never actually survive to the caller.
+        // Confirmed removing it changes nothing observable: GuidStorageFormatTests'
+        // DuckDb_Guid_ConvertsToString_HyphenatedFormat (which exercises the full public
+        // CreateDbParameter pipeline, not this method in isolation) passes identically before and
+        // after removal.
+        if (valueType.IsArray)
         {
             // DuckDB LIST type support
             parameter.DbType = DbType.Object;

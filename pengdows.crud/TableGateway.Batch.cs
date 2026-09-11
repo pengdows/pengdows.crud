@@ -540,19 +540,25 @@ public partial class TableGateway<TEntity, TRowID>
         var dialect = GetDialect(ctx);
 
         // Whether a rows-affected shortfall reliably means "version conflict" depends on which of
-        // BuildBatchUpsert's three SQL shapes is in play:
-        //  - Per-entity MERGE fallback (SQL Server/Oracle/Firebird): guard always present, same as
-        //    single-entity UpsertAsync's already-correct check.
+        // BuildBatchUpsert's three SQL shapes is in play. Uses the EXACT same expression as
+        // single-entity UpsertAsync's own check (TableGateway.Upsert.cs) rather than an
+        // independently-derived one — an earlier version of this condition
+        // (!SupportsInsertOnConflict && !SupportsOnDuplicateKey || SupportsOnConflictWhere)
+        // disagreed with the single-entity path specifically for Firebird: Firebird has neither
+        // InsertOnConflict nor OnDuplicateKey support, so that formula treated it as
+        // guard-capable, but Firebird's UPDATE OR INSERT ... MATCHING never actually emits a
+        // version-guard predicate (EmitsAnsiMergeSyntax is false there) — a 0-affected row from
+        // Firebird can't reliably mean "version mismatch" any more than it can for MySQL/MariaDB.
+        //  - Per-entity MERGE fallback (SQL Server/Oracle): guard always present.
         //  - Chunked ON CONFLICT (PostgreSQL/CockroachDB): guard only present when the dialect
         //    supports a WHERE predicate on DO UPDATE; without it (SQLite/DuckDB) every row always
         //    succeeds unconditionally, so this never spuriously fires for them either way.
-        //  - Chunked ON DUPLICATE KEY (MySQL/MariaDB): deliberately EXCLUDED — no version guard
-        //    exists there, and the driver reports 0-affected for a row whose values didn't change
-        //    (an ordinary no-op upsert, not a conflict). Treating that as a conflict would be a
-        //    false positive this fix must not introduce.
+        //  - Chunked ON DUPLICATE KEY (MySQL/MariaDB) and Firebird's UPDATE OR INSERT: correctly
+        //    EXCLUDED by this same expression, since neither sets SupportsOnConflictWhere nor
+        //    (SupportsMerge && EmitsAnsiMergeSyntax) — a 0-affected row there is an ordinary no-op
+        //    upsert (or a non-version-related skip), not a detectable conflict.
         var versionConflictDetectionApplies = _versionColumn != null &&
-            (!ctx.DataSourceInfo.SupportsInsertOnConflict && !ctx.DataSourceInfo.SupportsOnDuplicateKey
-             || dialect.SupportsOnConflictWhere);
+            (dialect.SupportsOnConflictWhere || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax));
 
         try
         {

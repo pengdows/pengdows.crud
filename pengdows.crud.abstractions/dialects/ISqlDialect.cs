@@ -865,6 +865,15 @@ public interface ISqlDialect
     /// Supported by PostgreSQL, MySQL, MariaDB, SQLite, and most open-source databases.
     /// SQL Server and Oracle do not support this syntax.
     /// </summary>
+    /// <remarks>
+    /// This is a capability fact for callers/tests to inspect, not a flag <see cref="AppendPaging"/>
+    /// itself branches on: <see cref="AppendPaging"/> generates <c>LIMIT</c>/<c>OFFSET</c> purely
+    /// as its fallback shape whenever <see cref="SupportsOffsetFetch"/> is false — it does not
+    /// consult this property at all. A dialect that sets this true is expected to also leave
+    /// <see cref="SupportsOffsetFetch"/> false (or override <see cref="AppendPaging"/> itself) if
+    /// it genuinely cannot accept OFFSET/FETCH syntax; setting this alone changes nothing about
+    /// what SQL gets generated.
+    /// </remarks>
     bool SupportsLimitOffset { get; }
 
     /// <summary>

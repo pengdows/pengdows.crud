@@ -756,10 +756,19 @@ public interface ITableGateway<TEntity, TRowID>
     /// This helper only mutates the provided container; it does not execute the
     /// command.
     /// </remarks>
+    /// <param name="wrappedColumnName">
+    /// The column reference to filter on, ALREADY dialect-wrapped/quoted (e.g. via
+    /// <see cref="ISqlContainer.WrapObjectName"/>) by the caller — this is a low-level helper for
+    /// extending custom SQL, the same trust tier as appending directly to
+    /// <see cref="ISqlContainer.Query"/>, and it does not wrap the value for you. Never pass an
+    /// externally-influenced column name here without wrapping it first.
+    /// </param>
+    /// <param name="ids">The values to filter by.</param>
+    /// <param name="sqlContainer">The container to append the WHERE clause to.</param>
     /// <example>
     /// <code>
     /// var sc = helper.BuildBaseRetrieve("e");
-    /// helper.BuildWhere("e.Id", new[] { 1, 2 }, sc);
+    /// helper.BuildWhere(sc.WrapObjectName("e.Id"), new[] { 1, 2 }, sc);
     /// var rows = await helper.LoadListAsync(sc);
     /// </code>
     /// </example>

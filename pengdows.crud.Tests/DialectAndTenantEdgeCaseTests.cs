@@ -82,7 +82,7 @@ public class DialectAndTenantEdgeCaseTests
     }
 
     [Fact]
-    public void FirebirdDialect_GetNaturalKeyLookupQuery_ReplacesLimitWithRows()
+    public void FirebirdDialect_GetNaturalKeyLookupQuery_UsesRowsOneClause()
     {
         var dialect = CreateFirebirdDialect();
         // Need to initialize so SupportsIdentityColumns can work

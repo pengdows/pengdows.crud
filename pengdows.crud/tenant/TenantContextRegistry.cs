@@ -84,14 +84,26 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     /// unlike wrapping a <c>Lazy&lt;IDatabaseContext&gt;</c> around real connection I/O.
     /// </summary>
     /// <remarks>
-    /// <see cref="_leaseCount"/> doubles as the exactly-once disposal guard: <see cref="Dead"/> is
-    /// a reserved sentinel meaning "disposal already committed." <see cref="TryAddLease"/> is a CAS
-    /// loop rather than a plain increment specifically because a plain increment cannot detect
-    /// "someone already committed to disposing this" — it would let a lease resurrect a reference
-    /// to an already-disposed context. Whichever of <see cref="ReleaseLease"/> or
-    /// <see cref="MarkRemoved"/> wins the CAS transition from 0 to <see cref="Dead"/> is the sole
-    /// owner of calling <see cref="TenantContextRegistry.DisposeEntry"/> — no separate guard flag
-    /// needed.
+    /// <see cref="_leaseCount"/> doubles as the exactly-once disposal-SCHEDULING guard between
+    /// <see cref="ReleaseLease"/> and <see cref="MarkRemoved"/>: <see cref="Dead"/> is a reserved
+    /// sentinel meaning "disposal already scheduled via the lease/Invalidate path." <see
+    /// cref="TryAddLease"/> is a CAS loop rather than a plain increment specifically because a
+    /// plain increment cannot detect "someone already committed to disposing this" — it would let
+    /// a lease resurrect a reference to an already-disposed context.
+    /// <para>
+    /// That guard alone is NOT sufficient to prevent a double-dispose/double-notify, though: the
+    /// registry's own shutdown path (<see cref="TenantContextRegistry.DisposeManaged"/>/
+    /// <see cref="TenantContextRegistry.DisposeManagedAsync"/>) disposes unconditionally,
+    /// regardless of <see cref="_leaseCount"/>, by design (shutdown is terminal — leases only
+    /// protect against a concurrent <see cref="TenantContextRegistry.Invalidate"/>, not against
+    /// total application teardown). <see cref="ConcurrentDictionary{TKey,TValue}"/> gives no
+    /// snapshot isolation, so shutdown's <c>_contexts.Values.ToArray()</c> can observe an entry
+    /// that a concurrent <see cref="MarkRemoved"/> call has already committed to disposing via
+    /// its own path. <see cref="_disposalClaimed"/> is a SEPARATE, independent one-time guard
+    /// specifically for this: whichever of the Invalidate-triggered dispose path or the shutdown
+    /// path calls <see cref="TryClaimDisposal"/> first is the sole owner of actually disposing the
+    /// context and firing <c>ContextRemoved</c> for it — every other caller gets false and skips.
+    /// </para>
     /// </remarks>
     internal sealed class TenantContextEntry
     {
@@ -99,6 +111,16 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         private int _leaseCount;
         private int _removed;
+        private int _disposalClaimed;
+
+        /// <summary>
+        /// Atomically claims the right to be the sole caller that disposes this entry's context
+        /// and fires <c>ContextRemoved</c> for it. Returns true for exactly one caller, ever —
+        /// every other concurrent or later caller (whether racing via the lease/Invalidate
+        /// dispose path or the registry's shutdown path) gets false and must skip disposing/
+        /// notifying, since whoever got true already owns it.
+        /// </summary>
+        public bool TryClaimDisposal() => Interlocked.CompareExchange(ref _disposalClaimed, 1, 0) == 0;
 
         public Lazy<Task<IDatabaseContext>> LazyContext { get; }
 
@@ -463,6 +485,11 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             return; // Faulted/canceled construction — nothing to dispose.
         }
 
+        if (!entry.TryClaimDisposal())
+        {
+            return; // Already claimed by a racing registry shutdown — see TryClaimDisposal.
+        }
+
         var context = task.Result;
         try
         {
@@ -579,7 +606,10 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         {
             if (TryTakeCompletedResult(entry, out var context, out var faulted))
             {
-                DisposeShutdownContextSync(context!);
+                if (entry.TryClaimDisposal())
+                {
+                    DisposeShutdownContextSync(context!);
+                }
             }
             else if (!faulted)
             {
@@ -597,7 +627,10 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         {
             if (TryTakeCompletedResult(entry, out var context, out var faulted))
             {
-                await DisposeShutdownContextAsync(context!).ConfigureAwait(false);
+                if (entry.TryClaimDisposal())
+                {
+                    await DisposeShutdownContextAsync(context!).ConfigureAwait(false);
+                }
             }
             else if (!faulted)
             {
@@ -672,6 +705,11 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
             void DisposeResult(IDatabaseContext context)
             {
+                if (!capturedEntry.TryClaimDisposal())
+                {
+                    return; // Already claimed by a racing Invalidate — see TryClaimDisposal.
+                }
+
                 if (capturedUseAsync)
                 {
                     owner.DisposeShutdownContextAsync(context).AsTask().GetAwaiter().GetResult();

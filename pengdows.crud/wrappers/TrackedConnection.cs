@@ -112,6 +112,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _sharedDisposeTimeout;
 
     private int _wasOpened;
     private readonly MetricsCollector? _metricsCollector;
@@ -236,7 +237,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         TimeSpan? modeLockTimeout = null,
         PoolSlot? slot = null,
         string? namePrefix = null,
-        Func<ITrackedConnection, CancellationToken, Task>? onFirstOpenAsync = null
+        Func<ITrackedConnection, CancellationToken, Task>? onFirstOpenAsync = null,
+        TimeSpan? sharedDisposeTimeout = null
     )
     {
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
@@ -250,6 +252,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         _modeContentionStats = modeContentionStats;
         _mode = mode;
         _modeLockTimeout = modeLockTimeout;
+        _sharedDisposeTimeout = sharedDisposeTimeout ?? SharedDisposeTimeout;
         if (isSharedConnection)
         {
             _isSharedConnection = true;
@@ -538,7 +541,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             return;
         }
 
-        if (await _semaphoreSlim.WaitAsync(SharedDisposeTimeout).ConfigureAwait(false))
+        if (await _semaphoreSlim.WaitAsync(_sharedDisposeTimeout).ConfigureAwait(false))
         {
             try
             {
@@ -548,28 +551,46 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             {
                 _semaphoreSlim.Release();
             }
+
+            return;
         }
-        else
+
+        if (_logger.IsEnabled(LogLevel.Warning))
         {
-            if (_logger.IsEnabled(LogLevel.Warning))
+            _logger.LogWarning(
+                "Timed out waiting to dispose shared connection {Name}; retrying once more before giving up.",
+                GetName());
+        }
+
+        // Second attempt is ALSO bounded — never wait unboundedly here. Every other acquirer of
+        // this same semaphore (RealAsyncLocker, used for ordinary command execution) is bounded
+        // and fails loudly; disposal must not be the one exception that can hang a caller's
+        // Dispose()/DisposeAsync() forever if whatever is holding the lock never releases it
+        // (e.g. a hung command with no CommandTimeout).
+        if (await _semaphoreSlim.WaitAsync(_sharedDisposeTimeout).ConfigureAwait(false))
+        {
+            try
             {
-                _logger.LogWarning(
-                    "Timed out waiting to dispose shared connection {Name}; retrying once lock is released.",
-                    GetName());
+                await DisposeConnectionAsyncCore().ConfigureAwait(false);
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
             }
 
-            await Task.Run(async () =>
-            {
-                await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
-                try
-                {
-                    await DisposeConnectionAsyncCore().ConfigureAwait(false);
-                }
-                finally
-                {
-                    _semaphoreSlim.Release();
-                }
-            }).ConfigureAwait(false);
+            return;
+        }
+
+        // Give up. Leak the connection rather than dispose/release a lock this call was never
+        // actually granted — the same "leaked rather than corrupted" precedent DatabaseContext's
+        // PoolGovernor drain handling uses (CORE-026/027): whatever still holds the lock keeps a
+        // working connection instead of crashing with an ObjectDisposedException, and this method
+        // returns instead of hanging its caller forever.
+        if (_logger.IsEnabled(LogLevel.Error))
+        {
+            _logger.LogError(
+                "Giving up waiting to dispose shared connection {Name} after {TotalSeconds}s total; leaking the connection instead of disposing it while its lock is still held by another operation.",
+                GetName(), _sharedDisposeTimeout.TotalSeconds * 2);
         }
     }
 

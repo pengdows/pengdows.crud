@@ -272,6 +272,68 @@ public class TenantTests
         Assert.Equal(0, removedCount);
     }
 
+    // Reproduces (deterministically, not via real thread-timing races that would be flaky) the
+    // logical shape of a race between Invalidate(tenant) and the registry's own
+    // Dispose()/DisposeAsync() shutdown path: DisposeManaged's _contexts.Values.ToArray()
+    // snapshot could observe an entry that a concurrent Invalidate has already committed to
+    // disposing via its own path, since ConcurrentDictionary gives no snapshot isolation between
+    // the two. Before the fix, DisposeManaged's loop disposed/notified for that entry
+    // unconditionally, with no awareness of TenantContextEntry's own removal/disposal state -
+    // so ContextRemoved fired twice for the same context, once from each independent path.
+    //
+    // Reconstructed here by calling entry.MarkRemoved directly (the exact side-effecting call
+    // Invalidate makes internally) WITHOUT removing the entry from _contexts first - this
+    // faithfully simulates "DisposeManaged's snapshot still sees this entry" while a concurrent
+    // Invalidate has already claimed disposal ownership of it, without depending on genuine
+    // thread scheduling to hit the window.
+    [Fact]
+    public async Task Invalidate_RacingWithRegistryDispose_FiresContextRemovedOnlyOnce()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var context = (DatabaseContext)registry.GetContext("race-tenant");
+
+        var removedCount = 0;
+        registry.ContextRemoved += _ => Interlocked.Increment(ref removedCount);
+
+        var contextsField = typeof(TenantContextRegistry).GetField("_contexts",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var contexts =
+            (ConcurrentDictionary<string, TenantContextRegistry.TenantContextEntry>)contextsField
+                .GetValue(registry)!;
+        var entry = contexts["race-tenant"];
+
+        // Simulates Invalidate("race-tenant")'s dispose-triggering side effect, deliberately
+        // without removing the entry from _contexts - see the method-level comment above.
+        entry.MarkRemoved(registry, "race-tenant");
+
+        await WaitUntilAsync(() => removedCount >= 1);
+        Assert.Equal(1, removedCount);
+        Assert.True(context.IsDisposed);
+
+        // The registry's own shutdown path now independently walks _contexts.Values.ToArray()
+        // and finds the very same entry (never removed above) - exactly the race window.
+        registry.Dispose();
+
+        Assert.Equal(1, removedCount);
+    }
+
     // Verifies that ContextCreated fires when GetContext successfully creates a new context.
     // PengdowsTelemetryService depends on this to begin tracking the context in OTel.
     [Fact]

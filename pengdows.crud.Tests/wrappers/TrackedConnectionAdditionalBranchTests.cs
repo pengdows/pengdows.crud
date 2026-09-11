@@ -68,6 +68,37 @@ public class TrackedConnectionAdditionalBranchTests
         Assert.Equal(ConnectionState.Closed, conn.State);
     }
 
+    [Fact]
+    public async Task DisposeAsync_SharedConnection_LockNeverReleasedInTime_GivesUpInsteadOfHangingForever()
+    {
+        // Uses a tiny injected sharedDisposeTimeout so this proves the "bounded, then give up"
+        // fix in fast wall-clock time - the real production 5s default isn't needed to prove the
+        // shape of the fix (both wait attempts are bounded, not just the first).
+        await using var conn = new fakeDbConnection();
+        await using var tracked = new TrackedConnection(conn, isSharedConnection: true,
+            sharedDisposeTimeout: TimeSpan.FromMilliseconds(30));
+
+        await tracked.OpenAsync();
+
+        var locker = tracked.GetLock();
+        await locker.LockAsync();
+        // Deliberately never released before the assertions below - simulates a command that
+        // hangs and never returns the connection's lock, which previously made DisposeAsync's
+        // second wait attempt block forever.
+
+        var disposeTask = tracked.DisposeAsync().AsTask();
+        var winner = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.Same(disposeTask, winner);
+        await disposeTask; // must complete without throwing, and without hanging
+
+        // Gave up rather than corrupting state: the connection was never actually closed while
+        // its lock still appeared to be held by another operation.
+        Assert.Equal(ConnectionState.Open, conn.State);
+
+        await locker.DisposeAsync();
+    }
+
     private sealed class ThrowingDisposeAsyncConnection : DbConnection
     {
         private ConnectionState _state = ConnectionState.Closed;

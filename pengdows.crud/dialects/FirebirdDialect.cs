@@ -404,12 +404,12 @@ internal class FirebirdDialect : SqlDialect
         return EngineVersionQuery;
     }
 
-    public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
-        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
-    {
-        var query = base.GetNaturalKeyLookupQuery(tableName, idColumnName, columnNames, parameterNames);
-        return query.Replace(" LIMIT 1", " ROWS 1", StringComparison.Ordinal);
-    }
+    // Firebird's "limit to one row" clause is ROWS 1, not the base class's default LIMIT 1.
+    // Uses the dedicated hook base.GetNaturalKeyLookupQuery already provides for exactly this
+    // (see OracleDialect's own FETCH FIRST override for the same pattern) instead of calling the
+    // base implementation and then string-replacing its output — a string-replace depends on the
+    // base class's exact generated text staying stable forever, which this hook exists to avoid.
+    protected override string GetNaturalKeyFirstRowOnlyClause() => " ROWS 1";
 
     private string? _sessionSettings;
 

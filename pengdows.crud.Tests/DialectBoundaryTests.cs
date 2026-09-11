@@ -81,6 +81,25 @@ namespace pengdows.crud.Tests
             Assert.Equal(DateTimeKind.Unspecified, converted.Kind);
         }
 
+        [Theory]
+        [InlineData(SupportedDatabase.MySql)]
+        [InlineData(SupportedDatabase.MariaDb)]
+        [InlineData(SupportedDatabase.TiDb)]
+        [InlineData(SupportedDatabase.AuroraMySql)]
+        public void MySqlFamilyDialect_CreateDbParameter_NormalizesDateTimeOffsetToUtc(SupportedDatabase db)
+        {
+            // MySQL/MariaDB/TiDB/Aurora MySQL have no offset-aware temporal type, exactly like
+            // Postgres/Spanner/CockroachDb/YugabyteDb - the real UTC instant must be stored, not
+            // the raw local wall-clock component with its offset silently dropped by the driver.
+            var dialect = SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db), NullLogger.Instance);
+            var dto = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(5));
+
+            var parameter = dialect.CreateDbParameter("p", DbType.DateTimeOffset, dto);
+
+            Assert.Equal(DbType.DateTime, parameter.DbType);
+            Assert.Equal(dto.UtcDateTime, parameter.Value);
+        }
+
         [Fact]
         public void OracleDialect_AdditionalBranches_AreCovered()
         {
