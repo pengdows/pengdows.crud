@@ -7,6 +7,7 @@ using testbed.Db2;
 using testbed.DuckDb;
 using testbed.FlatFile;
 using testbed.Firebird;
+using testbed.Informix;
 using testbed.mariaDb;
 using testbed.MySQL;
 using testbed.Oracle;
@@ -56,6 +57,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Db2 => new Db2TestContainer(),
             SupportedDatabase.Sybase => new SybaseTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
+            SupportedDatabase.Informix => new InformixTestContainer(),
             _ => null
         };
 
@@ -258,6 +260,15 @@ public class ParallelTestOrchestrator
         // SIGSEGV-on-boot workaround (SAP KBA 3018138: trace flag -T11889 + restart) as part of
         // its own startup sequence, so it goes through AddLocal like SQLite/DuckDB/Snowflake.
         AddLocal("Sybase ASE", new SybaseTestContainer(), (db, sp) => new SybaseTestProvider(db, sp), 45);
+
+        // Confirmed live end-to-end (icr.io/informix/informix-developer-database pulls
+        // anonymously, no registry credentials required — verified with a fresh
+        // `docker rmi`+`docker pull` with no ~/.docker/config.json present): full CRUD,
+        // transactions, concurrency, error mapping, and capability probes all pass — see
+        // InformixDialect.cs's SupportsMerge/SupportsOffsetFetch comments for the two
+        // confirmed-unsupported capabilities and TestProvider.cs's Informix-specific skips for
+        // the rest. Promoted from opt-in to unconditional, matching Sybase's precedent.
+        AddLocal("Informix", new InformixTestContainer(), (db, sp) => new InformixTestProvider(db, sp), 20);
 
         if (_includeSnowflake)
             AddLocal("Snowflake", new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);

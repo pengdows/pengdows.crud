@@ -117,11 +117,13 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var result = context.CreateDbParameter("p1", DbType.Int32, 123, ParameterDirection.Output);
 
-        // Positional-only providers (e.g. FlatFile, which has no dedicated dialect yet and falls
-        // back to Sql92Dialect) deliberately blank the parameter name — see
-        // SqlDialect.CreateDbParameter's "Positional providers use ? placeholders" comment.
-        var expectedName = context.Dialect.SupportsNamedParameters ? "p1" : string.Empty;
-        Assert.Equal(expectedName, result.ParameterName);
+        // Positional dialects (e.g. Informix, FlatFile) still retain the caller's chosen name on
+        // the DbParameter object — only the rendered SQL text ignores it (MakeParameterName
+        // always returns "?"). Blanking it here used to be the behavior, but that broke
+        // SqlContainer's own internal name-based bookkeeping (dictionary key, SetParameterValue,
+        // Clone) for every positional dialect — confirmed live against a real Informix
+        // container. See SqlDialect.CreateDbParameter's updated comment.
+        Assert.Equal("p1", result.ParameterName);
         Assert.Equal(DbType.Int32, result.DbType);
         Assert.Equal(123, result.Value);
         Assert.Equal(ParameterDirection.Output, result.Direction);

@@ -14,6 +14,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator Db2 = new Db2ExceptionTranslator();
     private static readonly IDbExceptionTranslator Snowflake = new SnowflakeExceptionTranslator();
     private static readonly IDbExceptionTranslator Sybase = new SybaseExceptionTranslator();
+    private static readonly IDbExceptionTranslator Informix = new InformixExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
     public IDbExceptionTranslator Get(SupportedDatabase database)
@@ -32,6 +33,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.Firebird => Firebird,
             SupportedDatabase.Db2 => Db2,
             SupportedDatabase.Snowflake => Snowflake,
+            SupportedDatabase.Informix => Informix,
             _ => Fallback
         };
     }

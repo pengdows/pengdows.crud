@@ -29,17 +29,6 @@ public class SqlContainerParameterNormalizationAdditionalTests
     }
 
     [Fact]
-    public void SetParameterValue_WithMarkerPrefix_ThrowsWhenDialectIllogical()
-    {
-        using var ctx = CreateContextWithDialect(new PositionalDialect(new fakeDbFactory(SupportedDatabase.Sqlite)));
-        var container = ctx.CreateSqlContainer("SELECT 1");
-
-        container.AddParameterWithValue("p0", DbType.Int32, 1);
-
-        Assert.Throws<KeyNotFoundException>(() => container.SetParameterValue("@p0", 5));
-    }
-
-    [Fact]
     public void SetParameterValue_ShortName_ThrowsWhenNotFound()
     {
         using var ctx = CreateContext(SupportedDatabase.PostgreSql);

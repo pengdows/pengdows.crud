@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
 using testbed.Db2;
+using testbed.Informix;
 
 #endregion
 
@@ -15,6 +16,9 @@ using testbed.Db2;
 // DbProviderFactoryFinder.FindAllFactories() below, which triggers the driver's native
 // initialization merely by reading DB2Factory.Instance.
 Db2NativeLibraryBootstrap.Register();
+
+// Same requirement, same reason, as Db2NativeLibraryBootstrap above.
+InformixNativeLibraryBootstrap.Register();
 
 // Enable Npgsql legacy timestamp behaviour so that "timestamp without time zone" columns
 // can be read as DateTime. Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.
@@ -36,7 +40,8 @@ await StormGateIntegrationTests.RunAsync();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true)
+// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true — cloud-only,
+// no Docker image; every other database, Informix included, runs unconditionally)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
 var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake);
 

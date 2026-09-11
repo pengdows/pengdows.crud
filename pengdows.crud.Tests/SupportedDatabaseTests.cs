@@ -62,7 +62,8 @@ public class SupportedDatabaseTests
                 "FlatFile",
                 "SingleStore",
                 "Sybase",
-                "Spanner"
+                "Spanner",
+                "Informix"
             },
             names);
     }

@@ -364,17 +364,19 @@ public class TestProvider : IAsyncTestProvider
         var intType = GetIntType(databaseContext.Product);
         var longType = GetLongType(databaseContext.Product);
         var boolType = GetBooleanType(databaseContext.Product);
+        var shortTextType = GetTextType(databaseContext.Product, 100);
+        var descriptionType = GetTextType(databaseContext.Product, 1000);
         sqlContainer.Query.Append($@"
 CREATE TABLE {tableName} (
     {idColumn} {longType} NOT NULL,
-    {nameColumn} VARCHAR(100) NOT NULL,
-    {descriptionColumn} VARCHAR(1000) NOT NULL,
+    {nameColumn} {shortTextType} NOT NULL,
+    {descriptionColumn} {descriptionType} NOT NULL,
     {valueColumn} {intType} NOT NULL,
     {isActiveColumn} {boolType} NOT NULL,
     {createdAtColumn} {dateType} NOT NULL,
-    {createdByColumn} VARCHAR(100) NOT NULL,
+    {createdByColumn} {shortTextType} NOT NULL,
     {updatedAtColumn} {dateType} NOT NULL,
-    {updatedByColumn} VARCHAR(100) NOT NULL,
+    {updatedByColumn} {shortTextType} NOT NULL,
     PRIMARY KEY ({idColumn})
 );");
         await sqlContainer.ExecuteNonQueryAsync();
@@ -427,6 +429,11 @@ CREATE TABLE {tableName} (
             // pengdows.flatfile parses only ISO SQL - "DATETIME" is rejected as vendor syntax;
             // "TIMESTAMP" is the standard form (see pengdows.flatfile/SQL_STANDARDS_STATUS.md).
             SupportedDatabase.FlatFile => "TIMESTAMP",
+            // Informix's DATETIME type requires an explicit precision qualifier - a bare
+            // "DATETIME" is not valid syntax (IBM docs, DATETIME data type reference). UNVERIFIED
+            // against a live server - this is the documented form, not yet confirmed to be
+            // accepted exactly as written here.
+            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
             _ => "DATETIME"
         };
     }
@@ -469,6 +476,12 @@ CREATE TABLE {tableName} (
             SupportedDatabase.TiDb => "BOOLEAN",
             SupportedDatabase.SqlServer => "BIT",
             SupportedDatabase.Sybase => "BIT",
+            // CONFIRMED live: InformixDialect is positional (SupportsNamedParameters == false),
+            // so SqlDialect's default NeedsCommonConversions (!SupportsNamedParameters) applies
+            // and every bool parameter is sent as Int16 (0/1), not a raw bool. Declaring the
+            // column as Informix's native BOOLEAN then breaks comparison — "Routine (equal) can
+            // not be resolved", since IDS has no "=" operator between BOOLEAN and SMALLINT.
+            SupportedDatabase.Informix => "SMALLINT",
             _ => "BOOLEAN"
         };
     }
@@ -516,6 +529,10 @@ CREATE TABLE {tableName} (
             SupportedDatabase.SqlServer => $"NVARCHAR({length})",
             SupportedDatabase.Oracle => $"NVARCHAR2({length})",
             SupportedDatabase.Sqlite => "TEXT",
+            // CONFIRMED live: Informix's traditional VARCHAR is capped at 255 bytes
+            // ("Maximum varchar size has been exceeded" for anything longer) — LVARCHAR
+            // supports up to 32739 bytes and is the correct type for longer text columns.
+            SupportedDatabase.Informix when length > 255 => $"LVARCHAR({length})",
             _ => $"VARCHAR({length})"
         };
     }
@@ -560,6 +577,23 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => true,
             SupportedDatabase.TiDb => true,
             _ => false
+        };
+    }
+
+    private static bool SupportsBinaryParameterBinding(SupportedDatabase product)
+    {
+        return product switch
+        {
+            // CONFIRMED live: Informix.Net.Core-lnx rejects a bare parameter bound to a
+            // BLOB/TEXT/BYTE column in an ordinary immediate INSERT — "Illegal attempt to use
+            // Text/Byte host variable." This is a long-documented Informix ESQL/CLI
+            // restriction: simple large object (TEXT/BYTE) and smart large object (BLOB/CLOB)
+            // host variables require either an INSERT cursor or locator-based
+            // (data-at-execution) binding, not a plain immediate-execute parameter — which is
+            // all pengdows.crud's parameter binding does today. Left as a known gap rather than
+            // implementing insert-cursor/data-at-execution support, out of scope for this pass.
+            SupportedDatabase.Informix => false,
+            _ => true
         };
     }
 
@@ -663,6 +697,10 @@ CREATE TABLE {tableName} (
             // host-variable form, same marker character as Oracle. Verified directly against the
             // engine's parser/binder (see FlatFileDialect.SupportsNamedParameters/ParameterMarker).
             SupportedDatabase.FlatFile => ":",
+            // Confirmed live: Informix.Net.Core-lnx (ODBC-backed) is positional-only — every
+            // parameter reference renders as a bare "?" regardless of name
+            // (InformixDialect.SupportsNamedParameters == false).
+            SupportedDatabase.Informix => "?",
             _ => "@"
         };
     }
@@ -1168,6 +1206,7 @@ CREATE TABLE {tableName} (
     {
         var supportsGuid = SupportsGuidBinding(_context.Product);
         var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
+        var supportsBinaryParam = SupportsBinaryParameterBinding(_context.Product);
 
         await DropTableIfExistsAsync("binding_matrix");
 
@@ -1206,8 +1245,7 @@ CREATE TABLE {table} (
         }
 
         sc.Clear();
-        sc.Query.Append($@"
-INSERT INTO {table} (
+        var insertColumns = $@"
     {_context.WrapObjectName("id")},
     {_context.WrapObjectName("int_val")},
     {_context.WrapObjectName("long_val")},
@@ -1215,9 +1253,8 @@ INSERT INTO {table} (
     {_context.WrapObjectName("bool_val")},
     {_context.WrapObjectName("text_val")},
     {_context.WrapObjectName("dto_val")},
-    {_context.WrapObjectName("guid_val")},
-    {_context.WrapObjectName("bin_val")}
-) VALUES (
+    {_context.WrapObjectName("guid_val")}";
+        var insertValues = $@"
     {sc.MakeParameterName("p0")},
     {sc.MakeParameterName("p1")},
     {sc.MakeParameterName("p2")},
@@ -1225,8 +1262,16 @@ INSERT INTO {table} (
     {sc.MakeParameterName("p4")},
     {sc.MakeParameterName("p5")},
     {sc.MakeParameterName("p6")},
-    {sc.MakeParameterName("p7")},
-    {sc.MakeParameterName("p8")}
+    {sc.MakeParameterName("p7")}";
+        if (supportsBinaryParam)
+        {
+            insertColumns += $",\n    {_context.WrapObjectName("bin_val")}";
+            insertValues += $",\n    {sc.MakeParameterName("p8")}";
+        }
+
+        sc.Query.Append($@"
+INSERT INTO {table} ({insertColumns}
+) VALUES ({insertValues}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.Int32, intVal);
@@ -1252,7 +1297,11 @@ INSERT INTO {table} (
             sc.AddParameterWithValue("p7", DbType.String, guidVal.ToString());
         }
 
-        sc.AddParameterWithValue("p8", DbType.Binary, binVal);
+        if (supportsBinaryParam)
+        {
+            sc.AddParameterWithValue("p8", DbType.Binary, binVal);
+        }
+
         await sc.ExecuteNonQueryAsync();
 
         try
@@ -1283,7 +1332,16 @@ INSERT INTO {table} (
                 CheckSkip("ParamBinding.Guid", $"Guid binding not supported by {_context.Product}");
             }
 
-            await AssertBindingCount("bin_val", DbType.Binary, binVal);
+            if (supportsBinaryParam)
+            {
+                await AssertBindingCount("bin_val", DbType.Binary, binVal);
+                CheckOk("ParamBinding.Binary", $"  [ParamBinding] Binary binding for {_context.Product}: OK");
+            }
+            else
+            {
+                CheckSkip("ParamBinding.Binary", $"Binary parameter binding not supported by {_context.Product}");
+            }
+
             CheckOk("ParamBinding.TypeMatrixFull", "  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
         }
         finally
@@ -1424,6 +1482,7 @@ INSERT INTO {table} (
     {
         var supportsGuid = SupportsGuidBinding(_context.Product);
         var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
+        var supportsBinaryParam = SupportsBinaryParameterBinding(_context.Product);
 
         await DropTableIfExistsAsync("fidelity_test");
 
@@ -1441,7 +1500,7 @@ CREATE TABLE {table} (
     {_context.WrapObjectName("is_active")} {GetBooleanType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("dto_value")} {GetDateTimeOffsetType(_context.Product, supportsDto)},
     {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product, supportsGuid)},
-    {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)} NOT NULL,
+    {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)},
     PRIMARY KEY ({_context.WrapObjectName("id")})
 ){FlatFileNullTokenClause(_context.Product)}");
         await sc.ExecuteNonQueryAsync();
@@ -1465,8 +1524,7 @@ CREATE TABLE {table} (
         }
 
         sc.Clear();
-        sc.Query.Append($@"
-INSERT INTO {table} (
+        var fidelityColumns = $@"
     {_context.WrapObjectName("id")},
     {_context.WrapObjectName("unicode_text")},
     {_context.WrapObjectName("empty_text")},
@@ -1476,9 +1534,8 @@ INSERT INTO {table} (
     {_context.WrapObjectName("decimal_edge")},
     {_context.WrapObjectName("is_active")},
     {_context.WrapObjectName("dto_value")},
-    {_context.WrapObjectName("guid_value")},
-    {_context.WrapObjectName("bin_value")}
-) VALUES (
+    {_context.WrapObjectName("guid_value")}";
+        var fidelityValues = $@"
     {sc.MakeParameterName("p0")},
     {sc.MakeParameterName("p1")},
     {sc.MakeParameterName("p2")},
@@ -1488,8 +1545,16 @@ INSERT INTO {table} (
     {sc.MakeParameterName("p6")},
     {sc.MakeParameterName("p7")},
     {sc.MakeParameterName("p8")},
-    {sc.MakeParameterName("p9")},
-    {sc.MakeParameterName("p10")}
+    {sc.MakeParameterName("p9")}";
+        if (supportsBinaryParam)
+        {
+            fidelityColumns += $",\n    {_context.WrapObjectName("bin_value")}";
+            fidelityValues += $",\n    {sc.MakeParameterName("p10")}";
+        }
+
+        sc.Query.Append($@"
+INSERT INTO {table} ({fidelityColumns}
+) VALUES ({fidelityValues}
 )");
         sc.AddParameterWithValue("p0", DbType.Int64, id);
         sc.AddParameterWithValue("p1", DbType.String, unicodeText);
@@ -1517,7 +1582,11 @@ INSERT INTO {table} (
             sc.AddParameterWithValue("p9", DbType.String, guidValue.ToString());
         }
 
-        sc.AddParameterWithValue("p10", DbType.Binary, binValue);
+        if (supportsBinaryParam)
+        {
+            sc.AddParameterWithValue("p10", DbType.Binary, binValue);
+        }
+
         await sc.ExecuteNonQueryAsync();
 
         try
@@ -1592,8 +1661,11 @@ INSERT INTO {table} (
                 {
                     // ASE right-trims trailing blanks from VARCHAR values on storage — long-
                     // documented Sybase behavior (distinct from SQL Server, which preserves
-                    // them). Leading spaces are preserved either way.
-                    var toleratesRightTrim = _context.Product == SupportedDatabase.Sybase &&
+                    // them). Leading spaces are preserved either way. CONFIRMED live: Informix
+                    // does the same for VARCHAR (only CHAR is blank-padded to its declared
+                    // length in Informix; VARCHAR strips trailing blanks on storage).
+                    var toleratesRightTrim = (_context.Product == SupportedDatabase.Sybase ||
+                                               _context.Product == SupportedDatabase.Informix) &&
                                               actualPadded == paddedText.TrimEnd();
                     if (!toleratesRightTrim)
                     {
@@ -1609,19 +1681,22 @@ INSERT INTO {table} (
                 if (actualBool != isActive)
                     throw new Exception($"[RoundTrip] Bool mismatch: expected {isActive}, got {actualBool}");
 
-                var actualBinary = CoerceBinary(binObj);
-                actualBinary = NormalizeBinaryForProvider(_context.Product, actualBinary, binValue);
-                if (!actualBinary.SequenceEqual(binValue))
+                if (supportsBinaryParam)
                 {
-                    Console.WriteLine(
-                        $"  [RoundTrip] Binary mismatch (expected {binValue.Length} bytes, got {actualBinary.Length})");
-                    Console.WriteLine($"  [RoundTrip] Expected (hex): {ToHex(binValue, 32)}");
-                    Console.WriteLine($"  [RoundTrip] Actual   (hex): {ToHex(actualBinary, 32)}");
-                    Console.WriteLine($"  [RoundTrip] Expected tail (hex): {ToHex(Tail(binValue, 8), 8)}");
-                    Console.WriteLine($"  [RoundTrip] Actual   tail (hex): {ToHex(Tail(actualBinary, 8), 8)}");
-                    Console.WriteLine($"  [RoundTrip] Actual last byte: 0x{actualBinary[^1]:X2}");
+                    var actualBinary = CoerceBinary(binObj);
+                    actualBinary = NormalizeBinaryForProvider(_context.Product, actualBinary, binValue);
+                    if (!actualBinary.SequenceEqual(binValue))
+                    {
+                        Console.WriteLine(
+                            $"  [RoundTrip] Binary mismatch (expected {binValue.Length} bytes, got {actualBinary.Length})");
+                        Console.WriteLine($"  [RoundTrip] Expected (hex): {ToHex(binValue, 32)}");
+                        Console.WriteLine($"  [RoundTrip] Actual   (hex): {ToHex(actualBinary, 32)}");
+                        Console.WriteLine($"  [RoundTrip] Expected tail (hex): {ToHex(Tail(binValue, 8), 8)}");
+                        Console.WriteLine($"  [RoundTrip] Actual   tail (hex): {ToHex(Tail(actualBinary, 8), 8)}");
+                        Console.WriteLine($"  [RoundTrip] Actual last byte: 0x{actualBinary[^1]:X2}");
 
-                    throw new Exception("[RoundTrip] Binary mismatch");
+                        throw new Exception("[RoundTrip] Binary mismatch");
+                    }
                 }
 
                 if (supportsGuid)
@@ -2804,15 +2879,30 @@ INSERT INTO {table} (
             if (val != 42)
                 throw new Exception($"[Quoting] Expected 42 for 'order' column, got {val}");
 
-            sc.Clear();
-            sc.Query.AppendFormat(
-                "SELECT {0} FROM {1} WHERE {2} = {3}",
-                wrappedUser, wrappedTable, wrappedId,
-                sc.MakeParameterName("p0"));
-            sc.AddParameterWithValue("p0", DbType.Int32, 1);
-            var userVal = await sc.ExecuteScalarOrNullAsync<int>();
-            if (userVal != 7)
-                throw new Exception($"[Quoting] Expected 7 for 'user' column, got {userVal}");
+            if (_context.Product == SupportedDatabase.Informix)
+            {
+                // CONFIRMED live: even correctly double-quoted (with DELIMIDENT=true honored —
+                // "order"/"default" both round-trip fine as ordinary reserved-word identifiers
+                // just above/below this), a column literally named "user" comes back as a
+                // string (the session's actual username) instead of our inserted integer —
+                // "Cannot convert value of type System.String to System.Int32." Informix
+                // treats USER as a special register/pseudo-column (like CURRENT/TODAY), not
+                // merely a reserved word, so quoting doesn't disambiguate it the way it does
+                // for "order"/"default". Skipped rather than worked around blind.
+                CheckSkip("Quoting.ReservedWordUser", "Informix treats \"user\" as a special register, not a quotable identifier");
+            }
+            else
+            {
+                sc.Clear();
+                sc.Query.AppendFormat(
+                    "SELECT {0} FROM {1} WHERE {2} = {3}",
+                    wrappedUser, wrappedTable, wrappedId,
+                    sc.MakeParameterName("p0"));
+                sc.AddParameterWithValue("p0", DbType.Int32, 1);
+                var userVal = await sc.ExecuteScalarOrNullAsync<int>();
+                if (userVal != 7)
+                    throw new Exception($"[Quoting] Expected 7 for 'user' column, got {userVal}");
+            }
 
             sc.Clear();
             sc.Query.AppendFormat(

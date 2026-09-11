@@ -59,6 +59,29 @@ public sealed class SqlDialectParameterPoolTests
     }
 
     [Fact]
+    public void ReusingPooledParameter_WhenProviderRejectsObjectDbType_DoesNotThrow()
+    {
+        // Regression: Informix.Net.Core's IfxParameter.DbType setter eagerly validates the
+        // assigned value against its own TypeMap and throws "No mapping exists from DbType
+        // Object to a known IfxType" — confirmed live against a real Informix container. The
+        // pool-reuse reset path unconditionally sets DbType = DbType.Object as placeholder
+        // state before the caller's real DbType overwrites it; that reset must tolerate a
+        // provider parameter that rejects DbType.Object outright, the same way it already
+        // tolerates providers whose ResetDbType() throws.
+        var factory = new RejectsObjectDbTypeFactory();
+        var dialect = new RejectingTestDialect(factory, NullLogger.Instance);
+
+        var first = dialect.CreateDbParameter("p0", DbType.String, "initial");
+        dialect.ReturnParameterToPool(first);
+
+        var second = dialect.CreateDbParameter("p1", DbType.Int32, 5);
+
+        Assert.Same(first, second);
+        Assert.Equal(DbType.Int32, second.DbType);
+        Assert.Equal(5, second.Value);
+    }
+
+    [Fact]
     public void ParameterPoolRespectsMaxSize()
     {
         var dialect = CreateDialect();
@@ -105,4 +128,73 @@ public sealed class SqlDialectParameterPoolTests
 
         public int PoolCount => _queue.Count;
     }
+
+    private sealed class RejectingTestDialect : SqlDialect
+    {
+        public RejectingTestDialect(DbProviderFactory factory, ILogger logger)
+            : base(factory, logger)
+        {
+        }
+
+        public override SupportedDatabase DatabaseType => SupportedDatabase.Informix;
+    }
+
+    private sealed class RejectsObjectDbTypeFactory : DbProviderFactory
+    {
+        public override DbParameter CreateParameter()
+        {
+            return new RejectsObjectDbTypeParameter();
+        }
+
+        public override DbConnection CreateConnection()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override DbCommand CreateCommand()
+        {
+            throw new NotSupportedException();
+        }
+
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
+        {
+            return new DbConnectionStringBuilder();
+        }
+    }
+
+#nullable disable
+    private sealed class RejectsObjectDbTypeParameter : DbParameter
+    {
+        private DbType _dbType = DbType.String;
+
+        public override DbType DbType
+        {
+            get => _dbType;
+            set
+            {
+                if (value == DbType.Object)
+                {
+                    throw new ArgumentException("No mapping exists from DbType Object to a known IfxType.");
+                }
+
+                _dbType = value;
+            }
+        }
+
+        public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
+        public override bool IsNullable { get; set; }
+        public override string ParameterName { get; set; } = string.Empty;
+        public override string SourceColumn { get; set; } = string.Empty;
+        public override object Value { get; set; }
+        public override bool SourceColumnNullMapping { get; set; }
+        public override int Size { get; set; }
+        public override byte Precision { get; set; }
+        public override byte Scale { get; set; }
+
+        public override void ResetDbType()
+        {
+            _dbType = DbType.String;
+        }
+    }
+#nullable restore
 }

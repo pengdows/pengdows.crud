@@ -75,13 +75,20 @@ public class ParameterCreationTests
     }
 
     [Fact]
-    public void CreateDbParameter_Positional_ClearsNameAndConverts()
+    public void CreateDbParameter_Positional_RetainsNameAndConverts()
     {
+        // Regression: confirmed live against a real Informix container that blanking the name
+        // here (the old behavior this test used to lock in) broke SqlContainer's own internal
+        // bookkeeping (dictionary key, SetParameterValue, Clone) for every positional dialect —
+        // see SqlDialect.CreateDbParameter's updated comment. The rendered SQL text still never
+        // references the name (MakeParameterName always returns "?" for a positional dialect
+        // regardless of what name is passed) — only the DbParameter object's own ParameterName
+        // property, used purely for pengdows.crud-internal lookups, is affected.
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var dialect = new PositionalDialect(factory);
         var p = dialect.CreateDbParameter("flag", DbType.Boolean, true);
 
-        Assert.Equal(string.Empty, p.ParameterName);
+        Assert.Equal("flag", p.ParameterName);
         Assert.Equal(DbType.Int16, p.DbType);
         Assert.Equal((short)1, p.Value);
     }

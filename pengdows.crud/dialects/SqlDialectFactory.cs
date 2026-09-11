@@ -128,6 +128,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.Db2 => new Db2Dialect(factory, logger),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, logger),
             SupportedDatabase.Sybase => new SybaseDialect(factory, logger),
+            SupportedDatabase.Informix => new InformixDialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
         };
     }

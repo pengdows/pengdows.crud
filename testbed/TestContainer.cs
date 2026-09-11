@@ -4,6 +4,7 @@ using System.Data.Common;
 using AdoNetCore.AseClient;
 using DotNet.Testcontainers.Containers;
 using FirebirdSql.Data.FirebirdClient;
+using Informix.Net.Core;
 using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
 using pengdows.crud.enums;
@@ -138,6 +139,68 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
                 if (currentError != lastError)
                 {
                     Console.WriteLine($"  [waiting] Sybase ASE not ready yet: {currentError}");
+                }
+                lastError = currentError;
+                await Task.Delay(1000);
+            }
+            catch (IfxException ifxException) when (ifxException.Message.Contains("Database not found"))
+            {
+                // CONFIRMED live: this image only provisions sysmaster/sysutils/sysuser/sysadmin
+                // at startup — no application-level demo database exists, and there is no
+                // documented env var to request one. Create it ourselves on a bootstrap
+                // connection with no Database= (which the server accepts once On-Line), then let
+                // the outer loop retry the real connection string against the now-real database.
+                try
+                {
+                    if (csb is not IfxConnectionStringBuilder orig)
+                    {
+                        throw new InvalidOperationException("Connection string builder is not an IfxConnectionStringBuilder.");
+                    }
+
+                    var db = orig.Database;
+                    if (string.IsNullOrWhiteSpace(db))
+                    {
+                        throw new InvalidOperationException("Database name is not specified.");
+                    }
+
+                    var csbTemp = new IfxConnectionStringBuilder(orig.ConnectionString) { Database = "" };
+
+                    await using var createConn = instance.CreateConnection();
+                    if (createConn is null)
+                    {
+                        throw new InvalidOperationException("DbProviderFactory.CreateConnection() returned null.");
+                    }
+
+                    createConn.ConnectionString = csbTemp.ConnectionString;
+
+                    await using var createCmd = createConn.CreateCommand();
+                    if (createCmd is null)
+                    {
+                        throw new InvalidOperationException("CreateCommand() returned null.");
+                    }
+
+                    createCmd.CommandText = $"CREATE DATABASE {db} WITH LOG;";
+
+                    await createConn.OpenAsync();
+                    await createCmd.ExecuteNonQueryAsync();
+                }
+                catch (Exception ex1)
+                {
+                    var currentError = ex1.Message;
+                    if (currentError != lastError)
+                    {
+                        Console.WriteLine($"  [waiting] Informix create database failed: {currentError}");
+                    }
+                    lastError = currentError;
+                    await Task.Delay(1000);
+                }
+            }
+            catch (IfxException ifxException)
+            {
+                var currentError = ifxException.Message;
+                if (currentError != lastError)
+                {
+                    Console.WriteLine($"  [waiting] Informix not ready yet: {currentError}");
                 }
                 lastError = currentError;
                 await Task.Delay(1000);

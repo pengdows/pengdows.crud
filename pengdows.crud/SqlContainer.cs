@@ -765,6 +765,25 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
+        if (!_context.SupportsNamedParameters && ParamSequence.Count == 0)
+        {
+            // Positional provider but no ParamSequence recorded. Confirmed live against a real
+            // Informix container: TableGateway builds SQL by calling
+            // dialect.MakeParameterName(name) directly and appending the result (always "?"
+            // for a positional dialect) into the query text — it never goes through the
+            // {P}NAME placeholder form that RenderParams()/ParamSequence tracking depends on.
+            // Since each "?" in the rendered text corresponds 1:1, in order, with one
+            // AddParameterWithValue call, binding _parameters in insertion order is correct —
+            // mirrors the named-provider fallback immediately above for the same reason.
+            foreach (var param in _parameters.Values)
+            {
+                dbCommand.Parameters.Add(param);
+                RegisterParameterOwner(param, dbCommand.Parameters);
+            }
+
+            return;
+        }
+
         // Positional path or named provider that does NOT support repeated placeholders:
         // ParamSequence may reference the same name multiple times (e.g., a value used
         // in both SET and WHERE). Each occurrence needs its own DbParameter instance

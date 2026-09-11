@@ -1302,7 +1302,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             param.ParameterName = string.Empty;
             param.Value = null;
-            param.DbType = DbType.Object;
+            try
+            {
+                param.DbType = DbType.Object;
+            }
+            catch
+            {
+                // Ignore providers that eagerly validate DbType against their own provider-type
+                // map and reject Object as a placeholder (e.g. Informix.Net.Core's
+                // IfxParameter.DbType setter throws "No mapping exists from DbType Object to a
+                // known IfxType" — confirmed live). The caller always overwrites DbType with
+                // the real value immediately after this reset, via CreateDbParameter<T>.
+            }
             param.Direction = ParameterDirection.Input;
             param.Size = 0;
             param.Precision = 0;
@@ -1420,11 +1431,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
             ApplyGuidFormat(parameter, (Guid)(object)value!);
         }
 
-        // Positional providers use "?" placeholders — parameter names must be blank.
-        if (!SupportsNamedParameters)
-        {
-            parameter.ParameterName = string.Empty;
-        }
+        // NOTE: positional (!SupportsNamedParameters) dialects render every parameter
+        // reference in SQL text as a bare "?" (see MakeParameterName) regardless of the name
+        // passed here — the name is never sent to the provider as text. This used to blank
+        // parameter.ParameterName to reflect that, but that broke pengdows.crud's own internal
+        // bookkeeping: SqlContainer.AddParameter treats an empty name as "none given" and
+        // substitutes a random generated one, so a caller's chosen name (e.g. "p0") was never
+        // actually the key anything got stored under — SetParameterValue/Clone/dictionary
+        // lookups by that name then failed. Confirmed live against a real Informix container
+        // ("Parameter 'p0' not found."). Real positional ADO.NET providers bind by ordinal
+        // position and tolerate a non-empty ParameterName on the wire, so the name is now kept
+        // for internal use only — nothing about actual provider binding needs it blank.
 
         // Apply common type coercions (Guid→string, bool→int16, DateTimeOffset→UtcDateTime).
         // Controlled by NeedsCommonConversions so dialects can opt in independently of

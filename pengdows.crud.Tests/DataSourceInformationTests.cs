@@ -95,6 +95,7 @@ public static class DataSourceTestData
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
             SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -179,6 +180,10 @@ public class DataSourceInformationTests
             // an earlier version of this test encoded a stale README claim that flatfile was
             // positional-only, which was simply wrong.
             SupportedDatabase.FlatFile => ":",
+            // Informix's ADO.NET driver (Informix.Net.Core-lnx) has no named-parameter support
+            // at all — confirmed by inspecting InformixClientFactory's assembly directly, not
+            // assumed. Positional "?" only.
+            SupportedDatabase.Informix => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -201,6 +206,10 @@ public class DataSourceInformationTests
                         // FlatFile genuinely implements MERGE INTO (see pengdows.sql/SqlParser.cs's
                         // ParseMerge) — verified real feature, not assumed.
                         || db == SupportedDatabase.FlatFile;
+                        // Informix: MERGE INTO itself is documented, but the base
+                        // RenderMergeSource's USING (VALUES (...)) AS s (...) shape was
+                        // CONFIRMED live to be rejected ("A syntax error has occurred.") — see
+                        // InformixDialect.cs's SupportsMerge comment. Left disabled.
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -251,7 +260,9 @@ public class DataSourceInformationTests
         {
             // FlatFile has no stored-procedure support at all (ProcWrappingStyle.None), so there
             // is nothing to name-match against — independent of its named-parameter support.
-            SupportedDatabase.FlatFile => false,
+            // Informix: same reasoning — ProcWrappingStyle deliberately left None pending live
+            // verification of its stored-procedure calling convention (see InformixDialect.cs).
+            SupportedDatabase.FlatFile or SupportedDatabase.Informix => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -268,8 +279,17 @@ public class DataSourceInformationTests
         // Assert: named parameters flags
         // Every database in this matrix supports named parameters, FlatFile included — it uses
         // ":name" (see FlatFileDialect.SupportsNamedParameters/ParameterMarker), verified directly
-        // against the engine's parser/binder.
-        Assert.True(info.SupportsNamedParameters);
+        // against the engine's parser/binder. Informix is the one genuine exception: its ADO.NET
+        // driver (Informix.Net.Core-lnx) has no named-parameter support at all — confirmed by
+        // inspecting InformixClientFactory's assembly directly.
+        if (db == SupportedDatabase.Informix)
+        {
+            Assert.False(info.SupportsNamedParameters);
+        }
+        else
+        {
+            Assert.True(info.SupportsNamedParameters);
+        }
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
         // Assert: output parameter limits
