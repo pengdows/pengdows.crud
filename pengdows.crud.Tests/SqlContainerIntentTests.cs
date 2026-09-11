@@ -136,9 +136,14 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        // ExecuteReaderAsync validates the write-capable connection separately.
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        // Regression: this used to only call AssertIsWriteConnection() (an InvalidOperationException),
+        // not the same explicit ReadWriteMode.ReadOnly pre-flight check ExecuteNonQueryAsync/
+        // ExecuteScalarCore already perform — see
+        // docs/planning/3.0-architectural-review-backlog.md's P0 item. Now throws the same
+        // IReadOnlyViolation-marked ReadOnlyContextException as every other write path.
+        var ex = await Assert.ThrowsAsync<pengdows.crud.exceptions.ReadOnlyContextException>(async () =>
             await container.ExecuteReaderAsync(ExecutionType.Write));
+        Assert.IsAssignableFrom<pengdows.crud.exceptions.IReadOnlyViolation>(ex);
     }
 
     [Fact]

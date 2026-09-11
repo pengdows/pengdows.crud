@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.isolation;
@@ -394,7 +395,12 @@ public class DatabaseContextTests
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
         var context = new DatabaseContext(config, factory);
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
+        // ReadOnlyContextException extends NotSupportedException and implements
+        // IReadOnlyViolation — see docs/planning/3.0-architectural-review-backlog.md's P0 item;
+        // this used to be a bare NotSupportedException, breaking the documented
+        // "catch (IReadOnlyViolation) catches any of the three uniformly" contract.
+        var ex = Assert.Throws<ReadOnlyContextException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
     }
 
     [Fact]

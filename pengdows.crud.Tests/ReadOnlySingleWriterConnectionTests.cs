@@ -80,8 +80,10 @@ public class ReadOnlySingleWriterConnectionTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
-        // Attempting to create a write transaction on a read-only context should throw
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        // Attempting to create a write transaction on a read-only context should throw —
+        // ReadOnlyContextException extends NotSupportedException and additionally implements
+        // IReadOnlyViolation, see docs/planning/3.0-architectural-review-backlog.md's P0 item.
+        await Assert.ThrowsAsync<pengdows.crud.exceptions.ReadOnlyContextException>(async () =>
         {
             var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
             await tx.DisposeAsync();

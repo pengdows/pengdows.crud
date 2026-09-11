@@ -68,7 +68,7 @@ public class InvalidTransactionTypeTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void BeginTransaction_ReadOnlyContext_DefaultIsWrite_ThrowsNotSupportedException()
+    public void BeginTransaction_ReadOnlyContext_DefaultIsWrite_ThrowsReadOnlyContextException()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -77,11 +77,14 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction());
+        // ReadOnlyContextException extends NotSupportedException and additionally implements
+        // IReadOnlyViolation — see docs/planning/3.0-architectural-review-backlog.md's P0 item.
+        var ex = Assert.Throws<pengdows.crud.exceptions.ReadOnlyContextException>(() => context.BeginTransaction());
+        Assert.IsAssignableFrom<pengdows.crud.exceptions.IReadOnlyViolation>(ex);
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnlyContext_ExplicitWriteExecutionType_ThrowsNotSupportedException()
+    public void BeginTransaction_ReadOnlyContext_ExplicitWriteExecutionType_ThrowsReadOnlyContextException()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -90,7 +93,7 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        Assert.Throws<NotSupportedException>(() =>
+        Assert.Throws<pengdows.crud.exceptions.ReadOnlyContextException>(() =>
             context.BeginTransaction(executionType: ExecutionType.Write));
     }
 
@@ -124,7 +127,7 @@ public class InvalidTransactionTypeTests
     }
 
     [Fact]
-    public async Task BeginTransactionAsync_ReadOnlyContext_ThrowsNotSupportedException()
+    public async Task BeginTransactionAsync_ReadOnlyContext_ThrowsReadOnlyContextException()
     {
         var config = new DatabaseContextConfiguration
         {
@@ -133,6 +136,9 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await context.BeginTransactionAsync());
+        // ReadOnlyContextException extends NotSupportedException and additionally implements
+        // IReadOnlyViolation — see docs/planning/3.0-architectural-review-backlog.md's P0 item.
+        await Assert.ThrowsAsync<pengdows.crud.exceptions.ReadOnlyContextException>(
+            async () => await context.BeginTransactionAsync());
     }
 }

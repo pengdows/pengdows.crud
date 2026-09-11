@@ -1526,6 +1526,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var operationKind = commandType == CommandType.StoredProcedure ? DbOperationKind.Unknown : DbOperationKind.Query;
         if (executionType == ExecutionType.Write)
         {
+            // Same pre-flight check ExecuteNonQueryAsync/ExecuteScalarCore already perform,
+            // before the narrower AssertIsWriteConnection() check below — this path (generated-
+            // key retrieval via BuildCreateWithReturning, e.g. reading back an OUTPUT/RETURNING
+            // result set) is still a write for read-only-mode purposes and must throw one of the
+            // three documented IReadOnlyViolation-marked exception types, not a bare
+            // InvalidOperationException, so `catch (IReadOnlyViolation)` catches it uniformly.
+            if (_context.ReadWriteMode == ReadWriteMode.ReadOnly)
+            {
+                throw new ReadOnlyContextException("Write operations are not supported in read-only mode.");
+            }
+
             _context.AssertIsWriteConnection();
         }
         else
