@@ -9,8 +9,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.6258311,
-    "totalTimeSeconds": 3.2061117,
+    "testTimeSeconds": 0.5161471,
+    "totalTimeSeconds": 3.1951065,
     "error": null,
     "checks": [
       {
@@ -210,8 +210,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.6742232,
-    "totalTimeSeconds": 3.095077,
+    "testTimeSeconds": 0.5271721,
+    "totalTimeSeconds": 2.8711825,
     "error": null,
     "checks": [
       {
@@ -411,8 +411,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.6289743,
-    "totalTimeSeconds": 3.0512368,
+    "testTimeSeconds": 0.515621,
+    "totalTimeSeconds": 2.8694811,
     "error": null,
     "checks": [
       {
@@ -612,8 +612,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 41,
-    "testTimeSeconds": 3.7631626,
-    "totalTimeSeconds": 50.6649637,
+    "testTimeSeconds": 3.6310928,
+    "totalTimeSeconds": 47.5726047,
     "error": null,
     "checks": [
       {
@@ -828,13 +828,13 @@
     "container": "Db2 [11.5.8.0]",
     "success": true,
     "outcome": "Passed",
-    "checksAttempted": 39,
-    "checksPassed": 39,
+    "checksAttempted": 40,
+    "checksPassed": 40,
     "checksFailed": 0,
     "checksSkipped": 2,
-    "totalChecks": 41,
-    "testTimeSeconds": 3.6747647,
-    "totalTimeSeconds": 56.5223453,
+    "totalChecks": 42,
+    "testTimeSeconds": 6.4572425,
+    "totalTimeSeconds": 54.3225682,
     "error": null,
     "checks": [
       {
@@ -973,6 +973,11 @@
         "reason": null
       },
       {
+        "name": "DbMode.SentinelPreventsUnload",
+        "outcome": "passed",
+        "reason": null
+      },
+      {
         "name": "ReaderDisposal.Compatibility",
         "outcome": "skipped",
         "reason": "MySql.Data specific EOF disposal check"
@@ -1054,8 +1059,8 @@
     "checksFailed": 0,
     "checksSkipped": 5,
     "totalChecks": 39,
-    "testTimeSeconds": 1.0740852,
-    "totalTimeSeconds": 1.1195863,
+    "testTimeSeconds": 1.1238729,
+    "totalTimeSeconds": 1.2666819,
     "error": null,
     "checks": [
       {
@@ -1265,8 +1270,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 38,
-    "testTimeSeconds": 6.5510435,
-    "totalTimeSeconds": 7.7691645,
+    "testTimeSeconds": 6.5132744,
+    "totalTimeSeconds": 7.7184025,
     "error": null,
     "checks": [
       {
@@ -1471,8 +1476,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 38,
-    "testTimeSeconds": 6.7083302,
-    "totalTimeSeconds": 7.9572648,
+    "testTimeSeconds": 6.6057161,
+    "totalTimeSeconds": 7.829877,
     "error": null,
     "checks": [
       {
@@ -1677,8 +1682,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 38,
-    "testTimeSeconds": 6.9317261,
-    "totalTimeSeconds": 8.2950046,
+    "testTimeSeconds": 6.6893843,
+    "totalTimeSeconds": 8.0363469,
     "error": null,
     "checks": [
       {
@@ -1883,8 +1888,8 @@
     "checksFailed": 0,
     "checksSkipped": 10,
     "totalChecks": 37,
-    "testTimeSeconds": 0.2590618,
-    "totalTimeSeconds": 0.2830446,
+    "testTimeSeconds": 0.2398422,
+    "totalTimeSeconds": 0.2617246,
     "error": null,
     "checks": [
       {
@@ -2084,8 +2089,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1083148,
-    "totalTimeSeconds": 4.2563557,
+    "testTimeSeconds": 0.0829075,
+    "totalTimeSeconds": 4.2394251,
     "error": null,
     "checks": [
       {
@@ -2300,8 +2305,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1054928,
-    "totalTimeSeconds": 7.2812776,
+    "testTimeSeconds": 0.0792285,
+    "totalTimeSeconds": 7.2085662,
     "error": null,
     "checks": [
       {
@@ -2516,8 +2521,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1139481,
-    "totalTimeSeconds": 6.2674519,
+    "testTimeSeconds": 0.0937191,
+    "totalTimeSeconds": 6.2446381,
     "error": null,
     "checks": [
       {
@@ -2732,8 +2737,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1939576,
-    "totalTimeSeconds": 3.4178842,
+    "testTimeSeconds": 0.1644793,
+    "totalTimeSeconds": 7.3112465,
     "error": null,
     "checks": [
       {
@@ -2948,8 +2953,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1126529,
-    "totalTimeSeconds": 7.2840897,
+    "testTimeSeconds": 0.0848107,
+    "totalTimeSeconds": 7.2301851,
     "error": null,
     "checks": [
       {
@@ -3149,8 +3154,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1850167,
-    "totalTimeSeconds": 7.3708979,
+    "testTimeSeconds": 0.1262335,
+    "totalTimeSeconds": 7.2622003,
     "error": null,
     "checks": [
       {
@@ -3350,8 +3355,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.2261698,
-    "totalTimeSeconds": 7.4997002,
+    "testTimeSeconds": 0.1949869,
+    "totalTimeSeconds": 6.4249042,
     "error": null,
     "checks": [
       {
@@ -3551,8 +3556,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1759018,
-    "totalTimeSeconds": 8.3629068,
+    "testTimeSeconds": 0.1195378,
+    "totalTimeSeconds": 7.258928,
     "error": null,
     "checks": [
       {
@@ -3752,8 +3757,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 38,
-    "testTimeSeconds": 1.0542798,
-    "totalTimeSeconds": 11.4420815,
+    "testTimeSeconds": 0.5951553,
+    "totalTimeSeconds": 12.954369,
     "error": null,
     "checks": [
       {
@@ -3958,8 +3963,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 38,
-    "testTimeSeconds": 0.7215663,
-    "totalTimeSeconds": 9.1145245,
+    "testTimeSeconds": 0.6913881,
+    "totalTimeSeconds": 9.0199183,
     "error": null,
     "checks": [
       {
@@ -4164,8 +4169,8 @@
     "checksFailed": 0,
     "checksSkipped": 2,
     "totalChecks": 38,
-    "testTimeSeconds": 1.3240829,
-    "totalTimeSeconds": 9.067526,
+    "testTimeSeconds": 0.9208652,
+    "totalTimeSeconds": 7.5768415,
     "error": null,
     "checks": [
       {
@@ -4370,8 +4375,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.118252,
-    "totalTimeSeconds": 1.2572751,
+    "testTimeSeconds": 0.1093301,
+    "totalTimeSeconds": 1.2450166,
     "error": null,
     "checks": [
       {
@@ -4581,8 +4586,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.156269,
-    "totalTimeSeconds": 1.3038686,
+    "testTimeSeconds": 0.1560663,
+    "totalTimeSeconds": 1.3158211,
     "error": null,
     "checks": [
       {
@@ -4792,8 +4797,8 @@
     "checksFailed": 0,
     "checksSkipped": 5,
     "totalChecks": 40,
-    "testTimeSeconds": 0.1056411,
-    "totalTimeSeconds": 4.2818958,
+    "testTimeSeconds": 0.1176434,
+    "totalTimeSeconds": 4.2587644,
     "error": null,
     "checks": [
       {
@@ -5008,8 +5013,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1475486,
-    "totalTimeSeconds": 2.3337277,
+    "testTimeSeconds": 0.1624066,
+    "totalTimeSeconds": 2.317452,
     "error": null,
     "checks": [
       {
@@ -5219,8 +5224,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.1213394,
-    "totalTimeSeconds": 1.2829385,
+    "testTimeSeconds": 0.1107872,
+    "totalTimeSeconds": 2.2739995,
     "error": null,
     "checks": [
       {
@@ -5430,8 +5435,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 39,
-    "testTimeSeconds": 0.2259758,
-    "totalTimeSeconds": 2.3760024,
+    "testTimeSeconds": 0.2257777,
+    "totalTimeSeconds": 2.3754385,
     "error": null,
     "checks": [
       {
@@ -5641,8 +5646,8 @@
     "checksFailed": 0,
     "checksSkipped": 9,
     "totalChecks": 39,
-    "testTimeSeconds": 59.5804249,
-    "totalTimeSeconds": 91.0113343,
+    "testTimeSeconds": 68.8252778,
+    "totalTimeSeconds": 99.0436227,
     "error": null,
     "checks": [
       {
@@ -5852,8 +5857,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.2721122,
-    "totalTimeSeconds": 11.5653707,
+    "testTimeSeconds": 6.2150966,
+    "totalTimeSeconds": 11.4476419,
     "error": null,
     "checks": [
       {
@@ -6073,8 +6078,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.2405609,
-    "totalTimeSeconds": 11.6010997,
+    "testTimeSeconds": 6.2457948,
+    "totalTimeSeconds": 11.5478598,
     "error": null,
     "checks": [
       {
@@ -6294,8 +6299,8 @@
     "checksFailed": 0,
     "checksSkipped": 3,
     "totalChecks": 41,
-    "testTimeSeconds": 6.4271403,
-    "totalTimeSeconds": 11.9501469,
+    "testTimeSeconds": 6.3161932,
+    "totalTimeSeconds": 21.8681496,
     "error": null,
     "checks": [
       {
@@ -6515,8 +6520,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 42,
-    "testTimeSeconds": 1.4620154,
-    "totalTimeSeconds": 1.4765401,
+    "testTimeSeconds": 1.4633619,
+    "totalTimeSeconds": 1.480504,
     "error": null,
     "checks": [
       {
@@ -6741,8 +6746,8 @@
     "checksFailed": 0,
     "checksSkipped": 9,
     "totalChecks": 37,
-    "testTimeSeconds": 0.1281976,
-    "totalTimeSeconds": 18.5648484,
+    "testTimeSeconds": 0.1512942,
+    "totalTimeSeconds": 17.8486146,
     "error": null,
     "checks": [
       {
@@ -6942,8 +6947,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.4047705,
-    "totalTimeSeconds": 1.6526745,
+    "testTimeSeconds": 0.3245243,
+    "totalTimeSeconds": 1.5104271,
     "error": null,
     "checks": [
       {
@@ -7143,8 +7148,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 37,
-    "testTimeSeconds": 0.4558486,
-    "totalTimeSeconds": 2.824885,
+    "testTimeSeconds": 0.3541262,
+    "totalTimeSeconds": 2.6753273,
     "error": null,
     "checks": [
       {
@@ -7344,8 +7349,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 38,
-    "testTimeSeconds": 1.4781001,
-    "totalTimeSeconds": 8.0741673,
+    "testTimeSeconds": 1.2165868,
+    "totalTimeSeconds": 6.7013841,
     "error": null,
     "checks": [
       {
@@ -7550,8 +7555,8 @@
     "checksFailed": 0,
     "checksSkipped": 4,
     "totalChecks": 38,
-    "testTimeSeconds": 1.8962795,
-    "totalTimeSeconds": 8.6478241,
+    "testTimeSeconds": 1.5138795,
+    "totalTimeSeconds": 8.0954081,
     "error": null,
     "checks": [
       {
