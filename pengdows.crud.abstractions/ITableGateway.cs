@@ -22,8 +22,19 @@ public interface ITableGateway<TEntity, TRowID>
     where TEntity : class, new()
 {
     /// <summary>
-    /// Fully qualified, quoted table name used by this entity.
+    /// Fully qualified, quoted table name used by this entity, quoted using the dialect of the
+    /// <see cref="IDatabaseContext"/> this gateway was <em>constructed</em> with.
     /// </summary>
+    /// <remarks>
+    /// This is fixed once at construction — it does NOT reflect a different per-call
+    /// <c>context</c> parameter passed to an operation (e.g.
+    /// <c>gateway.RetrieveOneAsync(id, tenantCtx)</c>), even when that tenant's dialect uses
+    /// different quoting or schema-qualification rules. A singleton gateway shared across
+    /// tenants (the documented multi-tenancy pattern — see CLAUDE.md) must NOT use this
+    /// property to build custom per-tenant SQL; resolve identifier quoting from the actual
+    /// per-call context instead (e.g. <c>sc.WrapObjectName(...)</c> on a container created from
+    /// that context, or <c>context.WrapObjectName(...)</c> directly).
+    /// </remarks>
     string WrappedTableName { get; }
 
     /// <summary>
