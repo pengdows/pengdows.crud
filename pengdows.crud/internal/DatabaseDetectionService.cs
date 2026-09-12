@@ -55,7 +55,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.FlatFile, new[] { "flatfile", "flat file" }),
         (SupportedDatabase.SybaseASE, new[] { "adaptive server enterprise", "sybase" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
-        (SupportedDatabase.SapHana, new[] { "hana" })
+        (SupportedDatabase.SapHana, new[] { "hana" }),
+        (SupportedDatabase.InterBase, new[] { "interbase" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
@@ -76,7 +77,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.FlatFile, new[] { "flatfile" }),
         (SupportedDatabase.SybaseASE, new[] { "aseclient", "adonetcore" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
-        (SupportedDatabase.SapHana, new[] { "hana" })
+        (SupportedDatabase.SapHana, new[] { "hana" }),
+        (SupportedDatabase.InterBase, new[] { "interbase" })
     };
 
     /// <summary>

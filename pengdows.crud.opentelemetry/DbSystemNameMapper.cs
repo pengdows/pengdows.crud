@@ -31,6 +31,8 @@ internal static class DbSystemNameMapper
         // Registered value, confirmed against the OTel semconv registry
         // (https://opentelemetry.io/docs/specs/semconv/registry/attributes/db/).
         SupportedDatabase.SapHana => "sap.hana",
+        // Not present in the OTel registry as of this writing; best-effort custom value.
+        SupportedDatabase.InterBase => "interbase",
         _ => "other_sql"
     };
 }

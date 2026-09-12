@@ -97,6 +97,7 @@ public static class DataSourceTestData
             SupportedDatabase.SybaseASE => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
             SupportedDatabase.SapHana => new HanaDialect(factory, NullLogger.Instance),
+            SupportedDatabase.InterBase => new InterBaseDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -268,7 +269,7 @@ public class DataSourceInformationTests
             SupportedDatabase.TiDb or SupportedDatabase.CockroachDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
-            SupportedDatabase.Firebird => ProcWrappingStyle.ExecuteProcedure,
+            SupportedDatabase.Firebird or SupportedDatabase.InterBase => ProcWrappingStyle.ExecuteProcedure,
             _ => ProcWrappingStyle.None
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
@@ -283,7 +284,7 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
                 or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
                 or SupportedDatabase.Db2 or SupportedDatabase.SingleStore or SupportedDatabase.SybaseASE
-                or SupportedDatabase.SapHana => false,
+                or SupportedDatabase.SapHana or SupportedDatabase.InterBase => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,
@@ -342,11 +343,13 @@ public class DataSourceInformationTests
 
         var result = dialect.GetDatabaseVersion(tracked);
 
-        // FlatFile has no version()-style SQL function at all — its dialect reads ADO.NET's
-        // standard ServerVersion property directly instead of executing a canned scalar query
-        // (see FlatFileDialect.GetDatabaseVersionAsync). Every other dialect still executes a
+        // FlatFile and InterBase have no version()-style SQL function at all — their dialects read
+        // ADO.NET's standard ServerVersion property directly instead of executing a canned scalar
+        // query (see FlatFileDialect.GetDatabaseVersionAsync; InterBaseDialect.cs's file-level
+        // summary confirms live that neither Firebird's rdb$get_context nor a mon$-table
+        // equivalent exists in InterBase 15). Every other dialect still executes a
         // dialect-specific SQL version query, matched against the canned scalar below.
-        var expected = db == SupportedDatabase.FlatFile
+        var expected = db is SupportedDatabase.FlatFile or SupportedDatabase.InterBase
             ? tracked.ServerVersion
             : scalars.Values.First().ToString();
         Assert.Equal(expected, result);

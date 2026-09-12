@@ -72,15 +72,22 @@ database family — not per-dialect virtual overrides). Concrete examples from t
 | PostgreSQL / CockroachDB / YugabyteDB / Aurora PostgreSQL | SQLSTATE `40P01` | SQLSTATE `40001` | SQLSTATE `55P03` or `57014` | any SQLSTATE class `23xxx` |
 | MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | errors `1048`, `1062`, `1169`, `1216`, `1451`, `1452`, `3819`, `4025` |
 
-Every dialect not in this table (Oracle, SQLite, Firebird, DuckDB, Db2, Snowflake, SAP HANA) has
-its own entries in the same `switch` — check `SqlDialect.cs`'s `TryClassifyProviderException`
-directly for the exact codes if you're targeting one of those specifically; the shape (numeric
-code vs. SQLSTATE, per family) follows the same pattern. SAP HANA is a notable exception to the
-"numeric code vs. SQLSTATE" framing: `HanaException.SqlState` is an empty string for every
-violation kind except unique, and `HanaException.ErrorCode` is always the generic COM HRESULT
-`-2147467259` regardless of violation kind — `HanaDialect` classifies purely off
-`HanaException.NativeError` (301 unique, 461/462 foreign key, 287 not-null, 677 check, 133
-deadlock, 131 lock-wait timeout), confirmed live against a real `saplabs/hanaexpress` container.
+Every dialect not in this table (Oracle, SQLite, Firebird, DuckDB, Db2, Snowflake, SAP HANA,
+InterBase) has its own entries in the same `switch` — check `SqlDialect.cs`'s
+`TryClassifyProviderException` directly for the exact codes if you're targeting one of those
+specifically; the shape (numeric code vs. SQLSTATE, per family) follows the same pattern. SAP
+HANA is a notable exception to the "numeric code vs. SQLSTATE" framing: `HanaException.SqlState`
+is an empty string for every violation kind except unique, and `HanaException.ErrorCode` is
+always the generic COM HRESULT `-2147467259` regardless of violation kind — `HanaDialect`
+classifies purely off `HanaException.NativeError` (301 unique, 461/462 foreign key, 287 not-null,
+677 check, 133 deadlock, 131 lock-wait timeout), confirmed live against a real
+`saplabs/hanaexpress` container. InterBase is the opposite case: `IBException.ErrorCode`
+*reliably* carries the real ISC status code (confirmed live — no "Number"/"NativeError"-shaped
+property shadows it), so `InterBaseDialect` classifies directly off `ErrorCode` (335544665
+unique, 335544466 foreign key — both directions — 335544347 not-null, 335544558 check). Unlike
+Firebird's shared-code-discriminated-by-message pattern, InterBase's not-null and check codes are
+numerically distinct, confirmed live (a correction to this session's own earlier, wrong research
+claiming they shared a code).
 
 **Two independent classification systems exist in this codebase and can disagree** — this
 `DbErrorCategory`/`DbExceptionInfo` system (for application control flow) and the separate

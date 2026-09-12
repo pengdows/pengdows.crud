@@ -64,7 +64,8 @@ public class SupportedDatabaseTests
                 "SybaseASE",
                 "Spanner",
                 "Informix",
-                "SapHana"
+                "SapHana",
+                "InterBase"
             },
             names);
     }

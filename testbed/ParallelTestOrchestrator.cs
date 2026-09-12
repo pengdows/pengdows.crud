@@ -14,6 +14,7 @@ using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
 using testbed.SapHana;
+using testbed.InterBase;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
@@ -28,12 +29,14 @@ public class ParallelTestOrchestrator
     private readonly ConcurrentBag<TestResult> _results = new();
     private readonly bool _includeSnowflake;
     private readonly bool _includeSapHana;
+    private readonly bool _includeInterBase;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false, bool includeInterBase = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
         _includeSapHana = includeSapHana;
+        _includeInterBase = includeInterBase;
     }
 
     /// <summary>
@@ -62,6 +65,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             SupportedDatabase.Informix => new InformixTestContainer(),
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
+            SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
             _ => null
         };
 
@@ -321,6 +325,12 @@ public class ParallelTestOrchestrator
         // previous high-water mark). Single pinned image internally, like Sybase/Informix.
         if (_includeSapHana)
             AddLocal("SAP HANA", new HanaTestContainer(), (db, sp) => new HanaTestProvider(db, sp), 300);
+
+        // Weight 5: connecting to an already-running, externally-managed container (see
+        // InterBaseTestContainer.cs's class remarks) — no image pull/first-boot cost like every
+        // other database here, just a connection retry loop.
+        if (_includeInterBase)
+            AddLocal("InterBase", new InterBaseTestContainer(), (db, sp) => new InterBaseTestProvider(db, sp), 5);
 
         if (only is { Count: > 0 })
             configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();

@@ -42,10 +42,13 @@ Console.WriteLine();
 
 // Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true — cloud-only,
 // no Docker image; SAP HANA is opt-in via INCLUDE_SAPHANA=true — real Docker image, but needs
-// 16-32GB RAM; every other database, Informix included, runs unconditionally)
+// 16-32GB RAM; InterBase is opt-in via INCLUDE_INTERBASE=true — a personal, non-shareable,
+// node-locked Developer Edition license plus a native libgds.so required on this host, see
+// InterBaseTestContainer.cs; every other database, Informix included, runs unconditionally)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
 var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana);
+var includeInterBase = Environment.GetEnvironmentVariable("INCLUDE_INTERBASE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

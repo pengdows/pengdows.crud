@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 21 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 22 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -25,6 +25,7 @@ pengdows.crud supports 21 directly supported databases via the `SupportedDatabas
 | `Spanner=262144` | Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter) |
 | `Informix=524288` | IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters |
 | `SapHana=1048576` | SAP HANA (opt-in via `INCLUDE_SAPHANA=true`; resource-based, not credentials — see note below) |
+| `InterBase=2097152` | Embarcadero InterBase — Firebird's proprietary ancestor; named (@) parameters, `ROWS`-based paging, classic `GEN_ID` sequences (opt-in; licensing-based, not resource/credentials — see note below) |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -35,6 +36,8 @@ pengdows.crud supports 21 directly supported databases via the `SupportedDatabas
 > **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SELECT @@memsql_version` probe (a SingleStore-only system variable, structurally identical to the existing `@@aurora_version` Aurora MySQL probe) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is not yet wired into the testbed orchestrator as an always-on container entry — that remains open work, distinct from the detection/dialect support described here.
 
 > **SAP HANA:** opt-in via `INCLUDE_SAPHANA=true`, for a different reason than Snowflake's opt-in — `saplabs/hanaexpress` is a real, pullable Docker image (~4.5GB), but SAP's own guidance and community reports consistently put a working container's RAM requirement at 16-32GB, far beyond a standard CI runner and beyond every other testbed container's footprint. Positional `?` parameters only (no named-parameter support — `Sap.Data.Hana.Net.v8.0`'s `DataSourceInformation.ParameterMarkerFormat` reports `"?"`); unquoted identifiers fold to UPPERCASE, quoted ones are case-sensitive (Oracle-like, verified independently); `LIMIT`/`OFFSET` paging only (SQL:2008 `OFFSET`/`FETCH` is rejected); `MERGE INTO` works but only with a `SELECT ... FROM DUMMY` source, not the ANSI `VALUES (...)` row-constructor shape; no multi-row `VALUES` batch insert; no `DROP TABLE IF EXISTS`. See `HanaDialect.cs`'s file-level summary for the full live-verification trail (a real `saplabs/hanaexpress` 2.00.088.00 container run by hand via Docker for this addition).
+>
+> **InterBase:** opt-in for a THIRD, distinct reason from Snowflake (credentials) and SAP HANA (resource footprint) — licensing. InterBase's Developer Edition license is node-locked to a specific machine/container IP, so a working container cannot be shared as a generic, freely-pullable public image the way every other testbed database can; anyone running this suite needs their own registered license and container. Named `@` parameters (unlike Firebird's own `@`, this was independently confirmed live rather than assumed from the shared ancestry); unquoted identifiers fold to UPPERCASE, quoted ones are case-sensitive; paging uses `ROWS n` (limit) / `ROWS m TO n` (1-based inclusive range) — neither SQL:2008 `OFFSET`/`FETCH` nor `LIMIT`/`OFFSET` is accepted; no `MERGE`, no `IDENTITY` columns, no `CREATE SEQUENCE`, no `INSERT ... RETURNING`, no multi-row `VALUES` batch insert, no `DROP TABLE IF EXISTS`. Generated keys use the classic InterBase 6 `CREATE GENERATOR` + `GEN_ID(name, 1)` pair via `GeneratedKeyPlan.PrefetchSequence` — the first shipped dialect to actually use this plan (see `docs/generated-keys.md`). Savepoints support the full `Create`/`Rollback`/`Release` set, confirmed live with an actual before/after row-survival check. See `InterBaseDialect.cs`'s file-level summary for the full live-verification trail, including two corrections to this session's own earlier research (savepoints and the NOT NULL error code).
 >
 > **Sybase (SAP ASE):** has its own dedicated `SybaseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` or `OFFSET`/`FETCH` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing. ASE 16's community Docker image also SIGSEGVs on boot on modern kernels (SAP KBA 3018138); `SybaseTestContainer` patches in trace flag `-T11889` and restarts to work around it — this means, unlike every `AddDocker`-based provider here, Sybase runs through `AddLocal` with one pinned image rather than a version matrix.
 
@@ -227,6 +230,38 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   unique, 461/462 foreign key, 287 not-null, 677 check).
 - Savepoints support the full `Create`/`Rollback`/`Release` set — unlike Oracle, which has no
   `RELEASE SAVEPOINT` at all.
+
+**InterBase**
+- Named `@` parameters, confirmed live via a real parameterized INSERT and SELECT WHERE clause
+  (a bare positional `?` also works when the driver can infer a type from context, but `@` is
+  used to match `DataSourceInformation`'s own reported style).
+- Unquoted identifiers fold to UPPERCASE; quoted identifiers are case-sensitive — same pattern
+  as Oracle/HANA, confirmed via `DataSourceInformation.IdentifierCase`/`QuotedIdentifierCase`.
+- Paging uses `ROWS n` (limit only) and `ROWS m TO n` (1-based, inclusive range) — its own idiom,
+  distinct from Firebird's `FIRST`/`SKIP`. Neither SQL:2008 `OFFSET`/`FETCH` nor MySQL/PostgreSQL
+  `LIMIT`/`OFFSET` is accepted.
+- No `MERGE` (rejected at the keyword itself), no `IDENTITY` columns, no `CREATE SEQUENCE`, no
+  `INSERT ... RETURNING`, no multi-row `VALUES (...), (...)` batch insert, no
+  `DROP TABLE IF EXISTS` — all confirmed rejected with SQLCODE -104 ("Token unknown") against a
+  real InterBase 15 server.
+- Generated keys use the classic InterBase 6 `CREATE GENERATOR name` + `GEN_ID(name, 1)` pair via
+  `GeneratedKeyPlan.PrefetchSequence` — the first shipped dialect to actually return this plan
+  (see `docs/generated-keys.md`, which previously documented the plan's `TableGateway.Core.cs`
+  plumbing as real but unreachable by any dialect).
+- A CHECK constraint on a nullable column rejects a NULL value outright — confirmed live, and
+  a genuine departure from ANSI SQL (which treats `chk > 0` against NULL as UNKNOWN, and a CHECK
+  constraint normally only fails on FALSE). A schema-design fact for callers, not something this
+  dialect's capability flags model differently.
+- Exception classification: `IBException.ErrorCode` reliably carries the real ISC status code
+  (301/335544665 unique, 335544466 foreign key — confirmed both directions — 335544347 not-null,
+  335544558 check). NOT NULL and CHECK are numerically DISTINCT codes here, unlike Firebird's
+  shared-code-discriminated-by-message pattern.
+- Savepoints support the full `Create`/`Rollback`/`Release` set, confirmed live with an actual
+  before/after row-survival check (not just absence of an exception) — full capability set, same
+  as HANA.
+- GUIDs round-trip through a `CHAR(16) CHARACTER SET OCTETS` column using the same RFC 4122
+  big-endian byte layout Firebird's own driver expects — confirmed independently live for this
+  (different) driver rather than assumed from Firebird's own documented behavior.
 
 **Snowflake**
 - Parses constraint DDL but enforces none of it at runtime: `EnforcesConstraints`,

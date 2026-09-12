@@ -47,8 +47,8 @@ Server `RETURN` statement's integer value.
 ## What each `ProcWrappingStyle` actually generates
 
 `ISqlDialect.ProcWrappingStyle` selects the strategy (`pengdows.crud/strategies/proc/*.cs`).
-`ExecutionType` is ignored by every style except PostgreSQL and Firebird, where read vs. write
-selects genuinely different syntax.
+`ExecutionType` is ignored by every style except PostgreSQL and Firebird/InterBase, where read vs.
+write selects genuinely different syntax.
 
 | Style | Databases | `CreateAsync`-shaped call (`ExecutionType.Write`) | `SELECT`-shaped call (`ExecutionType.Read`) |
 |---|---|---|---|
@@ -56,7 +56,7 @@ selects genuinely different syntax.
 | `Exec` | SQL Server | `EXEC proc_name arg1, arg2` — **space-separated, not parenthesized**; output-capable parameters get an ` OUTPUT` suffix appended per-argument (`WrapForStoredProc`'s `BuildProcedureArguments`, only for `ParameterDirection.Output`/`InputOutput`) | same |
 | `Oracle` | Oracle | `BEGIN\n\tproc_name(arg1, arg2);\nEND;` — a PL/SQL anonymous block, parentheses omitted entirely when there are no arguments | same |
 | `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB | `CALL proc_name(arg1, arg2)` (requires PostgreSQL 11+; earlier versions only support functions, use `Read` for everything) | `SELECT * FROM func_name(arg1, arg2)` |
-| `ExecuteProcedure` | Firebird | `EXECUTE PROCEDURE proc_name(arg1, arg2)` | `SELECT * FROM proc_name(arg1, arg2)` — Firebird disallows empty `()`, omitted entirely when there are no arguments |
+| `ExecuteProcedure` | Firebird, InterBase | `EXECUTE PROCEDURE proc_name(arg1, arg2)` | `SELECT * FROM proc_name(arg1, arg2)` — both disallow empty `()`, omitted entirely when there are no arguments. InterBase confirmed live against a real SUSPEND-based selectable procedure, independently of Firebird's own confirmation. |
 | `None` | SQLite, DuckDB | `WrapForStoredProc` throws `NotSupportedException` unconditionally — stored procedures are not supported at all on these engines | — |
 
 `RequiresStoredProcParameterNameMatch` and `MaxOutputParameters` (cataloged in

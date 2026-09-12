@@ -434,6 +434,11 @@ CREATE TABLE {tableName} (
             // against a live server - this is the documented form, not yet confirmed to be
             // accepted exactly as written here.
             SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            // CONFIRMED live: InterBase has no DATETIME type at all — "DATETIME" is parsed as an
+            // (unresolvable) domain/column reference, not a type keyword, and fails with SQLCODE
+            // -607 "Specified domain or source column ... does not exist" rather than a syntax
+            // error. TIMESTAMP is the correct type, same as Firebird/Db2.
+            SupportedDatabase.InterBase => "TIMESTAMP",
             _ => "DATETIME"
         };
     }
@@ -456,6 +461,12 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             SupportedDatabase.Firebird => "BIGINT",
+            // CONFIRMED live: InterBase 15 has no BIGINT/INT64 type at all — both are rejected
+            // with the same SQLCODE -607 "Specified domain or source column ... does not exist"
+            // as an unrecognized-type-keyword shape (parsed as a domain reference, not a syntax
+            // error). NUMERIC(18,0)/DECIMAL(18,0) is InterBase's classic (pre-Firebird-BIGINT)
+            // 64-bit-range exact-integer idiom and is accepted.
+            SupportedDatabase.InterBase => "NUMERIC(18,0)",
             _ => "BIGINT"
         };
     }
@@ -593,6 +604,15 @@ CREATE TABLE {tableName} (
             // all pengdows.crud's parameter binding does today. Left as a known gap rather than
             // implementing insert-cursor/data-at-execution support, out of scope for this pass.
             SupportedDatabase.Informix => false,
+            // CONFIRMED live: InterBase rejects a WHERE-clause "=" comparison against a BLOB
+            // column outright — "feature is not supported: BLOB and array data types are not
+            // supported for compare operation" — regardless of how the parameter itself is bound.
+            // A different failure shape from Informix's host-variable restriction above, but the
+            // same practical effect for this test (which specifically exercises an equality
+            // comparison, not just a bare INSERT). Confirmed as a genuine InterBase engine
+            // limitation, not shared by Firebird (which has no such restriction) despite both
+            // using "BLOB" as their binary column type here.
+            SupportedDatabase.InterBase => false,
             _ => true
         };
     }
@@ -1063,6 +1083,52 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.InterBase:
+                {
+                    var interBaseProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // InterBase: selectable proc (SUSPEND) → SELECT * FROM "proc_name" via Read
+                    // path — CONFIRMED live, same shape as Firebird's own case above (independently
+                    // reconfirmed for this driver/server, not assumed from Firebird). InterBase has
+                    // no "CREATE OR ALTER" shorthand, so drop first if a prior run left one behind.
+                    sc.Query.Append(
+                        $"DROP PROCEDURE {interBaseProcName}");
+                    try
+                    {
+                        await sc.ExecuteNonQueryAsync();
+                    }
+                    catch
+                    {
+                        // Procedure didn't exist yet — expected on a fresh database.
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {interBaseProcName}\n" +
+                        "RETURNS (result_val INTEGER)\n" +
+                        "AS\n" +
+                        "BEGIN\n" +
+                        "  result_val = 42;\n" +
+                        "  SUSPEND;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var interBaseWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(interBaseWrapped);
+                    var interBaseResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (interBaseResult != 42)
+                    {
+                        throw new Exception($"[InterBase proc] Expected 42 but got {interBaseResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {interBaseProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             case SupportedDatabase.SybaseASE:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
@@ -1446,15 +1512,23 @@ INSERT INTO {table} ({insertColumns}
         await _helper.CreateAsync(t, _context);
         var afterInsert = DateTime.UtcNow;
 
+        // Look up by t.Id (the entity's post-insert value), not the local `id` captured before
+        // CreateAsync: for GeneratedKeyPlan.PrefetchSequence (InterBase), CreateAsync overwrites
+        // the entity's [Id] with the generator-fetched value even though the property is
+        // client-writable and was already populated — the same contract every [Id(false)]
+        // DB-generated column already has, just reached via a pre-fetch instead of a post-fetch.
+        // Every other dialect's plan leaves t.Id == id unchanged, so this is a no-op there.
+        var lookupId = t.Id;
+
         try
         {
-            var sc = _helper.BuildRetrieve(new List<long> { id }, _context);
+            var sc = _helper.BuildRetrieve(new List<long> { lookupId }, _context);
             var rows = await _helper.LoadListAsync(sc);
             var retrieved = rows.FirstOrDefault()
                             ?? throw new Exception("[RoundTrip] Row not found after insert");
 
-            if (retrieved.Id != id)
-                throw new Exception($"[RoundTrip] Id: expected {id}, got {retrieved.Id}");
+            if (retrieved.Id != lookupId)
+                throw new Exception($"[RoundTrip] Id: expected {lookupId}, got {retrieved.Id}");
 
             if (retrieved.Description != unicodeDesc)
                 throw new Exception(
@@ -1483,7 +1557,7 @@ INSERT INTO {table} ({insertColumns}
         }
         finally
         {
-            await CleanupTestRow(id);
+            await CleanupTestRow(lookupId);
         }
 
         await TestRowRoundTripFidelity();
@@ -2485,14 +2559,19 @@ INSERT INTO {table} ({fidelityColumns}
     protected virtual async Task TestGetOrdinalUnknownColumnBehavior()
     {
         var id = Interlocked.Increment(ref _nextId);
-        await _helper.CreateAsync(new TestTable
+        var entity = new TestTable
         {
             Id = id,
             Name = NameEnum.Test,
             Description = "get-ordinal-unknown-column",
             Value = 42,
             IsActive = true
-        });
+        };
+        await _helper.CreateAsync(entity);
+        // Look up by entity.Id (the post-insert value), not the local `id` captured before
+        // CreateAsync — see TestRowRoundTrip's identical fix for why (GeneratedKeyPlan.
+        // PrefetchSequence overwrites a writable [Id] with the generator-fetched value).
+        id = entity.Id;
 
         try
         {
@@ -2625,6 +2704,7 @@ INSERT INTO {table} ({fidelityColumns}
             SupportedDatabase.Oracle => " FROM DUAL",
             SupportedDatabase.Db2 => " FROM SYSIBM.SYSDUMMY1",
             SupportedDatabase.Firebird => " FROM RDB$DATABASE",
+            SupportedDatabase.InterBase => " FROM RDB$DATABASE",
             _ => string.Empty
         };
     }

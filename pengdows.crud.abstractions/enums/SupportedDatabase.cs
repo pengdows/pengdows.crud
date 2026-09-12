@@ -42,5 +42,6 @@ public enum SupportedDatabase : ulong
     SybaseASE        = 1UL << 17, // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database
     Spanner          = 1UL << 18, // Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter)
     Informix         = 1UL << 19, // IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters
-    SapHana          = 1UL << 20 // SAP HANA — column-store in-memory RDBMS, positional (?) parameters, MVCC isolation
+    SapHana          = 1UL << 20, // SAP HANA — column-store in-memory RDBMS, positional (?) parameters, MVCC isolation
+    InterBase        = 1UL << 21 // Embarcadero InterBase — Firebird's proprietary ancestor, named (@) parameters, ROWS-based paging, GEN_ID sequences
 }
