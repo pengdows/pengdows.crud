@@ -63,7 +63,8 @@ public class SupportedDatabaseTests
                 "SingleStore",
                 "Sybase",
                 "Spanner",
-                "Informix"
+                "Informix",
+                "SapHana"
             },
             names);
     }

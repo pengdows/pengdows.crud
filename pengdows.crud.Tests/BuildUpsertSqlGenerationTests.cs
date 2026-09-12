@@ -227,6 +227,28 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.False(sql.EndsWith(";", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void BuildUpsert_Merge_SapHana_UsesSelectFromDummy()
+    {
+        // Verified live against a real saplabs/hanaexpress container: HANA rejects the base
+        // "USING (VALUES (...)) AS s (...)" row-constructor shape outright, but accepts a
+        // Oracle/DUAL-style "USING (SELECT ... FROM DUMMY) s" derived table for both the
+        // WHEN MATCHED and WHEN NOT MATCHED branches of MERGE INTO.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertLiteEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.SapHana);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SapHana", factory, typeMap);
+        var helper = new TableGateway<UpsertLiteEntity, int>(context);
+        var entity = new UpsertLiteEntity { Id = 1, Name = "v", Version = 1 };
+        var sc = helper.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+
+        Assert.Contains("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("USING (SELECT", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FROM DUMMY", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("USING (VALUES", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string BuildInsertColumns(IDatabaseContext context)
     {
         return string.Join(", ", new[]

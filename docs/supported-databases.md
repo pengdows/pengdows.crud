@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 18 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 21 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -22,6 +22,9 @@ pengdows.crud supports 18 directly supported databases via the `SupportedDatabas
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 | `SingleStore=65536` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
 | `Sybase=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
+| `Spanner=262144` | Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter) |
+| `Informix=524288` | IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters |
+| `SapHana=1048576` | SAP HANA (opt-in via `INCLUDE_SAPHANA=true`; resource-based, not credentials — see note below) |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -31,6 +34,8 @@ pengdows.crud supports 18 directly supported databases via the `SupportedDatabas
 
 > **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SELECT @@memsql_version` probe (a SingleStore-only system variable, structurally identical to the existing `@@aurora_version` Aurora MySQL probe) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is not yet wired into the testbed orchestrator as an always-on container entry — that remains open work, distinct from the detection/dialect support described here.
 
+> **SAP HANA:** opt-in via `INCLUDE_SAPHANA=true`, for a different reason than Snowflake's opt-in — `saplabs/hanaexpress` is a real, pullable Docker image (~4.5GB), but SAP's own guidance and community reports consistently put a working container's RAM requirement at 16-32GB, far beyond a standard CI runner and beyond every other testbed container's footprint. Positional `?` parameters only (no named-parameter support — `Sap.Data.Hana.Net.v8.0`'s `DataSourceInformation.ParameterMarkerFormat` reports `"?"`); unquoted identifiers fold to UPPERCASE, quoted ones are case-sensitive (Oracle-like, verified independently); `LIMIT`/`OFFSET` paging only (SQL:2008 `OFFSET`/`FETCH` is rejected); `MERGE INTO` works but only with a `SELECT ... FROM DUMMY` source, not the ANSI `VALUES (...)` row-constructor shape; no multi-row `VALUES` batch insert; no `DROP TABLE IF EXISTS`. See `HanaDialect.cs`'s file-level summary for the full live-verification trail (a real `saplabs/hanaexpress` 2.00.088.00 container run by hand via Docker for this addition).
+>
 > **Sybase (SAP ASE):** has its own dedicated `SybaseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` or `OFFSET`/`FETCH` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing. ASE 16's community Docker image also SIGSEGVs on boot on modern kernels (SAP KBA 3018138); `SybaseTestContainer` patches in trace flag `-T11889` and restarts to work around it — this means, unlike every `AddDocker`-based provider here, Sybase runs through `AddLocal` with one pinned image rather than a version matrix.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
@@ -196,6 +201,32 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   (internal, Firebird-only) clears the ADO.NET pool for that exact connection string via
   reflection into `FbConnection.ClearPool(string)` — no application code needs to know about this
   either.
+
+**SAP HANA**
+- Positional `?` parameters only — no named-parameter support at all in `Sap.Data.Hana.Net.v8.0`.
+- Unquoted identifiers fold to UPPERCASE; quoted identifiers are case-sensitive — same behavior
+  as Oracle, confirmed independently against a live container rather than assumed.
+- `LIMIT n OFFSET m` paging only; the SQL:2008 `OFFSET n ROWS FETCH NEXT m ROWS ONLY` form is
+  rejected outright with a syntax error.
+- `MERGE INTO ... WHEN MATCHED/WHEN NOT MATCHED` works, but only with a
+  `USING (SELECT ... FROM DUMMY) s` source — the base `USING (VALUES (...)) AS s (...)`
+  row-constructor shape is rejected, same failure mode as Informix.
+- No multi-row `VALUES (...), (...)` batch insert, and no `DROP TABLE IF EXISTS` (same
+  limitations as Informix and Oracle respectively).
+- Generated keys use `IDENTITY` columns (column-store tables only), but retrieval is
+  deliberately **not** wired to `CURRENT_IDENTITY_VALUE()` as a session-scoped function — that
+  function works correctly on a single held connection, but pengdows.crud's default generated-key
+  path treats `GeneratedKeyPlan.SessionScopedFunction` as a primary (non-fallback) mechanism that
+  isn't guaranteed to land on the same *pooled* physical connection that ran the INSERT. HANA
+  also has no multi-statement command support (`INSERT ...; SELECT ...` in one command is
+  rejected), ruling out the `CompoundStatement` plan MySQL uses for the same hazard. Falls back to
+  the safe universal `CorrelationToken` plan instead.
+- Exception classification cannot use `HanaException.SqlState` (empty string for every violation
+  kind except unique) or `HanaException.ErrorCode` (always the generic COM HRESULT
+  `-2147467259`) — only `HanaException.NativeError` carries the real discriminating code (301
+  unique, 461/462 foreign key, 287 not-null, 677 check).
+- Savepoints support the full `Create`/`Rollback`/`Release` set — unlike Oracle, which has no
+  `RELEASE SAVEPOINT` at all.
 
 **Snowflake**
 - Parses constraint DDL but enforces none of it at runtime: `EnforcesConstraints`,

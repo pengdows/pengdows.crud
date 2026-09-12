@@ -1,0 +1,73 @@
+<?xml version="1.0" standalone="yes"?>
+<NewDataSet>
+    <xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+               xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:MainDataTable="DataSourceInformation"
+                    msdata:UseCurrentLocale="true">
+            <xs:complexType>
+                <xs:choice minOccurs="0" maxOccurs="unbounded">
+                    <xs:element name="DataSourceInformation">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="CompositeIdentifierSeparatorPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductName" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductVersion" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductVersionNormalized" type="xs:string" minOccurs="0"/>
+                                <xs:element name="GroupByBehavior"
+                                            msdata:DataType="System.Data.Common.GroupByBehavior, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="IdentifierPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="IdentifierCase"
+                                            msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="OrderByColumnsInSelect" type="xs:boolean" minOccurs="0"/>
+                                <xs:element name="ParameterMarkerFormat" type="xs:string" minOccurs="0"/>
+                                <xs:element name="ParameterMarkerPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="ParameterNameMaxLength" type="xs:int" minOccurs="0"/>
+                                <xs:element name="QuotedIdentifierPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="QuotedIdentifierCase"
+                                            msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="ParameterNamePattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="StatementSeparatorPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="StringLiteralPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="SupportedJoinOperators"
+                                            msdata:DataType="System.Data.Common.SupportedJoinOperators, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                </xs:choice>
+            </xs:complexType>
+        </xs:element>
+    </xs:schema>
+    <!--
+      Every value below was captured LIVE from conn.GetSchema("DataSourceInformation") against a
+      real saplabs/hanaexpress 2.00.088.00.1760424921 container (HXE), using the real
+      Sap.Data.Hana.Net.v8.0 2.29.27 ADO.NET driver — not adapted from another dialect's template.
+      HANA has no wire-compatible sibling dialect already supported in this fixture set.
+      GroupByBehavior/IdentifierCase/QuotedIdentifierCase/SupportedJoinOperators are recorded here
+      as their integer enum values; the driver returned them as System.Data.Common enum instances
+      whose ToString() forms were "MustContainAll", "Sensitive", "Sensitive", and
+      "Inner, LeftOuter, RightOuter, FullOuter" respectively.
+    -->
+    <DataSourceInformation>
+        <CompositeIdentifierSeparatorPattern>\.</CompositeIdentifierSeparatorPattern>
+        <DataSourceProductName>HANA</DataSourceProductName>
+        <DataSourceProductVersion>02.00.088.00.1760424921</DataSourceProductVersion>
+        <DataSourceProductVersionNormalized>02.00.088.00.1760424921</DataSourceProductVersionNormalized>
+        <GroupByBehavior>3</GroupByBehavior>
+        <IdentifierPattern>^[_@#$A-Za-z]([_@#$A-Za-z]|[0-9])*$</IdentifierPattern>
+        <IdentifierCase>2</IdentifierCase>
+        <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
+        <ParameterMarkerFormat>?</ParameterMarkerFormat>
+        <ParameterMarkerPattern>^[_@#$A-Za-z]([_@#$A-Za-z]|[0-9])*$</ParameterMarkerPattern>
+        <ParameterNameMaxLength>128</ParameterNameMaxLength>
+        <ParameterNamePattern>^[_@#$A-Za-z]([_@#$A-Za-z]|[0-9])*$</ParameterNamePattern>
+        <QuotedIdentifierPattern>^\[([^\"\x00-\x1F\'\\]|\'\'|\\(?!\\))+\]$|^\"([^\"\x00-\x1F\'\\]|\'\'|\\(?!\\))+\"$</QuotedIdentifierPattern>
+        <QuotedIdentifierCase>2</QuotedIdentifierCase>
+        <StatementSeparatorPattern>;</StatementSeparatorPattern>
+        <StringLiteralPattern>^\'([^\']|\'\')*\'$</StringLiteralPattern>
+        <SupportedJoinOperators>15</SupportedJoinOperators>
+    </DataSourceInformation>
+</NewDataSet>

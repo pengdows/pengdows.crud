@@ -28,6 +28,9 @@ internal static class DbSystemNameMapper
         SupportedDatabase.YugabyteDb => "yugabytedb",
         SupportedDatabase.TiDb => "tidb",
         SupportedDatabase.Snowflake => "snowflake",
+        // Registered value, confirmed against the OTel semconv registry
+        // (https://opentelemetry.io/docs/specs/semconv/registry/attributes/db/).
+        SupportedDatabase.SapHana => "sap.hana",
         _ => "other_sql"
     };
 }

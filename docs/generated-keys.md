@@ -34,6 +34,7 @@
 | SQLite (<3.35) | `CompoundStatement` | Explicit override when `SupportsInsertReturning` is false |
 | MariaDB | `ReaderInsertedId` | Explicit override — always, regardless of driver |
 | MySQL | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
+| SAP HANA | `CorrelationToken` | Base logic (falls through — no override). HANA does have a working session-scoped function, `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`, confirmed live to return the correct value immediately after INSERT on a single held connection — but it is deliberately **not** wired up as `SessionScopedFunction`, to avoid the exact two-lease hazard described above. `CompoundStatement` was also confirmed rejected live (HANA has no multi-statement command support: `INSERT ...; SELECT ...` in one command throws a syntax error), so unlike MySQL/MariaDB there is no single-round-trip fix available — `CorrelationToken`'s two round trips are the safe option actually available for this database. |
 
 Databases not listed fall through to the base logic (RETURNING if supported, else session-scoped function, else correlation token).
 

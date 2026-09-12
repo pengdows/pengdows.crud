@@ -52,7 +52,7 @@ selects genuinely different syntax.
 
 | Style | Databases | `CreateAsync`-shaped call (`ExecutionType.Write`) | `SELECT`-shaped call (`ExecutionType.Read`) |
 |---|---|---|---|
-| `Call` | MySQL, MariaDB, Db2 | `CALL proc_name(arg1, arg2)` | same |
+| `Call` | MySQL, MariaDB, Db2, SAP HANA | `CALL proc_name(arg1, arg2)` | same |
 | `Exec` | SQL Server | `EXEC proc_name arg1, arg2` — **space-separated, not parenthesized**; output-capable parameters get an ` OUTPUT` suffix appended per-argument (`WrapForStoredProc`'s `BuildProcedureArguments`, only for `ParameterDirection.Output`/`InputOutput`) | same |
 | `Oracle` | Oracle | `BEGIN\n\tproc_name(arg1, arg2);\nEND;` — a PL/SQL anonymous block, parentheses omitted entirely when there are no arguments | same |
 | `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB | `CALL proc_name(arg1, arg2)` (requires PostgreSQL 11+; earlier versions only support functions, use `Read` for everything) | `SELECT * FROM func_name(arg1, arg2)` |

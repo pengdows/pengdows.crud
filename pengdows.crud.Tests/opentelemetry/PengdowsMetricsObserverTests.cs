@@ -1148,6 +1148,7 @@ public class PengdowsMetricsObserverTests
     [InlineData(SupportedDatabase.MariaDb, "mariadb")]
     [InlineData(SupportedDatabase.CockroachDb, "cockroachdb")]
     [InlineData(SupportedDatabase.DuckDB, "duckdb")]
+    [InlineData(SupportedDatabase.SapHana, "sap.hana")]
     [InlineData(SupportedDatabase.Unknown, "other_sql")]
     public void DbSystemNameMapper_MapsToOTelRegistryValues(SupportedDatabase product, string expected)
     {

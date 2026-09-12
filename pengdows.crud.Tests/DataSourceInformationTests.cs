@@ -96,6 +96,7 @@ public static class DataSourceTestData
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
             SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SapHana => new HanaDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -112,6 +113,9 @@ public static class DataSourceTestData
             // Matches fakeDbCommand's canned GetVersionQueryResult() response for Db2, and the
             // real ibmcom/db2 container version observed during the Phase 1 proof-of-concept.
             SupportedDatabase.Db2 => "11.05.0800",
+            // Real version string observed from a live saplabs/hanaexpress 2.00.088.00 container
+            // (via "SELECT VERSION FROM SYS.M_DATABASE"), not a generic placeholder.
+            SupportedDatabase.SapHana => "02.00.088.00.1760424921",
             _ => $"{db} v1.2.3"
         };
 
@@ -184,6 +188,9 @@ public class DataSourceInformationTests
             // at all — confirmed by inspecting InformixClientFactory's assembly directly, not
             // assumed. Positional "?" only.
             SupportedDatabase.Informix => "?",
+            // Sap.Data.Hana has no named-parameter support — confirmed live via
+            // DataSourceInformation.ParameterMarkerFormat ("?") and a real positional INSERT.
+            SupportedDatabase.SapHana => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -191,6 +198,8 @@ public class DataSourceInformationTests
         // Assert: major version parsing
         var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15
             : db == SupportedDatabase.Db2 ? 11
+            // Real version string observed live: "02.00.088.00.1760424921".
+            : db == SupportedDatabase.SapHana ? 2
             : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
@@ -205,7 +214,12 @@ public class DataSourceInformationTests
                        || db == SupportedDatabase.Sybase
                         // FlatFile genuinely implements MERGE INTO (see pengdows.sql/SqlParser.cs's
                         // ParseMerge) — verified real feature, not assumed.
-                        || db == SupportedDatabase.FlatFile;
+                        || db == SupportedDatabase.FlatFile
+                        // SAP HANA: MERGE INTO ... WHEN MATCHED/WHEN NOT MATCHED CONFIRMED live
+                        // against a real saplabs/hanaexpress container, using a custom
+                        // RenderMergeSource override ("USING (SELECT ... FROM DUMMY) s") since
+                        // the base VALUES-row-constructor source shape is rejected.
+                        || db == SupportedDatabase.SapHana;
                         // Informix: MERGE INTO itself is documented, but the base
                         // RenderMergeSource's USING (VALUES (...)) AS s (...) shape was
                         // CONFIRMED live to be rejected ("A syntax error has occurred.") — see
@@ -249,7 +263,8 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore => ProcWrappingStyle.Call,
+                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore
+                or SupportedDatabase.SapHana => ProcWrappingStyle.Call,
             SupportedDatabase.TiDb or SupportedDatabase.CockroachDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
@@ -267,7 +282,8 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
                 or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore or SupportedDatabase.Sybase => false,
+                or SupportedDatabase.Db2 or SupportedDatabase.SingleStore or SupportedDatabase.Sybase
+                or SupportedDatabase.SapHana => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Oracle => true,
@@ -279,10 +295,11 @@ public class DataSourceInformationTests
         // Assert: named parameters flags
         // Every database in this matrix supports named parameters, FlatFile included — it uses
         // ":name" (see FlatFileDialect.SupportsNamedParameters/ParameterMarker), verified directly
-        // against the engine's parser/binder. Informix is the one genuine exception: its ADO.NET
-        // driver (Informix.Net.Core-lnx) has no named-parameter support at all — confirmed by
-        // inspecting InformixClientFactory's assembly directly.
-        if (db == SupportedDatabase.Informix)
+        // against the engine's parser/binder. Informix and SAP HANA are the two genuine
+        // exceptions: neither ADO.NET driver (Informix.Net.Core-lnx; Sap.Data.Hana.Net.v8.0) has
+        // any named-parameter support at all — confirmed by inspecting each factory's assembly
+        // directly (Hana's real DataSourceInformation.ParameterMarkerFormat is "?").
+        if (db is SupportedDatabase.Informix or SupportedDatabase.SapHana)
         {
             Assert.False(info.SupportsNamedParameters);
         }

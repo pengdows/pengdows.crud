@@ -18,7 +18,7 @@ namespace pengdows.crud.enums;
 /// </para>
 /// </remarks>
 [Flags]
-public enum SupportedDatabase
+public enum SupportedDatabase: ulong
 {
     Unknown = 0, // Always first
     PostgreSql = 1, // Most standard-compliant (closest to SQL spec)
@@ -40,5 +40,6 @@ public enum SupportedDatabase
     SingleStore = 65536, // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
     Sybase = 131072, // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database
     Spanner = 262144, // Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter)
-    Informix = 524288 // IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters
+    Informix = 524288, // IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters
+    SapHana = 1048576 // SAP HANA — column-store in-memory RDBMS, positional (?) parameters, MVCC isolation
 }

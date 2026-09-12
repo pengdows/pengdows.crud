@@ -62,6 +62,7 @@ public class SqlDialectBranchTests
     [Theory]
     [InlineData(SupportedDatabase.SqlServer, "USING (VALUES (@i0, @i1)) AS s (\"id\", \"name\")")]
     [InlineData(SupportedDatabase.Oracle, "USING (SELECT :i0 AS \"id\", :i1 AS \"name\" FROM DUAL) s")]
+    [InlineData(SupportedDatabase.SapHana, "USING (SELECT ? AS \"id\", ? AS \"name\" FROM DUMMY) s")]
     public void RenderMergeSource_UsesProviderSyntax(SupportedDatabase db, string expected)
     {
         var dialect = CreateDialect(db);
