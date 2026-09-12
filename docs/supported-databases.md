@@ -262,6 +262,16 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
 - GUIDs round-trip through a `CHAR(16) CHARACTER SET OCTETS` column using the same RFC 4122
   big-endian byte layout Firebird's own driver expects — confirmed independently live for this
   (different) driver rather than assumed from Firebird's own documented behavior.
+- InterBase 15's type catalog is the older, pre-Firebird-4/5 set — no `BIGINT`, `INT128`,
+  `DECFLOAT`, or time-zone-aware timestamp type exists (`TIMESTAMP WITH TIME ZONE`/`TIME WITH
+  TIME ZONE` are genuine syntax errors; `BIGINT`/`INT128`/`DECFLOAT` all fail as unrecognized-type
+  domain-lookup errors, confirmed live with the identical SQLCODE -607 signature). `INT64` exists
+  only as an internal storage representation for high-precision `NUMERIC`/`DECIMAL`, never as a
+  declarable type — `NUMERIC(18,0)` is the real 64-bit-range idiom. Binding a raw
+  `DbType.DateTimeOffset` parameter fails at the driver level ("Invalid data type: 27") for the
+  same underlying reason Firebird's driver can't handle it; `InterBaseDialect.CreateDbParameter`
+  coerces to UTC `DateTime` (`DateTimeKind.Unspecified`) before the parameter ever reaches the
+  driver, confirmed live to round-trip correctly through the full stack.
 
 **Snowflake**
 - Parses constraint DDL but enforces none of it at runtime: `EnforcesConstraints`,

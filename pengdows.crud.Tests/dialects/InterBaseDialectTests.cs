@@ -240,6 +240,34 @@ public class InterBaseDialectTests
         Assert.Equal(guid, reconstructed);
     }
 
+    // CONFIRMED live: InterBaseSql.Data.InterBaseClient rejects a raw DbType.DateTimeOffset
+    // parameter outright at the driver level ("Invalid data type: 27") — there is no time-zone-
+    // aware temporal type in InterBase's type catalog at all ("TIMESTAMP WITH TIME ZONE"/"TIME
+    // WITH TIME ZONE" both fail as genuine syntax errors). CreateDbParameter coerces to UTC
+    // DateTime before the parameter ever reaches the driver — confirmed live (through the full
+    // pengdows.crud stack, not just the raw driver) to round-trip correctly once coerced.
+    [Fact]
+    public void CreateDbParameter_DateTimeOffset_CoercesToUnspecifiedUtcDateTime()
+    {
+        var d = CreateDialect();
+        var dto = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(-5));
+        var param = d.CreateDbParameter("p", DbType.DateTimeOffset, dto);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        var stored = Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(DateTimeKind.Unspecified, stored.Kind);
+        Assert.Equal(dto.UtcDateTime, DateTime.SpecifyKind(stored, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void CreateDbParameter_NonDateTimeOffsetTypes_PassThroughUnmodified()
+    {
+        var d = CreateDialect();
+        var param = d.CreateDbParameter("p", DbType.Int32, 42);
+        Assert.Equal(DbType.Int32, param.DbType);
+        Assert.Equal(42, param.Value);
+    }
+
     // ── Exception classification ────────────────────────────────────────────
     // Every code below was captured live from a real InterBaseSql.Data.InterBaseClient.IBException
     // thrown against a real InterBase 15 server. Unlike HANA, IBException.ErrorCode reliably

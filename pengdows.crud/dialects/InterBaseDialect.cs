@@ -37,6 +37,21 @@
 //   335544347 ("validation error for column X, value \"*** null ***\""), while CHECK alone uses
 //   335544558 ("Operation violates CHECK constraint ..."). No message-text discrimination is
 //   needed — the two are already numerically distinct. Do not trust the "shared code" claim.
+// - A THIRD CORRECTION, prompted by a user report that InterBase 15's documented type catalog is
+//   the older, pre-Firebird-4/5 set — no BIGINT, INT128, DECFLOAT, or time-zone-aware timestamp
+//   types, and INT64 is only an internal storage representation for high-precision NUMERIC/DECIMAL,
+//   never a declarable SQL type. Re-verified live and confirmed on every point: "INT128"/"DECFLOAT"
+//   both fail with the exact same SQLCODE -607 "Specified domain or source column ... does not
+//   exist" signature already documented below for BIGINT/INT64 (a domain-lookup failure, not a
+//   syntax error — the parser doesn't recognize any of these as type keywords at all); "TIMESTAMP
+//   WITH TIME ZONE"/"TIME WITH TIME ZONE" both fail with a genuine syntax error (SQLCODE -104,
+//   "Token unknown ... WITH") — there is no time-zone-aware temporal type whatsoever. This exposed
+//   a real, previously-undiscovered gap: binding a plain DbType.DateTimeOffset parameter (with no
+//   coercion) fails at the DRIVER level with "Invalid data type: 27" — InterBaseSql.Data.
+//   InterBaseClient doesn't support that DbType at all, the same real limitation
+//   FirebirdSql.Data.FirebirdClient has for the identical reason (see FirebirdDialect.CreateDbParameter's
+//   own DateTimeOffset-to-UTC-DateTime coercion). Fixed here with the equivalent override — see
+//   CreateDbParameter below — confirmed live to round-trip correctly once coerced.
 // - Driver: InterBaseSql.Data.InterBaseClient (Embarcadero, open source, NuGet.org, .NET 8
 //   target). Factory: InterBaseSql.Data.InterBaseClient.InterBaseClientFactory.Instance.
 //   GetSchema("DataSourceInformation") reports DataSourceProductName = "InterBase",
@@ -212,6 +227,27 @@ internal sealed class InterBaseDialect : SqlDialect
         (bytes[4], bytes[5]) = (bytes[5], bytes[4]);
         (bytes[6], bytes[7]) = (bytes[7], bytes[6]);
         return bytes;
+    }
+
+    /// <summary>
+    /// CONFIRMED live: InterBaseSql.Data.InterBaseClient rejects a raw <see cref="DbType.DateTimeOffset"/>
+    /// parameter outright at the driver level ("Invalid data type: 27") — there is no time-zone-aware
+    /// temporal type in InterBase's type catalog at all (both "TIMESTAMP WITH TIME ZONE" and "TIME
+    /// WITH TIME ZONE" fail as genuine syntax errors, SQLCODE -104). Same real limitation
+    /// FirebirdSql.Data.FirebirdClient has for the identical reason — coerce to UTC
+    /// <see cref="DateTime"/> before it ever reaches the driver, confirmed live to round-trip
+    /// correctly once coerced (<see cref="DateTimeKind.Unspecified"/> prevents the provider from
+    /// applying its own timezone adjustment on top).
+    /// </summary>
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (type == DbType.DateTimeOffset && value is DateTimeOffset dto)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.DateTime,
+                DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified));
+        }
+
+        return base.CreateDbParameter(name, type, value);
     }
 
     /// <summary>

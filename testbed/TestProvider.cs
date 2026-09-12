@@ -647,6 +647,12 @@ CREATE TABLE {tableName} (
             // (FirebirdSql.Data.Common.DbValue.GetTimeZoneId() throws "Incorrect time zone value"
             // against a live container when a raw offset is sent). This one IS a real, verified
             // driver limitation — do not flip it without re-verifying against a live container.
+            // InterBase: CONFIRMED live (see InterBaseDialect.CreateDbParameter) that coercing to
+            // a UTC DateTime with DateTimeKind.Unspecified before the parameter ever reaches
+            // InterBaseSql.Data.InterBaseClient round-trips correctly — the driver rejects a raw
+            // DbType.DateTimeOffset outright ("Invalid data type: 27"), same underlying problem as
+            // Firebird, but InterBase's own coercion override was verified live to actually work.
+            SupportedDatabase.InterBase => true,
             _ => false
         };
     }
@@ -699,6 +705,10 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Db2 => "TIMESTAMP",
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => "DATETIME(6)",
             SupportedDatabase.Sqlite => "TEXT", // SqliteDialect stores it as an ISO-8601 UTC string
+            // InterBase has no time-zone-aware temporal type at all (confirmed live: "TIMESTAMP
+            // WITH TIME ZONE" is a genuine syntax error) — plain TIMESTAMP, same choice as Db2
+            // above, since InterBaseDialect.CreateDbParameter already coerces away the offset.
+            SupportedDatabase.InterBase => "TIMESTAMP",
             _ => "TIMESTAMP WITH TIME ZONE"
         };
     }
