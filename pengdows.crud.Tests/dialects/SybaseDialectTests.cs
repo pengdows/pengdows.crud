@@ -17,19 +17,19 @@ namespace pengdows.crud.Tests.dialects;
 public class SybaseDialectTests
 {
     private static SybaseDialect Dialect() =>
-        new(new fakeDbFactory(SupportedDatabase.Sybase), NullLogger<SybaseDialect>.Instance);
+        new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger<SybaseDialect>.Instance);
 
     [Fact]
     public void CreateDialectForType_Sybase_ReturnsSybaseDialect()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sybase);
+        var factory = new fakeDbFactory(SupportedDatabase.SybaseASE);
         var dialect = SqlDialectFactory.CreateDialectForType(
-            SupportedDatabase.Sybase,
+            SupportedDatabase.SybaseASE,
             factory,
             NullLogger<SqlDialect>.Instance);
 
         Assert.IsType<SybaseDialect>(dialect);
-        Assert.Equal(SupportedDatabase.Sybase, dialect.DatabaseType);
+        Assert.Equal(SupportedDatabase.SybaseASE, dialect.DatabaseType);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class SybaseDialectTests
     public void AppendPaging_ThrowsNotSupported()
     {
         var dialect = Dialect();
-        var ctx = new DatabaseContext("fake", new fakeDbFactory(SupportedDatabase.Sybase));
+        var ctx = new DatabaseContext("fake", new fakeDbFactory(SupportedDatabase.SybaseASE));
         using var sc = ctx.CreateSqlContainer();
 
         Assert.Throws<NotSupportedException>(() => dialect.AppendPaging(sc.Query, 0, 10));
@@ -127,7 +127,7 @@ public class SybaseDialectTests
     [Fact]
     public void BuildUpsert_UsesMergeSql_WithNoTrailingSemicolon()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.Sybase);
+        var factory = new fakeDbFactory(SupportedDatabase.SybaseASE);
         var typeMap = new TypeMapRegistry();
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sybase", factory, typeMap);
         context.RegisterEntity<SybaseMergeEntity>();

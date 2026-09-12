@@ -61,7 +61,7 @@ public class SupportedDatabaseTests
                 "Db2",
                 "FlatFile",
                 "SingleStore",
-                "Sybase",
+                "SybaseASE",
                 "Spanner",
                 "Informix",
                 "SapHana"

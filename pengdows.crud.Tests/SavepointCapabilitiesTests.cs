@@ -38,7 +38,7 @@ public class SavepointCapabilitiesTests
 
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
-    [InlineData(SupportedDatabase.Sybase)]
+    [InlineData(SupportedDatabase.SybaseASE)]
     [InlineData(SupportedDatabase.Oracle)]
     public void TSqlAndOracle_SupportCreateAndRollbackButNotRelease(SupportedDatabase db)
     {
@@ -74,7 +74,7 @@ public class SavepointCapabilitiesTests
             SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
-            SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SybaseASE => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),

@@ -138,7 +138,7 @@ public class SqlDialectHelperTests
     {
         // ASE has no LIMIT clause but does support TOP N (verified live) — same shape as SQL
         // Server. Real SybaseDialect — see the SqlServer test above for why.
-        var dialect = new SybaseDialect(new fakeDbFactory(SupportedDatabase.Sybase), NullLoggerFactory.Instance.CreateLogger(nameof(SybaseDialect)));
+        var dialect = new SybaseDialect(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLoggerFactory.Instance.CreateLogger(nameof(SybaseDialect)));
         var sql = dialect.GetNaturalKeyLookupQuery("orders", "id", new[] { "name" }, new[] { ":name" });
 
         Assert.Contains("SELECT TOP 1", sql, StringComparison.OrdinalIgnoreCase);

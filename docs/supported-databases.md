@@ -21,7 +21,7 @@ pengdows.crud supports 21 directly supported databases via the `SupportedDatabas
 | `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) |
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 | `SingleStore=65536` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
-| `Sybase=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
+| `SybaseASE=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
 | `Spanner=262144` | Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter) |
 | `Informix=524288` | IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters |
 | `SapHana=1048576` | SAP HANA (opt-in via `INCLUDE_SAPHANA=true`; resource-based, not credentials — see note below) |

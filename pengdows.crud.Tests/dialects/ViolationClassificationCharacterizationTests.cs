@@ -53,7 +53,7 @@ public class ViolationClassificationCharacterizationTests
     private static FirebirdDialect Firebird() => new(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance);
     private static Db2Dialect Db2() => new(new fakeDbFactory(SupportedDatabase.Db2), NullLogger.Instance);
     private static SnowflakeDialect Snowflake() => new(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
-    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.Sybase), NullLogger.Instance);
+    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger.Instance);
     private static SpannerDialect Spanner() => new(new fakeDbFactory(SupportedDatabase.Spanner), NullLogger.Instance);
 
     // ---------- IsUniqueViolation ----------

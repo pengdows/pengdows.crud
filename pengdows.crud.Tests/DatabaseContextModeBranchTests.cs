@@ -79,7 +79,7 @@ public class DatabaseContextModeBranchTests
         // "unknown provider" — same DbMode.Best -> Standard outcome as the default branch would
         // give, but this asserts it's classified correctly rather than falling through by luck.
         var bestSybase = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Sybase, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.SybaseASE, false })!;
         Assert.Equal(DbMode.Standard, bestSybase);
     }
 
@@ -92,7 +92,7 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.Sybase, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false });
     }
 
     [Fact]

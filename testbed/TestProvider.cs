@@ -475,7 +475,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "BOOLEAN",
             SupportedDatabase.TiDb => "BOOLEAN",
             SupportedDatabase.SqlServer => "BIT",
-            SupportedDatabase.Sybase => "BIT",
+            SupportedDatabase.SybaseASE => "BIT",
             // CONFIRMED live: InformixDialect is positional (SupportsNamedParameters == false),
             // so SqlDialect's default NeedsCommonConversions (!SupportsNamedParameters) applies
             // and every bool parameter is sent as Int16 (0/1), not a raw bool. Declaring the
@@ -506,7 +506,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "VARBINARY(64)",
-            SupportedDatabase.Sybase => "VARBINARY(64)",
+            SupportedDatabase.SybaseASE => "VARBINARY(64)",
             SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
@@ -1063,7 +1063,7 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
-            case SupportedDatabase.Sybase:
+            case SupportedDatabase.SybaseASE:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
                     // ASE lacks SQL Server's "CREATE OR ALTER" shorthand — drop first if present,
@@ -1658,7 +1658,7 @@ INSERT INTO {table} ({fidelityColumns}
                             $"[RoundTrip] Empty string mismatch: expected '{emptyText}' or NULL, got '{actualEmpty}'");
                     }
                 }
-                else if (_context.Product == SupportedDatabase.Sybase)
+                else if (_context.Product == SupportedDatabase.SybaseASE)
                 {
                     // ASE pads an empty string literal to a single space on insert into a
                     // CHAR/VARCHAR column — long-documented Sybase/T-SQL behavior, not a
@@ -1683,7 +1683,7 @@ INSERT INTO {table} ({fidelityColumns}
                     // them). Leading spaces are preserved either way. CONFIRMED live: Informix
                     // does the same for VARCHAR (only CHAR is blank-padded to its declared
                     // length in Informix; VARCHAR strips trailing blanks on storage).
-                    var toleratesRightTrim = (_context.Product == SupportedDatabase.Sybase ||
+                    var toleratesRightTrim = (_context.Product == SupportedDatabase.SybaseASE ||
                                                _context.Product == SupportedDatabase.Informix) &&
                                               actualPadded == paddedText.TrimEnd();
                     if (!toleratesRightTrim)

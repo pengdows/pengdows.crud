@@ -54,7 +54,7 @@ internal class SybaseDialect : SqlDialect
     {
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.Sybase;
+    public override SupportedDatabase DatabaseType => SupportedDatabase.SybaseASE;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
