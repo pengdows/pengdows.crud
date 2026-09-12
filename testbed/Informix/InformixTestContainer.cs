@@ -16,14 +16,6 @@ public class InformixTestContainer : TestContainer
     private string? _connectionString;
     private string? _sqlhostsPath;
 
-    static InformixTestContainer()
-    {
-        // Idempotent — Program.cs already calls this before DbProviderFactoryFinder.FindAllFactories()
-        // touches InformixClientFactory.Instance, but registering again here is harmless and
-        // keeps this type safe to use standalone. Same pattern as Db2NativeLibraryBootstrap.
-        InformixNativeLibraryBootstrap.Register();
-    }
-
     public InformixTestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
@@ -39,6 +31,18 @@ public class InformixTestContainer : TestContainer
 
     public override async Task StartAsync()
     {
+        // Deliberately NOT in a static constructor (moved from one — see git history): a static
+        // cctor fires the instant this type is even CONSTRUCTED, which happens merely building a
+        // TestConfiguration list for inspection (ParallelTestOrchestrator.GetTestConfigurations,
+        // called from unit tests that never intend to actually run Informix) — eagerly triggering
+        // native-library re-exec/registration with no real driver use ever coming. Registering
+        // here instead, immediately before the first real native contact, keeps
+        // ParallelTestOrchestrator's list-building side-effect-free while still satisfying
+        // InformixNativeLibraryBootstrap's "before ANY access to InformixClientFactory" contract
+        // for actual runs — Register() is idempotent, so this is a no-op when Program.cs's own
+        // earlier, explicit call (testbed's real entry point) already ran it.
+        InformixNativeLibraryBootstrap.Register();
+
         await _container.StartAsync();
 
         var hostPort = _container.GetMappedPublicPort(_port);

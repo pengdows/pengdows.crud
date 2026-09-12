@@ -41,6 +41,13 @@ SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, T
 |----------|---------|--------|
 | Oracle | `INCLUDE_ORACLE=true` | Image requires license acceptance |
 | Snowflake | `INCLUDE_SNOWFLAKE=true` | Cloud-only, requires credentials |
+| SAP HANA | `INCLUDE_SAPHANA=true` | Real Docker image, but a working container needs 16-32GB RAM — far beyond a standard CI runner and every database above |
+
+> **SAP HANA**: `HanaTestContainer`/`HanaTestProvider` spin up `saplabs/hanaexpress`, single pinned
+> image (no version matrix — see `HanaTestContainer.cs`). Confirmed live: full CRUD lifecycle and
+> stored-procedure execution pass; container spinup takes ~2-3 minutes even with the image already
+> pulled locally (`StartupWeightSeconds = 300`, the highest of any database here). Run in isolation:
+> `INCLUDE_SAPHANA=true dotnet run --project testbed -- --only "SAP HANA"`.
 
 ---
 

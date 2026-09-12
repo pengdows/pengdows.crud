@@ -29,6 +29,7 @@
         <PackageReference Include="Informix.Net.Core-lnx" Version="4.1501.2.2026"/>
         <PackageReference Include="Npgsql" Version="9.0.3"/>
         <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0"/>
+        <PackageReference Include="Sap.Data.Hana.Net.v8.0" Version="2.29.27"/>
         <PackageReference Include="Snowflake.Data" Version="5.6.0"/>
         <PackageReference Include="Testcontainers" Version="4.4.0"/>
     </ItemGroup>

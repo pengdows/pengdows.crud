@@ -13,6 +13,7 @@ using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
+using testbed.SapHana;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
@@ -26,11 +27,13 @@ public class ParallelTestOrchestrator
     private readonly IServiceProvider _services;
     private readonly ConcurrentBag<TestResult> _results = new();
     private readonly bool _includeSnowflake;
+    private readonly bool _includeSapHana;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
+        _includeSapHana = includeSapHana;
     }
 
     /// <summary>
@@ -58,6 +61,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Sybase => new SybaseTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             SupportedDatabase.Informix => new InformixTestContainer(),
+            SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             _ => null
         };
 
@@ -117,7 +121,8 @@ public class ParallelTestOrchestrator
         {
             ContainerName = config.ContainerName,
             DatabaseProvider = config.DatabaseProvider,
-            StartTime = startTime
+            StartTime = startTime,
+            ConfiguredStartupWeightSeconds = config.StartupWeightSeconds
         };
 
         try
@@ -203,8 +208,46 @@ public class ParallelTestOrchestrator
         return configs.OrderByDescending(c => c.StartupWeightSeconds).ToList();
     }
 
-    // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
-    // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
+    /// <summary>
+    /// Shapes a completed run's <see cref="TestResult"/>s into spinup/exercise/setup-overhead/total
+    /// rows, sorted by measured spinup descending — the same ordering signal
+    /// <see cref="TestConfiguration.StartupWeightSeconds"/> currently has to guess at by hand, so a
+    /// real run's numbers can be read off directly instead of re-derived from scrollback. Pure and
+    /// static specifically so it's unit-testable without Docker (see
+    /// <c>ParallelTestOrchestratorTimingBreakdownTests</c>).
+    /// </summary>
+    public static IReadOnlyList<TimingBreakdownRow> BuildTimingBreakdown(IReadOnlyList<TestResult> results)
+    {
+        return results
+            .Select(r =>
+            {
+                var spinup = r.ContainerStartTime.TotalSeconds;
+                var exercise = r.TestTime?.TotalSeconds;
+                var total = r.TotalTime.TotalSeconds;
+                // Floored at 0 rather than reporting total-minus-spinup when there's no exercise
+                // time at all (e.g. a container-start timeout) — that value would just be "time
+                // spent failing to connect", not setup overhead.
+                var setupOverhead = exercise.HasValue ? Math.Max(0, total - spinup - exercise.Value) : 0;
+
+                return new TimingBreakdownRow(
+                    r.ContainerName,
+                    r.DatabaseProvider,
+                    r.ConfiguredStartupWeightSeconds,
+                    spinup,
+                    exercise,
+                    setupOverhead,
+                    total,
+                    r.Success);
+            })
+            .OrderByDescending(row => row.SpinupSeconds)
+            .ToList();
+    }
+
+    // Snowflake is opt-in for credentials (cloud-only, no Docker image). SAP HANA is opt-in for a
+    // different reason: saplabs/hanaexpress is a real Docker image, but a working container needs
+    // 16-32GB RAM per SAP's own guidance — far beyond a standard CI runner and every other
+    // database here. All other databases must appear unconditionally. See CLAUDE.md
+    // "Adding a New Database".
     public List<TestConfiguration> GetTestConfigurations(
         ISet<string>? only = null,
         ISet<string>? exclude = null,
@@ -273,6 +316,12 @@ public class ParallelTestOrchestrator
         if (_includeSnowflake)
             AddLocal("Snowflake", new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);
 
+        // Weight 300: CONFIRMED live to take several minutes even with the image already pulled
+        // locally — by far the slowest of any database here (compare Db2's 60s weight, itself the
+        // previous high-water mark). Single pinned image internally, like Sybase/Informix.
+        if (_includeSapHana)
+            AddLocal("SAP HANA", new HanaTestContainer(), (db, sp) => new HanaTestProvider(db, sp), 300);
+
         if (only is { Count: > 0 })
             configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();
         if (exclude is { Count: > 0 })
@@ -337,7 +386,38 @@ public class ParallelTestOrchestrator
             Console.WriteLine();
         }
 
+        DisplayTimingBreakdown(results);
         EmitJsonResults(results);
+    }
+
+    /// <summary>
+    /// Prints spinup/exercise/setup-overhead/total per database, sorted by measured spinup
+    /// descending, next to the configured <see cref="TestConfiguration.StartupWeightSeconds"/>
+    /// dispatch-order guess — so a live run's real numbers can directly correct that guess instead
+    /// of being re-derived from scrollback. See <see cref="BuildTimingBreakdown"/>.
+    /// </summary>
+    private static void DisplayTimingBreakdown(IReadOnlyList<TestResult> results)
+    {
+        const int w = 92;
+        Console.WriteLine("\n" + new string('=', w));
+        Console.WriteLine("TIMING BREAKDOWN (sorted by measured spinup, slowest first)");
+        Console.WriteLine(new string('=', w));
+        Console.WriteLine(
+            $"{"Database",-18} {"Spinup",8} {"Weight*",8} {"Exercise",8} {"Setup",8} {"Total",8}");
+        Console.WriteLine(new string('-', w));
+
+        foreach (var row in BuildTimingBreakdown(results))
+        {
+            var exerciseCol = row.ExerciseSeconds.HasValue ? row.ExerciseSeconds.Value.ToString("F2") + "s" : "-";
+            Console.WriteLine(
+                $"{row.ContainerName,-18} {row.SpinupSeconds,7:F2}s {row.ConfiguredWeightSeconds,7:F0}s {exerciseCol,8} {row.SetupOverheadSeconds,7:F2}s {row.TotalSeconds,7:F2}s");
+        }
+
+        Console.WriteLine(new string('-', w));
+        Console.WriteLine("* Weight = configured StartupWeightSeconds this run's dispatch order was actually");
+        Console.WriteLine("  sorted by. A measured Spinup well above Weight means the dispatch-order guess for");
+        Console.WriteLine("  that database should be raised so it claims a slot earlier next run.");
+        Console.WriteLine(new string('=', w));
     }
 
     private static void EmitJsonResults(IReadOnlyList<TestResult> results)
@@ -355,6 +435,8 @@ public class ParallelTestOrchestrator
                 checksFailed = r.Success ? 0 : 1,
                 checksSkipped = r.ChecksSkipped,
                 totalChecks = r.ChecksPassed + (r.Success ? 0 : 1) + r.ChecksSkipped,
+                containerStartTimeSeconds = r.ContainerStartTime.TotalSeconds,
+                configuredStartupWeightSeconds = r.ConfiguredStartupWeightSeconds,
                 testTimeSeconds = r.TestTime?.TotalSeconds,
                 totalTimeSeconds = r.TotalTime.TotalSeconds,
                 error = r.Error,
@@ -462,4 +544,29 @@ public class TestResult
     public int ChecksPassed { get; set; }
     public int ChecksSkipped { get; set; }
     public IReadOnlyList<CheckResult> Checks { get; set; } = Array.Empty<CheckResult>();
+
+    /// <summary>
+    /// The hand-set <see cref="TestConfiguration.StartupWeightSeconds"/> this run's dispatch order
+    /// was actually sorted by — carried onto the result purely so a live run's measured
+    /// <see cref="ContainerStartTime"/> can be compared against the guess that decided when this
+    /// container got a dispatch slot (see <see cref="ParallelTestOrchestrator.BuildTimingBreakdown"/>).
+    /// </summary>
+    public int ConfiguredStartupWeightSeconds { get; set; }
 }
+
+/// <summary>
+/// One row of <see cref="ParallelTestOrchestrator.BuildTimingBreakdown"/>'s output: a database's
+/// measured spinup (container startup), exercise (the test provider's own run), setup overhead
+/// (whatever's left — <see cref="IDatabaseContext"/> creation, test-provider construction — not
+/// captured by either stopwatch), and total, alongside the configured dispatch-order weight it was
+/// actually sorted by.
+/// </summary>
+public sealed record TimingBreakdownRow(
+    string ContainerName,
+    string DatabaseProvider,
+    double ConfiguredWeightSeconds,
+    double SpinupSeconds,
+    double? ExerciseSeconds,
+    double SetupOverheadSeconds,
+    double TotalSeconds,
+    bool Success);

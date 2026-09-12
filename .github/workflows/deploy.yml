@@ -147,11 +147,30 @@ jobs:
         run: |
           dotnet run --no-build --configuration Release --project testbed/testbed.csproj
 
-      - name: Run Firebird embedded integration tests
+      - name: Run Firebird embedded + orchestrator unit tests from pengdows.crud.IntegrationTests
         run: |
+          # pengdows.crud.IntegrationTests as a whole is NOT run via `dotnet test` in CI — most of
+          # it needs real per-database Docker infrastructure this job doesn't provision (that's
+          # what the "Run integration suite" step above, via `dotnet run --project testbed`,
+          # already covers). This step is deliberately scoped to two kinds of tests that ARE safe
+          # under vstest's testhost:
+          #   - Category=FirebirdEmbedded: needs the embedded runtime installed above, no Docker.
+          #   - ParallelTestOrchestratorDispatchOrderTests/TimingBreakdownTests, ProcessReexecHelperTests:
+          #     pure logic (dispatch-order sorting, spinup/exercise/total timing shaping, and the
+          #     re-exec argument-building fix below) with zero Docker/native-driver dependency.
+          # Deliberately NOT included: IntegrationMatrixTests.All_supported_providers_complete_successfully,
+          # which really does start every real database (like testbed) but from inside vstest's
+          # testhost — Informix's native bootstrap needs LD_LIBRARY_PATH set before the process
+          # starts, which requires re-executing the process, which is impossible here because
+          # vstest launches testhost.dll via hidden `--runtimeconfig`/`--depsfile` muxer flags no
+          # managed code can recover (see ProcessReexecHelper.IsUnrecoverableTestHostLaunch and
+          # InformixNativeLibraryBootstrap.ReexecWithCorrectedEnvironment). That failure is now
+          # caught and reported cleanly instead of crashing the whole testhost (a real crash this
+          # fixed), but the test itself will always legitimately fail Informix under `dotnet test`
+          # — use `dotnet run --project testbed` for full-matrix coverage instead.
           dotnet test --no-build --configuration Release \
             pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj \
-            --filter 'Category=FirebirdEmbedded' \
+            --filter 'Category=FirebirdEmbedded|FullyQualifiedName~ParallelTestOrchestratorDispatchOrderTests|FullyQualifiedName~ParallelTestOrchestratorTimingBreakdownTests|FullyQualifiedName~ProcessReexecHelperTests' \
             --logger 'console;verbosity=normal'
 
       - name: Remove temporary Firebird runtime

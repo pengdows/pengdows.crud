@@ -41,9 +41,11 @@ Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-
 Console.WriteLine();
 
 // Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true — cloud-only,
-// no Docker image; every other database, Informix included, runs unconditionally)
+// no Docker image; SAP HANA is opt-in via INCLUDE_SAPHANA=true — real Docker image, but needs
+// 16-32GB RAM; every other database, Informix included, runs unconditionally)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake);
+var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

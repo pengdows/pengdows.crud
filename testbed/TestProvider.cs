@@ -683,28 +683,6 @@ CREATE TABLE {tableName} (
         };
     }
 
-    private static string GetExpectedParameterMarker(SupportedDatabase product)
-    {
-        return product switch
-        {
-            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner => "@",
-            SupportedDatabase.CockroachDb => "@",
-            SupportedDatabase.YugabyteDb => "@",
-            SupportedDatabase.Snowflake => ":",
-            SupportedDatabase.DuckDB => "$",
-            SupportedDatabase.Oracle => ":",
-            // pengdows.flatfile supports named parameters via ":name" — the ISO SQL dynamic-SQL
-            // host-variable form, same marker character as Oracle. Verified directly against the
-            // engine's parser/binder (see FlatFileDialect.SupportsNamedParameters/ParameterMarker).
-            SupportedDatabase.FlatFile => ":",
-            // Confirmed live: Informix.Net.Core-lnx (ODBC-backed) is positional-only — every
-            // parameter reference renders as a bare "?" regardless of name
-            // (InformixDialect.SupportsNamedParameters == false).
-            SupportedDatabase.Informix => "?",
-            _ => "@"
-        };
-    }
-
     // Without an explicit NULLTOKEN, pengdows.flatfile writes both NULL and "" as an empty CSV
     // field for a nullable VARCHAR column, and they round-trip indistinguishably (ClrTypeParser
     // only treats an empty field as NULL for non-string columns) — the exact ambiguity
@@ -912,6 +890,38 @@ CREATE TABLE {tableName} (
 
                     sc.Clear();
                     sc.Query.Append($"DROP PROCEDURE {db2ProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
+            case SupportedDatabase.SapHana:
+                {
+                    var hanaProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // SAP HANA: CALL "proc_name"() — a plain SELECT as the procedure's last
+                    // statement is returned as a result set automatically; no explicit cursor
+                    // declaration or DYNAMIC RESULT SETS clause needed (unlike Db2).
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {hanaProcName}()\n" +
+                        "LANGUAGE SQLSCRIPT\n" +
+                        "READS SQL DATA AS\n" +
+                        "BEGIN\n" +
+                        "  SELECT 42 AS VAL FROM DUMMY;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var hanaWrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(hanaWrapped);
+                    var hanaResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (hanaResult != 42)
+                    {
+                        throw new Exception($"[SAP HANA proc] Expected 42 but got {hanaResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {hanaProcName}");
                     await sc.ExecuteNonQueryAsync();
                     break;
                 }
@@ -1189,10 +1199,19 @@ CREATE TABLE {tableName} (
         await TestTypeBindingMatrix();
     }
 
+    /// <summary>
+    /// Checks the dialect against ITSELF — the marker it actually renders must start with the
+    /// marker it declares via <see cref="ISqlDialect.ParameterMarker"/> — rather than against a
+    /// hand-maintained per-database literal table. Every dialect already asserts its own
+    /// ParameterMarker value in its own unit tests (e.g. HanaDialectTests.ParameterMarker_IsQuestionMark);
+    /// re-duplicating that fact here as a second, independently-maintained
+    /// SupportedDatabase switch was pure knowledge duplication with no DDL/container-selection
+    /// justification, and one more place to forget when adding a new database.
+    /// </summary>
     private void VerifyParameterMarker()
     {
         var rendered = _context.MakeParameterName("p0");
-        var expected = GetExpectedParameterMarker(_context.Product);
+        var expected = _context.Dialect.ParameterMarker;
         if (!rendered.StartsWith(expected, StringComparison.Ordinal))
         {
             throw new Exception(

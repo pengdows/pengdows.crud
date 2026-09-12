@@ -120,6 +120,31 @@ internal static class InformixNativeLibraryBootstrap
 
     private static void ReexecWithCorrectedEnvironment(string nativeRoot, string nativeLib, string? existingLdLibraryPath)
     {
+        var commandLineArgs = Environment.GetCommandLineArgs();
+
+        // CONFIRMED live: re-exec is fundamentally unrecoverable when running inside vstest's
+        // testhost — see ProcessReexecHelper.IsUnrecoverableTestHostLaunch's doc comment for the
+        // full mechanism (vstest launches testhost.dll with --runtimeconfig/--depsfile flags the
+        // muxer strips before Main ever sees them). Fail loudly with a clear, catchable exception
+        // here instead of attempting Process.Start + Environment.Exit — which, for this one
+        // launch shape, corrupts the whole vstest run when the re-exec'd child fails to start
+        // (the parent testhost calls Environment.Exit with the child's failure code, killing
+        // itself and aborting every other test vstest was mid-way through running on it). Any
+        // caller of Register() (InformixTestContainer.StartAsync, real testbed runs included)
+        // already wraps this in its own try/catch and records it as a per-provider failure — see
+        // ParallelTestOrchestrator.RunTestAsync and IntegrationTestFixture.InitializeAsync.
+        if (ProcessReexecHelper.IsUnrecoverableTestHostLaunch(commandLineArgs))
+        {
+            throw new PlatformNotSupportedException(
+                "Informix's native driver (libthcli15a.so) requires LD_LIBRARY_PATH to be set " +
+                "before the process starts, which requires re-executing the current process — " +
+                "not possible here because this process is vstest's testhost, launched via " +
+                "hidden 'dotnet exec --runtimeconfig ... --depsfile ...' flags that cannot be " +
+                "recovered from Environment.GetCommandLineArgs(). Run Informix-dependent tests " +
+                "via 'dotnet run --project testbed' instead, or set LD_LIBRARY_PATH in the shell " +
+                "before invoking 'dotnet test'.");
+        }
+
         var exePath = Process.GetCurrentProcess().MainModule?.FileName;
         if (string.IsNullOrEmpty(exePath))
         {
@@ -136,7 +161,11 @@ internal static class InformixNativeLibraryBootstrap
             UseShellExecute = false
         };
 
-        foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
+        // See ProcessReexecHelper's doc comment: a native-apphost launch (dotnet run --project
+        // testbed) needs argv[0] skipped, but a muxer launch (dotnet exec some.dll ..., which is
+        // how vstest's testhost always starts) needs the managed assembly path from argv[0] kept
+        // as the muxer's first argument, or re-exec silently produces an unrunnable command line.
+        foreach (var arg in ProcessReexecHelper.BuildReexecArguments(exePath, commandLineArgs))
         {
             psi.ArgumentList.Add(arg);
         }
