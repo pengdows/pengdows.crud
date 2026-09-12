@@ -375,6 +375,19 @@ public class CompositeKeyTests : DatabaseTestBase
     // on it the same way DropTableIfExistsAsync (DatabaseTestBase.cs) already retries transient
     // DatabaseExceptions, just with a longer backoff since Spanner's schema-change queue drains on
     // the order of seconds, not the 200ms used there for ordinary transient connection resets.
+    //
+    // CONFIRMED live (separate finding, ~1h12m into a full run): this class's SetupDatabaseAsync
+    // runs once per test method (DatabaseTestBase.InitializeAsync, called fresh per xunit test
+    // instance) — DROP TABLE, then CREATE TABLE, then this method's CREATE UNIQUE INDEX, back to
+    // back, dozens of times in sequence over the run. Occasionally the very next CREATE INDEX
+    // collides with "Duplicate name in schema: <same index name>" even though the prior DROP TABLE
+    // that owned it already returned success — Spanner's own DROP TABLE genuinely does cascade its
+    // secondary indices, but the name's removal from the shared schema catalog is not always
+    // visible to the very next DDL statement (the same class of asynchronous schema-propagation lag
+    // the comment above already documents for CREATE taking too long — here it instead shows up as
+    // a stale name, not a slow one). Not flagged IsTransient by SpannerDialect's classification
+    // (a genuine permanent duplicate name elsewhere should not be silently retried), so this method
+    // also retries on that specific, Spanner-only message shape.
     private static async Task ExecuteDdlWithTransientRetryAsync(IDatabaseContext context, string sql)
     {
         const int maxAttempts = 3;
@@ -386,7 +399,10 @@ public class CompositeKeyTests : DatabaseTestBase
                 await container.ExecuteNonQueryAsync().ConfigureAwait(false);
                 return;
             }
-            catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
+            catch (DatabaseException ex) when (attempt < maxAttempts &&
+                (ex.IsTransient == true ||
+                 (context.Product == SupportedDatabase.Spanner &&
+                  ex.Message.Contains("Duplicate name in schema", StringComparison.OrdinalIgnoreCase))))
             {
                 await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
             }

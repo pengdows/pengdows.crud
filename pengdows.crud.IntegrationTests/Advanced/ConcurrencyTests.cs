@@ -1,4 +1,5 @@
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
@@ -416,13 +417,34 @@ public class ConcurrencyTests : DatabaseTestBase
             {
                 var entity = CreateTestEntity(NameEnum.Test, 1000 + i);
 
-                await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
-                var helper = CreateTableGateway(context);
+                // CONFIRMED live: 100 concurrent transactions against a single shared Spanner Omni
+                // emulator instance can occasionally have one cancelled server-side under
+                // contention ("57014: Query cancelled") late in a long integration run — already
+                // classified IsTransient=true (see docs/exception-analysis.md's PostgreSQL-family
+                // Timeout mapping, which Spanner inherits). This test's actual intent is verifying
+                // no connection/resource leak across 100 concurrent creates, not verifying zero
+                // transient contention under load, so retry the individual attempt rather than
+                // failing the whole test on one expected-possible contention event.
+                const int maxAttempts = 3;
+                for (var attempt = 1; attempt <= maxAttempts; attempt++)
+                {
+                    try
+                    {
+                        await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
+                        var helper = CreateTableGateway(context);
 
-                await helper.CreateAsync(entity, transaction);
-                transaction.Commit();
+                        await helper.CreateAsync(entity, transaction);
+                        transaction.Commit();
 
-                return entity.Id;
+                        return entity.Id;
+                    }
+                    catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(200 * attempt));
+                    }
+                }
+
+                throw new InvalidOperationException("Unreachable — loop always returns or rethrows.");
             });
 
             var ids = await Task.WhenAll(tasks);
