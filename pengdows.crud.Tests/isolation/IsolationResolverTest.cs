@@ -256,6 +256,133 @@ public class IsolationResolverTests
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
     }
 
+    [Fact]
+    public void GetSupportedLevels_SybaseASE()
+    {
+        // Regression: SybaseDialect had NO GetSupportedIsolationLevels/GetIsolationProfileMapping
+        // override at all until this session — it silently fell through to SqlDialect's generic
+        // ANSI default ({ReadCommitted, RepeatableRead, Serializable}), wrongly omitting
+        // ReadUncommitted. Confirmed live against a real ASE 16.0 container: BeginTransaction
+        // accepts all four standard levels, and "SELECT @@isolation" inside each transaction
+        // confirms the server genuinely applies it (0/1/2/3 == ReadUncommitted/ReadCommitted/
+        // RepeatableRead/Serializable), not a client-side no-op.
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SybaseASE), false, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+        var expected = new[]
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        }.OrderBy(level => level).ToArray();
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
+    public void Resolve_SybaseASE_Mappings()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SybaseASE), false, false);
+
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadUncommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void ResolveWithDetail_SybaseASE_StrictConsistency_IsExactNotDegraded()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SybaseASE), false, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
+
+        Assert.Equal(IsolationLevel.Serializable, resolution.Level);
+        Assert.False(resolution.Degraded);
+    }
+
+    [Fact]
+    public void GetSupportedLevels_SingleStore()
+    {
+        // SingleStore is a plain MySqlDialect instance with a different DatabaseType tag (see
+        // MySqlDialect.cs) and deliberately has no isolation-level override of its own — confirmed
+        // live (this session, against a real ghcr.io/singlestore-labs/singlestoredb-dev
+        // container) that it genuinely matches real MySQL here: SET SESSION TRANSACTION ISOLATION
+        // LEVEL succeeded for all four standard levels, and @@transaction_isolation echoed back
+        // exactly what was requested for each — unlike TiDB, which silently coerces SERIALIZABLE
+        // down to REPEATABLE READ. This test locks that inheritance down as a checked conclusion.
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SingleStore), false, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+        var expected = new[]
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        }.OrderBy(level => level).ToArray();
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
+    public void Resolve_SingleStore_Mappings()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SingleStore), false, false);
+
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadUncommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void GetSupportedLevels_FlatFile()
+    {
+        // FlatFileDialect used to have NO isolation override at all (documented in its own
+        // file-level STATUS remark as an explicit open TODO, not a silent oversight) — it now
+        // declares all four standard levels as genuinely meaningful: DML's write-aside staging
+        // makes dirty reads impossible for any level, and RepeatableRead/Serializable take a real
+        // per-table snapshot on first read (confirmed live via pengdows.flatfile's own
+        // TransactionIsolationTests.cs — a Serializable reader's second read no longer picks up a
+        // concurrent writer's commit).
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.FlatFile), false, false);
+
+        var levels = resolver.GetSupportedLevels().OrderBy(level => level).ToArray();
+        var expected = new[]
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        }.OrderBy(level => level).ToArray();
+
+        Assert.Equal(expected, levels);
+    }
+
+    [Fact]
+    public void Resolve_FlatFile_Mappings()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.FlatFile), false, false);
+
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        // Not ReadUncommitted: both behave identically on this engine (dirty reads are impossible
+        // either way under write-aside DML staging), so FlatFileDialect maps FastWithRisks to the
+        // more honest ReadCommitted rather than implying a risk that isn't actually there.
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void ResolveWithDetail_FlatFile_StrictConsistency_IsExactNotDegraded()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.FlatFile), false, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
+
+        Assert.Equal(IsolationLevel.Serializable, resolution.Level);
+        Assert.False(resolution.Degraded);
+    }
+
     [Theory]
     [InlineData(SupportedDatabase.TiDb, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted)]
