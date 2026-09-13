@@ -31,15 +31,11 @@ public class IntegrationTestConfigurationTests
     }
 
     [Fact]
-    public void GetEnabledProviders_ExcludesFlatFile_ByDefault()
+    public void GetEnabledProviders_IncludesFlatFile_ByDefault()
     {
-        // FlatFile is intentionally off the always-on list (see BaseProviders' own comment) -
-        // its per-test-file DDL coverage is still incomplete, and one provider failing the whole
-        // cross-provider RunTestAgainstAllProvidersAsync aggregate would break every unrelated
-        // test class, not just FlatFile's own row.
         var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: false);
 
-        Assert.DoesNotContain(SupportedDatabase.FlatFile, providers);
+        Assert.Contains(SupportedDatabase.FlatFile, providers);
     }
 
     [Fact]
@@ -62,13 +58,8 @@ public class IntegrationTestConfigurationTests
     }
 
     [Fact]
-    public void FilterIntegrationOnly_MatchesFlatFile_EvenWhenNotInBaseCandidateList()
+    public void FilterIntegrationOnly_MatchesFlatFile()
     {
-        // INTEGRATION_ONLY=FlatFile must work to test it directly (per BaseProviders' own comment)
-        // even though FlatFile is deliberately excluded from the default candidate list - the
-        // EnabledProviders pipeline is responsible for adding it to the candidate list first
-        // (via ShouldIncludeFlatFile/GetEnabledProviders) before this filter ever runs; this test
-        // locks down that FilterIntegrationOnly itself still matches it once it's a candidate.
         var providers = new[] { SupportedDatabase.Sqlite, SupportedDatabase.FlatFile };
 
         var filtered = IntegrationTestConfiguration.FilterIntegrationOnly(providers, "FlatFile");

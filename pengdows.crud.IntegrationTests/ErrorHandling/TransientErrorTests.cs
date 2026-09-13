@@ -81,6 +81,19 @@ public class TransientErrorTests : DatabaseTestBase
                 DuckDB.NET.Data.DuckDBClientFactory.Instance);
         }
 
+        // Same category as Sqlite/DuckDB above: FlatFile is embedded/file-based, no TCP concept.
+        // Directory mode with a nonexistent path throws DirectoryNotFoundException from
+        // TableCatalog.LoadDirectory's Directory.EnumerateFiles (deferred execution, thrown on
+        // first enumeration) inside FlatFileConnection.Open() — DatabaseContext's initial-probe
+        // catch is exception-type-agnostic (see DatabaseContext.Initialization.cs), so this wraps
+        // into ConnectionFailedException the same way a real network refusal does for every
+        // other provider below.
+        if (provider == SupportedDatabase.FlatFile)
+        {
+            return new DatabaseContext("Path=/nonexistent_dir_pengdows_probe",
+                pengdows.flatfile.FlatFileProviderFactory.Instance);
+        }
+
         // Every other provider is TCP-based: rewrite the real connection string's port to a
         // closed local port (nothing listening) — an immediate, deterministic ECONNREFUSED,
         // as opposed to a blackholed host which could instead manifest as a slow-connect

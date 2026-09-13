@@ -34,8 +34,8 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Arrange - SQLite/DuckDB containers use SingleWriter mode, others use Standard
-            var expectedMode = provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB
+            // Arrange - SQLite/DuckDB/FlatFile containers use SingleWriter mode, others use Standard
+            var expectedMode = provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB or SupportedDatabase.FlatFile
                 ? DbMode.SingleWriter
                 : DbMode.Standard;
             Assert.Equal(expectedMode, context.ConnectionMode);
@@ -412,6 +412,16 @@ public class DbModeTests : DatabaseTestBase
             if (provider == SupportedDatabase.DuckDB)
             {
                 Output.WriteLine("Skipping isolation test for DuckDB");
+                return;
+            }
+
+            if (provider == SupportedDatabase.FlatFile)
+            {
+                // Same reason as SQLite/DuckDB above: SingleWriter mode has exactly one writer
+                // slot, so this test's two concurrently-open transactions deadlock against each
+                // other instead of demonstrating an isolation difference - confirmed live as a
+                // PoolSaturatedException timeout, not a real dirty-read failure.
+                Output.WriteLine("Skipping isolation test for FlatFile");
                 return;
             }
 

@@ -137,15 +137,16 @@ public class DbExceptionTranslatorRegistryTests
     // FallbackExceptionTranslator. Adding a SupportedDatabase value here is a REVIEWABLE decision,
     // not a silent default — see Registry_HasExplicitRoutingDecision_ForEveryDatabase below.
     //   - Unknown: not a real database, never a live connection target.
-    //   - FlatFile: pengdows.flatfile has no custom exception hierarchy at all — it throws plain
-    //     BCL exceptions (FormatException, InvalidOperationException, IOException, ...) with no
-    //     provider error codes or SQLSTATEs to pattern-match. There is nothing real to build a
-    //     dedicated IDbExceptionTranslator against yet; revisit once/if flatfile grows typed
-    //     exceptions for constraint/format/IO failures.
+    //
+    // FlatFile used to be listed here ("no custom exception hierarchy, nothing real to build
+    // against") — that went stale once FlatFileException.cs was written: it's a real DbException
+    // subclass whose SqlState deliberately uses the same ANSI class-23 codes Postgres reports
+    // (23505/23503/23502/23514 — see pengdows.flatfile's CLAUDE.md "Constraint Violations"
+    // section), specifically so a consumer could classify it via SqlState alone with no
+    // flatfile-specific special-casing. FlatFileExceptionTranslator now exists (see below).
     private static readonly HashSet<SupportedDatabase> IntentionalFallbackDatabases = new()
     {
-        SupportedDatabase.Unknown,
-        SupportedDatabase.FlatFile
+        SupportedDatabase.Unknown
     };
 
     [Fact]
@@ -275,5 +276,74 @@ public class DbExceptionTranslatorRegistryTests
         Assert.Equal(SupportedDatabase.DuckDB, result.Database);
         Assert.True(result.IsTransient);
         Assert.Same(inner, result.InnerException);
+    }
+
+    // -------------------------------------------------------------------------
+    // FlatFileExceptionTranslator — added once FlatFileException.SqlState (real ANSI class-23
+    // codes, matching Postgres's own set) made SqlState-based classification possible. See
+    // FlatFileDialect.IsUniqueViolation's doc comment and IntentionalFallbackDatabases above.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void Registry_Routes_FlatFile_To_FlatFileExceptionTranslator()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<FlatFileExceptionTranslator>(registry.Get(SupportedDatabase.FlatFile));
+    }
+
+    [Fact]
+    public void FlatFileTranslator_UniqueSqlState_Returns_UniqueConstraintViolationException()
+    {
+        var translator = new FlatFileExceptionTranslator();
+        var inner = new SqlStateDbException("23505", "duplicate key value violates unique constraint");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.FlatFile), inner, DbOperationKind.Insert);
+
+        Assert.IsType<UniqueConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void FlatFileTranslator_ForeignKeySqlState_Returns_ForeignKeyViolationException()
+    {
+        var translator = new FlatFileExceptionTranslator();
+        var inner = new SqlStateDbException("23503", "insert or update violates foreign key constraint");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.FlatFile), inner, DbOperationKind.Insert);
+
+        Assert.IsType<ForeignKeyViolationException>(result);
+    }
+
+    [Fact]
+    public void FlatFileTranslator_NotNullSqlState_Returns_NotNullViolationException()
+    {
+        var translator = new FlatFileExceptionTranslator();
+        var inner = new SqlStateDbException("23502", "null value in column violates not-null constraint");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.FlatFile), inner, DbOperationKind.Insert);
+
+        Assert.IsType<NotNullViolationException>(result);
+    }
+
+    [Fact]
+    public void FlatFileTranslator_CheckSqlState_Returns_CheckConstraintViolationException()
+    {
+        var translator = new FlatFileExceptionTranslator();
+        var inner = new SqlStateDbException("23514", "new row violates check constraint");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.FlatFile), inner, DbOperationKind.Insert);
+
+        Assert.IsType<CheckConstraintViolationException>(result);
+    }
+
+    [Fact]
+    public void FlatFileTranslator_GenericError_Returns_DatabaseOperationException()
+    {
+        var translator = new FlatFileExceptionTranslator();
+        var inner = new InvalidOperationException("some unrecognized FlatFile error");
+
+        var result = translator.Translate(TestDialect(SupportedDatabase.FlatFile), inner, DbOperationKind.Insert);
+
+        Assert.IsType<DatabaseOperationException>(result);
     }
 }

@@ -14,6 +14,9 @@ public class CockroachDbTestContainer : TestContainer
     private IContainer? _container;
     private int _sqlPort = 26257;
     private readonly string _image;
+    // Random per instance so two processes sharing one physical container never see each other's
+    // tables, even if they run concurrently.
+    private readonly string _database = "crud_test_" + TestContainerReuse.NewSuffix();
 
     public CockroachDbTestContainer(string image = "cockroachdb/cockroach:v25.1.0")
     {
@@ -22,25 +25,43 @@ public class CockroachDbTestContainer : TestContainer
 
     public override async Task StartAsync()
     {
-        var runId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
-        if (string.IsNullOrWhiteSpace(runId))
-        {
-            runId = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-        }
-
-        var uniqueSuffix = $"{runId}-{Guid.NewGuid():N}";
-
-        _container = new ContainerBuilder()
+        var builder = new ContainerBuilder()
             .WithImage(_image)
-            .WithName($"test-cockroach-{uniqueSuffix}")
             .WithHostname("cockroach")
             .WithPortBinding(26257, true)
             .WithPortBinding(8080, true)
             .WithCommand("start-single-node", "--insecure")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(26257))
-            .Build();
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(26257));
 
-        await _container.StartAsync();
+        if (TestContainerReuse.Enabled)
+        {
+            // No WithName here (a random per-instance suffix would break WithReuse's config
+            // hash-matching across processes) - Testcontainers assigns its own unique name.
+            builder = builder.WithReuse(true);
+        }
+        else
+        {
+            var runId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+            if (string.IsNullOrWhiteSpace(runId))
+            {
+                runId = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+            }
+
+            var uniqueSuffix = $"{runId}-{Guid.NewGuid():N}";
+            builder = builder.WithName($"test-cockroach-{uniqueSuffix}");
+        }
+
+        _container = builder.Build();
+
+        if (TestContainerReuse.Enabled)
+        {
+            using var _ = await TestContainerReuse.AcquireStartupLockAsync("cockroach-" + _image);
+            await _container.StartAsync();
+        }
+        else
+        {
+            await _container.StartAsync();
+        }
 
         _sqlPort = _container.GetMappedPublicPort(26257);
 
@@ -49,7 +70,7 @@ public class CockroachDbTestContainer : TestContainer
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "CREATE DATABASE IF NOT EXISTS testdb;";
+        cmd.CommandText = $"CREATE DATABASE IF NOT EXISTS \"{_database}\";";
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -64,7 +85,7 @@ public class CockroachDbTestContainer : TestContainer
         // was implicated in a real "Exception while reading from stream... Timeout during reading
         // attempt" failure observed under heavy parallel Docker load (12 providers' containers
         // competing for CPU) running this exact test suite.
-        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;" +
+        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database={_database};SSL Mode=disable;" +
                  "Timeout=30;CommandTimeout=60;";
         var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance);
         return Task.FromResult<IDatabaseContext>(ctx);
@@ -72,7 +93,26 @@ public class CockroachDbTestContainer : TestContainer
 
     protected override async ValueTask DisposeAsyncCore()
     {
-        if (_container != null)
+        if (_container is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = $"Host=localhost;Port={_sqlPort};Username=root;SSL Mode=disable;";
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"DROP DATABASE IF EXISTS \"{_database}\" CASCADE;";
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch
+        {
+            // Best-effort: a shared/reused container may already be gone.
+        }
+
+        if (!TestContainerReuse.Enabled)
         {
             await _container.StopAsync();
             await _container.DisposeAsync();

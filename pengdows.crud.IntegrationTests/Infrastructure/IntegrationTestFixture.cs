@@ -11,13 +11,7 @@ internal static class IntegrationTestConfiguration
     public static IReadOnlyList<SupportedDatabase> BaseProviders { get; } = new[]
     {
         SupportedDatabase.Sqlite,
-        // FlatFile temporarily disabled here: its integration test coverage is still being
-        // built out (several per-test-file provider switches, e.g.
-        // ConstraintViolationTests.CreateRelatedTableAsync, don't have a FlatFile case yet,
-        // which fails the WHOLE cross-provider test rather than just FlatFile's own row — see
-        // DatabaseTestBase's "any one provider fails the aggregate" behavior). Re-enable once
-        // that work lands. Use INTEGRATION_ONLY=FlatFile to test it directly in the meantime.
-        // SupportedDatabase.FlatFile,
+        SupportedDatabase.FlatFile,
         SupportedDatabase.PostgreSql,
         SupportedDatabase.Spanner,
         SupportedDatabase.SqlServer,
@@ -41,13 +35,6 @@ internal static class IntegrationTestConfiguration
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// FlatFile is deliberately excluded from <see cref="BaseProviders"/> (see its own comment)
-    /// but must still be directly testable via <c>INTEGRATION_ONLY=FlatFile</c> - unlike
-    /// <see cref="ShouldIncludeSnowflake"/>'s separate opt-in env var, this reuses
-    /// <c>INTEGRATION_ONLY</c> itself as the opt-in signal, since there is no separate credential
-    /// gate to guard here the way there is for Snowflake.
-    /// </summary>
     public static bool ShouldIncludeFlatFile =>
         ComputeShouldIncludeFlatFile(Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
@@ -72,7 +59,7 @@ internal static class IntegrationTestConfiguration
             providers.Add(SupportedDatabase.Snowflake);
         }
 
-        if (includeFlatFile)
+        if (includeFlatFile && !providers.Contains(SupportedDatabase.FlatFile))
         {
             providers.Add(SupportedDatabase.FlatFile);
         }

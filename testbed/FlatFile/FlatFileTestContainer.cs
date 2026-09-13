@@ -8,10 +8,11 @@ namespace testbed.FlatFile;
 
 /// <summary>
 /// pengdows.flatfile is an embedded, per-directory file engine with no server process (like
-/// SQLite/DuckDB) — no container to start/stop, just a scratch directory. DbMode is requested
-/// explicitly as SingleWriter rather than relying on DbMode.Best auto-detection, since
-/// FlatFileDialect does not yet override CoerceConnectionMode/DetectInMemoryKind (see its
-/// file-level STATUS remark) — Best would not currently resolve to SingleWriter on its own.
+/// SQLite/DuckDB) — no container to start/stop, just a scratch directory. DbMode is left at its
+/// default (Best): FlatFileDialect now overrides CoerceConnectionMode (see its own remarks),
+/// resolving Best to SingleWriter the same way SqliteDialect/DuckDbDialect do — no
+/// test-container-level override needed or wanted, since that would just mask a real dialect gap
+/// the way the prior explicit DbMode.SingleWriter override here did.
 /// </summary>
 public class FlatFileTestContainer : TestContainer
 {
@@ -35,8 +36,7 @@ public class FlatFileTestContainer : TestContainer
 
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = _connectionString,
-            DbMode = DbMode.SingleWriter
+            ConnectionString = _connectionString
         };
         var context = new DatabaseContext(
             config,

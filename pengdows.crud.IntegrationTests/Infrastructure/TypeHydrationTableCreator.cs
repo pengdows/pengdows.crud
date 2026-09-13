@@ -28,6 +28,13 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 ///     CHAR(16) CHARACTER SET OCTETS for guid (binary, 16 bytes); BLOB SUB_TYPE 0 for binary.</item>
 ///   <item>Snowflake: FLOAT4 declared (stored as 64-bit internally); DOUBLE for double;
 ///     TIMESTAMP_NTZ for both date types; VARCHAR(36) for guid; VARBINARY for binary.</item>
+///   <item>FlatFile: REAL for float; DOUBLE for double; TIMESTAMP for DateTime; TIMESTAMP WITH
+///     TIME ZONE (the genuine ISO/ANSI spelling - "TIMESTAMPTZ" is Postgres vendor shorthand the
+///     parser rejects outright) for DateTimeOffset — bare TIMESTAMP maps to CLR DateTime in
+///     SqlBinder.MapSqlDataTypeToClrType, so a DateTimeOffset column declared TIMESTAMP silently
+///     loses its offset (verified live via RoundTripTests/TestTableCreator.
+///     CreateRoundTripTableAsync's identical fix); VARCHAR(36) for guid (no native GUID type);
+///     BLOB for binary.</item>
 /// </list>
 /// </summary>
 public class TypeHydrationTableCreator
@@ -71,6 +78,7 @@ public class TypeHydrationTableCreator
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             SupportedDatabase.Db2 => CreateDb2Sql(),
+            SupportedDatabase.FlatFile => CreateFlatFileSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -234,6 +242,45 @@ CREATE TABLE IF NOT EXISTS {2} (
     {0}col_enum_int{1}       INTEGER          NOT NULL,
     {0}col_enum_str{1}       VARCHAR(50)      NOT NULL
 )", qp, qs, table);
+    }
+
+    // pengdows.flatfile parses only ISO SQL - "TEXT" is rejected, "VARCHAR(n)" is standard, and
+    // there is no native GUID/UUID type (plain VARCHAR(36) round-trips it as a string, matching
+    // FlatFileDialect.GuidFormat => GuidStorageFormat.String elsewhere in this test suite).
+    // col_datetimeoffset is TIMESTAMP WITH TIME ZONE, not TIMESTAMPTZ - the latter is Postgres
+    // vendor shorthand the parser rejects outright as a non-ISO extension. Only the genuine
+    // ISO/ANSI spelling (SQL:2008 §6.1) maps to CLR DateTimeOffset in SqlBinder.
+    // MapSqlDataTypeToClrType; see TestTableCreator.CreateRoundTripTableAsync's identical fix.
+    // WITH (NULLTOKEN = ...): without it, NULL and '' both write as an empty CSV field for
+    // VARCHAR columns and round-trip indistinguishably (ClrTypeParser.Parse only treats an empty
+    // field as NULL for non-string columns) - confirmed live via col_string_null coming back as
+    // "" instead of null in TypeHydration_ZeroAndNullValues_RoundTripCorrectly.
+    private string CreateFlatFileSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+CREATE TABLE IF NOT EXISTS {2} (
+    {0}id{1}                 BIGINT           NOT NULL PRIMARY KEY,
+    {0}col_string{1}         VARCHAR(500)     NOT NULL,
+    {0}col_string_null{1}    VARCHAR(500),
+    {0}col_short{1}          SMALLINT         NOT NULL,
+    {0}col_int{1}            INT              NOT NULL,
+    {0}col_int_null{1}       INT,
+    {0}col_long{1}           BIGINT           NOT NULL,
+    {0}col_float{1}          REAL             NOT NULL,
+    {0}col_double{1}         DOUBLE           NOT NULL,
+    {0}col_decimal{1}        DECIMAL(18,8)    NOT NULL,
+    {0}col_bool{1}           BOOLEAN          NOT NULL,
+    {0}col_bool_null{1}      BOOLEAN,
+    {0}col_datetime{1}       TIMESTAMP        NOT NULL,
+    {0}col_datetimeoffset{1} TIMESTAMP WITH TIME ZONE NOT NULL,
+    {0}col_guid{1}           VARCHAR(36)      NOT NULL,
+    {0}col_binary{1}         BLOB,
+    {0}col_enum_int{1}       INT              NOT NULL,
+    {0}col_enum_str{1}       VARCHAR(50)      NOT NULL
+) WITH (NULLTOKEN = '<<NULL>>')", qp, qs, table);
     }
 
     private string CreateSnowflakeSql()

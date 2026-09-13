@@ -13,32 +13,65 @@ public class MySqlTestContainer : TestContainer
 {
     private readonly IContainer _container;
     private string? _connectionString;
-    private string _database = "testdb";
+    // Fixed - used only for the image's own bootstrap (MYSQL_DATABASE). Must stay fixed so
+    // WithReuse's config hash matches across processes (see TestContainerReuse).
+    private readonly string _bootstrapDatabase = "testdb";
+    // Random per instance so two processes sharing one physical container never see each other's
+    // tables, even if they run concurrently.
+    private readonly string _database = "crud_test_" + TestContainerReuse.NewSuffix();
     private string _password = "rootpassword";
     private int _port = 3306;
     private string _username = "root";
+    private readonly string _image;
 
     public MySqlTestContainer(string? image = null)
     {
-        _container = new ContainerBuilder()
-            .WithImage(image ?? "mysql:8.4.11")
+        _image = image ?? "mysql:8.4.11";
+        var builder = new ContainerBuilder()
+            .WithImage(_image)
             .WithEnvironment("MYSQL_ROOT_PASSWORD", _password)
-            .WithEnvironment("MYSQL_DATABASE", _database)
+            .WithEnvironment("MYSQL_DATABASE", _bootstrapDatabase)
             .WithEnvironment("MYSQL_SQL_MODE",
                 "STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES")
             .WithCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci")
             .WithPortBinding(_port, true)
-            .WithExposedPort(_port)
-            .Build();
+            .WithExposedPort(_port);
+
+        if (TestContainerReuse.Enabled)
+        {
+            builder = builder.WithReuse(true);
+        }
+
+        _container = builder.Build();
     }
 
     public override async Task StartAsync()
     {
-        await _container.StartAsync();
+        if (TestContainerReuse.Enabled)
+        {
+            using var _ = await TestContainerReuse.AcquireStartupLockAsync("mysql-" + _image);
+            await _container.StartAsync();
+        }
+        else
+        {
+            await _container.StartAsync();
+        }
+
         var hostPort = _container.GetMappedPublicPort(_port);
+        var adminConnectionString =
+            $@"Server=localhost;Port={hostPort};Database={_bootstrapDatabase};User ID={_username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
+        await WaitForDbToStart(MySqlConnectorFactory.Instance, adminConnectionString, _container);
+
+        await using (var conn = new MySqlConnection(adminConnectionString))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"CREATE DATABASE `{_database}`";
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         _connectionString =
             $@"Server=localhost;Port={hostPort};Database={_database};User ID={_username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
-        await WaitForDbToStart(MySqlConnectorFactory.Instance, _connectionString, _container);
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
@@ -52,8 +85,30 @@ public class MySqlTestContainer : TestContainer
             new DatabaseContext(_connectionString, MySqlConnectorFactory.Instance, new TypeMapRegistry()));
     }
 
-    protected override ValueTask DisposeAsyncCore()
+    protected override async ValueTask DisposeAsyncCore()
     {
-        return _container.DisposeAsync();
+        if (_connectionString is not null)
+        {
+            try
+            {
+                var hostPort = _container.GetMappedPublicPort(_port);
+                var adminConnectionString =
+                    $@"Server=localhost;Port={hostPort};Database={_bootstrapDatabase};User ID={_username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
+                await using var conn = new MySqlConnection(adminConnectionString);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"DROP DATABASE IF EXISTS `{_database}`";
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Best-effort: a shared/reused container may already be gone.
+            }
+        }
+
+        if (!TestContainerReuse.Enabled)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

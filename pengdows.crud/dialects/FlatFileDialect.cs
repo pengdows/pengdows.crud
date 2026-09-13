@@ -9,11 +9,22 @@
 // verified against pengdows.flatfile — in particular isolation levels/profiles (its
 // FlatFileTransaction is file-snapshot/undo-journal rollback, explicitly not real
 // concurrent-connection isolation or MVCC per its own README), generated-key/identity
-// plan (flatfile has no autoincrement/sequence/RETURNING concept at all), session
-// settings, and CoerceConnectionMode/DbMode-Best selection. Decide those from real
-// research against pengdows.flatfile's source, not by copying another embedded dialect's
-// assumptions — see CLAUDE.md's "Adding a New Database" checklist and its SAP HANA
-// callout for the same caution.
+// plan (flatfile has no autoincrement/sequence/RETURNING concept at all), and session
+// settings. Decide those from real research against pengdows.flatfile's source, not by
+// copying another embedded dialect's assumptions — see CLAUDE.md's "Adding a New
+// Database" checklist and its SAP HANA callout for the same caution.
+//
+// CoerceConnectionMode/DbMode-Best selection IS decided (see IsEmbeddedSingleWriterEngine/
+// CoerceConnectionMode below): pengdows.flatfile has exactly one writer lock per
+// directory/file (FlatFileConnection.Open() / ConnectionWriteLock), the same real
+// constraint SQLite/DuckDB have, so it reuses SqlDialect's shared
+// CoerceEmbeddedSingleWriterMode policy — Best resolves to SingleWriter. Confirmed live
+// via pengdows.crud.IntegrationTests.ConnectionManagement.DbModeTests: forcing this
+// through an explicit DbMode.SingleWriter override at the test-container level (the
+// prior workaround, since removed) produced identical behavior to letting Best resolve
+// it, which is exactly what "this dialect decides it now" should look like. FlatFile has
+// no `:memory:` concept at all (always file/directory-backed), so DetectInMemoryKind is
+// NOT overridden — the base SqlDialect default (always None) is already correct.
 // =============================================================================
 
 using System;
@@ -69,6 +80,51 @@ internal class FlatFileDialect : SqlDialect
     /// same classification as SQLite/DuckDB, not a client-server RDBMS.
     /// </summary>
     public override bool IsClientServerDatabase => false;
+
+    /// <summary>
+    /// pengdows.flatfile allows exactly one non-readonly connection per directory/file at a time —
+    /// <see cref="FlatFileConnection.Open"/> acquires a real exclusive write lock
+    /// (<c>ConnectionWriteLock</c>), the same single-writer constraint SQLite/DuckDB have (see
+    /// <c>WriteConnectionEnforcementTests</c> in pengdows.flatfile.Tests). Same classification as
+    /// those two, not a guess.
+    /// </summary>
+    public override bool IsEmbeddedSingleWriterEngine => true;
+
+    /// <summary>
+    /// Reuses <see cref="SqlDialect.CoerceEmbeddedSingleWriterMode"/> — the exact same policy
+    /// SqliteDialect/DuckDbDialect use — since the underlying constraint (one writer at a time,
+    /// safest under Best) is identical. <see cref="DetectInMemoryKind"/> is not overridden (base
+    /// default: always <see cref="InMemoryKind.None"/>), since pengdows.flatfile has no
+    /// <c>:memory:</c> concept — every connection is a real directory or file.
+    /// </summary>
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb) =>
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+
+    /// <summary>
+    /// pengdows.flatfile's <c>FlatFileException.SqlState</c> deliberately uses the real ANSI SQL
+    /// class-23 codes a server-based database would report (see pengdows.flatfile's own CLAUDE.md
+    /// "Constraint Violations" section and <c>FlatFileException.cs</c>'s file-level remarks) —
+    /// exactly so a consumer like this dialect can classify it via SqlState alone, the same pattern
+    /// PostgreSqlDialect already uses for its own identical code set. The base
+    /// SqlDialect.IsXxxViolation overrides only match message text ("foreign key", "not null",
+    /// etc.), which FlatFileException's actual messages don't contain, so without these overrides
+    /// every FlatFile constraint violation fell through to a generic, unclassified exception.
+    /// </summary>
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Verified: pengdows.flatfile's SQL parser (<c>pengdows.sql/SqlParser.cs</c>) genuinely

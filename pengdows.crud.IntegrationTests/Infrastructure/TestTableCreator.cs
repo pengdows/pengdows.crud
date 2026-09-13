@@ -123,6 +123,14 @@ public class TestTableCreator
             // empty field as NULL for non-string columns) - an explicit sentinel makes NULL
             // distinguishable from '' for text_nullable, as ParameterBindingTests.NullSemantics_
             // EqualityVsIsNull requires.
+            // datetimeoffset_value is TIMESTAMP WITH TIME ZONE (the genuine ISO/ANSI spelling,
+            // SQL:2008 §6.1), not bare TIMESTAMP: SqlBinder.MapSqlDataTypeToClrType maps plain
+            // "TIMESTAMP" to CLR DateTime, only "TIMESTAMP WITH TIME ZONE" maps to DateTimeOffset
+            // (TIMESTAMPTZ is Postgres vendor shorthand the parser rejects outright as a non-ISO
+            // extension - not usable here at all). Before this fix, a DateTimeOffset value written
+            // into a plain TIMESTAMP column silently dropped its offset, then re-parsed using the
+            // AMBIENT LOCAL system timezone on read-back (confirmed live: an explicit -05:00
+            // offset came back as -06:00, matching this sandbox's own local zone for that date).
             SupportedDatabase.FlatFile => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -133,7 +141,7 @@ public class TestTableCreator
                     {longCol} BIGINT NOT NULL,
                     {decimalCol} DECIMAL(18,8) NOT NULL,
                     {boolCol} BOOLEAN NOT NULL,
-                    {dtoCol} TIMESTAMP NOT NULL,
+                    {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
                     {guidCol} VARCHAR(36) NOT NULL,
                     {binCol} BLOB NOT NULL
                 ) WITH (NULLTOKEN = '<<NULL>>')",
@@ -349,6 +357,14 @@ public class TestTableCreator
             SupportedDatabase.Db2 => $@"
                 CREATE TABLE {table} (
                     {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
+                )",
+            // pengdows.flatfile parses only ISO SQL - "TEXT" is rejected, "VARCHAR(n)" is standard.
+            SupportedDatabase.FlatFile => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
                     {fromCol} VARCHAR(255),
                     {userCol} VARCHAR(255)

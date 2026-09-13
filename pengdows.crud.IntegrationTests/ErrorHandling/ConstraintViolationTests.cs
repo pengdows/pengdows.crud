@@ -730,6 +730,18 @@ public class ConstraintViolationTests : DatabaseTestBase
                     name TEXT NOT NULL,
                     FOREIGN KEY (test_table_id) REFERENCES test_table(id)
                 )",
+            // pengdows.flatfile has no auto-increment/identity/sequence concept at all (see
+            // TestTableCreator.CreateFlatFileTableSql's plain "id BIGINT PRIMARY KEY") — same
+            // client-supplied-id shape as Spanner, so AppendInsertRelatedTable below treats it the
+            // same way. "TEXT"/vendor syntax is rejected (ISO SQL only - see
+            // pengdows.flatfile/SQL_STANDARDS_STATUS.md), hence VARCHAR(255) here.
+            SupportedDatabase.FlatFile => @"
+                CREATE TABLE IF NOT EXISTS test_related (
+                    id BIGINT PRIMARY KEY,
+                    test_table_id BIGINT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    FOREIGN KEY (test_table_id) REFERENCES test_table(id)
+                )",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => @"
                 CREATE TABLE IF NOT EXISTS test_related (
                     id BIGSERIAL PRIMARY KEY,
@@ -800,9 +812,9 @@ public class ConstraintViolationTests : DatabaseTestBase
         var nameColumn = container.WrapObjectName("name");
 
         // Verified live: omitting "id" here relies on auto-generation, which every other provider
-        // has (BIGSERIAL/AUTO_INCREMENT/IDENTITY/sequence) but Spanner's plain
-        // "id BIGINT PRIMARY KEY" does not (see CreateRelatedTableAsync's Spanner branch above).
-        // For Spanner, the resulting NOT-NULL-with-no-default insert doesn't fail fast the way a
+        // has (BIGSERIAL/AUTO_INCREMENT/IDENTITY/sequence) but Spanner's and FlatFile's plain
+        // "id BIGINT PRIMARY KEY" does not (see CreateRelatedTableAsync's Spanner/FlatFile
+        // branches above). For Spanner, the resulting NOT-NULL-with-no-default insert doesn't fail fast the way a
         // real Postgres NOT NULL violation would — PGAdapter hangs until the command timeout
         // instead, which is what made every FK/constraint test using this helper look like an
         // unrelated "Spanner is slow to detect constraint violations" issue. Reproduced with a
@@ -818,9 +830,9 @@ public class ConstraintViolationTests : DatabaseTestBase
         // at all), unconditionally rejects an explicit value into an identity column unless
         // IDENTITY_INSERT is turned on for that table — verified live via the exact regression
         // this caused: "Cannot insert explicit value for identity column in table 'test_related'
-        // when IDENTITY_INSERT is set to OFF." Scope the explicit id to Spanner specifically,
-        // leaving every other provider's own auto-generation working as it always did.
-        if (provider == SupportedDatabase.Spanner)
+        // when IDENTITY_INSERT is set to OFF." Scope the explicit id to Spanner/FlatFile
+        // specifically, leaving every other provider's own auto-generation working as it always did.
+        if (provider is SupportedDatabase.Spanner or SupportedDatabase.FlatFile)
         {
             var idColumn = container.WrapObjectName("id");
             container.Query.Append("INSERT INTO ")
@@ -878,6 +890,13 @@ public class ConstraintViolationTests : DatabaseTestBase
             // `_ => null` default), meaning no unique constraint was ever added for Spanner at all —
             // the real root cause of the Unique-classification gap tracked as CLAUDE.md item 21.
             SupportedDatabase.Spanner => "CREATE UNIQUE INDEX uq_name ON test_table (name)",
+            // pengdows.flatfile's SqlParser accepts ALTER TABLE ADD CONSTRAINT ... UNIQUE, but
+            // DefaultFlatFileQueryExecutor.ExecuteAlterTableAddConstraint only implements CHECK and
+            // FOREIGN KEY there (confirmed live: "ALTER TABLE ADD CONSTRAINT only supports CHECK
+            // and FOREIGN KEY constraints right now, not 'UniqueConstraintNode'"). CREATE UNIQUE
+            // INDEX is the route pengdows.flatfile's own CLAUDE.md documents as fully supported
+            // for adding uniqueness over pre-existing data — same fix as the Spanner case above.
+            SupportedDatabase.FlatFile => "CREATE UNIQUE INDEX uq_name ON test_table (name)",
             _ => null
         };
 
@@ -918,6 +937,9 @@ public class ConstraintViolationTests : DatabaseTestBase
             // this was simply missing (fell to the `_ => null` default), never verified either
             // way. Uses the same syntax as PostgreSql/CockroachDb/YugabyteDb; verify live.
             SupportedDatabase.Spanner =>
+                "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            // Same ANSI ALTER TABLE ADD CONSTRAINT ... CHECK support as UNIQUE above.
+            SupportedDatabase.FlatFile =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             _ => null
         };

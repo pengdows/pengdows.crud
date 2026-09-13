@@ -38,6 +38,15 @@ public class AsyncConnectionAcquisitionRealPostgresTests : DatabaseTestBase
     [SkippableFact]
     public async Task ExecuteReaderAsync_RealPostgres_DoesNotBlockCallingThread_WhenPoolSlotHeldByRealQuery()
     {
+        // Was throwing a raw InvalidOperationException from CreateAdditionalContextAsync below
+        // (reported as a hard FAIL, not a skip) whenever Postgres isn't in this run's enabled
+        // provider set - e.g. `INTEGRATION_ONLY=<anything but PostgreSql>`. This test is
+        // Postgres-specific by construction (real Npgsql driver, real network I/O), so it should
+        // skip like every other single-provider-required test in this suite (see
+        // MultiTenantDialectVersionTests' identical guard), not fail.
+        Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.PostgreSql),
+            "PostgreSQL is not enabled for this test run.");
+
         // Reuse the fixture's already-running PostgreSQL Testcontainer's real connection string
         // (via the same internal accessor SqlContainer itself uses -- IDatabaseContext.ConnectionString
         // is deliberately redacted for display, see SecurityRegressionTests), but build our OWN

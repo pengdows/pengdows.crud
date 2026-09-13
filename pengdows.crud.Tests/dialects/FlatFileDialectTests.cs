@@ -48,6 +48,45 @@ public class FlatFileDialectTests
         => Assert.False(Dialect().IsClientServerDatabase);
 
     [Fact]
+    public void IsEmbeddedSingleWriterEngine_IsTrue()
+        => Assert.True(Dialect().IsEmbeddedSingleWriterEngine);
+
+    [Fact]
+    public void CoerceConnectionMode_Best_ResolvesToSingleWriter()
+    {
+        var (mode, reason) = Dialect().CoerceConnectionMode(DbMode.Best, "path=/tmp/whatever", isLocalDb: false);
+
+        Assert.Equal(DbMode.SingleWriter, mode);
+        Assert.NotEmpty(reason);
+    }
+
+    [Theory]
+    [InlineData(DbMode.SingleWriter)]
+    [InlineData(DbMode.SingleConnection)]
+    public void CoerceConnectionMode_ExplicitEmbeddedMode_IsHonoredAsIs(DbMode requested)
+    {
+        var (mode, reason) = Dialect().CoerceConnectionMode(requested, "path=/tmp/whatever", isLocalDb: false);
+
+        Assert.Equal(requested, mode);
+        Assert.Empty(reason);
+    }
+
+    [Theory]
+    [InlineData(DbMode.Standard)]
+    [InlineData(DbMode.PreventDatabaseUnload)]
+    public void CoerceConnectionMode_UnsafeExplicitMode_CoercesToSingleWriter(DbMode requested)
+    {
+        var (mode, reason) = Dialect().CoerceConnectionMode(requested, "path=/tmp/whatever", isLocalDb: false);
+
+        Assert.Equal(DbMode.SingleWriter, mode);
+        Assert.NotEmpty(reason);
+    }
+
+    [Fact]
+    public void DetectInMemoryKind_AlwaysNone()
+        => Assert.Equal(InMemoryKind.None, Dialect().DetectInMemoryKind("path=/tmp/whatever"));
+
+    [Fact]
     public void SupportsDropTableIfExists_IsTrue()
         => Assert.True(Dialect().SupportsDropTableIfExists);
 

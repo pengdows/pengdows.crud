@@ -17,6 +17,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator Informix = new InformixExceptionTranslator();
     private static readonly IDbExceptionTranslator Hana = new HanaExceptionTranslator();
     private static readonly IDbExceptionTranslator InterBase = new InterBaseExceptionTranslator();
+    private static readonly IDbExceptionTranslator FlatFile = new FlatFileExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
     public IDbExceptionTranslator Get(SupportedDatabase database)
@@ -38,6 +39,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.Informix => Informix,
             SupportedDatabase.SapHana => Hana,
             SupportedDatabase.InterBase => InterBase,
+            SupportedDatabase.FlatFile => FlatFile,
             _ => Fallback
         };
     }
