@@ -6,13 +6,23 @@
 // STATUS: Partial. Only the properties below reflect a deliberate, verified decision
 // against pengdows.flatfile's actual behavior (see citations on each). Everything not
 // overridden here still falls through to SqlDialect's generic defaults and has NOT been
-// verified against pengdows.flatfile — in particular isolation levels/profiles (its
+// verified against pengdows.flatfile — in particular generated-key/identity plan (flatfile
+// has no autoincrement/sequence/RETURNING concept at all) and session settings. Decide
+// those from real research against pengdows.flatfile's source, not by copying another
+// embedded dialect's assumptions — see CLAUDE.md's "Adding a New Database" checklist and
+// its SAP HANA callout for the same caution.
+//
+// Isolation levels/profiles ARE now decided (see GetSupportedIsolationLevels/
+// GetIsolationProfileMapping below) — this used to say the opposite ("NOT verified... its
 // FlatFileTransaction is file-snapshot/undo-journal rollback, explicitly not real
-// concurrent-connection isolation or MVCC per its own README), generated-key/identity
-// plan (flatfile has no autoincrement/sequence/RETURNING concept at all), and session
-// settings. Decide those from real research against pengdows.flatfile's source, not by
-// copying another embedded dialect's assumptions — see CLAUDE.md's "Adding a New
-// Database" checklist and its SAP HANA callout for the same caution.
+// concurrent-connection isolation or MVCC"), which was true of the ENGINE at the time that
+// was written but is no longer true: pengdows.flatfile's FlatFileTransaction now takes a
+// real per-table snapshot on first read under RepeatableRead/Serializable/Snapshot,
+// confirmed live (a Serializable reader's second read of a table no longer picks up a
+// concurrent writer's commit — see pengdows.flatfile's TransactionIsolationTests.cs). The
+// underlying write-aside DML staging (real file untouched until Commit) already prevented
+// dirty reads unconditionally; what changed is repeatable-read/phantom-read protection for
+// RepeatableRead/Serializable/Snapshot specifically.
 //
 // CoerceConnectionMode/DbMode-Best selection IS decided (see IsEmbeddedSingleWriterEngine/
 // CoerceConnectionMode below): pengdows.flatfile has exactly one writer lock per
@@ -28,6 +38,8 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -89,6 +101,52 @@ internal class FlatFileDialect : SqlDialect
     /// those two, not a guess.
     /// </summary>
     public override bool IsEmbeddedSingleWriterEngine => true;
+
+    /// <summary>
+    /// Confirmed live against pengdows.flatfile (this session — see its
+    /// TransactionIsolationTests.cs): all four standard levels are genuinely meaningful, not
+    /// just accepted without differentiation.
+    /// <list type="bullet">
+    ///   <item><see cref="IsolationLevel.ReadUncommitted"/>/<see cref="IsolationLevel.ReadCommitted"/> —
+    ///   live reads of the real file. DML is always staged (write-aside: the real file is
+    ///   untouched until Commit), so dirty reads are structurally impossible even for
+    ///   ReadUncommitted — the same "can't actually deliver a weaker guarantee than what's
+    ///   requested" over-delivery real engines like PostgreSQL exhibit for their own
+    ///   READ UNCOMMITTED.</item>
+    ///   <item><see cref="IsolationLevel.RepeatableRead"/>/<see cref="IsolationLevel.Serializable"/>/
+    ///   <see cref="IsolationLevel.Snapshot"/> — a table's file is copied into the transaction's
+    ///   own journal on first read, and every later read of that table within the same
+    ///   transaction resolves to that frozen copy (see FlatFileTransaction.ResolveForRead's
+    ///   RequiresSnapshotRead branch). Because the snapshot is the WHOLE file rather than
+    ///   per-row tracking, this prevents phantom reads too, not just non-repeatable reads — so
+    ///   RepeatableRead and Serializable deliver identical, genuinely Serializable-strength
+    ///   guarantees here. This is sufficient for real serializability (not just
+    ///   snapshot-isolation-with-write-skew-risk) specifically BECAUSE
+    ///   <see cref="IsEmbeddedSingleWriterEngine"/>'s ConnectionWriteLock already guarantees at
+    ///   most one writer transaction exists at a time — there is no second concurrent writer a
+    ///   snapshot reader could ever need to serialize against.</item>
+    /// </list>
+    /// </summary>
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadUncommitted,
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    /// <summary>
+    /// FastWithRisks maps to ReadCommitted rather than ReadUncommitted: both behave identically
+    /// on this engine (dirty reads are impossible either way — see
+    /// <see cref="GetSupportedIsolationLevels"/>), so ReadCommitted is the more honest name for
+    /// what a caller actually gets when asking for the "fast, accept some risk" profile.
+    /// </summary>
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+    };
 
     /// <summary>
     /// Reuses <see cref="SqlDialect.CoerceEmbeddedSingleWriterMode"/> — the exact same policy

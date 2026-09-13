@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -190,4 +191,36 @@ public class FlatFileDialectTests
     [Fact]
     public void MergeUpdateRequiresTargetAlias_IsFalse()
         => Assert.False(Dialect().MergeUpdateRequiresTargetAlias);
+
+    /// <summary>
+    /// Confirmed live against pengdows.flatfile (TransactionIsolationTests.cs there): DML's
+    /// write-aside staging makes dirty reads impossible for any level, and RepeatableRead/
+    /// Serializable now take a real per-table snapshot on first read (see
+    /// FlatFileTransaction.ResolveForRead) — so all four standard levels are genuinely
+    /// meaningful, not just accepted without differentiation.
+    /// </summary>
+    [Fact]
+    public void GetSupportedIsolationLevels_IncludesAllFourStandardLevels()
+    {
+        var levels = Dialect().GetSupportedIsolationLevels(allowSnapshotIsolation: false);
+
+        Assert.Equal(4, levels.Count);
+        Assert.Contains(IsolationLevel.ReadUncommitted, levels);
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void GetIsolationProfileMapping_MapsFastWithRisksToReadCommitted()
+    {
+        var mapping = Dialect().GetIsolationProfileMapping(allowSnapshotIsolation: false);
+
+        // Not ReadUncommitted: both behave identically on this engine (dirty reads are
+        // impossible either way), so ReadCommitted is the more honest name for what a caller
+        // actually gets when asking for the "fast, accept some risk" profile.
+        Assert.Equal(IsolationLevel.ReadCommitted, mapping[IsolationProfile.FastWithRisks]);
+        Assert.Equal(IsolationLevel.RepeatableRead, mapping[IsolationProfile.SafeNonBlockingReads]);
+        Assert.Equal(IsolationLevel.Serializable, mapping[IsolationProfile.StrictConsistency]);
+    }
 }
