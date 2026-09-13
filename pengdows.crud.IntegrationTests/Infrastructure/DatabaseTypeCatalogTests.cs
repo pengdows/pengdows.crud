@@ -48,6 +48,24 @@ public class DatabaseTypeCatalogTests
         Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
     }
 
+    // Every catalogued type that can't be declared as a column and/or can't be returned from a
+    // query must say why — an unexplained CanDeclareColumn:false/CanReturnFromQuery:false entry
+    // is indistinguishable from a typo. This runs across every populated database, not just one,
+    // so a future catalog addition that forgets Notes fails here immediately rather than being
+    // caught by chance the next time someone reads the file.
+    [Fact]
+    public void GetColumnTypes_EveryNonDeclarableOrNonReturnableEntry_HasAnExplicitReason()
+    {
+        var offenders = PopulatedDatabases()
+            .Select(args => (SupportedDatabase)args[0])
+            .SelectMany(db => DatabaseTypeCatalog.GetColumnTypes(db).Select(type => (db, type)))
+            .Where(x => (!x.type.CanDeclareColumn || !x.type.CanReturnFromQuery) && string.IsNullOrWhiteSpace(x.type.Notes))
+            .Select(x => $"{x.db}/{x.type.CanonicalName}")
+            .ToList();
+
+        Assert.Empty(offenders);
+    }
+
     [Fact]
     public void GetColumnTypes_UnpopulatedDatabase_ReturnsEmptyRatherThanThrowing()
     {

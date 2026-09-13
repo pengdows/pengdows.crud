@@ -15,6 +15,7 @@ using testbed.PostgreSQL;
 using testbed.SqlServer;
 using testbed.SapHana;
 using testbed.InterBase;
+using testbed.SingleStore;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
@@ -61,6 +62,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Db2 => new Db2TestContainer(),
+            SupportedDatabase.SingleStore => new SingleStoreTestContainer(),
             SupportedDatabase.SybaseASE => new SybaseTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             SupportedDatabase.Informix => new InformixTestContainer(),
@@ -302,6 +304,17 @@ public class ParallelTestOrchestrator
         AddDocker("YugabyteDB", 20, image => new YugabyteTestContainer(image), (db, sp) => new YugabyteTestProvider(db, sp));
         AddDocker("Oracle", 45, image => new OracleTestContainer(image), (db, sp) => new OracleTestProvider(db, sp));
         AddDocker("Db2", 60, image => new Db2TestContainer(image), (db, sp) => new Db2TestProvider(db, sp));
+
+        // SingleStoreTestContainer has no per-image constructor (single pinned dev image, like
+        // Sybase/Informix/Spanner below) — goes through AddLocal. No dedicated TestProvider
+        // subclass: DatabaseDetectionService's @@memsql_version probe tags the connection as
+        // SupportedDatabase.SingleStore at runtime, and TestProvider.cs's stored-proc test already
+        // branches on that (see its SupportedDatabase.SingleStore case) — the base TestProvider is
+        // sufficient, matching how plain MySQL is registered above. Weight 15: confirmed live
+        // (this session) to reach "healthy" in ~15-20s, a bit slower than MySQL's single-node 8s
+        // weight since the dev image boots a 2-node (master+leaf) cluster.
+        AddLocal("SingleStore", new SingleStoreTestContainer(), (db, sp) => new TestProvider(db, sp), 15);
+
         // SybaseTestContainer has no per-image constructor (unlike AddDocker's providers) — it
         // pins one verified image internally (nguoianphu/docker-sybase) and handles ASE 16's
         // SIGSEGV-on-boot workaround (SAP KBA 3018138: trace flag -T11889 + restart) as part of

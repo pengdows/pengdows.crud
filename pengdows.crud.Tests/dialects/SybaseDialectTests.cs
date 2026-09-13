@@ -235,6 +235,34 @@ public class SybaseDialectTests
         Assert.Equal(DbErrorCategory.Unknown, Dialect().ClassifyException(ex));
     }
 
+    // Verified live against a real ASE 16.0 SP02 container (nguoianphu/docker-sybase) this
+    // session: AseConnection.BeginTransaction accepts all four standard IsolationLevel values,
+    // and a "SELECT @@isolation" inside each transaction confirmed the server genuinely applied
+    // it (0/1/2/3 == ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) — not a
+    // client-side no-op. Without SybaseDialect's override, this would silently fall back to
+    // SqlDialect's generic ANSI default, which wrongly omits ReadUncommitted.
+    [Fact]
+    public void GetSupportedIsolationLevels_IncludesAllFourStandardLevels()
+    {
+        var levels = Dialect().GetSupportedIsolationLevels(allowSnapshotIsolation: false);
+
+        Assert.Equal(4, levels.Count);
+        Assert.Contains(IsolationLevel.ReadUncommitted, levels);
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void GetIsolationProfileMapping_MapsFastWithRisksToReadUncommitted()
+    {
+        var mapping = Dialect().GetIsolationProfileMapping(allowSnapshotIsolation: false);
+
+        Assert.Equal(IsolationLevel.ReadUncommitted, mapping[IsolationProfile.FastWithRisks]);
+        Assert.Equal(IsolationLevel.RepeatableRead, mapping[IsolationProfile.SafeNonBlockingReads]);
+        Assert.Equal(IsolationLevel.Serializable, mapping[IsolationProfile.StrictConsistency]);
+    }
+
     [Table("sybase_merge")]
     private class SybaseMergeEntity
     {

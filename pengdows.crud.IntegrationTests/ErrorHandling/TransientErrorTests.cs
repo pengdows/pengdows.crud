@@ -106,7 +106,8 @@ public class TransientErrorTests : DatabaseTestBase
                 or SupportedDatabase.Spanner =>
                 new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"), Npgsql.NpgsqlFactory.Instance),
 
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore =>
                 new DatabaseContext(WithBuilderKey(RemoveBuilderKeys(rawCs,
                         "Allow Public Key Retrieval", "Application Name"), "Port", "1"),
                     MySql.Data.MySqlClient.MySqlClientFactory.Instance),

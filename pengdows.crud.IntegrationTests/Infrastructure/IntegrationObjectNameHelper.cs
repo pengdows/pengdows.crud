@@ -65,6 +65,7 @@ internal static class IntegrationObjectNameHelper
         SupportedDatabase.SqlServer => "DATETIME2",
         SupportedDatabase.MySql => "DATETIME",
         SupportedDatabase.MariaDb => "DATETIME",
+        SupportedDatabase.SingleStore => "DATETIME",
         // Spanner's PostgreSQL interface has no plain TIMESTAMP type at all (verified live:
         // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner always
         // stores instants in UTC internally.
@@ -76,8 +77,20 @@ internal static class IntegrationObjectNameHelper
     // verified live: "P0001: <UNIQUE> constraint is not supported, create a unique index
     // instead." Every other provider gets the normal inline clause; for Spanner, use this (empty)
     // plus SpannerUniqueIndexSql's separate CREATE UNIQUE INDEX statement as a follow-up.
+    //
+    // SingleStore is a DIFFERENT, more fundamental restriction, confirmed live against a real
+    // ghcr.io/singlestore-labs/singlestoredb-dev container: a secondary unique constraint that
+    // does not include the table's shard key (which defaults to the primary key, "id" in every
+    // table this helper is used for) is rejected outright, in both storage engines SingleStore
+    // offers — "unique keys must contain all columns of the shard key '(id)'" on rowstore tables,
+    // and "multiple UNIQUE indexes with at least one index containing multiple columns on
+    // columnstore table" on its columnstore default. See
+    // https://docs.singlestore.com/docs/unique-key-restrictions (linked directly in both live
+    // error messages). Unlike Spanner, there is no separate-statement workaround — a standalone
+    // CREATE UNIQUE INDEX on the same columns hits the identical restriction — so this returns
+    // empty for SingleStore too rather than routing through SpannerUniqueIndexSql's pattern.
     public static string InlineUniqueConstraintClause(SupportedDatabase provider, params string[] wrappedColumns) =>
-        provider == SupportedDatabase.Spanner
+        provider is SupportedDatabase.Spanner or SupportedDatabase.SingleStore
             ? string.Empty
             : $",\n    UNIQUE ({string.Join(", ", wrappedColumns)})";
 
@@ -110,6 +123,7 @@ internal static class IntegrationObjectNameHelper
                 => [GetPostgreSqlSchema(builder) ?? "public"],
             SupportedDatabase.SqlServer => [GetValue(builder, "Current Schema", "Schema") ?? "dbo"],
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore
                 => GetValue(builder, "Database", "Initial Catalog") is { Length: > 0 } db
                     ? [db]
                     : [],

@@ -54,6 +54,136 @@ public class DialectMissingPathTests
     }
 
     // =========================================================================
+    // MySqlDialect — SingleStore-specific PrepareStatements/SupportsSavepoints overrides.
+    // Both confirmed live (this session) against a real ghcr.io/singlestore-labs/
+    // singlestoredb-dev container — see MySqlDialect.cs's SingleStore comments for detail.
+    // =========================================================================
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    public void MySql_PrepareStatements_FalseOnlyForSingleStore_WhenUsingMySqlConnector(SupportedDatabase flavor, bool expected)
+    {
+        var factory = new fakeDbFactory(flavor);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, isMySqlConnector: true, flavor);
+
+        // SingleStore's own documentation recommends leaving server-side prepare OFF
+        // (useServerPrepStmts=false) — it already parameterizes/compiles/caches plans
+        // internally, so PREPARE has no performance upside there, and confirmed live (this
+        // session) it has real gaps: PREPARE-ing a CREATE PROCEDURE with a compound BEGIN...END
+        // body returns a generic parse error (1064) instead of MySQL's own dedicated 1295 "not
+        // supported in the prepared statement protocol yet" — never attempting prepare avoids
+        // the whole class of gap rather than pattern-matching exceptions after the fact.
+        Assert.Equal(expected, dialect.PrepareStatements);
+    }
+
+    [Fact]
+    public void MySql_PrepareStatements_FalseForSingleStore_EvenWithOracleMySqlData()
+    {
+        // isMySqlConnector=false (Oracle's MySql.Data) already yields PrepareStatements=false for
+        // every flavor via the existing _isMySqlConnector check — this pins down that SingleStore
+        // stays false through the AND, not by coincidence of the base check alone.
+        var factory = new fakeDbFactory(SupportedDatabase.SingleStore);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, isMySqlConnector: false, SupportedDatabase.SingleStore);
+
+        Assert.False(dialect.PrepareStatements);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    public void MySql_SupportsSavepoints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
+    {
+        var factory = new fakeDbFactory(flavor);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, flavor);
+
+        // CONFIRMED LIVE: SingleStore accepts SAVEPOINT/ROLLBACK TO SAVEPOINT syntax with no
+        // error, but ROLLBACK TO SAVEPOINT is a silent no-op (a row inserted after the savepoint
+        // survives the rollback) — reporting SupportsSavepoints=>true would silently lose data
+        // for any caller relying on it. MySQL/AuroraMySql genuinely support real rollback.
+        Assert.Equal(expected, dialect.SupportsSavepoints);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    public void MySql_EnforcesForeignKeyConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
+    {
+        var factory = new fakeDbFactory(flavor);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, flavor);
+
+        // CONFIRMED LIVE: SingleStore rejects a FOREIGN KEY clause at CREATE TABLE time outright
+        // ("Foreign keys are not supported...") — a DDL-time rejection, not merely an
+        // unenforced-at-runtime gap. MySQL/AuroraMySql genuinely enforce FK constraints.
+        Assert.Equal(expected, dialect.EnforcesForeignKeyConstraints);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    public void MySql_SupportsUniqueConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
+    {
+        var factory = new fakeDbFactory(flavor);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, flavor);
+
+        // CONFIRMED LIVE: any unique key beyond a SingleStore table's shard key (defaults to its
+        // primary key) is rejected outright at DDL time on both storage engines it offers.
+        Assert.Equal(expected, dialect.SupportsUniqueConstraints);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    public void MySql_SupportsCheckConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
+    {
+        var factory = new fakeDbFactory(flavor);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, flavor);
+
+        // CONFIRMED LIVE: "Feature 'Check constraints' is not supported by SingleStore."
+        Assert.Equal(expected, dialect.SupportsCheckConstraints);
+    }
+
+    // Verified live (this session, against a real ghcr.io/singlestore-labs/singlestoredb-dev
+    // container): SET SESSION TRANSACTION ISOLATION LEVEL succeeded for all four standard levels,
+    // and @@transaction_isolation echoed back exactly what was requested for each — unlike TiDB,
+    // which is documented elsewhere in this codebase to silently coerce SERIALIZABLE down to
+    // REPEATABLE READ. SingleStore genuinely inherits MySqlDialect's 4-level set correctly; this
+    // pins that down as a deliberate, checked conclusion rather than an untested inheritance.
+    [Fact]
+    public void MySql_GetSupportedIsolationLevels_SingleStore_MatchesMySqlFamily()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SingleStore);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, SupportedDatabase.SingleStore);
+
+        var levels = dialect.GetSupportedIsolationLevels(allowSnapshotIsolation: false);
+
+        Assert.Equal(4, levels.Count);
+        Assert.Contains(IsolationLevel.ReadUncommitted, levels);
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void MariaDb_SupportsSavepoints_IsTrue_UnaffectedBySingleStoreOverride()
+    {
+        // MariaDbDialect overrides DatabaseType directly and leaves the base MySqlDialect
+        // constructor's flavor at its default (SupportedDatabase.MySql) — this test locks down
+        // that the DatabaseType-based SingleStore check in SupportsSavepoints still resolves
+        // correctly for that shape, not just for a MySqlDialect constructed with an explicit
+        // SingleStore flavor argument.
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var dialect = new MariaDbDialect(factory, NullLogger<MySqlDialect>.Instance);
+
+        Assert.True(dialect.SupportsSavepoints);
+    }
+
+    // =========================================================================
     // MySqlDialect — TryGetProviderErrorCode returns null (line 309)
     // =========================================================================
 

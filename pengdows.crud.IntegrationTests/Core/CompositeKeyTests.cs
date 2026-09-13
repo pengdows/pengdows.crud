@@ -155,6 +155,18 @@ public class CompositeKeyTests : DatabaseTestBase
                 return;
             }
 
+            // SingleStore cannot express this table's shape at all — see
+            // IntegrationObjectNameHelper.InlineUniqueConstraintClause's SingleStore comment — so
+            // SetupDatabaseAsync creates order_items with no (order_id, product_id) unique
+            // constraint for this provider, and this test's entire premise (the DB rejecting a
+            // duplicate composite key) doesn't apply.
+            if (provider == SupportedDatabase.SingleStore)
+            {
+                Output.WriteLine(
+                    "Skipping duplicate composite key test for SingleStore (no DB-level unique constraint on (order_id, product_id) is possible there — see https://docs.singlestore.com/docs/unique-key-restrictions)");
+                return;
+            }
+
             var helper = new TableGateway<OrderItem, long>(context);
             var item = CreateOrderItem(104, 204, 1, 9.99m);
             await helper.CreateAsync(item, context);

@@ -74,7 +74,8 @@ public class TypeHydrationTableCreator
             // always stores instants in UTC internally.
             SupportedDatabase.Spanner => CreateSpannerSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             SupportedDatabase.Db2 => CreateDb2Sql(),

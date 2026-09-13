@@ -35,6 +35,7 @@
 //   ones in the base class can never fire for AseException).
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -119,6 +120,29 @@ internal class SybaseDialect : SqlDialect
 
     // Verified live: SAVE TRANSACTION / ROLLBACK TRANSACTION work exactly as in SQL Server.
     public override bool SupportsSavepoints => true;
+
+    // Verified live against ASE 16.0 SP02 (this session): AseConnection.BeginTransaction accepts
+    // all four standard IsolationLevel values with no error, and a subsequent
+    // "SELECT @@isolation" inside each transaction confirms the server genuinely applied it —
+    // 0/1/2/3 map exactly to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable, not just
+    // a client-side no-op. Without this override, GetSupportedIsolationLevels/
+    // GetIsolationProfileMapping silently fell back to SqlDialect's generic ANSI default
+    // ({ReadCommitted, RepeatableRead, Serializable}), which wrongly omitted ReadUncommitted —
+    // a real, supported level on this engine.
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
+    {
+        IsolationLevel.ReadUncommitted,
+        IsolationLevel.ReadCommitted,
+        IsolationLevel.RepeatableRead,
+        IsolationLevel.Serializable
+    };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
+    {
+        [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+        [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+        [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+    };
 
     // Same T-SQL family as SQL Server: SAVE TRANSACTION has no explicit release statement.
     public override SavepointCapabilities SavepointCapabilities =>

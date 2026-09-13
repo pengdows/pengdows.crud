@@ -23,7 +23,8 @@ internal static class IntegrationTestConfiguration
         SupportedDatabase.Oracle,
         SupportedDatabase.YugabyteDb,
         SupportedDatabase.TiDb,
-        SupportedDatabase.Db2
+        SupportedDatabase.Db2,
+        SupportedDatabase.SingleStore
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>

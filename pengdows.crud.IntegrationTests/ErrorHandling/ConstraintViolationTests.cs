@@ -773,6 +773,16 @@ public class ConstraintViolationTests : DatabaseTestBase
                     name VARCHAR(255) NOT NULL,
                     FOREIGN KEY (test_table_id) REFERENCES test_table(id)
                 )",
+            // SingleStore rejects a FOREIGN KEY clause at CREATE TABLE time outright (confirmed
+            // live: "Foreign keys are not supported...") — see
+            // MySqlDialect.EnforcesForeignKeyConstraints's SingleStore comment. No FK clause here;
+            // the FK-specific tests below skip themselves via that flag instead.
+            SupportedDatabase.SingleStore => @"
+                CREATE TABLE IF NOT EXISTS test_related (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    test_table_id BIGINT NOT NULL,
+                    name VARCHAR(255) NOT NULL
+                )",
             SupportedDatabase.Oracle => string.Format(@"
                 DECLARE
                     table_exists NUMBER;
@@ -877,6 +887,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             SupportedDatabase.SqlServer => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE ([name])",
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
+            // SingleStore is NOT handled here — ISqlDialect.SupportsUniqueConstraints is false
+            // for it (confirmed live: any unique key beyond the table's shard key is rejected,
+            // "unique keys must contain all columns of the shard key"), so every call site gates
+            // on that flag before ever reaching this method. Falls through to `_ => null`.
             SupportedDatabase.Oracle =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
             SupportedDatabase.Firebird =>
@@ -926,6 +940,10 @@ public class ConstraintViolationTests : DatabaseTestBase
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            // SingleStore is NOT handled here — ISqlDialect.SupportsCheckConstraints is false for
+            // it (confirmed live: "Feature 'Check constraints' is not supported by SingleStore."),
+            // so every call site gates on that flag before ever reaching this method. Falls
+            // through to `_ => null`.
             SupportedDatabase.Oracle =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
             SupportedDatabase.Firebird =>

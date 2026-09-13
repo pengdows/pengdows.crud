@@ -37,6 +37,7 @@ public class TestTableCreator
             SupportedDatabase.MySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.TiDb => CreateMySqlTableSql(),
+            SupportedDatabase.SingleStore => CreateMySqlTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
             SupportedDatabase.CockroachDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
@@ -207,7 +208,8 @@ public class TestTableCreator
                     [guid_value] UNIQUEIDENTIFIER NOT NULL,
                     [binary_value] VARBINARY(256) NOT NULL
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {textCol} VARCHAR(255) NOT NULL,
@@ -314,7 +316,8 @@ public class TestTableCreator
                     {fromCol} NVARCHAR(255),
                     {userCol} NVARCHAR(255)
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
@@ -441,7 +444,8 @@ public class TestTableCreator
                     {0}name{1} NVARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => string.Format(@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,

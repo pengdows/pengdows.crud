@@ -165,7 +165,19 @@ internal class MySqlDialect : SqlDialect
     // that can corrupt string values containing escape sequences when using text protocol.
     // Oracle MySql.Data defaults OFF to avoid max_prepared_stmt_count exhaustion on older servers.
     // ShouldDisablePrepareOn() guards against error 1461 and 1295 on either path.
-    public override bool PrepareStatements => _isMySqlConnector;
+    //
+    // SingleStore is excluded even when the driver is MySqlConnector: per SingleStore's own
+    // documentation, its drivers recommend leaving server-side prepare OFF
+    // (useServerPrepStmts=false) — SingleStore already parameterizes/compiles/caches query plans
+    // internally regardless, so server-side PREPARE has no performance upside there, and
+    // confirmed live (this session, against a real ghcr.io/singlestore-labs/singlestoredb-dev
+    // container) it has real gaps: PREPARE-ing a CREATE PROCEDURE with a compound BEGIN...END
+    // body returns a generic ER_PARSE_ERROR (1064) instead of MySQL's own dedicated 1295 "not
+    // supported in the prepared statement protocol yet", so the ShouldDisablePrepareOn recovery
+    // path below can't reliably distinguish that from a genuine syntax error. Not preparing at
+    // all for SingleStore avoids this whole class of gap rather than pattern-matching one
+    // instance of it after the fact.
+    public override bool PrepareStatements => _isMySqlConnector && DatabaseType != SupportedDatabase.SingleStore;
     public override bool SupportsReadOnlyTransactions => true;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
@@ -257,7 +269,40 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
-    public override bool SupportsSavepoints => true; // Available since MySQL 5.0.3 (2005)
+    // Available since MySQL 5.0.3 (2005) — true for MySQL/MariaDB/AuroraMySql/TiDB. SingleStore
+    // is the one exception, CONFIRMED LIVE (against a real ghcr.io/singlestore-labs/
+    // singlestoredb-dev container, via raw SQL bypassing pengdows.crud entirely): SAVEPOINT and
+    // ROLLBACK TO SAVEPOINT are both accepted with no error, but ROLLBACK TO SAVEPOINT is a
+    // silent no-op — a row inserted after the savepoint survives the rollback. Reporting
+    // SupportsSavepoints => true here would be worse than the syntax simply failing: callers
+    // would believe the rollback happened and silently keep data it should have discarded. See
+    // TransactionContext's Savepoint/RollbackToSavepoint/ReleaseSavepoint docs — throwing
+    // NotSupportedException (SavepointCapabilities.None, via the base SupportsSavepoints=>false
+    // fallback) is the documented, correct behavior for a database that lacks a capability, not
+    // a special case invented for SingleStore.
+    // DatabaseType (not _flavor) so this stays correct for MariaDbDialect/TiDbDialect, both of
+    // which override DatabaseType directly and leave _flavor at its base-constructor default.
+    public override bool SupportsSavepoints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // Confirmed live: SingleStore rejects a FOREIGN KEY clause at CREATE TABLE time outright
+    // ("Foreign keys are not supported. To allow the table to be created remove the foreign key
+    // or set the `ignore_foreign_keys` global variable...") — a DDL-time rejection, not merely an
+    // unenforced-at-runtime gap like TiDbDialect's own EnforcesForeignKeyConstraints=>false
+    // (TiDB accepts FK syntax, just doesn't enforce it). Callers must not declare a FOREIGN KEY
+    // at all for SingleStore, not just expect violations to go undetected.
+    public override bool EnforcesForeignKeyConstraints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // Confirmed live: creating ANY unique key on a SingleStore table beyond the columns of its
+    // shard key (which defaults to the primary key) is rejected outright — "unique keys must
+    // contain all columns of the shard key '(id)'" (rowstore) / "multiple UNIQUE indexes with at
+    // least one index containing multiple columns on columnstore table" (columnstore, the
+    // default engine). This is a real DDL-time capability gap, not merely unenforced-at-runtime.
+    public override bool SupportsUniqueConstraints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // Confirmed live: "Feature 'Check constraints' is not supported by SingleStore." — CHECK
+    // constraints don't exist on this engine at all, unlike TiDbDialect's own
+    // SupportsCheckConstraints=>false override (a different, TiDB-specific reason).
+    public override bool SupportsCheckConstraints => DatabaseType != SupportedDatabase.SingleStore;
     public override bool SupportsJsonTypes => IsInitialized && IsVersionAtLeast(5, 7, 8);
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
@@ -374,6 +419,22 @@ internal class MySqlDialect : SqlDialect
         return baseline.TrimEnd(';') + "; " + intent;
     }
 
+    // SingleStore session-state note (confirmed live this session, against a real
+    // ghcr.io/singlestore-labs/singlestoredb-dev container): it reports SELECT VERSION() as a
+    // generic "5.7.32", so it falls into the useLegacyModes branch below like any pre-8.0 MySQL
+    // server and gets sent the FULL flag set including NO_ZERO_DATE/NO_ZERO_IN_DATE. Sending that
+    // does NOT error — SET SESSION sql_mode='...' always succeeds — but SingleStore silently
+    // keeps only the flags it actually recognizes and drops the rest with no warning: a real
+    // SET SESSION with every flag above resulted in @@sql_mode reporting back only
+    // "ANSI_QUOTES,ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES", silently discarding
+    // ERROR_FOR_DIVISION_BY_ZERO, NO_ENGINE_SUBSTITUTION, NO_BACKSLASH_ESCAPES, NO_ZERO_DATE, and
+    // NO_ZERO_IN_DATE. This is confirmed harmless for pengdows.crud specifically: ANSI_QUOTES —
+    // the one flag this dialect's identifier-quoting policy actually depends on (see
+    // WrapObjectName's ANSI double-quote enforcement) — is exactly the one that survives, and
+    // pengdows.crud always parameterizes values rather than inlining string literals, so the
+    // backslash-escaping/zero-date/division-by-zero flags being unenforced has no effect on
+    // framework-generated SQL. Not worth special-casing SingleStore out of this flag set: sending
+    // a slightly wider list than SingleStore honors is a no-op there, not a failure.
     private SessionSettingsResult GetMySqlSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
