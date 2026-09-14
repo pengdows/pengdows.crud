@@ -405,32 +405,62 @@ CREATE TABLE {tableName} (
     /// zero attachments this time. The pass bar is relative to this database's own already-measured
     /// cold/warm gap (recovering at least half of it), not a fixed absolute number — the raw
     /// magnitude of the cost varies a lot per database (Firebird ~9ms, SQL Server AUTO_CLOSE ~40ms).
+    ///
+    /// PREVIOUSLY A REAL BUG, fixed here: this always called <see cref="CheckOk"/> regardless of
+    /// <c>sentinelPrevented</c>'s value, so a genuine sentinel-mechanism regression could never
+    /// fail a testbed run — it only ever produced an easy-to-miss "did NOT prevent it" log line.
+    /// Confirmed live against Firebird 3.0.9 (small absolute cold/warm gap, ~10-50ms) that a
+    /// SINGLE sentinel measurement is genuinely noisy: three consecutive runs produced prevented/
+    /// not-prevented/not-prevented. A bare CheckOk-to-CheckFail flip on one sample would have made
+    /// this check flaky. Instead, the sentinel round trip is measured up to 3 times against the
+    /// SAME held-open reader (the whole point is one persistent connection across repeated
+    /// drain-and-wait cycles) and a majority verdict decides pass/fail — smoothing single-sample
+    /// timing noise while still catching a sentinel mechanism that reliably fails to help.
     /// </summary>
     private async Task TestSentinelPreventsDetectedUnloadCostAsync(string probeSql, double coldMs, double warmMs)
     {
         await using var sentinelContainer = _context.CreateSqlContainer(probeSql);
         await using var sentinelReader = await sentinelContainer.ExecuteReaderAsync();
 
-        ClearProviderPoolForIdleUnloadProbe();
-        await Task.Delay(TimeSpan.FromSeconds(3));
-
-        var sw = Stopwatch.StartNew();
-        await using (var container = _context.CreateSqlContainer(probeSql))
-        {
-            await container.ExecuteScalarOrNullAsync<int>();
-        }
-        sw.Stop();
-
-        var sentinelMs = sw.Elapsed.TotalMilliseconds;
         var originalGap = coldMs - warmMs;
-        var remainingGap = sentinelMs - warmMs;
-        var sentinelPrevented = remainingGap < originalGap / 2.0;
+        const int sampleCount = 3;
+        var samples = new List<(double SentinelMs, bool Prevented)>(sampleCount);
 
-        CheckOk("DbMode.SentinelPreventsUnload",
-            $"  [DbMode] Sentinel validation for {_context.Product}: round trip with one connection held open throughout = {sentinelMs:F2}ms (original gap was {originalGap:F2}ms) — " +
+        for (var i = 0; i < sampleCount; i++)
+        {
+            ClearProviderPoolForIdleUnloadProbe();
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            var sw = Stopwatch.StartNew();
+            await using (var container = _context.CreateSqlContainer(probeSql))
+            {
+                await container.ExecuteScalarOrNullAsync<int>();
+            }
+            sw.Stop();
+
+            var sentinelMs = sw.Elapsed.TotalMilliseconds;
+            var remainingGap = sentinelMs - warmMs;
+            samples.Add((sentinelMs, remainingGap < originalGap / 2.0));
+        }
+
+        var preventedCount = samples.Count(s => s.Prevented);
+        var sentinelPrevented = preventedCount * 2 > sampleCount; // strict majority
+        var sampleSummary = string.Join(", ", samples.Select(s => $"{s.SentinelMs:F2}ms/{(s.Prevented ? "ok" : "fail")}"));
+        var message =
+            $"  [DbMode] Sentinel validation for {_context.Product}: {preventedCount}/{sampleCount} samples prevented " +
+            $"the unload cost (samples: {sampleSummary}; original gap was {originalGap:F2}ms) — " +
             (sentinelPrevented
                 ? "unload cost PREVENTED (confirms PreventDatabaseUnload's sentinel mechanism actually works here)"
-                : "cost still present — sentinel did NOT prevent it (investigate before trusting PreventDatabaseUnload for this database)"));
+                : "cost still present — sentinel did NOT reliably prevent it (investigate before trusting PreventDatabaseUnload for this database)");
+
+        if (sentinelPrevented)
+        {
+            CheckOk("DbMode.SentinelPreventsUnload", message);
+        }
+        else
+        {
+            CheckFail("DbMode.SentinelPreventsUnload", message);
+        }
     }
 
 }
