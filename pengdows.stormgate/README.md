@@ -20,9 +20,11 @@ The standard ADO.NET pool is excellent at managing idle connections, but it isn'
 
 ## What StormGate Does *Not* Fix
 
-StormGate gates how many connections may be *opening* at once. That's the right lever for a
-real client-server database (SQL Server, PostgreSQL, MySQL, Oracle, etc.) whose server enforces
-a connection limit and gets overwhelmed by a thundering herd of simultaneous opens.
+StormGate gates how many connections may be concurrently open — opening or already held by the
+application, for the full lifetime of the lease, not just the moment of the open handshake.
+That's the right lever for a real client-server database (SQL Server, PostgreSQL, MySQL, Oracle,
+etc.) whose server enforces a connection limit and gets overwhelmed either by a thundering herd
+of simultaneous opens or by too many connections held open at once.
 
 It is **not** a fix for SQLite's (or any single-writer, file-based database's) write-locking
 behavior. SQLite allows only one writer at a time against the file regardless of how many
