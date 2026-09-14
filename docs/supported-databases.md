@@ -324,4 +324,6 @@ these are the v2-only additions since then)
   INSERT-then-fetch-ID operation.
 - Oracle: `RequiresOutputParameterForReturning => true` is Oracle's sole positive case for that
   capability among all 16 dialects — every other RETURNING-capable database gets its generated
-  key via a result set, not an OUT parameter.
+  key via a result set, not an OUT parameter. (Among all 20 dialect classes — several
+  `SupportedDatabase` values, such as AuroraMySql/AuroraPostgreSql/SingleStore, share a
+  dialect class rather than getting their own.)
