@@ -1,6 +1,4 @@
-using System.Data;
 using pengdows.crud;
-using pengdows.crud.exceptions;
 
 namespace testbed.InterBase;
 
@@ -66,84 +64,4 @@ public class InterBaseTestProvider : TestProvider
         await sc.ExecuteNonQueryAsync();
     }
 
-    /// <summary>
-    /// Overrides the base class's duplicate-PK check with a raw-SQL insert instead of
-    /// <c>TableGateway.CreateAsync</c>. CONFIRMED live that the base version cannot actually force
-    /// a PK collision here: <see cref="InterBaseDialect"/>'s
-    /// <see cref="GeneratedKeyPlan.PrefetchSequence"/> plan makes <c>CreateAsync</c> fetch a fresh
-    /// generator value and overwrite the entity's (client-supplied, writable) <c>Id</c> on EVERY
-    /// call — including the base test's second call reusing the same entity object — so the two
-    /// inserts silently land under two different, non-colliding ids and no exception is ever
-    /// thrown ("[ErrorMapping] Expected DatabaseException for duplicate PK — none thrown"). A raw
-    /// INSERT with an explicit, repeated id bypasses the generator entirely and forces a genuine
-    /// PK violation, which is what this test exists to exercise — the rest of the base method
-    /// (syntax-error mapping) is unaffected by this issue and does not need overriding.
-    /// </summary>
-    protected override async Task TestErrorMapping()
-    {
-        var id = DateTime.UtcNow.Ticks % 1_000_000_000;
-
-        async Task InsertRaw()
-        {
-            var insert = _context.CreateSqlContainer();
-            insert.Query.Append(
-                $"INSERT INTO {_context.WrapObjectName("test_table")} " +
-                $"({_context.WrapObjectName("id")}, {_context.WrapObjectName("name")}, " +
-                $"{_context.WrapObjectName("description")}, {_context.WrapObjectName("value")}, " +
-                $"{_context.WrapObjectName("is_active")}, {_context.WrapObjectName("created_at")}, " +
-                $"{_context.WrapObjectName("created_by")}, {_context.WrapObjectName("updated_at")}, " +
-                $"{_context.WrapObjectName("updated_by")}) VALUES " +
-                $"({insert.MakeParameterName("p0")}, {insert.MakeParameterName("p1")}, " +
-                $"{insert.MakeParameterName("p2")}, {insert.MakeParameterName("p3")}, " +
-                $"{insert.MakeParameterName("p4")}, {insert.MakeParameterName("p5")}, " +
-                $"{insert.MakeParameterName("p6")}, {insert.MakeParameterName("p7")}, " +
-                $"{insert.MakeParameterName("p8")})");
-            insert.AddParameterWithValue("p0", DbType.Int64, id);
-            insert.AddParameterWithValue("p1", DbType.String, "Test");
-            insert.AddParameterWithValue("p2", DbType.String, "error-mapping-test");
-            insert.AddParameterWithValue("p3", DbType.Int32, 0);
-            insert.AddParameterWithValue("p4", DbType.Boolean, true);
-            insert.AddParameterWithValue("p5", DbType.DateTime, DateTime.UtcNow);
-            insert.AddParameterWithValue("p6", DbType.String, "testbed");
-            insert.AddParameterWithValue("p7", DbType.DateTime, DateTime.UtcNow);
-            insert.AddParameterWithValue("p8", DbType.String, "testbed");
-            await insert.ExecuteNonQueryAsync();
-        }
-
-        await InsertRaw();
-
-        try
-        {
-            await InsertRaw();
-            throw new Exception("[ErrorMapping] Expected DatabaseException for duplicate PK — none thrown");
-        }
-        catch (DatabaseException ex)
-        {
-            CheckOk("ErrorMapping.UniqueViolation", $"  [ErrorMapping] Unique violation → DatabaseException: OK ({ex.Message[..Math.Min(80, ex.Message.Length)]}...)");
-        }
-        finally
-        {
-            await CleanupTestRow(id);
-        }
-
-        var healthCount = await CountTestRows();
-        CheckOk("ErrorMapping.ConnectionHealth", $"  [ErrorMapping] Connection health after exception: OK (count={healthCount})");
-
-        var badSc = _context.CreateSqlContainer("SELECT * FROM");
-        DatabaseException? syntaxEx = null;
-        try
-        {
-            await badSc.ExecuteNonQueryAsync();
-            throw new Exception("[ErrorMapping] Expected DatabaseException for syntax error — none thrown");
-        }
-        catch (DatabaseException ex)
-        {
-            syntaxEx = ex;
-        }
-
-        if (string.IsNullOrWhiteSpace(syntaxEx?.Message))
-            throw new Exception("[ErrorMapping] Syntax error exception had empty message");
-
-        CheckOk("ErrorMapping.SyntaxError", $"  [ErrorMapping] Syntax error → DatabaseException: OK ({syntaxEx.Message[..Math.Min(80, syntaxEx.Message.Length)]}...)");
-    }
 }

@@ -22,4 +22,10 @@ dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTes
   --results-directory "${results}" \
   --logger "trx;LogFileName=IntegrationTests.trx"
 
+# testbed itself now covers a much narrower slice than the xUnit suite above: per database, it
+# spins up its own Testcontainers instance and runs table creation, a scalar-UDF smoke check, and
+# the DbMode/PreventDatabaseUnload idle-unload probe (a live cold-vs-warm reconnect measurement
+# that can't be expressed as an ordinary pooled-connection xUnit test) - see TestProvider.cs's
+# class remarks. CRUD/transaction/isolation/error-mapping/stored-proc coverage all live in the
+# IntegrationTests run above; this second run is not a duplicate of it.
 dotnet run -c Release --project "${root}/testbed"

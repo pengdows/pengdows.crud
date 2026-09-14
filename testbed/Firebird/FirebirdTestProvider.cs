@@ -17,14 +17,6 @@ public class FirebirdTestProvider : TestProvider
         this.context = context;
     }
 
-    /// <summary>
-    /// Firebird's default container database uses the NONE character set which only supports
-    /// ASCII. Override the description to ASCII-only; other round-trip assertions still run.
-    /// </summary>
-    protected override string RoundTripDescription => "Hello World ASCII round-trip test string";
-
-    protected override string RoundTripFidelityUnicodeText => "Hello World ASCII fidelity test string";
-
     public override async Task CreateTable()
     {
         var sqlContainer = context.CreateSqlContainer();

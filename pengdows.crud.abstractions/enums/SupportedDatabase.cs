@@ -20,7 +20,7 @@ namespace pengdows.crud.enums;
 [Flags]
 public enum SupportedDatabase : ulong
 {
-    Unknown = 0,// Always first
+    Unknown          = 0,         // Always first, defaults to a SQL 92 Dialect.
 
     PostgreSql       = 1UL << 0,  // Most standard-compliant (closest to SQL spec)
     SqlServer        = 1UL << 1,  // Strong compliance, with Microsoft-specific extensions
@@ -43,5 +43,5 @@ public enum SupportedDatabase : ulong
     Spanner          = 1UL << 18, // Google Cloud Spanner PostgreSQL interface (including Spanner Omni via PGAdapter)
     Informix         = 1UL << 19, // IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters
     SapHana          = 1UL << 20, // SAP HANA — column-store in-memory RDBMS, positional (?) parameters, MVCC isolation
-    InterBase        = 1UL << 21 // Embarcadero InterBase — Firebird's proprietary ancestor, named (@) parameters, ROWS-based paging, GEN_ID sequences
+    InterBase        = 1UL << 21  // Embarcadero InterBase — Firebird's proprietary ancestor, named (@) parameters, ROWS-based paging, GEN_ID sequences
 }

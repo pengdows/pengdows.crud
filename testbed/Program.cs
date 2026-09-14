@@ -1,5 +1,12 @@
 ﻿// See https://aka.ms/new-console-template for more information
-
+//
+// Entry point for the testbed's container-provisioning battery (see TestProvider.cs's own class
+// remarks for what "testbed" now covers post-consolidation with pengdows.crud.IntegrationTests):
+// per database, this spins up a real Testcontainers instance, creates the shared test table,
+// runs a scalar-UDF smoke check and the DbMode idle-unload probe, then disposes the container.
+// It is NOT the place to add CRUD/transaction/isolation/error-mapping coverage for a new
+// database — that belongs in pengdows.crud.IntegrationTests. run-integration-tests.sh runs both
+// this program and that xUnit suite as the two halves of "run the integration tests."
 
 #region
 

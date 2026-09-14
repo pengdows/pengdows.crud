@@ -15,17 +15,4 @@ public class InformixTestProvider : TestProvider
         : base(context, serviceProvider)
     {
     }
-
-    /// <summary>
-    /// CONFIRMED live: the container's database is created with the server's default
-    /// DB_LOCALE/CLIENT_LOCALE (no explicit locale requested at CREATE DATABASE time), which
-    /// this image resolves to a Latin-1-family locale — Western European accented characters
-    /// (as in the base <see cref="TestProvider.RoundTripDescription"/>) round-trip fine, but
-    /// Polish/Latin-2 characters fail with "ERROR [HY000] [Informix][Informix ODBC
-    /// Driver]Inexact character conversion during translation." Overridden to Latin-1-safe text
-    /// rather than attempting to reconfigure the container's locale, matching the pattern this
-    /// property's own doc comment already describes for limited-charset databases.
-    /// </summary>
-    protected override string RoundTripFidelityUnicodeText =>
-        "Héllø Wörld résumé café naïve ñ åæø";
 }
