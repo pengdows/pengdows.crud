@@ -389,6 +389,66 @@ public sealed class StormGateConnectionInterceptorTests
         // caller behavior PermitBox's finalizer exists to cover.
     }
 
+    // Item from review: an explicitly-released permit (ReleasePermit / the replace branch in
+    // MarkPermitHeld) called box.Permit.Dispose() directly without GC.SuppressFinalize(box), so
+    // the PermitBox still went onto the finalization queue and survived an extra GC generation
+    // for no reason — pure allocation/GC pressure on the connection-open/close hot path, not a
+    // correctness bug (StormGate.StormGatePermit.Dispose() is idempotent by design, see its
+    // ReleaseState — a redundant finalizer-driven Dispose() would have been a safe no-op, not a
+    // double-release). Proven via PermitBoxFinalizerRunCount, a test-only counter incremented by
+    // PermitBox's finalizer: after an explicit release, GC.SuppressFinalize should mean that
+    // finalizer never runs, even after forcing collection.
+    [Fact]
+    public void ExplicitlyReleasedPermit_SuppressesFinalization_FinalizerNeverRuns()
+    {
+        var dbPath = TempDbPath();
+        try
+        {
+            using var stormGate = CreateGate(dbPath, maxConcurrentOpens: 1, TimeSpan.FromMilliseconds(150));
+            var interceptor = new StormGateConnectionInterceptor(stormGate);
+
+            // Drain any finalizer backlog left by an EARLIER test in this class (in particular
+            // PermitIsReleased_WhenTrackedConnectionIsGarbageCollectedWithoutBeingReleased above,
+            // which deliberately abandons a PermitBox) before taking the baseline snapshot —
+            // PermitBoxFinalizerRunCount is process-wide, and without this the finalizer thread
+            // finishing that earlier test's work mid-way through this one's own GC loop below
+            // would look identical to a genuine regression here.
+            for (var i = 0; i < 5; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            var before = Interlocked.Read(ref StormGateConnectionInterceptor.PermitBoxFinalizerRunCount);
+
+            AcquireAndExplicitlyReleasePermit(interceptor);
+
+            for (var i = 0; i < 5; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            var after = Interlocked.Read(ref StormGateConnectionInterceptor.PermitBoxFinalizerRunCount);
+            Assert.Equal(before, after);
+        }
+        finally
+        {
+            File.Delete(dbPath);
+        }
+    }
+
+    // Isolated into its own non-inlined method for the same reason as AcquireAndAbandonPermit
+    // above — no surviving stack-local root once this method returns.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void AcquireAndExplicitlyReleasePermit(StormGateConnectionInterceptor interceptor)
+    {
+        var connection = (SqliteConnection)SqliteFactory.Instance.CreateConnection()!;
+        interceptor.AcquirePermit(connection);
+        interceptor.ReleasePermit(connection);
+        connection.Dispose();
+    }
+
     [Fact]
     public void Constructor_ThrowsForNullStormGate()
     {

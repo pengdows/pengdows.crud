@@ -40,6 +40,12 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
     private readonly ConditionalWeakTable<DbConnection, PermitBox> _heldPermits = new();
     private readonly object _permitLock = new();
 
+    // Test-only observability hook: incremented by PermitBox's finalizer, exposed via
+    // InternalsVisibleTo so StormGateConnectionInterceptorTests can prove GC.SuppressFinalize
+    // (see MarkPermitHeld/ReleasePermit) actually prevents that finalizer from running after an
+    // explicit release, instead of just trusting the call is there.
+    internal static long PermitBoxFinalizerRunCount;
+
     public StormGateConnectionInterceptor(StormGate stormGate)
     {
         _stormGate = stormGate ?? throw new ArgumentNullException(nameof(stormGate));
@@ -55,15 +61,29 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         // nothing left to dispose Permit. Without this finalizer that permanently shrinks the
         // shared StormGate's admission budget by one slot per occurrence. Only Permit is
         // touched here — never the connection, which this box holds no reference to anyway.
+        //
+        // Every explicit-release call site (ReleasePermit, and the replace branch in
+        // MarkPermitHeld) calls GC.SuppressFinalize(box) right after disposing Permit, so this
+        // finalizer only actually runs for the abandoned-connection case above — not on every
+        // ordinary connection close, which would otherwise put one PermitBox per connection open
+        // onto the finalization queue for no reason (extra GC-generation survival on the hot
+        // path). A redundant Dispose() call reaching this finalizer anyway (if that
+        // SuppressFinalize call were ever missed) would still be safe, not a double-release:
+        // StormGate.StormGatePermit.Dispose() is idempotent by design (see its ReleaseState).
+        // catch (not catch (ObjectDisposedException)) is deliberate: an unhandled exception in a
+        // finalizer terminates the process regardless of its type, so this must never let
+        // anything escape, including whatever else StormGate.ReleaseLease() might someday throw.
         ~PermitBox()
         {
+            Interlocked.Increment(ref PermitBoxFinalizerRunCount);
             try
             {
                 Permit.Dispose();
             }
-            catch (ObjectDisposedException)
+            catch
             {
-                // The owning StormGate had already torn down its semaphore; nothing to release.
+                // The owning StormGate had already torn down its semaphore, or ReleaseLease
+                // failed for some other reason; either way, nothing left to release.
             }
         }
     }
@@ -184,6 +204,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
             if (_heldPermits.TryGetValue(connection, out var existing))
             {
                 existing.Permit.Dispose();
+                GC.SuppressFinalize(existing);
             }
             else
             {
@@ -194,7 +215,11 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
         }
     }
 
-    private void ReleasePermit(DbConnection connection)
+    // internal (not private) so StormGateConnectionInterceptorTests can trigger the explicit-
+    // release path directly on a raw, never-opened connection — the same reason AcquirePermit
+    // above is internal: such a connection's ADO.NET State never actually transitions, so the
+    // StateChange subscription this method normally fires through never runs.
+    internal void ReleasePermit(DbConnection connection)
     {
         lock (_permitLock)
         {
@@ -203,6 +228,7 @@ public sealed class StormGateConnectionInterceptor : DbConnectionInterceptor
                 _heldPermits.Remove(connection);
                 connection.StateChange -= OnConnectionStateChange;
                 box.Permit.Dispose();
+                GC.SuppressFinalize(box);
             }
         }
     }
