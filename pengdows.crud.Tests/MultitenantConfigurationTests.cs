@@ -42,12 +42,12 @@ public class AuditValueResolver : IAuditValueResolver
     }
 }
 
-public class MultitenantIntegrationTests : IAsyncLifetime
+public class MultitenantConfigurationTests : IAsyncLifetime
 {
     private readonly IServiceProvider _provider;
     private readonly ITenantContextRegistry _tenantRegistry;
 
-    public MultitenantIntegrationTests()
+    public MultitenantConfigurationTests()
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder()

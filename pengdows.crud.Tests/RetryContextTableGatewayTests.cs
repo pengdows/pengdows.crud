@@ -19,7 +19,7 @@ namespace pengdows.crud.Tests;
 /// per-call context happened to trigger the cache miss, so it would ALSO leak spurious commands
 /// into a RetryContext's queue the first time a given dialect was used with it.
 /// </summary>
-public class RetryContextTableGatewayIntegrationTests
+public class RetryContextTableGatewayTests
 {
     [Table("rc_gateway_test")]
     private sealed class GatewayTestEntity

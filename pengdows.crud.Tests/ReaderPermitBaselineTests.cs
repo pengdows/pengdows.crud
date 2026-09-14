@@ -16,7 +16,7 @@ namespace pengdows.crud.Tests;
 // baseline after each of these exit shapes, not just that the mocked sub-objects' Dispose() was
 // called. This fills that integration-level gap for the two most common exit shapes: draining to
 // EOF, and closing explicitly before EOF.
-public class ReaderPermitBaselineIntegrationTests
+public class ReaderPermitBaselineTests
 {
     private static DatabaseContext CreateContext(int maxConcurrentReads = 1)
     {

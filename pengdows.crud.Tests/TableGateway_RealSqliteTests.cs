@@ -11,11 +11,11 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLifetime
+public class TableGateway_RealSqliteTests : RealSqliteContextTestBase, IAsyncLifetime
 {
     private readonly TableGateway<TestEntity, int> entityHelper;
 
-    public TableGateway_IntegrationTests()
+    public TableGateway_RealSqliteTests()
     {
         // Create an in-memory SQLite connection
         // _connection = new SqliteConnection("Data Source=:memory:");
@@ -257,34 +257,26 @@ public class TableGateway_IntegrationTests : RealSqliteContextTestBase, IAsyncLi
     [Fact]
     public async Task TransactionEntity()
     {
-        try
-        {
-            await BuildTestTable();
-            var s = Guid.NewGuid().ToString();
-            var tmp = new TestEntity { Name = s };
-            var create = entityHelper.BuildCreate(tmp);
-            await create.ExecuteNonQueryAsync();
+        await BuildTestTable();
+        var s = Guid.NewGuid().ToString();
+        var tmp = new TestEntity { Name = s };
+        var create = entityHelper.BuildCreate(tmp);
+        await create.ExecuteNonQueryAsync();
 
-            var ctx = Context.BeginTransaction();
-            var tmp2 = new TestEntity { Name = s + "transaction" };
-            var tsc = entityHelper.BuildCreate(tmp2, ctx);
-            await tsc.ExecuteNonQueryAsync();
+        var ctx = Context.BeginTransaction();
+        var tmp2 = new TestEntity { Name = s + "transaction" };
+        var tsc = entityHelper.BuildCreate(tmp2, ctx);
+        await tsc.ExecuteNonQueryAsync();
 
-            var retrieveInsideTransaction = entityHelper.BuildBaseRetrieve(s, ctx);
-            var retrieve = entityHelper.BuildBaseRetrieve(s);
-            var listInside = await entityHelper.LoadListAsync(retrieveInsideTransaction); //will be inside transaction
-            ctx.Commit();
-            var listOutside = await entityHelper.LoadListAsync(retrieve); //will be outside transaction
-            //Due to this being a singleconnection, you can't get a writer outside the connection  
-            Assert.True(listInside.Count > 1);
-            Assert.True(listInside.Count > 1);
+        var retrieveInsideTransaction = entityHelper.BuildBaseRetrieve(s, ctx);
+        var retrieve = entityHelper.BuildBaseRetrieve(s);
+        var listInside = await entityHelper.LoadListAsync(retrieveInsideTransaction); //will be inside transaction
+        ctx.Commit();
+        var listOutside = await entityHelper.LoadListAsync(retrieve); //will be outside transaction
+        //Due to this being a singleconnection, you can't get a writer outside the connection
+        Assert.True(listInside.Count > 1);
 
-            var loaded = listOutside[0];
-            Assert.Equal(s, loaded.Name);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex);
-        }
+        var loaded = listOutside[0];
+        Assert.Equal(s, loaded.Name);
     }
 }

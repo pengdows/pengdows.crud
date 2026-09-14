@@ -10,10 +10,11 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Integration tests for CancellationToken support across TableGateway, SqlContainer, and TrackedReader.
-/// Uses FakeDb with data persistence enabled.
+/// Unit tests for CancellationToken propagation across TableGateway, SqlContainer, and TrackedReader.
+/// Uses fakeDb with data persistence enabled — no real database or driver is involved; this exercises
+/// pengdows.crud's own cancellation plumbing, not provider behavior.
 /// </summary>
-public class CancellationTokenIntegrationTests : IAsyncLifetime
+public class CancellationTokenTests : IAsyncLifetime
 {
     private TableGateway<TestEntity, int> _helper = null!;
     private IDatabaseContext _context = null!;
