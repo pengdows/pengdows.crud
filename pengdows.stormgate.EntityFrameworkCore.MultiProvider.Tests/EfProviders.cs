@@ -1,5 +1,8 @@
 using System.Data.Common;
 using IBM.EntityFrameworkCore;
+#if NET10_0_OR_GREATER
+using DuckDB.EFCoreProvider.Extensions;
+#endif
 
 namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 
@@ -71,32 +74,48 @@ namespace pengdows.stormgate.EntityFrameworkCore.MultiProvider.Tests;
 ///   and MariaDB are net8.0-only in this project's MemberData lists (see the #if NET8_0 guards
 ///   below) because Pomelo.EntityFrameworkCore.MySql has no EF Core 10-compatible release yet.
 ///
-/// DuckDB is absent from both MemberData lists above, but NOT because StormGate is incompatible
-/// with it — it is absent because EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb has
-/// no overload accepting an arbitrary DbConnection at all (only a DuckDbConnectionOptions/
-/// connection-string object), so fakeDb cannot plug into it the way this file's two tiers are
-/// tested. That is a statement about this file's fakeDb-injection testing *method*, not about
-/// whether StormGateConnectionInterceptor can actually govern DuckDB. Reflection over the package
-/// shows UseDuckDb is a thin layer over Microsoft.EntityFrameworkCore.Sqlite — the DbConnection
-/// object EF Core actually opens/closes is a genuine Microsoft.Data.Sqlite.SqliteConnection (with
-/// DuckDB's own engine substituted in via its native SQLite-ABI-compatible library), the exact
-/// same connection type already proven fully Tier 1 and Tier 2 compatible above. Confirmed
-/// directly — not assumed — by <see cref="DuckDbInterceptorRealProviderTests"/>, which drives a
-/// real embedded DuckDB engine (no Docker, no fakeDb) through StormGateConnectionInterceptor and
-/// proves saturation actually blocks a second concurrent open.
+/// DuckDB has THREE independent EF Core providers investigated here, and only the third is wired
+/// into ConnectionControlCapable/DeepTestCapable — the first two remain excluded, for two
+/// different documented reasons that have nothing to do with StormGate itself:
 ///
+/// - EnergyExemplar.EntityFrameworkCore.DuckDb 1.0.2's UseDuckDb has no overload accepting an
+///   arbitrary DbConnection at all (only a DuckDbConnectionOptions/connection-string object), so
+///   fakeDb cannot plug into it the way this file's two tiers are tested. That is a statement
+///   about this file's fakeDb-injection testing *method*, not about whether
+///   StormGateConnectionInterceptor can actually govern it. Reflection over the package shows
+///   UseDuckDb is a thin layer over Microsoft.EntityFrameworkCore.Sqlite — the DbConnection object
+///   EF Core actually opens/closes is a genuine Microsoft.Data.Sqlite.SqliteConnection (with
+///   DuckDB's own engine substituted in via its native SQLite-ABI-compatible library), the exact
+///   same connection type already proven fully Tier 1 and Tier 2 compatible above. Confirmed
+///   directly — not assumed — by <see cref="DuckDbInterceptorRealProviderTests"/>, which drives a
+///   real embedded DuckDB engine (no Docker, no fakeDb) through StormGateConnectionInterceptor and
+///   proves saturation actually blocks a second concurrent open.
 /// - DuckDB.EFCore (github.com/denis-ivanov/DuckDB.EFCore, net10.0-only, a second and independent
-///   DuckDB EF Core provider from EnergyExemplar's above): Tier 1 no — unlike EnergyExemplar's
-///   package, its UseDuckDB DOES accept an arbitrary DbConnection at the API level, so it was
-///   actually tried against fakeDb via ConnectionControlCapable. It failed immediately with
-///   InvalidCastException: DuckDBRelationalConnection.OpenDbConnectionAsync casts the incoming
-///   connection to concrete DuckDB.NET.Data.DuckDBConnection unconditionally, one layer earlier
-///   than the command-creation-time casts documented for Oracle/Firebird/Db2 above, so it doesn't
-///   survive even Tier 1. Same underlying class of problem as those three, though — a hardcoded
+///   DuckDB EF Core provider): Tier 1 no — unlike EnergyExemplar's package, its UseDuckDB DOES
+///   accept an arbitrary DbConnection at the API level, so it was actually tried against fakeDb
+///   via ConnectionControlCapable. It failed immediately with InvalidCastException:
+///   DuckDBRelationalConnection.OpenDbConnectionAsync casts the incoming connection to concrete
+///   DuckDB.NET.Data.DuckDBConnection unconditionally, one layer earlier than the
+///   command-creation-time casts documented for Oracle/Firebird/Db2 above, so it doesn't even
+///   survive Tier 1. Same underlying class of problem as those three, though — a hardcoded
 ///   concrete-type cast inside the provider's own code, not a StormGate/pengdows.crud gap — and
 ///   confirmed directly, not assumed, by <see cref="DuckDBEFCoreInterceptorRealProviderTests"/>,
 ///   which proves StormGateConnectionInterceptor governs a genuine DuckDBConnection (no fakeDb, no
 ///   Docker) exactly as it does every provider above.
+/// - DuckDB.EFCoreProvider (github.com/skuirrels/DuckDB.EFCoreProvider, net10.0-only, a THIRD and
+///   independent DuckDB EF Core provider from both of the above): Tier 1 AND Tier 2 yes, as of
+///   1.25.0. AddEntityFrameworkDuckDB() now calls
+///   serviceCollection.TryAddSingleton&lt;DbProviderFactory&gt;(DuckDBClientFactory.Instance), and
+///   UseDuckDB(DbConnection, contextOwnsConnection, ...) (confirmed via ilspycmd decompilation of
+///   DuckDBDbContextOptionsBuilderExtensions — the overload existed before 1.25.0 too, but only
+///   started working end to end against a substituted connection at that version) accepts an
+///   arbitrary connection and drives it through real queries, SaveChanges, and EnsureCreated. This
+///   is the only one of the three DuckDB providers included in ConnectionControlCapable/
+///   DeepTestCapable below (both net10.0-gated, matching the package's own TFM support) and in
+///   Configure()'s switch. Confirmed via the package's own public GitHub source rather than its
+///   README (which had not caught up to the 1.25.0 change): its functional-test suite as of
+///   1.25.0 depends directly on pengdows.crud.fakeDb — see the .csproj comment next to its
+///   PackageReference for the exact file.
 /// </summary>
 public static class EfProviders
 {
@@ -132,13 +151,13 @@ public static class EfProviders
         yield return new object[] { SupportedDatabase.Firebird };
         yield return new object[] { SupportedDatabase.Snowflake };
         yield return new object[] { SupportedDatabase.Db2 };
-        // SupportedDatabase.DuckDB (via DuckDB.EFCore, net10.0-only) is deliberately absent here —
-        // tried and found to fail even Tier 1: DuckDBRelationalConnection.OpenDbConnectionAsync
-        // casts the incoming connection to concrete DuckDB.NET.Data.DuckDBConnection
-        // unconditionally, so a fakeDbConnection throws InvalidCastException on Open(), before a
-        // command is ever created. See DuckDBEFCoreInterceptorRealProviderTests for the real,
-        // non-fakeDb proof that StormGateConnectionInterceptor governs it against a genuine
-        // DuckDBConnection regardless.
+        // SupportedDatabase.DuckDB here means DuckDB.EFCoreProvider (skuirrels) specifically — the
+        // only one of the three DuckDB EF Core providers investigated (see the class doc comment)
+        // that accepts a substituted fakeDbConnection end to end. net10.0-only, matching the
+        // package's own TFM support.
+#if NET10_0_OR_GREATER
+        yield return new object[] { SupportedDatabase.DuckDB };
+#endif
     }
 
     /// <summary>
@@ -177,6 +196,9 @@ public static class EfProviders
             yield return new object[] { SupportedDatabase.MariaDb };
         }
         yield return new object[] { SupportedDatabase.Snowflake };
+#if NET10_0_OR_GREATER
+        yield return new object[] { SupportedDatabase.DuckDB };
+#endif
     }
 
     public static void Configure(SupportedDatabase database, DbContextOptionsBuilder builder, DbConnection connection)
@@ -218,12 +240,18 @@ public static class EfProviders
                 builder.UseDb2(connection, _ => { });
                 break;
 
-            // SupportedDatabase.DuckDB (DuckDB.EFCore) is deliberately NOT wired up here — it
-            // fails even Tier 1 against fakeDb (see the class doc comment above and
-            // DuckDBEFCoreInterceptorRealProviderTests), so nothing ever calls Configure() with
-            // it, and every caller of Configure() is driven exclusively by MemberData lists or
-            // hardcoded SupportedDatabase literals, neither of which include it. A case here
-            // would be genuinely unreachable dead code.
+            // SupportedDatabase.DuckDB routes to DuckDB.EFCoreProvider (skuirrels) specifically —
+            // see the class doc comment for why this is the only one of the three investigated
+            // DuckDB EF Core providers wired up here. denis-ivanov's DuckDB.EFCore is deliberately
+            // NOT wired up: it fails even Tier 1 against fakeDb (see
+            // DuckDBEFCoreInterceptorRealProviderTests), and nothing calls Configure() with it,
+            // since MemberData lists and hardcoded SupportedDatabase literals both route DuckDB
+            // through this case instead — a separate case for it would be unreachable dead code.
+#if NET10_0_OR_GREATER
+            case SupportedDatabase.DuckDB:
+                builder.UseDuckDB(connection, contextOwnsConnection: false);
+                break;
+#endif
 
             default:
                 throw new NotSupportedException(

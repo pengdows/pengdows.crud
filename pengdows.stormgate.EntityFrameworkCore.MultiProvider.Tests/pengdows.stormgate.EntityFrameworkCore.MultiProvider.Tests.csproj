@@ -139,6 +139,39 @@
          DuckDBEFCoreInterceptorRealProviderTests can prove StormGateConnectionInterceptor governs
          a genuine DuckDBConnection directly, bypassing fakeDb entirely. -->
     <PackageReference Include="DuckDB.EFCore" Version="1.0.4" />
+    <!-- A THIRD, independent DuckDB EF Core provider (github.com/skuirrels/DuckDB.EFCoreProvider,
+         unrelated to both EnergyExemplar's package and denis-ivanov's DuckDB.EFCore above) —
+         net10.0-only (its nuspec has only a net10.0 dependency group). As of 1.25.0 it added
+         support for a caller-registered DbProviderFactory: AddEntityFrameworkDuckDB() now calls
+         serviceCollection.TryAddSingleton<DbProviderFactory>(DuckDBClientFactory.Instance), so a
+         caller-registered factory (TryAddSingleton losing to an already-registered one) wins, and
+         UseDuckDB(DbConnection) accepts an arbitrary substituted connection end-to-end through
+         queries, SaveChanges, and EnsureCreated (confirmed by reading the package's own public
+         GitHub source/CHANGELOG for 1.25.0 — not assumed from the NuGet listing alone, since its
+         README hadn't caught up at the time this was added). Its own functional-test suite as of
+         1.25.0 depends directly on pengdows.crud.fakeDb (pengdows.crud.fakeDb.CapturingFakeDbConnection
+         in DuckDB.EFCoreProvider.FunctionalTests/TestUtilities/CapturingFakeDbConnection.cs) to
+         validate the substitution — the strongest possible external confirmation that fakeDb
+         injection actually works against this provider, from the provider author's own test code
+         rather than from testing here first. See EfProviders.cs for how this is wired into the
+         Tier 1/Tier 2 MemberData lists and Configure().
+
+         Dependency note, verified live rather than assumed: DuckDB.EFCoreProvider depends on
+         Skuirrels.DuckDB.NET.Data.Full/Skuirrels.DuckDB.NET.Bindings.Full — a performance fork of
+         DuckDB.NET.Data.Full/DuckDB.NET.Bindings.Full that ships its assemblies at the exact same
+         path (lib/net10.0/DuckDB.NET.Data.dll etc.), so it cannot coexist as a SEPARATE assembly
+         alongside the official package this project already references (for EnergyExemplar's
+         package and DuckDB.EFCore above) — its own changelog says as much ("must not be installed
+         alongside the official packages"). In practice this project doesn't end up with two
+         assemblies at all: NuGet's own conflict resolution picks one physical DuckDB.NET.Data.dll
+         for the whole project (confirmed via project.assets.json and the copied output DLL's file
+         version — Skuirrels' 1.5.5.4 wins over the official 1.5.5), and every DuckDB-related test
+         in this project — EnergyExemplar's real-provider test, DuckDB.EFCore's real-provider test,
+         and this package's own fakeDb Tier 1/Tier 2 theories — passed against that single resolved
+         assembly. Worth re-checking if a future version bump of either package changes which one
+         wins, or introduces an actual behavioral difference between the fork and the official
+         build. -->
+    <PackageReference Include="DuckDB.EFCoreProvider" Version="1.26.0" />
   </ItemGroup>
 
   <ItemGroup>
