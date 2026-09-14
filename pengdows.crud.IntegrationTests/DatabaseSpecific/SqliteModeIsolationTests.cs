@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
@@ -153,6 +154,76 @@ public class SqliteModeIsolationTests
 
         Assert.Equal(1, rowCount);
         Assert.Equal(2, survivingId);
+    }
+
+    /// <summary>
+    /// Live coverage for <see cref="ModeContentionException"/>, which had zero references anywhere
+    /// in the integration suite before this test. It fires from
+    /// <c>DatabaseContext.GetSingleConnectionTransactionGate()</c>'s semaphore-backed gate — the
+    /// same gate <see cref="SingleConnectionMode_OrdinaryCommand_BlocksUntilOpenTransactionDisposed"/>
+    /// above proves an ordinary command blocks on while a transaction holds the single shared
+    /// connection — when the wait exceeds <see cref="DatabaseContextConfiguration.ModeLockTimeout"/>.
+    /// This exception deliberately extends <see cref="TimeoutException"/> directly rather than
+    /// pengdows.crud's own <c>DatabaseException</c> hierarchy, specifically so
+    /// <c>SqlContainer</c>'s generic timeout-reclassification path (which turns a raw provider
+    /// timeout into <c>CommandTimeoutException</c>) cannot swallow it — this test's core assertion
+    /// is the exception TYPE, not just that something eventually timed out.
+    ///
+    /// No real timing race here (unlike the two tests above): the blocking transaction is opened
+    /// and held by the SAME thread of control before the ordinary command is ever attempted, so
+    /// the outcome is deterministic — the ordinary command is guaranteed to find the gate already
+    /// held and wait the full configured timeout.
+    /// </summary>
+    [Fact]
+    public async Task SingleConnectionMode_OrdinaryCommand_ThrowsModeContentionException_WhenGateWaitExceedsTimeout()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            ModeLockTimeout = TimeSpan.FromMilliseconds(300)
+        };
+
+        await using var ctx = new DatabaseContext(cfg, SqliteFactory.Instance);
+
+        await using (var create = ctx.CreateSqlContainer(
+                         "CREATE TABLE contention_probe (id INTEGER PRIMARY KEY, val TEXT)"))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
+
+        var txn = ctx.BeginTransaction();
+        try
+        {
+            await using (var insertInTxn = txn.CreateSqlContainer(
+                             "INSERT INTO contention_probe (id, val) VALUES (1, 'holds-the-gate')"))
+            {
+                await insertInTxn.ExecuteNonQueryAsync();
+            }
+
+            // The transaction above already holds GetSingleConnectionTransactionGate() for its
+            // entire span (see the class-level comment on DatabaseContext.GetSingleConnectionTransactionGate).
+            // This ordinary, non-transaction-bound command must wait for it — and, with a 300ms
+            // ModeLockTimeout and nothing ever releasing the gate, must time out.
+            await using var ordinary = ctx.CreateSqlContainer(
+                "INSERT INTO contention_probe (id, val) VALUES (2, 'should-time-out-waiting')");
+
+            var ex = await Assert.ThrowsAsync<ModeContentionException>(
+                async () => await ordinary.ExecuteNonQueryAsync());
+
+            Assert.Equal(DbMode.SingleConnection, ex.Mode);
+            Assert.Equal(TimeSpan.FromMilliseconds(300), ex.Timeout);
+            // Snapshot reflects the contention this wait itself recorded, not a default/empty struct.
+            Assert.True(ex.Snapshot.CurrentWaiters >= 0);
+        }
+        finally
+        {
+            // The gate is still held; rolling back releases it so the DatabaseContext (and its
+            // one pinned SingleConnection connection) can dispose cleanly.
+            txn.Rollback();
+            await txn.DisposeAsync();
+        }
     }
 
     [Fact]

@@ -3,7 +3,9 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Npgsql;
 using pengdows.crud.attributes;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -35,6 +37,44 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
         await using var extension = context.CreateSqlContainer("CREATE EXTENSION IF NOT EXISTS hstore");
         await extension.ExecuteNonQueryAsync();
 
+        // Npgsql caches a connection string's Postgres type catalog (OIDs for every type it knows
+        // about, including extension/plugin types like hstore) the first time ANY connection for
+        // that exact connection string opens — and pengdows.crud's own DatabaseContext already
+        // opened at least one connection during product/version detection before this method ever
+        // ran, i.e. before the CREATE EXTENSION above existed. Confirmed live with a minimal repro
+        // (open a connection, THEN create the extension, THEN try to bind an HStore value on the
+        // same connection string): it fails with "The NpgsqlDbType 'Hstore' isn't present in your
+        // database" even though the extension is genuinely installed — NOT because pengdows.crud's
+        // NpgsqlDbType.Hstore binding (ProviderParameterFactory.cs) is wrong, and NOT because of a
+        // missing NpgsqlDataSourceBuilder.UseHstore() opt-in (that method doesn't even exist in
+        // Npgsql 9 — Hstore needs no such opt-in once the type catalog is fresh). The fix is
+        // NpgsqlConnection.ReloadTypesAsync(), an instance method requiring an already-open,
+        // credentialed connection. Building an independent connection from a copied-out connection
+        // string doesn't work either — Npgsql's own NpgsqlConnection.ConnectionString getter omits
+        // the password on readback (standard ADO.NET provider behavior, confirmed live: "No
+        // password has been provided"), on top of IDatabaseContext.ConnectionString being
+        // deliberately redacted. So this borrows a connection through pengdows.crud's own
+        // (internal, InternalsVisibleTo-friend) connection-acquisition path and calls
+        // ReloadTypesAsync directly on the real, already-authenticated Npgsql connection object —
+        // safe to do mid-pool-lifecycle since it only refreshes cached type metadata and touches no
+        // transaction/data state — then returns the connection through the normal API immediately
+        // after, exactly like ConnectionManagement tests already borrow/return connections.
+        var borrowed = context.GetConnection(ExecutionType.Write);
+        try
+        {
+            if (borrowed.State != ConnectionState.Open)
+            {
+                await borrowed.OpenAsync();
+            }
+
+            var underlying = ((IInternalConnectionWrapper)borrowed).UnderlyingConnection;
+            await ((NpgsqlConnection)underlying).ReloadTypesAsync();
+        }
+        finally
+        {
+            context.CloseAndDisposeConnection(borrowed);
+        }
+
         await using var table = context.CreateSqlContainer($"""
             CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(context, "advanced_type_roundtrip")} (
                 id              INTEGER PRIMARY KEY,
@@ -49,7 +89,8 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
                 inet_value      INET NOT NULL,
                 cidr_value      CIDR NOT NULL,
                 mac_value       MACADDR NOT NULL,
-                interval_value  INTERVAL NOT NULL
+                interval_value  INTERVAL NOT NULL,
+                hstore_value    HSTORE NOT NULL
             )
             """);
         await table.ExecuteNonQueryAsync();
@@ -81,7 +122,13 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
                 InetValue = Inet.Parse("192.168.1.20"),
                 CidrValue = Cidr.Parse("192.168.1.0/24"),
                 MacValue = MacAddress.Parse("08:00:2B:01:02:03"),
-                IntervalValue = new PostgreSqlInterval(3, 2, 4_000_000)
+                IntervalValue = new PostgreSqlInterval(3, 2, 4_000_000),
+                HStoreValue = new HStore(new Dictionary<string, string?>
+                {
+                    ["role"] = "admin",
+                    ["nickname"] = null,
+                    ["needs quoting"] = "has, special=>chars"
+                })
             };
 
             var gateway = new TableGateway<PostgreSqlAdvancedTypeEntity, int>(context);
@@ -121,6 +168,11 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
             // months are not representable in TimeSpan and are therefore not
             // asserted as part of this provider round-trip.
             Assert.Equal(expected.IntervalValue.ToTimeSpan(), actual.IntervalValue.ToTimeSpan());
+
+            Assert.Equal(expected.HStoreValue, actual.HStoreValue);
+            Assert.Equal("admin", actual.HStoreValue["role"]);
+            Assert.Null(actual.HStoreValue["nickname"]);
+            Assert.Equal("has, special=>chars", actual.HStoreValue["needs quoting"]);
         });
     }
 }
@@ -141,4 +193,5 @@ internal sealed class PostgreSqlAdvancedTypeEntity
     [Column("cidr_value", DbType.Object)] public Cidr CidrValue { get; set; }
     [Column("mac_value", DbType.Object)] public MacAddress MacValue { get; set; }
     [Column("interval_value", DbType.Object)] public PostgreSqlInterval IntervalValue { get; set; }
+    [Column("hstore_value", DbType.Object)] public HStore HStoreValue { get; set; }
 }

@@ -226,4 +226,115 @@ public class StoredProcedureTests : DatabaseTestBase
             }
         });
     }
+
+    /// <summary>
+    /// Oracle requires stored procedures to be invoked inside a PL/SQL anonymous block
+    /// (<c>ProcWrappingStyle.Oracle</c> — <c>BEGIN proc(args); END;</c>); ExecutionType is ignored,
+    /// the same block syntax is used for reads and writes. Proven here via the "automatic" call
+    /// pattern (<c>CommandType.StoredProcedure</c> triggers <c>WrapForStoredProc</c> internally,
+    /// same shape as the SQL Server OUTPUT test above) with a real OUT parameter, against a live
+    /// Oracle server — <c>fakeDb</c> cannot prove the PL/SQL block actually executes and binds an
+    /// OUT parameter back into the caller's <c>DbParameter</c>.
+    /// </summary>
+    [SkippableFact]
+    public Task StoredProc_AnonymousBlock_WithOutParameter_WorksOnOracle()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.Oracle)
+            {
+                return;
+            }
+
+            var procName = context.WrapObjectName("sp_pengdows_oracle_test");
+            var createSql =
+                $"CREATE OR REPLACE PROCEDURE {procName}(input_value IN NUMBER, output_value OUT NUMBER) AS\n" +
+                "BEGIN\n" +
+                "  output_value := input_value + 1;\n" +
+                "END;";
+
+            await context.CreateSqlContainer(createSql).ExecuteNonQueryAsync();
+
+            try
+            {
+                await using var container = context.CreateSqlContainer("sp_pengdows_oracle_test");
+                container.AddParameterWithValue("input_value", DbType.Int32, 41);
+                var output = container.AddParameterWithValue("output_value", DbType.Int32, 0,
+                    ParameterDirection.Output);
+
+                await container.ExecuteNonQueryAsync(CommandType.StoredProcedure);
+
+                Assert.Equal(42, Convert.ToInt32(output.Value));
+                Output.WriteLine($"{provider}: PL/SQL anonymous block invoked, OUT result = {output.Value}");
+            }
+            finally
+            {
+                await context.CreateSqlContainer($"DROP PROCEDURE {procName}").ExecuteNonQueryAsync();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Firebird invokes stored procedures via EXECUTE PROCEDURE syntax
+    /// (<c>ProcWrappingStyle.ExecuteProcedure</c>) and — unlike every style except PostgreSQL's —
+    /// ExecutionType is semantically significant: Read renders <c>SELECT * FROM proc(args)</c>
+    /// (treating the procedure as a table function), Write renders
+    /// <c>EXECUTE PROCEDURE proc(args)</c>. Both syntaxes are proven here, against a real Firebird
+    /// server, for the same selectable procedure (a <c>RETURNS</c> clause + <c>SUSPEND</c>) —
+    /// <c>fakeDb</c> can't prove either PSQL shape actually executes.
+    /// </summary>
+    [SkippableFact]
+    public Task StoredProc_ExecuteProcedure_BothReadAndWriteSyntax_WorkOnFirebird()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.Firebird)
+            {
+                return;
+            }
+
+            var procName = context.WrapObjectName("sp_pengdows_fb_test");
+            var createSql =
+                $"CREATE OR ALTER PROCEDURE {procName} (input_value INTEGER)\n" +
+                "RETURNS (output_value INTEGER)\n" +
+                "AS\n" +
+                "BEGIN\n" +
+                "  output_value = input_value + 1;\n" +
+                "  SUSPEND;\n" +
+                "END";
+
+            await context.CreateSqlContainer(createSql).ExecuteNonQueryAsync();
+
+            try
+            {
+                // Read style: SELECT * FROM proc(args) — proc treated as a table function.
+                await using (var readContainer = context.CreateSqlContainer("sp_pengdows_fb_test"))
+                {
+                    readContainer.AddParameterWithValue("input_value", DbType.Int32, 41);
+                    var readResult =
+                        await readContainer.ExecuteScalarRequiredAsync<int>(CommandType.StoredProcedure);
+                    Assert.Equal(42, readResult);
+                }
+
+                // Write style: EXECUTE PROCEDURE proc(args) — explicit ExecutionType.Write wrap.
+                await using (var writeSc = context.CreateSqlContainer("sp_pengdows_fb_test"))
+                {
+                    writeSc.AddParameterWithValue("input_value", DbType.Int32, 99);
+                    var wrapped = writeSc.WrapForStoredProc(ExecutionType.Write);
+                    Assert.StartsWith("EXECUTE PROCEDURE", wrapped, StringComparison.OrdinalIgnoreCase);
+
+                    await using var execContainer = context.CreateSqlContainer(wrapped);
+                    execContainer.AddParameterWithValue("input_value", DbType.Int32, 99);
+                    var writeResult = await execContainer.ExecuteScalarRequiredAsync<int>();
+                    Assert.Equal(100, writeResult);
+                }
+
+                Output.WriteLine($"{provider}: EXECUTE PROCEDURE read+write syntax both verified live.");
+            }
+            finally
+            {
+                await context.CreateSqlContainer($"DROP PROCEDURE {procName}").ExecuteNonQueryAsync();
+            }
+        });
+    }
 }

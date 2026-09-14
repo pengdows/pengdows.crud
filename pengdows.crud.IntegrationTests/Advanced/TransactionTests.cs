@@ -177,6 +177,72 @@ public class TransactionTests : DatabaseTestBase
     }
 
     [SkippableFact]
+    public async Task Transaction_ChaosIsolationLevel_IsRejectedByEveryProvider()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Ported from testbed/TestProvider.cs's TestInvalidIsolationLevels, which was deleted
+            // without a replacement during the e0cd635 testbed -> pengdows.crud.IntegrationTests
+            // consolidation (see CLAUDE.md's "Adding a New Database" checklist item 24) — this and
+            // the test below close that regression. IsolationLevel.Chaos is universally invalid:
+            // no dialect's GetSupportedIsolationLevels() includes it, so IsolationResolver.Validate
+            // rejects it for every provider before any connection/driver round trip happens.
+            var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationLevel.Chaos));
+            Output.WriteLine($"{provider}: Chaos isolation level correctly rejected — {ex.Message}");
+            await Task.CompletedTask;
+        });
+    }
+
+    [SkippableFact]
+    public async Task Transaction_ProviderSpecificUnsupportedIsolationLevel_IsRejected()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Ported from testbed/TestProvider.cs's TestInvalidIsolationLevels (see the comment
+            // above and CLAUDE.md checklist item 24 for the full history). Each level below was
+            // empirically confirmed, historically, to be one this specific provider's real
+            // driver/engine does not honor. Item 24 explicitly warns not to mechanically extend
+            // this list from GetSupportedIsolationLevels() alone — several of these providers are
+            // missing MORE than one level (e.g. Oracle also lacks ReadUncommitted; CockroachDb/
+            // DuckDB also lack ReadUncommitted and RepeatableRead), and only the level below was
+            // ever driver-verified as the specific rejection case, not "the first missing one."
+            //
+            // IMPORTANT — what this test actually proves: DatabaseContext.BeginTransaction(IsolationLevel)
+            // validates the requested level via IsolationResolver.Validate (itself sourced from the
+            // dialect's own GetSupportedIsolationLevels()) BEFORE any connection/driver round trip.
+            // So this proves pengdows.crud's own gate is self-consistent with GetSupportedIsolationLevels()
+            // for a real, live-detected dialect instance against a real container — not that the raw
+            // ADO.NET driver rejects the level if asked directly. The original direct-driver
+            // confirmation that produced these five entries predates the Validate() gate and is not
+            // re-verified by this test.
+            IsolationLevel? unsupported = provider switch
+            {
+                SupportedDatabase.PostgreSql
+                    or SupportedDatabase.Firebird
+                    or SupportedDatabase.Sqlite
+                    or SupportedDatabase.YugabyteDb => IsolationLevel.ReadUncommitted,
+                SupportedDatabase.Oracle => IsolationLevel.RepeatableRead,
+                SupportedDatabase.CockroachDb
+                    or SupportedDatabase.DuckDB => IsolationLevel.ReadCommitted,
+                SupportedDatabase.TiDb => IsolationLevel.Serializable,
+                SupportedDatabase.Snowflake => IsolationLevel.RepeatableRead,
+                SupportedDatabase.Db2 => IsolationLevel.Snapshot,
+                _ => null
+            };
+
+            if (unsupported is null)
+            {
+                Output.WriteLine($"No historically-confirmed unsupported level to check for {provider}; skipping.");
+                return;
+            }
+
+            var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupported.Value));
+            Output.WriteLine($"{provider}: {unsupported.Value} correctly rejected — {ex.Message}");
+            await Task.CompletedTask;
+        });
+    }
+
+    [SkippableFact]
     public async Task Transaction_Savepoint_RollsBackPartialWork()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -260,6 +326,68 @@ public class TransactionTests : DatabaseTestBase
             Assert.NotNull(retrieved1);
             Assert.Null(retrieved2);
             Assert.Null(retrieved3);
+        });
+    }
+
+    /// <summary>
+    /// <c>ReleaseSavepointAsync</c> — the third <see cref="pengdows.crud.enums.SavepointCapabilities"/>
+    /// flag, alongside <c>Create</c>/<c>Rollback</c> which the two tests above already cover —
+    /// discards a savepoint without rolling back any work performed after it. Verified live in two
+    /// parts against a real provider: (1) a released savepoint's prior work survives a commit
+    /// exactly as if the savepoint had never been rolled back to, and (2) a subsequent
+    /// <c>RollbackToSavepointAsync</c> to that now-discarded name genuinely fails against the real
+    /// server (name no longer exists) rather than silently succeeding — <c>fakeDb</c> cannot prove
+    /// either half of this since it never talks to a real savepoint stack.
+    /// </summary>
+    [SkippableFact]
+    public async Task Transaction_ReleaseSavepoint_DiscardsNameButKeepsWork()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (!context.Dialect.SavepointCapabilities.HasFlag(SavepointCapabilities.Release))
+            {
+                Output.WriteLine($"Skipping ReleaseSavepointAsync test for {provider}: Release not supported");
+                return;
+            }
+
+            // Part 1: release, then commit — both rows must survive since release doesn't roll back.
+            var entity1 = CreateTestEntity(NameEnum.Test, 900);
+            var entity2 = CreateTestEntity(NameEnum.Test2, 901);
+
+            await using (var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
+            {
+                var helper = CreateTableGateway(context);
+
+                await helper.CreateAsync(entity1, transaction);
+                await transaction.SavepointAsync("release_me");
+                await helper.CreateAsync(entity2, transaction);
+                await transaction.ReleaseSavepointAsync("release_me");
+
+                transaction.Commit();
+            }
+
+            var retrieved1 = await CreateTableGateway(context).RetrieveOneAsync(entity1.Id, context);
+            var retrieved2 = await CreateTableGateway(context).RetrieveOneAsync(entity2.Id, context);
+            Assert.NotNull(retrieved1);
+            Assert.NotNull(retrieved2); // Release must NOT discard entity2's work, unlike rollback.
+
+            // Part 2: a released savepoint name no longer exists — rolling back to it must fail.
+            var entity3 = CreateTestEntity(NameEnum.Test, 902);
+
+            await using var abortedTransaction =
+                context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
+            var abortedHelper = CreateTableGateway(context);
+
+            await abortedHelper.CreateAsync(entity3, abortedTransaction);
+            await abortedTransaction.SavepointAsync("also_released");
+            await abortedTransaction.ReleaseSavepointAsync("also_released");
+
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => abortedTransaction.RollbackToSavepointAsync("also_released").AsTask());
+
+            abortedTransaction.Rollback();
+
+            Output.WriteLine($"{provider}: ReleaseSavepointAsync verified — work survives, name is discarded.");
         });
     }
 
