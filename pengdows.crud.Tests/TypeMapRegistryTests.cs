@@ -34,6 +34,27 @@ public class TypeMapRegistryTests
     }
 
     [Fact]
+    public void GetTableInfo_ThrowsIfMultipleCorrelationTokens()
+    {
+        var registry = new TypeMapRegistry();
+        Assert.Throws<TooManyColumns>(() => registry.GetTableInfo<MultipleCorrelationTokens>());
+    }
+
+    [Fact]
+    public void Clear_RemovesCachedTableInfo_SoANewRegistrationReplacesIt()
+    {
+        var registry = new TypeMapRegistry();
+        var before = registry.GetTableInfo<MyEntity>();
+
+        registry.Clear();
+        var after = registry.GetTableInfo<MyEntity>();
+
+        // Different TableInfo instances confirms the cache entry was actually dropped and rebuilt,
+        // not just that GetTableInfo happens to return equal-looking data.
+        Assert.NotSame(before, after);
+    }
+
+    [Fact]
     public void GetTableInfo_ThrowsIfIdMarkedPrimaryKey()
     {
         var registry = new TypeMapRegistry();
@@ -330,6 +351,14 @@ public class TypeMapRegistryTests
         [Column("V2", DbType.Int32)][Version] public int V2 { get; set; }
     }
 
+    [Table("MultipleCorrelationTokens")]
+    private class MultipleCorrelationTokens
+    {
+        [Column("C1", DbType.String)][CorrelationToken] public string C1 { get; set; } = string.Empty;
+
+        [Column("C2", DbType.String)][CorrelationToken] public string C2 { get; set; } = string.Empty;
+    }
+
     [Table("Invalid")]
     private class IdWithPrimaryKey
     {
@@ -431,6 +460,34 @@ public class TypeMapRegistryTests
         [Column("Second", DbType.String, 3)] public string Second { get; set; } = string.Empty;
 
         [Column("Third", DbType.String)] public string Third { get; set; } = string.Empty;
+    }
+
+    // AssignOrdinals's gap-skip loop only actually iterates more than zero times when an
+    // unordered column's first candidate ordinal (1) is already taken by an explicit one —
+    // MixedOrdinalEntity's own explicit ordinal is 3, so its unordered column never needs to skip
+    // anything. This entity's explicit ordinal is 1, forcing the auto-assigned column to skip past
+    // it.
+    [Table("OrdinalGapEntity")]
+    private class OrdinalGapEntity
+    {
+        [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
+
+        [Column("A", DbType.String, 1)] public string A { get; set; } = string.Empty;
+
+        [Column("B", DbType.String)] public string B { get; set; } = string.Empty;
+    }
+
+    [Fact]
+    public void GetTableInfo_UnorderedColumnSkipsPastAnExplicitlyTakenOrdinal()
+    {
+        var registry = new TypeMapRegistry();
+        var info = registry.GetTableInfo<OrdinalGapEntity>();
+
+        // The Id column also occupies an ordinal slot ahead of A/B, so B's auto-assignment must
+        // skip past both it and A's explicit ordinal — the specific numbers matter less than B
+        // ending up distinct from, and after, A's explicitly-claimed ordinal.
+        Assert.Equal(1, info.Columns["A"].Ordinal);
+        Assert.True(info.Columns["B"].Ordinal > info.Columns["A"].Ordinal);
     }
 
     [Table("JsonValid")]

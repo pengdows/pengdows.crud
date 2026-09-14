@@ -37,6 +37,75 @@ public class SybaseDialectTests
         => Assert.Equal("@", Dialect().ParameterMarker);
 
     [Fact]
+    public void PrepareStatements_IsFalse()
+        => Assert.False(Dialect().PrepareStatements);
+
+    [Fact]
+    public void SupportsJsonTypes_IsFalse()
+        => Assert.False(Dialect().SupportsJsonTypes);
+
+    [Fact]
+    public void SupportsXmlTypes_IsFalse()
+        => Assert.False(Dialect().SupportsXmlTypes);
+
+    [Fact]
+    public void SupportsBatchInsert_IsFalse()
+        => Assert.False(Dialect().SupportsBatchInsert);
+
+    [Fact]
+    public void SupportsSemicolonStatementSeparator_IsFalse()
+        => Assert.False(Dialect().SupportsSemicolonStatementSeparator);
+
+    [Fact]
+    public void RenderMergeSource_NullColumns_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => Dialect().RenderMergeSource(null!, new[] { "p0" }));
+    }
+
+    [Fact]
+    public void RenderMergeSource_NullParameterNames_Throws()
+    {
+        var column = new ColumnInfo { Name = "id", PropertyInfo = typeof(SybaseMergeEntity).GetProperty(nameof(SybaseMergeEntity.Id))! };
+        Assert.Throws<ArgumentNullException>(() => Dialect().RenderMergeSource(new[] { column }, null!));
+    }
+
+    [Fact]
+    public void RenderMergeSource_MismatchedColumnAndParameterCounts_Throws()
+    {
+        var column = new ColumnInfo { Name = "id", PropertyInfo = typeof(SybaseMergeEntity).GetProperty(nameof(SybaseMergeEntity.Id))! };
+        Assert.Throws<ArgumentException>(() => Dialect().RenderMergeSource(new[] { column }, new[] { "p0", "p1" }));
+    }
+
+    [Fact]
+    public void RenderMergeSource_JsonColumn_WrapsParameterViaRenderJsonArgument()
+    {
+        var column = new ColumnInfo
+        {
+            Name = "payload",
+            PropertyInfo = typeof(SybaseMergeEntity).GetProperty(nameof(SybaseMergeEntity.Id))!,
+            IsJsonType = true
+        };
+
+        var sql = Dialect().RenderMergeSource(new[] { column }, new[] { "p0" });
+
+        Assert.Contains("AS \"payload\"", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClassifyException_UnrecognizedAseErrorNumber_FallsBackToBaseHeuristic()
+        => Assert.Equal(DbErrorCategory.Unknown, Dialect().ClassifyException(Ase(99999, "some unrecognized ASE failure")));
+
+    [Fact]
+    public void AnalyzeException_ExceptionWithNoErrorCode_FallsBackToBaseAnalyzeException()
+    {
+        var ex = new InvalidOperationException("no ASE error number available at all");
+
+        var info = Dialect().AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.Unknown, info.Category);
+    }
+
+    [Fact]
     public void SupportsSavepoints_IsTrue()
         => Assert.True(Dialect().SupportsSavepoints);
 

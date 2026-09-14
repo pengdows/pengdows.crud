@@ -552,17 +552,6 @@ internal class MySqlDialect : SqlDialect
         return false;
     }
 
-    private static int? TryGetProviderErrorCode(Exception ex)
-    {
-        var numberProperty = ex.GetType().GetProperty("Number");
-        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
-        {
-            return number;
-        }
-
-        return null;
-    }
-
     public override string GetBaseSessionSettings()
     {
         return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;

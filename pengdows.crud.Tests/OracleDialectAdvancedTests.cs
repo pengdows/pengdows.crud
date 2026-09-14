@@ -550,4 +550,53 @@ public class OracleDialectAdvancedTests
         Assert.Equal(DbType.String, guidParam.DbType);
         Assert.Equal(guidValue.ToString("D"), guidParam.Value);
     }
+
+    [Fact]
+    public void SupportsBatchUpdate_IsTrue()
+    {
+        Assert.True(_dialect.SupportsBatchUpdate);
+    }
+
+    [Fact]
+    public void SupportsJsonTypes_UninitializedDialect_IsFalse()
+    {
+        // IsInitialized is false immediately after construction (no DetectDatabaseInfoAsync has
+        // run yet), so this short-circuits false regardless of server version.
+        Assert.False(_dialect.SupportsJsonTypes);
+    }
+
+    [Fact]
+    public void PrepareParameterValue_BooleanTrue_ReturnsInt16One()
+    {
+        var result = _dialect.PrepareParameterValue(true, DbType.Boolean);
+
+        Assert.Equal((short)1, result);
+    }
+
+    [Fact]
+    public void PrepareParameterValue_BooleanFalse_ReturnsInt16Zero()
+    {
+        var result = _dialect.PrepareParameterValue(false, DbType.Boolean);
+
+        Assert.Equal((short)0, result);
+    }
+
+    [Fact]
+    public void PrepareParameterValue_NonBooleanDbType_FallsBackToBaseBehavior()
+    {
+        var result = _dialect.PrepareParameterValue("hello", DbType.String);
+
+        Assert.Equal("hello", result);
+    }
+
+    [Fact]
+    public async Task TryEnterReadOnlyTransactionAsync_ExecutesReadOnlySessionSql()
+    {
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", _factory);
+        await using var txn = context.BeginTransaction();
+
+        var ex = await Record.ExceptionAsync(() => _dialect.TryEnterReadOnlyTransactionAsync(txn).AsTask());
+
+        Assert.Null(ex);
+    }
 }

@@ -71,6 +71,39 @@ public class RetryContextSequentialExecutionTests
         Assert.Contains("DELETE FROM \"t1\"", succeedingConn.ExecutedNonQueryTexts);
     }
 
+    // NextDelay's decorrelated-jitter formula has an early-return fast path whenever
+    // BaseDelay == MaxDelay (every other test in this file uses that shape for speed), which never
+    // exercises the actual `baseMs + random * (upperMs - baseMs)` computation. A meaningfully wider
+    // MaxDelay than BaseDelay is required to reach it — kept small enough that the test still
+    // completes in well under a second.
+    [Fact]
+    public async Task StartAsync_RetryWithWideDelayRange_ExercisesRealJitterComputation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var options = new RetryContextOptions
+        {
+            MaxAttempts = 3,
+            BaseDelay = TimeSpan.FromMilliseconds(10),
+            MaxDelay = TimeSpan.FromMilliseconds(1000)
+        };
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
+
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
+
+        var failingConn = new fakeDbConnection();
+        failingConn.SetNonQueryExecuteException(
+            new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        var succeedingConn = new fakeDbConnection();
+        factory.Connections.Add(failingConn);
+        factory.Connections.Add(succeedingConn);
+
+        await rc.StartAsync();
+
+        Assert.Equal(0, rc.QueuedCommandCount);
+        Assert.Contains("DELETE FROM \"t1\"", succeedingConn.ExecutedNonQueryTexts);
+    }
+
     [Fact]
     public async Task StartAsync_NonTransientFailureStopsImmediatelyAndLeavesLaterCommandsUnexecuted()
     {

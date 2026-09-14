@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
@@ -404,6 +405,42 @@ public class DuckDbDialectAdvancedTests
         using var sc = gateway.BuildCreateWithReturning(new DuckDbAutoIdEntity { Name = "test" }, withReturning: true);
 
         Assert.Contains("RETURNING", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // TryClassifyProviderException's generic SqlState-class-23 fallback and its "Constraint
+    // Error" message fallback are both checked only after SqlDialect.ClassifyException has
+    // already ruled out IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/
+    // IsCheckConstraintViolation — a bare "23000" SqlState (not one of the four specific codes
+    // 23505/23503/23502/23514) and a message containing neither those codes' specific wording
+    // nor a SqlState both exercise these two generic fallbacks respectively.
+    [Fact]
+    public void AnalyzeException_GenericClass23SqlState_ClassifiesAsConstraintViolation()
+    {
+        var ex = new DuckDbTestDbException("23000", "some other integrity error");
+
+        var info = _dialect.AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    [Fact]
+    public void AnalyzeException_ConstraintErrorMessageWithNoSqlState_ClassifiesAsConstraintViolation()
+    {
+        var ex = new DuckDbTestDbException(null, "Constraint Error: some other integrity failure");
+
+        var info = _dialect.AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    private sealed class DuckDbTestDbException : DbException
+    {
+        public DuckDbTestDbException(string? sqlState, string message) : base(message)
+        {
+            SqlState = sqlState;
+        }
+
+        public override string? SqlState { get; }
     }
 
     [Table("duckdb_auto_id_entity")]

@@ -54,6 +54,22 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     /// </summary>
     public Exception? ThrowOnDataSourceDispose { get; set; }
 
+    /// <summary>
+    /// When set, <see cref="CreateConnection"/> throws this exception immediately instead of
+    /// returning a connection — lets a test exercise a caller's handling of a factory-level
+    /// failure (e.g. a misconfigured provider registration) without a bespoke DbProviderFactory
+    /// subclass.
+    /// </summary>
+    public Exception? ThrowOnCreateConnection { get; set; }
+
+    /// <summary>
+    /// When true, <see cref="CreateConnection"/> returns null instead of a connection —
+    /// DbProviderFactory.CreateConnection is documented nullable, and some callers (e.g. a
+    /// best-effort pool-reset hook probing for a sample connection) must tolerate a provider that
+    /// genuinely can't produce one.
+    /// </summary>
+    public bool ReturnNullConnection { get; set; }
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
@@ -171,6 +187,20 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbConnection CreateConnection()
     {
+        if (ThrowOnCreateConnection != null)
+        {
+            throw ThrowOnCreateConnection;
+        }
+
+        if (ReturnNullConnection)
+        {
+            // DbProviderFactory.CreateConnection() is declared non-nullable, matching every real
+            // provider's factory — but ReturnNullConnection exists specifically to test a
+            // caller's defensive handling of a provider that misbehaves at runtime despite the
+            // contract, so the null-forgiving operator here is a deliberate, narrow lie.
+            return null!;
+        }
+
         if (_connections.Count > 0)
         {
             var pre = _connections[0];

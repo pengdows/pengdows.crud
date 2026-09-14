@@ -61,10 +61,9 @@ namespace pengdows.crud.dialects;
 /// Every capability flag and error-code mapping here is sourced from IBM's public
 /// documentation (cited on each member) and has been verified end-to-end against a real
 /// server via <c>testbed</c> (see the file-level AI SUMMARY for what was confirmed working vs.
-/// genuinely unsupported). A dedicated <c>InformixDialectTests.cs</c> asserting each capability
-/// flag individually (per CLAUDE.md's "Adding a New Database" checklist item 7) has not yet
-/// been written — the exhaustive matrix tests in <c>DataSourceInformationTests.cs</c> and this
-/// file's own comments are the only coverage today.
+/// genuinely unsupported). See <c>InformixDialectTests.cs</c> for the dedicated capability-flag
+/// and exception-classification test coverage (CLAUDE.md's "Adding a New Database" checklist
+/// item 7).
 /// </remarks>
 internal sealed class InformixDialect : SqlDialect
 {

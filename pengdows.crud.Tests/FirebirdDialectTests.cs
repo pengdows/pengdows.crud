@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -60,6 +61,60 @@ public class FirebirdDialectTests
         // (including test-double) connection type is unaffected.
         var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
             NullLogger<FirebirdDialect>.Instance);
+
+        var ex = Record.Exception(() => dialect.ResetConnectionPoolForDdl("Data Source=test"));
+
+        Assert.Null(ex);
+    }
+
+    // TryClassifyProviderException's message-text fallback ("violation of"/"*** null ***"/"CHECK
+    // constraint") is checked only after SqlDialect.ClassifyException has already ruled out
+    // IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation, and
+    // after this method's own SqlState-based checks — this message deliberately contains
+    // "violation of" without "PRIMARY"/"UNIQUE" (so IsUniqueViolation stays false), no "FOREIGN
+    // KEY"/"NOT NULL"/"CHECK constraint" wording, and has no SqlState set at all, to land
+    // specifically on that fallback rather than any of the earlier, more specific checks.
+    [Fact]
+    public void AnalyzeException_MessageContainsViolationOfWithNoOtherMatch_ClassifiesAsConstraintViolation()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var ex = new FirebirdTestDbException("violation of some other integrity constraint");
+
+        var info = dialect.AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    private sealed class FirebirdTestDbException : DbException
+    {
+        public FirebirdTestDbException(string message) : base(message)
+        {
+        }
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_FactoryCreateConnectionReturnsNull_DoesNotThrow()
+    {
+        // DbProviderFactory.CreateConnection() is documented nullable — a provider that genuinely
+        // can't produce a sample connection (e.g. misconfigured factory registration) must not
+        // crash the best-effort pool-reset hook.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird) { ReturnNullConnection = true };
+        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
+
+        var ex = Record.Exception(() => dialect.ResetConnectionPoolForDdl("Data Source=test"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_FactoryThrows_IsSwallowedAsBestEffort()
+    {
+        // A missed pool reset just means the caller sees the original "object ... is in use"
+        // failure, no worse than before this hook existed — it must never surface its own
+        // exception on top of that.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird) { ThrowOnCreateConnection = new InvalidOperationException("factory boom") };
+        var dialect = new FirebirdDialect(factory, NullLogger<FirebirdDialect>.Instance);
 
         var ex = Record.Exception(() => dialect.ResetConnectionPoolForDdl("Data Source=test"));
 

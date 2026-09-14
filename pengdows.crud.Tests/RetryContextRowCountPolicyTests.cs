@@ -111,6 +111,30 @@ public class RetryContextRowCountPolicyTests
         Assert.Equal(0, rc.QueuedCommandCount);
     }
 
+    // RowCountPolicy currently only defines Ignore/AtLeastOne/ExactlyOne, and Ignore is filtered
+    // out before EnforceRowCountPolicy's switch is ever reached — so its `_ => false` default arm
+    // is unreachable through any value the enum can express today. Exercised here via an explicit
+    // out-of-range cast so a hypothetical future policy value degrades to "no violation" rather
+    // than throwing, instead of leaving this defensive branch completely untested.
+    [Fact]
+    public async Task StartAsync_UnknownRowCountPolicyValue_DoesNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
+
+        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        rc.SetRowCountPolicy(sc, (RowCountPolicy)99);
+
+        var conn = new fakeDbConnection();
+        conn.EnqueueNonQueryResult(0);
+        factory.Connections.Add(conn);
+
+        await rc.StartAsync();
+
+        Assert.Equal(0, rc.QueuedCommandCount);
+    }
+
     [Fact]
     public async Task StartAsync_RowCountPolicyViolationIsNotRetried()
     {
