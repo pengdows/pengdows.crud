@@ -13,7 +13,7 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryType>git</RepositoryType>
-        <WarningsAsErrors>true</WarningsAsErrors>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
         <SignAssembly>true</SignAssembly>

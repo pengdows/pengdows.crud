@@ -414,7 +414,7 @@ public class StormGateTests
 
     private sealed class SavepointCapableFakeConnection : fakeDbConnection
     {
-        public SavepointTrackingTransaction? LastTransaction { get; private set; }
+        public new SavepointTrackingTransaction? LastTransaction { get; private set; }
 
         protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
         {
