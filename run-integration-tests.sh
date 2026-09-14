@@ -19,6 +19,7 @@ export TESTBED_REUSE_CONTAINERS=true
 
 dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
   -c Release \
+  -p:TestTfmsInParallel=false \
   --results-directory "${results}" \
   --logger "trx;LogFileName=IntegrationTests.trx"
 
