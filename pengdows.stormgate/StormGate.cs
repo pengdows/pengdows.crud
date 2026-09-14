@@ -235,14 +235,22 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
     private void CompleteLease(bool releaseSemaphoreSlot)
     {
-        // Released before taking _lifecycleLock, not inside it: SemaphoreSlim.Release() must
-        // never run while holding a lock of ours. It's safe to call unconditionally here even
-        // though the semaphore is about to be disposed on this same call in the last-lease case
-        // below — Release() always completes (and its waiter Task, if any, is constructed with
-        // RunContinuationsAsynchronously, so its continuation never runs inline on this thread —
-        // verified against dotnet/runtime's SemaphoreSlim source) strictly before the disposal
-        // decision a few lines down is even made, so there is no ordering hazard from moving it
-        // out here.
+        // Released before taking _lifecycleLock, not inside it. SemaphoreSlim.Release() takes the
+        // semaphore's own internal lock while dequeuing a waiter; calling it from inside
+        // _lifecycleLock would establish a _lifecycleLock -> (semaphore's internal lock) ordering
+        // edge into a lock we don't own and can't inspect across BCL versions — exactly the kind
+        // of edge that causes deadlocks if anything elsewhere ever acquires those two locks in the
+        // opposite order. (Separately, and only as corroborating evidence, not the load-bearing
+        // reason: SemaphoreSlim's async waiter Task is constructed with
+        // TaskCreationOptions.RunContinuationsAsynchronously, so Release() doesn't run a waiter's
+        // continuation inline on this thread either — verified against dotnet/runtime's
+        // SemaphoreSlim source — but that's an implementation detail we shouldn't have to rely on.)
+        // It's safe to call unconditionally here, even though the semaphore may be disposed later
+        // in this same call in the last-lease case below: RegisterLease() incremented
+        // _activeLeases for every outstanding acquire attempt (including this one) before it ever
+        // started waiting, and that count isn't decremented until the lock block just below runs
+        // — so TryClaimResourceDisposal can't tear down the semaphore until AFTER this Release()
+        // call has already returned, regardless of what other threads are doing concurrently.
         if (releaseSemaphoreSlot)
         {
             _semaphore.Release();
