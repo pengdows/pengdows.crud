@@ -250,7 +250,7 @@ public class StormGateTests
 
         // The deferred drain, whenever it finally happens, always disposes synchronously —
         // matching the pre-existing precedent for the semaphore's own deferred disposal — because
-        // the release that finally drains _activeLeases to zero can come from either a sync or
+        // the release that finally drains _outstandingAttempts to zero can come from either a sync or
         // async permit release (StormGatePermit.DisposeAsync() itself calls the same sync
         // ReleaseLease()), so there is no single "was the original Dispose call async" thread to
         // honor by the time the drain actually happens.

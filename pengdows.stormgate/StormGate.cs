@@ -17,7 +17,13 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     private readonly TimeSpan _acquireTimeout;
     private readonly ILogger _logger;
     private readonly object _lifecycleLock = new();
-    private int _activeLeases;
+    // Counts outstanding acquire ATTEMPTS, not held permits: an attempt is counted from
+    // RegisterLease() (before it ever waits on the semaphore) until its own ReleaseReservation()
+    // (wait failed/canceled) or ReleaseLease() (permit later disposed) — see RegisterLease's doc
+    // comment for why that range, not just "currently holding a permit," is what the disposal
+    // guard needs. Do not read this as "connections currently open" for a diagnostics/metrics
+    // surface — it over-counts by the size of the wait queue under saturation.
+    private int _outstandingAttempts;
     private int _disposed;
     private int _resourcesDisposed;
 
@@ -102,16 +108,18 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     /// </summary>
     public async Task<StormGatePermit> AcquirePermitAsync(CancellationToken ct = default)
     {
-        ThrowIfDisposed();
-
         // Reserve BEFORE waiting on the semaphore, not after — see the "outstanding acquire
         // attempt" remarks on RegisterLease for why this ordering is load-bearing, not cosmetic.
+        // RegisterLease() itself throws ObjectDisposedException under the same lock as the
+        // increment — no separate check needed here, and a separate one here would race it (see
+        // RegisterLease's doc comment).
         RegisterLease();
         try
         {
-            // Dispose may race with WaitAsync after the disposed check above.
-            // In that case SemaphoreSlim may throw ObjectDisposedException.
-            // That is acceptable: a disposed StormGate cannot hand out new permits.
+            // Dispose may still race in here, after RegisterLease's disposed check passed but
+            // before this wait completes. In that case SemaphoreSlim may throw
+            // ObjectDisposedException. That is acceptable: a disposed StormGate cannot hand out
+            // new permits, and the catch below unwinds the reservation either way.
             if (!await _semaphore.WaitAsync(_acquireTimeout, ct).ConfigureAwait(false))
             {
                 _logger.LogWarning("StormGate saturation: timed out waiting for a connection permit after {Timeout}ms.", _acquireTimeout.TotalMilliseconds);
@@ -133,8 +141,6 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     /// <summary>Synchronous counterpart of <see cref="AcquirePermitAsync"/> — see its remarks.</summary>
     public StormGatePermit AcquirePermit(CancellationToken ct = default)
     {
-        ThrowIfDisposed();
-
         RegisterLease();
         try
         {
@@ -208,17 +214,26 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     /// Counts an acquire attempt as "outstanding" from the moment it commits to taking a slot —
     /// BEFORE the semaphore wait even begins, not after it succeeds. This is load-bearing, not
     /// cosmetic: Dispose()/DisposeAsync() only tear down the shared DbDataSource/SemaphoreSlim
-    /// once <see cref="_activeLeases"/> reaches zero, so an attempt that has taken a slot (or is
-    /// still waiting for one) but hasn't finished becoming a registered lease must still count —
-    /// otherwise a concurrent Dispose() can see "zero active leases" and dispose shared state
-    /// while that attempt is still using it, corrupting or crashing it (and potentially masking
-    /// its real exception with an unrelated ObjectDisposedException from the release path).
+    /// once <see cref="_outstandingAttempts"/> reaches zero, so an attempt that has taken a slot
+    /// (or is still waiting for one) but hasn't finished becoming a registered lease must still
+    /// count — otherwise a concurrent Dispose() can see "zero outstanding attempts" and dispose
+    /// shared state while that attempt is still using it, corrupting or crashing it (and
+    /// potentially masking its real exception with an unrelated ObjectDisposedException from the
+    /// release path).
+    ///
+    /// The disposed check and the increment must happen under the SAME lock acquisition, not as
+    /// a separate check beforehand: a bare check-then-lock has a gap where Dispose() can win the
+    /// race in between, successfully claim disposal (seeing zero outstanding attempts), and only
+    /// then have this method increment the count on an already-torn-down gate — transiently
+    /// violating the very invariant this method exists to establish, and surfacing as a raw,
+    /// unlabeled ObjectDisposedException from SemaphoreSlim itself instead of the clean one below.
     /// </summary>
     private void RegisterLease()
     {
         lock (_lifecycleLock)
         {
-            _activeLeases++;
+            ThrowIfDisposed();
+            _outstandingAttempts++;
         }
     }
 
@@ -235,22 +250,11 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
     private void CompleteLease(bool releaseSemaphoreSlot)
     {
-        // Released before taking _lifecycleLock, not inside it. SemaphoreSlim.Release() takes the
-        // semaphore's own internal lock while dequeuing a waiter; calling it from inside
-        // _lifecycleLock would establish a _lifecycleLock -> (semaphore's internal lock) ordering
-        // edge into a lock we don't own and can't inspect across BCL versions — exactly the kind
-        // of edge that causes deadlocks if anything elsewhere ever acquires those two locks in the
-        // opposite order. (Separately, and only as corroborating evidence, not the load-bearing
-        // reason: SemaphoreSlim's async waiter Task is constructed with
-        // TaskCreationOptions.RunContinuationsAsynchronously, so Release() doesn't run a waiter's
-        // continuation inline on this thread either — verified against dotnet/runtime's
-        // SemaphoreSlim source — but that's an implementation detail we shouldn't have to rely on.)
-        // It's safe to call unconditionally here, even though the semaphore may be disposed later
-        // in this same call in the last-lease case below: RegisterLease() incremented
-        // _activeLeases for every outstanding acquire attempt (including this one) before it ever
-        // started waiting, and that count isn't decremented until the lock block just below runs
-        // — so TryClaimResourceDisposal can't tear down the semaphore until AFTER this Release()
-        // call has already returned, regardless of what other threads are doing concurrently.
+        // Released before taking _lifecycleLock, not inside it: calling Release() while holding
+        // _lifecycleLock would establish a lock-ordering edge into SemaphoreSlim's own internal
+        // lock, one we don't own and can't inspect across BCL versions. Safe regardless of the
+        // disposal below — see RegisterLease's doc comment for why _outstandingAttempts covers
+        // this call until the lock block right after this one runs.
         if (releaseSemaphoreSlot)
         {
             _semaphore.Release();
@@ -260,9 +264,9 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
 
         lock (_lifecycleLock)
         {
-            _activeLeases--;
+            _outstandingAttempts--;
 
-            if (_activeLeases == 0 &&
+            if (_outstandingAttempts == 0 &&
                 Volatile.Read(ref _disposed) != 0 &&
                 _resourcesDisposed == 0)
             {
@@ -321,15 +325,15 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
     /// <summary>
     /// Atomically claims the right to actually dispose _dataSource/_semaphore, if — and only
     /// if — no acquire attempt or lease is currently outstanding. Whichever of Dispose(Async) or
-    /// the last outstanding attempt's CompleteLease() call reaches zero active leases first wins
-    /// this claim; the other is a no-op, so the resources are disposed exactly once regardless of
-    /// which side the drain completes on.
+    /// the last outstanding attempt's CompleteLease() call reaches zero outstanding attempts first
+    /// wins this claim; the other is a no-op, so the resources are disposed exactly once
+    /// regardless of which side the drain completes on.
     /// </summary>
     private bool TryClaimResourceDisposal()
     {
         lock (_lifecycleLock)
         {
-            if (_activeLeases != 0 || _resourcesDisposed != 0)
+            if (_outstandingAttempts != 0 || _resourcesDisposed != 0)
             {
                 return false;
             }
