@@ -342,6 +342,17 @@ internal class HStoreCoercion : DbCoercion<HStore>
             }
         }
 
+        // Npgsql 9 hydrates a real hstore column as a structured Dictionary<string,string?>
+        // (confirmed live), not the canonical "key=>value" text this coercion round-trips
+        // through DbType.String bindings — read that shape directly rather than only ever
+        // expecting a string. IDictionary<string,string?> also matches a plain
+        // Dictionary<string,string> at runtime (nullable-reference annotations are erased).
+        if (src.RawValue is IDictionary<string, string?> dict)
+        {
+            value = new HStore(dict);
+            return true;
+        }
+
         value = default;
         return false;
     }

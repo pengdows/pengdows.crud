@@ -22,6 +22,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -181,6 +182,21 @@ internal static class ProviderParameterFactory
             {
                 // NpgsqlDbType.Hstore = 37
                 _cachedNpgsqlDbTypeProperty.SetValue(parameter, 37);
+
+                // HStoreCoercion.TryWrite (the general coercion layer, which already ran by this
+                // point) stringifies to the canonical "key=>value, ..." text format for portable
+                // DbType.String bindings. Npgsql's Hstore serializer, once NpgsqlDbType.Hstore is
+                // explicitly set above, requires a structured Dictionary<string,string?>/
+                // IDictionary value instead — a raw string throws InvalidCastException
+                // ("Writing values of 'System.String' is not supported for parameters having
+                // NpgsqlDbType 'Hstore'"), confirmed live against Npgsql 9. Re-parse the
+                // already-produced canonical text back into the shape Npgsql now requires rather
+                // than duplicating HStore's own escaping/parsing logic here.
+                if (parameter.Value is string hstoreText)
+                {
+                    parameter.Value = pengdows.crud.types.valueobjects.HStore.Parse(hstoreText)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value);
+                }
             }
             else if (valueType.IsGenericType && valueType.Name.Contains("Range"))
             {
