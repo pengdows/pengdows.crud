@@ -196,7 +196,7 @@ provider-casting gap described above entirely.
 | **Complexity** | Minimal (1 class) | Full-featured Framework |
 | **Admission Control** | Single Global Gate | Read/Write Lane Separation |
 | **Metrics** | Basic (Logging) | 36+ Detailed Metrics |
-| **Multi-Dialect** | No (Provider Agnostic) | Yes (14+ DB specific optimizations) |
+| **Multi-Dialect** | No (Provider Agnostic) | Yes (22 DB specific optimizations) |
 | **Legacy Apps** | **Perfect** (Dapper, etc.) | Requires migration |
 
 ---
