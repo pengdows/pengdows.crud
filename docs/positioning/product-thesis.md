@@ -575,6 +575,80 @@ Current package/publish status, version numbers, and per-package implementation 
 [`implementation-evidence.md`](./implementation-evidence.md), since they change
 independently of the architecture itself.
 
+## Two conventional bargains, and a third position
+
+Most DALs make one of two bargains with the application developer. "We'll abstract the
+database for you" — in exchange, the application accepts the abstraction's limitations,
+provider leaks, generated SQL, and whatever edge-case behavior the framework decided was
+portable. Or "we'll stay out of your way" — in exchange, the application writes all of the
+infrastructure around the driver itself: pooling discipline, retry policy, transaction
+handling, read/write routing, provider quirks, generated-key handling, batching, exception
+interpretation, observability, tenant lifecycle.
+
+pengdows.crud takes a third position: **keep control of the SQL, but stop making every
+application reimplement database execution infrastructure.** Retry is the clearest example,
+because the shape of the problem is identical either way and only the coordination differs.
+A conventional stack composes it from independent pieces the application team has to get
+right together — a retry policy, pool/connection tuning, a throttling layer, a transaction
+wrapper, a transient-error classifier, commit-ambiguity handling, metrics, provider-specific
+exception mapping — sitting in front of the actual DAL call. Under `RetryContext`
+(`docs/planning/retry-context-design.md`), the same request becomes one call into
+`RetryContext`, which sits on top of `DatabaseContext` and inherits its transaction
+semantics, admission control, connection lifecycle, provider behavior, error classification,
+metrics, and session setup directly — the retry code is small *because the hard parts were
+already solved underneath it*, not because the problem is actually simpler.
+
+The same pattern repeats for every provider difference. A developer using a more
+conventional DAL eventually writes some version of `if (db == SqlServer) ... else if
+(db == PostgreSql) ... else if (db == Oracle) ...` for generated-key retrieval, then again
+for upsert, batching, JSON, stored procedures, parameter limits, repeated parameters,
+read-only connections, isolation, savepoints, transient-error classification, identity
+retrieval, connection-string differences, SQLite locking, Oracle array binding, and provider
+preparation quirks — at which point the application contains a second, worse database
+abstraction layer wrapped around the supposedly portable one. Principle 6's capability-flag
+pattern (`ISqlDialect` booleans like `SupportsBatchInsert`/`SupportsSavepoints` rather than a
+silent one-size-fits-all SQL string) is what keeps that knowledge where it actually belongs
+instead.
+
+A second category of problem isn't solved by competing DALs so much as declared out of
+scope — the typical answer pushes the problem back onto the application, where pengdows.crud
+instead treats it as the DAL's job. Some of these are unqualified differentiators already
+established earlier in this document; two have real, narrower prior art worth naming rather
+than glossing over, consistent with this document's own discipline of citing counterexamples
+instead of asserting uniqueness by omission (see the `SingleWriter` section above):
+
+| Problem | Typical answer | pengdows.crud's answer |
+|---|---|---|
+| Connection saturation | Configure your connection pool correctly | The application shouldn't be able to overwhelm the pool in the first place — `PoolGovernor` admission control, principle 5 |
+| SQLite write contention | Configure `busy_timeout`, retry locked errors, or serialize it yourself | Admit only one writer before contention ever reaches SQLite — `SingleWriter`, benchmarked above |
+| Commit ambiguity | Make your operations idempotent | If commit may have happened, say so as a distinct "outcome unknown" result rather than guessing — `RetryContext`, shortcoming #1 in `retry-context-design.md` |
+| Reader lifetime | Make sure callers dispose their readers | The reader is a lease over every resource its execution required; EOF releases the lease automatically — "Reader-as-Lease Model," `docs/architecture.md` |
+| Provider portability | Here's an interface over `DbConnection`; good luck | Provider-specific behavior is discovered and represented as `ISqlDialect` capabilities, and the execution machinery changes accordingly — principle 6 |
+| Read replicas† | Create another connection factory/repository and route reads yourself | Read intent is part of execution (`ExecutionType.Read`/`Write`, principle 4); `PoolGovernor` already supports independent reader/writer pools with per-pool turnstiles, so routing to a replica doesn't require separate application-level plumbing |
+| Multi-tenancy‡ | Create scopes/factories/caches yourself and be careful rotating tenant configuration | The tenant selects an execution environment (principle 3), whose lifecycle can be leased, invalidated, bounded, and rotated through `ITenantContextRegistry`'s own primitives |
+| Retry infrastructure§ | Compose a retry policy, pool tuning, a transient-error classifier, and commit-ambiguity handling yourself | `RetryContext` sits on the same `DatabaseContext` boundary and inherits its admission control, transaction semantics, and error classification directly — see the retry diagram above |
+
+† GRDB.swift's `DatabasePool` already offers a dedicated reader pool distinct from its single
+writer (cited in this document's `SingleWriter` competitive research above) — the
+differentiator here is that pengdows.crud's version isn't a SQLite-specific feature, it's the
+same `PoolGovernor` mechanism used for every supported database.
+‡ EF Core supports a `DbContext`-per-tenant pattern in spirit; it does not provide this
+project's specific lease/invalidate/cardinality-bound/case-insensitive-key primitives as a
+first-class registry.
+§ EF Core's own provider-specific `IExecutionStrategy` (`EnableRetryOnFailure()`) is a real,
+shipped retry coordinator, not absent competition — `retry-context-design.md`'s comparison
+table works through the specific differences (pool-admission awareness, a decided
+commit-ambiguity policy, structural elimination of non-database side-effect duplication)
+rather than claiming EF Core has nothing here.
+
+The common thread across all of the above isn't "many features" — it's that pengdows.crud
+contains the database-engineering knowledge applications normally have to rediscover for
+themselves, without taking away the one thing an experienced database developer actually
+wants to keep: control of the SQL. The pitch is not "don't worry about databases." It's
+"write the database operation you intend; the execution context supplies the machinery
+required to run it correctly" — which is a stronger, more specific claim than "portable CRUD
+library," and the one this whole document exists to substantiate.
+
 ## Competitive thesis
 
 Individual pengdows.crud capabilities have competitors — other libraries offer typed
@@ -591,5 +665,15 @@ The individual capabilities in pengdows.crud are not necessarily unique. What is
 that they share one model of database identity, execution intent, resource ownership, and
 lifetime. Or shorter: you can assemble the parts yourself; the hard part is making them agree
 on what is happening. pengdows.crud already does.
+
+**pengdows.crud virtualizes the database execution environment — not SQL.** The application
+states the database operation; the execution context determines how that operation can run
+safely, efficiently, and truthfully against whatever database is actually underneath it. The
+second, easy-to-miss half of that claim: **the virtualization boundary includes success *and*
+failure.** Most DALs that virtualize anything stop at SQL syntax, mapping, connections, or
+transactions. This one carries the abstraction through admission, topology, lifecycle,
+session state, transaction guarantees, generated-key mechanics, provider failures, retry
+safety, cleanup, observability, and shutdown — the failure and edge-case side of database
+execution, not only the happy path.
 
 For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/positioning/dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md).
