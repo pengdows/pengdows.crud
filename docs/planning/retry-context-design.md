@@ -3,12 +3,32 @@
 **Status (updated 2026-09-15): implemented and shipping.** `pengdows.crud/RetryContext.cs` /
 `pengdows.crud.abstractions/IRetryContext.cs` implement both `RetryContextType.Sequential` and
 `RetryContextType.Transactional`, including the commit-ambiguity policy (shortcoming #1, both
-modes), per-command row-count policy, and statement-shape retry safety
-(`IRetryContext.SetRetrySafety`). See `future-work.md`'s FEAT-001 tracker row for the full
+modes) and per-command row-count policy. See `future-work.md`'s FEAT-001 tracker row for the full
 implementation history and dates. This document's "Shortcomings" section below is kept as the
 design record (several items are now resolved in code, not just in prose — see the status note
 inline on each one) rather than rewritten into a changelog; check `RetryContext.cs` and its test
 suite directly for exact current behavior, not this document alone.
+
+**Superseded by a later correctness review (2026-09-15): the statement-shape retry-safety
+mechanism described throughout this document (`RetrySafety`, `IRetryContext.SetRetrySafety`,
+`ClassifyStatementShape`'s `DELETE`/`[Version]`-guarded-`UPDATE` detection, and
+`RetrySafety.IdempotentViaUniqueConstraint`) has been removed from the implementation entirely** —
+not merely left unbuilt, but built, shipped (2026-09-07), and then deleted once a review of the
+by-then-completed per-command-transaction-with-confirmed-rollback design (see "Recommended
+policy" under shortcoming #1) showed its premise no longer held: once Sequential wraps every
+command in its own transaction and only retries after
+`RollbackOrThrowOutcomeUnknownAsync` *confirms* rollback succeeded, nothing from a rolled-back
+attempt can have durably applied — regardless of the statement's shape. A `DELETE`, a
+`[Version]`-guarded `UPDATE`, a bare `INSERT`, and an unguarded `UPDATE` are all equally safe to
+retry after a confirmed rollback, so classifying them differently added complexity without
+buying any additional safety. Worse, `IdempotentViaUniqueConstraint`'s specific justification —
+"a unique-constraint violation on retry proves an earlier attempt already landed server-side" —
+was actively **wrong** under this model: a confirmed rollback already rules that out, so such a
+violation can only mean a genuinely separate conflict (e.g. a concurrent writer), and treating it
+as confirmed success was a real correctness bug, not just unnecessary caution. The mentions of
+this mechanism left below are historical design record, not current behavior — see
+`RetryContext.cs`'s `RunSequentialAttemptAsync` doc comment and
+`RetryContextStatementSafetyTests.cs` for what actually ships today.
 
 **Known drift from this document's original sketch:** the "Shape" section below shows
 `context.CreateRetryContext(RetryContextType, options)` as the entry point. That factory method was
@@ -424,16 +444,26 @@ blocking gap**: implementing backoff mechanics before deciding a commit-ambiguit
 shipping a feature that silently duplicates writes. It now has a recommended policy (see its full
 writeup below) rather than being an open question.
 
-1. **RESOLVED — policy decided (2026-08-31, later same day), and implemented for
-   `RetryContextType.Sequential` (2026-09-07).** `RetryContext.ClassifyStatementShape` detects
-   `DELETE` and a `[Version]`-guarded `UPDATE` (via this library's own `v0` version-parameter
-   naming convention, not SQL-text guessing) as naturally safe; everything else fails closed with
-   `RetryOutcomeUnknownException` unless the caller declares
-   `RetrySafety.IdempotentViaUniqueConstraint` via `IRetryContext.SetRetrySafety`, which also makes
+1. **RESOLVED — policy decided (2026-08-31, later same day), implemented for
+   `RetryContextType.Sequential` (2026-09-07), and then SUPERSEDED by a simpler, correct policy
+   the same day the per-command-transaction rework landed (see the top-of-document status note).**
+   The paragraph below describes the original, now-removed statement-shape mechanism for
+   historical record; skip to shortcoming #1's "Recommended policy" replacement text further down
+   for what actually ships. Originally: `RetryContext.ClassifyStatementShape` detected `DELETE`
+   and a `[Version]`-guarded `UPDATE` (via this library's own `v0` version-parameter naming
+   convention, not SQL-text guessing) as naturally safe; everything else failed closed with
+   `RetryOutcomeUnknownException` unless the caller declared
+   `RetrySafety.IdempotentViaUniqueConstraint` via `IRetryContext.SetRetrySafety`, which also made
    a retry-attempt `UniqueConstraintViolationException` count as confirmed success. Sequential was
    also reworked the same day to wrap each command in its own individual transaction (rather than
    relying on implicit auto-commit), making its failure/rollback path structurally match
-   Transactional's.
+   Transactional's — and it was exactly this rework that made the statement-shape mechanism
+   obsolete: once every command's retry is gated on a *confirmed* rollback, nothing from that
+   attempt can have durably applied, regardless of the statement's shape, so the whole
+   classification (and the `IdempotentViaUniqueConstraint` reasoning specifically, which was
+   actively wrong under this model — see the top-of-document note) was deleted rather than kept
+   as unnecessary extra caution. `RetrySafety`, `IRetryContext.SetRetrySafety`, and
+   `ClassifyStatementShape` no longer exist in the codebase.
 
    **`RetryContextType.Transactional`'s narrower commit-phase window closed too (2026-09-08).**
    Added `TransactionException.Phase` (`Begin`/`Commit`/`Rollback`), set at all four
@@ -462,6 +492,15 @@ writeup below) rather than being an open question.
    that anything is wrong. For `RetryContextType.Sequential`, whose entire mechanism is "remove a command
    from the queue on success, keep and retry it on failure," this is no longer a background risk: the
    removal decision **is** the commit-ambiguity decision.
+
+   **This "split by statement shape" policy below was the recommendation at the time it was
+   written, was implemented, and was then superseded (2026-09-15) once the per-command-transaction
+   rework (described a few paragraphs up) made the split unnecessary — see the top-of-document
+   status note for the correctness reason. The actual, current policy is simpler: retry after
+   *any* transient failure whose rollback is confirmed, regardless of statement shape; fail closed
+   with `RetryOutcomeUnknownException` only when rollback itself can't be confirmed, a transient
+   failure occurs during commit, or cancellation arrives after commit begins.** Kept below for
+   historical record:**
 
    **Recommended policy — split by whether the SQL statement is naturally self-limiting under
    re-application, not one blanket rule:**
@@ -665,7 +704,7 @@ specifically should block starting on backoff mechanics until it has a decided a
 | **Coordinated re-admission through the fairness turnstile** | Not reachable — `PoolGovernor`'s turnstile has no public seam | Same | **Yes** — reacquires through the same turnstile every other caller uses |
 | **Backoff algorithm** | Configurable (fixed, linear, exponential, jittered exponential via `Backoff.DecorrelatedJitterBackoffV2`) | Whatever the author writes, often a fixed sleep | Decorrelated exponential jitter (algorithm named, parameters unspecified — see shortcoming #4) |
 | **Exception classification** | Caller supplies a predicate (`Policy.Handle<T>(predicate)`) — no built-in database-transient-vs-permanent distinction | Caller supplies whatever check they write | Reuses `DatabaseException.IsTransient`, already correct for every shipped provider's typed exceptions |
-| **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Decided, not yet implemented — retry automatically for naturally-idempotent shapes (`DELETE`, version-guarded `UPDATE`), require an opt-in idempotency key for everything else, fail closed with a distinct "outcome unknown" result otherwise — see shortcoming #1 |
+| **Commit-ambiguity policy** | Caller's problem entirely | Caller's problem entirely | Implemented — retry automatically after any transient failure whose rollback is *confirmed* (statement shape doesn't matter once rollback is confirmed), fail closed with a distinct "outcome unknown" result when rollback can't be confirmed or a transient failure hits commit itself — see shortcoming #1 |
 | **Audit-field rollback** | Not applicable — no concept of pengdows.crud entities | Not applicable | Not a rollback problem under the queue shape at all — commands are fully built (audit fields stamped once) before `StartAsync()` runs, so there's no shared mutable state to restore — see shortcoming #2 |
 | **Intermediate reads/generated-value writes affecting later commands, within one retry unit** | Fully supported — the retried delegate can read, branch, write, and use a just-generated ID freely | Same | **Not supported** — the queue must be fully built before execution starts, so neither a read result nor a DB-generated `Id` from an earlier queued command is available to a later one; see "Deliberate scope boundary" above |
 | **Non-database side-effect duplication on retry** (logging, external API calls, in-memory state mutations inside the retried unit) | Caller's problem entirely — the delegate is arbitrary code, re-invoked on every attempt; EF Core's docs put this in bold as the caller's responsibility for the same reason | Same | **Structurally impossible** — no delegate is re-invoked; a retry only ever replays an already-built `ISqlContainer`, so the only thing that can be duplicated is the SQL command itself (shortcoming #1's scope, and now its *entire* scope) — see "The flip side of that same boundary" above |
@@ -683,12 +722,14 @@ re-admission during backoff, structural (not discipline-based) elimination of no
 side-effect duplication, and now commit-ambiguity policy too — three unambiguous wins, not two.
 EF Core and Polly leave commit ambiguity entirely to the caller, with no mechanism to do otherwise
 (a delegate is opaque code; nothing about its statements' shape is visible to the coordinator). This
-design's queue shape makes the statement shape visible — `[Version]`-guarded updates and deletes
-retry safely by construction, an opt-in idempotency key covers everything else — which is exactly
-why this converts from a tie into a win once implemented, rather than needing a new capability
-invented from scratch: per "The flip side of that same boundary" above, a bare SQL
-command/transaction with no other side effects to reason about is already the easiest version of
-this problem any of these tools could face.
+design's queue shape makes retry safety provable without needing to inspect the statement's shape at
+all — wrapping each command in its own transaction means a *confirmed* rollback alone proves nothing
+durably applied, so every statement shape retries safely by construction once rollback is confirmed
+(an earlier revision classified `DELETE`/version-guarded updates as safe and required an opt-in
+idempotency key for everything else; that distinction turned out to be unnecessary once the
+per-command-transaction rework landed — see the top-of-document status note). Per "The flip side of
+that same boundary" above, a bare SQL command/transaction with no other side effects to reason about
+is already the easiest version of this problem any of these tools could face.
 
 ## Comparison to how other DALs handle this
 
@@ -733,7 +774,17 @@ one checklist:
   `PoolForbiddenException`) never enter the retry loop at all — confirm this holds for all three,
   not just one representative case.
 - Row-count policies (`Ignore`/`AtLeastOne`/`ExactlyOne`) behave independently per command, and a
-  violation aborts as non-transient without invoking a retry.
+  violation aborts as non-transient without invoking a retry — including when a caller-supplied
+  `IsTransientOverride` returns `true` for it (it must never reach the override at all).
+- In `RetryContextType.Sequential`, a transient failure is retried after a *confirmed* rollback
+  regardless of statement shape (`DELETE`, bare `INSERT`, unguarded `UPDATE` alike) — added
+  2026-09-15 after removing the statement-shape/`IdempotentViaUniqueConstraint` mechanism (see
+  the top-of-document status note).
+- A `UniqueConstraintViolationException` on a retry attempt is never treated as confirmation of
+  success — it propagates as a genuine conflict, the same as on any other attempt.
+- `IExecutionGovernanceRejection` exceptions (`PoolSaturatedException`/`ModeContentionException`/
+  `PoolForbiddenException`) are excluded from retry unconditionally, even when a caller-supplied
+  `IsTransientOverride` returns `true` for them.
 - Audit and tenant metadata remain stable and unchanged across every attempt (a direct consequence
   of "no delegate is re-invoked," but worth asserting explicitly rather than trusting the
   architecture argument alone).
