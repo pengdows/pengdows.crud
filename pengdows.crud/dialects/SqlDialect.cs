@@ -332,8 +332,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB): isolated
     /// in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the most
-    /// functional safe mode (Best selects it, and the unsafe Standard/PreventDatabaseUnload modes
-    /// coerce to it), while SingleConnection/SingleWriter explicit requests are honored as-is.
+    /// functional safe mode (Best selects it, and Standard/PreventDatabaseUnload coerce to it too),
+    /// while SingleConnection/SingleWriter explicit requests are honored as-is.
+    /// <para>
+    /// Standard is coerced rather than honored because these engines fail unpredictably under
+    /// concurrent writers from the same process — SQLite hits SQLITE_BUSY/lock contention; DuckDB's
+    /// optimistic concurrency control aborts conflicting transactions. Both failure modes are
+    /// workload- and timing-dependent: a workload can run clean under Standard for a long time and
+    /// then start failing intermittently once write patterns overlap under load, which makes the
+    /// problem easy to miss in testing. SingleWriter forces the writer governor to a single permit,
+    /// which prevents concurrent writers from ever reaching the engine (for writes routed through
+    /// the same DatabaseContext) instead of requiring callers to detect and retry the failures.
+    /// </para>
     /// Factored out so SqliteDialect and DuckDbDialect — which only differ in how they recognize
     /// an in-memory connection string — don't duplicate this decision.
     /// </summary>
@@ -351,7 +361,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
         {
-            return (DbMode.SingleWriter, "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
+            return (DbMode.SingleWriter,
+                "SQLite/DuckDB: Standard/PreventDatabaseUnload would allow concurrent writers to reach the engine and fail nondeterministically under contention (SQLITE_BUSY / DuckDB transaction-conflict aborts); coerced to SingleWriter to prevent that outright");
         }
 
         return (requested, string.Empty);
