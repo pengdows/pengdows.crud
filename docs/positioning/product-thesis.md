@@ -147,6 +147,35 @@ single-writer contention — which is why `SingleWriter` for DuckDB in this libr
 deliberate policy choice, not something DuckDB's engine forces (see principle 5's DuckDB
 discussion).
 
+**"Pin a single physical connection for the writer instead of governing admission over ephemeral
+ones" is worth stating precisely, not just noting in passing — it's a deeper structural
+difference than "one writer instead of many," not merely a smaller one.** A pinned-writer design
+makes the connection itself part of the concurrency model:
+
+```
+writer queue → single long-lived connection → database
+```
+
+One writer, yes — but if that connection becomes poisoned, severed, or otherwise unusable, the
+serialization mechanism itself is now tied to a dead resource; recovery means rebuilding the
+writer object, resetting the queue, or in the worst case restarting the process. `SingleWriter`'s
+mechanism is structurally different:
+
+```
+write demand → PoolGovernor capacity=1 → acquire ordinary ephemeral connection → execute → dispose/return connection
+```
+
+**The permit is persistent; the connection is not.** `PoolSlot`/`PoolSlotToken`
+(`pengdows.crud/infrastructure/PoolSlot.cs`) — the RAII object a writer holds while admitted —
+carries zero reference to any connection, `DbCommand`, or `DbConnection` at all; releasing it back
+to `PoolGovernor` is pure semaphore bookkeeping, entirely independent of whether the connection
+used during that slot's lifetime succeeded, failed, or died. A bad connection can be discarded
+without destroying the write-serialization policy itself — the next admitted write simply acquires
+a fresh ephemeral connection from the ordinary pool and continues. Put concisely: **concurrency
+policy is decoupled from connection identity.** GRDB/Peewee-style designs encode "one writer = one
+writer connection"; this library encodes "one writer = one unit of admitted write capacity" — the
+thing enforcing the correctness guarantee is not the thing most likely to fail.
+
 Treat this as a strong, specifically-researched claim, not an unqualified absolute:
 re-verify against current competitors before repeating it externally, since the DAL/ORM
 landscape moves; the mechanism itself is real, tested, and described in full in principle
