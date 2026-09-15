@@ -9,7 +9,7 @@
 // outcome-unknown and are never replayed blindly. Retry safety for custom commands is explicit
 // metadata; RetryContext does not infer semantic safety from SQL text.
 //
-// EXECUTION MODEL: Attempts are serialized. The next attempt is scheduled only after the current
+// EXECUTION MODEL: Attempts are serialized. Each next attempt starts only after the current
 // attempt's transaction disposal has completed, and cancellation cannot complete StartAsync before
 // that cleanup barrier.
 // =============================================================================
@@ -38,18 +38,13 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     private int _started;
     private int _completed;
 
-    // Timer-driven run state — only ever touched by one attempt's worth of callback chain at a
-    // time (see the class-level "EXECUTION MODEL" note above), so plain fields are safe: nothing
-    // else can be concurrently mutating them while a run is in flight. A RetryContext instance
-    // only ever runs one RetryContextType for its whole lifetime (decided at construction), so
-    // there is exactly one timer/backoff/attempt-counter set here, not one per mode.
-    private Timer? _timer;
+    // Run state is owned by the single awaited executor loop; no timer callbacks or concurrent
+    // attempt-state mutations are involved.
     private TaskCompletionSource? _completion;
     private Stopwatch? _stopwatch;
     private TimeSpan _previousDelay;
     private TimeSpan? _nextDelay;
     private int _attempt;
-    private int _stepRunning;
 
     public RetryContext(IDatabaseContext context, RetryContextType retryContextType, RetryContextOptions? options = null)
     {
@@ -155,7 +150,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
         try
         {
-            await RunTimerDrivenAsync(cancellationToken).ConfigureAwait(false);
+            await RunRetryLoopAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -171,17 +166,12 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     }
 
     /// <summary>
-    /// Arms the single timer-driven attempt loop and returns once the whole run resolves — see
-    /// the class-level "EXECUTION MODEL" note. A RetryContext instance runs exactly one
-    /// <see cref="RetryContextType"/> for its entire lifetime (<see cref="StartAsync"/> already
-    /// rejected any unimplemented mode before this is ever reached), so there is exactly one
-    /// timer and one backoff/attempt-counter set here, not one per mode. This method only arms
-    /// the first attempt; it does not itself execute anything — <see cref="RunStepAsync"/>'s
-    /// callback chain does the actual work and resolves <c>_completion</c> when the run concludes.
+    /// Executes attempts serially and waits for each transaction disposal to complete before
+    /// applying the next backoff and starting another attempt.
     /// </summary>
-    private ValueTask RunTimerDrivenAsync(CancellationToken cancellationToken)
+    private async ValueTask RunRetryLoopAsync(CancellationToken cancellationToken)
     {
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
         _stopwatch = Stopwatch.StartNew();
         _attempt = 0;
         _previousDelay = TimeSpan.Zero;
@@ -190,85 +180,40 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _completion = completion;
 
-        _timer = new Timer(OnTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
-
-        // If cancellation happens during backoff, wake the one-shot timer immediately. If an
-        // attempt is already running, its linked token will stop it and RunStepAsync will complete
-        // the caller's task only after that attempt's rollback/disposal has finished.
-        var cancelRegistration = linked.Token.Register(
-            static state => ((RetryContext)state!).OnCancellationRequested(),
-            this);
-
-        // The only place StartAsync itself schedules anything — every attempt after this one is
-        // scheduled by the timer callback chain below, not by this method.
-        ScheduleNextAttempt(TimeSpan.Zero);
-
-        return AwaitAndCleanUpAsync(completion, linked, cancelRegistration);
-    }
-
-    private async ValueTask AwaitAndCleanUpAsync(
-        TaskCompletionSource completion,
-        CancellationTokenSource linked,
-        CancellationTokenRegistration cancelRegistration)
-    {
         try
         {
+            while (!completion.Task.IsCompleted)
+            {
+                _nextDelay = null;
+                await RunStepAsync(linked.Token).ConfigureAwait(false);
+
+                if (!completion.Task.IsCompleted && _nextDelay is { } nextDelay)
+                {
+                    await Task.Delay(nextDelay, linked.Token).ConfigureAwait(false);
+                }
+            }
+
             await completion.Task.ConfigureAwait(false);
         }
         finally
         {
-            cancelRegistration.Dispose();
-            _timer?.Dispose();
-            _timer = null;
-            linked.Dispose();
+            _completion = null;
         }
     }
 
-    /// <summary>
-    /// The timer callback. Stops the timer first thing, before anything else runs, so nothing can
-    /// re-fire while this attempt (or the scheduling decision at the end of it) is still in
-    /// progress — see the class-level "EXECUTION MODEL" note. Explicit and technically redundant
-    /// with the timer's one-shot (<see cref="Timeout.Infinite"/> period) configuration, kept for
-    /// the same discipline/documentation value regardless.
-    /// </summary>
-    private void OnTimerFired(object? state)
-    {
-        try
-        {
-            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
-            Volatile.Write(ref _stepRunning, 1);
-            _ = RunStepAsync((CancellationToken)state!);
-        }
-        catch (ObjectDisposedException)
-        {
-            // A callback that was already queued raced RetryContext disposing the timer after the
-            // run concluded through some other path. The run is over either way — nothing to do.
-        }
-    }
-
-    /// <summary>
-    /// Executes exactly one attempt, dispatched by <see cref="RetryContextType"/>, then either
-    /// resolves <c>_completion</c> (nothing left to do / non-transient or budget-exhausted failure
-    /// / cancellation) or re-arms the timer for the next step (success moving on, or a transient
-    /// failure's backoff wait) and returns. Never throws past its own boundary — every exception is
-    /// funneled into <c>_completion</c> instead, since this runs as a timer callback's
-    /// fire-and-forget continuation, not something anyone awaits directly.
-    /// </summary>
     private async Task RunStepAsync(CancellationToken cancellationToken)
     {
         var completion = _completion!;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            switch (RetryContextType)
+            if (RetryContextType == RetryContextType.Sequential)
             {
-                case RetryContextType.Sequential:
-                    await RunSequentialAttemptAsync(cancellationToken).ConfigureAwait(false);
-                    break;
-                case RetryContextType.Transactional:
-                    await RunTransactionalAttemptAsync(cancellationToken).ConfigureAwait(false);
-                    break;
+                await RunSequentialAttemptAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await RunTransactionalAttemptAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException ex)
@@ -278,22 +223,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         catch (Exception ex)
         {
             completion.TrySetException(ex);
-        }
-        finally
-        {
-            Volatile.Write(ref _stepRunning, 0);
-            if (!completion.Task.IsCompleted && _nextDelay is { } nextDelay)
-            {
-                ScheduleNextAttempt(nextDelay);
-            }
-        }
-    }
-
-    private void OnCancellationRequested()
-    {
-        if (Volatile.Read(ref _stepRunning) == 0)
-        {
-            ScheduleNextAttempt(TimeSpan.Zero);
         }
     }
 
@@ -383,7 +312,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         {
             if (txn is not null)
             {
-                await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+                await RollbackOrThrowOutcomeUnknownAsync(txn, ex, attemptCts.Token).ConfigureAwait(false);
             }
 
             throw new RetryOutcomeUnknownException(ex, _attempt);
@@ -400,7 +329,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             // own unique constraint — an earlier attempt's execution already landed server-side
             // before that attempt's failure, and this constraint violation is the proof of that,
             // not a real conflict.
-            await SafeRollbackAsync(txn!, attemptCts.Token).ConfigureAwait(false);
+            await RollbackOrThrowOutcomeUnknownAsync(txn!, ex, attemptCts.Token).ConfigureAwait(false);
 
             _queue.Dequeue();
             _attempt = 0;
@@ -411,7 +340,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         {
             if (txn is not null)
             {
-                await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+                await RollbackOrThrowOutcomeUnknownAsync(txn, ex, attemptCts.Token).ConfigureAwait(false);
             }
 
             var budgetExceeded =
@@ -424,11 +353,11 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             _previousDelay = NextDelay(_previousDelay);
             _nextDelay = _previousDelay;
         }
-        catch
+        catch (Exception ex)
         {
             if (txn is not null)
             {
-                await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+                await RollbackOrThrowOutcomeUnknownAsync(txn, ex, attemptCts.Token).ConfigureAwait(false);
             }
             throw;
         }
@@ -535,7 +464,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         {
             if (txn is not null)
             {
-                await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+                await RollbackOrThrowOutcomeUnknownAsync(txn, ex, attemptCts.Token).ConfigureAwait(false);
             }
 
             // A transient failure at the commit itself is never safe to blindly retry as a whole
@@ -559,11 +488,11 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
             _previousDelay = NextDelay(_previousDelay);
             _nextDelay = _previousDelay;
         }
-        catch
+        catch (Exception ex)
         {
             if (txn is not null)
             {
-                await SafeRollbackAsync(txn, attemptCts.Token).ConfigureAwait(false);
+                await RollbackOrThrowOutcomeUnknownAsync(txn, ex, attemptCts.Token).ConfigureAwait(false);
             }
             throw;
         }
@@ -577,15 +506,11 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     }
 
     /// <summary>
-    /// Best-effort rollback used when an attempt's transaction fails partway through. Skips the
-    /// call entirely if the transaction is already <see cref="ITransactionContext.IsCompleted"/> —
-    /// notably, a <c>CommitAsync</c> that itself throws already leaves the transaction completed
-    /// (the connection released) per its own documented contract, so attempting a second
-    /// commit/rollback on it is neither necessary nor safe. A rollback failure here is swallowed:
-    /// the original exception that triggered the rollback is what must propagate, and there is
-    /// nothing more this method could do about a rollback that itself fails.
+    /// Rolls back an attempt. If rollback cannot be confirmed, execution fails closed with an
+    /// outcome-unknown exception preserving both the original failure and rollback failure.
     /// </summary>
-    private static async ValueTask SafeRollbackAsync(ITransactionContext txn, CancellationToken cancellationToken)
+    private async ValueTask RollbackOrThrowOutcomeUnknownAsync(
+        ITransactionContext txn, Exception original, CancellationToken cancellationToken)
     {
         if (txn.IsCompleted)
         {
@@ -594,33 +519,27 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
         try
         {
-            await txn.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            await txn.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch
+        catch (Exception rollbackFailure)
         {
-            // Best-effort — see summary above.
+            throw new RetryOutcomeUnknownException(
+                new AggregateException("The operation failed and rollback could not be confirmed.", original, rollbackFailure),
+                _attempt);
         }
     }
 
     /// <summary>
-    /// Re-arms the timer for the next step. A no-op if the run already concluded through some
-    /// other path (e.g. external cancellation racing a just-finished attempt) — re-arming a
-    /// finished run would resurrect it and risk a stray extra attempt after the caller already
-    /// observed <see cref="StartAsync"/> complete.
+    /// <see cref="IExecutionGovernanceRejection"/> (PoolSaturatedException/ModeContentionException/
+    /// PoolForbiddenException) is checked first and unconditionally — per the design's "never
+    /// retried, full stop" policy, no <see cref="RetryContextOptions.IsTransientOverride"/> may
+    /// reclassify one of these three as retryable. <c>PoolGovernor</c> already owns bounded
+    /// waiting/backpressure for admission rejections; a second, uncoordinated retry on top would
+    /// add load exactly when the governor decided to stop.
     /// </summary>
-    private void ScheduleNextAttempt(TimeSpan delay)
-    {
-        if (_completion?.Task.IsCompleted == true)
-        {
-            return;
-        }
-
-        var dueMs = delay <= TimeSpan.Zero ? 0L : (long)Math.Ceiling(delay.TotalMilliseconds);
-        _timer?.Change(dueMs, Timeout.Infinite);
-    }
-
     private bool IsTransient(Exception ex) =>
-        Options.IsTransientOverride?.Invoke(ex) ?? (ex is DatabaseException db && db.IsTransient == true);
+        ex is not IExecutionGovernanceRejection &&
+        (Options.IsTransientOverride?.Invoke(ex) ?? (ex is DatabaseException db && db.IsTransient == true));
 
     /// <summary>
     /// Validates a just-executed command's affected-row count against the policy attached to its
@@ -840,7 +759,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     // reaches its terminal state.
     //
     // Both attempt methods now roll back (never commit) on any failure path before disposing their
-    // per-attempt transaction — see SafeRollbackAsync — so "Disposal never intentionally commits"
+    // per-attempt transaction — see RollbackOrThrowOutcomeUnknownAsync — so "Disposal never intentionally commits"
     // (the design doc's commit-ambiguity note) already holds for the transactions RetryContext
     // itself opens; this Dispose only ever tears down queued ISqlContainer templates, not a live
     // transaction. ----

@@ -21,7 +21,7 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud.exceptions;
 
-public sealed class PoolSaturatedException : TimeoutException
+public sealed class PoolSaturatedException : TimeoutException, IExecutionGovernanceRejection
 {
     public PoolSaturatedException(PoolLabel label, string poolKeyHash, PoolStatisticsSnapshot snapshot,
         TimeSpan timeout)

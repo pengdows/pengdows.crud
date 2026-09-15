@@ -6,6 +6,8 @@ using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -69,6 +71,31 @@ public class RetryContextSequentialExecutionTests
 
         Assert.Equal(0, rc.QueuedCommandCount);
         Assert.Contains("DELETE FROM \"t1\"", succeedingConn.ExecutedNonQueryTexts);
+    }
+
+    [Fact]
+    public async Task StartAsync_RollbackFailure_FailsClosedWithoutRetrying()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
+
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
+
+        var failingConn = new fakeDbConnection();
+        failingConn.SetNonQueryExecuteException(
+            new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        failingConn.SetTransactionRollbackException(
+            new InvalidOperationException("simulated rollback failure"));
+        var succeedingConn = new fakeDbConnection();
+        factory.Connections.Add(failingConn);
+        factory.Connections.Add(succeedingConn);
+
+        var ex = await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
+
+        Assert.Equal(1, ex.Attempt);
+        Assert.IsType<AggregateException>(ex.InnerException);
+        Assert.Empty(succeedingConn.ExecutedNonQueryTexts);
     }
 
     // NextDelay's decorrelated-jitter formula has an early-return fast path whenever
@@ -200,6 +227,79 @@ public class RetryContextSequentialExecutionTests
         {
             ctx.CloseAndDisposeConnection(held);
         }
+    }
+
+    // docs/planning/retry-context-design.md, shortcoming #5: PoolSaturatedException,
+    // ModeContentionException, and PoolForbiddenException must "never [be] retried, full stop" —
+    // not a per-exception-type distinction, one uniform rule regardless of any other
+    // classification signal. Before IExecutionGovernanceRejection was wired into IsTransient(),
+    // Options.IsTransientOverride was consulted unconditionally, so a caller-supplied override
+    // that happened to return true for one of these three would defeat the policy and retry an
+    // admission-control rejection blind — exactly what shortcoming #5 says must never happen.
+    [Theory]
+    [MemberData(nameof(GovernanceRejections))]
+    public async Task StartAsync_GovernanceRejection_IsNeverRetried_EvenWhenIsTransientOverrideSaysYes(
+        Exception rejection)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var options = new RetryContextOptions
+        {
+            MaxAttempts = 3,
+            BaseDelay = TimeSpan.Zero,
+            MaxDelay = TimeSpan.Zero,
+            IsTransientOverride = _ => true
+        };
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
+
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
+
+        var failingConn = new fakeDbConnection();
+        failingConn.SetNonQueryExecuteException(rejection);
+        var neverTouchedConn = new fakeDbConnection();
+        factory.Connections.Add(failingConn);
+        factory.Connections.Add(neverTouchedConn);
+
+        await Assert.ThrowsAsync(rejection.GetType(), () => rc.StartAsync().AsTask());
+
+        Assert.Equal(1, rc.QueuedCommandCount);
+        Assert.Empty(neverTouchedConn.ExecutedNonQueryTexts);
+    }
+
+    public static TheoryData<Exception> GovernanceRejections()
+    {
+        var poolSnapshot = new PoolStatisticsSnapshot(
+            PoolLabel.Writer,
+            "abc123",
+            MaxSlots: 4,
+            InUse: 3,
+            PeakInUse: 3,
+            Queued: 2,
+            PeakQueued: 2,
+            TurnstileQueued: 0,
+            PeakTurnstileQueued: 0,
+            TotalAcquired: 5,
+            TotalWaitTicks: 0,
+            TotalHoldTicks: 0,
+            TotalSlotTimeouts: 1,
+            TotalTurnstileTimeouts: 0,
+            TotalCanceledWaits: 0,
+            Disabled: false,
+            Forbidden: false);
+        var modeSnapshot = new ModeContentionSnapshot(
+            CurrentWaiters: 3,
+            PeakWaiters: 5,
+            TotalWaits: 9,
+            TotalTimeouts: 2,
+            TotalWaitTimeTicks: 42,
+            AverageWaitTimeTicks: 7);
+
+        return new TheoryData<Exception>
+        {
+            new PoolSaturatedException(PoolLabel.Writer, "abc123", poolSnapshot, TimeSpan.FromMilliseconds(250)),
+            new ModeContentionException(DbMode.SingleWriter, modeSnapshot, TimeSpan.FromSeconds(4)),
+            new PoolForbiddenException(PoolLabel.Writer, "abc123")
+        };
     }
 
     [Fact]

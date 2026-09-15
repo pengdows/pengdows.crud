@@ -20,7 +20,7 @@ using pengdows.crud.metrics;
 
 namespace pengdows.crud.exceptions;
 
-public sealed class ModeContentionException : TimeoutException
+public sealed class ModeContentionException : TimeoutException, IExecutionGovernanceRejection
 {
     public ModeContentionException(DbMode mode, ModeContentionSnapshot snapshot, TimeSpan timeout)
         : base($"{mode} contention: {snapshot.CurrentWaiters} waiters, timed out after {timeout}.")

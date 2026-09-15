@@ -18,7 +18,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.exceptions;
 
-public sealed class PoolForbiddenException : InvalidOperationException
+public sealed class PoolForbiddenException : InvalidOperationException, IExecutionGovernanceRejection
 {
     public PoolForbiddenException(PoolLabel label, string poolKeyHash)
         : base(
