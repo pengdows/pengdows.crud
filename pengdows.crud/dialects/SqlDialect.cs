@@ -1729,8 +1729,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
 
             case SupportedDatabase.Db2:
-                // Db2 SQLCODE -803 / SQLSTATE 23505
-                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
+                // Db2 SQLCODE -803 / SQLSTATE 23505. IBM.Data.Db2's DB2Exception often doesn't
+                // populate SqlState at all (see Db2ExceptionTranslator's own doc comment), so also
+                // fall back to the numeric SQLCODE magnitude when SqlState is unavailable.
+                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) ||
+                       errorCode == 803;
 
             case SupportedDatabase.Snowflake:
                 // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at
@@ -1753,8 +1756,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
         switch (DatabaseType)
         {
             case SupportedDatabase.SqlServer:
+                // A DELETE blocked by a child row's FK says "REFERENCE constraint", not "FOREIGN
+                // KEY constraint" — only INSERT/UPDATE blocked by a missing parent uses "FOREIGN
+                // KEY constraint" wording. Confirmed live against a real SqlServer container.
                 return errorCode == 547 &&
-                       message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
+                       (message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase) ||
+                        message.Contains("REFERENCE constraint", StringComparison.OrdinalIgnoreCase));
 
             case SupportedDatabase.PostgreSql:
             case SupportedDatabase.CockroachDb:
@@ -1784,9 +1791,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
 
             case SupportedDatabase.Db2:
-                // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
+                // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete
+                // RESTRICT). IBM.Data.Db2's DB2Exception often doesn't populate SqlState at all
+                // (see Db2ExceptionTranslator's own doc comment), so also fall back to the
+                // numeric SQLCODE magnitude when SqlState is unavailable.
                 return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(sqlState, "23504", StringComparison.OrdinalIgnoreCase);
+                       string.Equals(sqlState, "23504", StringComparison.OrdinalIgnoreCase) ||
+                       errorCode is 530 or 531 or 532;
 
             case SupportedDatabase.Snowflake:
                 // Snowflake parses FOREIGN KEY constraint DDL but never enforces it at runtime
@@ -1841,8 +1852,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
 
             case SupportedDatabase.Db2:
-                // Db2 SQLCODE -407 / SQLSTATE 23502
-                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
+                // Db2 SQLCODE -407 / SQLSTATE 23502. IBM.Data.Db2's DB2Exception often doesn't
+                // populate SqlState at all (see Db2ExceptionTranslator's own doc comment), so
+                // also fall back to the numeric SQLCODE magnitude when SqlState is unavailable.
+                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
+                       errorCode == 407;
 
             case SupportedDatabase.Snowflake:
                 // NOT NULL is the one constraint Snowflake actually enforces at runtime (error
@@ -1880,7 +1894,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
             case SupportedDatabase.MariaDb:
             case SupportedDatabase.TiDb:
             case SupportedDatabase.AuroraMySql:
-                return errorCode is 3819 or 4025;
+                // MySqlExceptionTranslator also recognizes a check violation by message pattern
+                // ("constraint" + "failed for") when no numeric error code is present at all —
+                // see MySqlTranslatorTests.MessagePattern_ConstraintFailedFor_MapsTo_CheckConstraintViolationException.
+                return errorCode is 3819 or 4025 ||
+                       (message.Contains("constraint", StringComparison.OrdinalIgnoreCase) &&
+                        message.Contains("failed for", StringComparison.OrdinalIgnoreCase));
 
             case SupportedDatabase.Oracle:
                 return errorCode == 2290;
@@ -1895,8 +1914,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
 
             case SupportedDatabase.Db2:
-                // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
-                return string.Equals(sqlState, "23513", StringComparison.OrdinalIgnoreCase);
+                // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB).
+                // IBM.Data.Db2's DB2Exception often doesn't populate SqlState at all (see
+                // Db2ExceptionTranslator's own doc comment), so also fall back to the numeric
+                // SQLCODE magnitude when SqlState is unavailable.
+                return string.Equals(sqlState, "23513", StringComparison.OrdinalIgnoreCase) ||
+                       errorCode == 545;
 
             case SupportedDatabase.Snowflake:
                 // Snowflake parses CHECK constraint DDL but never enforces it at runtime
