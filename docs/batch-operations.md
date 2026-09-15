@@ -101,6 +101,22 @@ Convenience overloads delegate to these batch methods:
 - Audit values are resolved once per batch, not once per entity.
 - Version columns are prepared during batch create, and batch update/upsert uses the same version-aware SQL generation rules as the single-row paths.
 
+### A batch version conflict is reported honestly, not attributed to a guessed entity
+
+Batch operations don't use `RETURNING`/`OUTPUT` (by design, for cross-dialect portability), so when
+a real multi-row batch-update chunk (Postgres/SQL Server/Snowflake/Oracle) reports fewer affected
+rows than the chunk's entity count, *which* entity or entities actually conflicted genuinely cannot
+be identified from the affected-row count alone. `BuildBatchConflictMessage`
+(`TableGateway.Batch.cs`) says so explicitly in the thrown `ConcurrencyConflictException`'s message
+rather than implying an attribution it can't make, and — critically — **no entity's in-memory
+`Version` is written back for an ambiguous chunk, not even for entities that may have actually
+succeeded server-side.** The caller is told to re-read every entity in that batch before retrying,
+not to assume only some are stale. This is different from the single-entity path (and from a chunk
+that happens to contain exactly one entity — always true for dialects without
+`SupportsBatchUpdate`, which fall back to one `BuildUpdate` container per entity: SQLite, MySQL,
+MariaDB, Firebird — where the conflicting entity is unambiguous and named directly in the
+exception message).
+
 ## Architecture
 
 ### Entry Points

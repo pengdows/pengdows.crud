@@ -77,6 +77,15 @@ The mode opens one sentinel through the normal connection and session-initializa
 - Firebird embedded is different: durable embedded storage can explicitly select
   `PreventDatabaseUnload`, while `SingleConnection` remains a separate, explicitly selected
   specialized mode. The latter is still a single-concurrency boundary.
+- **A second, distinct gate spans an entire open transaction, on top of the transaction's own
+  user-operation/completion locks** (`DatabaseContext.GetSingleConnectionTransactionGate()`, a
+  non-reentrant `SemaphoreSlim`). Because every operation shares one physical connection in this
+  mode, an ordinary non-transactional write (or read) issued while a transaction is open must
+  wait behind that transaction rather than risk being silently absorbed into its uncommitted
+  scope and rolled back with it — a hazard unique to sharing one physical connection, which no
+  other `DbMode` needs to guard against, so no other mode pays for this gate. A call made *from
+  inside* the transaction itself is a no-op against this gate (the transaction already holds it —
+  re-acquiring the same non-reentrant semaphore would deadlock).
 
 ### SingleWriter
 

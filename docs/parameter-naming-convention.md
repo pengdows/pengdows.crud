@@ -210,6 +210,21 @@ correct database-specific prefix before the name is embedded in SQL:
 
 The base name (without prefix) is always what you pass to `SetParameterValue()`.
 
+### Positional providers without a neutral-token sequence bind in insertion order
+
+`SqlContainer` also supports SQL that was built by calling `dialect.MakeParameterName(name)`
+directly and appending its result into the query text (always `?` for a positional dialect),
+rather than going through the `{P}NAME` neutral-placeholder form that `RenderParams()`/
+`ParamSequence` tracking depends on — `TableGateway` itself builds SQL this way. When a
+positional provider has no `ParamSequence` recorded, each `?` in the rendered text corresponds
+1:1, in order, with one `AddParameterWithValue` call, so binding parameters in insertion order is
+correct (the same reasoning applies to a named provider with no `ParamSequence`, which falls back
+identically). This was confirmed live against a real Informix container, not just inferred from
+ADO.NET's general positional-binding theory — Informix's provider was the one that actually
+exercises this fallback path in practice, since it's positional and doesn't use the neutral-token
+form. See `SqlContainer.cs`'s parameter-binding fallback (the `!_context.SupportsNamedParameters
+&& ParamSequence.Count == 0` branch) for the exact mechanism.
+
 ## Implementation: ClauseCounters
 
 All counter state lives in a `ClauseCounters` struct (value type, no heap allocation). Each

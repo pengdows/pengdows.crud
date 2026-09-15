@@ -212,6 +212,14 @@ the attribute. Everything else (POCOs, `Dictionary<,>`, `List<>`, etc. — inclu
 `Dictionary<string, object>` example above) needs the explicit attribute; there is no general
 "any complex type is JSON" inference.
 
+`ColumnInfo.JsonSerializerOptions` is stored per column (default `JsonSerializerOptions.Default`
+when `[Json]` doesn't specify one), so two `[Json]` columns on the *same* entity can use different
+serialization settings with no extra wiring — each column's own options travel with it. On the
+read side, `CompiledMapperFactory<TEntity>` bakes the actual `JsonSerializer.Deserialize<T>` call
+(with that column's specific `JsonSerializerOptions` instance) directly into the compiled
+expression-tree getter for that property, rather than resolving serializer options and reflecting
+into `JsonSerializer` generically at read time for every row.
+
 ## `[EnumColumn]`
 
 ```csharp

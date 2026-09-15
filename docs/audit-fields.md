@@ -124,6 +124,13 @@ the failed attempt — not a stale "successfully created/updated" stamp. This ap
 single-entity and batch operations (`entities.Select(SnapshotAuditFields).ToArray()` in the batch
 paths).
 
+**Exception — a `CorrelationToken`-plan `CreateAsync` whose INSERT succeeds but whose follow-up ID
+lookup then fails does *not* restore audit fields**, because the write genuinely happened; restoring
+would misrepresent a row that actually exists. See
+[`docs/generated-keys.md`](./generated-keys.md#a-two-round-trip-plans-id-retrieval-failure-does-not-falsify-the-write)
+for the full explanation — this is the one deliberate exception to the "failed write restores audit
+fields" rule above, not a gap in it.
+
 ## Summary table
 
 | Scenario | `CreatedBy`/`CreatedOn` | `LastUpdatedBy`/`LastUpdatedOn` | Resolver calls |
