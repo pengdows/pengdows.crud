@@ -1,0 +1,113 @@
+#region
+
+using System;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.@internal;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
+using pengdows.crud.fakeDb;
+using pengdows.crud.strategies.connection;
+using Xunit;
+
+#endregion
+
+namespace pengdows.crud.Tests;
+
+public class PreventDatabaseUnloadConnectionStrategyBehaviorTests
+{
+    [Fact]
+    public async Task GetConnectionAsync_OpenFailure_DISPOSES_AND_RETHROWS()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite, ConnectionFailureMode.FailAfterCount,
+            failAfterCount: 1);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await strategy.GetConnectionAsync(ctx, ExecutionType.Read, false));
+    }
+
+    // Regression guard: GetConnectionAsync must open the connection via OpenAsync, not the
+    // blocking sync Open() -- calling Open() from inside an async method is exactly the
+    // sync-over-async CLR ThreadPool-starvation pattern the "connection acquisition blocked
+    // calling thread under async load" fix was meant to eliminate everywhere. Found as a real
+    // regression on the 2.1.0 branch (same method still called sync Open()); this test locks
+    // the correct behavior down here too.
+    [Fact]
+    public async Task GetConnectionAsync_OpensConnectionAsynchronously_NotSynchronously()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive-asyncopen;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, factory);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+
+        var conn = await strategy.GetConnectionAsync(ExecutionType.Read, false);
+        try
+        {
+            var underlying = (fakeDbConnection)((IInternalConnectionWrapper)conn).UnderlyingConnection;
+            Assert.Equal(1, underlying.OpenAsyncCount);
+            Assert.Equal(0, underlying.OpenCount);
+        }
+        finally
+        {
+            conn.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task ReleaseConnectionAsync_DoesNotDisposePersistentConnection()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
+        Assert.NotNull(ctx.PersistentConnection);
+
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+        await strategy.ReleaseConnectionAsync(ctx.PersistentConnection);
+
+        Assert.Equal(ConnectionState.Open, ctx.PersistentConnection.State);
+    }
+
+    [Fact]
+    public void HandleDialectDetection_ReturnsNullWhenFactoryMissing()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive.db;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer));
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+
+        var result = strategy.HandleDialectDetection(null, null, NullLoggerFactory.Instance);
+
+        Assert.Null(result.dialect);
+        Assert.Null(result.dataSourceInfo);
+    }
+
+}
