@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    Exposes the consuming project's PengdowsMultiTenancy MSBuild property to analyzers as
+    build_property.PengdowsMultiTenancy (via CompilerVisibleProperty). Set it explicitly, in the
+    consuming .csproj:
+
+      <PropertyGroup>
+        <PengdowsMultiTenancy>true</PengdowsMultiTenancy>
+      </PropertyGroup>
+
+    to turn on PGC027 (GatewayCallSiteContextAnalyzer): every call to a gateway execution/build
+    method must then supply a non-null IDatabaseContext/ITransactionContext argument — the
+    single-tenant convenience of relying on a gateway's default context becomes a compile error.
+    Deliberately explicit, not inferred from the presence of ITenantContextRegistry/AddMultiTenancy
+    usage in the compilation, so enabling it never depends on how (or in which assembly) an
+    application happens to wire up multitenancy.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="PengdowsMultiTenancy" />
+  </ItemGroup>
+</Project>

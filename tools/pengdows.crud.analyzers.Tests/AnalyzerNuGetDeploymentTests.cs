@@ -28,6 +28,39 @@ public sealed class AnalyzerNuGetDeploymentTests
     }
 
     [Fact]
+    public void AnalyzerProject_PacksTheMultiTenancyPropsFile()
+    {
+        // PGC027's opt-in enablement (PengdowsMultiTenancy) only reaches a consuming project's
+        // compiler options if build/pengdows.crud.analyzers.props actually ships in the package —
+        // NuGet's build/{PackageId}.props auto-import convention requires this exact path.
+        var projectPath = Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "pengdows.crud.analyzers",
+            "pengdows.crud.analyzers.csproj");
+        var propsPath = Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "pengdows.crud.analyzers",
+            "build",
+            "pengdows.crud.analyzers.props");
+
+        Assert.True(File.Exists(propsPath), $"Expected props file not found: {propsPath}");
+        Assert.Contains("CompilerVisibleProperty", File.ReadAllText(propsPath));
+        Assert.Contains("PengdowsMultiTenancy", File.ReadAllText(propsPath));
+
+        var project = XDocument.Load(projectPath);
+        var packedNoneItems = project.Root!.Descendants("None")
+            .Where(e => e.Attribute("Pack")?.Value == "true")
+            .ToArray();
+
+        Assert.Contains(
+            packedNoneItems,
+            e => e.Attribute("Include")?.Value == "build/pengdows.crud.analyzers.props"
+                 && e.Attribute("PackagePath")?.Value == "build/pengdows.crud.analyzers.props");
+    }
+
+    [Fact]
     public void DeployWorkflow_PacksChecksAndPushesAnalyzerPackage()
     {
         var workflowPath = Path.Combine(RepositoryRoot, ".github", "workflows", "deploy.yml");

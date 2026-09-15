@@ -26,5 +26,11 @@
         <None Include="$(OutputPath)\$(AssemblyName).dll"
               Pack="true"
               PackagePath="analyzers/dotnet/cs" />
+        <!-- build/{PackageId}.props is auto-imported by any project referencing this package —
+             this is how PGC027's opt-in PengdowsMultiTenancy property becomes CompilerVisible in
+             a consuming project. See the file's own comments for the enablement contract. -->
+        <None Include="build/pengdows.crud.analyzers.props"
+              Pack="true"
+              PackagePath="build/pengdows.crud.analyzers.props" />
     </ItemGroup>
 </Project>

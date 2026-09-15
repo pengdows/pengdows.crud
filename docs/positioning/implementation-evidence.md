@@ -62,7 +62,7 @@ inherits from the other.
 
 ## Complete analyzer rule list (principle 9)
 
-The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
+The `pengdows.crud.analyzers` Roslyn package currently defines five rules:
 
 - **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
   as `AddScoped`/`AddTransient` are errors; these types must be singletons.
@@ -72,6 +72,11 @@ The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
   parameter (see thesis principle 3).
 - **PGC026** — warns on the split `WrapObjectName("alias") + "." + WrapObjectName("column")`
   pattern in favor of the single-call `WrapObjectName("alias.column")` form.
+- **PGC027** — opt-in (`PengdowsMultiTenancy=true` MSBuild property): a *call site* invoking a
+  gateway execution/build method must supply a non-null context argument — omitting it, or
+  passing a literal `null`/`default`, is an error. The call-site companion to PGC025's
+  definition-side check (see thesis principle 3); off by default, zero effect on single-tenant
+  projects that never set the property.
 
 ## BenchmarkValidation mechanism (principle 10)
 

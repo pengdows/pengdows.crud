@@ -277,6 +277,30 @@ before doing work — a generic "the context parameter must actually be used" ch
 documented rationale is transaction and multitenancy correctness, not a tenant-ID-specific
 runtime filter.
 
+**The default context is a single-tenant convenience, not a multitenancy escape hatch — and a
+second analyzer, PGC027, makes that distinction a compile-time contract rather than a
+convention.** A gateway's constructor-time default context (the fallback a call like
+`gateway.CreateAsync(entity)` silently uses when no context argument is supplied) is a
+perfectly ordinary, ergonomic default for a single-database application. It is not safe to rely
+on once an application opts into multitenancy: at that point, omitting the context argument
+doesn't mean "use the one obvious database," it means "silently run this operation against
+whichever tenant happened to construct this shared gateway" — a live cross-tenant correctness
+bug, not a style nit. PGC025 already protects the *callee* half of this (a gateway method must
+propagate whatever context it was given); **PGC027** (`GatewayCallSiteContextAnalyzer`) protects
+the *caller* half: once a consuming project sets the MSBuild property `PengdowsMultiTenancy` to
+`true`, any call to a gateway execution/build method that omits the context argument, or passes a
+literal `null`/`default`, is a compile error — including inside a custom subclass's own
+single-tenant-style convenience wrapper (`CreateAsync(entity) => CreateAsync(entity, null)`),
+which is exactly where this class of bug likes to hide once multitenancy is added to a project
+that started single-tenant. This is deliberately an explicit opt-in (a `CompilerVisibleProperty`,
+not a heuristic search of the compilation for an `AddMultiTenancy(...)` call) — an application can
+wire up `ITenantContextRegistry` however it likes, in whichever assembly, without the analyzer's
+enforcement depending on guessing that shape correctly. Single-tenant applications that never set
+the property see zero change in behavior: the same no-context convenience calls remain completely
+valid, exactly as before. Together, the two rules state the actual contract precisely: *"the
+default context exists, but multitenancy deliberately removes its implicit use from the valid
+programming model"* — enforced by the compiler, not left to a comment or a code-review checklist.
+
 This is additive value on its own, independent of anything else in this document, *when*
 each tenant is configured to resolve to a physically separate database. `TenantContextRegistry`
 itself does not verify this: it builds a distinct `IDatabaseContext` per tenant key from
