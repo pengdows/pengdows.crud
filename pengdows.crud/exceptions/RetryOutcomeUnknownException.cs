@@ -1,7 +1,7 @@
 // =============================================================================
 // FILE: RetryOutcomeUnknownException.cs
-// PURPOSE: Thrown when RetryContextType.Sequential deliberately stops retrying a transiently
-//          failing command instead of guessing whether it already applied server-side.
+// PURPOSE: Thrown when RetryContext deliberately stops instead of guessing whether an attempt's
+//          effects actually landed server-side.
 //
 // AI SUMMARY:
 // - Not a DatabaseException: this is a "we refuse to guess" decision, not a database-error
@@ -9,9 +9,13 @@
 //   docs/planning/retry-context-design.md.
 // - Never retried: RetryContext's retry loop only classifies DatabaseException instances; this
 //   type deliberately falls outside that hierarchy so it always propagates immediately.
-// - Thrown only for a command RetryContext cannot prove is safe to retry blind (not a DELETE, not
-//   a [Version]-guarded UPDATE) and for which the caller did not declare
-//   RetrySafety.IdempotentViaUniqueConstraint via IRetryContext.SetRetrySafety.
+// - Thrown for exactly the cases where a confirmed rollback isn't available to prove nothing
+//   applied: rollback for the failed attempt itself threw (outcome of that attempt is unknown),
+//   a transient failure occurred during CommitAsync specifically (TransactionException.Phase ==
+//   Commit — the write may have already landed server-side despite the exception), or
+//   cancellation arrived after commit had already begun. A transient failure anywhere BEFORE
+//   commit, followed by a rollback that itself completes without throwing, is retried instead —
+//   confirmed rollback is proof nothing durably applied, regardless of the statement's shape.
 // =============================================================================
 
 namespace pengdows.crud.exceptions;
@@ -20,12 +24,11 @@ public sealed class RetryOutcomeUnknownException : InvalidOperationException
 {
     public RetryOutcomeUnknownException(Exception transientFailure, int attempt)
         : base(
-            "RetryContext stopped retrying a transiently-failing command because its statement " +
-            "shape is not provably safe to retry blind (not a DELETE, not a [Version]-guarded " +
-            "UPDATE), and no RetrySafety.IdempotentViaUniqueConstraint was declared for it via " +
-            "IRetryContext.SetRetrySafety. The command may or may not have actually applied " +
-            "server-side before this failure — verify manually before deciding whether to " +
-            "resubmit it. See \"Commit ambiguity\" in docs/planning/retry-context-design.md.",
+            "RetryContext stopped retrying because it could not confirm the failed attempt's " +
+            "rollback, or a transient failure occurred during commit / after commit had already " +
+            "begun. The command may or may not have actually applied server-side — verify " +
+            "manually before deciding whether to resubmit it. See \"Commit ambiguity\" in " +
+            "docs/planning/retry-context-design.md.",
             transientFailure)
     {
         Attempt = attempt;

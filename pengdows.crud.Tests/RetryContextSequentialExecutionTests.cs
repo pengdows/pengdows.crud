@@ -55,9 +55,10 @@ public class RetryContextSequentialExecutionTests
         await using var ctx = CreateContext(factory);
         var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
 
-        // DELETE is one of the two statement shapes RetryContext recognizes as naturally safe to
-        // retry blind (see RetryContextStatementSafetyTests.cs for the commit-ambiguity policy
-        // itself) — this test is only exercising the retry-in-place mechanics, not that policy.
+        // Any statement retries in place after a confirmed rollback (see
+        // RetryContextStatementSafetyTests.cs for the commit-ambiguity policy itself) — DELETE
+        // here is just a concrete statement, not a specially-recognized shape; this test only
+        // exercises the retry-in-place mechanics.
         using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
 
         var failingConn = new fakeDbConnection();

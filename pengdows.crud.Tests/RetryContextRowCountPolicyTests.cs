@@ -72,6 +72,41 @@ public class RetryContextRowCountPolicyTests
         Assert.Equal(1, rc.QueuedCommandCount);
     }
 
+    // A row-count policy violation is a data-integrity decision ("this succeeded, but the result
+    // wasn't acceptable"), not a database-error classification — RowCountPolicyViolationException
+    // deliberately isn't a DatabaseException so it always propagates and aborts, per its own file
+    // header. But IsTransientOverride was, until now, consulted unconditionally for ANY Exception,
+    // so a caller-supplied override that happens to return true for it could silently defeat that
+    // invariant and retry a command whose result the policy already rejected.
+    [Fact]
+    public async Task StartAsync_RowCountPolicyViolation_IsNeverRetried_EvenWhenIsTransientOverrideSaysYes()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var options = new RetryContextOptions
+        {
+            MaxAttempts = 3,
+            BaseDelay = TimeSpan.Zero,
+            MaxDelay = TimeSpan.Zero,
+            IsTransientOverride = _ => true
+        };
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
+
+        using var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1 WHERE \"id\" = 1");
+        rc.SetRowCountPolicy(sc, RowCountPolicy.AtLeastOne);
+
+        var conn = new fakeDbConnection();
+        conn.EnqueueNonQueryResult(0);
+        factory.Connections.Add(conn);
+        var neverTouchedConn = new fakeDbConnection();
+        factory.Connections.Add(neverTouchedConn);
+
+        await Assert.ThrowsAsync<RowCountPolicyViolationException>(() => rc.StartAsync().AsTask());
+
+        Assert.Equal(1, rc.QueuedCommandCount);
+        Assert.Empty(neverTouchedConn.ExecutedNonQueryTexts);
+    }
+
     [Fact]
     public async Task StartAsync_ExactlyOneThrowsWhenMoreThanOneRowAffected()
     {

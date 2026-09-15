@@ -32,8 +32,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     private readonly Queue<ISqlContainer> _queue = new();
     private readonly List<ISqlContainer> _allContainers = new();
     private readonly Dictionary<ISqlContainer, RowCountPolicy> _rowCountPolicies = new();
-    private readonly Dictionary<ISqlContainer, RetrySafety> _retrySafety = new();
-    private readonly Dictionary<ISqlContainer, string?> _retrySafetyConstraints = new();
     private readonly CancellationTokenSource _stopCts = new();
     private int _started;
     private int _completed;
@@ -100,27 +98,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         }
 
         _rowCountPolicies[container] = policy;
-    }
-
-    /// <inheritdoc cref="IRetryContext.SetRetrySafety"/>
-    public void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety)
-    {
-        SetRetrySafety(container, retrySafety, null);
-    }
-
-    public void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety, string? constraintName)
-    {
-        ThrowIfDisposed();
-        ThrowIfStarted();
-        ArgumentNullException.ThrowIfNull(container);
-        if (!_queue.Contains(container))
-        {
-            throw new ArgumentException(
-                "The container is not part of this RetryContext's queue.", nameof(container));
-        }
-
-        _retrySafety[container] = retrySafety;
-        _retrySafetyConstraints[container] = constraintName;
     }
 
     private void ThrowIfStarted()
@@ -230,8 +207,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// One Sequential attempt: opens a fresh transaction, executes and commits the current queue
     /// head against it individually, then either dequeues on success or rolls back on failure. A
     /// command that succeeds is removed from the queue and never re-executed; a command that
-    /// fails transiently is retried in place — subject to the statement-shape safety check below
-    /// — up to
+    /// fails transiently is retried in place, after a *confirmed* rollback, up to
     /// <see cref="RetryContextOptions.MaxAttempts"/>/<see cref="RetryContextOptions.MaxElapsedTime"/>.
     /// See "Dual retry modes" in the design doc.
     /// </summary>
@@ -244,19 +220,23 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// has instead of a bare, un-rollback-able auto-commit.
     /// </para>
     /// <para>
-    /// Statement-shape commit-ambiguity handling (shortcoming #1) IS implemented here: a
-    /// transiently-failing command that is not provably safe to retry blind — not a
-    /// <c>DELETE</c>, not a <c>[Version]</c>-guarded <c>UPDATE</c>, and not declared
-    /// <see cref="RetrySafety.IdempotentViaUniqueConstraint"/> via
-    /// <see cref="SetRetrySafety"/> — fails closed with
-    /// <see cref="RetryOutcomeUnknownException"/> instead of blindly retrying. A command that *is*
-    /// declared idempotent-via-unique-constraint additionally treats a
-    /// <see cref="UniqueConstraintViolationException"/> on a retry attempt (never on the first
-    /// attempt) as confirmation of success rather than a real conflict. Still NOT implemented: a
-    /// <c>CommitAsync</c> that itself throws transiently is currently classified the same as any
-    /// other transient failure by this same statement-shape check — see
-    /// <see cref="RunTransactionalAttemptAsync"/>'s identical disclaimer for why that narrower
-    /// window remains a known, separate gap.
+    /// Commit-ambiguity handling (shortcoming #1) is implemented via the confirmed-rollback
+    /// guarantee, not statement-shape inference: <see cref="RollbackOrThrowOutcomeUnknownAsync"/>
+    /// fails closed with <see cref="RetryOutcomeUnknownException"/> whenever rollback itself
+    /// cannot be confirmed, so a retry only ever happens once rollback for the failed attempt has
+    /// genuinely completed — at which point nothing from that attempt could have durably applied,
+    /// regardless of whether the command was a <c>DELETE</c>, a bare <c>INSERT</c>, or anything
+    /// else. There is deliberately no per-statement-shape classification here (an earlier revision
+    /// had one, gated on <c>[Version]</c>-guarded updates and an opt-in
+    /// <c>RetrySafety.IdempotentViaUniqueConstraint</c> declaration; both were removed once
+    /// wrapping each command in its own transaction with confirmed rollback made the distinction
+    /// unnecessary — a unique-constraint violation on a later attempt can only mean a genuinely
+    /// separate conflict, since a confirmed rollback rules out this same command's own earlier
+    /// attempt having landed). A <c>CommitAsync</c> that itself throws transiently is separately
+    /// handled, the same way as in <see cref="RunTransactionalAttemptAsync"/>: a
+    /// <see cref="TransactionException"/> whose <see cref="TransactionException.Phase"/> is
+    /// <see cref="TransactionPhase.Commit"/> fails closed with
+    /// <see cref="RetryOutcomeUnknownException"/> unconditionally rather than being retried.
     /// </para>
     /// </remarks>
     private async Task RunSequentialAttemptAsync(CancellationToken cancellationToken)
@@ -321,21 +301,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         {
             throw new RetryOutcomeUnknownException(ex, _attempt);
         }
-        catch (UniqueConstraintViolationException ex) when (
-            !commitStarted && _attempt > 1 && GetRetrySafety(template) == RetrySafety.IdempotentViaUniqueConstraint &&
-            IsExpectedConstraint(template, ex))
-        {
-            // Not the first attempt, and the caller declared this command safe to retry via its
-            // own unique constraint — an earlier attempt's execution already landed server-side
-            // before that attempt's failure, and this constraint violation is the proof of that,
-            // not a real conflict.
-            await RollbackOrThrowOutcomeUnknownAsync(txn!, ex, attemptCts.Token).ConfigureAwait(false);
-
-            _queue.Dequeue();
-            _attempt = 0;
-            _previousDelay = TimeSpan.Zero;
-            _nextDelay = TimeSpan.Zero;
-        }
         catch (Exception ex) when (IsTransient(ex))
         {
             if (txn is not null)
@@ -368,21 +333,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                 await txn.DisposeAsync().ConfigureAwait(false);
             }
         }
-    }
-
-    private RetrySafety GetRetrySafety(ISqlContainer container) =>
-        _retrySafety.TryGetValue(container, out var safety) ? safety : RetrySafety.Unspecified;
-
-    private bool IsExpectedConstraint(ISqlContainer container, UniqueConstraintViolationException exception)
-    {
-        if (!_retrySafetyConstraints.TryGetValue(container, out var expected) ||
-            string.IsNullOrWhiteSpace(expected) ||
-            string.IsNullOrWhiteSpace(exception.ConstraintName))
-        {
-            return false;
-        }
-
-        return string.Equals(expected, exception.ConstraintName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -539,7 +489,8 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     /// </summary>
     private bool IsTransient(Exception ex) =>
         ex is not IExecutionGovernanceRejection &&
-        (Options.IsTransientOverride?.Invoke(ex) ?? (ex is DatabaseException db && db.IsTransient == true));
+        ex is DatabaseException db &&
+        (Options.IsTransientOverride?.Invoke(db) ?? db.IsTransient == true);
 
     /// <summary>
     /// Validates a just-executed command's affected-row count against the policy attached to its

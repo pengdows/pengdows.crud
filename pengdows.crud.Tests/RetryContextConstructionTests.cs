@@ -97,7 +97,6 @@ public class RetryContextConstructionTests
         await rc.StartAsync();
 
         Assert.Throws<InvalidOperationException>(() => rc.SetRowCountPolicy(sc, RowCountPolicy.ExactlyOne));
-        Assert.Throws<InvalidOperationException>(() => rc.SetRetrySafety(sc, RetrySafety.IdempotentViaUniqueConstraint));
     }
 
     [Theory]

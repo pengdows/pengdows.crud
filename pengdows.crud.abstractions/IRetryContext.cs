@@ -11,9 +11,10 @@ namespace pengdows.crud;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Full design: <c>docs/planning/retry-context-design.md</c> (tracked as FEAT-001). Status as of
-/// this interface's introduction: designed, not implemented — see that document for the decided
-/// and still-open pieces before relying on any particular runtime behavior here.
+/// Full design: <c>docs/planning/retry-context-design.md</c> (tracked as FEAT-001, implemented
+/// and shipping — see that document's status note and `future-work.md`'s FEAT-001 tracker row for
+/// the implementation history) — read it for the decided commit-ambiguity policy and any
+/// remaining open plumbing items before relying on a particular edge-case behavior here.
 /// </para>
 /// <para>
 /// <b>Ownership boundary:</b> a <see cref="RetryContext"/> creates and owns each attempt's
@@ -64,23 +65,6 @@ public interface IRetryContext : IDatabaseContext
     /// <param name="container">A container already present in this context's queue.</param>
     /// <param name="policy">The policy to apply when that command executes.</param>
     void SetRowCountPolicy(ISqlContainer container, RowCountPolicy policy);
-
-    /// <summary>
-    /// Declares a queued command's retry-safety classification for
-    /// <see cref="RetryContextType.Sequential"/>'s commit-ambiguity policy (see "Commit ambiguity"
-    /// in the design doc — shortcoming #1). A transiently-failing command is retried automatically
-    /// with no declaration needed when it is provably safe (a <c>DELETE</c>, or an <c>UPDATE</c>
-    /// guarded by a <c>[Version]</c> column) — this call only matters for a command that is
-    /// <i>not</i> one of those shapes (a bare <c>INSERT</c>, or an <c>UPDATE</c> with no version
-    /// guard), which otherwise fails closed with <see cref="pengdows.crud.exceptions.RetryOutcomeUnknownException"/>
-    /// instead of retrying blind.
-    /// </summary>
-    /// <param name="container">A container already present in this context's queue.</param>
-    /// <param name="retrySafety">The retry-safety classification to apply when that command executes.</param>
-    void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety);
-
-    /// <summary>Declares retry safety and, for unique-constraint idempotency, the expected constraint.</summary>
-    void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety, string? constraintName);
 
     /// <summary>
     /// Runs the queued command plan per <see cref="RetryContextType"/>'s semantics. Only one
