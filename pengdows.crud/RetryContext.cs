@@ -63,6 +63,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     private Stopwatch? _stopwatch;
     private TimeSpan _previousDelay;
     private int _attempt;
+    private int _stepRunning;
 
     public RetryContext(IDatabaseContext context, RetryContextType retryContextType, RetryContextOptions? options = null)
     {
@@ -84,6 +85,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         _inner = context;
         RetryContextType = retryContextType;
         Options = options ?? new RetryContextOptions();
+        ValidateOptions(Options);
     }
 
     public RetryContextType RetryContextType { get; }
@@ -108,6 +110,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     public void SetRowCountPolicy(ISqlContainer container, RowCountPolicy policy)
     {
         ThrowIfDisposed();
+        ThrowIfStarted();
         ArgumentNullException.ThrowIfNull(container);
         if (!_queue.Contains(container))
         {
@@ -122,6 +125,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     public void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety)
     {
         ThrowIfDisposed();
+        ThrowIfStarted();
         ArgumentNullException.ThrowIfNull(container);
         if (!_queue.Contains(container))
         {
@@ -130,6 +134,15 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         }
 
         _retrySafety[container] = retrySafety;
+    }
+
+    private void ThrowIfStarted()
+    {
+        if (IsStarted)
+        {
+            throw new InvalidOperationException(
+                "RetryContext configuration cannot be changed after StartAsync has been called.");
+        }
     }
 
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
@@ -184,14 +197,14 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _completion = completion;
 
-        // Responds to cancellation immediately, independent of whatever the timer is currently
-        // doing — without this, a cancel requested while the timer is idle mid-backoff wouldn't be
-        // noticed until that timer eventually fired.
-        var cancelRegistration = linked.Token.Register(
-            static state => ((TaskCompletionSource)state!).TrySetCanceled(),
-            completion);
-
         _timer = new Timer(OnTimerFired, linked.Token, Timeout.Infinite, Timeout.Infinite);
+
+        // If cancellation happens during backoff, wake the one-shot timer immediately. If an
+        // attempt is already running, its linked token will stop it and RunStepAsync will complete
+        // the caller's task only after that attempt's rollback/disposal has finished.
+        var cancelRegistration = linked.Token.Register(
+            static state => ((RetryContext)state!).OnCancellationRequested(),
+            this);
 
         // The only place StartAsync itself schedules anything — every attempt after this one is
         // scheduled by the timer callback chain below, not by this method.
@@ -230,6 +243,7 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
         try
         {
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            Volatile.Write(ref _stepRunning, 1);
             _ = RunStepAsync((CancellationToken)state!);
         }
         catch (ObjectDisposedException)
@@ -264,9 +278,25 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
                     break;
             }
         }
+        catch (OperationCanceledException ex)
+        {
+            completion.TrySetCanceled(ex.CancellationToken);
+        }
         catch (Exception ex)
         {
             completion.TrySetException(ex);
+        }
+        finally
+        {
+            Volatile.Write(ref _stepRunning, 0);
+        }
+    }
+
+    private void OnCancellationRequested()
+    {
+        if (Volatile.Read(ref _stepRunning) == 0)
+        {
+            ScheduleNextAttempt(TimeSpan.Zero);
         }
     }
 
@@ -432,7 +462,11 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
         if (sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && HasVersionGuardParameter(container))
         {
-            return StatementShape.VersionGuardedUpdate;
+            var whereIndex = sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+            if (whereIndex >= 0 && sql[whereIndex..].Contains("version", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatementShape.VersionGuardedUpdate;
+            }
         }
 
         return StatementShape.Other;
@@ -811,13 +845,10 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     // so deferring their disposal to this single point costs nothing in practice.
     //
     // Lifetime hazard this guards against: if Dispose/DisposeAsync is called while StartAsync is
-    // still actually running (a caller bug — StartAsync should always be awaited to completion
-    // before disposing), it is not safe to enumerate/dispose _queue/_allContainers concurrently
-    // with RunStepAsync's callback chain mutating them. IsStarted && !IsCompleted is exactly that
-    // "still running" window, so both paths below check it first and throw loudly instead of
-    // silently leaving orphaned background work or corrupting the collections — see "Required
-    // implementation corrections" in the design doc ("must not silently convert failure into
-    // success").
+    // still actually running, it is not safe to enumerate/dispose _queue/_allContainers
+    // concurrently with RunStepAsync's callback chain. ValidateDispose checks this before the
+    // base class marks the object disposed, so a rejected disposal remains retryable after the run
+    // reaches its terminal state.
     //
     // Both attempt methods now roll back (never commit) on any failure path before disposing their
     // per-attempt transaction — see SafeRollbackAsync — so "Disposal never intentionally commits"
@@ -826,15 +857,6 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
     // transaction. ----
     protected override void DisposeManaged()
     {
-        if (IsStarted && !IsCompleted)
-        {
-            _stopCts.Dispose();
-            throw new InvalidOperationException(
-                "RetryContext was disposed while StartAsync was still running. Await StartAsync to " +
-                "completion before disposing — queued commands were left untouched because it is " +
-                "not safe to enumerate them while StartAsync is concurrently executing.");
-        }
-
         foreach (var container in _allContainers)
         {
             container.Dispose();
@@ -845,20 +867,44 @@ public sealed class RetryContext : SafeAsyncDisposableBase, IRetryContext
 
     protected override async ValueTask DisposeManagedAsync()
     {
-        if (IsStarted && !IsCompleted)
-        {
-            _stopCts.Dispose();
-            throw new InvalidOperationException(
-                "RetryContext was disposed while StartAsync was still running. Await StartAsync to " +
-                "completion before disposing — queued commands were left untouched because it is " +
-                "not safe to enumerate them while StartAsync is concurrently executing.");
-        }
-
         foreach (var container in _allContainers)
         {
             await container.DisposeAsync().ConfigureAwait(false);
         }
 
         _stopCts.Dispose();
+    }
+
+    protected override void ValidateDispose()
+    {
+        if (IsStarted && !IsCompleted)
+        {
+            throw new InvalidOperationException(
+                "RetryContext cannot be disposed while StartAsync is running. Await StartAsync to " +
+                "completion before disposing.");
+        }
+    }
+
+    private static void ValidateOptions(RetryContextOptions options)
+    {
+        if (options.MaxAttempts <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "MaxAttempts must be positive.");
+        }
+
+        if (options.BaseDelay < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "BaseDelay cannot be negative.");
+        }
+
+        if (options.MaxDelay < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "MaxDelay cannot be negative.");
+        }
+
+        if (options.MaxElapsedTime is { } elapsed && elapsed <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "MaxElapsedTime must be positive.");
+        }
     }
 }

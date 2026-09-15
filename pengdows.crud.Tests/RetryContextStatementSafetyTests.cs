@@ -69,6 +69,25 @@ public class RetryContextStatementSafetyTests
     }
 
     [Fact]
+    public async Task StartAsync_UnrelatedV0ParameterDoesNotEnableVersionGuardRetry()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
+
+        using var sc = rc.CreateSqlContainer(
+            "UPDATE \"t1\" SET \"counter\" = \"counter\" + @v0 WHERE \"id\" = @k0");
+        sc.AddParameterWithValue("v0", DbType.Int32, 1);
+        sc.AddParameterWithValue("k0", DbType.Int32, 1);
+
+        var conn = new fakeDbConnection();
+        conn.SetNonQueryExecuteException(new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        factory.Connections.Add(conn);
+
+        await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
+    }
+
+    [Fact]
     public async Task StartAsync_TransientFailureOnUnguardedUpdate_FailsClosedWithRetryOutcomeUnknown()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

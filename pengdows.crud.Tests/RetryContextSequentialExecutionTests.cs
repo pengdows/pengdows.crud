@@ -203,6 +203,22 @@ public class RetryContextSequentialExecutionTests
     }
 
     [Fact]
+    public async Task StartAsync_BeginFailurePropagatesAndLeavesCommandQueued()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = CreateContext(factory);
+        var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
+        using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
+        var connection = new fakeDbConnection();
+        connection.SetFailOnBeginTransaction();
+        factory.Connections.Add(connection);
+
+        await Assert.ThrowsAsync<TransactionException>(() => rc.StartAsync().AsTask());
+
+        Assert.Equal(1, rc.QueuedCommandCount);
+    }
+
+    [Fact]
     public async Task StopAsync_CancelsAnInFlightBackoffWait()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -284,8 +300,9 @@ public class RetryContextSequentialExecutionTests
         // Never completed — the command execution hangs forever unless something bounds it.
         var gate = connection.SetExecuteGate();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => rc.StartAsync().AsTask());
+        var startTask = rc.StartAsync().AsTask();
 
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => startTask);
         Assert.Equal(1, rc.QueuedCommandCount);
 
         // Release the gate so the now-cancelled task's awaited continuation isn't left dangling.

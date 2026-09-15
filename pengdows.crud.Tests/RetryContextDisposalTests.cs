@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -98,7 +99,7 @@ public class RetryContextDisposalTests
         try
         {
             Assert.Throws<InvalidOperationException>(() => rc.Dispose());
-            Assert.True(rc.IsDisposed);
+            Assert.False(rc.IsDisposed);
         }
         finally
         {
@@ -112,5 +113,35 @@ public class RetryContextDisposalTests
         await startTask;
 
         Assert.Equal(0, rc.QueuedCommandCount);
+        rc.Dispose();
+        Assert.True(sc.IsDisposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhileStartAsyncIsStillRunning_DoesNotPoisonLaterCleanup()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=retrycontext-dispose-async;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        await using var ctx = new DatabaseContext(config, factory);
+        var connection = factory.CreatedConnections.Single();
+        var rc = new RetryContext(ctx, RetryContextType.Sequential);
+        var sc = rc.CreateSqlContainer("UPDATE \"t1\" SET \"x\" = 1");
+        var gate = connection.SetExecuteGate();
+
+        var startTask = rc.StartAsync().AsTask();
+        await Task.Delay(30);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => rc.DisposeAsync().AsTask());
+        Assert.False(rc.IsDisposed);
+
+        gate.TrySetResult(true);
+        await startTask;
+        await rc.DisposeAsync();
+        Assert.True(sc.IsDisposed);
     }
 }

@@ -32,6 +32,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
 
     public void Dispose()
     {
+        ValidateDispose();
         if (!TryBeginDispose())
         {
             return;
@@ -76,6 +77,7 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
 
     public async ValueTask DisposeAsync()
     {
+        ValidateDispose();
         if (!TryBeginDispose())
         {
             return;
@@ -133,6 +135,10 @@ public abstract class SafeAsyncDisposableBase : ISafeAsyncDisposableBase, IDispo
 
     /// <summary>Override for synchronous unmanaged cleanup. Prefer SafeHandle.</summary>
     protected virtual void DisposeUnmanaged()
+    {
+    }
+
+    protected virtual void ValidateDispose()
     {
     }
 
