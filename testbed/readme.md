@@ -1,17 +1,30 @@
 # Integration Test Suite
 
-The testbed runs a fixed matrix of **17–19 checks** against every supported database to verify
-that `pengdows.crud` behaves correctly across dialects. Tests run via Testcontainers (Docker)
-with up to 2 databases in parallel.
+**This project's own scope narrowed after a consolidation with `pengdows.crud.IntegrationTests`
+(see `CLAUDE.md`'s "Adding a New Database" checklist, item 4) — most of what this document used
+to describe as "the testbed's 17–19 checks" no longer runs here.** `testbed` now only does
+container-provisioning-adjacent work per database: spin up a real Testcontainers instance
+(or, for SQLite/DuckDB, a local file/memory connection), create the shared test table
+(`CreateTable`), run a scalar-UDF smoke check and the `DbMode`/`PreventDatabaseUnload`
+idle-unload probe, then dispose the container — plus a `RunAdditionalTestsAsync()` hook for the
+handful of checks that genuinely need the live container itself (not just a connection string),
+overridden today by SQLite, DuckDB, PostgreSQL, SQL Server, MariaDB, Spanner, and Db2's own
+`TestProvider` subclasses.
+
+Everything else — CRUD round-trips, parameter binding, transactions/isolation, stored procedures,
+upsert/error-mapping/identifier-quoting capability probes, pool isolation, kill-connection
+rollback behavior, `DbMode` lock-contention scenarios — now lives in `pengdows.crud.IntegrationTests`
+as ordinary xUnit tests (see that project's `Core/`, `ErrorHandling/`, and `DatabaseSpecific/`
+folders), using `DatabaseTestBase`/`IntegrationTestFixture` rather than this project's
+container-orchestration machinery. `run-integration-tests.sh` runs both halves — this program and
+that xUnit suite — as "the two halves of running the integration tests." Tests here still run via
+Testcontainers (Docker) with up to 2 databases in parallel.
 
 ## Running
 
 ```bash
-# All always-on databases (11)
+# All always-on databases (16 SQL engines + FlatFile)
 dotnet run -c Release --project testbed
-
-# Include Oracle (requires license acceptance)
-INCLUDE_ORACLE=true dotnet run -c Release --project testbed
 
 # Include Snowflake (requires credentials)
 INCLUDE_SNOWFLAKE=true dotnet run -c Release --project testbed
@@ -33,15 +46,21 @@ Per-engine overrides use `TESTBED_<ENGINE>_IMAGES` with two comma-separated imag
 
 ## Always-on Databases
 
-SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB, IBM Db2 LUW
+Oracle and several others were promoted from opt-in to unconditional as their integration
+matured — this list reflects `ParallelTestOrchestrator.GetTestConfigurations()` as it actually
+stands today, not the original smaller set:
+
+SQLite, DuckDB, FlatFile (not an RDBMS — a flat-file provider, included here since it registers
+the same way), PostgreSQL, Google Spanner, MySQL, MariaDB, SQL Server, CockroachDB, Firebird,
+TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 
 ## Opt-in Databases
 
 | Database | Env var | Reason |
 |----------|---------|--------|
-| Oracle | `INCLUDE_ORACLE=true` | Image requires license acceptance |
 | Snowflake | `INCLUDE_SNOWFLAKE=true` | Cloud-only, requires credentials |
 | SAP HANA | `INCLUDE_SAPHANA=true` | Real Docker image, but a working container needs 16-32GB RAM — far beyond a standard CI runner and every database above |
+| InterBase | `INCLUDE_INTERBASE=true` | A personal, non-shareable, node-locked Developer Edition license (registration state lives in a persistent volume, not the image) plus a native `libgds.so` required on the host running the testbed process — see `InterBaseTestContainer.cs` |
 
 > **SAP HANA**: `HanaTestContainer`/`HanaTestProvider` spin up `saplabs/hanaexpress`, single pinned
 > image (no version matrix — see `HanaTestContainer.cs`). Confirmed live: full CRUD lifecycle and
@@ -51,166 +70,65 @@ SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, T
 
 ---
 
-## Test Scenarios
+## What Still Runs Here
 
-### 1. CreateTable
+### CreateTable
 Drops and recreates a 10-column test table (`id`, `name`, `description`, `value`, `is_active`,
 `created_at`, `created_by`, `updated_at`, `updated_by`) using dialect-specific DDL. Oracle uses
 `NUMBER` + `SEQUENCE`/`TRIGGER`; SQL Server uses `IDENTITY`; MySQL uses `BIGINT AUTO_INCREMENT`,
-etc.
+etc. Runs for every database, every time.
 
-### 2. InsertRows
-Inserts one row using `BuildCreate()` + `ExecuteNonQueryAsync()` and asserts the row count goes
-from 0 to 1.
+### Scalar UDF
+Creates and calls a scalar user-defined function inline in a `SELECT` statement
+(`TestScalarUdf()`, a virtual no-op by default). Currently only implemented for Snowflake; every
+other database skips this check silently.
 
-### 3. RetrieveRows
-Retrieves the inserted row by ID using `BuildRetrieve()` + `LoadListAsync()` and asserts all
-fields match.
+### DbMode / PreventDatabaseUnload idle-unload probe
+Measures cold-vs-warm connection latency after an idle period to validate the
+`PreventDatabaseUnload` sentinel's actual effect (see `CLAUDE.md`'s connection-modes section for
+the empirical background — this is the check that produced those numbers, not just documentation
+asserting them).
 
-### 4. DeleteRows
-Deletes the row using `BuildDelete()` and asserts the row count returns to 0.
+### `RunAdditionalTestsAsync()` container-level hooks
+A small number of databases override this for a check that genuinely needs the live container
+itself, not just a pooled connection string — currently SQLite, DuckDB, PostgreSQL, SQL Server,
+MariaDB, Spanner, and Db2. See each database's own `*TestProvider.cs` for what it actually checks;
+these are container-provisioning-adjacent probes, not general CRUD/transaction coverage.
 
-### 5. Transactions
-Two sub-checks:
-- **Rollback**: insert inside a transaction, roll back, assert count unchanged.
-- **Commit**: insert inside a transaction, commit, assert count incremented.
+## Where the Rest Moved
 
-Uses `Context.BeginTransaction()`, `Commit()`, `Rollback()`.
+The checks this document used to describe in detail — insert/retrieve/delete, transactions
+(commit/rollback/read-your-writes/savepoints), stored procedures, parameter binding, row
+round-trip and type-fidelity checks, concurrency, command/container reuse, upsert, paging, error
+mapping, and identifier quoting — are not gone, they moved to `pengdows.crud.IntegrationTests` as
+ordinary `[SkippableFact]` xUnit tests during the consolidation `CLAUDE.md` documents. Rough
+mapping, by folder (exact per-check file names weren't individually re-verified for this pass —
+grep the folder for the scenario name if you need the precise file):
 
-### 6. Stored Procedure Return Value
-Creates a database-specific stored procedure or function, calls it via `WrapForStoredProc()`,
-and verifies the return value. Each database uses native syntax:
-- SQL Server: `CREATE PROCEDURE … RETURN 5`
-- PostgreSQL / CockroachDB / YugabyteDB: `CREATE FUNCTION … RETURNS INT`
-- MySQL / MariaDB / TiDB: `CREATE PROCEDURE … SELECT 42`
-- Oracle: `CREATE PROCEDURE … :result := 42`
-- Firebird: `CREATE PROCEDURE … SUSPEND`
-- Snowflake: `CREATE PROCEDURE … RETURNS VARCHAR LANGUAGE JAVASCRIPT`
+| Old testbed scenario | Now lives in |
+|---|---|
+| Insert/Retrieve/Delete, row round-trip, type fidelity | `Core/BasicCrudTests.cs`, `Core/RoundTripTests.cs`, `Core/TypeHydrationTests.cs` |
+| Transactions (commit/rollback/read-your-writes) | `Core/TransactionResilienceTests.cs` |
+| Savepoints | `Core/TransactionResilienceTests.cs` (capability-gated per dialect's `SupportsSavepoints`) |
+| Stored procedures | `Core/StoredProcedureTests.cs` |
+| Parameter binding | `Core/ParameterBindingTests.cs` |
+| Command/container reuse | `Core/SqlContainerReuseTests.cs` |
+| Upsert / merge conflicts | `Core/MergeConflictTests.cs`, `Core/VersionedUpsertConflictTests.cs` |
+| Identifier quoting | `Core/QuotingTortureTests.cs`, `Core/EmbeddedQuoteIdentifierIntegrationTests.cs` |
+| Error mapping (constraint violations, deadlocks, timeouts, transient errors) | `ErrorHandling/ConstraintViolationTests.cs` and siblings |
+| Pool isolation, kill-connection rollback, `DbMode` lock contention | `DatabaseSpecific/`, `Core/MultiTenantDialectVersionTests.cs`, `Core/RetryContextTests.cs` |
 
-*Skipped: SQLite, DuckDB (no stored procedure support)*
-
-### 7. Scalar UDF
-Creates and calls a scalar user-defined function inline in a `SELECT` statement. Currently only
-implemented for Snowflake (the base class is a no-op, so all other databases skip this check
-silently).
-
-*Skipped: all databases except Snowflake*
-
-### 8. Parameter Binding
-Four sub-checks:
-- **Marker format**: verifies correct prefix (`:` Oracle/Firebird, `@` SQL Server/MySQL/PostgreSQL,
-  `$` DuckDB).
-- **NULL semantics**: `col = NULL` returns 0 rows; `col IS NULL` on a NOT NULL column returns 0
-  rows.
-- **Duplicate named parameters**: SQL Server/MySQL/PostgreSQL allow the same name twice; Oracle
-  requires distinct names (`p0`, `p1`) — the Oracle provider overrides this check.
-- **Type matrix**: creates a `binding_matrix` table and round-trips `int`, `long`, `decimal`,
-  `bool`, `string`, `DateTimeOffset` (skipped if unsupported), `Guid` (skipped if unsupported),
-  `binary` through parameterized INSERT + SELECT.
-
-### 9. Row Round-Trip
-Inserts a row with Unicode text, `bool = false`, an enum value, a specific `int`, and a
-`DateTime`, then retrieves it and asserts every field coerces back to the correct .NET value.
-
-### 10. Row Round-Trip Fidelity
-Deeper type fidelity check using a dedicated `fidelity_test` table with columns:
-
-| Column | Value tested |
-|--------|-------------|
-| `unicode_text` | Multi-script Unicode string |
-| `empty_text` | `""` (empty string) |
-| `null_text` | `NULL` |
-| `padded_text` | String with leading/trailing whitespace |
-| `decimal_value` | Precise decimal with scale |
-| `decimal_edge` | Very small / very large decimal |
-| `is_active` | `bool` false |
-| `dto_value` | `DateTimeOffset` with timezone offset *(skip if unsupported)* |
-| `guid_value` | `Guid` *(skip if unsupported)* |
-| `binary_value` | `byte[]` blob |
-
-Each column is verified to survive a full insert→retrieve cycle within type-specific tolerances
-(e.g. datetime tolerance defaults to 2 s, widens for SQLite text storage).
-
-### 11. Extended Transactions — Rollback on Exception
-Begins a transaction, inserts a row, then throws an exception inside the transaction scope.
-Verifies the implicit rollback leaves the row count unchanged.
-
-### 12. Extended Transactions — Read-Your-Writes
-Inside a transaction, inserts a row and immediately reads count — verifies the new row is
-visible within the same transaction before commit. Rolls back; verifies count outside is
-unchanged.
-
-### 13. Extended Transactions — Savepoints
-Creates a savepoint after inserting a first row, inserts a second row, rolls back to the
-savepoint, then commits. Verifies only the first row persists.
-
-*Skipped: MySQL, MariaDB, TiDB, Snowflake (dialect `SupportsSavepoints = false`)*
-
-### 14. Concurrency
-Spawns 5 parallel `Task`s; each independently inserts a row with a random description,
-retrieves it by ID, and deletes it. Asserts all 5 tasks complete without error, exercising the
-connection pool and thread-safety of `DatabaseContext`.
-
-### 15. Command Reuse
-Builds one parameterized `ISqlContainer` targeting a specific row. Executes it (1 row
-returned). Swaps the parameter value via `SetParameterValue()` to target a different row.
-Executes again (1 row returned). Verifies the container can be reused without rebuilding SQL.
-
-### 16. Upsert
-Two sub-checks via `BuildUpsert()`:
-- **Insert path**: upserts a row that does not yet exist — row is created.
-- **Update path**: mutates a field on the entity, upserts again — existing row is updated and
-  retrieved value matches the mutation.
-
-Uses dialect-native upsert:
-- SQL Server / Oracle: `MERGE`
-- PostgreSQL / CockroachDB / YugabyteDB: `INSERT … ON CONFLICT DO UPDATE`
-- MySQL / MariaDB / TiDB: `INSERT … ON DUPLICATE KEY UPDATE`
-- Firebird: `MERGE`
-- SQLite: `INSERT OR REPLACE`
-
-*Skipped: databases that support none of the above (currently none)*
-
-### 17. Paging
-Inserts 10 rows with known IDs, then paginates using dialect-specific syntax:
-
-| Dialect | Syntax |
-|---------|--------|
-| PostgreSQL, MySQL, MariaDB, TiDB, SQLite, DuckDB, CockroachDB, YugabyteDB | `LIMIT n OFFSET m` |
-| SQL Server | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
-| Oracle | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` |
-| Firebird | `ROWS m TO n` |
-
-Retrieves page 1 (first 5 IDs) and page 2 (next 5 IDs). Asserts each page has exactly 5 rows
-and there is no overlap between pages.
-
-### 18. Error Mapping
-Three sub-checks:
-- **Unique violation**: inserts a duplicate row expecting a `DbException` with an informative
-  message containing the constraint name. *(Skipped: Snowflake — does not enforce PK constraints)*
-- **Connection health after exception**: asserts a follow-up `COUNT(*)` query succeeds after the
-  exception, proving the connection is not permanently broken.
-- **Syntax error**: executes an intentionally malformed SQL statement and asserts a `DbException`
-  is raised with a non-empty message.
-
-### 19. Identifier Quoting
-Creates a table whose column names are reserved words or contain special characters:
-
-| Column name | Challenge |
-|-------------|-----------|
-| `order` | Reserved keyword |
-| `user` | Reserved keyword |
-| `default` | Reserved keyword |
-| `display name` | Space in name |
-| `CamelCase` | Mixed case |
-
-Inserts a row and retrieves each column by name using `WrapObjectName()` (which emits
-dialect-specific quoting: `[…]` SQL Server, `"…"` PostgreSQL/Oracle, `` `…` `` MySQL). Verifies
-values survive the quoting round-trip correctly.
+If you're adding integration coverage for a new behavior, it almost certainly belongs in one of
+those `pengdows.crud.IntegrationTests` folders, not here — see `CLAUDE.md`'s "Adding a New
+Database" checklist item 4 for the exact division of responsibility.
 
 ---
 
 ## Skip Matrix
+
+**These checks now execute via `pengdows.crud.IntegrationTests` (see "Where the Rest Moved"
+above), not this project — the matrix is kept here because it hasn't been re-homed into that
+project's own docs yet, not because these checks still run in `testbed`.**
 
 | Check | SQLite | DuckDB | MySQL | MariaDB | TiDB | Firebird | PostgreSQL | SQL Server | CockroachDB | YugabyteDB | Oracle | Snowflake |
 |-------|--------|--------|-------|---------|------|----------|------------|------------|-------------|------------|--------|-----------|
@@ -223,6 +141,11 @@ values survive the quoting round-trip correctly.
 
 ⏭ = skipped (dialect limitation)  ✅ = runs
 
+**This table predates Spanner, Db2, SingleStore, Sybase ASE, Informix, SAP HANA, and InterBase
+being added to the testbed and has not been re-verified against them** — treat it as accurate
+for the twelve databases listed and unknown (not "all ✅") for the rest until someone checks each
+one's actual skip behavior and adds a column.
+
 ---
 
 ## Architecture
@@ -231,22 +154,33 @@ values survive the quoting round-trip correctly.
 testbed/
 ├── Program.cs                        Entry point; parses args and env vars
 ├── ParallelTestOrchestrator.cs       Starts containers, runs TestProvider per DB, collects results
-├── TestProvider.cs                   Base class with all 17+ test scenario methods (~2000 lines)
+├── TestProvider.cs                   Base class: CreateTable, scalar-UDF, idle-unload probe (~466 lines)
 ├── TestContainer.cs                  Shared container startup / wait-for-ready logic
 ├── Sqlite/                           SQLite — no container (file/memory based)
 ├── DuckDb/
 ├── Db2/
-├── PostgreSql/
-├── MySql/
-├── MariaDb/
+├── PostgreSQL/
+├── Spanner/
+├── MySQL/
+├── mariaDb/
 ├── SqlServer/
-├── CockroachDb/
+├── Cockroach/
 ├── Firebird/
-├── TiDb/
-├── YugabyteDb/
-├── Oracle/                           Opt-in (INCLUDE_ORACLE=true)
-└── Snowflake/                        Opt-in (INCLUDE_SNOWFLAKE=true)
+├── TiDB/
+├── Yugabyte/
+├── Oracle/                           Always-on (promoted from opt-in as integration matured)
+├── SingleStore/
+├── Sybase/
+├── Informix/
+├── Snowflake/                        Opt-in (INCLUDE_SNOWFLAKE=true)
+├── SapHana/                          Opt-in (INCLUDE_SAPHANA=true)
+└── InterBase/                        Opt-in (INCLUDE_INTERBASE=true)
 ```
+
+`TestProvider.cs`'s own detailed responsibilities (CreateTable, scalar-UDF check, idle-unload
+probe, the `RunAdditionalTestsAsync` hook) are described above under "What Still Runs Here" — the
+17-19 check CRUD/transaction/etc. battery this file used to run directly now lives in
+`pengdows.crud.IntegrationTests` instead.
 
 Each database subdirectory contains:
 - `*TestContainer.cs` — starts the Testcontainers image and returns a connection string
