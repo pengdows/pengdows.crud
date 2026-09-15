@@ -94,14 +94,18 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     internal readonly BoundedCache<string, IReadOnlyList<IColumnInfo>> _columnListCache = new(MaxCacheSize);
 
-    // Keyed by dialect (SupportedDatabase) so different dialects never share SQL strings
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string>> _queryCache = new();
+    // Keyed by dialect INSTANCE (not the SupportedDatabase enum) so two contexts on the same
+    // product but different server versions never share stale SQL strings. A ConditionalWeakTable
+    // (rather than a ConcurrentDictionary) ties each entry's lifetime to its dialect instance, so
+    // the cache doesn't grow without bound as contexts are created/disposed over a long-running
+    // process's lifetime.
+    private readonly ConditionalWeakTable<ISqlDialect, BoundedCache<string, string>> _queryCache = new();
 
-    private readonly ConcurrentDictionary<SupportedDatabase, BoundedCache<string, string[]>> _whereParameterNames =
+    private readonly ConditionalWeakTable<ISqlDialect, BoundedCache<string, string[]>> _whereParameterNames =
         new();
 
-    // Cache for wrapped table names per dialect
-    private readonly ConcurrentDictionary<ISqlDialect, string> _wrappedTableNameCache = new();
+    // Cache for wrapped table names per dialect instance (same leak-safety rationale as above)
+    private readonly ConditionalWeakTable<ISqlDialect, string> _wrappedTableNameCache = new();
 
     // Thread-safe cache for hybrid reader plans by recordset shape hash
     private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
@@ -347,10 +351,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     // =========================================================================
 
     internal BoundedCache<string, string> GetOrCreateQueryCache(ISqlDialect dialect) =>
-        _queryCache.GetOrAdd(dialect.DatabaseType, static _ => new BoundedCache<string, string>(MaxCacheSize));
+        _queryCache.GetValue(dialect, static _ => new BoundedCache<string, string>(MaxCacheSize));
 
     internal BoundedCache<string, string[]> GetOrCreateParamNamesCache(ISqlDialect dialect) =>
-        _whereParameterNames.GetOrAdd(dialect.DatabaseType,
+        _whereParameterNames.GetValue(dialect,
             static _ => new BoundedCache<string, string[]>(MaxCacheSize));
 
     private static int ResolveReaderPlanCacheSize(IDatabaseContext context)
@@ -375,7 +379,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     protected string BuildWrappedTableName(ISqlDialect dialect)
     {
-        return _wrappedTableNameCache.GetOrAdd(dialect, d =>
+        return _wrappedTableNameCache.GetValue(dialect, d =>
         {
             if (string.IsNullOrWhiteSpace(_tableInfo.Schema) || !d.SupportsNamespaces)
             {
@@ -404,10 +408,13 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     protected void CheckParameterLimit(ISqlContainer sc, int? toAdd)
     {
+        var maxParameterLimit = sc is ISqlDialectProvider dialectProvider
+            ? dialectProvider.Dialect.MaxParameterLimit
+            : _context.MaxParameterLimit;
         var count = sc.ParameterCount + (toAdd ?? 0);
-        if (count > _context.MaxParameterLimit)
+        if (count > maxParameterLimit)
         {
-            throw new TooManyParametersException("Too many parameters", _context.MaxParameterLimit);
+            throw new TooManyParametersException("Too many parameters", maxParameterLimit);
         }
     }
 

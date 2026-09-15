@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
@@ -49,12 +50,14 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         var sc1 = helper1.BuildCreate(entity1);
         var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var dialectCache1 = field.GetValue(helper1) as IDictionary;
-        var initialCacheCount = dialectCache1!.Count;
+        // The cache is a ConditionalWeakTable (ties entry lifetime to the dialect instance to
+        // avoid unbounded growth), which exposes no .Count - enumerate it instead.
+        var dialectCache1 = (IEnumerable)field.GetValue(helper1)!;
+        var initialCacheCount = dialectCache1.Cast<object>().Count();
 
         var sc2 = helper1.BuildCreate(entity2);
-        var dialectCache2 = field.GetValue(helper1) as IDictionary;
-        var finalCacheCount = dialectCache2!.Count;
+        var dialectCache2 = (IEnumerable)field.GetValue(helper1)!;
+        var finalCacheCount = dialectCache2.Cast<object>().Count();
 
         // Verify cache was reused (same count means no new templates were created)
         Assert.Equal(initialCacheCount, finalCacheCount);
@@ -94,12 +97,12 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
 
         var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var dialectCache1 = field.GetValue(helper1) as IDictionary;
-        var initialCacheCount = dialectCache1!.Count;
+        var dialectCache1 = (IEnumerable)field.GetValue(helper1)!;
+        var initialCacheCount = dialectCache1.Cast<object>().Count();
 
         await helper1.BuildUpdateAsync(entity2, false);
-        var dialectCache2 = field.GetValue(helper1) as IDictionary;
-        var finalCacheCount = dialectCache2!.Count;
+        var dialectCache2 = (IEnumerable)field.GetValue(helper1)!;
+        var finalCacheCount = dialectCache2.Cast<object>().Count();
 
         // Verify cache was reused (same count means no new templates were created)
         Assert.Equal(initialCacheCount, finalCacheCount);

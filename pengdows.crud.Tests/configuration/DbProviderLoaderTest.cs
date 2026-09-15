@@ -20,6 +20,18 @@ namespace pengdows.crud.Tests.configuration;
 public class DbProviderLoaderTests
 {
     [Fact]
+    public void Constructors_AreNotPublic()
+    {
+        // CLAUDE.md: "Minimize public APIs; make types/members internal when possible" and
+        // "Don't add new public constructors unless there is a clear SDK-use reason." Every
+        // caller of DbProviderLoader in this codebase lives in pengdows.crud.Tests/testbed/etc,
+        // which already have InternalsVisibleTo access - there is no SDK consumer that needs a
+        // public constructor here.
+        var publicConstructors = typeof(DbProviderLoader).GetConstructors(BindingFlags.Instance | BindingFlags.Public);
+        Assert.Empty(publicConstructors);
+    }
+
+    [Fact]
     public void Constructor_NullConfiguration_Throws()
     {
         var logger = new Mock<ILogger<DbProviderLoader>>();

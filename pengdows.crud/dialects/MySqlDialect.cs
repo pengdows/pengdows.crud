@@ -125,6 +125,21 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsNamedParameters => true;
 
+    protected override bool NormalizeDateTimeOffsetToUtc => true;
+
+    protected override DbType RemapDbType(DbType type) =>
+        type == DbType.Boolean ? DbType.Byte : base.RemapDbType(type);
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.Boolean && value is bool boolean)
+        {
+            return boolean ? (byte)1 : (byte)0;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
     // IMMUTABLE: MySQL theoretical maximum parameter limit - do not change without extensive testing
     public override int MaxParameterLimit => 65535;
 

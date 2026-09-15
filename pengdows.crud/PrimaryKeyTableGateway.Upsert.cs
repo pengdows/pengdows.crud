@@ -523,7 +523,17 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
             }
 
-            sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+            // A dialect may support both MERGE and ON CONFLICT. The cached fragment is normally
+            // built for MERGE in that case and references its source alias (s), while
+            // PostgreSQL's ON CONFLICT branch requires EXCLUDED. Mirrors the identical fix in
+            // TableGateway.Batch.cs's BuildBatchUpsertOnConflict.
+            var updateFragment = template.UpsertUpdateFragment;
+            if (dialect.SupportsMerge && dialect.SupportsInsertOnConflict && updateFragment != null)
+            {
+                updateFragment = updateFragment.Replace("s.", "EXCLUDED.", StringComparison.OrdinalIgnoreCase);
+            }
+
+            sc.Query.Append(") DO UPDATE SET ").Append(updateFragment);
 
             if (template.UpsertOnConflictVersionWhere != null)
             {

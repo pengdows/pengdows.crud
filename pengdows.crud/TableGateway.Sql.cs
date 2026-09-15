@@ -366,7 +366,7 @@ public partial class TableGateway<TEntity, TRowID>
     private CachedSqlTemplates GetTemplatesForDialect(ISqlDialect dialect)
     {
         return _templatesByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedSqlTemplates>(() =>
+            .GetValue(dialect, _ => new Lazy<CachedSqlTemplates>(() =>
                 BuildCachedSqlTemplatesForDialect(dialect)))
             .Value;
     }
@@ -411,7 +411,7 @@ public partial class TableGateway<TEntity, TRowID>
         try
         {
             return _containersByDialect
-                .GetOrAdd(dialect.DatabaseType, _ => new Lazy<CachedContainerTemplates>(() =>
+                .GetValue(dialect, _ => new Lazy<CachedContainerTemplates>(() =>
                     BuildCachedContainerTemplatesForDialect(dialect, context)))
                 .Value;
         }

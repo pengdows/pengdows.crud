@@ -20,6 +20,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
@@ -84,6 +85,8 @@ internal class PostgreSqlDialect : SqlDialect
     // Use '@' parameter marker — ADO.NET standard; avoids Npgsql's '::' cast lookahead
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
+
+    protected override bool NormalizeDateTimeOffsetToUtc => true;
 
     public override bool SupportsSetValuedParameters => true;
 
@@ -255,6 +258,28 @@ internal class PostgreSqlDialect : SqlDialect
     public override string GetVersionQuery()
     {
         return "SELECT version()";
+    }
+
+    public override Version? ParseVersion(string versionString)
+    {
+        if (string.IsNullOrWhiteSpace(versionString))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(versionString, @"PostgreSQL\s+(\d+(?:\.\d+)*)",
+            RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var raw = match.Groups[1].Value;
+            var normalized = raw.Contains('.', StringComparison.Ordinal) ? raw : raw + ".0";
+            if (Version.TryParse(normalized, out var version))
+            {
+                return version;
+            }
+        }
+
+        return base.ParseVersion(versionString);
     }
 
     public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)

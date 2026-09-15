@@ -9,7 +9,9 @@ using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -561,5 +563,98 @@ public class PrimaryKeyTableGatewayTests
 
         var rows = await gw.BatchUpsertAsync(entities);
         Assert.True(rows >= 0);
+    }
+
+    [Fact]
+    public void BuildBatchUpsert_PostgreSqlSupportsMergeAndOnConflict_UsesExcludedNotSourceAlias()
+    {
+        // fakeDb's PostgreSql emulation defaults to version 15.0, so SupportsMerge is true
+        // (PostgreSqlDialect.SupportsMerge => IsVersionAtLeast(15)) alongside the always-true
+        // SupportsInsertOnConflict. BuildBatchUpsert picks the ON CONFLICT path (it checks
+        // SupportsInsertOnConflict before SupportsMerge), so the cached UpsertUpdateFragment -
+        // which is built assuming a MERGE "USING (...) AS s" source alias whenever SupportsMerge
+        // is true - must NOT be used verbatim in an ON CONFLICT DO UPDATE SET clause: there is no
+        // "s" alias there, only PostgreSQL's implicit EXCLUDED pseudo-table.
+        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+        var entities = new[]
+        {
+            new OrderLine { OrderId = 1, LineNumber = 1, ProductCode = "A", Quantity = 1 },
+            new OrderLine { OrderId = 1, LineNumber = 2, ProductCode = "B", Quantity = 2 }
+        };
+
+        var containers = gw.BuildBatchUpsert(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("ON CONFLICT", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EXCLUDED", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(" = s.", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // =========================================================================
+    // MULTI-TENANT DIALECT CACHE (PK gateway)
+    // =========================================================================
+
+    private static IDatabaseContext MakeVersionedPostgresContext(string versionString)
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<Category>();
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connection = new fakeDbConnection
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=PostgreSql"
+        };
+        // Overrides fakeDb's hardcoded "PostgreSQL 15.0" default for "SELECT version()", by exact
+        // command text rather than FIFO order - DatabaseContext's init path runs "SELECT
+        // version()" more than once against the same connection, and an override keyed by
+        // command text answers every one of those calls identically.
+        connection.SetScalarResultForCommand("SELECT version()", versionString);
+        // DatabaseDetectionService's PostgreSQL-family flavor probes run after "SELECT version()"
+        // and treat any non-empty string result as a positive match (YugabyteDB/Aurora); without
+        // these, the queued Postgres version string above would itself satisfy `is string
+        // { Length: > 0 }` on both probes and misidentify this as YugabyteDB.
+        connection.SetScalarResultForCommand(
+            "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1", DBNull.Value);
+        connection.SetScalarResultForCommand("SELECT aurora_version()", DBNull.Value);
+        factory.Connections.Add(connection);
+
+        return new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=test;EmulatedProduct=PostgreSql",
+                DbMode = DbMode.SingleConnection
+            },
+            factory, NullLoggerFactory.Instance, typeMap);
+    }
+
+    [Fact]
+    public async Task SharedGateway_TwoPostgreSqlVersions_GeneratesCorrectSqlPerContext()
+    {
+        // PostgreSQL 15+ supports MERGE in addition to ON CONFLICT; BuildUpsert (PK gateway)
+        // prefers MERGE when the dialect supports it (checked before SupportsInsertOnConflict),
+        // so these two contexts must produce genuinely different SQL statement shapes from the
+        // SAME PrimaryKeyTableGateway<> instance. If GetPkTemplatesForDialect's cache were keyed
+        // by the SupportedDatabase enum (or otherwise shared across dialect instances) instead of
+        // the dialect instance, the second call below would incorrectly reuse the first context's
+        // cached UpsertUpdateFragment, producing a MERGE statement with a dangling EXCLUDED
+        // reference (or vice versa).
+        await using var oldContext = MakeVersionedPostgresContext("PostgreSQL 12.4 on x86_64-pc-linux-gnu");
+        await using var newContext = MakeVersionedPostgresContext("PostgreSQL 16.1 on x86_64-pc-linux-gnu");
+
+        Assert.False(oldContext.GetDialect().SupportsMerge, "Precondition: PostgreSQL 12.4 must not support MERGE.");
+        Assert.True(newContext.GetDialect().SupportsMerge, "Precondition: PostgreSQL 16.1 must support MERGE.");
+
+        var gateway = new PrimaryKeyTableGateway<Category>(oldContext);
+
+        var oldSql = gateway.BuildUpsert(new Category { Code = "A", Label = "old-tenant" }, oldContext).Query.ToString();
+        var newSql = gateway.BuildUpsert(new Category { Code = "A", Label = "new-tenant" }, newContext).Query.ToString();
+
+        Assert.Contains("ON CONFLICT", oldSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EXCLUDED", oldSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MERGE", oldSql, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("MERGE", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(" = s.", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("EXCLUDED", newSql, StringComparison.OrdinalIgnoreCase);
     }
 }

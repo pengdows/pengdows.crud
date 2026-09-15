@@ -148,18 +148,22 @@ public class DbProviderLoader : IDbProviderLoader
             }
 
             var instanceProperty = type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-            if (instanceProperty == null)
+            var instanceField = instanceProperty == null
+                ? type.GetField("Instance", BindingFlags.Public | BindingFlags.Static)
+                : null;
+
+            if (instanceProperty == null && instanceField == null)
             {
                 _logger.LogError(
-                    "DbProviderFactory type '{FactoryTypeName}' for provider '{ProviderKey}' does not have a static  Instance property",
+                    "DbProviderFactory type '{FactoryTypeName}' for provider '{ProviderKey}' does not have a static Instance property or field",
                     config.FactoryType, providerKey
                 );
                 throw new InvalidOperationException(
-                    $"DbProviderFactory type '{config.FactoryType}' for provider '{providerKey}' does not have a static  Instance property."
+                    $"DbProviderFactory type '{config.FactoryType}' for provider '{providerKey}' does not have a static  Instance property or field."
                 );
             }
 
-            var factory = instanceProperty.GetValue(null) as DbProviderFactory;
+            var factory = (instanceProperty?.GetValue(null) ?? instanceField?.GetValue(null)) as DbProviderFactory;
             if (factory == null)
             {
                 _logger.LogError(

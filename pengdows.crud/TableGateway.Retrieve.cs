@@ -232,6 +232,14 @@ public partial class TableGateway<TEntity, TRowID>
             ? 1
             : (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)nonNullIds.Count);
 
+        // Bucketing is only a cache optimization. Never pad an IN-list beyond the provider's
+        // parameter limit; SQL Server's 2100 limit, for example, would otherwise turn 2100 IDs
+        // into a 4096-parameter command.
+        if (bucket > dialect.MaxParameterLimit)
+        {
+            bucket = nonNullIds.Count;
+        }
+
         // Parameter names are dialect-specific (e.g. "@w0" vs ":w0"), so cache per dialect + bucket.
         var paramNamesCache = GetOrCreateParamNamesCache(dialect);
         var paramNamesKey = $"WhereParams:{bucket}";

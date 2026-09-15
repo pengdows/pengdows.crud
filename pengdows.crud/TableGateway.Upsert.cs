@@ -49,30 +49,46 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
+        var auditSnapshot = SnapshotAuditFields(entity);
 
-        // BuildUpsert creates a dynamic container - proper disposal required to avoid resource leaks
-        // Use async disposal for async operations
-        await using var sc = BuildUpsert(entity, ctx);
-        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // BuildUpsert creates a dynamic container - proper disposal required to avoid resource leaks
+            // Use async disposal for async operations
+            await using var sc = BuildUpsert(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
         // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
         // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
         // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
         // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
         // cannot detect version conflicts — do NOT throw for those dialects.
-        if (rowsAffected == 0 && _versionColumn != null)
-        {
-            var canDetect = dialect.SupportsOnConflictWhere
-                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
-            if (canDetect)
+            if (rowsAffected == 0)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
-            }
-        }
+                if (_versionColumn != null)
+                {
+                    var canDetect = dialect.SupportsOnConflictWhere
+                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                    if (canDetect)
+                    {
+                        // The enclosing catch below restores audit fields for this path -
+                        // don't restore here too, or it happens twice.
+                        throw new ConcurrencyConflictException(
+                            $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                            ctx.Product);
+                    }
+                }
 
-        return rowsAffected;
+                RestoreAuditFields(entity, auditSnapshot);
+            }
+
+            return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     /// <inheritdoc/>

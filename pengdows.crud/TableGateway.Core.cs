@@ -84,11 +84,14 @@ public partial class TableGateway<TEntity, TRowID> :
 
     // Per-dialect templates are cached in _templatesByDialect
 
-    // SQL templates cached per dialect to support context overrides
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
+    // SQL templates cached per dialect INSTANCE to support context overrides. A
+    // ConditionalWeakTable (not a ConcurrentDictionary) ties each entry's lifetime to its dialect
+    // instance so the cache doesn't grow without bound as contexts are created/disposed, while
+    // still keeping differently-versioned servers of the same product from sharing stale SQL.
+    private readonly ConditionalWeakTable<ISqlDialect, Lazy<CachedSqlTemplates>> _templatesByDialect = new();
 
     // Pre-built SqlContainer cache for common operations (GetById, GetByIds, etc.)
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<CachedContainerTemplates>> _containersByDialect =
+    private readonly ConditionalWeakTable<ISqlDialect, Lazy<CachedContainerTemplates>> _containersByDialect =
         new();
 
 
@@ -446,7 +449,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         await using var sc = ctx.CreateSqlContainer(lastIdQuery);
-        var generatedId = await sc.ExecuteScalarOrNullAsync<object>(CommandType.Text, cancellationToken);
+        var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken);
 
         if (generatedId != null && generatedId != DBNull.Value)
         {

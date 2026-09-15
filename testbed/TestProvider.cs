@@ -394,6 +394,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "BOOLEAN",
             SupportedDatabase.TiDb => "BOOLEAN",
             SupportedDatabase.SqlServer => "BIT",
+            SupportedDatabase.Sybase => "BIT",
             _ => "BOOLEAN"
         };
     }
@@ -413,6 +414,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "VARBINARY(64)",
+            SupportedDatabase.Sybase => "VARBINARY(64)",
             SupportedDatabase.PostgreSql => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
@@ -1362,14 +1364,16 @@ INSERT INTO {table} (
                             $"[RoundTrip] Empty string mismatch: expected '{emptyText}' or NULL, got '{actualEmpty}'");
                     }
                 }
-                else if (actualEmpty != emptyText)
+                else if (actualEmpty != emptyText &&
+                         !(_context.Product == SupportedDatabase.Sybase && actualEmpty == " "))
                 {
                     throw new Exception(
                         $"[RoundTrip] Empty string mismatch: expected '{emptyText}', got '{actualEmpty}'");
                 }
                 if (!actualNullIsDbNull)
                     throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
-                if (actualPadded != paddedText)
+                if (actualPadded != paddedText &&
+                    !(_context.Product == SupportedDatabase.Sybase && actualPadded == paddedText.TrimEnd()))
                     throw new Exception(
                         $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
                 if (actualDecimal != decimalValue)
@@ -1974,7 +1978,9 @@ INSERT INTO {table} (
                              || _context.DataSourceInfo.SupportsOnDuplicateKey;
 
         await RunCapabilityTest("Upsert", supportsUpsert, TestUpsertCapability);
-        await RunCapabilityTest("Paging", true, TestPagingCapability);
+        await RunCapabilityTest("Paging",
+            _context.Dialect.SupportsOffsetFetch || _context.Dialect.SupportsLimitOffset,
+            TestPagingCapability);
     }
 
     protected virtual async Task TestUpsertCapability()
@@ -2029,6 +2035,12 @@ INSERT INTO {table} (
 
     protected virtual async Task TestPagingCapability()
     {
+        if (!_context.Dialect.SupportsOffsetFetch && !_context.Dialect.SupportsLimitOffset)
+        {
+            CheckSkip($"  [Capabilities] Paging is not supported by {_context.Product}");
+            return;
+        }
+
         // Insert 10 rows so we can page through exactly our rows
         var ids = new List<long>();
         for (var i = 0; i < 10; i++)

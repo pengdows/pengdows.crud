@@ -111,6 +111,72 @@ diagnosing batch throughput.
 
 ---
 
+## Analyzer improvements: multi-tenancy footguns
+
+Motivated by a real integration (a multi-tenant wiki app wiring up `AddMultiTenancy` +
+`ITenantContextRegistry` for the first time): the existing analyzers caught one real mistake
+(`PGC001`, tried to register `IDatabaseContext` as scoped so it could be resolved per-request)
+but only after the wrong design was already half-built, and didn't catch a second, more
+dangerous mistake at all (application code calling gateway methods without passing the
+per-request `IDatabaseContext`, silently falling back to whatever context the gateway singleton
+was constructed with — the bootstrap tenant). `PGC025` (`GatewayMethodContextParameterAnalyzer`)
+already enforces `ctx = contextArg ?? Context` threading *inside* gateway subclasses, but has no
+opinion about *callers* of those gateways.
+
+Three ideas, roughly in order of how early each would have caught the actual mistakes made:
+
+### 1. Flag `IDatabaseContext` as a direct injection point in multi-tenant projects
+
+The root mistake wasn't the scoped registration — it was designing endpoints/controllers to
+take `IDatabaseContext` as a constructor/action/delegate parameter at all, once multi-tenancy is
+in play. A directly-injected `IDatabaseContext` always resolves to whatever was registered at
+startup; it can never vary per request.
+
+Sketch: a compilation-wide analyzer that, when it detects a call to `AddMultiTenancy` anywhere
+in the project, flags any minimal-API delegate parameter, MVC controller constructor/action
+parameter, or `[FromServices]` property of type `IDatabaseContext`. Message: *"IDatabaseContext
+should not be injected directly in a multi-tenant app — resolve it via
+ITenantContextRegistry.GetContext(tenantKey) per request instead."*
+
+This is the earliest possible intervention — it would fire on the very first draft, before
+anyone gets as far as writing a (bad) DI registration for it.
+
+### 2. Flag gateway calls that omit the optional context argument, project-wide
+
+This is the dangerous one: omitting `contextArg` at a call site doesn't throw, it silently runs
+against the wrong tenant's database. `PGC025` already has all the machinery to recognize
+"gateway method with an optional trailing `IDatabaseContext? contextArg = null`" — it just
+restricts its search to methods declared *inside* gateway-derived types (`IsGatewayType`).
+Extending the same detection to arbitrary call sites (any invocation of one of those methods,
+regardless of the containing type) — gated on `AddMultiTenancy` being present in the project, so
+single-tenant apps aren't forced into always passing context explicitly — would have caught
+every one of the ~20 call sites that needed fixing by hand in `Program.cs`, at compile time
+instead of via manual grep.
+
+Open question: whether to make this unconditional (flag *any* omitted context argument,
+tenancy or not) since even in a single-tenant app it's evidence the call is relying on a
+gateway's constructor-bound default rather than an explicit transaction/context — that's
+arguably always worth a lint, just lower severity than the multi-tenant case.
+
+### 3. Make `PGC001`'s message tenancy-aware
+
+Right now `PGC001` says *"...must not be registered as scoped or transient"* and stops there —
+correct, but it doesn't point anywhere. If `AddMultiTenancy` is also present in the compilation,
+append: *"...for per-request tenant resolution, use ITenantContextRegistry.GetContext(tenantKey)
+instead."* A code-fix provider that rewrites the offending `AddScoped<IDatabaseContext>(...)`
+factory into a `ITenantContextRegistry`-based resolver would go further, but even just the
+improved message answers the question the person was actually trying to solve when they reached
+for `AddScoped` in the first place.
+
+None of these three replace integration testing — they catch DI-shape/call-site mistakes at
+compile time, but "does Host-header-based tenant routing actually land on the right tenant" is
+a runtime behavior that still needs an end-to-end test (see the wiki app's
+`MultiTenancyEndpointTests` for the pattern: boot the real app via `WebApplicationFactory`,
+send requests with different `Host` headers, assert against `ITenantContextRegistry.GetContext`
+directly).
+
+---
+
 ## OpenTelemetry metrics adapter
 
 `pengdows.crud` currently exposes metrics through `IDatabaseContext.Metrics`,

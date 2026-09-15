@@ -4,9 +4,9 @@
 //          Constructor, shared template infrastructure, CREATE, RETRIEVE.
 // =============================================================================
 
-using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -28,7 +28,10 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // Per-dialect template cache
     // =========================================================================
 
-    private readonly ConcurrentDictionary<SupportedDatabase, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
+    // Keyed by dialect INSTANCE (not the SupportedDatabase enum) so two contexts on the same
+    // product but different server versions never share stale SQL strings; a ConditionalWeakTable
+    // ties each entry's lifetime to its dialect instance so the cache doesn't grow without bound.
+    private readonly ConditionalWeakTable<ISqlDialect, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
 
     /// <summary>Cached SQL fragments specific to PK-based operations.</summary>
     private sealed class PkTemplates
@@ -84,7 +87,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
     private PkTemplates GetPkTemplatesForDialect(ISqlDialect dialect) =>
         _pkTemplatesByDialect
-            .GetOrAdd(dialect.DatabaseType, _ => new Lazy<PkTemplates>(() => BuildPkTemplates(dialect)))
+            .GetValue(dialect, _ => new Lazy<PkTemplates>(() => BuildPkTemplates(dialect)))
             .Value;
 
     private PkTemplates BuildPkTemplates(ISqlDialect dialect)

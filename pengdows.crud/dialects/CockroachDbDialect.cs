@@ -12,6 +12,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -39,6 +40,23 @@ internal class CockroachDbDialect : PostgreSqlDialect
     public override string GetBaseSessionSettings()
     {
         return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
+    }
+
+    public override Version? ParseVersion(string versionString)
+    {
+        if (string.IsNullOrWhiteSpace(versionString))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(versionString, @"CockroachDB\b.*?\bv(?<version>\d+(?:\.\d+){1,3})",
+            RegexOptions.IgnoreCase);
+        if (match.Success && Version.TryParse(match.Groups["version"].Value, out var version))
+        {
+            return version;
+        }
+
+        return null;
     }
 
     /// <inheritdoc/>

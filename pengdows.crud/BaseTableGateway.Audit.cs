@@ -192,4 +192,52 @@ public abstract partial class BaseTableGateway<TEntity>
 
         return _auditValueResolver?.Resolve();
     }
+
+    protected readonly struct AuditFieldSnapshot
+    {
+        private readonly bool _hasSnapshot;
+
+        internal AuditFieldSnapshot(object? lastUpdatedOn, object? lastUpdatedBy,
+            object? createdOn, object? createdBy)
+        {
+            LastUpdatedOn = lastUpdatedOn;
+            LastUpdatedBy = lastUpdatedBy;
+            CreatedOn = createdOn;
+            CreatedBy = createdBy;
+            _hasSnapshot = true;
+        }
+
+        internal bool HasSnapshot => _hasSnapshot;
+        internal object? LastUpdatedOn { get; }
+        internal object? LastUpdatedBy { get; }
+        internal object? CreatedOn { get; }
+        internal object? CreatedBy { get; }
+    }
+
+    protected AuditFieldSnapshot SnapshotAuditFields(TEntity obj)
+    {
+        if (obj == null || !_hasAuditColumns)
+        {
+            return default;
+        }
+
+        return new AuditFieldSnapshot(
+            _tableInfo.LastUpdatedOn?.PropertyInfo.GetValue(obj),
+            _tableInfo.LastUpdatedBy?.PropertyInfo.GetValue(obj),
+            _tableInfo.CreatedOn?.PropertyInfo.GetValue(obj),
+            _tableInfo.CreatedBy?.PropertyInfo.GetValue(obj));
+    }
+
+    protected void RestoreAuditFields(TEntity obj, in AuditFieldSnapshot snapshot)
+    {
+        if (obj == null || !snapshot.HasSnapshot)
+        {
+            return;
+        }
+
+        _auditLastUpdatedOnSetter?.Invoke(obj, snapshot.LastUpdatedOn);
+        _auditLastUpdatedBySetter?.Invoke(obj, snapshot.LastUpdatedBy);
+        _auditCreatedOnSetter?.Invoke(obj, snapshot.CreatedOn);
+        _auditCreatedBySetter?.Invoke(obj, snapshot.CreatedBy);
+    }
 }

@@ -146,6 +146,61 @@ public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
         Assert.Equal(0, affected);
     }
 
+    [Fact]
+    public async Task UpsertAsync_SqlServer_StaleVersion_RestoresAuditFieldsExactlyOnce()
+    {
+        // On the version-conflict path (0 rows + detectable conflict), RestoreAuditFields must
+        // run exactly once. It must not run a second, redundant time when the
+        // ConcurrencyConflictException propagates to the enclosing catch block.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<AuditedVersionedUpsertEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var connection = new fakeDbConnection();
+        connection.EnqueueNonQueryResult(0); // version mismatch → 0 rows from MERGE
+        factory.Connections.Add(connection);
+        await using var context = new DatabaseContext(
+            new DatabaseContextConfiguration { ConnectionString = "Data Source=test;EmulatedProduct=SqlServer", DbMode = DbMode.SingleConnection },
+            factory, NullLoggerFactory.Instance, typeMap);
+        var gateway = new TableGateway<AuditedVersionedUpsertEntity, int>(context);
+        var staleEntity = new AuditedVersionedUpsertEntity { Id = 1, Name = "new", Version = 3 };
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+            await gateway.UpsertAsync(staleEntity, context));
+
+        Assert.Equal(1, staleEntity.LastUpdatedOnSetCount);
+    }
+
+    [Table("audited_versioned_upsert")]
+    private sealed class AuditedVersionedUpsertEntity
+    {
+        [Id]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("Version", DbType.Int32)]
+        public int Version { get; set; }
+
+        private DateTime? _lastUpdatedOn;
+
+        public int LastUpdatedOnSetCount { get; private set; }
+
+        [LastUpdatedOn]
+        [Column("LastUpdatedOn", DbType.DateTime)]
+        public DateTime? LastUpdatedOn
+        {
+            get => _lastUpdatedOn;
+            set
+            {
+                _lastUpdatedOn = value;
+                LastUpdatedOnSetCount++;
+            }
+        }
+    }
+
     [Table("versioned_upsert")]
     private sealed class VersionedUpsertEntity
     {

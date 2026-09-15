@@ -48,6 +48,8 @@ These are not checklist items — they are the lens through which every finding 
 
 **The Simplicity Rule** — Prefer the simplest design that solves the problem correctly. Complexity must justify its existence. Solve the problem you have, not the one you imagine.
 
+**The I/O Separation Rule** — Never mix business logic with I/O. Systems fail when domain rules are tangled with transport protocols or persistence mechanisms. Presentation I/O (controllers, Minimal API endpoints, route handlers, UI components) must only adapt transport protocols, bind inputs, extract auth context, delegate to domain operations, and format responses. Persistence I/O (TableGateways, SQL builders, repositories, database drivers) must only map schemas, build queries, execute statements, and manage transactions/connections. All business rules, invariants, validation logic, domain workflows, and multi-entity orchestrations belong exclusively in pure, isolated domain models, domain services, or use cases that can be verified in isolation without I/O.
+
 ---
 
 ## 4) P0 blockers (no merge)
@@ -125,6 +127,14 @@ Block if a change introduces any of the following:
 * Exception handling that changes observable behavior without tests.
 * Logic changes that can produce incorrect results for valid, boundary, or adversarial inputs.
 
+### I. Separation of business logic from I/O (no business logic in I/O)
+
+Never mix business logic into I/O layers. Block if:
+
+* **Business logic in controllers / endpoint handlers / presentation I/O**: Endpoint delegates, controllers, or route handlers perform business logic, domain calculations, invariant enforcement, multi-step domain workflows (e.g., revision walking, redirect traversal, parsing/category sync), or direct entity mutations. The I/O layer is strictly an adapter: bind inputs, resolve auth/tenant context, delegate to domain service/operation, and format the HTTP response.
+* **Business logic in TableGateways / persistence I/O**: TableGateways, SQL builders, or repositories contain business rules, domain validation, or cross-entity domain orchestration. Gateways are strictly data-access adapters: build SQL, map rows to entities, execute statements, and commit/rollback transactions.
+* **Domain logic coupled to I/O abstractions**: Business logic directly depends on HTTP primitives (`HttpContext`, `ClaimsPrincipal`, `IResult`) or raw database primitives (`IDbConnection`, `IDbCommand`) rather than domain models and clean abstractions.
+
 ---
 
 ## 5) P1 majors (fix or justify with false-positive evidence)
@@ -148,7 +158,9 @@ Block if a change introduces any of the following:
 ### C. Behavior locality (Holub)
 
 * Behavior must live with the structure that owns the data or invariant it manipulates.
-* Flag when business logic is implemented in service layers that simply wrap TableGateway calls.
+* Never put business logic into I/O adapters: flag when business logic is placed in controllers, minimal API endpoint handlers, or HTTP presentation layers.
+* Never put business logic into persistence adapters: flag when business logic or domain orchestration is placed in TableGateways. Gateways are purely data-access adapters.
+* Flag when business logic is implemented in service layers that simply wrap TableGateway calls without adding domain rules.
 * Flag when SQL logic is implemented outside the gateway responsible for the table.
 * Flag "ask then act" patterns — code that retrieves state only to make decisions on it elsewhere. That decision belongs with the object that owns the state.
 * Objects should expose capabilities, not data. Flag getters whose primary purpose is to allow outside code to enforce invariants that should live with the owning type. Do not flag simple data carriers, value objects, DTOs, or read models solely for exposing state.
@@ -263,6 +275,7 @@ If SQL/dialect behavior changes, reviewers must state:
 * **Runtime reality:** What does this actually do at runtime? Are there hidden allocations, blocking calls, implicit IO, or other invisible costs?
 * **Behavior locality:** Does behavior live with the structure that owns the invariant? Are objects exposing capabilities or leaking data?
 * **Design/Testability:** If it is hard to test, the design is wrong.
+* **I/O Separation:** Is business logic mixed with I/O? Are controllers/endpoints doing more than protocol translation and delegation? Are TableGateways doing more than SQL/data access? Does domain logic exist in a pure, easily testable layer free of HTTP and DB primitives?
 * **Clarity:** Code should read like an executable spec. One statement per line. Braces everywhere. Explicit parentheses. If you cannot say it in English, you cannot say it in code.
 
 ---
@@ -271,7 +284,7 @@ If SQL/dialect behavior changes, reviewers must state:
 
 This policy aligns with existing repo mandates:
 
-* TDD required, integration suite required, ValueTask hot paths, TransactionScope ban, interface-first, multi-dialect correctness constraints.
+* TDD required, integration suite required, ValueTask hot paths, TransactionScope ban, interface-first, multi-dialect correctness constraints, and strict separation of business logic from I/O (no business logic in controllers/endpoints, no business logic in TableGateways; domain logic isolated from HTTP/SQL plumbing).
 
 Influences: Abrash (measure everything, know the machine, expose hidden costs), Holub (behavior lives with the owning structure, design for testability, interfaces over concrete types), Lampson (explicit ownership, every resource has a single clear owner), Martin (small cohesive functions, single responsibility, clean contracts, dependency direction), Schneier (hostile inputs, explicit boundaries, fail loudly, secrets stay secret).
 

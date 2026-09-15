@@ -466,6 +466,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     protected virtual bool NeedsCommonConversions => !SupportsNamedParameters;
 
+    /// <summary>
+    /// Indicates that offset-aware values must be normalized to UTC because the provider family
+    /// stores them in a non-offset-aware temporal type.
+    /// </summary>
+    protected virtual bool NormalizeDateTimeOffsetToUtc => false;
+
     // Feature support based on SQL standards and database capabilities
     public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
@@ -1240,6 +1246,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
             _commonConversions.TryGetValue(parameter.DbType, out var converter))
         {
             converter(parameter, value);
+        }
+
+        if (!valueIsNull && value is DateTimeOffset dto && NormalizeDateTimeOffsetToUtc)
+        {
+            parameter.DbType = DbType.DateTime;
+            parameter.Value = dto.UtcDateTime;
         }
 
         if (!valueIsNull)
