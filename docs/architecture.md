@@ -1099,7 +1099,21 @@ A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup cach
 
 ### Connection-string handling in the normalization cache
 
-`ConnectionStringNormalizationCache` is a static, process-lifetime `ConcurrentDictionary<string, Dictionary<string,string>>` keyed on the **literal connection string as passed in**, with no eviction, no bound, and no TTL (only a `ClearForTests()` used by the test suite). The cached *value* has credentials scrubbed before storage — `ShouldIgnoreKey` excludes `password`/`pwd`/`user id`/`uid`/`user`/`username` and any key containing `password`/`secret`/`token`/`access` — so the parsed key/value breakdown itself never retains a credential. The cache *key*, however, is the raw connection string exactly as supplied, which for most providers embeds the password directly. For an application that constructs a fixed, small number of connection strings (the common case — one or a few per `DatabaseContext`), this is a harmless, unbounded-in-theory-but-bounded-in-practice cache. For an application that builds many distinct connection strings at runtime — per-tenant credentials, credential rotation, dynamically generated passwords — this cache grows without bound for the process lifetime and keeps every historical raw connection string (including old, rotated-out credentials) resident in memory indefinitely.
+`ConnectionStringNormalizationCache` is a static, process-lifetime cache backing connection-string
+normalization. **Previously** (fixed 2026-08-29, CORE-012 — see `docs/planning/future-work.md`)
+it was a plain, unbounded `ConcurrentDictionary<string, Dictionary<string,string>>` keyed on the
+**literal connection string as passed in**: the cached *value* had credentials scrubbed before
+storage, but the *key* was the raw connection string itself — for most providers embedding the
+password directly — so an application constructing many distinct connection strings at runtime
+(per-tenant credentials, credential rotation) retained every historical raw connection string,
+including rotated-out credentials, resident in memory for the process lifetime.
+
+The cache now keys on a SHA-256 digest of the raw connection string instead of the string itself
+(the cached value never depends on which credential value produced it, so a digest collision
+between two connection strings differing only in credential is harmless), and is bounded via the
+same `BoundedCache<TKey,TValue>` LRU pattern used elsewhere in this codebase (256 entries —
+distinct connection strings per process are typically small in number, bounding worst-case
+pathological growth). No raw connection string or credential is retained as either key or value.
 
 ### Connection Reuse
 
