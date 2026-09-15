@@ -30,6 +30,7 @@ public class RetryContextStatementSafetyTests
         var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
 
         using var sc = rc.CreateSqlContainer("DELETE FROM \"t1\"");
+        rc.SetRetrySafety(sc, RetrySafety.Idempotent);
 
         var failingConn = new fakeDbConnection();
         failingConn.SetNonQueryExecuteException(
@@ -55,6 +56,7 @@ public class RetryContextStatementSafetyTests
         sc.AddParameterWithValue("i0", DbType.Int32, 1);
         sc.AddParameterWithValue("k0", DbType.Int32, 1);
         sc.AddParameterWithValue("v0", DbType.Int32, 1);
+        rc.SetRetrySafety(sc, RetrySafety.OptimisticConcurrency);
 
         var failingConn = new fakeDbConnection();
         failingConn.SetNonQueryExecuteException(
@@ -69,7 +71,7 @@ public class RetryContextStatementSafetyTests
     }
 
     [Fact]
-    public async Task StartAsync_UnrelatedV0ParameterDoesNotEnableVersionGuardRetry()
+    public async Task StartAsync_UnrelatedV0ParameterStillRetriesConfirmedExecutionFailure()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateContext(factory);
@@ -84,11 +86,12 @@ public class RetryContextStatementSafetyTests
         conn.SetNonQueryExecuteException(new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
         factory.Connections.Add(conn);
 
-        await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
+        await rc.StartAsync();
+        Assert.Equal(0, rc.QueuedCommandCount);
     }
 
     [Fact]
-    public async Task StartAsync_TransientFailureOnUnguardedUpdate_FailsClosedWithRetryOutcomeUnknown()
+    public async Task StartAsync_TransientFailureOnUnguardedUpdate_RetriesAfterConfirmedRollback()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateContext(factory);
@@ -101,16 +104,12 @@ public class RetryContextStatementSafetyTests
             new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
         factory.Connections.Add(failingConn);
 
-        var ex = await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
-
-        Assert.Equal(1, ex.Attempt);
-        Assert.IsType<DeadlockException>(ex.InnerException);
-        // Never dequeued: RetryContext refused to guess whether the failed attempt applied.
-        Assert.Equal(1, rc.QueuedCommandCount);
+        await rc.StartAsync();
+        Assert.Equal(0, rc.QueuedCommandCount);
     }
 
     [Fact]
-    public async Task StartAsync_TransientFailureOnBareInsert_FailsClosedWithRetryOutcomeUnknown()
+    public async Task StartAsync_TransientFailureOnBareInsert_RetriesAfterConfirmedRollback()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateContext(factory);
@@ -123,9 +122,8 @@ public class RetryContextStatementSafetyTests
             new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
         factory.Connections.Add(failingConn);
 
-        await Assert.ThrowsAsync<RetryOutcomeUnknownException>(() => rc.StartAsync().AsTask());
-
-        Assert.Equal(1, rc.QueuedCommandCount);
+        await rc.StartAsync();
+        Assert.Equal(0, rc.QueuedCommandCount);
     }
 
     [Fact]
@@ -136,7 +134,7 @@ public class RetryContextStatementSafetyTests
         var rc = new RetryContext(ctx, RetryContextType.Sequential, FastOptions);
 
         using var sc = rc.CreateSqlContainer("INSERT INTO \"t1\" (\"idempotency_key\") VALUES ('abc')");
-        rc.SetRetrySafety(sc, RetrySafety.IdempotentViaUniqueConstraint);
+        rc.SetRetrySafety(sc, RetrySafety.IdempotentViaUniqueConstraint, "UQ_idempotency_key");
 
         // First attempt fails transiently (but, per the idempotency-key declaration, may have
         // already landed server-side). Second attempt's retry hits the row the first attempt
@@ -147,7 +145,8 @@ public class RetryContextStatementSafetyTests
             new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
         var retryConn = new fakeDbConnection();
         retryConn.SetNonQueryExecuteException(
-            new UniqueConstraintViolationException("idempotency_key already exists", SupportedDatabase.Sqlite));
+            new UniqueConstraintViolationException("idempotency_key already exists", SupportedDatabase.Sqlite,
+                constraintName: "UQ_idempotency_key"));
         factory.Connections.Add(firstAttemptConn);
         factory.Connections.Add(retryConn);
 

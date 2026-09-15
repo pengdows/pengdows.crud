@@ -35,5 +35,11 @@ public enum RetrySafety
     /// as a real conflict) rather than propagating it — the same pattern Stripe's API uses for
     /// exactly this problem.
     /// </summary>
-    IdempotentViaUniqueConstraint = 1
+    IdempotentViaUniqueConstraint = 1,
+
+    /// <summary>The command is safe to replay because it is explicitly idempotent.</summary>
+    Idempotent = 2,
+
+    /// <summary>The command is an explicitly verified optimistic-concurrency update.</summary>
+    OptimisticConcurrency = 3
 }

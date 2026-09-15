@@ -79,6 +79,9 @@ public interface IRetryContext : IDatabaseContext
     /// <param name="retrySafety">The retry-safety classification to apply when that command executes.</param>
     void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety);
 
+    /// <summary>Declares retry safety and, for unique-constraint idempotency, the expected constraint.</summary>
+    void SetRetrySafety(ISqlContainer container, RetrySafety retrySafety, string? constraintName);
+
     /// <summary>
     /// Runs the queued command plan per <see cref="RetryContextType"/>'s semantics. Only one
     /// executor may run a given context, and only once — a second call must throw.
