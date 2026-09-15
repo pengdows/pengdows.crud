@@ -117,19 +117,25 @@ throws in the first place, before your code ever sees it.
 
 ## Retry-policy boundary: this does not retry for you
 
-`AnalyzeException`/`IsRetryable` tells you whether retrying *might* help — it does not retry
-anything itself. There is no built-in retry loop, backoff, or connection-pool-aware retry
-coordinator in the current library. A `RetryContext` subsystem with exactly that shape (governor-
-aware backoff, no connection held during sleep, transient-exception-only retry) is designed but
-**not implemented** — see [`docs/planning/retry-context-design.md`](./planning/retry-context-design.md)
-for the full design, its concrete shortcomings, and how it compares to Polly/EF Core/other DALs
-(the original design prose lives in `docs/planning/future-work.md`'s "RetryContext Subsystem"
-section, tracked as `FEAT-001`) if you want to build your own retry wrapper around
-`IsRetryable`/`IsTransient` today; don't assume it already exists.
+`AnalyzeException`/`IsRetryable` tells you whether retrying *might* help — `RetryContext`
+(`pengdows.crud/RetryContext.cs`, obtained via `new RetryContext(context, retryContextType,
+options)` against a plain `IDatabaseContext`) is the built-in, governor-aware retry coordinator
+that acts on that signal: no connection held during backoff sleep, re-admission through the same
+`PoolGovernor` fairness turnstile, and a decided commit-ambiguity policy (see
+[`docs/planning/retry-context-design.md`](./planning/retry-context-design.md) for the full design,
+its now-mostly-closed shortcomings list, and how it compares to Polly/EF Core/other DALs — the
+original design prose lives in `docs/planning/future-work.md`'s "RetryContext Subsystem" section,
+tracked as `FEAT-001`). It binds to `DatabaseException.IsTransient`, not `AnalyzeException`'s
+independent signal, as its canonical retry trigger.
+
+If you need retry semantics `RetryContext` doesn't cover (its queue shape can't express
+read-then-branch within one retry unit — see the design doc's "Deliberate scope boundary"), the
+minimal example below shows what a hand-rolled application-level wrapper around
+`IsRetryable`/`IsTransient` looks like:
 
 ```csharp
-// Minimal example of what an application-level retry wrapper looks like today —
-// pengdows.crud does not provide this for you.
+// Minimal example of a hand-rolled retry wrapper, for cases outside RetryContext's queue-shaped
+// scope (e.g. read-then-branch within one retry unit).
 for (var attempt = 0; ; attempt++)
 {
     try

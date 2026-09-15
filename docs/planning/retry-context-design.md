@@ -1,15 +1,29 @@
 # RetryContext Subsystem — Design, Shortcomings, and Comparison (FEAT-001)
 
-**Status: designed, zero implementation.** Nothing described in this document exists in code yet.
-The "Shortcomings" section below identifies commit ambiguity (shortcoming #1) as the one gap that
-had no policy at all when this document started — it now has a recommended, decided policy (see
-shortcoming #1's full writeup), so implementation can proceed against that policy rather than
-waiting on further design work. Tracked as `FEAT-001` in [`future-work.md`](./future-work.md)'s
+**Status (updated 2026-09-15): implemented and shipping.** `pengdows.crud/RetryContext.cs` /
+`pengdows.crud.abstractions/IRetryContext.cs` implement both `RetryContextType.Sequential` and
+`RetryContextType.Transactional`, including the commit-ambiguity policy (shortcoming #1, both
+modes), per-command row-count policy, and statement-shape retry safety
+(`IRetryContext.SetRetrySafety`). See `future-work.md`'s FEAT-001 tracker row for the full
+implementation history and dates. This document's "Shortcomings" section below is kept as the
+design record (several items are now resolved in code, not just in prose — see the status note
+inline on each one) rather than rewritten into a changelog; check `RetryContext.cs` and its test
+suite directly for exact current behavior, not this document alone.
+
+**Known drift from this document's original sketch:** the "Shape" section below shows
+`context.CreateRetryContext(RetryContextType, options)` as the entry point. That factory method was
+never added to `IDatabaseContext` — the actual, shipped API is a public constructor,
+`new RetryContext(context, retryContextType, options)`, called directly against a plain
+`IDatabaseContext` (see "Ownership boundary" below, which the constructor enforces by throwing
+`NotSupportedException` if handed an `ITransactionContext`). Every other aspect of the shape
+(queue-of-`ISqlContainer`, `StartAsync()`, immutable-after-start plan) matches this document as
+written.
+
+Tracked as `FEAT-001` in [`future-work.md`](./future-work.md)'s
 tracker (section 10); the original
 design write-up lives in that same file under "RetryContext Subsystem (Governor-Aware Resilient
 Execution)" and is reproduced/expanded here. [`exception-analysis.md`](../exception-analysis.md)'s
-"Retry-policy boundary" section points readers here for the full picture; it also shows the
-application-level retry loop you'd have to hand-write today, since none of this exists.
+"Retry-policy boundary" section points readers here for the full picture.
 
 Grounded against the current `3.0` branch by direct source inspection, not assumed from the design
 prose — each factual claim below about what exists today cites the exact file it was checked
@@ -540,33 +554,29 @@ writeup below) rather than being an open question.
    any of the three by construction, and none of them should be forced into a shared base class to fix
    that.
 
-   **Detection precedent already exists in this codebase for exactly this shape of problem:**
-   `IReadOnlyViolation` (`pengdows.crud.abstractions/exceptions/IReadOnlyViolation.cs`) is an empty
-   marker interface implemented by three read-only-rejection exceptions that deliberately have three
-   different base types (`NotSupportedException`, `InvalidOperationException`,
-   `DatabaseOperationException`), letting a caller write one `catch (IReadOnlyViolation)` without the
-   library unifying their inheritance at all. The same pattern — a marker interface (e.g.
-   `IExecutionGovernanceRejection`, name not decided) implemented by all three of
+   **RESOLVED (implemented 2026-09-15): detection and policy are both built.**
+   `IExecutionGovernanceRejection` (`pengdows.crud.abstractions/exceptions/IExecutionGovernanceRejection.cs`)
+   is an empty marker interface — the same pattern `IReadOnlyViolation`
+   (`pengdows.crud.abstractions/exceptions/IReadOnlyViolation.cs`) already uses for three
+   read-only-rejection exceptions with three different base types — implemented by all of
    `PoolSaturatedException`/`ModeContentionException`/`PoolForbiddenException` with zero change to
-   what each actually extends — would give `RetryContext` a single, cheap way to detect "this was
-   rejected before ever reaching the database" as distinct from an actual `DatabaseException`. This
-   resolves the *detection* half of this shortcoming.
+   what each actually extends. `RetryContext.IsTransient` checks `ex is not
+   IExecutionGovernanceRejection` **first, unconditionally, before consulting
+   `Options.IsTransientOverride`** — a caller-supplied override cannot reclassify one of these three
+   as retryable, closing a real gap where the override was previously consulted first and could
+   defeat the "never retried, full stop" policy blind. See
+   `RetryContextSequentialExecutionTests.StartAsync_GovernanceRejection_IsNeverRetried_EvenWhenIsTransientOverrideSaysYes`
+   (all three exception types, each with an override that returns `true`) and
+   `ExecutionGovernanceRejectionTests.cs` (marker-interface assignability) for the coverage.
 
-   **Policy decided (2026-09-01): none of the three are ever retried, full stop.** This is not a
-   per-exception-type distinction (`PoolForbiddenException` retried never, the other two retried
-   sometimes) — all three are treated the same way, and the reasoning is uniform, not
-   case-by-case: `PoolGovernor` already converts saturation into bounded waiting and backpressure
-   as its own designed behavior (`MaxQueueDepth`, `PoolAcquireTimeout`). A `RetryContext` that
-   caught one of these and retried anyway would be layering a second, uncoordinated wait on top of
-   a mechanism that already decided "no more waiting" — at best redundant, at worst actively
-   amplifying load exactly when the governor is signaling it should be reduced, defeating the
-   protection `PoolGovernor` exists to provide. This applies uniformly to `PoolForbiddenException`
-   (a configuration-level rejection, never transient) and to `PoolSaturatedException`/
-   `ModeContentionException` (which *are* time-bounded waits, but ones `PoolGovernor` itself already
-   ran to completion and gave up on — a second, independent wait on top adds nothing but load). The
-   marker interface (still not decided by name) remains the mechanism for detecting all three as a
-   group so `RetryContext` can apply this one uniform "never" rule without needing to know each
-   type individually.
+   The reasoning, restated for the record: `PoolGovernor` already converts saturation into bounded
+   waiting and backpressure as its own designed behavior (`MaxQueueDepth`, `PoolAcquireTimeout`). A
+   `RetryContext` that caught one of these and retried anyway would be layering a second,
+   uncoordinated wait on top of a mechanism that already decided "no more waiting" — at best
+   redundant, at worst actively amplifying load exactly when the governor is signaling it should be
+   reduced. This applies uniformly to `PoolForbiddenException` (a configuration-level rejection,
+   never transient) and to `PoolSaturatedException`/`ModeContentionException` (time-bounded waits
+   `PoolGovernor` itself already ran to completion and gave up on).
 6. **`RetryContextType.Sequential`'s materialization question is RESOLVED by the queue shape; the
    idempotency half is not (it's shortcoming #1).** The original concern was whether the input
    sequence must be fully materialized up front or could be a one-shot/side-effecting source unsafe
@@ -592,8 +602,14 @@ writeup below) rather than being an open question.
    `InfrastructureTimeoutExceptionIdentityTests.cs`). The design should state explicitly that
    cancellation during the backoff `Task.Delay` propagates unwrapped, consistent with everything
    else in the library — that's the correct answer by house style, but it isn't written down.
-9. **Multi-tenancy interaction — proposed analysis below, not yet confirmed (2026-08-31, pending
-   review).** Each tenant gets an independently-governed `DatabaseContext`/`PoolGovernor`
+9. **Multi-tenancy interaction — proposed analysis below, CONFIRMED (2026-09-15) by
+   `RetryContextTenantScopingTests.cs`.** `WrappedContext_IsExactlyTheProvidedTenantContext_NotSomeOtherTenant`
+   asserts reference identity against the exact tenant context handed to the constructor (not some
+   other one), and `StartAsync_AgainstOneTenant_NeverTouchesAnotherTenantsConnectionFactory` proves a
+   `RetryContext` built against one tenant's context never obtains or executes against a second
+   tenant's connection factory. Both pass with zero production-code changes needed — confirming the
+   proposed analysis below held as originally reasoned. Each tenant gets an independently-governed
+   `DatabaseContext`/`PoolGovernor`
    (`docs/connection/multitenancy-architecture.md`). Original framing of this shortcoming assumed
    `RetryContext` would need explicit tenant-awareness and a decided answer for what happens to a
    held `ITenantContextLease` across a backoff sleep. Working through it against the queue shape
