@@ -206,6 +206,20 @@ public class MetricsCollectorTests
         Assert.Equal(0d, snapshot.P99TransactionMs);
     }
 
+    [Fact]
+    public void CommandSucceeded_MetricsChangedSubscriberThrows_DoesNotPropagate()
+    {
+        var collector = new MetricsCollector(MetricsOptions.Default);
+        collector.MetricsChanged += () => throw new InvalidOperationException("subscriber failure");
+
+        var ex = Record.Exception(() => collector.CommandSucceeded(CreateStartTimestamp(5d), 1));
+
+        Assert.Null(ex);
+        var snapshot = collector.CreateSnapshot();
+        Assert.Equal(1, snapshot.CommandsExecuted);
+        Assert.Equal(0, snapshot.CommandsFailed);
+    }
+
     private static long CreateStartTimestamp(double durationMs)
     {
         var offset = (long)Math.Max(1, durationMs / 1000d * Stopwatch.Frequency);

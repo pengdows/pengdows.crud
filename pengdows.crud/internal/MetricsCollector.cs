@@ -400,7 +400,18 @@ internal sealed class MetricsCollector
     private void NotifyUpdated()
     {
         var handler = Volatile.Read(ref _metricsChanged);
-        handler?.Invoke();
+
+        try
+        {
+            handler?.Invoke();
+        }
+        catch
+        {
+            // Metrics notification is instrumentation, not execution — it must never be able to
+            // turn an already-successful database command into an apparent failure by throwing
+            // back into the caller (see DatabaseContext.OnMetricsCollectorUpdated for the
+            // per-subscriber isolation on the public MetricsUpdated event this ultimately feeds).
+        }
     }
 
     private void RecordCommandDuration(long startTimestamp, bool success)

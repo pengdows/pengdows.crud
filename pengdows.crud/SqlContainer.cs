@@ -1161,15 +1161,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
             var translated = TranslateDatabaseException(ex, operationKind);
-            if (activity != null)
-            {
-                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                {
-                    { "exception.type", translated.GetType().FullName },
-                    { "exception.message", translated.Message },
-                    { "exception.stacktrace", translated.ToString() }
-                }));
-            }
+            AddSanitizedExceptionEvent(activity, translated);
             throw translated;
         }
         catch (Exception ex) when (ex is not DatabaseException)
@@ -1184,14 +1176,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
                 if (activity != null)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                    {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.ToString() }
-                    }));
+                    activity.SetStatus(ActivityStatusCode.Error);
                 }
+
+                AddSanitizedExceptionEvent(activity, ex);
 
                 throw;
             }
@@ -1205,14 +1193,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
-                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                {
-                    { "exception.type", translated.GetType().FullName },
-                    { "exception.message", translated.Message },
-                    { "exception.stacktrace", translated.ToString() }
-                }));
+                activity.SetStatus(ActivityStatusCode.Error);
             }
+
+            AddSanitizedExceptionEvent(activity, translated);
 
             throw translated;
         }
@@ -1495,15 +1479,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             metrics?.CommandTimedOut(startTimestamp);
             activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
             var translated = TranslateDatabaseException(ex, operationKind);
-            if (activity != null)
-            {
-                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                {
-                    { "exception.type", translated.GetType().FullName },
-                    { "exception.message", translated.Message },
-                    { "exception.stacktrace", translated.ToString() }
-                }));
-            }
+            AddSanitizedExceptionEvent(activity, translated);
             throw translated;
         }
         catch (Exception ex) when (ex is not DatabaseException)
@@ -1518,14 +1494,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
                 if (activity != null)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                    {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.ToString() }
-                    }));
+                    activity.SetStatus(ActivityStatusCode.Error);
                 }
+
+                AddSanitizedExceptionEvent(activity, ex);
 
                 throw;
             }
@@ -1539,14 +1511,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
-                activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
-                {
-                    { "exception.type", translated.GetType().FullName },
-                    { "exception.message", translated.Message },
-                    { "exception.stacktrace", translated.ToString() }
-                }));
+                activity.SetStatus(ActivityStatusCode.Error);
             }
+
+            AddSanitizedExceptionEvent(activity, translated);
 
             throw translated;
         }
@@ -1906,6 +1874,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         };
     }
 
+    // CORE-024: bounds for what StartActivity/AddSanitizedExceptionEvent record. db.statement is
+    // parameterized SQL by default, but a caller can append raw literals via Query directly, and
+    // nothing previously stopped a pathologically large custom statement from ballooning trace
+    // storage. Provider exception messages can carry server names, connection internals, or SQL
+    // fragments; a full exception.ToString() (a stack trace) is the worst offender for that and
+    // belongs in logs, not a trace tag, so it is not recorded here at all.
+    //
+    // For this same reason, every catch block calls activity.SetStatus(ActivityStatusCode.Error)
+    // with NO description on a real command failure — never ex.Message/translated.Message. The
+    // bounded, truncated exception.message event tag added by AddSanitizedExceptionEvent already
+    // carries that diagnostic information; passing the raw message to SetStatus as well would
+    // bypass this bound entirely via a second, independent path.
+    private const int MaxTelemetryStatementLength = 4000;
+    private const int MaxTelemetryMessageLength = 1000;
+
     private Activity? StartActivity(string operationName)
     {
         var activity = ActivitySource.StartActivity(operationName, ActivityKind.Client);
@@ -1913,10 +1896,39 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             activity.SetTag("db.system", _context.Product.ToString().ToLowerInvariant());
             activity.SetTag("db.name", _context.Name);
-            activity.SetTag("db.statement", Query.ToString());
+            activity.SetTag("db.statement", Truncate(Query.ToString(), MaxTelemetryStatementLength));
             activity.SetTag("db.operation", operationName);
         }
         return activity;
+    }
+
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (value == null || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return string.Concat(value.AsSpan(0, maxLength), "...(truncated)");
+    }
+
+    /// <summary>
+    /// Records a sanitized "exception" activity event: type and a truncated message only.
+    /// Deliberately omits exception.stacktrace — see the remarks on MaxTelemetryStatementLength
+    /// above for why (CORE-024).
+    /// </summary>
+    private static void AddSanitizedExceptionEvent(Activity? activity, Exception ex)
+    {
+        if (activity == null)
+        {
+            return;
+        }
+
+        activity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+        {
+            { "exception.type", ex.GetType().FullName },
+            { "exception.message", Truncate(ex.Message, MaxTelemetryMessageLength) }
+        }));
     }
 
     private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
