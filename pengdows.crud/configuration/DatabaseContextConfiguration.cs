@@ -20,7 +20,7 @@
 //         in the connection string and keep these values aligned with it.
 // - Mode locking (SingleWriter / SingleConnection):
 //   * ModeLockTimeout: Timeout for shared-connection write locks.
-//     Defaults to 30 s (higher than PoolAcquireTimeout's 5 s) because mode
+//     Defaults to 30 s (higher than PoolAcquireTimeout's 10 s) because mode
 //     locks guard long transactions, not just pool admission.
 // - SingleWriter fairness:
 //   * EnableSingleWriterFairness: turnstile for writer-preference in SingleWriter mode ONLY.
@@ -40,7 +40,7 @@ namespace pengdows.crud.configuration;
 /// </summary>
 public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 {
-    internal const int DefaultPoolAcquireSeconds = 5;
+    internal const int DefaultPoolAcquireSeconds = 10;
     internal const int DefaultModeLockSeconds = 30;
 
     /// <summary>
@@ -187,8 +187,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public string ApplicationName { get; set; } = string.Empty;
 
     /// <inheritdoc/>
-    public SessionInitializationFailureMode SessionInitializationFailureMode { get; set; } =
-        SessionInitializationFailureMode.BestEffort;
+    public SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
 
     /// <inheritdoc/>
     public bool EnforceUniqueConnectionString { get; set; }

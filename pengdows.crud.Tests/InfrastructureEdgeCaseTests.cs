@@ -495,7 +495,7 @@ public class InfrastructureEdgeCaseTests
     [Fact]
     public void Configuration_DefaultConstants_AreExpected()
     {
-        Assert.Equal(5, DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
+        Assert.Equal(10, DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
         Assert.Equal(30, DatabaseContextConfiguration.DefaultModeLockSeconds);
     }
 

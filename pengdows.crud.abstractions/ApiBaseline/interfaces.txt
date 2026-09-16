@@ -364,7 +364,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ProviderName
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
-property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : pengdows.crud.enums.SessionInitializationFailureMode { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : System.Nullable`1<pengdows.crud.enums.SessionInitializationFailureMode> { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ParsedVersion : System.Version { get; set; }
 property pengdows.crud.dialects.IDatabaseProductInfo::ProductName : string { get; set; }

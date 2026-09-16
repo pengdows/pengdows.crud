@@ -258,7 +258,7 @@ public class MagicStringRegressionTests
     [Fact]
     public void DatabaseContextConfiguration_PoolAcquireSeconds_Value()
     {
-        Assert.Equal(5, DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
+        Assert.Equal(10, DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
     }
 
     [Fact]

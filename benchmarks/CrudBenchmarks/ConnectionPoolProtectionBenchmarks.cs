@@ -103,12 +103,20 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         // With 100 concurrent writers queuing behind 1 permit, the queue drain time
         // far exceeds the default 5 s timeout.  Use a generous timeout so pengdows
         // can demonstrate that it survives the storm while EF/Dapper crash.
+        //
+        // MaxQueuedWrites must also be raised to match WriteStormConcurrency: PoolGovernor's
+        // default queue-depth cap is Math.Max(maxSlots * 8, 32), i.e. 32 for SingleWriter's
+        // single writer permit — well below this benchmark's 100 concurrent writers. That cap
+        // fires as an immediate PoolSaturatedException (not a timeout), independent of
+        // PoolAcquireTimeout above, so raising the timeout alone does not let all 100 writers
+        // queue. See docs/connection/connection-pooling.md's "Pool governors" section.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = _connectionString,
             DbMode = DbMode.Standard, // overridden to SingleWriter by SQLite dialect
             ReadWriteMode = ReadWriteMode.ReadWrite,
             PoolAcquireTimeout = TimeSpan.FromMinutes(5),
+            MaxQueuedWrites = WriteStormConcurrency,
             EnableMetrics = true
         };
 
@@ -183,7 +191,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             tasks.Add(Task.Run(async () =>
             {
                 await using var container = _pengdowsContext.CreateSqlContainer();
-                await ApplyBusyTimeoutAsync(container);
+                await ApplyBusyTimeoutAsync(container, ExecutionType.Read);
                 var sql = BuildReadSql(param => container.MakeParameterName(param));
                 container.Query.Append(sql);
                 container.AddParameterWithValue("id", DbType.Int32, id);
@@ -530,11 +538,22 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             .Replace("{id}", param("id"));
     }
 
-    private static async Task ApplyBusyTimeoutAsync(ISqlContainer container)
+    // Defaults to ExecutionType.Write to preserve WriteStorm_Pengdows's existing call (applied
+    // against an already-open transaction's container, where ExecutionType is moot — the
+    // transaction's connection is already pinned, so this never triggers a new governor
+    // acquisition either way). PoolExhaustion_Pengdows passes ExecutionType.Read explicitly: it's
+    // a pure-read concurrency test (50 concurrent reads, meant to exercise SingleWriter's
+    // unbounded/ungated read path per CLAUDE.md's ExecutionType docs), and without this, the
+    // pragma statement's default Write classification funneled all 50 "reads" through the single
+    // writer permit before ever reaching the actual read — a benchmark bug, not a pengdows.crud
+    // behavior, that produced a PoolSaturatedException/NA instead of a real read-concurrency
+    // measurement (confirmed live: PoolAcquireTimeout=5min was tuned for WriteStorm's legitimate
+    // 100-way writer-permit queuing, not this accidental one).
+    private static async Task ApplyBusyTimeoutAsync(ISqlContainer container, ExecutionType executionType = ExecutionType.Write)
     {
         container.Query.Clear();
         container.Query.Append(BusyTimeoutSql);
-        await container.ExecuteNonQueryAsync();
+        await container.ExecuteNonQueryAsync(executionType);
         container.Query.Clear();
     }
 

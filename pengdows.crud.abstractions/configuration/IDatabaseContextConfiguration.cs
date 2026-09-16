@@ -136,7 +136,10 @@ public interface IDatabaseContextConfiguration
     /// </summary>
     /// <remarks>
     /// Should be set lower than the ADO.NET connection timeout so the library surfaces a
-    /// meaningful error before the driver does.
+    /// meaningful error before the driver does. The default (10 s) is deliberately below the
+    /// ~15 s "Connect Timeout"/"Connection Timeout" default shared by SqlClient, Npgsql,
+    /// MySqlConnector, and Oracle's managed driver, so pengdows' own <c>PoolSaturatedException</c>
+    /// reliably wins that race rather than tying with (or losing to) the provider's own timeout.
     /// </remarks>
     TimeSpan PoolAcquireTimeout { get; set; }
 
@@ -149,13 +152,13 @@ public interface IDatabaseContextConfiguration
     /// <para>
     /// This timeout governs a different bottleneck than <see cref="PoolAcquireTimeout"/>:
     /// <list type="bullet">
-    ///   <item><see cref="PoolAcquireTimeout"/> — waiting for a governor permit (pool admission, default 5 s)</item>
+    ///   <item><see cref="PoolAcquireTimeout"/> — waiting for a governor permit (pool admission, default 10 s)</item>
     ///   <item><see cref="ModeLockTimeout"/> — waiting for a shared-connection write lock (default 30 s)</item>
     /// </list>
     /// </para>
     /// <para>
     /// Mode locks guard long-running transactions, which is why the default (30 s) is higher than
-    /// the governor timeout (5 s). <c>null</c> means wait indefinitely — appropriate when you prefer
+    /// the governor timeout (10 s). <c>null</c> means wait indefinitely — appropriate when you prefer
     /// to block rather than abort long transactions. Set both timeouts explicitly if you want
     /// consistent failure behavior across all wait surfaces.
     /// </para>
@@ -192,14 +195,20 @@ public interface IDatabaseContextConfiguration
 
     /// <summary>
     /// Controls how a connection is handled when applying session settings fails on first open.
-    /// Defaults to <see cref="SessionInitializationFailureMode.BestEffort"/> — logs and proceeds
-    /// with the connection in an unknown session state (current 2.0 behavior).
+    /// <c>null</c> (the default) resolves automatically based on <see cref="ReadWriteMode"/>:
+    /// <see cref="SessionInitializationFailureMode.BestEffort"/> (logs and proceeds with the
+    /// connection in an unknown session state) for a read-write context, or
+    /// <see cref="SessionInitializationFailureMode.FailClosed"/> for a context resolved to
+    /// <see cref="enums.ReadWriteMode.ReadOnly"/> — an unknown session state is a
+    /// security-relevant default for a context meant to guarantee read-only behavior, so it
+    /// should not require discovering the right knob. An explicit value always wins over this
+    /// mode-based default in either direction.
     /// </summary>
     /// <remarks>
     /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
     /// MySQL, MariaDB, and Oracle, which remains best-effort regardless of this setting.
     /// </remarks>
-    SessionInitializationFailureMode SessionInitializationFailureMode { get; set; }
+    SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
 
     /// <summary>
     /// Maximum number of callers allowed to queue for a write-governor slot before further

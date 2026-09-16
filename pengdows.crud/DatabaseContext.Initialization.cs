@@ -509,7 +509,14 @@ public partial class DatabaseContext
         _poolAcquireTimeout = configuration.PoolAcquireTimeout;
         _modeLockTimeout = configuration.ModeLockTimeout;
         _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
-        _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
+        // An explicit configuration value always wins. Left unset, a context resolved to ReadOnly
+        // (including MaxConcurrentWrites=0 promotion, already applied to ReadWriteMode above)
+        // defaults to FailClosed rather than BestEffort — an unknown session state is a
+        // security-relevant default for a context meant to guarantee read-only behavior.
+        _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode
+            ?? (ReadWriteMode == ReadWriteMode.ReadOnly
+                ? SessionInitializationFailureMode.FailClosed
+                : SessionInitializationFailureMode.BestEffort);
         _maxQueuedWrites = configuration.MaxQueuedWrites;
         _maxQueuedReads = configuration.MaxQueuedReads;
         _configuredReadPoolSize = normalizedReadPoolSize;

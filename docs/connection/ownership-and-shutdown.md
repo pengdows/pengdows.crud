@@ -51,7 +51,7 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
 3. Dispose the connection-open coordination primitives (`_connectionOpenLocker`/`_connectionOpenGate`).
 4. **Close both governors first, then drain each with `PoolAcquireTimeout` as the drain
    timeout** — a *different* timeout from the one used for ordinary slot acquisition, but the
-   same configured value (`DatabaseContextConfiguration.PoolAcquireTimeout`, default 5s). There is
+   same configured value (`DatabaseContextConfiguration.PoolAcquireTimeout`, default 10s). There is
    no separate "shutdown timeout" setting.
 5. **If both governors drained cleanly**, dispose the owned `DbDataSource`(s), release the
    unique-connection-string claim, and unregister the duplicate-connection warning registration.

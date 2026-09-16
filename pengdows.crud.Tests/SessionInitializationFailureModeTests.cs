@@ -83,6 +83,111 @@ public class SessionInitializationFailureModeTests
     }
 
     [Fact]
+    public async Task OpenAsync_ReadOnlyContext_DefaultMode_SessionSettingsFailure_ThrowsConnectionException()
+    {
+        // ReadOnly contexts should fail closed by default even without explicitly configuring
+        // SessionInitializationFailureMode — an unknown session state on a read-only context is a
+        // security-relevant default, not one that should require discovering the right knob.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var initConnection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
+
+        var opConnection = new fakeDbConnection();
+        opConnection.SetFailOnCommand();
+        factory.Connections.Add(opConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+            // SessionInitializationFailureMode left unset — must default to FailClosed for ReadOnly.
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+
+        var conn = context.GetConnection(ExecutionType.Read);
+        try
+        {
+            await Assert.ThrowsAsync<ConnectionException>(async () => await conn.OpenAsync());
+        }
+        finally
+        {
+            conn.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_ReadOnlyContext_ExplicitBestEffort_SessionSettingsFailure_DoesNotThrow()
+    {
+        // An explicit override always wins over the ReadOnly smart default.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var initConnection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
+
+        var opConnection = new fakeDbConnection();
+        opConnection.SetFailOnCommand();
+        factory.Connections.Add(opConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.BestEffort
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+
+        var conn = context.GetConnection(ExecutionType.Read);
+        try
+        {
+            var ex = await Record.ExceptionAsync(async () => await conn.OpenAsync());
+            Assert.Null(ex);
+        }
+        finally
+        {
+            conn.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task OpenAsync_ReadWriteContext_ExplicitFailClosed_IsRespected()
+    {
+        // An explicit override always wins over the ReadWrite smart default too.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+
+        var initConnection = new fakeDbConnection();
+        factory.Connections.Add(initConnection);
+
+        var opConnection = new fakeDbConnection();
+        opConnection.SetFailOnCommand();
+        factory.Connections.Add(opConnection);
+
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+
+        var conn = context.GetConnection(ExecutionType.Write);
+        try
+        {
+            await Assert.ThrowsAsync<ConnectionException>(async () => await conn.OpenAsync());
+        }
+        finally
+        {
+            conn.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task BeginTransaction_FailClosed_SessionSettingsFailure_DoesNotLeakPoolSlot()
     {
         // Regression: OpenConnectionWithOptionalLock (TransactionContext.cs) calls connection.Open()
