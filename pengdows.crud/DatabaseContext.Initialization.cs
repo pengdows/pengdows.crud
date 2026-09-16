@@ -218,10 +218,16 @@ public partial class DatabaseContext
                         break;
                 }
             };
-            // ExecuteSessionSettings handles its own exceptions internally (logs + returns).
-            // No outer try-catch needed here.
+            // ExecuteSessionSettings/ExecuteSessionSettingsAsync handle their own exceptions
+            // internally (log + return, or throw ConnectionException when FailClosed is
+            // configured). No outer try-catch needed here for the sync handlers.
             _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
             _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
+            // The async handlers keep a thin outer catch — NOT to re-catch session-settings
+            // failures (ExecuteSessionSettingsAsync already handles those, including the
+            // FailClosed throw), but purely as a safety net for the logging call inside its
+            // own catch block throwing (e.g. a broken logging sink). OperationCanceledException
+            // and ConnectionException (the FailClosed signal) must still propagate untouched.
             _firstOpenHandlerAsyncRw = async (tc, ct) =>
             {
                 try
@@ -229,6 +235,10 @@ public partial class DatabaseContext
                     await ExecuteSessionSettingsAsync(tc, false, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (ConnectionException)
                 {
                     throw;
                 }
@@ -247,6 +257,10 @@ public partial class DatabaseContext
                 {
                     throw;
                 }
+                catch (ConnectionException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to apply session settings on first open for {Name}", Name);
@@ -257,6 +271,9 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
+            _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
+            _maxQueuedWrites = configuration.MaxQueuedWrites;
+            _maxQueuedReads = configuration.MaxQueuedReads;
             _configuredReadPoolSize = normalizedReadPoolSize;
             _configuredWritePoolSize = normalizedWritePoolSize;
             if (configuration.EnableMetrics)
@@ -303,6 +320,20 @@ public partial class DatabaseContext
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
                 _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
+            }
+
+            if (ConnectionMode == DbMode.SingleConnection)
+            {
+                // DbMode.SingleConnection shares one physical connection across the entire
+                // context. A transaction acquires this gate for its whole lifetime (Begin through
+                // Commit/Rollback/Dispose) so every other operation — another transaction attempt,
+                // or an ordinary non-transactional command — correctly waits its turn instead of
+                // racing directly against the connection or silently executing while a transaction
+                // is mid-flight (risking absorption into that transaction's uncommitted scope).
+                // Separate from the connection's own per-command RealAsyncLocker (TrackedConnection
+                // .GetLock()) so a transaction holding this gate never deadlocks against its own
+                // commands, which still acquire that other lock as normal.
+                _singleConnectionTransactionGate = new SemaphoreSlim(1, 1);
             }
 
             // Apply pooling defaults now that we have the final mode and dialect
@@ -721,7 +752,16 @@ public partial class DatabaseContext
         // read replica), sharing the turnstile would incorrectly gate replica reads behind
         // primary writes — those operations are independent and should not compete.
         // Also skip when writes are forbidden — no writes means no turnstile needed.
-        var sharesTurnstile = string.Equals(writerKey, readerKey, StringComparison.Ordinal);
+        //
+        // NOTE: this is deliberately NOT a comparison of the writer/reader connection-string
+        // hashes (writerKey/readerKey) — those strings are intentionally mutated differently
+        // for reader vs. writer during InitializeReadOnlyConnectionResources (pooling stripped
+        // from the reader, an "-rw" ApplicationName suffix + MaxPoolSize=1 on the writer) even
+        // when the caller supplied only one connection string, so a hash comparison is always
+        // false for the common single-connection-string SingleWriter case. Whether reader and
+        // writer target the same physical server is determined by whether the caller supplied
+        // an explicit ReadOnlyConnectionString, not by whether the derived strings still match.
+        var sharesTurnstile = !_explicitReadOnlyConnectionString;
 
         SemaphoreSlim? turnstile = null;
         if (ConnectionMode == DbMode.SingleWriter && _enableSingleWriterFairness && sharesTurnstile
@@ -739,7 +779,8 @@ public partial class DatabaseContext
             _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: true,
-            ownsTurnstile: turnstile != null); // Writers hold turnstile until slot released
+            ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
+            maxQueueDepth: _maxQueuedWrites);
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -750,7 +791,8 @@ public partial class DatabaseContext
             _metricsCollector != null,
             turnstile: turnstile,
             holdTurnstile: false,
-            ownsTurnstile: false); // Readers touch-and-release turnstile
+            ownsTurnstile: false, // Readers touch-and-release turnstile
+            maxQueueDepth: _maxQueuedReads);
 
         // Attach slot for modes with persistent connections.
         if (ConnectionMode == DbMode.PreventDatabaseUnload)
@@ -1303,7 +1345,8 @@ public partial class DatabaseContext
         bool trackMetrics = false,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
-        bool ownsTurnstile = false)
+        bool ownsTurnstile = false,
+        int? maxQueueDepth = null)
     {
         if (disabled || !maxSlots.HasValue)
         {
@@ -1328,7 +1371,8 @@ public partial class DatabaseContext
             sharedSemaphore: sharedSemaphore,
             turnstile: turnstile,
             holdTurnstile: holdTurnstile,
-            ownsTurnstile: ownsTurnstile);
+            ownsTurnstile: ownsTurnstile,
+            maxQueueDepth: maxQueueDepth);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)

@@ -27,6 +27,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.threading;
@@ -118,6 +119,28 @@ public partial class DatabaseContext
         }
 
         return _connectionOpenLocker ?? (ILockerAsync)new RealAsyncLocker(_connectionOpenGate);
+    }
+
+    /// <summary>
+    /// DbMode.SingleConnection shares one physical connection across the entire context. This gate
+    /// serializes exclusive use of that connection for a transaction's entire span (Begin through
+    /// Commit/Rollback/Dispose) against every other caller — another transaction attempt, or an
+    /// ordinary non-transactional command. Bounded by <see cref="ModeLockTimeout"/> (the same
+    /// timeout already used elsewhere for mode-related lock waits), so a caller blocks but does not
+    /// wait forever; exceeding it throws <see cref="pengdows.crud.exceptions.ModeContentionException"/>.
+    /// Separate from the connection's own per-command lock (<c>TrackedConnection.GetLock()</c>) so a
+    /// transaction holding this gate never deadlocks against its own commands, which still acquire
+    /// that other lock as normal.
+    /// </summary>
+    internal ILockerAsync GetSingleConnectionTransactionGate()
+    {
+        ThrowIfDisposed();
+        if (_singleConnectionTransactionGate == null)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        return new RealAsyncLocker(_singleConnectionTransactionGate, _modeContentionStats, ConnectionMode, _modeLockTimeout);
     }
 
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
@@ -248,6 +271,12 @@ public partial class DatabaseContext
             // logical connection will retry the SET on next first-open. For StandardMode
             // (ephemeral connections) each TrackedConnection is fresh anyway.
             _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
+            {
+                throw new ConnectionException(
+                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                    Product, ex);
+            }
             return;
         }
 
@@ -328,6 +357,12 @@ public partial class DatabaseContext
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
+            {
+                throw new ConnectionException(
+                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                    Product, ex);
+            }
             return;
         }
 

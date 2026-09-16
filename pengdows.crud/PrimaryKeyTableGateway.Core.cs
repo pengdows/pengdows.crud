@@ -33,6 +33,11 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // ties each entry's lifetime to its dialect instance so the cache doesn't grow without bound.
     private readonly ConditionalWeakTable<ISqlDialect, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
 
+    // Batch SQL can group multiple entities into a single container. Keep the ownership metadata
+    // weakly attached to that container so a partial batch failure restores audit fields only for
+    // containers that never completed, without extending the container's lifetime.
+    private readonly ConditionalWeakTable<ISqlContainer, IReadOnlyList<TEntity>> _batchContainerEntities = new();
+
     /// <summary>Cached SQL fragments specific to PK-based operations.</summary>
     private sealed class PkTemplates
     {
@@ -262,9 +267,22 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             throw new ArgumentNullException(nameof(entity));
         }
 
-        var ctx = context ?? _context;
-        await using var sc = BuildCreate(entity, ctx);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+        // BuildCreate mutates audit fields as a side effect of building the INSERT, before
+        // anything executes. Restore them if the write never actually succeeds.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
+        {
+            var ctx = context ?? _context;
+            await using var sc = BuildCreate(entity, ctx);
+            return RestoreAuditFieldsIfFailed(
+                await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1,
+                entity, auditSnapshot);
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     // =========================================================================

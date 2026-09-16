@@ -91,24 +91,42 @@ public partial class PrimaryKeyTableGateway<TEntity>
             throw new ArgumentNullException(nameof(entity));
         }
 
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        await using var sc = BuildUpsert(entity, ctx);
-        var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-        if (rowsAffected == 0 && _versionColumn != null)
+        // BuildUpsert mutates audit fields as a side effect of building the statement, before
+        // anything executes. Restore them whenever the write doesn't actually succeed —
+        // including the version-conflict/0-rows-affected case below.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        try
         {
-            var canDetect = dialect.SupportsOnConflictWhere
-                || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
-            if (canDetect)
-            {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
-            }
-        }
+            var ctx = context ?? _context;
+            var dialect = GetDialect(ctx);
+            await using var sc = BuildUpsert(entity, ctx);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
-        return rowsAffected;
+            if (rowsAffected == 0)
+            {
+                // 0 rows affected without an exception is a failed write regardless of whether
+                // this entity is versioned or the dialect can detect a conflict.
+                RestoreAuditFields(entity, auditSnapshot);
+                if (_versionColumn != null)
+                {
+                    var canDetect = dialect.SupportsOnConflictWhere
+                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                    if (canDetect)
+                    {
+                        throw new ConcurrencyConflictException(
+                            $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                            ctx.Product);
+                    }
+                }
+            }
+
+            return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(entity, auditSnapshot);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -158,7 +176,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var result = new List<ISqlContainer>(entities.Count);
         foreach (var entity in entities)
         {
-            result.Add(BuildUpsert(entity, ctx));
+            var container = BuildUpsert(entity, ctx);
+            TrackBatchContainer(container, [entity]);
+            result.Add(container);
         }
 
         return result;
@@ -186,13 +206,26 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpsert(entities, ctx);
         var total = 0;
-        foreach (var sc in containers)
+        var completedContainers = 0;
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return total;
@@ -630,6 +663,45 @@ public partial class PrimaryKeyTableGateway<TEntity>
             }
         }
 
+        TrackBatchContainer(sc, chunk);
         return sc;
+    }
+
+    private void TrackBatchContainer(ISqlContainer container, IReadOnlyList<TEntity> entities)
+    {
+        _batchContainerEntities.Remove(container);
+        _batchContainerEntities.Add(container, entities);
+    }
+
+    private void RestoreBatchAuditFields(
+        IReadOnlyList<ISqlContainer> containers,
+        int firstUnexecutedContainer,
+        IReadOnlyList<TEntity> entities,
+        IReadOnlyList<AuditFieldSnapshot> snapshots)
+    {
+        if (!_hasAuditColumns)
+        {
+            return;
+        }
+
+        for (var containerIndex = firstUnexecutedContainer; containerIndex < containers.Count; containerIndex++)
+        {
+            if (!_batchContainerEntities.TryGetValue(containers[containerIndex], out var chunk))
+            {
+                continue;
+            }
+
+            foreach (var entity in chunk)
+            {
+                for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
+                {
+                    if (ReferenceEquals(entities[entityIndex], entity))
+                    {
+                        RestoreAuditFields(entity, snapshots[entityIndex]);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

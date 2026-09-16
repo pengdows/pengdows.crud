@@ -138,6 +138,43 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
         }
     }
 
+    private int? _maxQueuedWrites;
+    private int? _maxQueuedReads;
+
+    /// <inheritdoc/>
+    public int? MaxQueuedWrites
+    {
+        get => _maxQueuedWrites;
+        set
+        {
+            if (value is < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value),
+                    $"MaxQueuedWrites must be >= 0 (got {value}). " +
+                    "Use 0 to disable queueing entirely; use null for the governor's built-in default.");
+            }
+
+            _maxQueuedWrites = value;
+        }
+    }
+
+    /// <inheritdoc/>
+    public int? MaxQueuedReads
+    {
+        get => _maxQueuedReads;
+        set
+        {
+            if (value is < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value),
+                    $"MaxQueuedReads must be >= 0 (got {value}). " +
+                    "Use 0 to disable queueing entirely; use null for the governor's built-in default.");
+            }
+
+            _maxQueuedReads = value;
+        }
+    }
+
     /// <inheritdoc/>
     public bool EnableSingleWriterFairness { get; set; } = true;
 
@@ -148,4 +185,8 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public TimeSpan? ModeLockTimeout { get; set; } = TimeSpan.FromSeconds(DefaultModeLockSeconds);
 
     public string ApplicationName { get; set; } = string.Empty;
+
+    /// <inheritdoc/>
+    public SessionInitializationFailureMode SessionInitializationFailureMode { get; set; } =
+        SessionInitializationFailureMode.BestEffort;
 }

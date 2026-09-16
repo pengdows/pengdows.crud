@@ -163,4 +163,31 @@ public interface IDatabaseContextConfiguration
     /// </para>
     /// </remarks>
     bool EnableSingleWriterFairness { get; set; }
+
+    /// <summary>
+    /// Controls how a connection is handled when applying session settings fails on first open.
+    /// Defaults to <see cref="SessionInitializationFailureMode.BestEffort"/> — logs and proceeds
+    /// with the connection in an unknown session state (current 2.0 behavior).
+    /// </summary>
+    /// <remarks>
+    /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
+    /// MySQL, MariaDB, and Oracle, which remains best-effort regardless of this setting.
+    /// </remarks>
+    SessionInitializationFailureMode SessionInitializationFailureMode { get; set; }
+
+    /// <summary>
+    /// Maximum number of callers allowed to queue for a write-governor slot before further
+    /// callers are rejected immediately with <c>PoolSaturatedException</c>, rather than waiting
+    /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
+    /// built-in default (proportional to <see cref="MaxConcurrentWrites"/>).
+    /// </summary>
+    int? MaxQueuedWrites { get; set; }
+
+    /// <summary>
+    /// Maximum number of callers allowed to queue for a read-governor slot before further
+    /// callers are rejected immediately with <c>PoolSaturatedException</c>, rather than waiting
+    /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
+    /// built-in default (proportional to <see cref="MaxConcurrentReads"/>).
+    /// </summary>
+    int? MaxQueuedReads { get; set; }
 }

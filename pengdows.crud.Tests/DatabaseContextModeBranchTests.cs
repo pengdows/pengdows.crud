@@ -79,6 +79,41 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.Sybase, false });
     }
 
+    [Fact]
+    public void CoerceMode_Db2_TreatedAsFullServerDatabase()
+    {
+        // Regression guard (structurally guaranteed under the current dialect-delegated
+        // architecture, kept as an explicit test anyway): CoerceMode delegates entirely to
+        // ISqlDialect.CoerceConnectionMode, so there is no per-database switch left for Db2 (or
+        // any other client-server database) to be silently missing from — Db2Dialect inherits the
+        // base SqlDialect defaults (Best -> Standard, explicit modes honored as-is) with no
+        // special-casing needed. See CLAUDE.md's "Adding a New Database" checklist item 9.
+        var context = CreateContext("Server=localhost;Database=test");
+        var coerce = GetInstanceMethod("CoerceMode");
+
+        var bestDb2 = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.Db2, false })!;
+        Assert.Equal(DbMode.Standard, bestDb2);
+
+        var explicitMode = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false })!;
+        Assert.Equal(DbMode.SingleWriter, explicitMode);
+    }
+
+    [Fact]
+    public void IsClientServerDatabase_Db2_ReturnsTrue()
+    {
+        // Regression: IsClientServerDatabase had no Db2 case, so a misconfigured
+        // SingleConnection/SingleWriter mode against Db2 silently got no diagnostic warning
+        // that every other client-server database gets.
+        var context = CreateContext("Server=localhost;Database=test");
+        var method = GetInstanceMethod("IsClientServerDatabase");
+
+        var result = (bool)method.Invoke(context, new object?[] { SupportedDatabase.Db2 })!;
+
+        Assert.True(result);
+    }
+
     private static DatabaseContext CreateContext(string connectionString)
     {
         var context = (DatabaseContext)RuntimeHelpers.GetUninitializedObject(typeof(DatabaseContext));

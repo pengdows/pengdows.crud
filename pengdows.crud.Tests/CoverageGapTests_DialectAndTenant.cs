@@ -852,7 +852,8 @@ public class CoverageGapTests_DialectAndTenant
             var failures = 0;
 
             // Dedicated Thread objects (not Parallel.For/thread-pool tasks) — the thread
-            // pool's slow injection heuristic would otherwise stall Barrier.SignalAndWait()
+            // pool's slow injection heuristic (~1 new thread per ~0.5-1s once existing
+            // threads are seen blocked) would otherwise stall Barrier.SignalAndWait()
             // for many seconds before all `contenders` threads are actually running.
             var threads = new Thread[contenders];
             for (var i = 0; i < contenders; i++)

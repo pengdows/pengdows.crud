@@ -272,14 +272,14 @@ public class ParallelTestOrchestrator
                 ContainerName = "MariaDB",
                 DatabaseProvider = "MariaDB",
                 Container = new MariaDbContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new MariaDbTestProvider(db, sp)
             },
             new()
             {
                 ContainerName = "SQL Server",
                 DatabaseProvider = "SQL Server",
                 Container = new SqlServerTestContainer(),
-                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
+                TestProviderFactory = (db, sp) => new SqlServerTestProvider(db, sp)
             },
             new()
             {

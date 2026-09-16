@@ -8,7 +8,9 @@ using pengdows.crud.fakeDb;
 namespace pengdows.crud.Tests.dialects;
 
 /// <summary>
-/// Tests for MySQL/MariaDB generated key strategy.
+/// Tests for MySQL's generated key strategy (MariaDB unconditionally overrides
+/// GetGeneratedKeyPlan() to ReaderInsertedId regardless of provider — see
+/// MariaDbDialectTests.GeneratedKeyPlan_UsesReaderInsertedId — so it isn't covered here).
 /// When using MySqlConnector, GetGeneratedKeyPlan returns ReaderInsertedId:
 /// execute INSERT as a reader and read LastInsertedId from the provider's OK packet,
 /// avoiding multi-statement (which MySqlConnector deliberately does not support) and
@@ -41,14 +43,11 @@ public class MySqlDialectCompoundStatementTests
         Assert.Equal(GeneratedKeyPlan.ReaderInsertedId, dialect.GetGeneratedKeyPlan());
     }
 
-    [Fact]
-    public void MariaDb_OracleProvider_GetGeneratedKeyPlan_Returns_CompoundStatement()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
-        var dialect = new MariaDbDialect(factory, NullLogger<MariaDbDialect>.Instance);
-
-        Assert.Equal(GeneratedKeyPlan.CompoundStatement, dialect.GetGeneratedKeyPlan());
-    }
+    // MariaDb_OracleProvider_GetGeneratedKeyPlan_Returns_CompoundStatement removed: MariaDbDialect
+    // now unconditionally overrides GetGeneratedKeyPlan() to ReaderInsertedId regardless of
+    // provider (reads the generated id from the command/reader rather than a compound
+    // multi-statement INSERT; SELECT LAST_INSERT_ID()) — see MariaDbDialectTests.
+    // GeneratedKeyPlan_UsesReaderInsertedId for the current, correct coverage of this behavior.
 
     [Fact]
     public void MySql_GetCompoundInsertIdSuffix_Returns_LastInsertId()

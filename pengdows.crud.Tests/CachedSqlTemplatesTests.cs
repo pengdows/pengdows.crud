@@ -50,14 +50,10 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
         var sc1 = helper1.BuildCreate(entity1);
         var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        // The cache is a ConditionalWeakTable (ties entry lifetime to the dialect instance to
-        // avoid unbounded growth), which exposes no .Count - enumerate it instead.
-        var dialectCache1 = (IEnumerable)field.GetValue(helper1)!;
-        var initialCacheCount = dialectCache1.Cast<object>().Count();
+        var initialCacheCount = CountConditionalWeakTableEntries(field.GetValue(helper1)!);
 
         var sc2 = helper1.BuildCreate(entity2);
-        var dialectCache2 = (IEnumerable)field.GetValue(helper1)!;
-        var finalCacheCount = dialectCache2.Cast<object>().Count();
+        var finalCacheCount = CountConditionalWeakTableEntries(field.GetValue(helper1)!);
 
         // Verify cache was reused (same count means no new templates were created)
         Assert.Equal(initialCacheCount, finalCacheCount);
@@ -97,18 +93,27 @@ public class CachedSqlTemplatesTests : IAsyncLifetime
 
         var field = typeof(TableGateway<TestEntity, int>).GetField("_templatesByDialect",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var dialectCache1 = (IEnumerable)field.GetValue(helper1)!;
-        var initialCacheCount = dialectCache1.Cast<object>().Count();
+        var initialCacheCount = CountConditionalWeakTableEntries(field.GetValue(helper1)!);
 
         await helper1.BuildUpdateAsync(entity2, false);
-        var dialectCache2 = (IEnumerable)field.GetValue(helper1)!;
-        var finalCacheCount = dialectCache2.Cast<object>().Count();
+        var finalCacheCount = CountConditionalWeakTableEntries(field.GetValue(helper1)!);
 
         // Verify cache was reused (same count means no new templates were created)
         Assert.Equal(initialCacheCount, finalCacheCount);
         Assert.True(finalCacheCount > 0, "Templates should be cached");
     }
 
+
+    /// <summary>
+    /// _templatesByDialect is a ConditionalWeakTable (keyed by dialect instance, not
+    /// SupportedDatabase enum — see the field's own comment), which has no .Count. It does
+    /// implement IEnumerable, so counting entries via enumeration is the only reflection-free
+    /// option available without referencing the internal CachedSqlTemplates type argument.
+    /// </summary>
+    private static int CountConditionalWeakTableEntries(object conditionalWeakTable)
+    {
+        return ((IEnumerable)conditionalWeakTable).Cast<object>().Count();
+    }
 
     [Fact]
     public async Task BuildUpdateAsync_WhenLoadOriginalTrue_ThrowsIfTableMissing()

@@ -77,10 +77,26 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private IColumnInfo? _idColumn;
 
-    // Monolithic parameter binders, cached per dialect
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
-    private readonly ConcurrentDictionary<SupportedDatabase, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
+    // Multitenancy background for every cache in this block: TableGateway is a singleton shared
+    // across tenant contexts (see CLAUDE.md's multi-tenancy pattern: gateway.Method(entity,
+    // tenantCtx)). Two tenants on different versions/capability sets of the same engine (e.g.
+    // MySQL 8.0.18 vs 8.0.21) get distinct dialect instances with distinct
+    // ProductInfo.ParsedVersion — a cache keyed only by the coarse SupportedDatabase enum let
+    // whichever tenant's dialect built the entry first silently dictate SQL for every other
+    // same-enum tenant, even when a dialect property is explicitly version-gated (e.g.
+    // MySqlDialect.UpsertIncomingAlias).
+    //
+    // These three bake actual DbParameter construction into the cached delegate (see
+    // CompiledBinderFactory — it closes over the dialect instance itself via Expression.Constant
+    // and keeps calling dialect.CreateDbParameter for the lifetime of the cache entry), so they
+    // stay keyed by dialect INSTANCE (ConditionalWeakTable, reclaimed once a tenant's
+    // DatabaseContext/dialect is no longer referenced) rather than a version fingerprint —
+    // CreateDbParameter's behavior also depends on the live DbProviderFactory instance and, for
+    // Firebird, GuidStorageMode, neither of which a simple DatabaseType+version fingerprint
+    // captures. See docs/FUTURE_WORK.md's fingerprint-audit entry before changing this.
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _insertBinders = new();
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.Binder> _upsertBinders = new();
+    private readonly ConditionalWeakTable<ISqlDialect, CompiledBinderFactory<TEntity>.UpdateBinder> _updateBinders = new();
 
     // Per-dialect templates are cached in _templatesByDialect
 
@@ -121,6 +137,21 @@ public partial class TableGateway<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // BuildCreate (called below via every branch) mutates audit fields as a side effect of
+        // building the INSERT, before anything executes. Restore them if the write never
+        // actually succeeds, so a failed Create doesn't leave the entity claiming one did.
+        // writeSucceeded is set the instant the database has accepted the persisting INSERT
+        // (the write command completed without throwing) — some branches then do a follow-up
+        // step (retrieving a generated ID) that can itself throw. Once the write has succeeded, a
+        // later failure in that follow-up step
+        // must NOT restore audit fields — the row already exists with the new values; restoring
+        // would make the entity falsely claim a rollback that never happened. A plain local bool
+        // can't be observed from the shared catch below across the ExecuteReaderInsertedIdAsync
+        // branch's async call, hence the one-element array as a simple mutable cell.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        var writeSucceeded = new bool[1];
+        try
+        {
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
@@ -136,7 +167,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
             // Proceed with standard insert since ID is now populated
             await using var sc = BuildCreate(entity, ctx);
-            return await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+            var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -149,11 +182,19 @@ public partial class TableGateway<TEntity, TRowID> :
             if (dialect.DatabaseType == SupportedDatabase.Oracle)
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
+
+                // The INSERT above executed without throwing — the database accepted the write
+                // regardless of whether reading the OUT parameter below succeeds.
+                writeSucceeded[0] = true;
                 generatedId = sc.GetParameterValue(OracleReturningParameterName);
             }
             else
             {
                 generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write).ConfigureAwait(false);
+
+                // The statement above executed without throwing — the database accepted the
+                // write regardless of whether a generated ID came back inline.
+                writeSucceeded[0] = true;
             }
 
             if (generatedId != null && generatedId != DBNull.Value)
@@ -178,8 +219,11 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
             {
+                RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
+
+            writeSucceeded[0] = true;
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
@@ -211,6 +255,12 @@ public partial class TableGateway<TEntity, TRowID> :
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
             {
+                // ExecuteReaderAsync above executed without throwing — the INSERT (the compound
+                // statement's first result set) already ran server-side. The database accepted
+                // the write regardless of whether navigating to/reading the trailing SELECT
+                // result set below succeeds.
+                writeSucceeded[0] = true;
+
                 // First result set = INSERT (rows-affected, no data rows).
                 // Advance to the SELECT result set to read the generated ID.
                 // Use IInternalTrackedReader.InnerReader to bypass TrackedReader.NextResult() policy;
@@ -244,19 +294,31 @@ public partial class TableGateway<TEntity, TRowID> :
         // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
         // No multi-statement support required — MySqlConnector deliberately omits it.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect).ConfigureAwait(false);
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
+            var succeeded = rowsAffected == 1;
+            writeSucceeded[0] = succeeded;
 
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
+            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
             }
 
-            return rowsAffected == 1;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
+        }
+        }
+        catch
+        {
+            if (!writeSucceeded[0])
+            {
+                RestoreAuditFields(entity, auditSnapshot);
+            }
+
+            throw;
         }
     }
 
@@ -269,6 +331,12 @@ public partial class TableGateway<TEntity, TRowID> :
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // See the 2-arg CreateAsync overload above for why this exists (including the
+        // writeSucceeded flag and why it's a one-element array).
+        var auditSnapshot = SnapshotAuditFields(entity);
+        var writeSucceeded = new bool[1];
+        try
+        {
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
@@ -283,7 +351,9 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
             await using var sc = BuildCreate(entity, ctx);
-            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
 
         // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
@@ -297,6 +367,10 @@ public partial class TableGateway<TEntity, TRowID> :
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                // The INSERT above executed without throwing — the database accepted the write
+                // regardless of whether reading the OUT parameter below succeeds.
+                writeSucceeded[0] = true;
                 generatedId = sc.GetParameterValue(OracleReturningParameterName);
             }
             else
@@ -304,6 +378,10 @@ public partial class TableGateway<TEntity, TRowID> :
                 generatedId = await sc
                     .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                // The statement above executed without throwing — the database accepted the
+                // write regardless of whether a generated ID came back inline.
+                writeSucceeded[0] = true;
             }
 
             if (generatedId != null && generatedId != DBNull.Value)
@@ -327,8 +405,11 @@ public partial class TableGateway<TEntity, TRowID> :
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
             {
+                RestoreAuditFields(entity, auditSnapshot);
                 return false;
             }
+
+            writeSucceeded[0] = true;
 
             var lookupSql = dialect.GetCorrelationTokenLookupQuery(
                 _tableInfo.Name,
@@ -355,6 +436,12 @@ public partial class TableGateway<TEntity, TRowID> :
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
             {
+                // ExecuteReaderAsync above executed without throwing — the INSERT (the compound
+                // statement's first result set) already ran server-side. The database accepted
+                // the write regardless of whether navigating to/reading the trailing SELECT
+                // result set below succeeds.
+                writeSucceeded[0] = true;
+
                 if (reader is IInternalTrackedReader internalReader)
                 {
                     var inner = internalReader.InnerReader;
@@ -380,18 +467,31 @@ public partial class TableGateway<TEntity, TRowID> :
         // 4b. ReaderInsertedId plan (MySqlConnector): see ExecuteReaderInsertedIdAsync.
         // No multi-statement support required.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, cancellationToken).ConfigureAwait(false);
+            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded, cancellationToken).ConfigureAwait(false);
 
         // 5. Default path: standard insert followed by optional session-scoped retrieval
         {
             await using var sc = BuildCreate(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-            if (rowsAffected == 1 && _idColumn != null && !_idColumn.IsIdWritable)
+            var succeeded = rowsAffected == 1;
+            writeSucceeded[0] = succeeded;
+
+            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
             {
                 await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
             }
 
-            return rowsAffected == 1;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
+        }
+        }
+        catch
+        {
+            if (!writeSucceeded[0])
+            {
+                RestoreAuditFields(entity, auditSnapshot);
+            }
+
+            throw;
         }
     }
 
@@ -400,19 +500,30 @@ public partial class TableGateway<TEntity, TRowID> :
     /// from the command's LastInsertedId property (populated from the MySQL OK packet).
     /// Falls back to <see cref="PopulateGeneratedIdAsync"/> when LastInsertedId is absent (e.g. fakeDb).
     /// </summary>
+    /// <param name="writeSucceeded">
+    /// Set to true once the INSERT reader has executed without throwing, before the
+    /// <see cref="PopulateGeneratedIdAsync"/> fallback (which can itself throw) runs — see the
+    /// caller (<c>CreateAsync</c>) for why this must be observable outside this method.
+    /// </param>
     private async ValueTask<bool> ExecuteReaderInsertedIdAsync(
         TEntity entity,
         IDatabaseContext ctx,
         ISqlDialect dialect,
+        bool[] writeSucceeded,
         CancellationToken cancellationToken = default)
     {
         await using var sc = BuildCreate(entity, ctx);
         object? generatedId = null;
         await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
         {
+            // ExecuteReaderAsync above executed without throwing — the database accepted the
+            // write regardless of whether reading LastInsertedId from the command below succeeds.
+            writeSucceeded[0] = true;
+
             if (reader is IInternalTrackedReader internalReader)
                 generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
         }
+
         if (generatedId is not null && generatedId != DBNull.Value)
             _idColumn!.PropertyInfo.SetValue(entity,
                 TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
@@ -489,6 +600,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
 
     // Placeholders for identity-returning clauses in INSERT statements
+    private const string
+        PrefixClausePlaceholder = "{prefix}"; // SQL Server: DECLARE @table for the trigger-safe OUTPUT INTO form
+
     private const string OutputClausePlaceholder = "{output}"; // SQL Server: OUTPUT INSERTED.id (before VALUES)
 
     private const string
@@ -585,7 +699,8 @@ public partial class TableGateway<TEntity, TRowID> :
     {
         var sc = ctx.CreateSqlContainer();
 
-        sc.Query.Append("INSERT INTO ")
+        sc.Query.Append(PrefixClausePlaceholder)
+            .Append("INSERT INTO ")
             .Append(BuildWrappedTableName(dialect))
             .Append(" (");
 
@@ -690,6 +805,7 @@ public partial class TableGateway<TEntity, TRowID> :
     {
         var (sc, dialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
 
+        var prefixClause = string.Empty;
         var outputClause = string.Empty;
         var returningClause = string.Empty;
         var wrapsEntireStatement = false;
@@ -701,7 +817,15 @@ public partial class TableGateway<TEntity, TRowID> :
 
             if (dialect.DatabaseType == SupportedDatabase.SqlServer)
             {
-                outputClause = dialect.RenderInsertReturningClause(idWrapped); // SQL Server: OUTPUT goes before VALUES
+                // A bare "OUTPUT INSERTED.id" is rejected by SQL Server when the target table has
+                // an enabled trigger. The OUTPUT ... INTO @table-variable form works whether or
+                // not a trigger is present, so it's applied unconditionally rather than trying to
+                // detect triggers at SQL-generation time.
+                var clause = dialect.RenderInsertReturningClause(idWrapped);
+                const string outputTable = "@__pengdows_output";
+                prefixClause = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
+                outputClause = $"{clause} INTO {outputTable} ({idWrapped})";
+                returningClause = $"; SELECT {idWrapped} FROM {outputTable}";
             }
             else if (dialect.DatabaseType == SupportedDatabase.Oracle)
             {
@@ -724,6 +848,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         // Replace placeholders with actual clauses (or empty strings)
+        sc.Query.Replace(PrefixClausePlaceholder, prefixClause);
         sc.Query.Replace(OutputClausePlaceholder, outputClause);
         sc.Query.Replace(ReturningClausePlaceholder, returningClause);
 
@@ -1210,20 +1335,20 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _insertBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, dialect));
+        return _insertBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _upsertBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, dialect));
+        return _upsertBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
-        return _updateBinders.GetOrAdd(dialect.DatabaseType, _ =>
-            CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, dialect));
+        return _updateBinders.GetValue(dialect, d =>
+            CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, d));
     }
 
     // CheckParameterLimit moved to BaseTableGateway.Core.cs
@@ -1252,22 +1377,42 @@ public partial class TableGateway<TEntity, TRowID> :
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
+
+        // BuildUpdateAsync mutates audit fields as a side effect of building the UPDATE, before
+        // anything executes. Restore them whenever the write doesn't actually succeed — including
+        // the version-conflict/0-rows-affected case below — so the entity doesn't claim a write
+        // that never persisted.
+        var auditSnapshot = SnapshotAuditFields(objectToUpdate);
         try
         {
             await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-            if (rowsAffected == 0 && _versionColumn != null)
+            if (rowsAffected == 0)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
+                // 0 rows affected without an exception is a failed write regardless of whether
+                // this entity is versioned — restore before the (conditional) throw below, not
+                // just in the generic catch, since a plain "return 0" for an unversioned entity
+                // never reaches that catch at all.
+                RestoreAuditFields(objectToUpdate, auditSnapshot);
+                if (_versionColumn != null)
+                {
+                    throw new ConcurrencyConflictException(
+                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                        ctx.Product);
+                }
             }
 
             return rowsAffected;
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
         {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
             return 0;
+        }
+        catch
+        {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
+            throw;
         }
     }
 

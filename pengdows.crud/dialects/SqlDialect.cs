@@ -214,6 +214,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public bool IsInitialized => _productInfo != null;
 
+    /// <inheritdoc cref="IInternalSqlDialect.CacheFingerprint"/>
+    public virtual string CacheFingerprint =>
+        $"{DatabaseType}|{(IsInitialized ? ProductInfo.ParsedVersion?.ToString() ?? "unversioned" : "uninitialized")}";
+
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
 

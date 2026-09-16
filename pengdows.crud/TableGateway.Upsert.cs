@@ -58,11 +58,11 @@ public partial class TableGateway<TEntity, TRowID>
             await using var sc = BuildUpsert(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
-        // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
-        // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
-        // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
-        // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
-        // cannot detect version conflicts — do NOT throw for those dialects.
+            // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
+            // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
+            // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
+            // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
+            // cannot detect version conflicts — do NOT throw for those dialects.
             if (rowsAffected == 0)
             {
                 if (_versionColumn != null)
@@ -224,13 +224,22 @@ public partial class TableGateway<TEntity, TRowID>
             binder(entity, parameters);
 
             var conflictCols = ResolveUpsertKey();
+            var overridesSystemIdentity = (dialect.DatabaseType is SupportedDatabase.PostgreSql
+                or SupportedDatabase.AuroraPostgreSql) && (_idColumn?.IsIdWritable == true);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
                 .Append(BuildWrappedTableName(dialect))
                 .Append(" (")
                 .Append(colSb.AsSpan())
-                .Append(") VALUES (")
+                .Append(")");
+
+            if (overridesSystemIdentity)
+            {
+                sc.Query.Append(" OVERRIDING SYSTEM VALUE");
+            }
+
+            sc.Query.Append(" VALUES (")
                 .Append(valSb.AsSpan())
                 .Append(") ON CONFLICT (");
 
@@ -406,6 +415,8 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             var onClause = dialect.RenderMergeOnClause(join.ToString());
+            var overridesSystemIdentity = (dialect.DatabaseType is SupportedDatabase.PostgreSql
+                or SupportedDatabase.AuroraPostgreSql) && (_idColumn?.IsIdWritable == true);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("MERGE INTO ")
@@ -418,7 +429,14 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(template.UpsertUpdateFragment)
                 .Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
-                .Append(") VALUES (")
+                .Append(")");
+
+            if (overridesSystemIdentity)
+            {
+                sc.Query.Append(" OVERRIDING SYSTEM VALUE");
+            }
+
+            sc.Query.Append(" VALUES (")
                 .Append(insertValSb.AsSpan())
                 .Append(")");
 

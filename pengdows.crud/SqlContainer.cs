@@ -988,6 +988,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     }
 
                     sb.Append(_context.MakeParameterName(param));
+
+                    // SQL Server EXEC requires an explicit OUTPUT marker for output-capable
+                    // parameters. Without it the procedure executes, but the provider leaves
+                    // the DbParameter unchanged. Other wrapping styles encode OUT semantics
+                    // differently (or through provider binding alone), so keep this T-SQL-only.
+                    if (_context.ProcWrappingStyle == ProcWrappingStyle.Exec &&
+                        (param.Direction == ParameterDirection.Output ||
+                         param.Direction == ParameterDirection.InputOutput))
+                    {
+                        sb.Append(" OUTPUT");
+                    }
                 }
 
                 return sb.ToString();
@@ -1131,6 +1142,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+
+            await using var singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
+            if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
+            {
+                await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             // Note: SingleWriter mode now uses Standard lifecycle with governor policy.
             // The governor (WriteSlots=1) ensures only one write at a time.
@@ -1443,6 +1460,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
                     : CommandBehavior.CloseConnection);
 
+            // Reads deliberately do NOT wait on the single-connection transaction gate: an
+            // existing, intentional pattern (see TransactionStreamingTests
+            // .LoadStreamAsync_TransactionContext_PassedExplicitly_UsesCorrectConnection) reads via
+            // the plain context while a transaction is open on the same DbMode.SingleConnection
+            // connection, and asserts the read observes the connection without the transaction
+            // having to complete first. Making reads wait here would deadlock that pattern (the
+            // transaction can't complete until code after the read commits it). The absorption/
+            // rollback risk this gate exists for is write-specific (see ExecuteNonQueryAsync) — a
+            // read has no side effect to lose.
+            //
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
             // otherwise, we will have the connection set to autoclose so that we
@@ -1457,9 +1484,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
                 cmd,
                 metrics,
-                this);
+                this,
+                contextLocker);
             cmd = null;
-            lockTransferred = true; // TrackedReader now owns the lock
+            lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
             if (activity != null)
             {
@@ -1533,7 +1561,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
             }
 
-            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
+            if (!lockTransferred && contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
             {
                 try
                 {
@@ -1888,6 +1916,28 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // bypass this bound entirely via a second, independent path.
     private const int MaxTelemetryStatementLength = 4000;
     private const int MaxTelemetryMessageLength = 1000;
+
+    /// <summary>
+    /// DbMode.SingleConnection shares one physical connection across the entire context. A
+    /// transaction holds this gate for its whole lifetime (see
+    /// <c>TransactionContext.AcquireSingleConnectionTransactionGate</c>); an ordinary
+    /// non-transactional <b>write</b> must acquire it too, briefly, so it correctly waits behind
+    /// an active transaction instead of risking silent absorption into its uncommitted scope and
+    /// being rolled back with it. Deliberately not applied to reads — no side effect to lose, and
+    /// an existing, intentional pattern relies on reads observing the connection without waiting
+    /// for an open transaction to complete first (see the read path's own comment). A no-op for
+    /// transaction-scoped calls (the transaction already holds it — re-acquiring the same
+    /// non-reentrant semaphore would deadlock) and for every other mode.
+    /// </summary>
+    private ILockerAsync GetSingleConnectionTransactionGateForOrdinaryOp(bool isTransaction)
+    {
+        if (isTransaction || _context is not DatabaseContext dbContext)
+        {
+            return NoOpAsyncLocker.Instance;
+        }
+
+        return dbContext.GetSingleConnectionTransactionGate();
+    }
 
     private Activity? StartActivity(string operationName)
     {

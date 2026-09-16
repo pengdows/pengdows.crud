@@ -40,7 +40,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             var fallback = new List<ISqlContainer>(entities.Count);
             foreach (var entity in entities)
             {
-                fallback.Add(BuildCreate(entity, ctx));
+                var container = BuildCreate(entity, ctx);
+                TrackBatchContainer(container, [entity]);
+                fallback.Add(container);
             }
 
             return fallback;
@@ -92,13 +94,26 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await CreateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false) ? 1 : 0;
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchCreate(entities, ctx);
         var total = 0;
-        foreach (var sc in containers)
+        var completedContainers = 0;
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return total;

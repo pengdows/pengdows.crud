@@ -36,6 +36,32 @@ public class SingleWriterTurnstileActivationTests
     }
 
     [Fact]
+    public void SingleWriter_SingleConnectionString_ActivatesSharedTurnstile()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+            // No dedicated ReadOnlyConnectionString — the common/default configuration.
+        };
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var writerTurnstile = GetGovernorField(context, "_writerGovernor", "_turnstile");
+        var readerTurnstile = GetGovernorField(context, "_readerGovernor", "_turnstile");
+
+        // BUG today: writer/reader connection strings diverge during initialization
+        // (pooling stripped from reader, "-rw" suffix + MaxPoolSize=1 on writer) even though
+        // the caller only supplied one connection string — so the pool-key hash comparison
+        // that gates turnstile creation sees them as different pools, and no turnstile is
+        // ever created for the single-connection-string SingleWriter case.
+        Assert.NotNull(writerTurnstile);
+        Assert.Same(writerTurnstile, readerTurnstile);
+    }
+
+    [Fact]
     public void SingleWriter_ExplicitReadOnlyConnectionString_DoesNotShareTurnstile()
     {
         // Guard: when the caller explicitly points reads at a different connection string
@@ -55,5 +81,4 @@ public class SingleWriterTurnstileActivationTests
         var writerTurnstile = GetGovernorField(context, "_writerGovernor", "_turnstile");
         Assert.Null(writerTurnstile);
     }
-
 }

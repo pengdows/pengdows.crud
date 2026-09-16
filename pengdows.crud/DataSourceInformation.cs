@@ -79,8 +79,14 @@ internal class DataSourceInformation : IDataSourceInformation
         ParsedVersion = info.ParsedVersion;
         Product = info.DatabaseType;
         StandardCompliance = info.StandardCompliance;
-        ParameterMarkerPattern = string.Empty;
+        ParameterMarkerPattern = BuildParameterMarkerPattern(dialect);
         ParameterNamePatternRegex = dialect.ParameterNamePattern;
+    }
+
+    private static string BuildParameterMarkerPattern(ISqlDialect dialect)
+    {
+        var escapedMarker = Regex.Escape(dialect.ParameterMarker);
+        return dialect.SupportsNamedParameters ? escapedMarker + "\\w+" : escapedMarker;
     }
 
     /// <inheritdoc />
@@ -152,7 +158,8 @@ internal class DataSourceInformation : IDataSourceInformation
     }
 
     internal static async Task<DataSourceInformation> CreateAsync(ITrackedConnection connection,
-        DbProviderFactory factory, ILoggerFactory? loggerFactory = null)
+        DbProviderFactory factory, ILoggerFactory? loggerFactory = null,
+        CancellationToken cancellationToken = default)
     {
         if (connection == null)
         {
@@ -165,13 +172,14 @@ internal class DataSourceInformation : IDataSourceInformation
         }
 
         loggerFactory ??= NullLoggerFactory.Instance;
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync().ConfigureAwait(false);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var dialect = await SqlDialectFactory.CreateDialectAsync(connection, factory, loggerFactory)
+        var dialect = await SqlDialectFactory.CreateDialectAsync(connection, factory, loggerFactory, cancellationToken)
             .ConfigureAwait(false);
         return new DataSourceInformation(dialect);
     }

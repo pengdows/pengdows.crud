@@ -46,19 +46,44 @@ public partial class PrimaryKeyTableGateway<TEntity>
             throw new ArgumentNullException(nameof(objectToUpdate));
         }
 
-        var ctx = context ?? _context;
-        await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        // BuildUpdateAsync mutates audit fields as a side effect of building the UPDATE, before
+        // anything executes. Restore them if the write never actually succeeds.
+        var auditSnapshot = SnapshotAuditFields(objectToUpdate);
+        try
+        {
+            var ctx = context ?? _context;
+            await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
+            throw;
+        }
     }
 
     /// <inheritdoc/>
     public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
-        var ctx = context ?? _context;
-        await using var sc =
-            await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
-        return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        // See the 2-arg UpdateAsync overload above for why this exists.
+        var auditSnapshot = SnapshotAuditFields(objectToUpdate);
+        try
+        {
+            var ctx = context ?? _context;
+            await using var sc =
+                await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
+            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            return rowsAffected;
+        }
+        catch
+        {
+            RestoreAuditFields(objectToUpdate, auditSnapshot);
+            throw;
+        }
     }
 
     // =========================================================================
@@ -94,7 +119,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 SetAuditFields(entity, true, auditValues);
             }
 
-            result.Add(BuildUpdateByPk(entity, ctx, dialect, auditAlreadySet: true));
+            var container = BuildUpdateByPk(entity, ctx, dialect, auditAlreadySet: true);
+            TrackBatchContainer(container, [entity]);
+            result.Add(container);
         }
 
         return result;
@@ -122,13 +149,26 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        var auditSnapshots = _hasAuditColumns
+            ? entities.Select(SnapshotAuditFields).ToArray()
+            : Array.Empty<AuditFieldSnapshot>();
         var containers = BuildBatchUpdate(entities, ctx);
         var total = 0;
-        foreach (var sc in containers)
+        var completedContainers = 0;
+        try
         {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            foreach (var sc in containers)
+            {
+                await using var owned = sc;
+                cancellationToken.ThrowIfCancellationRequested();
+                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                completedContainers++;
+            }
+        }
+        catch
+        {
+            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
+            throw;
         }
 
         return total;

@@ -31,12 +31,16 @@ internal static class SqlDialectFactory
     internal static async Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken = default)
     {
         loggerFactory ??= NullLoggerFactory.Instance;
+        cancellationToken.ThrowIfCancellationRequested();
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
-        // Use centralized detection service
+        // Use centralized detection service. Product inference itself has no genuine async I/O
+        // path, so the cancellation token above is only checked cooperatively before starting,
+        // not threaded any deeper into this call.
         var inferredType = DatabaseDetectionService.DetectProduct(connection, factory);
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
