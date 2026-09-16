@@ -339,7 +339,21 @@ public partial class DatabaseContext
             Interlocked.Exchange(ref _metricsHasActivity, 1);
         }
 
-        handler.Invoke(this, metrics);
+        foreach (var invocation in handler.GetInvocationList())
+        {
+            try
+            {
+                ((EventHandler<DatabaseMetrics>)invocation).Invoke(this, metrics);
+            }
+            catch (Exception ex)
+            {
+                // A MetricsUpdated subscriber is instrumentation, not execution. It must never be
+                // able to turn an already-successful database command into an apparent failure by
+                // throwing back into the command's execution path — isolate each subscriber so one
+                // misbehaving handler can't also prevent the rest from observing this update.
+                _logger.LogError(ex, "MetricsUpdated subscriber threw an exception; ignoring it so it cannot affect command execution outcome.");
+            }
+        }
     }
 
     private static bool HasCommandActivity(DatabaseMetrics metrics)

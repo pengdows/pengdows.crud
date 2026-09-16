@@ -1226,7 +1226,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
                 if (activity != null)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.SetStatus(ActivityStatusCode.Error);
                 }
 
                 AddSanitizedExceptionEvent(activity, ex);
@@ -1243,7 +1243,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
+                activity.SetStatus(ActivityStatusCode.Error);
             }
 
             AddSanitizedExceptionEvent(activity, translated);
@@ -1630,7 +1630,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
                 if (activity != null)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity.SetStatus(ActivityStatusCode.Error);
                 }
 
                 AddSanitizedExceptionEvent(activity, ex);
@@ -1647,7 +1647,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             if (activity != null)
             {
-                activity.SetStatus(ActivityStatusCode.Error, translated.Message);
+                activity.SetStatus(ActivityStatusCode.Error);
             }
 
             AddSanitizedExceptionEvent(activity, translated);
@@ -2094,6 +2094,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // storage. Provider exception messages can carry server names, connection internals, or SQL
     // fragments; a full exception.ToString() (a stack trace) is the worst offender for that and
     // belongs in logs, not a trace tag, so it is not recorded here at all.
+    //
+    // For this same reason, every catch block calls activity.SetStatus(ActivityStatusCode.Error)
+    // with NO description on a real command failure — never ex.Message/translated.Message. The
+    // bounded, truncated exception.message event tag added by AddSanitizedExceptionEvent already
+    // carries that diagnostic information; passing the raw message to SetStatus as well would
+    // bypass this bound entirely via a second, independent path.
     private const int MaxTelemetryStatementLength = 4000;
     private const int MaxTelemetryMessageLength = 1000;
 

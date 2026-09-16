@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -30,6 +31,30 @@ public class SqlDialectTests
         var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
         Assert.Equal(string.Empty, ctx.WrapObjectName(null!));
         Assert.Equal(string.Empty, ctx.WrapObjectName(string.Empty));
+    }
+
+    [Fact]
+    public void WrapObjectName_ManyDistinctIdentifiers_CacheDoesNotGrowUnbounded()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var ctx = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
+
+        for (var i = 0; i < 5000; i++)
+        {
+            ctx.WrapObjectName($"distinct_identifier_{i}");
+        }
+
+        var count = GetWrappedNameCacheCount(ctx.Dialect);
+        Assert.True(count <= 1024,
+            $"_wrappedNameCache grew to {count} entries after 5000 distinct identifiers — it must be bounded.");
+    }
+
+    private static int GetWrappedNameCacheCount(object dialect)
+    {
+        var field = typeof(SqlDialect).GetField("_wrappedNameCache", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var cache = field.GetValue(dialect)!;
+        var countProperty = cache.GetType().GetProperty("Count")!;
+        return (int)countProperty.GetValue(cache)!;
     }
 
     [Fact]

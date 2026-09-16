@@ -117,4 +117,52 @@ public class SqlContainerTelemetryRedactionTests
         Assert.True(messageText!.Length < 5_000,
             "exception.message must be truncated rather than recording the full, unbounded text.");
     }
+
+    [Fact]
+    public async Task ExecuteNonQuery_OnFailure_ActivityStatusDescription_DoesNotCarryUnboundedMessage()
+    {
+        // The exception.message tag (asserted above) is deliberately bounded — but
+        // Activity.SetStatus(ActivityStatusCode.Error, ex.Message) is a second, independent path
+        // that can carry the exact same unbounded provider message, bypassing that policy.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var longMessage = new string('e', 5_000);
+        var failingConnection = new fakeDbConnection();
+        failingConnection.SetCommandFailure("SELECT 1", new InvalidOperationException(longMessage));
+        factory.Connections.Add(failingConnection);
+
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleConnection
+        };
+        using var ctx = new DatabaseContext(cfg, factory, NullLoggerFactory.Instance);
+
+        failingConnection.SetCommandFailure("SELECT 1", new InvalidOperationException(longMessage));
+
+        string? statusDescription = null;
+        var statusDescriptionCaptured = false;
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "pengdows.crud",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.GetTagItem("pengdows.context_id") as string == ctx.RootId.ToString())
+                {
+                    statusDescriptionCaptured = true;
+                    statusDescription = activity.StatusDescription;
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var container = ctx.CreateSqlContainer("SELECT 1");
+        await Assert.ThrowsAnyAsync<Exception>(async () => await container.ExecuteNonQueryAsync());
+
+        Assert.True(statusDescriptionCaptured);
+        Assert.True(string.IsNullOrEmpty(statusDescription) || statusDescription!.Length < 5_000,
+            "Activity.StatusDescription must not carry the full, unbounded exception message — " +
+            "the bounded exception.message event tag already carries that diagnostic information.");
+    }
 }

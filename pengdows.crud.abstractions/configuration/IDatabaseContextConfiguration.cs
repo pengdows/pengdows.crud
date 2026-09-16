@@ -193,14 +193,20 @@ public interface IDatabaseContextConfiguration
 
     /// <summary>
     /// Controls how a connection is handled when applying session settings fails on first open.
-    /// Defaults to <see cref="SessionInitializationFailureMode.BestEffort"/> — logs and proceeds
-    /// with the connection in an unknown session state (current 2.0 behavior).
+    /// <c>null</c> (the default) resolves automatically based on <see cref="ReadWriteMode"/>:
+    /// <see cref="SessionInitializationFailureMode.BestEffort"/> (logs and proceeds with the
+    /// connection in an unknown session state) for a read-write context, or
+    /// <see cref="SessionInitializationFailureMode.FailClosed"/> for a context resolved to
+    /// <see cref="enums.ReadWriteMode.ReadOnly"/> — an unknown session state is a
+    /// security-relevant default for a context meant to guarantee read-only behavior, so it
+    /// should not require discovering the right knob. An explicit value always wins over this
+    /// mode-based default in either direction.
     /// </summary>
     /// <remarks>
     /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
     /// MySQL, MariaDB, and Oracle, which remains best-effort regardless of this setting.
     /// </remarks>
-    SessionInitializationFailureMode SessionInitializationFailureMode { get; set; }
+    SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
 
     /// <summary>
     /// Maximum number of callers allowed to queue for a write-governor slot before further

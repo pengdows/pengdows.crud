@@ -174,7 +174,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
 
-    private readonly ConcurrentDictionary<string, string> _wrappedNameCache = new(StringComparer.Ordinal);
+    // Bounded (not a plain ConcurrentDictionary) so a caller feeding a large number of distinct,
+    // caller-supplied identifiers through WrapObjectName cannot grow this cache without limit for
+    // the lifetime of the dialect instance. Object names have extremely high locality under
+    // legitimate use, so a small bound costs essentially nothing on the hot path.
+    private readonly BoundedCache<string, string> _wrappedNameCache = new(WrappedNameCacheCapacity);
+    private const int WrappedNameCacheCapacity = 512;
+
+    // Cached once per instance so WrapObjectName's cache-hit path (the common case) doesn't
+    // allocate a new delegate on every call for the BoundedCache.GetOrAdd factory argument.
+    private readonly Func<string, string> _buildWrappedObjectName;
 
     // Performance: Static parameter name pool to avoid allocations
     private static readonly char[] ValidNameChars =
@@ -262,6 +271,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         Factory = factory ?? throw new ArgumentNullException(nameof(factory));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         ConnectionStringBuilder = Factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
+        _buildWrappedObjectName = BuildWrappedObjectName;
     }
 
     /// <summary>
@@ -797,7 +807,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
 
         var canonical = trimmed.Length == span.Length ? name : trimmed.ToString();
-        return _wrappedNameCache.GetOrAdd(canonical, static (key, state) => state.BuildWrappedObjectName(key), this);
+        return _wrappedNameCache.GetOrAdd(canonical, _buildWrappedObjectName);
     }
 
     private string BuildWrappedObjectName(string identifier)
