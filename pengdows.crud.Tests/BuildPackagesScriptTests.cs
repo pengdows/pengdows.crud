@@ -33,21 +33,23 @@ public class BuildPackagesScriptTests
     }
 
     // =========================================================================
-    // Version consistency — Directory.Build.props must declare 2.1.0
-    // This test was RED when the version was 2.0.6 (bumped to 2.1.0 — minor bump for the additive
-    // ReleaseSavepointAsync/SavepointCapabilities API plus the SavepointAsync/RollbackToSavepointAsync
-    // no-op-to-throw fix).
+    // Version consistency — Directory.Build.props must declare 2.0.6
+    // This branch briefly carried a stale VersionPrefix of 2.1.0 (left over from
+    // backport/multitenancy-lease-fixes, predating this branch's own 2.0-partial-backport
+    // merge) — corrected back to 2.0.6 since this line is the compatible patch successor to
+    // 2.0.5, not a real 2.1.0 release; 2.1.0 is a separate branch. This test now locks in the
+    // corrected value.
     // =========================================================================
 
     [Fact]
-    public void DirectoryBuildProps_Version_Is_2_1_0()
+    public void DirectoryBuildProps_Version_Is_2_0_6()
     {
         var root = GetRepoRoot();
         var propsPath = Path.Combine(root, "Directory.Build.props");
         Assert.True(File.Exists(propsPath), $"Directory.Build.props not found at {propsPath}");
 
         var contents = File.ReadAllText(propsPath);
-        Assert.Contains("<VersionPrefix>2.1.0</VersionPrefix>", contents, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>2.0.6</VersionPrefix>", contents, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>", contents, StringComparison.Ordinal);
         Assert.Contains("<FileVersion>$(VersionPrefix).0</FileVersion>", contents, StringComparison.Ordinal);
     }
