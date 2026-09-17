@@ -70,17 +70,23 @@ public class BuildPackagesScriptTests
 
     // =========================================================================
     // Version consistency — Directory.Build.props must declare the release version.
+    // A later commit (6ac7a59, adding ReleaseSavepointAsync/SavepointCapabilities as new public
+    // API) bumped VersionPrefix to 2.2.0, a real semver-correct minor bump for additive API
+    // surface — but it left the branch literally named "2.1.0" building package version "2.2.0".
+    // Forced back to 2.1.0 so the branch name and shipped version stay in lockstep; any future
+    // additive work here should accumulate under 2.1.0 until a deliberate version-bump decision
+    // renames the branch too.
     // =========================================================================
 
     [Fact]
-    public void DirectoryBuildProps_Version_Is_2_2_0()
+    public void DirectoryBuildProps_Version_Is_2_1_0()
     {
         var root = GetRepoRoot();
         var propsPath = Path.Combine(root, "Directory.Build.props");
         Assert.True(File.Exists(propsPath), $"Directory.Build.props not found at {propsPath}");
 
         var contents = File.ReadAllText(propsPath);
-        Assert.Contains("<VersionPrefix>2.2.0</VersionPrefix>", contents, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>2.1.0</VersionPrefix>", contents, StringComparison.Ordinal);
         Assert.Contains("<AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>", contents, StringComparison.Ordinal);
         Assert.Contains("<FileVersion>$(VersionPrefix).0</FileVersion>", contents, StringComparison.Ordinal);
     }

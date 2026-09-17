@@ -58,10 +58,30 @@ public class SupportedDatabaseTests
                 "AuroraMySql",
                 "AuroraPostgreSql",
                 "Db2",
-                "SingleStore",
                 "FlatFile",
+                "SingleStore",
                 "Sybase"
             },
             names);
+    }
+
+    /// <summary>
+    /// Db2/FlatFile/SingleStore/Sybase were added independently on 2.0.6, 2.1.0, and 3.0, each in
+    /// a different order — leaving the same enum member with a different numeric bit value on
+    /// each branch (e.g. SingleStore was 32768 here but 65536 on 3.0). Since this is a [Flags]-style
+    /// enum, that divergence is a real cross-branch binary-compatibility hazard for anything that
+    /// persists, logs, or compares the numeric value. Realigned to match 3.0's canonical values
+    /// (the branch these are permanently pinned against, per the 2.0.6/2.1.0/3.0 compatibility
+    /// policy) since neither 2.0.6 nor 2.1.0 had ever shipped a tagged release with the old
+    /// values.
+    /// </summary>
+    [Theory]
+    [InlineData(SupportedDatabase.Db2, 16384)]
+    [InlineData(SupportedDatabase.FlatFile, 32768)]
+    [InlineData(SupportedDatabase.SingleStore, 65536)]
+    [InlineData(SupportedDatabase.Sybase, 131072)]
+    public void SupportedDatabase_LateAddedMembers_MatchCanonical3_0Values(SupportedDatabase value, int expected)
+    {
+        Assert.Equal(expected, (int)value);
     }
 }
