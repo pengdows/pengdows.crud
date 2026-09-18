@@ -57,7 +57,7 @@ write selects genuinely different syntax.
 | `Oracle` | Oracle | `BEGIN\n\tproc_name(arg1, arg2);\nEND;` — a PL/SQL anonymous block, parentheses omitted entirely when there are no arguments | same |
 | `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB | `CALL proc_name(arg1, arg2)` (requires PostgreSQL 11+; earlier versions only support functions, use `Read` for everything) | `SELECT * FROM func_name(arg1, arg2)` |
 | `ExecuteProcedure` | Firebird, InterBase | `EXECUTE PROCEDURE proc_name(arg1, arg2)` | `SELECT * FROM proc_name(arg1, arg2)` — both disallow empty `()`, omitted entirely when there are no arguments. InterBase confirmed live against a real SUSPEND-based selectable procedure, independently of Firebird's own confirmation. |
-| `None` | SQLite, DuckDB | `WrapForStoredProc` throws `NotSupportedException` unconditionally — stored procedures are not supported at all on these engines | — |
+| `None` | SQLite, DuckDB, Access | `WrapForStoredProc` throws `NotSupportedException` unconditionally — stored procedures are not supported at all on these engines | — |
 
 `RequiresStoredProcParameterNameMatch` and `MaxOutputParameters` (cataloged in
 [`capability-discovery.md`](./capability-discovery.md)) further constrain what a given dialect
@@ -118,8 +118,11 @@ await writeSc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.StoredProced
   supporting arbitrary caller-driven traversal across multiple result sets would mean holding an
   unbounded connection lease. A procedure that returns more than one result set can only have its
   first result set consumed through the normal reader/load path.
-- **SQLite and DuckDB don't support stored procedures at all** (`ProcWrappingStyle.None`) — this is
-  a real engine limitation, not a gap in this library; `WrapForStoredProc` throws
-  `NotSupportedException` immediately rather than attempting anything.
+- **SQLite, DuckDB, and Access don't support stored procedures at all** (`ProcWrappingStyle.None`)
+  — this is a real engine limitation, not a gap in this library; `WrapForStoredProc` throws
+  `NotSupportedException` immediately rather than attempting anything. For Access specifically,
+  confirmed live that there is no session-SQL surface at all either (see `docs/supported-databases.md`'s
+  Behavioral Gotchas entry) — this isn't just "procedures unsupported," the engine has no
+  server-side executable-statement concept beyond `DELETE`/`INSERT`/`SELECT`/`UPDATE`.
 - **Return-value capture is SQL Server-only.** Every other style throws `NotSupportedException` if
   you call `WrapForCreateWithReturn()`/etc. against it.

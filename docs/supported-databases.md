@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 22 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 23 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
 
 | Enum Value | Product |
 |---|---|
@@ -26,6 +26,7 @@ pengdows.crud supports 22 directly supported databases via the `SupportedDatabas
 | `Informix=524288` | IBM Informix Dynamic Server (IDS) — owner-qualified schemas, positional (?) parameters |
 | `SapHana=1048576` | SAP HANA (opt-in via `INCLUDE_SAPHANA=true`; resource-based, not credentials — see note below) |
 | `InterBase=2097152` | Embarcadero InterBase — Firebird's proprietary ancestor; named (@) parameters, `ROWS`-based paging, classic `GEN_ID` sequences (opt-in; licensing-based, not resource/credentials — see note below) |
+| `Access=4194304` | Microsoft Access (Jet/ACE) via `System.Data.OleDb` — no native ADO.NET Jet/ACE client exists (opt-in; no Docker image exists at all, Windows-only — see note below) |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -38,6 +39,8 @@ pengdows.crud supports 22 directly supported databases via the `SupportedDatabas
 > **SAP HANA:** opt-in via `INCLUDE_SAPHANA=true`, for a different reason than Snowflake's opt-in — `saplabs/hanaexpress` is a real, pullable Docker image (~4.5GB), but SAP's own guidance and community reports consistently put a working container's RAM requirement at 16-32GB, far beyond a standard CI runner and beyond every other testbed container's footprint. Positional `?` parameters only (no named-parameter support — `Sap.Data.Hana.Net.v8.0`'s `DataSourceInformation.ParameterMarkerFormat` reports `"?"`); unquoted identifiers fold to UPPERCASE, quoted ones are case-sensitive (Oracle-like, verified independently); `LIMIT`/`OFFSET` paging only (SQL:2008 `OFFSET`/`FETCH` is rejected); `MERGE INTO` works but only with a `SELECT ... FROM DUMMY` source, not the ANSI `VALUES (...)` row-constructor shape; no multi-row `VALUES` batch insert; no `DROP TABLE IF EXISTS`. See `HanaDialect.cs`'s file-level summary for the full live-verification trail (a real `saplabs/hanaexpress` 2.00.088.00 container run by hand via Docker for this addition).
 >
 > **InterBase:** opt-in for a THIRD, distinct reason from Snowflake (credentials) and SAP HANA (resource footprint) — licensing. InterBase's Developer Edition license is node-locked to a specific machine/container IP, so a working container cannot be shared as a generic, freely-pullable public image the way every other testbed database can; anyone running this suite needs their own registered license and container. Named `@` parameters (unlike Firebird's own `@`, this was independently confirmed live rather than assumed from the shared ancestry); unquoted identifiers fold to UPPERCASE, quoted ones are case-sensitive; paging uses `ROWS n` (limit) / `ROWS m TO n` (1-based inclusive range) — neither SQL:2008 `OFFSET`/`FETCH` nor `LIMIT`/`OFFSET` is accepted; no `MERGE`, no `IDENTITY` columns, no `CREATE SEQUENCE`, no `INSERT ... RETURNING`, no multi-row `VALUES` batch insert, no `DROP TABLE IF EXISTS`. Generated keys use the classic InterBase 6 `CREATE GENERATOR` + `GEN_ID(name, 1)` pair via `GeneratedKeyPlan.PrefetchSequence` — the first shipped dialect to actually use this plan (see `docs/generated-keys.md`). Savepoints support the full `Create`/`Rollback`/`Release` set, confirmed live with an actual before/after row-survival check. See `InterBaseDialect.cs`'s file-level summary for the full live-verification trail, including two corrections to this session's own earlier research (savepoints and the NOT NULL error code).
+>
+> **Microsoft Access (Jet/ACE):** opt-in via `INCLUDE_ACCESS=true`, for a FOURTH distinct reason from Snowflake (credentials), SAP HANA (resource footprint), and InterBase (licensing) — Access has no Docker image at all (it isn't a server process) and the ACE OLE DB provider plus ADOX (used to create the `.accdb` file) are both Windows-only. Detected via `GetSchema("DataSourceInformation").DataSourceProductName` reporting `"MS Jet"` — deliberately NOT via factory type, since `System.Data.OleDb.OleDbFactory` is the generic transport for any OLE DB provider (SQLOLEDB, OraOLEDB, etc.) and would misdetect every other OLE DB connection as Access; confirmed live against the real `OleDbFactory` type that `DetectFromFactory` correctly returns `Unknown`, not `Access`, for it. Positional `?` parameters only; `[bracket]`-quoted identifiers (ANSI double-quotes are rejected outright, unlike SQL Server's tolerance of both). No `MERGE`/`ON CONFLICT`/`ON DUPLICATE KEY` of any kind — `UpsertAsync` correctly throws `NotSupportedException`, confirmed live, since Access genuinely has no server-side upsert mechanism to fall back to. No stored procedures, and no session-level `SET` statement surface at all (`SET ANSI_NULLS ON`/similar all fail with a parser error) — engine behavior is controlled purely via connection-string properties. `ReadUncommitted`/`ReadCommitted` are the only isolation levels ACE's driver accepts; `RepeatableRead`/`Serializable`/`Snapshot` all throw. Embedded, file-based engine (`IsClientServerDatabase => false`), coerced to `DbMode.SingleWriter` the same way SQLite/DuckDB are — confirmed live to be both necessary (a second connection writing while another holds an open transaction blocks, then fails outright with `"Could not update; currently locked."`) and effective (20 concurrent writes through one governed `DatabaseContext` all succeed, even when `DbMode.Standard` is explicitly requested — the coercion cannot be bypassed). Exception classification is pure English message-text substring matching — `OleDbException` reports the identical generic COM HRESULT (`-2147467259`) and an empty `Errors` collection for every violation kind, so no numeric discrimination is possible at all; this covers all four constraint kinds, the lock-wait-timeout message above, and connection failures (a missing file, or a file another connection/process already holds exclusively). A real, previously-undiscovered driver quirk found via a live `TableGateway` CRUD round-trip (not caught by fakeDb-driven unit tests, which never construct a real `OleDbParameter`): `OleDbParameter`'s own automatic `DbType.DateTime`-to-`OleDbType` mapping is wrong for Access, breaking every insert with a date column, until `OleDbType.Date` is set explicitly — fixed via `AdvancedTypeRegistry`'s reflection-based `SetEnumProperty` mechanism (the same approach Spanner's `NpgsqlDbType.TimestampTz` fix uses). See `AccessDialect.cs`'s file-level summary for the full live-verification trail (both `Microsoft.ACE.OLEDB.12.0` and the current `16.0` were tested and behave identically).
 >
 > **Sybase (SAP ASE):** has its own dedicated `SybaseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` or `OFFSET`/`FETCH` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing. ASE 16's community Docker image also SIGSEGVs on boot on modern kernels (SAP KBA 3018138); `SybaseTestContainer` patches in trace flag `-T11889` and restarts to work around it — this means, unlike every `AddDocker`-based provider here, Sybase runs through `AddLocal` with one pinned image rather than a version matrix.
 
@@ -150,6 +153,49 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 Capability-flag differences and dialect-specific behavior that aren't obvious from the matrices
 above — verified directly against each `dialects/*.cs` implementation. This is not exhaustive;
 it lists the quirks most likely to surprise a caller who assumes uniform SQL-standard behavior.
+
+**Microsoft Access (Jet/ACE)**
+- No native ADO.NET Jet/ACE client exists — this dialect targets `System.Data.OleDb` with
+  `Provider=Microsoft.ACE.OLEDB.16.0` in the connection string. Both `Microsoft.ACE.OLEDB.12.0`
+  (~2010) and the current `16.0` were confirmed live to behave identically for everything below.
+- Positional `?` parameters only. `[bracket]` identifier quoting — both `[brackets]` and
+  `` `backticks` `` are accepted by the real ACE parser, but ANSI double-quotes are rejected
+  outright ("Syntax error in query. Incomplete query clause."), unlike SQL Server's tolerance for
+  double quotes via `QUOTED_IDENTIFIER ON`.
+- No `MERGE`/`ON CONFLICT`/`ON DUPLICATE KEY` of any kind — `UpsertAsync` correctly throws
+  `NotSupportedException`; there is no server-side upsert mechanism to fall back to at all.
+- No stored procedures (`ProcWrappingStyle.None`), and no session-level `SET` statement support
+  whatsoever — `SET ANSI_NULLS ON`/`SET QUOTED_IDENTIFIER ON`/`SET TRANSACTION ISOLATION LEVEL
+  ...` all fail with "Invalid SQL statement; expected 'DELETE', 'INSERT', 'PROCEDURE', 'SELECT',
+  or 'UPDATE'." Engine behavior is controlled purely via OLE DB connection-string properties.
+- Only `ReadUncommitted`/`ReadCommitted` isolation levels are accepted by
+  `OleDbConnection.BeginTransaction` — `RepeatableRead`/`Serializable`/`Snapshot` all throw
+  "Neither the isolation level nor a strengthening of it is supported."
+- Embedded, file-based engine (`IsClientServerDatabase => false`), coerced to `DbMode.SingleWriter`
+  the same way SQLite/DuckDB are — confirmed both necessary (a second connection writing while
+  another holds an open transaction blocks, then fails outright with `OleDbException: "Could not
+  update; currently locked."`) and effective (20 concurrent writes through one governed
+  `DatabaseContext` all succeed, even when `DbMode.Standard` is explicitly requested — the
+  coercion cannot be bypassed).
+- Exception classification is pure English message-text substring matching:
+  `OleDbException.ErrorCode` is the identical generic COM HRESULT (`-2147467259`) and
+  `Errors` is empty for every violation kind — no numeric discrimination is possible at all. This
+  covers all four constraint kinds, a lock-wait-timeout case, and connection failures (a missing
+  file, or a file another connection/process already holds exclusively).
+- `OleDbParameter`'s own automatic `DbType.DateTime`-to-`OleDbType` mapping is wrong for Access —
+  every insert with a date column failed ("Data type mismatch in criteria expression") until
+  `OleDbType.Date` was set explicitly via `AdvancedTypeRegistry`'s reflection-based
+  `SetEnumProperty` mechanism (the same approach Spanner's `NpgsqlDbType.TimestampTz` fix uses).
+  Found by a live `TableGateway` CRUD round-trip — fakeDb-driven unit tests never construct a real
+  `OleDbParameter` and could not have caught this.
+- `TEXT(n)` is capped at 255 characters ("Size of field ... is too long" beyond that) — `MEMO` is
+  the unlimited-length equivalent. `LONG` is both the int and the long/bigint type (Access has no
+  genuine 64-bit integer type at all). `YESNO` is the native boolean type.
+- Detected via `GetSchema("DataSourceInformation").DataSourceProductName` reporting `"MS Jet"` —
+  deliberately NOT via factory type, since `System.Data.OleDb.OleDbFactory` is the generic
+  transport for any OLE DB provider (SQLOLEDB, OraOLEDB, etc.) and would misdetect every other OLE
+  DB connection as Access; confirmed live against the real `OleDbFactory` type that
+  `DetectFromFactory` correctly returns `Unknown`, not `Access`, for it.
 
 **CockroachDB**
 - Only `Serializable` isolation is ever offered — no `ReadCommitted` fallback exists at all

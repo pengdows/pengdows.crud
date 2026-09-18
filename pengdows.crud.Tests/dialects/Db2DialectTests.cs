@@ -379,11 +379,4 @@ public class Db2DialectTests
             SQLState = sqlState;
         }
     }
-
-    private sealed class PlainMessageDbException : DbException
-    {
-        public PlainMessageDbException(string message) : base(message)
-        {
-        }
-    }
 }

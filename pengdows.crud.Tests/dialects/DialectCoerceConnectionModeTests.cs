@@ -117,6 +117,31 @@ public class DialectCoerceConnectionModeTests
         Assert.Equal(DbMode.SingleConnection, singleConnectionMode);
     }
 
+    /// <summary>
+    /// Default-deny invariant over the WHOLE enum, generalizing the hand-picked
+    /// <c>InlineData</c> lists above the same way <c>DialectDetectInMemoryKindTests</c>'
+    /// equivalent test does: regardless of which specific category a database falls into
+    /// (full client-server, embedded single-writer, topology-forced), asking for
+    /// <see cref="DbMode.Best"/> must always resolve to a concrete, usable mode and must never
+    /// throw — a dialect that left this ambiguous (returned <c>Best</c> unchanged, or threw)
+    /// would break <see cref="DatabaseContext"/> construction for every caller who didn't pass an
+    /// explicit mode, which is the common case. A hand-picked list only proves what someone
+    /// thought to test; this proves it for every value, including any future one, automatically.
+    /// </summary>
+    [Fact]
+    public void EveryDatabase_BestMode_ResolvesToConcreteNonBestMode()
+    {
+        foreach (SupportedDatabase db in Enum.GetValues(typeof(SupportedDatabase)))
+        {
+            var dialect = CreateDialect(db);
+
+            var (mode, reason) = dialect.CoerceConnectionMode(DbMode.Best, "Data Source=test;", isLocalDb: false);
+
+            Assert.NotEqual(DbMode.Best, mode);
+            Assert.False(string.IsNullOrWhiteSpace(reason));
+        }
+    }
+
     [Fact]
     public void SqlServer_LocalDb_ForcesPreventDatabaseUnload_RegardlessOfRequestedMode()
     {

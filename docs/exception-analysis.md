@@ -73,9 +73,14 @@ database family — not per-dialect virtual overrides). Concrete examples from t
 | MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | errors `1048`, `1062`, `1169`, `1216`, `1451`, `1452`, `3819`, `4025` |
 
 Every dialect not in this table (Oracle, SQLite, Firebird, DuckDB, Db2, Snowflake, SAP HANA,
-InterBase) has its own entries in the same `switch` — check `SqlDialect.cs`'s
+InterBase, Access) has its own entries in the same `switch` — check `SqlDialect.cs`'s
 `TryClassifyProviderException` directly for the exact codes if you're targeting one of those
-specifically; the shape (numeric code vs. SQLSTATE, per family) follows the same pattern. SAP
+specifically; the shape (numeric code vs. SQLSTATE, per family) follows the same pattern. Access
+is the most extreme case of the "no numeric signal at all" shape: `OleDbException.ErrorCode` is
+always the identical generic COM HRESULT (`-2147467259`) and `Errors` is empty for every
+violation kind, including connection failures — classification (constraint kinds, a lock-wait
+timeout, and connection failures alike) is pure English message-text substring matching,
+confirmed live against a real `.accdb`. SAP
 HANA is a notable exception to the "numeric code vs. SQLSTATE" framing: `HanaException.SqlState`
 is an empty string for every violation kind except unique, and `HanaException.ErrorCode` is
 always the generic COM HRESULT `-2147467259` regardless of violation kind — `HanaDialect`

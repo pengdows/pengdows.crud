@@ -1,5 +1,6 @@
 #region
 
+using System;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -52,5 +53,31 @@ public class DialectDetectInMemoryKindTests
     {
         var dialect = CreateDialect(db);
         Assert.Equal(InMemoryKind.None, dialect.DetectInMemoryKind("Data Source=:memory:"));
+    }
+
+    /// <summary>
+    /// Generalizes <see cref="NonEmbeddedDialects_AlwaysReportNone"/>'s hand-picked list into a
+    /// default-deny invariant over the WHOLE enum: only SQLite and DuckDB genuinely have an
+    /// in-memory concept, so every other value — including any future one — must report
+    /// <see cref="InMemoryKind.None"/> for a <c>:memory:</c>-shaped connection string, with no one
+    /// needing to remember to add it to a list. A hand-picked <c>InlineData</c> list only proves
+    /// what someone thought to test; a new database that's never added to it isn't caught
+    /// failing, it's just silently never checked at all — the exact failure mode the four
+    /// `InlineData` cases above already had (Access needed adding by hand and easily could have
+    /// been forgotten).
+    /// </summary>
+    [Fact]
+    public void EveryDatabaseExceptSqliteAndDuckDb_ReportsNoneForMemoryConnectionString()
+    {
+        foreach (SupportedDatabase db in Enum.GetValues(typeof(SupportedDatabase)))
+        {
+            if (db is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB)
+            {
+                continue;
+            }
+
+            var dialect = CreateDialect(db);
+            Assert.Equal(InMemoryKind.None, dialect.DetectInMemoryKind("Data Source=:memory:"));
+        }
     }
 }

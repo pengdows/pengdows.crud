@@ -61,12 +61,21 @@ TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 | Snowflake | `INCLUDE_SNOWFLAKE=true` | Cloud-only, requires credentials |
 | SAP HANA | `INCLUDE_SAPHANA=true` | Real Docker image, but a working container needs 16-32GB RAM — far beyond a standard CI runner and every database above |
 | InterBase | `INCLUDE_INTERBASE=true` | A personal, non-shareable, node-locked Developer Edition license (registration state lives in a persistent volume, not the image) plus a native `libgds.so` required on the host running the testbed process — see `InterBaseTestContainer.cs` |
+| Access | `INCLUDE_ACCESS=true` | No Docker image exists at all — Access isn't a server process. Windows-only (the ACE OLE DB provider and the ADOX COM interop used to create the `.accdb` file both require it) — see `AccessTestContainer.cs` |
 
 > **SAP HANA**: `HanaTestContainer`/`HanaTestProvider` spin up `saplabs/hanaexpress`, single pinned
 > image (no version matrix — see `HanaTestContainer.cs`). Confirmed live: full CRUD lifecycle and
 > stored-procedure execution pass; container spinup takes ~2-3 minutes even with the image already
 > pulled locally (`StartupWeightSeconds = 300`, the highest of any database here). Run in isolation:
 > `INCLUDE_SAPHANA=true dotnet run --project testbed -- --only "SAP HANA"`.
+>
+> **Access**: `AccessTestContainer`/`AccessTestProvider` create a fresh `.accdb` file per run via
+> ADOX COM interop (no Testcontainers/Docker at all — modeled on `SqliteTestContainer.cs`, not
+> `InterBaseTestContainer.cs`'s externally-managed-container pattern). Confirmed live: full
+> `TableGateway` CRUD round-trip, a real duplicate-key insert correctly throwing
+> `UniqueConstraintViolationException`, `UpsertAsync` correctly throwing `NotSupportedException`
+> (Access has no server-side upsert mechanism at all), and that `OleDbFactory` alone never implies
+> Access. Run in isolation: `INCLUDE_ACCESS=true dotnet run --project testbed -- --only "Access"`.
 
 ---
 
@@ -174,7 +183,8 @@ testbed/
 ├── Informix/
 ├── Snowflake/                        Opt-in (INCLUDE_SNOWFLAKE=true)
 ├── SapHana/                          Opt-in (INCLUDE_SAPHANA=true)
-└── InterBase/                        Opt-in (INCLUDE_INTERBASE=true)
+├── InterBase/                        Opt-in (INCLUDE_INTERBASE=true)
+└── Access/                           Opt-in (INCLUDE_ACCESS=true)
 ```
 
 `TestProvider.cs`'s own detailed responsibilities (CreateTable, scalar-UDF check, idle-unload

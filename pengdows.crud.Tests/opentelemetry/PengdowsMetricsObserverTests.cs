@@ -1149,10 +1149,44 @@ public class PengdowsMetricsObserverTests
     [InlineData(SupportedDatabase.CockroachDb, "cockroachdb")]
     [InlineData(SupportedDatabase.DuckDB, "duckdb")]
     [InlineData(SupportedDatabase.SapHana, "sap.hana")]
+    [InlineData(SupportedDatabase.Access, "microsoft.access")]
+    [InlineData(SupportedDatabase.Db2, "ibm.db2")]
+    [InlineData(SupportedDatabase.Informix, "ibm.informix")]
+    [InlineData(SupportedDatabase.Spanner, "gcp.spanner")]
+    [InlineData(SupportedDatabase.SybaseASE, "sap.ase")]
+    [InlineData(SupportedDatabase.SingleStore, "singlestore")]
+    [InlineData(SupportedDatabase.FlatFile, "flatfile")]
     [InlineData(SupportedDatabase.Unknown, "other_sql")]
     public void DbSystemNameMapper_MapsToOTelRegistryValues(SupportedDatabase product, string expected)
     {
         Assert.Equal(expected, DbSystemNameMapper.Map(product));
+    }
+
+    /// <summary>
+    /// Guards against the exact silent-omission failure mode a hand-maintained switch invites:
+    /// a new <see cref="SupportedDatabase"/> value added without ever updating
+    /// <see cref="DbSystemNameMapper"/> compiles clean and silently falls through to the generic
+    /// <c>"other_sql"</c> fallback — indistinguishable from a deliberate choice. This test
+    /// iterates every real value (excluding <see cref="SupportedDatabase.Unknown"/>, whose
+    /// fallback IS the deliberate, correct answer) and fails loudly if any of them resolve to
+    /// the fallback instead of an explicit mapping. Found six real gaps this way — Db2, FlatFile,
+    /// SingleStore, SybaseASE, Spanner, and Informix had never been given a considered
+    /// db.system.name at all — now fixed with the real OTel semconv registry values
+    /// (https://opentelemetry.io/docs/specs/semconv/registry/attributes/db/) where one exists
+    /// (`ibm.db2`, `ibm.informix`, `gcp.spanner`), or a best-effort custom value where none does.
+    /// </summary>
+    [Fact]
+    public void DbSystemNameMapper_NoRealProductSilentlyFallsThroughToOtherSql()
+    {
+        foreach (SupportedDatabase product in Enum.GetValues(typeof(SupportedDatabase)))
+        {
+            if (product == SupportedDatabase.Unknown)
+            {
+                continue;
+            }
+
+            Assert.NotEqual("other_sql", DbSystemNameMapper.Map(product));
+        }
     }
 
     // ── Test double for ITenantContextRegistry ────────────────────────────

@@ -876,6 +876,7 @@ Databases that **cannot run in a standard, freely-shareable Docker container** m
 - `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
 - `INCLUDE_SAPHANA=true` — real Docker image, but needs 16-32GB RAM, far beyond a standard CI runner
 - `INCLUDE_INTERBASE=true` — a personal, non-shareable, node-locked Developer Edition license (registration state lives in a persistent volume, not the image) plus a native `libgds.so` required on the host running the testbed process
+- `INCLUDE_ACCESS=true` — a FOURTH distinct reason: no Docker image exists at all (Access isn't a server process), and the ACE OLE DB provider plus the ADOX COM interop used to create the `.accdb` file are both Windows-only
 
 All other databases must run automatically with no env var gating.
 
