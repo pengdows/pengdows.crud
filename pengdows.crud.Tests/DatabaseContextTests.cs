@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.isolation;
@@ -392,7 +393,7 @@ public class DatabaseContextTests
             ReadWriteMode = ReadWriteMode.ReadOnly
         };
         var context = new DatabaseContext(config, factory);
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
+        Assert.Throws<ReadOnlyContextException>(() => context.BeginTransaction(executionType: ExecutionType.Write));
     }
 
     [Fact]

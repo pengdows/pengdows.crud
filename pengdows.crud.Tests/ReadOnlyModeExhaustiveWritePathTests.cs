@@ -208,20 +208,14 @@ public class ReadOnlyModeExhaustiveWritePathTests
     [Fact]
     public void BeginTransaction_DefaultWriteIntent_RejectsBeforeAnyConnectionWork()
     {
-        // The 3.0 source fixed this call site to throw ReadOnlyContextException (one of the
-        // three documented IReadOnlyViolation-marked types), so a caller's uniform
+        // DatabaseContext.ResolveTransactionParameters throws ReadOnlyContextException (one of
+        // the three documented IReadOnlyViolation-marked types), so a caller's uniform
         // `catch (IReadOnlyViolation)` pattern also catches this earliest rejection point (no
-        // connection is ever touched). This branch's DatabaseContext.ResolveTransactionParameters
-        // still throws a bare NotSupportedException("Context is read-only.") here — several
-        // pre-existing tests (ReadOnlySingleWriterConnectionTests, CriticalPathCoverageTests,
-        // DatabaseContextTests) already assert exactly that type for this exact call site, so
-        // this ported test asserts today's actual (not-yet-widened) behavior rather than
-        // reproducing the 3.0 fix, which would require also updating those pre-existing
-        // assertions — out of scope for a test-porting pass.
+        // connection is ever touched) — matching 3.0's fix (backport of commit 7db5f4c).
         var (context, _) = CreateReadOnlyContext();
         using var ctx = (DatabaseContext)context;
 
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction());
+        Assert.Throws<ReadOnlyContextException>(() => context.BeginTransaction());
     }
 
     [Fact]

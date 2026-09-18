@@ -111,7 +111,7 @@ public class CriticalPathSupplementalTests
         using var context = new DatabaseContext(config, factory);
 
         // Write operations on read-only context should fail
-        Assert.Throws<NotSupportedException>(() =>
+        Assert.Throws<ReadOnlyContextException>(() =>
             context.BeginTransaction(executionType: ExecutionType.Write));
     }
 

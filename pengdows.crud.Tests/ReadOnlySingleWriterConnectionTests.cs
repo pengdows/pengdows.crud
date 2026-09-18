@@ -81,7 +81,7 @@ public class ReadOnlySingleWriterConnectionTests
         await using var ctx = CreateReadOnlySingleWriterContext(factory);
 
         // Attempting to create a write transaction on a read-only context should throw
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
         {
             var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
             await tx.DisposeAsync();

@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -77,7 +78,7 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        Assert.Throws<NotSupportedException>(() => context.BeginTransaction());
+        Assert.Throws<ReadOnlyContextException>(() => context.BeginTransaction());
     }
 
     [Fact]
@@ -90,7 +91,7 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        Assert.Throws<NotSupportedException>(() =>
+        Assert.Throws<ReadOnlyContextException>(() =>
             context.BeginTransaction(executionType: ExecutionType.Write));
     }
 
@@ -133,6 +134,6 @@ public class InvalidTransactionTypeTests
         };
         var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await context.BeginTransactionAsync());
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () => await context.BeginTransactionAsync());
     }
 }

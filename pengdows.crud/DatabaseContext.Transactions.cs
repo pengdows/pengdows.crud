@@ -20,6 +20,7 @@
 using System.Data;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
@@ -139,7 +140,13 @@ public partial class DatabaseContext
         {
             if (!_isWriteConnection)
             {
-                throw new NotSupportedException("Context is read-only.");
+                // ReadOnlyContextException already extends NotSupportedException (no behavior
+                // change for a caller catching that broader type) and additionally implements
+                // IReadOnlyViolation, matching every other read-only rejection path — a plain
+                // NotSupportedException here broke the documented "catch (IReadOnlyViolation)
+                // catches any of the three uniformly" contract for this one path (the earliest
+                // of all of them: rejected before any connection is even touched).
+                throw new ReadOnlyContextException("Context is read-only.");
             }
 
             if (isolationLevel is null)
