@@ -85,7 +85,7 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false });
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.Sybase, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false });
     }
 
     [Fact]

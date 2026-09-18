@@ -979,7 +979,7 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
-            case SupportedDatabase.Sybase:
+            case SupportedDatabase.SybaseASE:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
                     // ASE lacks SQL Server's "CREATE OR ALTER" shorthand — drop first if present,

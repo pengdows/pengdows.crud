@@ -53,7 +53,7 @@ public class ViolationClassificationCharacterizationTests
     private static FirebirdDialect Firebird() => new(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance);
     private static Db2Dialect Db2() => new(new fakeDbFactory(SupportedDatabase.Db2), NullLogger.Instance);
     private static SnowflakeDialect Snowflake() => new(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
-    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.Sybase), NullLogger.Instance);
+    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger.Instance);
     // SpannerDialect/SupportedDatabase.Spanner do not exist in this branch (Spanner support is
     // 3.0-only) — the Spanner-specific facts from the 3.0 source file were removed; every other
     // dialect's assertions are ported unchanged.

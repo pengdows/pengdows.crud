@@ -50,7 +50,7 @@ public class DatabaseContextTests
         Assert.NotNull(conn);
         Assert.Equal(ConnectionState.Closed, conn.State);
 
-        if (product == SupportedDatabase.Sybase)
+        if (product == SupportedDatabase.SybaseASE)
         {
             // AdoNetCore.AseClient's AseConnection does not implement GetSchema at all —
             // verified live: every overload throws NotSupportedException. FakeDb mirrors that
