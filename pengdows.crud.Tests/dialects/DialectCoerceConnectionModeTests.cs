@@ -211,4 +211,19 @@ public class DialectCoerceConnectionModeTests
         Assert.Equal(DbMode.Standard, mode);
         Assert.Contains("Full server", reason);
     }
+
+    [Fact]
+    public void DuckDb_DescribeStandardModeRisk_NamesConfirmedLiveFailure()
+    {
+        // CONFIRMED LIVE (see DuckDbDialect.cs's file-level AI SUMMARY and
+        // pengdows.crud.IntegrationTests/ErrorHandling/SerializationConflictTests.cs): 20
+        // concurrent same-row UPDATEs through DbMode.Standard reproducibly threw
+        // SerializationConflictException; the identical scenario under DbMode.SingleWriter
+        // produced zero. This locks down that the risk text actually names that evidence rather
+        // than only generic architectural caution.
+        var dialect = new DuckDbDialect(new fakeDbFactory(SupportedDatabase.DuckDB), NullLogger.Instance);
+        var risk = dialect.DescribeStandardModeRisk();
+        Assert.Contains("SerializationConflictException", risk);
+        Assert.Contains("CONFIRMED LIVE", risk);
+    }
 }

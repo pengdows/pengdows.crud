@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Data;
 using DuckDB.NET.Data;
 using FirebirdSql.Data.FirebirdClient;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
@@ -20,7 +22,13 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// <list type="bullet">
 /// <item><b>DuckDB</b> (this file): confirmed via a real concurrent-write conflict that
 /// DuckDBException reports ErrorType == Transaction (NOT "Serialization" despite that enum
-/// member's name) with message "TransactionContext Error: Conflict on update!".</item>
+/// member's name) with message "TransactionContext Error: Conflict on update!". A companion test,
+/// <see cref="DuckDb_ConcurrentSameRowUpdates_UnderSingleWriterMode_AllSucceedWithZeroConflicts"/>,
+/// proves the other half of DuckDbDialect.cs's DescribeStandardModeRisk() claim: 20 real
+/// concurrent same-row UPDATE tasks through DbMode.Standard reproduced 8/20
+/// SerializationConflictException (see that dialect's file-level AI SUMMARY for the exact live
+/// numbers), while the identical load under DbMode.SingleWriter — pengdows.crud's production
+/// default for file-based DuckDB — produces zero, asserted here.</item>
 /// <item><b>Firebird</b> (this file): confirmed via both a reversed-lock-order two-connection
 /// scenario AND a snapshot-read-then-conflicting-write scenario that Firebird cannot distinguish
 /// a true deadlock from a serialization conflict — both produce SQLSTATE 40001 with message
@@ -125,6 +133,76 @@ public class SerializationConflictTests
             var translated = translator.Translate(dialect, thrown!, DbOperationKind.Update);
 
             Assert.IsType<SerializationConflictException>(translated);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task DuckDb_ConcurrentSameRowUpdates_UnderSingleWriterMode_AllSucceedWithZeroConflicts()
+    {
+        // Companion to DuckDb_ConcurrentConflictingWrite_ClassifiesAsSerializationConflictException
+        // above (which proves DuckDB's own conflict gets correctly classified via two raw
+        // connections) — this proves the other half: pengdows.crud's SingleWriter mode (the
+        // production default for file-based DuckDB) actually PREVENTS the conflict from ever
+        // reaching the caller under real concurrent write pressure through the public API,
+        // mirroring AccessDialect.cs's "both the hazard and the fix" live-verification structure.
+        // CONFIRMED LIVE: the identical 20-concurrent-same-row-UPDATE scenario through
+        // DbMode.Standard reproducibly throws SerializationConflictException for a real fraction
+        // of the writers (8/20 in the probe that established this) — see DuckDbDialect.cs's
+        // file-level AI SUMMARY. Under DbMode.SingleWriter, asserted here, it must be zero.
+        var path = Path.Combine(Path.GetTempPath(), $"pengdows_singlewriter_probe_{Guid.NewGuid():N}.db");
+        const int writerCount = 20;
+
+        try
+        {
+            var cfg = new DatabaseContextConfiguration
+            {
+                ConnectionString = $"Data Source={path}",
+                DbMode = DbMode.SingleWriter,
+                ReadWriteMode = ReadWriteMode.ReadWrite
+            };
+            await using var context = new DatabaseContext(cfg, DuckDBClientFactory.Instance);
+            Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+
+            await using (var create = context.CreateSqlContainer())
+            {
+                create.Query.Append("CREATE TABLE probe (id INTEGER PRIMARY KEY, counter INTEGER)");
+                await create.ExecuteNonQueryAsync();
+            }
+
+            await using (var seed = context.CreateSqlContainer())
+            {
+                seed.Query.Append("INSERT INTO probe (id, counter) VALUES (1, 0)");
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            var exceptions = new ConcurrentBag<Exception>();
+
+            var tasks = Enumerable.Range(0, writerCount).Select(_ => Task.Run(async () =>
+            {
+                try
+                {
+                    await using var sc = context.CreateSqlContainer();
+                    sc.Query.Append("UPDATE probe SET counter = counter + 1 WHERE id = 1");
+                    await sc.ExecuteNonQueryAsync();
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            Assert.Empty(exceptions);
+
+            await using var verify = context.CreateSqlContainer();
+            verify.Query.Append("SELECT counter FROM probe WHERE id = 1");
+            var finalCounter = await verify.ExecuteScalarOrNullAsync<int>();
+            Assert.Equal(writerCount, finalCounter);
         }
         finally
         {

@@ -96,7 +96,7 @@ The mode opens one sentinel through the normal connection and session-initializa
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
 - Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
 - **The turnstile is held for the writer's entire transaction, not just the moment of acquiring the write permit** — a deliberate tradeoff, not an oversight. It exists specifically to prevent writer starvation: without it, a steady stream of readers could keep a waiting writer permanently queued behind them under `PoolGovernor`'s otherwise reader/writer-symmetric admission. Holding it for the whole transaction span means new readers gate behind an in-flight writer (readers already queued when the writer grabbed the turnstile are not displaced — see `PoolGovernor`'s own remarks), trading a bounded amount of reader latency for a hard guarantee that writers make progress.
-- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine does not actually have this limitation — it supports concurrent non-conflicting writes within one process — so SingleWriter there is pengdows.crud's own deterministic policy choice, not a limitation DuckDB's engine imposes (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
+- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine handles concurrent *disjoint-row* writes cleanly (CONFIRMED LIVE — no conflict at all), but genuinely does fail concurrent writers targeting the *same* row/resource with `SerializationConflictException` (also CONFIRMED LIVE — see the "Standard → honored, not coerced" entry above) — so SingleWriter there is both a deterministic policy choice for the disjoint case AND a real, reproduced fix for the same-resource case, not purely a policy preference (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 - **The write permit is not the connection.** `PoolGovernor`'s capacity-1 semaphore for writers is enforced via `PoolSlot`/`PoolSlotToken` (`pengdows.crud/infrastructure/PoolSlot.cs`), which holds no reference to any `DbConnection`/`DbCommand` at all — releasing a slot back to the governor is pure counter bookkeeping, independent of whether the connection used during that slot's lifetime succeeded or died. A pinned-writer design (GRDB's `DatabasePool`, Peewee's `SqliteQueueDatabase`) makes the one long-lived writer connection itself part of the concurrency mechanism, so a poisoned or severed connection requires rebuilding the writer object to recover. Here, a bad connection is simply discarded and the next admitted write acquires a fresh ephemeral one — concurrency policy is decoupled from connection identity. See `docs/positioning/product-thesis.md`'s expanded treatment of this distinction.
 
 ### Best
@@ -132,11 +132,16 @@ The mode opens one sentinel through the normal connection and session-initializa
 - **Standard → honored, not coerced.** Both engines are documented by their own vendors as
   supporting concurrent connections/writers, so an explicit `Standard` request is allowed through
   (`Best` still resolves to `SingleWriter`). `DatabaseContext.WarnOnModeMismatch` logs an
-  evidence-backed risk Warning when this happens instead — DuckDB's optimistic-concurrency-control
-  caution is architecturally reasoned (not reproduced against a live instance); Access's is
-  CONFIRMED LIVE (`OleDbException: Could not update; currently locked.` under concurrent raw OleDb
-  writes) — see `AccessDialect.cs`'s file-level AI SUMMARY and each dialect's
-  `DescribeStandardModeRisk()` override.
+  evidence-backed risk Warning when this happens instead — **both risks are CONFIRMED LIVE.**
+  Access's raw concurrent OleDb writers hit `OleDbException: Could not update; currently locked.`
+  DuckDB's vendor claim genuinely holds for disjoint-row concurrent writers (verified: they don't
+  conflict), but 20 concurrent writers updating the *same* row through pengdows.crud under
+  `DbMode.Standard` threw `SerializationConflictException`
+  (`"TransactionContext Error: Conflict on update!"`) for 8/20; the identical scenario under
+  `DbMode.SingleWriter` succeeded 20/20 with zero conflicts — see
+  `pengdows.crud.IntegrationTests/ErrorHandling/SerializationConflictTests.cs` for the checked-in
+  classification proof, `AccessDialect.cs`/`DuckDbDialect.cs`'s file-level AI SUMMARY for the full
+  trail, and each dialect's `DescribeStandardModeRisk()` override for the exact wording.
 
 ### LocalDb: `Best` and every other requested mode coerce to PreventDatabaseUnload, **except an
 explicit `Standard` request, which is honored.** PreventDatabaseUnload's sentinel only matters for

@@ -15,6 +15,25 @@
 // - Embedded analytics database with columnar storage.
 // - Handles in-memory and file-based connections.
 // - Connection mode similar to SQLite handling.
+// - Concurrent-write conflict under Standard mode: CONFIRMED LIVE, both the hazard and the fix
+//   (mirroring AccessDialect.cs's structure). Two independent live probes:
+//   1. pengdows.crud.IntegrationTests/ErrorHandling/SerializationConflictTests.cs
+//      (DuckDb_ConcurrentConflictingWrite_ClassifiesAsSerializationConflictException) — two raw
+//      connections, snapshot-read-then-conflicting-write, confirms DuckDBException reports
+//      ErrorType == Transaction with message "TransactionContext Error: Conflict on update!" and
+//      that pengdows.crud correctly classifies it as SerializationConflictException (IsTransient).
+//   2. An ad-hoc 20-task concurrent-writer probe against a real file-based DuckDB (same shape as
+//      the Access probe): disjoint-row concurrent INSERTs never conflict (DuckDB genuinely
+//      handles that case, matching its vendor documentation and docs/positioning/product-
+//      thesis.md's "DuckDB's own engine does not actually have this limitation" note); but
+//      concurrent UPDATEs to the SAME row reproducibly fail — through pengdows.crud with
+//      DbMode.Standard explicitly honored, 8/20 concurrent same-row UPDATEs threw
+//      SerializationConflictException (final counter 12, not 20 — lost/rejected updates, not
+//      silently dropped). The identical scenario under DbMode.SingleWriter: 20/20 succeeded,
+//      final counter exactly 20 — the turnstile governor genuinely prevents it. So unlike the
+//      disjoint-insert case, DuckDB's "supports concurrent writers" claim does NOT hold for
+//      same-row/same-resource contention — this justifies DescribeStandardModeRisk() below as a
+//      real, reproduced risk (not just architecturally reasoned caution).
 // =============================================================================
 
 using System.Data;
@@ -88,18 +107,24 @@ internal class DuckDbDialect : SqlDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// DuckDB's optimistic concurrency control aborts conflicting writers rather than blocking, so
-    /// concurrent writes under Standard mode can surface as intermittent transaction-conflict
-    /// errors — pengdows.crud has not independently verified safe multi-writer behavior against a
-    /// live DuckDB instance (unlike Access's CONFIRMED-live OleDbException finding — see
-    /// AccessDialect.cs). This is architecturally reasoned caution, not a reproduced failure.
+    /// CONFIRMED LIVE (see file-level AI SUMMARY): DuckDB's optimistic concurrency control lets
+    /// disjoint-row concurrent writers through cleanly, but genuinely aborts a same-row/same-
+    /// resource write-write conflict with "TransactionContext Error: Conflict on update!" —
+    /// reproduced both via two raw conflicting connections
+    /// (SerializationConflictTests.DuckDb_ConcurrentConflictingWrite_...) and via 20 concurrent
+    /// same-row UPDATEs through pengdows.crud itself under DbMode.Standard (8/20 threw
+    /// SerializationConflictException; the identical scenario under DbMode.SingleWriter: 0/20).
     /// </remarks>
     internal override string DescribeStandardModeRisk() =>
-        "DuckDB documents support for concurrent connections/transactions, but its optimistic " +
-        "concurrency control aborts conflicting writers rather than blocking — under real write " +
-        "concurrency this can surface as intermittent transaction-conflict errors. pengdows.crud " +
-        "has not independently verified safe multi-writer behavior; SingleWriter mode is " +
-        "recommended unless you have validated your workload's concurrency pattern.";
+        "DuckDB documents support for concurrent connections/transactions, and disjoint-row " +
+        "writers genuinely do proceed cleanly — but this was CONFIRMED LIVE to fail for " +
+        "same-row/same-resource contention: concurrent writers to the same row can throw " +
+        "SerializationConflictException (\"TransactionContext Error: Conflict on update!\"). " +
+        "pengdows.crud's SingleWriter mode prevents this (verified live: 20 concurrent same-row " +
+        "updates through one shared DatabaseContext, zero conflicts, all 20 applied). Standard " +
+        "mode is honored here because it was explicitly requested, but expect intermittent " +
+        "serialization-conflict errors under real write contention unless you serialize " +
+        "conflicting writes yourself.";
 
     protected override bool NeedsCommonConversions => true;
     public override string ParameterMarker => "$";
