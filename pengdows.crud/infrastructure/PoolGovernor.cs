@@ -63,6 +63,13 @@ internal sealed class PoolGovernor : IDisposable
     private readonly object _drainLock = new();
     private TaskCompletionSource<bool> _drainSignal;
 
+    // CORE-027: admission-closed state. 0 = open, 1 = closed. Checked first in every acquire
+    // entry point so a caller racing a concurrent Close()/Dispose() gets a clear
+    // ObjectDisposedException instead of either silently succeeding past intended shutdown or
+    // throwing from deep inside semaphore machinery that was torn down underneath it. Also lets
+    // WaitForDrainAsync provide a real guarantee: once closed, _inUse can only decrease.
+    private int _closed;
+
     // Turnstile fairness support: prevents writer starvation under reader pressure
     private readonly SemaphoreSlim? _turnstile;
     private readonly TurnstileState? _turnstileState;
@@ -178,8 +185,47 @@ internal sealed class PoolGovernor : IDisposable
     /// </summary>
     internal int MaxQueueDepth => _maxQueueDepth;
 
+    /// <summary>
+    /// Current number of immediately-acquirable semaphore permits. Test-only diagnostic used to
+    /// verify <see cref="ReleaseToken"/>'s release ordering (permits must become available before
+    /// <c>_inUse</c> reflects the release, not after).
+    /// </summary>
+    internal int AvailablePermits => _semaphore?.CurrentCount ?? 0;
+
+    /// <summary>
+    /// Test-only hook invoked immediately before <see cref="ReleaseToken"/> decrements
+    /// <c>_inUse</c> — lets a test observe/assert state at that exact instant. Never set outside
+    /// tests.
+    /// </summary>
+    internal Action? TestOnlyBeforeInUseDecrement { get; set; }
+
+    /// <summary>
+    /// True once <see cref="Close"/> (or <see cref="Dispose"/>) has been called. Every acquire
+    /// entry point checks this first and throws <see cref="ObjectDisposedException"/> if set.
+    /// </summary>
+    internal bool IsClosed => Volatile.Read(ref _closed) != 0;
+
+    /// <summary>
+    /// Closes admission: every subsequent Acquire/TryAcquire/AcquireAsync/TryAcquireAsync call
+    /// throws <see cref="ObjectDisposedException"/> immediately, before touching the semaphore.
+    /// Idempotent.
+    /// </summary>
+    public void Close()
+    {
+        Interlocked.Exchange(ref _closed, 1);
+    }
+
+    private void ThrowIfClosed()
+    {
+        if (IsClosed)
+        {
+            throw new ObjectDisposedException(nameof(PoolGovernor));
+        }
+    }
+
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -348,6 +394,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public bool TryAcquire(out PoolSlot slot, CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -409,6 +456,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -580,6 +628,7 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
+        ThrowIfClosed();
         if (_forbidden)
         {
             throw new PoolForbiddenException(_label, _poolKeyHash);
@@ -667,9 +716,33 @@ internal sealed class PoolGovernor : IDisposable
 
             if (signal.Task.IsCompleted)
             {
-                // Signal already set — re-check _inUse before returning.
-                // A concurrent Acquire() may have bumped it back up.
-                break;
+                // Signal already set — but it may be a STALE completed signal: a concurrent
+                // Acquire()'s Interlocked.Increment(ref _inUse) can land before its own
+                // ResetDrainSignalIfNeeded() takes _drainLock, so GetCurrentDrainSignal() above
+                // can still observe the old (already-completed) instance even though _inUse is
+                // genuinely back above zero. Actually re-check _inUse — rather than trusting a
+                // signal snapshot that may already be behind current reality.
+                if (Interlocked.Read(ref _inUse) == 0)
+                {
+                    break;
+                }
+
+                // Stale signal, _inUse still genuinely positive: a concurrent ResetDrainSignalIfNeeded
+                // hasn't installed a fresh signal yet. Respect cancellation/timeout instead of
+                // spinning past it, and yield instead of hot-looping a CPU core waiting for the
+                // other thread's ResetDrainSignalIfNeeded to run.
+                if (effectiveToken.IsCancellationRequested)
+                {
+                    if (timeoutCts != null && timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                    {
+                        throw new TimeoutException("Drain timeout");
+                    }
+
+                    throw new OperationCanceledException(cancellationToken);
+                }
+
+                await Task.Yield();
+                continue;
             }
 
             try
@@ -775,6 +848,33 @@ internal sealed class PoolGovernor : IDisposable
 
     private PoolSlot OnAcquired(long waitStart, bool releaseWriterTurnstileInterestOnRelease)
     {
+        if (IsClosed)
+        {
+            // CORE-027 TOCTOU: ThrowIfClosed() is only checked once, at the very top of
+            // Acquire/TryAcquire/AcquireAsync/TryAcquireAsync, before any semaphore/turnstile
+            // work. A concurrent Close() landing after that check but before a slow-path Wait()
+            // completes lets this straggler still reach here with a real permit in hand — give it
+            // back and reject exactly as ThrowIfClosed() would have a few instructions earlier,
+            // so "once closed, _inUse can only decrease" (WaitForDrainAsync's contract) actually
+            // holds.
+            //
+            // Only the semaphore permit is released here — the turnstile permit (if any writer is
+            // currently holding one) is released by the caller's own catch block via its
+            // `turnstileAcquired` local, exactly like every other failure path in
+            // Acquire/TryAcquire/AcquireAsync/TryAcquireAsync. Only the WritersActiveOrWaiting
+            // bookkeeping needs handling directly here, since every call site already flips its
+            // local writerTurnstileInterestRegistered to false immediately before calling
+            // OnAcquired, making the caller's own UnregisterWriterTurnstileInterest a no-op by the
+            // time this throws.
+            _semaphore?.Release();
+            if (releaseWriterTurnstileInterestOnRelease && _turnstileState != null)
+            {
+                Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
+            }
+
+            throw new ObjectDisposedException(nameof(PoolGovernor));
+        }
+
         var inUse = Interlocked.Increment(ref _inUse);
         ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
@@ -785,11 +885,14 @@ internal sealed class PoolGovernor : IDisposable
     internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt, bool releaseWriterTurnstileInterest)
     {
         RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
-        Interlocked.Decrement(ref _inUse);
 
-        // Release semaphore and turnstile BEFORE signaling drain-waiters.
-        // If the signal fires first, DisposeAsync can dispose these objects
-        // before Release() is called, causing ObjectDisposedException.
+        // Release semaphore and turnstile BEFORE decrementing _inUse (and before signaling
+        // drain-waiters below). _inUse dropping to zero is the signal callers rely on — both
+        // WaitForDrainAsync's direct _inUse==0 fast path and the drain-signal machinery further
+        // down — to mean "safe to dispose the governor". If _inUse were decremented first, a
+        // concurrent WaitForDrainAsync could observe zero and let a caller dispose the semaphore/
+        // turnstile while this method is still about to call Release() on them, throwing
+        // ObjectDisposedException on this thread.
         _semaphore?.Release();
 
         // Writers release turnstile when slot is released
@@ -802,6 +905,9 @@ internal sealed class PoolGovernor : IDisposable
         {
             Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
         }
+
+        TestOnlyBeforeInUseDecrement?.Invoke();
+        Interlocked.Decrement(ref _inUse);
 
         // Signal drain-waiters only if _inUse is still zero at the instant
         // the signal is set.  The read and the TrySetResult must happen under
@@ -894,6 +1000,8 @@ internal sealed class PoolGovernor : IDisposable
 
     public void Dispose()
     {
+        Close();
+
         if (_ownsSemaphore)
         {
             _semaphore?.Dispose();

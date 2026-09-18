@@ -153,6 +153,68 @@ public sealed class PoolGovernorAsyncAcquireGapTests
             $"Expected an essentially-immediate PoolSaturatedException, took {sw.ElapsedMilliseconds}ms.");
     }
 
+    /// <summary>
+    /// Forces WaitForDrainAsync's own private _drainSignal field into an already-completed state
+    /// while _inUse is still genuinely positive — simulating the documented stale-signal race
+    /// (a concurrent Acquire's Interlocked.Increment(_inUse) landing before its own
+    /// ResetDrainSignalIfNeeded takes the drain lock) deterministically, since arranging the real
+    /// race from two independently scheduled threads would mean winning against the exact instant
+    /// a lock is taken.
+    /// </summary>
+    private static void ForceStaleCompletedDrainSignal(PoolGovernor governor)
+    {
+        var createDrainSignal = typeof(PoolGovernor).GetMethod("CreateDrainSignal", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var staleSignal = createDrainSignal.Invoke(null, new object[] { true })!;
+        var drainSignalField = typeof(PoolGovernor).GetField("_drainSignal", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        drainSignalField.SetValue(governor, staleSignal);
+    }
+
+    [Fact]
+    public async Task WaitForDrainAsync_StaleCompletedSignalWithInUseStillPositive_YieldsAndRetriesUntilRealDrain()
+    {
+        using var governor = new PoolGovernor(PoolLabel.Reader, "stale-signal-key", 1, TimeSpan.FromSeconds(10));
+        var slot = await governor.AcquireAsync();
+
+        ForceStaleCompletedDrainSignal(governor);
+
+        var releaseAfter = Task.Run(async () =>
+        {
+            await Task.Delay(150);
+            await slot.DisposeAsync();
+        });
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await governor.WaitForDrainAsync(TimeSpan.FromSeconds(10));
+        sw.Stop();
+
+        await releaseAfter;
+
+        // Must have actually looped (yielding, rechecking) rather than returning immediately off
+        // the stale-but-completed signal without ever re-observing _inUse.
+        Assert.True(sw.ElapsedMilliseconds >= 100,
+            $"Expected WaitForDrainAsync to keep retrying past the stale signal until the real " +
+            $"release, but it returned after only {sw.ElapsedMilliseconds}ms.");
+    }
+
+    [Fact]
+    public async Task WaitForDrainAsync_StaleCompletedSignalNeverRealDrains_ThrowsTimeoutException()
+    {
+        using var governor = new PoolGovernor(PoolLabel.Reader, "stale-signal-timeout-key", 1, TimeSpan.FromSeconds(10));
+        var slot = await governor.AcquireAsync();
+
+        ForceStaleCompletedDrainSignal(governor);
+
+        try
+        {
+            await Assert.ThrowsAsync<TimeoutException>(
+                () => governor.WaitForDrainAsync(TimeSpan.FromMilliseconds(200)));
+        }
+        finally
+        {
+            await slot.DisposeAsync();
+        }
+    }
+
     // No turnstile — async mirror of PoolGovernorSyncAcquireTests.
     // Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait.
     [Fact]
