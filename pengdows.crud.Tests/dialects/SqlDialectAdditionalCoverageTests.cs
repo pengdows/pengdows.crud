@@ -65,6 +65,25 @@ public class SqlDialectAdditionalCoverageTests
     }
 
     [Fact]
+    public void WrapObjectName_SegmentLooksPreWrappedButHasUnescapedInnerQuote_IsSafelyEscaped()
+    {
+        var dialect = CreateBaseDialect();
+        // A crafted identifier that merely STARTS and ENDS with the quote char, but contains an
+        // unescaped quote in the middle, must never be passed through verbatim by the
+        // "already wrapped" fast path - that would let the embedded content break out of the
+        // identifier and inject arbitrary SQL. It must instead be treated as literal data and
+        // safely escaped (every quote char doubled, wrapped in one more outer pair), producing a
+        // syntactically inert (if ugly) single quoted identifier.
+        var malicious = "\"a\"; DROP TABLE Users;--\"";
+        var wrapped = dialect.WrapObjectName(malicious);
+
+        // Every quote char in the original is doubled and the whole thing is wrapped in one
+        // more outer pair - a single, syntactically inert quoted identifier, not a string that
+        // terminates early and lets the rest run as SQL.
+        Assert.Equal("\"\"\"a\"\"; DROP TABLE Users;--\"\"\"", wrapped);
+    }
+
+    [Fact]
     public void WrapObjectName_LongIdentifier_ExceedsDefaultStackCapacity()
     {
         var dialect = CreateBaseDialect();
