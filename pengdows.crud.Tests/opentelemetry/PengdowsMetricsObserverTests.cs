@@ -1148,10 +1148,41 @@ public class PengdowsMetricsObserverTests
     [InlineData(SupportedDatabase.MariaDb, "mariadb")]
     [InlineData(SupportedDatabase.CockroachDb, "cockroachdb")]
     [InlineData(SupportedDatabase.DuckDB, "duckdb")]
+    [InlineData(SupportedDatabase.Db2, "ibm.db2")]
+    [InlineData(SupportedDatabase.SybaseASE, "sap.ase")]
+    [InlineData(SupportedDatabase.SingleStore, "singlestore")]
+    [InlineData(SupportedDatabase.FlatFile, "flatfile")]
     [InlineData(SupportedDatabase.Unknown, "other_sql")]
     public void DbSystemNameMapper_MapsToOTelRegistryValues(SupportedDatabase product, string expected)
     {
         Assert.Equal(expected, DbSystemNameMapper.Map(product));
+    }
+
+    /// <summary>
+    /// Guards against the exact silent-omission failure mode a hand-maintained switch invites:
+    /// a new <see cref="SupportedDatabase"/> value added without ever updating
+    /// <see cref="DbSystemNameMapper"/> compiles clean and silently falls through to the generic
+    /// <c>"other_sql"</c> fallback — indistinguishable from a deliberate choice. This test
+    /// iterates every real value (excluding <see cref="SupportedDatabase.Unknown"/>, whose
+    /// fallback IS the deliberate, correct answer) and fails loudly if any of them resolve to
+    /// the fallback instead of an explicit mapping. Found four real gaps this way on this branch
+    /// (matching 3.0's own finding for the databases both branches share) — Db2, SybaseASE,
+    /// SingleStore, and FlatFile had never been given a considered db.system.name at all — now
+    /// fixed with the real OTel semconv registry value where one exists (`ibm.db2`), or a
+    /// best-effort custom value where none does.
+    /// </summary>
+    [Fact]
+    public void DbSystemNameMapper_NoRealProductSilentlyFallsThroughToOtherSql()
+    {
+        foreach (SupportedDatabase product in Enum.GetValues(typeof(SupportedDatabase)))
+        {
+            if (product == SupportedDatabase.Unknown)
+            {
+                continue;
+            }
+
+            Assert.NotEqual("other_sql", DbSystemNameMapper.Map(product));
+        }
     }
 
     // ── Test double for ITenantContextRegistry ────────────────────────────
