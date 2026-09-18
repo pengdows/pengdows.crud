@@ -63,6 +63,37 @@ public class SqlDialectAdditionalCoverageTests
     }
 
     [Fact]
+    public void WrapObjectName_SegmentWithValidlyEscapedInnerQuotes_IsLeftAlone()
+    {
+        var dialect = CreateBaseDialect();
+        // A segment that IS a well-formed, already-escaped quoted identifier (every embedded
+        // quote doubled, consistent with AppendWithEscaping's own doubling scheme) must still
+        // pass through unchanged - this is the legitimate case the idempotency fast path
+        // exists for, and the fix for the finding below must not regress it.
+        var wrapped = dialect.WrapObjectName("\"My \"\"Special\"\" Table\"");
+        Assert.Equal("\"My \"\"Special\"\" Table\"", wrapped);
+    }
+
+    [Fact]
+    public void WrapObjectName_SegmentLooksPreWrappedButHasUnescapedInnerQuote_IsSafelyEscaped()
+    {
+        var dialect = CreateBaseDialect();
+        // A crafted identifier that merely STARTS and ENDS with the quote char, but contains an
+        // unescaped quote in the middle, must never be passed through verbatim by the
+        // "already wrapped" fast path - that would let the embedded content break out of the
+        // identifier and inject arbitrary SQL. It must instead be treated as literal data and
+        // safely escaped (every quote char doubled, wrapped in one more outer pair), producing a
+        // syntactically inert (if ugly) single quoted identifier.
+        var malicious = "\"a\"; DROP TABLE Users;--\"";
+        var wrapped = dialect.WrapObjectName(malicious);
+
+        // Every quote char in the original is doubled and the whole thing is wrapped in one
+        // more outer pair - a single, syntactically inert quoted identifier, not a string that
+        // terminates early and lets the rest run as SQL.
+        Assert.Equal("\"\"\"a\"\"; DROP TABLE Users;--\"\"\"", wrapped);
+    }
+
+    [Fact]
     public void WrapObjectName_LongIdentifier_ExceedsDefaultStackCapacity()
     {
         var dialect = CreateBaseDialect();
