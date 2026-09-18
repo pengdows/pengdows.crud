@@ -9,7 +9,6 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
-using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
@@ -57,59 +56,16 @@ public class SybaseDialectTests
         => Assert.False(Dialect().RequiresMergeStatementTerminator);
 
     [Fact]
-    public void BuildBatchUpdateSql_NoVersionColumn_OmitsVersionClauses()
+    public void SupportsBatchUpdate_IsFalse()
     {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 42);
-
-        var sql = query.ToString();
-        Assert.Contains("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(';', sql);
-    }
-
-    [Fact]
-    public void BuildBatchUpdateSql_NonOpaqueVersionColumn_AddsOnPredicateAndIncrementsInSet()
-    {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 1,
-            versionColumnName: "\"version\"",
-            versionColumnIsOpaque: false);
-
-        var sql = query.ToString();
-        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"version\" = t.\"version\" + 1", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain(';', sql);
-    }
-
-    [Fact]
-    public void BuildBatchUpdateSql_OpaqueVersionColumn_AddsOnPredicateButNoIncrement()
-    {
-        using var query = new SqlQueryBuilder();
-        Dialect().BuildBatchUpdateSql(
-            "\"t\"",
-            new[] { "\"col\"" },
-            new[] { "\"id\"" },
-            1,
-            query,
-            (row, col) => 1,
-            versionColumnName: "\"version\"",
-            versionColumnIsOpaque: true);
-
-        var sql = query.ToString();
-        Assert.Contains("t.\"version\" = s.\"version\"", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("+ 1", sql, StringComparison.Ordinal);
+        // Verified live: the dialect previously set this true with a BuildBatchUpdateSql override
+        // generating "MERGE INTO t USING (VALUES (...), (...)) AS s(...)" — ASE has no
+        // VALUES-derived-table-as-MERGE-source support and rejects it with "Incorrect syntax near
+        // the keyword 'VALUES'." (the single-row SELECT-derived USING source RenderMergeSource
+        // uses for ordinary upsert is a different, supported construct). Falls back to one
+        // BuildUpdate container per entity instead, the same safe fallback SQLite/MySQL/MariaDB/
+        // Firebird use.
+        Assert.False(Dialect().SupportsBatchUpdate);
     }
 
     [Fact]
@@ -276,6 +232,34 @@ public class SybaseDialectTests
     {
         var ex = new InvalidOperationException("some other failure");
         Assert.Equal(DbErrorCategory.Unknown, Dialect().ClassifyException(ex));
+    }
+
+    // Verified live against a real ASE 16.0 SP02 container: AseConnection.BeginTransaction
+    // accepts all four standard IsolationLevel values, and a "SELECT @@isolation" inside each
+    // transaction confirmed the server genuinely applied it (0/1/2/3 ==
+    // ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) — not a client-side no-op.
+    // Without SybaseDialect's override, this would silently fall back to SqlDialect's generic
+    // ANSI default, which wrongly omits ReadUncommitted.
+    [Fact]
+    public void GetSupportedIsolationLevels_IncludesAllFourStandardLevels()
+    {
+        var levels = Dialect().GetSupportedIsolationLevels(allowSnapshotIsolation: false);
+
+        Assert.Equal(4, levels.Count);
+        Assert.Contains(IsolationLevel.ReadUncommitted, levels);
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+    }
+
+    [Fact]
+    public void GetIsolationProfileMapping_MapsFastWithRisksToReadUncommitted()
+    {
+        var mapping = Dialect().GetIsolationProfileMapping(allowSnapshotIsolation: false);
+
+        Assert.Equal(IsolationLevel.ReadUncommitted, mapping[IsolationProfile.FastWithRisks]);
+        Assert.Equal(IsolationLevel.RepeatableRead, mapping[IsolationProfile.SafeNonBlockingReads]);
+        Assert.Equal(IsolationLevel.Serializable, mapping[IsolationProfile.StrictConsistency]);
     }
 
     [Table("sybase_merge")]
