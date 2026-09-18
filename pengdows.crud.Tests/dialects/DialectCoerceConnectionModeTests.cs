@@ -1,5 +1,6 @@
 #region
 
+using System;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -60,13 +61,25 @@ public class DialectCoerceConnectionModeTests
         Assert.Contains("Isolated in-memory", reason);
     }
 
+    private static string FileConnectionString(SupportedDatabase db) => db switch
+    {
+        SupportedDatabase.Sqlite => "Data Source=file.db",
+        SupportedDatabase.DuckDB => "Data Source=file.duckdb",
+        // Access has no in-memory mode at all (unlike Sqlite/DuckDB's ":memory:") — every
+        // connection is file-based, so it only participates in the file-based cases below, not
+        // EmbeddedDialect_IsolatedInMemory_ForcesSingleConnection above.
+        SupportedDatabase.Access => "Provider=Microsoft.ACE.OLEDB.16.0;Data Source=file.accdb;",
+        _ => throw new ArgumentOutOfRangeException(nameof(db))
+    };
+
     [Theory]
     [InlineData(SupportedDatabase.Sqlite)]
     [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Access)]
     public void EmbeddedDialect_FileOrSharedMemory_Best_ResolvesToSingleWriter(SupportedDatabase db)
     {
         var dialect = CreateDialect(db);
-        var cs = db == SupportedDatabase.Sqlite ? "Data Source=file.db" : "Data Source=file.duckdb";
+        var cs = FileConnectionString(db);
         var (mode, reason) = dialect.CoerceConnectionMode(DbMode.Best, cs, isLocalDb: false);
         Assert.Equal(DbMode.SingleWriter, mode);
         Assert.Contains("Best selects SingleWriter", reason);
@@ -75,10 +88,11 @@ public class DialectCoerceConnectionModeTests
     [Theory]
     [InlineData(SupportedDatabase.Sqlite)]
     [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Access)]
     public void EmbeddedDialect_FileOrSharedMemory_UnsafeExplicitModes_CoerceToSingleWriter(SupportedDatabase db)
     {
         var dialect = CreateDialect(db);
-        var cs = db == SupportedDatabase.Sqlite ? "Data Source=file.db" : "Data Source=file.duckdb";
+        var cs = FileConnectionString(db);
 
         var (standardMode, _) = dialect.CoerceConnectionMode(DbMode.Standard, cs, isLocalDb: false);
         var (preventUnloadMode, _) = dialect.CoerceConnectionMode(DbMode.PreventDatabaseUnload, cs, isLocalDb: false);
@@ -90,10 +104,11 @@ public class DialectCoerceConnectionModeTests
     [Theory]
     [InlineData(SupportedDatabase.Sqlite)]
     [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Access)]
     public void EmbeddedDialect_FileOrSharedMemory_SafeExplicitModes_AreHonored(SupportedDatabase db)
     {
         var dialect = CreateDialect(db);
-        var cs = db == SupportedDatabase.Sqlite ? "Data Source=file.db" : "Data Source=file.duckdb";
+        var cs = FileConnectionString(db);
 
         var (singleWriterMode, _) = dialect.CoerceConnectionMode(DbMode.SingleWriter, cs, isLocalDb: false);
         var (singleConnectionMode, _) = dialect.CoerceConnectionMode(DbMode.SingleConnection, cs, isLocalDb: false);

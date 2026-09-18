@@ -194,5 +194,14 @@ public enum SupportedDatabase : ulong
     /// Opt-in in the integration test matrix (<c>INCLUDE_INTERBASE=true</c>) — requires a
     /// personal, node-locked Developer Edition license and a native <c>libgds.so</c> on the host.
     /// </summary>
-    InterBase = 1UL << 21
+    InterBase = 1UL << 21,
+
+    /// <summary>
+    /// Microsoft Access (Jet/ACE), via <c>System.Data.OleDb</c> and the Microsoft Access Database
+    /// Engine Redistributable (<c>Microsoft.ACE.OLEDB.16.0</c>) — there is no native ADO.NET
+    /// Jet/ACE client. Positional (<c>?</c>) parameters, no stored procedures, no <c>MERGE</c>.
+    /// Opt-in in the integration test matrix (<c>INCLUDE_ACCESS=true</c>) — Windows-only and
+    /// COM-interop-dependent (ADOX), with no Docker image at all.
+    /// </summary>
+    Access = 1UL << 22
 }

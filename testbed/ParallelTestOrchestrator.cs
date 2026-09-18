@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using testbed.Access;
 using testbed.Cockroach;
 using testbed.Db2;
 using testbed.DuckDb;
@@ -31,13 +32,15 @@ public class ParallelTestOrchestrator
     private readonly bool _includeSnowflake;
     private readonly bool _includeSapHana;
     private readonly bool _includeInterBase;
+    private readonly bool _includeAccess;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false, bool includeInterBase = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
         _includeSapHana = includeSapHana;
         _includeInterBase = includeInterBase;
+        _includeAccess = includeAccess;
     }
 
     /// <summary>
@@ -68,6 +71,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Informix => new InformixTestContainer(),
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
+            SupportedDatabase.Access when _includeAccess => new AccessTestContainer(),
             _ => null
         };
 
@@ -344,6 +348,11 @@ public class ParallelTestOrchestrator
         // other database here, just a connection retry loop.
         if (_includeInterBase)
             AddLocal("InterBase", new InterBaseTestContainer(), (db, sp) => new InterBaseTestProvider(db, sp), 5);
+
+        // Weight 5: no Docker image at all — just a local .accdb file create (ADOX) and a
+        // handful of OLE DB round trips, similar cost shape to InterBase's connection-only case.
+        if (_includeAccess)
+            AddLocal("Access", new AccessTestContainer(), (db, sp) => new AccessTestProvider(db, sp), 5);
 
         if (only is { Count: > 0 })
             configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();

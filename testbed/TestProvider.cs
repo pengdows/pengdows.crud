@@ -200,6 +200,10 @@ CREATE TABLE {tableName} (
             // -607 "Specified domain or source column ... does not exist" rather than a syntax
             // error. TIMESTAMP is the correct type, same as Firebird/Db2.
             SupportedDatabase.InterBase => "TIMESTAMP",
+            // CONFIRMED live: Access accepts DATETIME as a real column type keyword — same as
+            // the base default, listed explicitly for discoverability alongside the other
+            // Access cases in this file.
+            SupportedDatabase.Access => "DATETIME",
             _ => "DATETIME"
         };
     }
@@ -211,6 +215,9 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(10)",
             SupportedDatabase.Firebird => "INTEGER",
+            // Access's LONG is its 32-bit integer type (there is no separate word-sized "INT"
+            // distinct from LONG) — confirmed live via a real CREATE TABLE round-trip.
+            SupportedDatabase.Access => "LONG",
             _ => "INT"
         };
     }
@@ -228,6 +235,10 @@ CREATE TABLE {tableName} (
             // error). NUMERIC(18,0)/DECIMAL(18,0) is InterBase's classic (pre-Firebird-BIGINT)
             // 64-bit-range exact-integer idiom and is accepted.
             SupportedDatabase.InterBase => "NUMERIC(18,0)",
+            // Access has no genuine 64-bit integer type at all — LONG (32-bit) is the largest
+            // native integer type. Confirmed live via a real CREATE TABLE round-trip; sufficient
+            // for this testbed's row-count-scale id column.
+            SupportedDatabase.Access => "LONG",
             _ => "BIGINT"
         };
     }
@@ -254,6 +265,9 @@ CREATE TABLE {tableName} (
             // column as Informix's native BOOLEAN then breaks comparison — "Routine (equal) can
             // not be resolved", since IDS has no "=" operator between BOOLEAN and SMALLINT.
             SupportedDatabase.Informix => "SMALLINT",
+            // YESNO is Access's native boolean type — confirmed live via a real CREATE TABLE +
+            // INSERT + SELECT round trip (round-trips as a .NET bool).
+            SupportedDatabase.Access => "YESNO",
             _ => "BOOLEAN"
         };
     }
@@ -269,6 +283,11 @@ CREATE TABLE {tableName} (
             // ("Maximum varchar size has been exceeded" for anything longer) — LVARCHAR
             // supports up to 32739 bytes and is the correct type for longer text columns.
             SupportedDatabase.Informix when length > 255 => $"LVARCHAR({length})",
+            // CONFIRMED live: Access's TEXT(n) is capped at 255 characters ("Size of field ...
+            // is too long" for anything longer) — MEMO is the correct, unlimited-length type for
+            // longer text columns (LONGTEXT also works but MEMO is Jet SQL's own idiomatic name).
+            SupportedDatabase.Access when length > 255 => "MEMO",
+            SupportedDatabase.Access => $"TEXT({length})",
             _ => $"VARCHAR({length})"
         };
     }

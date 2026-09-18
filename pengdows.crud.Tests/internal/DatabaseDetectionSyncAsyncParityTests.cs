@@ -33,6 +33,12 @@ public class DatabaseDetectionSyncAsyncParityTests
     public static IEnumerable<object[]> Scenarios()
     {
         yield return new object[] { "PlainMySql", SupportedDatabase.MySql, (string?)null!, (string?)null!, SupportedDatabase.MySql };
+        // Access's detection is a pure schema-token match ("MS Jet", confirmed live) — it never
+        // touches the flavor-probe layer at all (isMySqlFamily/isPgFamily gates don't apply), so
+        // there's no genuine sync/async divergence risk for it the way there was for Aurora/
+        // Spanner/SingleStore/Yugabyte below. Included anyway for completeness per the checklist's
+        // guidance to cover every new detection probe here, not just the ones with real risk.
+        yield return new object[] { "PlainAccess", SupportedDatabase.Access, (string?)null!, (string?)null!, SupportedDatabase.Access };
         yield return new object[]
             { "AuroraMySql", SupportedDatabase.MySql, "SELECT @@aurora_version", "3.04.0.1", SupportedDatabase.AuroraMySql };
         yield return new object[]

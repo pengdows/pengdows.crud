@@ -681,6 +681,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             SupportedDatabase.CockroachDb => "v23.1.0",
             SupportedDatabase.DuckDB => "DuckDB 0.9.2",
             SupportedDatabase.Db2 => "DB2 11.05.0800",
+            // Confirmed live: OleDbConnection.ServerVersion returns this exact string against a
+            // real .accdb via Microsoft.ACE.OLEDB.16.0 — the same Jet-compatibility version
+            // reported by DataSourceProductVersion, unchanged across ACE 12.0 and 16.0.
+            SupportedDatabase.Access => "04.00.0000",
             _ => "1.0"
         };
     }

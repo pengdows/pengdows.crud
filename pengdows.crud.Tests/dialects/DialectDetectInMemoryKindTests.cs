@@ -44,6 +44,10 @@ public class DialectDetectInMemoryKindTests
     [InlineData(SupportedDatabase.SqlServer)]
     [InlineData(SupportedDatabase.Firebird)]
     [InlineData(SupportedDatabase.Unknown)]
+    // Access IS embedded/file-based (see DialectCoerceConnectionModeTests), but unlike
+    // Sqlite/DuckDB it has no in-memory concept at all — confirmed live, Jet/ACE has no
+    // ":memory:"-equivalent connection mode — so it belongs in this "always None" group too.
+    [InlineData(SupportedDatabase.Access)]
     public void NonEmbeddedDialects_AlwaysReportNone(SupportedDatabase db)
     {
         var dialect = CreateDialect(db);

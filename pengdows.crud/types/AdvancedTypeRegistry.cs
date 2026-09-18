@@ -94,6 +94,12 @@ internal class AdvancedTypeRegistry
         public const string TimestampTz = "TimestampTz";
     }
 
+    private static class OleDbNames
+    {
+        public const string DbTypeProperty = "OleDbType";
+        public const string Date = "Date";
+    }
+
     private static class OracleNames
     {
         public const string DbTypeProperty = "OracleDbType";
@@ -663,6 +669,29 @@ internal class AdvancedTypeRegistry
                     param.Value = dto.UtcDateTime;
                 }
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TimestampTz);
+            }
+        });
+
+        // CONFIRMED live this session: OleDbParameter's own automatic DbType-to-OleDbType
+        // mapping for DbType.DateTime does not produce a type Access/ACE accepts for a DATETIME
+        // column — every insert failed with "Data type mismatch in criteria expression" until
+        // OleDbType.Date was set explicitly on the parameter (isolated via a minimal repro:
+        // setting only param.DbType = DateTime, with or without DateTimeKind normalization,
+        // fails identically; only an explicit param.OleDbType override fixes it). This is a real,
+        // previously-undiscovered ACE binding quirk, not a guess — caught by a live
+        // AccessTestProvider CRUD round-trip after the dialect/translator unit tests (which use
+        // fakeDb, never a real OleDbParameter) had already gone green.
+        // DateTimeOffset for Access has not been verified live — Access has no timezone-aware
+        // temporal type at all, but whether the OleDb driver even accepts a DateTimeOffset CLR
+        // value (before this ConfigureParameter callback ever runs) is unconfirmed; do not assume
+        // the DateTime fix generalizes without testing it directly first.
+        RegisterMapping<DateTime>(SupportedDatabase.Access, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                SetEnumProperty(param, OleDbNames.DbTypeProperty, OleDbNames.Date);
             }
         });
     }

@@ -51,11 +51,14 @@ Console.WriteLine();
 // no Docker image; SAP HANA is opt-in via INCLUDE_SAPHANA=true — real Docker image, but needs
 // 16-32GB RAM; InterBase is opt-in via INCLUDE_INTERBASE=true — a personal, non-shareable,
 // node-locked Developer Edition license plus a native libgds.so required on this host, see
-// InterBaseTestContainer.cs; every other database, Informix included, runs unconditionally)
+// InterBaseTestContainer.cs; Access is opt-in via INCLUDE_ACCESS=true — no Docker image at all,
+// Windows-only and COM-interop-dependent (ADOX), see AccessTestContainer.cs; every other
+// database, Informix included, runs unconditionally)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
 var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
 var includeInterBase = Environment.GetEnvironmentVariable("INCLUDE_INTERBASE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase);
+var includeAccess = Environment.GetEnvironmentVariable("INCLUDE_ACCESS")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase, includeAccess);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

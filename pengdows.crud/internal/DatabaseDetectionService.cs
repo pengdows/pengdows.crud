@@ -56,7 +56,12 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.SybaseASE, new[] { "adaptive server enterprise", "sybase" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
         (SupportedDatabase.SapHana, new[] { "hana" }),
-        (SupportedDatabase.InterBase, new[] { "interbase" })
+        (SupportedDatabase.InterBase, new[] { "interbase" }),
+        // "MS Jet" confirmed live from a real .accdb via System.Data.OleDb — no FactoryTypeTokens
+        // entry is added for Access: factory.GetType().FullName is "System.Data.OleDb.OleDbFactory"
+        // for ANY OLE DB provider (SQLOLEDB, OraOLEDB, etc.), so matching on it there would
+        // misdetect every other OLE DB connection as Access.
+        (SupportedDatabase.Access, new[] { "jet" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =

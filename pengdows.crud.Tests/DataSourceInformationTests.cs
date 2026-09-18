@@ -50,6 +50,13 @@ public static class DataSourceTestData
             SupportedDatabase.Oracle => "Oracle Database",
             SupportedDatabase.Snowflake => "Snowflake",
             SupportedDatabase.SybaseASE => "Adaptive Server Enterprise",
+            // Confirmed live from a real .accdb: DataSourceProductName = "MS Jet", NOT "Access" —
+            // unlike every other recently-added database here, the enum name does not contain
+            // its real schema token ("jet" is not a substring of "Access"), so the generic
+            // db.ToString() fallback below would produce a schema the real provider never
+            // actually reports, letting detection silently fall through to Unknown and misfire
+            // on the Aurora MySQL flavor probe instead (confirmed the hard way).
+            SupportedDatabase.Access => "MS Jet",
             _ => db.ToString()
         };
 
@@ -192,6 +199,8 @@ public class DataSourceInformationTests
             // Sap.Data.Hana has no named-parameter support — confirmed live via
             // DataSourceInformation.ParameterMarkerFormat ("?") and a real positional INSERT.
             SupportedDatabase.SapHana => "?",
+            // Confirmed live: ParameterMarkerFormat = "?" from a real .accdb's DataSourceInformation.
+            SupportedDatabase.Access => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -201,6 +210,8 @@ public class DataSourceInformationTests
             : db == SupportedDatabase.Db2 ? 11
             // Real version string observed live: "02.00.088.00.1760424921".
             : db == SupportedDatabase.SapHana ? 2
+            // Real ServerVersion observed live from a real .accdb: "04.00.0000".
+            : db == SupportedDatabase.Access ? 4
             : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
@@ -278,7 +289,10 @@ public class DataSourceInformationTests
             // is nothing to name-match against — independent of its named-parameter support.
             // Informix: same reasoning — ProcWrappingStyle deliberately left None pending live
             // verification of its stored-procedure calling convention (see InformixDialect.cs).
-            SupportedDatabase.FlatFile or SupportedDatabase.Informix => false,
+            // Access: same reasoning again — no ADO.NET-invocable stored procedures at all,
+            // confirmed live (ProcWrappingStyle.None is a considered decision, not an unexamined
+            // default — see AccessDialect.cs).
+            SupportedDatabase.FlatFile or SupportedDatabase.Informix or SupportedDatabase.Access => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -299,8 +313,11 @@ public class DataSourceInformationTests
         // against the engine's parser/binder. Informix and SAP HANA are the two genuine
         // exceptions: neither ADO.NET driver (Informix.Net.Core-lnx; Sap.Data.Hana.Net.v8.0) has
         // any named-parameter support at all — confirmed by inspecting each factory's assembly
-        // directly (Hana's real DataSourceInformation.ParameterMarkerFormat is "?").
-        if (db is SupportedDatabase.Informix or SupportedDatabase.SapHana)
+        // directly (Hana's real DataSourceInformation.ParameterMarkerFormat is "?"). Access is a
+        // third genuine exception — confirmed live, ParameterMarkerFormat = "?" from a real
+        // .accdb's DataSourceInformation, no native ADO.NET Jet/ACE client has named-parameter
+        // support either.
+        if (db is SupportedDatabase.Informix or SupportedDatabase.SapHana or SupportedDatabase.Access)
         {
             Assert.False(info.SupportsNamedParameters);
         }
@@ -343,13 +360,14 @@ public class DataSourceInformationTests
 
         var result = dialect.GetDatabaseVersion(tracked);
 
-        // FlatFile and InterBase have no version()-style SQL function at all — their dialects read
-        // ADO.NET's standard ServerVersion property directly instead of executing a canned scalar
-        // query (see FlatFileDialect.GetDatabaseVersionAsync; InterBaseDialect.cs's file-level
-        // summary confirms live that neither Firebird's rdb$get_context nor a mon$-table
-        // equivalent exists in InterBase 15). Every other dialect still executes a
+        // FlatFile, InterBase, and Access have no version()-style SQL function at all — their
+        // dialects read ADO.NET's standard ServerVersion property directly instead of executing a
+        // canned scalar query (see FlatFileDialect.GetDatabaseVersionAsync; InterBaseDialect.cs's
+        // file-level summary confirms live that neither Firebird's rdb$get_context nor a mon$-table
+        // equivalent exists in InterBase 15; AccessDialect.cs confirms live that Jet SQL has no
+        // SET-statement or version-function surface at all). Every other dialect still executes a
         // dialect-specific SQL version query, matched against the canned scalar below.
-        var expected = db is SupportedDatabase.FlatFile or SupportedDatabase.InterBase
+        var expected = db is SupportedDatabase.FlatFile or SupportedDatabase.InterBase or SupportedDatabase.Access
             ? tracked.ServerVersion
             : scalars.Values.First().ToString();
         Assert.Equal(expected, result);
