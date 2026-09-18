@@ -49,6 +49,15 @@
 //   concurrent connections, and a caller who has read that documentation can choose to bypass the
 //   governor deliberately; DescribeStandardModeRisk surfaces the CONFIRMED-live failure above as
 //   a warning (not a block) when they do.
+//   CAVEAT: the script that produced the "CONFIRMED live" finding above was never committed and no
+//   longer exists (confirmed via full-repo/git-history search) — unlike DuckDbDialect.cs's
+//   equivalent finding, which was independently reproduced and locked into a permanent regression
+//   test this session (SerializationConflictTests.cs), this one rests on unreproduced prose. In
+//   particular, whether the conflict is scoped to "same table" (as documented here) or narrower
+//   ("same row", like DuckDB's confirmed behavior) was never actually tested — see
+//   docs/connection/access-concurrency-verification.md for the concrete test plan (Windows-only;
+//   this repo's environment can't run OleDb/ACE) to re-verify and, if the granularity turns out to
+//   be narrower than "same table", correct this wording.
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."
