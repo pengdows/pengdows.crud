@@ -49,7 +49,7 @@ public static class DataSourceTestData
             SupportedDatabase.Firebird => "Firebird",
             SupportedDatabase.Oracle => "Oracle Database",
             SupportedDatabase.Snowflake => "Snowflake",
-            SupportedDatabase.Sybase => "Adaptive Server Enterprise",
+            SupportedDatabase.SybaseASE => "Adaptive Server Enterprise",
             _ => db.ToString()
         };
 
@@ -93,7 +93,7 @@ public static class DataSourceTestData
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
-            SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SybaseASE => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
@@ -178,7 +178,7 @@ public class DataSourceInformationTests
                        || (db == SupportedDatabase.Firebird && info.ParsedVersion?.Major >= 2)
                        || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14)
-                       || db == SupportedDatabase.Sybase
+                       || db == SupportedDatabase.SybaseASE
                        || db == SupportedDatabase.Db2;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
@@ -211,7 +211,7 @@ public class DataSourceInformationTests
         // Assert: proc wrap style
         var expectedWrap = db switch
         {
-            SupportedDatabase.SqlServer or SupportedDatabase.Sybase => ProcWrappingStyle.Exec,
+            SupportedDatabase.SqlServer or SupportedDatabase.SybaseASE => ProcWrappingStyle.Exec,
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
@@ -231,7 +231,7 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
                 or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.SingleStore or SupportedDatabase.Sybase
+                or SupportedDatabase.SingleStore or SupportedDatabase.SybaseASE
                 or SupportedDatabase.Db2 => false,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb

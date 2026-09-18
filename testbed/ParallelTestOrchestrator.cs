@@ -49,7 +49,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
-            SupportedDatabase.Sybase => new SybaseTestContainer(),
+            SupportedDatabase.SybaseASE => new SybaseTestContainer(),
             _ => null
         };
 

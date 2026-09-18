@@ -17,7 +17,7 @@ namespace pengdows.crud.Tests.dialects;
 public class NaturalKeyLookupQueryCharacterizationTests
 {
     private static SqlServerDialect SqlServer() => new(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger.Instance);
-    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.Sybase), NullLogger.Instance);
+    private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger.Instance);
     private static OracleDialect Oracle() => new(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger.Instance);
     private static Db2Dialect Db2() => new(new fakeDbFactory(SupportedDatabase.Db2), NullLogger.Instance);
     private static PostgreSqlDialect Postgres() => new(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
