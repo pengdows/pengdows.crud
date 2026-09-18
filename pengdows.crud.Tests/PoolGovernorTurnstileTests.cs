@@ -570,7 +570,7 @@ public sealed class PoolGovernorTurnstileTests
         using var wp = writer.Acquire();
 
         // maxQueueDepth: 1 — only one reader may queue on the turnstile at a time.
-        // Acquire timeout is long (2s) so a fast-fail is unambiguously distinguishable
+        // Acquire timeout is non-zero (250ms) so a fast-fail is unambiguously distinguishable
         // from "waited out the timeout". trackMetrics: true so GetSnapshot().TurnstileQueued
         // can be polled below instead of guessing with a fixed sleep — under heavy parallel
         // test-suite load a fixed sleep is not long enough to reliably guarantee the
@@ -579,12 +579,12 @@ public sealed class PoolGovernorTurnstileTests
         // scheduled yet, so the "second" caller was actually the first, and no fast-fail
         // was expected to trigger at all).
         using var reader = new PoolGovernor(PoolLabel.Reader, "qd-r", 1,
-            TimeSpan.FromSeconds(2), trackMetrics: true, turnstile: turnstile, holdTurnstile: false,
+            TimeSpan.FromMilliseconds(250), trackMetrics: true, turnstile: turnstile, holdTurnstile: false,
             maxQueueDepth: 1);
 
         // Occupy the one allowed queue slot with a background waiter that will not
         // return until the test disposes the writer's slot (it never will here —
-        // it just blocks for the full 2s timeout in the background).
+        // it just blocks for the full 250ms timeout in the background).
         //
         // Runs on a dedicated OS thread rather than Task.Run/the ThreadPool: under heavy parallel
         // load (e.g. the whole solution's test suite running alongside a live Docker database
@@ -635,10 +635,8 @@ public sealed class PoolGovernorTurnstileTests
 
         // Not a correctness assertion — every assertion that matters already ran above. This is
         // just winding down the occupier thread before the test method returns. Its own configured
-        // acquire timeout is 2s, but under severe scheduler contention (observed: 16 CPU-bound
-        // processes oversubscribing an 8-core box) actually getting scheduled to notice that
-        // timeout elapsed and call SetResult can take meaningfully longer than 2s of wall clock, so
-        // this needs real headroom above that 2s rather than a tight budget.
+        // acquire timeout is 250ms, but under severe scheduler contention the worker can still
+        // take longer than that to run its cleanup continuation, so this keeps real headroom.
         await occupierDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
