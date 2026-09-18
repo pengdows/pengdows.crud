@@ -20,6 +20,13 @@ public class EmbeddedModeEnforcementTests
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.Standard, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, ":memory:", DbMode.KeepAlive, DbMode.SingleConnection)]
     [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.SingleConnection, DbMode.SingleConnection)]
+    // DuckDB (unlike Sqlite above) honors an explicit Standard request against a file-based
+    // database instead of coercing it — DuckDB documents concurrent-connection support, so
+    // pengdows.crud allows opting in, with a risk warning layered on top by
+    // DatabaseContext.WarnOnModeMismatch (see DbModeCoercionLoggingTests.
+    // DuckDbFile_StandardMode_IsHonored_WithUnsafeWarning) rather than a silent coercion.
+    [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.Standard, DbMode.Standard)]
+    [InlineData(SupportedDatabase.DuckDB, "file.db", DbMode.PreventDatabaseUnload, DbMode.SingleWriter)]
     // Firebird (embedded or not) is NOT in this list — CoerceMode treats it as an ordinary full
     // server database (Best selects Standard, every explicit choice including
     // PreventDatabaseUnload is honored, nothing forced) — see

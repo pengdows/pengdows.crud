@@ -52,9 +52,16 @@ public class DatabaseContextModeBranchTests
             new object?[] { DbMode.PreventDatabaseUnload, SupportedDatabase.Firebird, false })!;
         Assert.Equal(DbMode.PreventDatabaseUnload, firebirdPreventUnload);
 
-        var localDb = (DbMode)coerce.Invoke(context,
+        // LocalDB requires PreventDatabaseUnload for Best and every other requested mode, EXCEPT
+        // an explicit Standard request, which is now honored — see SqlServerDialect.
+        // CoerceConnectionMode and CLAUDE.md's "Connection Management and DbMode" section.
+        var localDbStandard = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
-        Assert.Equal(DbMode.PreventDatabaseUnload, localDb);
+        Assert.Equal(DbMode.Standard, localDbStandard);
+
+        var localDbOther = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.SqlServer, true })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, localDbOther);
     }
 
     [Fact]
@@ -89,10 +96,15 @@ public class DatabaseContextModeBranchTests
         var context = CreateContext("Data Source=file:test.db");
         var warn = GetInstanceMethod("WarnOnModeMismatch");
 
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false });
-        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false });
+        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false, false });
+        // Pattern 2: DuckDB/Access honor an explicit Standard request — exercise the risk-warning branch.
+        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.DuckDB, false, false });
+        // Pattern 3: SQL Server LocalDB honors an explicit Standard request — exercise the
+        // performance-warning branch.
+        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, false, true });
     }
 
     [Fact]

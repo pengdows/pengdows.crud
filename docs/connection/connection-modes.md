@@ -115,13 +115,36 @@ The mode opens one sentinel through the normal connection and session-initializa
 
 - SQLite/DuckDB `:memory:` → SingleConnection
 
-### Allowed for SQLite/DuckDB file-based:
+### Allowed for SQLite file-based:
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log
+- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log — SQLite stays
+  hard-coerced with no opt-out; see `SqlDialect.CoerceEmbeddedSingleWriterMode`'s `allowStandard`
+  parameter (SQLite never sets it).
 
-### LocalDb: coerced to PreventDatabaseUnload (unconditionally — every request, not just `Best`; this is the one database where the auto-shutdown lifecycle genuinely leaves no better default).
+### Allowed for DuckDB/Access file-based:
+
+- SingleWriter (default for Best)
+- SingleConnection (allowed alternative)
+- PreventDatabaseUnload → coerced to SingleWriter with a Warning log (same as SQLite — a
+  file-based embedded engine has no use for a "keep an idle server attachment alive" sentinel)
+- **Standard → honored, not coerced.** Both engines are documented by their own vendors as
+  supporting concurrent connections/writers, so an explicit `Standard` request is allowed through
+  (`Best` still resolves to `SingleWriter`). `DatabaseContext.WarnOnModeMismatch` logs an
+  evidence-backed risk Warning when this happens instead — DuckDB's optimistic-concurrency-control
+  caution is architecturally reasoned (not reproduced against a live instance); Access's is
+  CONFIRMED LIVE (`OleDbException: Could not update; currently locked.` under concurrent raw OleDb
+  writes) — see `AccessDialect.cs`'s file-level AI SUMMARY and each dialect's
+  `DescribeStandardModeRisk()` override.
+
+### LocalDb: `Best` and every other requested mode coerce to PreventDatabaseUnload, **except an
+explicit `Standard` request, which is honored.** PreventDatabaseUnload's sentinel only matters for
+a workload that actually goes idle long enough to trigger LocalDB's auto-shutdown; a caller who
+knows their workload stays busy continuously can opt out deliberately. `WarnOnModeMismatch` logs a
+performance-only (not correctness-risk) Warning when this happens — LocalDB is a real
+client-server engine under the hood, so Standard mode works correctly, it just forgoes the
+idle-reconnect mitigation.
 
 ### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Firebird, Db2, and SQL Server (with `AUTO_CLOSE`) each have a real, empirically-confirmed idle-unload cost, but `PreventDatabaseUnload` is deliberately a knob for the operator to reach for, not an auto-selected default — see the PreventDatabaseUnload section above for why.
 

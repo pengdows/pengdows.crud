@@ -113,18 +113,26 @@ internal class SqlServerDialect : SqlDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// LocalDB genuinely requires PreventDatabaseUnload unconditionally — there is no production
-    /// LocalDB deployment shape where the auto-shutdown behavior is wanted, so this is forced
-    /// regardless of the requested mode (unlike Firebird/Db2's own idle-unload costs, which stay an
-    /// explicitly-honored opt-in knob rather than an auto-selected default — see CLAUDE.md's
-    /// "Connection Management and DbMode" section for the full policy). Non-LocalDB SQL Server is
-    /// an ordinary full server database and falls through to the base implementation.
+    /// LocalDB auto-selects PreventDatabaseUnload for <see cref="DbMode.Best"/> and forces it for
+    /// every other requested mode EXCEPT an explicit <see cref="DbMode.Standard"/> request, which
+    /// is honored as-is. PreventDatabaseUnload's sentinel only matters for a workload that
+    /// actually goes idle long enough to trigger LocalDB's auto-shutdown; a caller who knows their
+    /// workload stays busy continuously can opt out deliberately (unlike Firebird/Db2's own
+    /// idle-unload costs, which stay an explicitly-honored opt-in knob rather than an auto-selected
+    /// default — see CLAUDE.md's "Connection Management and DbMode" section for the full policy).
+    /// Non-LocalDB SQL Server is an ordinary full server database and falls through to the base
+    /// implementation.
     /// </remarks>
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
     {
         if (isLocalDb)
         {
+            if (requested == DbMode.Standard)
+            {
+                return (DbMode.Standard, string.Empty);
+            }
+
             return (DbMode.PreventDatabaseUnload, "LocalDB requires PreventDatabaseUnload");
         }
 

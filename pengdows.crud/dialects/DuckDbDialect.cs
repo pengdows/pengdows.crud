@@ -75,9 +75,31 @@ internal class DuckDbDialect : SqlDialect
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Unlike SqliteDialect, an explicit <see cref="DbMode.Standard"/> request is honored rather
+    /// than coerced (<c>allowStandard: true</c>) — DuckDB is documented by its own vendor as
+    /// supporting concurrent connections/transactions, so a caller who has read that documentation
+    /// can opt in deliberately. <see cref="DbMode.Best"/> still resolves to SingleWriter. See
+    /// <see cref="DescribeStandardModeRisk"/> for the risk warning surfaced when this happens.
+    /// </remarks>
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb) =>
-        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString), allowStandard: true);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// DuckDB's optimistic concurrency control aborts conflicting writers rather than blocking, so
+    /// concurrent writes under Standard mode can surface as intermittent transaction-conflict
+    /// errors — pengdows.crud has not independently verified safe multi-writer behavior against a
+    /// live DuckDB instance (unlike Access's CONFIRMED-live OleDbException finding — see
+    /// AccessDialect.cs). This is architecturally reasoned caution, not a reproduced failure.
+    /// </remarks>
+    internal override string DescribeStandardModeRisk() =>
+        "DuckDB documents support for concurrent connections/transactions, but its optimistic " +
+        "concurrency control aborts conflicting writers rather than blocking — under real write " +
+        "concurrency this can surface as intermittent transaction-conflict errors. pengdows.crud " +
+        "has not independently verified safe multi-writer behavior; SingleWriter mode is " +
+        "recommended unless you have validated your workload's concurrency pattern.";
 
     protected override bool NeedsCommonConversions => true;
     public override string ParameterMarker => "$";

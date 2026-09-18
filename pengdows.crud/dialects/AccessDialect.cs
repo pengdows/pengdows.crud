@@ -38,14 +38,17 @@
 //   a second connection's INSERT of a completely different row into the same table blocks, then
 //   fails outright with "OleDbException: Could not update; currently locked." — a genuine, real
 //   lock conflict surfaced to the caller, not a transient retry. Through pengdows.crud itself:
-//   CoerceConnectionMode coerces to SingleWriter even when DbMode.Standard is explicitly
-//   requested (confirmed live — there is no way to obtain raw pooled-connection behavior for
-//   Access through the public API at all), and with that governor active, 20 concurrent write
-//   tasks issued through one shared DatabaseContext all succeed with zero lock-conflict
-//   exceptions and all 20 rows land correctly. This empirically justifies the SingleWriter
-//   choice — it isn't just architecturally reasoned (Jet/ACE's page-level/.laccdb-file locking
-//   model resembling SQLite's), the failure it prevents is real and reproducible, and the
-//   governor genuinely prevents it for Access specifically.
+//   CoerceConnectionMode coerces DbMode.Best to SingleWriter, and with that governor active, 20
+//   concurrent write tasks issued through one shared DatabaseContext all succeed with zero
+//   lock-conflict exceptions and all 20 rows land correctly. This empirically justifies
+//   SingleWriter as the safe default — it isn't just architecturally reasoned (Jet/ACE's
+//   page-level/.laccdb-file locking model resembling SQLite's), the failure it prevents is real
+//   and reproducible, and the governor genuinely prevents it for Access specifically.
+//   An explicit DbMode.Standard request is honored rather than coerced (allowStandard: true on
+//   CoerceEmbeddedSingleWriterMode) — Access is documented by Microsoft as supporting multiple
+//   concurrent connections, and a caller who has read that documentation can choose to bypass the
+//   governor deliberately; DescribeStandardModeRisk surfaces the CONFIRMED-live failure above as
+//   a warning (not a block) when they do.
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."
@@ -127,9 +130,26 @@ internal sealed class AccessDialect : SqlDialect
 
     public override InMemoryKind DetectInMemoryKind(string? connectionString) => InMemoryKind.None;
 
+    // Unlike SqliteDialect, an explicit DbMode.Standard request is honored rather than coerced
+    // (allowStandard: true) — Access is documented as supporting multiple concurrent connections,
+    // so a caller who has read that documentation can opt in deliberately. DbMode.Best still
+    // resolves to SingleWriter. See DescribeStandardModeRisk for the CONFIRMED-live risk warning
+    // surfaced when this happens.
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb) =>
-        CoerceEmbeddedSingleWriterMode(requested, InMemoryKind.None);
+        CoerceEmbeddedSingleWriterMode(requested, InMemoryKind.None, allowStandard: true);
+
+    // CONFIRMED live (see file-level AI SUMMARY): raw OleDb concurrent writers against Access hit
+    // "OleDbException: Could not update; currently locked." — stronger evidence than DuckDB's
+    // (architecturally-reasoned but not reproduced) caution, so this names the actual failure.
+    internal override string DescribeStandardModeRisk() =>
+        "Access documents support for multiple concurrent connections, but this was CONFIRMED LIVE " +
+        "to fail under concurrent writers: two connections writing to the same table outside " +
+        "pengdows.crud's governance produced \"OleDbException: Could not update; currently " +
+        "locked.\" pengdows.crud's SingleWriter mode prevents this (verified live: 20 concurrent " +
+        "write tasks through one shared DatabaseContext, zero lock-conflict exceptions). Standard " +
+        "mode is honored here because it was explicitly requested, but expect intermittent " +
+        "lock-conflict failures under real write concurrency unless you serialize writes yourself.";
 
     // No MERGE/ON CONFLICT/ON DUPLICATE KEY of any kind.
     public override bool SupportsMerge => false;

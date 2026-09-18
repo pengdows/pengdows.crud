@@ -825,7 +825,7 @@ public partial class DatabaseContext
         }
 
         // Warn on mode/database mismatches (performance, not correctness)
-        WarnOnModeMismatch(coercedMode, product, requestedMode != coercedMode);
+        WarnOnModeMismatch(coercedMode, product, requestedMode != coercedMode, isLocalDb);
 
         return coercedMode;
     }
@@ -2374,7 +2374,7 @@ public partial class DatabaseContext
             reason);
     }
 
-    private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced)
+    private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced, bool isLocalDb)
     {
         // Don't warn if we auto-coerced (already logged that with EventIds.ModeCoerced)
         if (wasCoerced)
@@ -2410,21 +2410,43 @@ public partial class DatabaseContext
             }
         }
 
-        // Pattern 2: SQLite/DuckDB-like embedded engine, file-based, with Standard (potential lock
-        // contention). Deliberately checks IsEmbeddedSingleWriterEngine rather than
-        // !IsClientServerDatabase — the latter is also true for the Unknown-database fallback,
-        // which would wrongly get this SQLite/DuckDB-specific "SQLITE_BUSY" wording.
+        // Pattern 2: an embedded single-writer engine (DuckDB, Access — SQLite stays hard-coerced
+        // and never reaches this: see SqlDialect.CoerceEmbeddedSingleWriterMode's allowStandard
+        // parameter) explicitly running Standard mode against a file-based database. The engine's
+        // own documentation claims concurrent-connection/writer support; pengdows.crud honors the
+        // explicit choice but surfaces the dialect's own evidence-backed risk description
+        // (DescribeStandardModeRisk) instead of silently trusting that documentation. Deliberately
+        // checks IsEmbeddedSingleWriterEngine rather than !IsClientServerDatabase — the latter is
+        // also true for the Unknown-database fallback, which should not get this wording.
         if (dialect.IsEmbeddedSingleWriterEngine &&
             resolved == DbMode.Standard &&
             dialect.DetectInMemoryKind(_connectionString) == InMemoryKind.None)
         {
+            var risk = (dialect as SqlDialect)?.DescribeStandardModeRisk() ??
+                "This engine has single-writer constraints; concurrent writers may cause lock contention.";
             _logger.LogWarning(
                 diagnostics.EventIds.ModeMismatch,
-                "Standard mode used with file-based {Database}. " +
-                "File-based SQLite has single-writer constraints which may cause lock contention (SQLITE_BUSY errors). " +
-                "Consider SingleWriter mode for better write coordination, or enable WAL mode (PRAGMA journal_mode=WAL) " +
-                "for improved read/write concurrency.",
-                product
+                "Standard mode used with file-based {Database}. {Risk}",
+                product,
+                risk
+            );
+        }
+
+        // Pattern 3: SQL Server LocalDB explicitly running Standard mode. Unlike Pattern 2, this is
+        // purely a performance/lifecycle tradeoff, not a correctness risk — LocalDB is a real
+        // client-server engine under the hood, so Standard mode works correctly; it just means
+        // LocalDB's auto-shutdown-after-idle behavior isn't masked by a PreventDatabaseUnload
+        // sentinel. Only relevant to a caller whose workload actually goes idle long enough to
+        // trigger it — see SqlServerDialect.CoerceConnectionMode.
+        if (isLocalDb && resolved == DbMode.Standard)
+        {
+            _logger.LogWarning(
+                diagnostics.EventIds.ModeMismatch,
+                "Standard mode used with SQL Server LocalDB. LocalDB automatically shuts down " +
+                "after an idle period, which incurs a reconnect cost on next use; " +
+                "PreventDatabaseUnload avoids that cost by holding one sentinel connection open. " +
+                "This is irrelevant if your workload keeps the database busy continuously — " +
+                "Standard mode is honored here because it was explicitly requested."
             );
         }
     }

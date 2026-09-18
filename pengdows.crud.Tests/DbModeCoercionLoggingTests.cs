@@ -52,8 +52,13 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void DuckDbFile_StandardMode_CoercesToSingleWriter_WithWarning()
+    public void DuckDbFile_StandardMode_IsHonored_WithUnsafeWarning()
     {
+        // DuckDB documents support for concurrent connections, so an explicit Standard request is
+        // now honored (Best still defaults to SingleWriter) — but pengdows.crud surfaces a
+        // dialect-specific risk warning rather than silently trusting that documentation. Not a
+        // "DbMode override" (that mechanism only fires on an actual coercion); this is
+        // WarnOnModeMismatch's Pattern 2.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -63,8 +68,11 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.DuckDB), lf);
-        Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Standard mode used with file-based"));
     }
 
     [Fact]
@@ -182,8 +190,14 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void SqlServerLocalDb_StandardMode_CoercesToKeepAlive_WithWarning()
+    public void SqlServerLocalDb_StandardMode_IsHonored_WithPerformanceWarning()
     {
+        // PreventDatabaseUnload's sentinel only matters if the workload actually goes idle long
+        // enough to trigger LocalDB's auto-shutdown; a caller who knows their workload stays busy
+        // can opt out via an explicit Standard request (Best still auto-selects
+        // PreventDatabaseUnload — see SqlServerLocalDb_BestMode_AutoSelectsKeepAlive_WithInfo).
+        // Not a "DbMode override" (no coercion happened); this is WarnOnModeMismatch's Pattern 3,
+        // a performance-only warning distinct from DuckDB/Access's correctness-risk wording.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -193,8 +207,11 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
-        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Standard mode used with SQL Server LocalDB"));
     }
 
     [Fact]

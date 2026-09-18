@@ -84,13 +84,34 @@ public class AccessDialectTests
 
     [Theory]
     [InlineData(DbMode.Best, DbMode.SingleWriter)]
-    [InlineData(DbMode.Standard, DbMode.SingleWriter)]
+    [InlineData(DbMode.PreventDatabaseUnload, DbMode.SingleWriter)]
     public void CoerceConnectionMode_CoercesToSingleWriter(DbMode requested, DbMode expected)
     {
         // Access is a file-based embedded engine (architecturally in SQLite's category, not
         // Sybase/Db2's) — coerced the same way SqliteDialect/DuckDbDialect are.
         var (mode, _) = CreateDialect().CoerceConnectionMode(requested, "Provider=Microsoft.ACE.OLEDB.16.0;Data Source=test.accdb;", isLocalDb: false);
         Assert.Equal(expected, mode);
+    }
+
+    [Fact]
+    public void CoerceConnectionMode_ExplicitStandard_IsHonored()
+    {
+        // Access documents support for multiple concurrent connections, so an explicit Standard
+        // request is honored (Best still defaults to SingleWriter) — but this was CONFIRMED LIVE
+        // to be unsafe under real write concurrency; see DescribeStandardModeRisk below and
+        // AccessDialect.cs's file-level AI SUMMARY for the reproduced OleDbException.
+        var (mode, reason) = CreateDialect().CoerceConnectionMode(DbMode.Standard,
+            "Provider=Microsoft.ACE.OLEDB.16.0;Data Source=test.accdb;", isLocalDb: false);
+        Assert.Equal(DbMode.Standard, mode);
+        Assert.Equal(string.Empty, reason);
+    }
+
+    [Fact]
+    public void DescribeStandardModeRisk_NamesConfirmedLiveFailure()
+    {
+        var risk = CreateDialect().DescribeStandardModeRisk();
+        Assert.Contains("OleDbException", risk);
+        Assert.Contains("currently locked", risk);
     }
 
     [Fact]

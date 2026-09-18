@@ -85,20 +85,56 @@ public class DialectCoerceConnectionModeTests
         Assert.Contains("Best selects SingleWriter", reason);
     }
 
-    [Theory]
-    [InlineData(SupportedDatabase.Sqlite)]
-    [InlineData(SupportedDatabase.DuckDB)]
-    [InlineData(SupportedDatabase.Access)]
-    public void EmbeddedDialect_FileOrSharedMemory_UnsafeExplicitModes_CoerceToSingleWriter(SupportedDatabase db)
+    [Fact]
+    public void Sqlite_FileOrSharedMemory_UnsafeExplicitModes_CoerceToSingleWriter()
     {
-        var dialect = CreateDialect(db);
-        var cs = FileConnectionString(db);
+        // Sqlite never opts into allowStandard — Standard/PreventDatabaseUnload both stay
+        // hard-coerced, unlike DuckDB/Access below.
+        var dialect = CreateDialect(SupportedDatabase.Sqlite);
+        var cs = FileConnectionString(SupportedDatabase.Sqlite);
 
         var (standardMode, _) = dialect.CoerceConnectionMode(DbMode.Standard, cs, isLocalDb: false);
         var (preventUnloadMode, _) = dialect.CoerceConnectionMode(DbMode.PreventDatabaseUnload, cs, isLocalDb: false);
 
         Assert.Equal(DbMode.SingleWriter, standardMode);
         Assert.Equal(DbMode.SingleWriter, preventUnloadMode);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Access)]
+    public void EmbeddedDialect_FileOrSharedMemory_PreventDatabaseUnload_StillCoercesToSingleWriter(
+        SupportedDatabase db)
+    {
+        // PreventDatabaseUnload's "keep an idle-unload-prone server attachment alive" purpose
+        // doesn't apply to a file-based embedded engine — only Standard was carved out for
+        // DuckDB/Access, not PreventDatabaseUnload.
+        var dialect = CreateDialect(db);
+        var cs = FileConnectionString(db);
+
+        var (mode, _) = dialect.CoerceConnectionMode(DbMode.PreventDatabaseUnload, cs, isLocalDb: false);
+
+        Assert.Equal(DbMode.SingleWriter, mode);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Access)]
+    public void EmbeddedDialect_FileOrSharedMemory_ExplicitStandard_IsHonored(SupportedDatabase db)
+    {
+        // Both DuckDB and Access document support for concurrent connections/writers, so an
+        // explicit Standard request is honored (Best still defaults to SingleWriter) — unlike
+        // Sqlite, which stays hard-coerced regardless. DatabaseContext.WarnOnModeMismatch layers
+        // an evidence-backed risk warning on top of this (see DbModeCoercionLoggingTests and each
+        // dialect's DescribeStandardModeRisk override); this test only locks down the coercion
+        // decision itself.
+        var dialect = CreateDialect(db);
+        var cs = FileConnectionString(db);
+
+        var (mode, reason) = dialect.CoerceConnectionMode(DbMode.Standard, cs, isLocalDb: false);
+
+        Assert.Equal(DbMode.Standard, mode);
+        Assert.Equal(string.Empty, reason);
     }
 
     [Theory]
@@ -143,10 +179,26 @@ public class DialectCoerceConnectionModeTests
     }
 
     [Fact]
-    public void SqlServer_LocalDb_ForcesPreventDatabaseUnload_RegardlessOfRequestedMode()
+    public void SqlServer_LocalDb_ExplicitStandard_IsHonored()
     {
+        // PreventDatabaseUnload's sentinel only matters for a workload that actually goes idle
+        // long enough to trigger LocalDB's auto-shutdown; a caller who knows their workload stays
+        // busy can opt out via an explicit Standard request. Best still auto-selects
+        // PreventDatabaseUnload (see SqlServer_NotLocalDb_BehavesAsOrdinaryFullServer's sibling
+        // LocalDb Best coverage in DbModeCoercionLoggingTests).
         var dialect = CreateDialect(SupportedDatabase.SqlServer);
         var (mode, reason) = dialect.CoerceConnectionMode(DbMode.Standard, "Server=(localdb)\\mssqllocaldb", isLocalDb: true);
+        Assert.Equal(DbMode.Standard, mode);
+        Assert.Equal(string.Empty, reason);
+    }
+
+    [Fact]
+    public void SqlServer_LocalDb_OtherExplicitModes_ForcePreventDatabaseUnload()
+    {
+        // Only Standard was carved out for LocalDB — every other explicit request (and Best) still
+        // forces PreventDatabaseUnload, matching the pre-existing unconditional behavior.
+        var dialect = CreateDialect(SupportedDatabase.SqlServer);
+        var (mode, reason) = dialect.CoerceConnectionMode(DbMode.SingleWriter, "Server=(localdb)\\mssqllocaldb", isLocalDb: true);
         Assert.Equal(DbMode.PreventDatabaseUnload, mode);
         Assert.Contains("LocalDB requires PreventDatabaseUnload", reason);
     }

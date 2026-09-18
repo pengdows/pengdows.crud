@@ -340,24 +340,37 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
-    /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB): isolated
+    /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB, Access): isolated
     /// in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the most
-    /// functional safe mode (Best selects it, and Standard/PreventDatabaseUnload coerce to it too),
+    /// functional safe mode (Best selects it, and PreventDatabaseUnload always coerces to it),
     /// while SingleConnection/SingleWriter explicit requests are honored as-is.
     /// <para>
-    /// Standard is coerced rather than honored because these engines fail unpredictably under
-    /// concurrent writers from the same process — SQLite hits SQLITE_BUSY/lock contention; DuckDB's
-    /// optimistic concurrency control aborts conflicting transactions. Both failure modes are
-    /// workload- and timing-dependent: a workload can run clean under Standard for a long time and
-    /// then start failing intermittently once write patterns overlap under load, which makes the
-    /// problem easy to miss in testing. SingleWriter forces the writer governor to a single permit,
-    /// which prevents concurrent writers from ever reaching the engine (for writes routed through
-    /// the same DatabaseContext) instead of requiring callers to detect and retry the failures.
+    /// Standard is coerced to SingleWriter by default because these engines fail unpredictably
+    /// under concurrent writers from the same process — SQLite hits SQLITE_BUSY/lock contention;
+    /// DuckDB's optimistic concurrency control aborts conflicting transactions; Access surfaces a
+    /// raw OleDbException lock conflict (CONFIRMED live — see AccessDialect.cs). Both failure modes
+    /// are workload- and timing-dependent: a workload can run clean under Standard for a long time
+    /// and then start failing intermittently once write patterns overlap under load, which makes
+    /// the problem easy to miss in testing. SingleWriter forces the writer governor to a single
+    /// permit, which prevents concurrent writers from ever reaching the engine (for writes routed
+    /// through the same DatabaseContext) instead of requiring callers to detect and retry the
+    /// failures.
     /// </para>
-    /// Factored out so SqliteDialect and DuckDbDialect — which only differ in how they recognize
-    /// an in-memory connection string — don't duplicate this decision.
+    /// <para>
+    /// <paramref name="allowStandard"/> lets a dialect opt an explicit <see cref="DbMode.Standard"/>
+    /// request out of that coercion and have it honored instead (Best still resolves to
+    /// SingleWriter either way) — DuckDB and Access both opt in, since both are documented by their
+    /// own vendors as supporting concurrent connections/writers, and a caller who has read that
+    /// documentation should be able to choose it deliberately. SQLite leaves this false and stays
+    /// hard-coerced. See each opting-in dialect's <see cref="DescribeStandardModeRisk"/> override
+    /// for the evidence <c>DatabaseContext.WarnOnModeMismatch</c> surfaces when this happens.
+    /// </para>
+    /// Factored out so SqliteDialect, DuckDbDialect, and AccessDialect — which only differ in how
+    /// they recognize an in-memory connection string (Access has none) and whether they opt into
+    /// <paramref name="allowStandard"/> — don't duplicate this decision.
     /// </summary>
-    protected static (DbMode Mode, string Reason) CoerceEmbeddedSingleWriterMode(DbMode requested, InMemoryKind kind)
+    protected static (DbMode Mode, string Reason) CoerceEmbeddedSingleWriterMode(DbMode requested, InMemoryKind kind,
+        bool allowStandard = false)
     {
         if (kind == InMemoryKind.Isolated)
         {
@@ -369,6 +382,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return (DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
         }
 
+        if (allowStandard && requested == DbMode.Standard)
+        {
+            return (DbMode.Standard, string.Empty);
+        }
+
         if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
         {
             return (DbMode.SingleWriter,
@@ -377,6 +395,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         return (requested, string.Empty);
     }
+
+    /// <summary>
+    /// Risk description surfaced by <c>DatabaseContext.WarnOnModeMismatch</c> (Pattern 2) when an
+    /// embedded single-writer engine is actually running with an explicitly-honored
+    /// <see cref="DbMode.Standard"/> — only reachable for a dialect that opts into
+    /// <c>allowStandard</c> on <see cref="CoerceEmbeddedSingleWriterMode"/>; SQLite never reaches
+    /// this, since it stays hard-coerced. Generic fallback text; override with engine-specific
+    /// evidence (see <c>DuckDbDialect</c>/<c>AccessDialect</c>).
+    /// </summary>
+    internal virtual string DescribeStandardModeRisk() =>
+        "This engine documents support for concurrent connections, but pengdows.crud has not " +
+        "independently verified safe concurrent-writer behavior under Standard mode; it may cause " +
+        "intermittent lock-contention or transaction-conflict errors under real write concurrency. " +
+        "Consider SingleWriter mode unless you have verified your workload's concurrency safety.";
 
     public virtual string ParameterMarker => "?";
 
