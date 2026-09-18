@@ -81,6 +81,14 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private readonly ObservableCounter<long> _poolTurnstileTimeoutsTotal;
     private readonly ObservableCounter<long> _poolCanceledWaitsTotal;
 
+    // ── OTel semantic-convention instruments (additive — alongside the pengdows.* names above) ─
+    private readonly Histogram<double> _operationDuration;
+    private readonly ObservableUpDownCounter<int> _semconvConnectionCount;
+    private readonly ObservableUpDownCounter<int> _semconvConnectionMax;
+    private readonly ObservableUpDownCounter<int> _semconvConnectionPendingRequests;
+    private readonly ObservableCounter<long> _semconvConnectionTimeouts;
+    private readonly ActivityListener _activityListener;
+
     public PengdowsMetricsObserver()
         : this(new Meter(MeterName,
                    typeof(PengdowsMetricsObserver).Assembly.GetName().Version?.ToString(3)), true)
@@ -181,6 +189,181 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
             () => GetPoolCounters(s => s.TotalTurnstileTimeouts), "{timeout}", "Total turnstile acquisition timeouts");
         _poolCanceledWaitsTotal = _meter.CreateObservableCounter("pengdows.db.client.pool.canceled_waits_total",
             () => GetPoolCounters(s => s.TotalCanceledWaits), "{cancellation}", "Total canceled pool wait operations");
+
+        // ── OTel semantic-convention instruments ──────────────────────────
+        // https://opentelemetry.io/docs/specs/semconv/db/database-metrics/
+        _operationDuration = _meter.CreateHistogram("db.client.operation.duration", "s",
+            "Duration of database client operations",
+            advice: new InstrumentAdvice<double>
+            {
+                HistogramBucketBoundaries = new[] { 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10 }
+            });
+        _semconvConnectionCount = _meter.CreateObservableUpDownCounter("db.client.connection.count",
+            GetSemconvConnectionCount, "{connection}",
+            "The number of connections currently in state described by the state attribute");
+        _semconvConnectionMax = _meter.CreateObservableUpDownCounter("db.client.connection.max",
+            () => GetSemconvPoolGauges(s => s.MaxSlots), "{connection}",
+            "The maximum number of open connections allowed");
+        _semconvConnectionPendingRequests = _meter.CreateObservableUpDownCounter("db.client.connection.pending_requests",
+            () => GetSemconvPoolGauges(s => s.Queued), "{request}",
+            "The number of current pending requests for an open connection");
+        _semconvConnectionTimeouts = _meter.CreateObservableCounter("db.client.connection.timeouts",
+            () => GetSemconvPoolCounters(s => s.TotalSlotTimeouts + s.TotalTurnstileTimeouts), "{timeout}",
+            "The number of connection timeouts that have occurred trying to obtain a connection from the pool");
+
+        // Derives db.client.operation.duration from the same ActivitySource("pengdows.crud")
+        // spans SqlContainer already emits for tracing — no new per-call plumbing in core.
+        // Filtered to Track()ed contexts via the pengdows.context_id tag so that unrelated,
+        // concurrently-running activity (e.g. other tests) is never recorded here.
+        _activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "pengdows.crud",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = OnActivityStopped
+        };
+        ActivitySource.AddActivityListener(_activityListener);
+    }
+
+    private IEnumerable<Measurement<int>> GetSemconvConnectionCount()
+    {
+        foreach (var kv in _contexts)
+        {
+            var context = kv.Value;
+            if (context.IsDisposed)
+            {
+                Untrack(context);
+                continue;
+            }
+
+            foreach (var label in new[] { PoolLabel.Reader, PoolLabel.Writer })
+            {
+                var snapshot = context.GetPoolStatisticsSnapshot(label);
+                var tags = new TagList
+                {
+                    { "db.client.connection.pool.name", $"{context.Name}.{label.ToString().ToLowerInvariant()}" },
+                    { "db.client.connection.state", "used" }
+                };
+                yield return new Measurement<int>(snapshot.InUse, tags);
+            }
+        }
+    }
+
+    private IEnumerable<Measurement<int>> GetSemconvPoolGauges(Func<PoolStatisticsSnapshot, int> selector)
+    {
+        foreach (var kv in _contexts)
+        {
+            var context = kv.Value;
+            if (context.IsDisposed)
+            {
+                Untrack(context);
+                continue;
+            }
+
+            foreach (var label in new[] { PoolLabel.Reader, PoolLabel.Writer })
+            {
+                var snapshot = context.GetPoolStatisticsSnapshot(label);
+                var tags = new TagList
+                {
+                    { "db.client.connection.pool.name", $"{context.Name}.{label.ToString().ToLowerInvariant()}" }
+                };
+                yield return new Measurement<int>(selector(snapshot), tags);
+            }
+        }
+    }
+
+    private IEnumerable<Measurement<long>> GetSemconvPoolCounters(Func<PoolStatisticsSnapshot, long> selector)
+    {
+        foreach (var kv in _contexts)
+        {
+            var context = kv.Value;
+            if (context.IsDisposed)
+            {
+                Untrack(context);
+                continue;
+            }
+
+            foreach (var label in new[] { PoolLabel.Reader, PoolLabel.Writer })
+            {
+                var snapshot = context.GetPoolStatisticsSnapshot(label);
+                var tags = new TagList
+                {
+                    { "db.client.connection.pool.name", $"{context.Name}.{label.ToString().ToLowerInvariant()}" }
+                };
+                yield return new Measurement<long>(selector(snapshot), tags);
+            }
+        }
+    }
+
+    private void OnActivityStopped(Activity activity)
+    {
+        if (activity.Source.Name != "pengdows.crud")
+        {
+            return;
+        }
+
+        var contextIdTag = activity.GetTagItem("pengdows.context_id") as string;
+        if (contextIdTag == null || !Guid.TryParse(contextIdTag, out var rootId) || !_contexts.ContainsKey(rootId))
+        {
+            return; // not a Track()ed context — do not record (see class-level note on isolation)
+        }
+
+        var dbSystemTag = activity.GetTagItem("db.system") as string;
+        var dbNameTag = activity.GetTagItem("db.name") as string;
+        var dbOperationTag = activity.GetTagItem("db.operation") as string;
+
+        var tags = new TagList
+        {
+            { "db.system.name", MapDbSystemNameTag(dbSystemTag) },
+            { "db.namespace", dbNameTag },
+            { "db.operation.name", dbOperationTag }
+        };
+
+        if (activity.Status == ActivityStatusCode.Error)
+        {
+            tags.Add("error.type", FindExceptionTypeTag(activity) ?? "unknown");
+        }
+
+        _operationDuration.Record(activity.Duration.TotalSeconds, tags);
+    }
+
+    private static string MapDbSystemNameTag(string? dbSystemTag)
+    {
+        if (dbSystemTag == null)
+        {
+            return "other_sql";
+        }
+
+        foreach (var product in Enum.GetValues<SupportedDatabase>())
+        {
+            if (product != SupportedDatabase.Unknown &&
+                string.Equals(product.ToString(), dbSystemTag, StringComparison.OrdinalIgnoreCase))
+            {
+                return DbSystemNameMapper.Map(product);
+            }
+        }
+
+        return dbSystemTag;
+    }
+
+    private static string? FindExceptionTypeTag(Activity activity)
+    {
+        foreach (var evt in activity.Events)
+        {
+            if (evt.Name != "exception")
+            {
+                continue;
+            }
+
+            foreach (var tag in evt.Tags)
+            {
+                if (tag.Key == "exception.type")
+                {
+                    return tag.Value as string;
+                }
+            }
+        }
+
+        return null;
     }
 
     public void Track(IDatabaseContext context)
@@ -363,6 +546,8 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
         {
             context.MetricsUpdated -= HandleMetricsUpdated;
         }
+
+        _activityListener.Dispose();
 
         if (_ownsMeter)
         {

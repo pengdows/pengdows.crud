@@ -2059,6 +2059,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             activity.SetTag("db.name", _context.Name);
             activity.SetTag("db.statement", Truncate(Query.ToString(), MaxTelemetryStatementLength));
             activity.SetTag("db.operation", operationName);
+            activity.SetTag("pengdows.context_id", _context.RootId.ToString());
         }
         return activity;
     }
