@@ -1,8 +1,11 @@
 using System;
 using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -17,6 +20,111 @@ public class FirebirdDialectTests
             NullLogger<FirebirdDialect>.Instance);
         Assert.Equal("\"", dialect.QuotePrefix);
         Assert.Equal("\"", dialect.QuoteSuffix);
+    }
+
+    [Fact]
+    public void RequiresExplicitRollbackAfterFailedWrite_ReturnsTrue_ForFirebird()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        Assert.True(dialect.RequiresExplicitRollbackAfterFailedWrite);
+    }
+
+    [Fact]
+    public void RequiresConnectionPoolResetForDdl_ReturnsTrue_ForFirebird()
+    {
+        // SqlContainer gates the (relatively expensive) IsDdlStatement(Query.ToString()) check on
+        // this flag before doing any string work — must be true for Firebird, the only dialect
+        // that actually needs ResetConnectionPoolForDdl called.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        Assert.True(dialect.RequiresConnectionPoolResetForDdl);
+    }
+
+    [Fact]
+    public void RequiresConnectionPoolResetForDdl_ReturnsFalse_ForNonFirebirdDialect()
+    {
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql),
+            NullLogger<PostgreSqlDialect>.Instance);
+        Assert.False(dialect.RequiresConnectionPoolResetForDdl);
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_NoClearPoolMethodOnConnectionType_DoesNotThrow()
+    {
+        // fakeDb's connection type has no static ClearPool(string) method — the reflection
+        // lookup must resolve to null and no-op cleanly, rather than throwing, so a caller on a
+        // real FirebirdSql.Data.FirebirdClient connection gets the pool reset while every other
+        // (including test-double) connection type is unaffected.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+
+        var ex = Record.Exception(() => dialect.ResetConnectionPoolForDdl("Data Source=test"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DdlStatement_TriggersPoolResetHookWithoutThrowing()
+    {
+        // End-to-end: SqlContainer must detect a DDL leading keyword and call
+        // FirebirdDialect.ResetConnectionPoolForDdl before executing — against fakeDb's
+        // connection type (no real ClearPool method), that call is a safe no-op, so the
+        // statement must still complete normally rather than throw.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        await using var container = context.CreateSqlContainer("CREATE TABLE \"ddl_probe\" (\"id\" INTEGER)");
+
+        var ex = await Record.ExceptionAsync(async () => await container.ExecuteNonQueryAsync());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_FailedWrite_IssuesRollbackOnFirebird()
+    {
+        // Regression for the P0 gap found in review: the failed-write rollback fix originally
+        // only lived in ExecuteNonQueryAsync's finally block. Firebird's most common write path
+        // (any [Id(false)] autoincrement CREATE) uses GeneratedKeyPlan.Returning, which executes
+        // through ExecuteReaderAsync/ExecuteScalarCore — a totally separate code path — so the
+        // rollback never fired for that scenario. This reproduces it directly against
+        // ExecuteReaderAsync without needing a full TableGateway/entity round trip.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        const string failingSql = "INSERT INTO \"probe\" (\"id\") VALUES (1) RETURNING \"id\"";
+        factory.SetCommandFailure(failingSql, new InvalidOperationException("simulated provider failure"));
+
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        await using var container = context.CreateSqlContainer(failingSql);
+
+        var ex = await Record.ExceptionAsync(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+
+        Assert.NotNull(ex);
+        Assert.Contains(factory.CreatedConnections,
+            c => c.ExecutedNonQueryTexts.Contains("ROLLBACK"));
+    }
+
+    [Fact]
+    public async Task TryRollBackFailedWriteAsync_DoesNotFireInsideExplicitTransaction()
+    {
+        // Regression for the second P0 gap: a bare, un-enlisted ROLLBACK must never be issued
+        // against a TransactionContext's pinned connection — that connection's commit/rollback
+        // lifecycle belongs entirely to the transaction itself (see TransactionContext.Dispose),
+        // and firing our own ROLLBACK underneath it could corrupt or bypass that ownership.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        const string failingSql = "INSERT INTO \"probe\" (\"id\") VALUES (1) RETURNING \"id\"";
+        factory.SetCommandFailure(failingSql, new InvalidOperationException("simulated provider failure"));
+
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Firebird", factory);
+        await using var txn = context.BeginTransaction();
+        await using var container = txn.CreateSqlContainer(failingSql);
+
+        var ex = await Record.ExceptionAsync(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+
+        Assert.NotNull(ex);
+        Assert.DoesNotContain(factory.CreatedConnections,
+            c => c.ExecutedNonQueryTexts.Contains("ROLLBACK"));
     }
 
     [Fact]
