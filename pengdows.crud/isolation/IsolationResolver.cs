@@ -223,6 +223,18 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
+            // Verified live against ASE 16.0 SP02: AseConnection.BeginTransaction accepts all
+            // four standard IsolationLevel values, and a subsequent "SELECT @@isolation" inside
+            // each transaction confirms the server genuinely applied it — 0/1/2/3 map exactly to
+            // ReadUncommitted/ReadCommitted/RepeatableRead/Serializable, not just a client-side
+            // no-op.
+            SupportedDatabase.SybaseASE => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -317,6 +329,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // CS, Db2's default
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
+            },
+            SupportedDatabase.SybaseASE => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

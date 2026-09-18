@@ -124,7 +124,14 @@ internal class SybaseDialect : SqlDialect
     // Verified live: MERGE works (both WHEN MATCHED / WHEN NOT MATCHED), but a trailing
     // semicolon is rejected ("Incorrect syntax near ';'"), unlike SQL Server.
     public override bool SupportsMerge => true;
-    public override bool SupportsBatchUpdate => true;
+
+    // Verified live: a MERGE whose USING source is a multi-row VALUES-derived table
+    // ("MERGE INTO t USING (VALUES (@b0, ...), (@b1, ...)) AS s(...) ON ...") fails with
+    // "Incorrect syntax near the keyword 'VALUES'." ASE has no VALUES-derived-table-as-MERGE-source
+    // support (unlike the single-row SELECT-derived USING source RenderMergeSource uses, which
+    // does work — see SupportsMerge above). Falls back to one BuildUpdate container per entity
+    // instead, the same safe fallback SQLite/MySQL/MariaDB/Firebird use.
+    public override bool SupportsBatchUpdate => false;
 
     // Verified live: "Incorrect syntax near ';'." when BuildUpsertMerge's generated MERGE
     // statement ends with a trailing semicolon — unlike SQL Server, ASE rejects it.
@@ -136,94 +143,11 @@ internal class SybaseDialect : SqlDialect
     // executes fine as one round trip.
     public override bool SupportsSemicolonStatementSeparator => false;
 
-    /// <inheritdoc />
-    public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
-        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
-    {
-        if (rowCount <= 0)
-        {
-            return;
-        }
-
-        query.Append("MERGE INTO ");
-        query.Append(tableName);
-        query.Append(" AS t USING (VALUES ");
-
-        var allCols = new List<string>(keyColumns);
-        allCols.AddRange(columnNames);
-
-        var paramIdx = 0;
-        for (var row = 0; row < rowCount; row++)
-        {
-            if (row > 0)
-            {
-                query.Append(", ");
-            }
-
-            query.Append('(');
-            for (var col = 0; col < allCols.Count; col++)
-            {
-                if (col > 0)
-                {
-                    query.Append(", ");
-                }
-
-                var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
-            }
-
-            query.Append(')');
-        }
-
-        query.Append(") AS s(");
-        for (var i = 0; i < allCols.Count; i++)
-        {
-            if (i > 0)
-            {
-                query.Append(", ");
-            }
-
-            query.Append(allCols[i]);
-        }
-
-        query.Append(") ON (");
-        for (var i = 0; i < keyColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                query.Append(" AND ");
-            }
-
-            query.Append("t.");
-            query.Append(keyColumns[i]);
-            query.Append(" = s.");
-            query.Append(keyColumns[i]);
-        }
-
-        query.Append(") WHEN MATCHED THEN UPDATE SET ");
-        for (var i = 0; i < columnNames.Count; i++)
-        {
-            if (i > 0)
-            {
-                query.Append(", ");
-            }
-
-            query.Append(columnNames[i]);
-            query.Append(" = s.");
-            query.Append(columnNames[i]);
-        }
-
-        // Deliberately no trailing ';' — ASE rejects it after a MERGE statement.
-    }
+    // (No BuildBatchUpdateSql override: SupportsBatchUpdate is false above, so
+    // TableGateway.BuildBatchUpdate never calls it. This dialect previously carried an override
+    // here generating "MERGE INTO t USING (VALUES (...), (...)) AS s(...)" — the unsupported
+    // VALUES-derived-table-as-MERGE-source construct documented above — removed rather than left
+    // as unreachable, known-broken code.)
 
     // ASE has no OUTPUT/RETURNING clause. IDENTITY columns exist and @@IDENTITY works
     // (verified live), so generated keys are read back via a compound statement.
