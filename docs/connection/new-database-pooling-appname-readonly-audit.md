@@ -47,9 +47,18 @@ helper `OracleDialect` uses. Its discriminator gap remains open: two candidates 
 successfully (`Optofc=1`, `DelimIdent=true`) but neither is confirmed behaviorally inert, so
 nothing was implemented rather than guessing (see its section below).
 
-The remaining gaps (session-SQL read-only claim for Db2/HANA, pool discriminators for
-HANA/Informix, and the Db2 `MaxPoolSize=0` question) still require live server verification — see
-"Next steps" at the bottom for what's still open.
+**Db2's questions are now also resolved (2026-09-18, live against a real `ibmcom/db2:11.5.8.0`
+container)**: `SET TRANSACTION READ ONLY` is a flat syntax error there too (contradicting the
+original ANSI-plausibility assumption), so left unimplemented, matching Sybase's identical
+conclusion. Separately, a real, previously-undiscovered bug was found and fixed:
+`Db2Dialect.MaxPoolSizeSettingName`/`MinPoolSizeSettingName` were never set at all, so any
+explicit `Max Pool Size` a caller wrote into their own Db2 connection string was silently ignored.
+The driver itself was also confirmed to not enforce `Max Pool Size` as a real cap at any value —
+pengdows.crud's own in-process `PoolGovernor` is Db2's sole real admission-control safety net.
+
+The only remaining gaps (HANA's session-SQL read-only claim and HANA/Informix's pool
+discriminators) still require live server verification — see "Next steps" at the bottom for what's
+still open.
 
 ## Why this document exists
 
@@ -115,19 +124,17 @@ research only, per instruction): `ApplicationNameSettingName => "applicationName
 `ApplicationNameSettingName` would be set, the reader/writer pool-key split comes for free — no
 `ReadOnlyPoolDiscriminatorSettingName` needed.
 
-### Db2 (`IBM.Data.Db2.DB2ConnectionStringBuilder`, confirmed via `net.ibm.data.db2` 8.0.0.400)
+### Db2 (`IBM.Data.Db2.DB2ConnectionStringBuilder`, confirmed via `net.ibm.data.db2` 8.0.0.400) — RESOLVED (2026-09-18, live against a real `ibmcom/db2:11.5.8.0` container)
 
 | Capability | Real keyword | Status |
 |---|---|---|
-| Application Name | `ClientApplicationName` | **Confirmed** in the connection-string builder. (`ProgramName` also exists as a second, lower-level candidate — `ClientApplicationName` is the one that surfaces in Db2's own connection-monitoring views, e.g. `SYSIBMADM.APPLICATIONS`.) |
-| Pooling | `Pooling` (bool), `MaxPoolSize` (int), `MinPoolSize` (int) | **Confirmed**, full min/max sizing support, not just an on/off switch. **Default values (fresh builder, no connection string set): `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=0`.** `MaxPoolSize=0` is the one outlier among all six databases here — every other driver defaults to `100`. `0` most likely means "no explicit cap on the .NET builder side, provider decides internally" rather than literally zero connections, but this needs live confirmation before trusting it — don't assume it behaves like the others' `100` default. |
-| Read-only (connection string) | none found | No dedicated keyword among 89 inspected properties. |
-| Read-only (session SQL) | `SET TRANSACTION READ ONLY` — **not yet live-verified** | Standard ANSI SQL:1999; Db2 LUW is known for strong SQL-standard conformance, so this is plausible but unconfirmed against a real server. |
+| Application Name | `ClientApplicationName` | **Applied.** Confirmed in the connection-string builder. (`ProgramName` also exists as a second, lower-level candidate — `ClientApplicationName` is the one that surfaces in Db2's own connection-monitoring views, e.g. `SYSIBMADM.APPLICATIONS`.) |
+| Pooling | `Pooling` (bool), `Max Pool Size` (int), `Min Pool Size` (int) | **Applied — and a real, separate bug found and fixed.** `Db2Dialect.MaxPoolSizeSettingName`/`MinPoolSizeSettingName` were never set at all (inherited the base `null`), so `PoolingConfigReader` silently ignored ANY explicit `Max Pool Size` a caller wrote into their own Db2 connection string and always used the dialect default — a real, previously-undiscovered gap distinct from the `MaxPoolSize=0` question below. Fixed via TDD (`Db2DialectTests.cs`). |
+| `MaxPoolSize=0` default — is it "unbounded" or "literally zero"? | N/A | **RESOLVED, but the bigger finding subsumes it**: `pengdows.crud`'s own `ResolveEffectiveMaxPoolSize` (in `DatabaseContext.Initialization.cs`) already special-cases a connection-string `MaxPoolSize=0` as "fall back to dialect default" generically, dialect-agnostically — this was already safe before today's fix, once `MaxPoolSizeSettingName` is wired up at all. Separately, live-confirmed the driver's `Max Pool Size` setting **does not actually enforce anything** as a client-side cap on physical connections at ANY value (0/5/100/unset all behaved identically — 150 concurrent opens succeeded in ~0.01s even with `Max Pool Size=5` explicitly set; DB2's own `SYSIBMADM.APPLICATIONS` admin view confirmed 313 genuine concurrent server-side sessions while those connections were held open, ruling out a client-side illusion). `pengdows.crud`'s own `PoolGovernor` (semaphore-based, fully in-process) is Db2's ONLY real safety net — more so than for drivers that also enforce their own cap as defense-in-depth. |
+| Read-only (connection string) | none found | Confirmed no dedicated keyword among the full property list. The only candidate, `IsReadOnly`, is `DbConnectionStringBuilder`'s own base-class "is this builder locked" indicator (present on every ADO.NET builder) — not a Db2-specific property; the compiler refuses assigning to it. |
+| Read-only (session SQL) | `SET TRANSACTION READ ONLY` — **REJECTED, does not exist** | Live-tested and confirmed to be a flat SYNTAX ERROR: `SQL0104N An unexpected token "READ ONLY" was found following "SET TRANSACTION". Expected tokens may include: "<space>".` Db2 LUW's ANSI conformance does NOT extend to this statement, contradicting the original plausibility assumption. |
 
-Recommendation once live-verified: prefer the connection string if a property is found on a
-closer look at IBM's own docs (none found here); otherwise the session-SQL fallback is
-acceptable per the stated priority (connection string > session > nothing). Since
-`ApplicationNameSettingName` would be set, no separate pool discriminator is needed.
+**Conclusion**: no database-level read-only enforcement mechanism exists for Db2 reachable via this driver — `GetReadOnlyConnectionParameter()` stays at the base `null`/no-op, matching the same conclusion independently reached for Sybase ASE the same day (see that section below). `pengdows.crud`'s own `ReadWriteMode.ReadOnly` pre-flight check still applies regardless. See `Db2Dialect.cs`'s own comments for the full dated trail.
 
 ### SAP HANA (`Sap.Data.Hana.HanaConnectionStringBuilder`, confirmed via `sap.data.hana.net.v8.0` 2.29.27)
 
@@ -206,7 +213,7 @@ up.
 | Database | App Name keyword | Pooling on/off | Min/Max pool size | Default MinPoolSize / MaxPoolSize | Read-only (conn string) | Read-only (session, unverified) | Discriminator needed? |
 |---|---|---|---|---|---|---|---|
 | FlatFile | `applicationName` ✓ | n/a (no real pool concept) | n/a | n/a | `readonly=true` ✓ hard-enforced | — | No |
-| Db2 | `ClientApplicationName` ✓ | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / **`0`** ⚠️ outlier | none | `SET TRANSACTION READ ONLY` (plausible) | No |
+| Db2 | `ClientApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`) | `Min Pool Size`/`Max Pool Size` ✓ APPLIED (setting name was never wired up — real bug, now fixed) | `0` / `0` — driver doesn't enforce it at ANY value, live-confirmed | none | `SET TRANSACTION READ ONLY` — **REJECTED live, syntax error** | No |
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | **RESOLVED**: `SET TRANSACTION READ ONLY` is a syntax error; `sp_dboption 'read only'` is real but database-wide, not usable here | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
@@ -226,27 +233,29 @@ unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` ove
 inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
 functionally different would be exactly the same class of unverified-assumption gap Access had.
 
-## Next steps (Sybase ASE, InterBase, and Informix resolved 2026-09-18 — see their sections above; the rest still open)
+## Next steps (Db2, Sybase ASE, InterBase, and Informix resolved 2026-09-18 — see their sections above; only HANA remains open)
 
 1. Live-verify the remaining "plausible, not yet live-verified" session-SQL read-only claim
-   (HANA) against a real server. (Sybase ASE's read-only question is now RESOLVED — no usable
-   per-connection mechanism exists. InterBase's read-only claim is now CONFIRMED LIVE to work at
-   the driver level, but NOT wired into pengdows.crud. Informix's is CONFIRMED LIVE and
-   implemented. Db2's is separately tracked — see its own section/status note. See each database's
-   section above for the full trail.)
+   (HANA) against a real server. (Db2 and Sybase ASE both REJECTED outright as syntax errors,
+   contradicting the original ANSI-plausibility assumption for both. InterBase's read-only claim
+   is CONFIRMED LIVE to work at the driver level, but NOT wired into pengdows.crud. Informix's is
+   CONFIRMED LIVE and implemented. See each database's section above for the full trail.)
 2. Live-verify (or find documentation for) a genuinely inert, driver-recognized discriminator
    keyword for HANA and Informix — the same way `Jet OLEDB:Database Locking Mode=1` was verified
    for Access and `fetch size=200` was verified for InterBase (open a connection with vs. without
    it, confirm identical behavior, confirm the connection strings differ; prefer a candidate that
    matches the driver's own compiled-in default over an arbitrary non-default knob, so the "inert"
    claim doesn't rest only on empirical observation).
-3. Confirm what Db2's `MaxPoolSize=0` default actually means in practice (unbounded? provider-
-   internal default? something else?) — if it's not equivalent to `100`, `Db2Dialect` likely
-   needs its own `DefaultMaxPoolSize` override instead of inheriting `SqlDialect`'s `100`
-   fallback.
+3. ~~Confirm what Db2's `MaxPoolSize=0` default actually means in practice~~ **Done (2026-09-18)
+   — see the Db2 section above: pengdows.crud's own generic 0-handling logic was already safe,
+   but the driver itself doesn't enforce ANY `MaxPoolSize` value as a real cap regardless (150
+   concurrent opens succeeded with `Max Pool Size=5` explicitly set) — pengdows.crud's in-process
+   `PoolGovernor` is Db2's sole real admission-control safety net. A real, separate
+   `MaxPoolSizeSettingName`/`MinPoolSizeSettingName` wiring bug was found and fixed along the way
+   (neither was ever set, so any caller-supplied `Max Pool Size` was silently ignored).**
 4. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
-   how `AccessDialect.cs`/`SybaseDialect.cs`/`InterBaseDialect.cs`/`InformixDialect.cs` were fixed
-   this session.
+   how `AccessDialect.cs`/`Db2Dialect.cs`/`SybaseDialect.cs`/`InterBaseDialect.cs`/
+   `InformixDialect.cs` were fixed this session.
 5. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
    itself is created (not just what SQL runs after it begins)" — InterBase's confirmed-working
    `IBTransactionOptions`-based read-only transaction is blocked on this, not on missing research.
