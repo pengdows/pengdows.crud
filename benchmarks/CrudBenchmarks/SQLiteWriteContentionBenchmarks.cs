@@ -147,12 +147,29 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         // With 100 concurrent writers queuing behind 1 permit, the queue drain time
         // far exceeds the default 5 s timeout.  Use a generous timeout so pengdows
         // can demonstrate that it survives the storm while EF/Dapper accumulate failures.
+        //
+        // MaxQueuedWrites: PoolGovernor's admission-control queue-depth cap (added 2026-08-28,
+        // commit d62d4a7, to fail fast instead of holding a caller for the full acquire timeout
+        // when the turnstile queue is stalled) defaults to max(maxSlots*8, 32) — 32 for
+        // SingleWriter's single write slot. This benchmark deliberately queues up to
+        // WriteStormConcurrency-1 (99) writers behind that one slot, which exceeds the default
+        // cap and was rejecting real admissions with PoolSaturatedException before this override
+        // — a benchmark-configuration gap, not a governor regression: the count-based default
+        // was never sized for a 100-writer storm, it just happened to work before the cap
+        // existed. Set explicitly here rather than relying on the ambient default, since this
+        // benchmark's own concurrency is a known, fixed quantity.
+        //
+        // Interim fix: a real solution should replace the raw count cap with an estimated-wait
+        // check (queue depth / slots * observed average hold time vs. PoolAcquireTimeout) so
+        // admission control adapts to actual service time instead of guessing a fixed number —
+        // tracked as follow-up, not implemented here.
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = _connectionString,
             DbMode = DbMode.Standard, // overridden to SingleWriter by SQLite dialect automatically
             ReadWriteMode = ReadWriteMode.ReadWrite,
             PoolAcquireTimeout = TimeSpan.FromMinutes(5),
+            MaxQueuedWrites = WriteStormConcurrency,
             EnableMetrics = true
         };
 
