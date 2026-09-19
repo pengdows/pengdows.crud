@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -72,11 +73,11 @@ public class FirebirdDialectTests
     }
 
     [Fact]
-    public void ResetConnectionPoolForDdl_NoClearPoolMethodOnConnectionType_DoesNotThrow()
+    public void ResetConnectionPoolForDdl_NoClearAllPoolsMethodOnConnectionType_DoesNotThrow()
     {
-        // fakeDb's connection type has no static ClearPool(string) method — the reflection
-        // lookup must resolve to null and no-op cleanly, rather than throwing, so a caller on a
-        // real FirebirdSql.Data.FirebirdClient connection gets the pool reset while every other
+        // fakeDb's connection type has no static ClearAllPools() method — the reflection lookup
+        // must resolve to null and no-op cleanly, rather than throwing, so a caller on a real
+        // FirebirdSql.Data.FirebirdClient connection gets the pool reset while every other
         // (including test-double) connection type is unaffected.
         var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
             NullLogger<FirebirdDialect>.Instance);
@@ -110,6 +111,57 @@ public class FirebirdDialectTests
         public FirebirdTestDbException(string message) : base(message)
         {
         }
+    }
+
+    private sealed class ClearAllPoolsSpyConnection : DbConnection
+    {
+        public static int ClearAllPoolsCallCount;
+
+        public static void ClearAllPools() => ClearAllPoolsCallCount++;
+
+        [AllowNull]
+        public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => string.Empty;
+        public override string DataSource => string.Empty;
+        public override string ServerVersion => "1.0";
+        public override ConnectionState State => ConnectionState.Closed;
+
+        public override void ChangeDatabase(string databaseName) { }
+        public override void Open() { }
+        public override void Close() { }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel) =>
+            throw new NotSupportedException();
+
+        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
+    }
+
+    private sealed class ClearAllPoolsSpyFactory : DbProviderFactory
+    {
+        public override DbConnection CreateConnection() => new ClearAllPoolsSpyConnection();
+    }
+
+    [Fact]
+    public void ResetConnectionPoolForDdl_ConnectionTypeHasClearAllPools_InvokesIt()
+    {
+        // Firebird's DDL commit requires that NO other connection — even one from an entirely
+        // different DatabaseContext instance (e.g. the "second concurrent client" pattern
+        // CreateAdditionalContextAsync-based tests use) — is sitting idle in ANY ADO.NET pool
+        // referencing the table's current metadata generation. Resetting only the issuing
+        // context's own reader/writer connection-string pools (SqlContainer.cs's dual reset)
+        // cannot reach a DIFFERENT DatabaseContext's pools at all, since those use their own,
+        // unrelated connection strings this method never sees. FbConnection.ClearAllPools() — a
+        // real, parameterless static method confirmed present via reflection on
+        // FirebirdSql.Data.FirebirdClient.FbConnection — clears every pool for this provider
+        // process-wide regardless of which connection string created it, closing that gap. Uses
+        // ClearAllPools() (not ClearPool(string)) specifically so the connectionString parameter
+        // is irrelevant to which pools get cleared.
+        ClearAllPoolsSpyConnection.ClearAllPoolsCallCount = 0;
+        var dialect = new FirebirdDialect(new ClearAllPoolsSpyFactory(), NullLogger<FirebirdDialect>.Instance);
+
+        dialect.ResetConnectionPoolForDdl("Data Source=test");
+
+        Assert.Equal(1, ClearAllPoolsSpyConnection.ClearAllPoolsCallCount);
     }
 
     [Fact]

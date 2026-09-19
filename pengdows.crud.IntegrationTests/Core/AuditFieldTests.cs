@@ -40,8 +40,7 @@ public class AuditFieldTests : DatabaseTestBase
         await DropTableIfExistsAsync(context, "audited_entity");
 
         var createSql = BuildAuditTableSql(provider, context);
-        await using var container = context.CreateSqlContainer(createSql);
-        await container.ExecuteNonQueryAsync();
+        await ExecuteDdlWithTransientRetryAsync(context, createSql);
     }
 
     [SkippableFact]
@@ -339,8 +338,7 @@ CREATE TABLE {table} (
         if (!await FirebirdAuditTableExistsAsync(context))
         {
             var createSql = BuildAuditTableSql(SupportedDatabase.Firebird, context);
-            await using var createContainer = context.CreateSqlContainer(createSql);
-            await createContainer.ExecuteNonQueryAsync();
+            await ExecuteDdlWithTransientRetryAsync(context, createSql);
         }
 
         await using var deleteContainer = context.CreateSqlContainer($"DELETE FROM {wrappedTable}");

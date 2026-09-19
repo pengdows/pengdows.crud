@@ -252,13 +252,11 @@ public class MergeConflictTests : DatabaseTestBase
     private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql, string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
-        await using var container = context.CreateSqlContainer(createSql);
-        await container.ExecuteNonQueryAsync();
+        await ExecuteDdlWithTransientRetryAsync(context, createSql);
 
         if (extraSql is not null)
         {
-            await using var extraContainer = context.CreateSqlContainer(extraSql);
-            await extraContainer.ExecuteNonQueryAsync();
+            await ExecuteDdlWithTransientRetryAsync(context, extraSql);
         }
     }
 

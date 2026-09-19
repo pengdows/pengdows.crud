@@ -236,30 +236,92 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
     protected static async Task DropTableIfExistsAsync(IDatabaseContext context, string tableName)
     {
-        var wrappedTable = IntegrationObjectNameHelper.Table(context, tableName);
-
-        // A short bounded retry for genuinely transient DatabaseException outcomes (IsTransient)
-        // across any dialect. Firebird's own DDL-vs-connection-pooling interaction (a stale pooled
-        // connection blocking a DDL commit even with no active transaction) is handled centrally
-        // in SqlContainer.ExecuteNonQueryAsync via SqlDialect.ResetConnectionPoolForDdl, not here —
-        // this loop no longer needs Firebird-specific handling.
-        const int maxAttempts = 3;
+        // Delegates to DatabaseSchemaHelper.TryDropTableAsync, which already recovers from two
+        // known provider-specific failure shapes: Spanner's refusal to drop a table that still
+        // has a secondary index (drops the blocking index first, then retries) and Firebird's
+        // DDL-vs-connection-pooling metadata lock (falls back to DELETE FROM, no DDL lock
+        // needed). A bare inline "DROP TABLE" here — this method's original form — missed both
+        // fallbacks even though DatabaseSchemaHelper already handled them for its own,
+        // fixture-wide cleanup path; that gap let Spanner/Firebird failures slip through
+        // CompositeKeyTests/MergeConflictTests's own per-class RecreateTableAsync.
+        //
+        // Retains a bounded retry for OTHER genuinely transient DatabaseException outcomes
+        // (IsTransient) as a generic backstop across any dialect, on top of TryDropTableAsync's
+        // targeted fallbacks — SqlDialect.ResetConnectionPoolForDdl (SqlContainer.ExecuteNonQueryAsync)
+        // already handles the common Firebird DDL-pooling case centrally, so this loop is a safety
+        // net, not the primary defense. A flat 200ms x 3 attempts (this method's original form)
+        // was confirmed too short under heavy load — the residual, low-frequency Firebird lock
+        // conflict (a SerializationConflictException, IsTransient = true) still slipped through
+        // with that budget once other test infrastructure fixes eliminated the more common
+        // failure modes exposing it. Widened to match ExecuteDdlWithTransientRetryAsync's more
+        // generous escalating backoff instead of guessing at a slightly-larger flat delay.
+        const int maxAttempts = 5;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await using var container = context.CreateSqlContainer($"DROP TABLE {wrappedTable}");
+            try
+            {
+                // requireActualDrop: true — this method's callers immediately issue their own bare
+                // CREATE TABLE expecting the name to be free. Firebird's metadata-lock fallback
+                // (DELETE FROM, used by DatabaseSchemaHelper's own fixture-wide cleanup) would
+                // leave the table behind — emptied but still present — turning that immediately-
+                // following CREATE TABLE into a hard "already exists" failure instead of the
+                // original transient lock conflict this retry loop exists to absorb.
+                await DatabaseSchemaHelper.TryDropTableAsync(context, tableName, requireActualDrop: true)
+                    .ConfigureAwait(false);
+                return;
+            }
+            catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt)).ConfigureAwait(false);
+            }
+        }
+    }
+
+    // Verified live: Spanner's CREATE TABLE / CREATE INDEX is a distributed, globally-coordinated
+    // schema change that Spanner serializes one at a time per database — under a long integration
+    // run where many test classes each issue their own DROP/CREATE cycle back-to-back against the
+    // same database, that queue can grow deep enough that a trivially small CREATE TABLE exceeds
+    // even the client's command timeout. CommandTimeoutException already defaults IsTransient=true
+    // for exactly this reason (see OperationExceptions.cs).
+    //
+    // Any test class doing its own DROP/CREATE cycle (RecreateTableAsync-style) should run its
+    // CREATE statement(s) through this rather than a bare ExecuteNonQueryAsync — a bare call has
+    // no protection against the above, and (for any dialect, not just Spanner) no protection
+    // against the residual, low-frequency Firebird DDL-vs-connection-pooling lock conflict
+    // SqlContainer.ExecuteNonQueryAsync's own pool-reset hook reduces but does not fully
+    // eliminate under heavy concurrent load. Originally lived only on CompositeKeyTests; promoted
+    // here after MergeConflictTests hit the same Firebird lock conflict with no retry protection
+    // at all on its own bare RecreateTableAsync.
+    protected static async Task ExecuteDdlWithTransientRetryAsync(IDatabaseContext context, string sql)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            await using var container = context.CreateSqlContainer(sql);
             try
             {
                 await container.ExecuteNonQueryAsync().ConfigureAwait(false);
                 return;
             }
-            catch (Exception ex) when (IsTableMissingException(ex))
+            // Spanner's own DROP TABLE genuinely does cascade its secondary indices, but the
+            // name's removal from the shared schema catalog is not always visible to the very
+            // next DDL statement — the very next CREATE INDEX can collide with "Duplicate name in
+            // schema: <same index name>" even though the prior DROP TABLE that owned it already
+            // returned success. This is NOT a transient condition to retry-and-hope-it-clears —
+            // under heavier load the propagation lag was observed to exceed even a 5-attempt,
+            // up-to-50s-total backoff. Since the index name and definition are generated
+            // deterministically by our own code for a given table, "duplicate name" here always
+            // means "the exact index we wanted already exists" — a no-op, not a failure. Treated
+            // as success unconditionally rather than retried, which also sidesteps the timing
+            // question entirely instead of trying to out-wait a variable-length propagation lag.
+            catch (DatabaseException ex) when (context.Product == SupportedDatabase.Spanner &&
+                ex.Message.Contains("Duplicate name in schema", StringComparison.OrdinalIgnoreCase))
             {
-                // Table was not present; swallow
                 return;
             }
             catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
             }
         }
     }
@@ -278,25 +340,6 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// </summary>
     protected static bool SupportsReadOnlyTransactions(IDatabaseContext context) =>
         context.Dialect.SupportsReadOnlyTransactions;
-
-    private static bool IsTableMissingException(Exception ex)
-    {
-        var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
-        return message.Contains("does not exist")
-               || message.Contains("doesn't exist")
-               || message.Contains("no such table")
-               || message.Contains("table with name")
-               || message.Contains("catalog error")
-               || message.Contains("table unknown")
-               || message.Contains("unknown table")
-               || message.Contains("table not found")
-               || message.Contains("invalid object name")
-               || message.Contains("ora-00942")
-               // Db2 SQL0204N: <schema>.<name> is an undefined name (raised on DROP TABLE for a
-               // table that was never created — expected for providers only some tests exercise).
-               || message.Contains("sql0204n")
-               || message.Contains("is an undefined name");
-    }
 
     private static string BuildExclusionReason(SupportedDatabase provider)
     {

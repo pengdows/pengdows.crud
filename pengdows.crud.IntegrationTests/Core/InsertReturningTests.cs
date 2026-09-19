@@ -59,8 +59,7 @@ public class InsertReturningTests : DatabaseTestBase
     {
         await DropTableIfExistsAsync(context).ConfigureAwait(false);
         var createSql = GetCreateTableSql(provider, context);
-        await using var container = context.CreateSqlContainer(createSql);
-        await container.ExecuteNonQueryAsync();
+        await ExecuteDdlWithTransientRetryAsync(context, createSql).ConfigureAwait(false);
     }
 
     [SkippableFact]
@@ -228,38 +227,8 @@ WHERE {nameColumn} = ");
         Assert.Equal(1, count);
     }
 
-    private static async Task DropTableIfExistsAsync(IDatabaseContext context)
-    {
-        var dropSql = $"DROP TABLE {context.WrapObjectName(TableName)}";
-        await using var container = context.CreateSqlContainer(dropSql);
-        try
-        {
-            await container.ExecuteNonQueryAsync();
-        }
-        catch (Exception ex) when (IsTableMissing(ex.Message))
-        {
-            // ignore
-        }
-    }
-
-    private static bool IsTableMissing(string? message)
-    {
-        var text = message?.ToLowerInvariant() ?? string.Empty;
-        return text.Contains("does not exist")
-               || text.Contains("doesn't exist")
-               || text.Contains("no such table")
-               || text.Contains("unknown table")
-               || text.Contains("table not found")
-               || text.Contains("invalid object name")
-               || text.Contains("ora-00942")
-               || text.Contains("table unknown")
-               || text.Contains("table with name")
-               || text.Contains("catalog error")
-               // Db2 SQL0204N: <schema>.<name> is an undefined name (raised on DROP TABLE for a
-               // table that was never created — expected for providers only some tests exercise).
-               || text.Contains("sql0204n")
-               || text.Contains("is an undefined name");
-    }
+    private static Task DropTableIfExistsAsync(IDatabaseContext context) =>
+        DropTableIfExistsAsync(context, TableName);
 
     /// <summary>
     /// Snowflake-specific: verifies AUTOINCREMENT identity columns work for INSERT, and that

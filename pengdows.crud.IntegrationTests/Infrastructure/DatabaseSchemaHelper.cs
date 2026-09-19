@@ -71,7 +71,32 @@ internal static class DatabaseSchemaHelper
         return commands;
     }
 
-    private static async Task TryDropTableAsync(IDatabaseContext context, string tableName)
+    /// <summary>
+    /// Drops <paramref name="tableName"/> if it exists, recovering from two known
+    /// provider-specific failure shapes rather than propagating them: Spanner's refusal to drop a
+    /// table that still has a secondary index (parses the blocking index name(s) out of the error
+    /// and drops them first, then retries), and Firebird's DDL-vs-connection-pooling metadata
+    /// lock. Used both by the shared per-run fixture cleanup (<see cref="DropTablesAsync"/>) and
+    /// by individual test classes' own per-class table recreation
+    /// (<c>DatabaseTestBase.DropTableIfExistsAsync</c>) — a test class that only calls the latter
+    /// without going through this method misses both fallbacks, which is exactly the gap that let
+    /// Spanner/Firebird failures slip through CompositeKeyTests/MergeConflictTests despite this
+    /// method already handling them correctly for the fixture-wide cleanup path.
+    /// </summary>
+    /// <param name="requireActualDrop">
+    /// When <see langword="false"/> (the default, used by <see cref="DropTablesAsync"/>'s own
+    /// fixture-wide reset): Firebird's metadata lock falls back to <c>DELETE FROM</c>, which
+    /// needs no DDL lock at all — sufficient there because that caller only needs the table
+    /// EMPTY, not gone, before the next test's own setup runs. When <see langword="true"/> (used
+    /// by <c>DatabaseTestBase.DropTableIfExistsAsync</c>, whose callers immediately issue a bare
+    /// <c>CREATE TABLE</c> expecting the name to be free): the DELETE fallback is skipped and the
+    /// original exception is rethrown instead, so the caller's own outer retry loop gets a
+    /// genuine re-attempt at the real DROP — settling for "emptied, not dropped" here would leave
+    /// the table behind and turn that immediately-following CREATE TABLE into a hard
+    /// "already exists" failure, which is exactly the regression this parameter exists to avoid.
+    /// </param>
+    internal static async Task TryDropTableAsync(IDatabaseContext context, string tableName,
+        bool requireActualDrop = false)
     {
         var wrapped = IntegrationObjectNameHelper.Table(context, tableName);
         await using var container = context.CreateSqlContainer($"DROP TABLE {wrapped}");
@@ -112,7 +137,7 @@ internal static class DatabaseSchemaHelper
         }
         catch (Exception ex)
         {
-            if (context.Product == SupportedDatabase.Firebird && IsMetadataLock(ex.Message))
+            if (context.Product == SupportedDatabase.Firebird && IsMetadataLock(ex.Message) && !requireActualDrop)
             {
                 if (traceEnabled)
                 {
@@ -143,7 +168,7 @@ internal static class DatabaseSchemaHelper
                         $"DROP fallback-drop-indices table={tableName} indices={string.Join(",", indices)} elapsedMs={sw!.ElapsedMilliseconds}");
                 }
 
-                await TryDropTableAsync(context, tableName);
+                await TryDropTableAsync(context, tableName, requireActualDrop);
                 return;
             }
 

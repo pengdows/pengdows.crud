@@ -68,7 +68,24 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
             }
 
             var underlying = ((IInternalConnectionWrapper)borrowed).UnderlyingConnection;
-            await ((NpgsqlConnection)underlying).ReloadTypesAsync();
+            var npgsqlConnection = (NpgsqlConnection)underlying;
+            await npgsqlConnection.ReloadTypesAsync();
+
+            // ReloadTypesAsync's own doc comment is explicit: it "reloads the types for this
+            // connection only. Type changes will appear for other connections only after they are
+            // re-opened from the pool." Under a small/idle test run the pool is small enough that
+            // this borrowed connection is very likely the one later reused for the actual
+            // RetrieveOneAsync call below, masking the gap — but under full-suite load (a larger
+            // pool with more connections already open from before this method ran, e.g.
+            // DatabaseContext's own product/version-detection connection at construction) a
+            // DIFFERENT, never-reloaded connection can serve that call instead, still carrying the
+            // stale pre-extension type catalog: confirmed live as an intermittent
+            // InvalidCastException ("Reading as 'System.Object' is not supported for fields having
+            // DataTypeName '-'") that this borrowed-connection-only reload doesn't fully prevent.
+            // ClearPool forces every OTHER idle/busy connection for this connection string to be
+            // discarded and reopened fresh on next use, so whichever connection actually serves
+            // the later reads is guaranteed to pick up the reloaded type catalog too.
+            NpgsqlConnection.ClearPool(npgsqlConnection);
         }
         finally
         {
