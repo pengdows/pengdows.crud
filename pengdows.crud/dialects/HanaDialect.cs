@@ -69,6 +69,36 @@
 // - GUIDs: HanaDbType (the driver's provider-specific type enum) has no native UUID-style
 //   member — confirmed by enumerating the real enum. Stored as a client-generated hyphenated
 //   string, matching every other dialect without a native GUID column type.
+// - Pool discriminator (2026-09-19, real container): no ApplicationName-equivalent keyword
+//   exists on the real Sap.Data.Hana.HanaConnectionStringBuilder (72 properties inspected via
+//   reflection). "ConnectionTimeout" was chosen and CONFIRMED LIVE via the actual production
+//   mechanism (ConnectionPoolingConfiguration.ApplyPoolDiscriminator's generic
+//   DbConnectionStringBuilder, NOT the HANA-specific typed builder — the typed builder silently
+//   canonicalizes away any property explicitly set to its own default value, which would defeat
+//   a discriminator built that way): the resulting string genuinely contains
+//   "ConnectionTimeout=15" as literal text, and HanaConnection connects successfully with it.
+//   15 is this property's own compiled-in default, so setting it explicitly is guaranteed
+//   behaviorally inert by construction — the same bar InterBaseDialect's "fetch size=200" fix
+//   meets, stronger than Access's arbitrary-non-default-knob approach.
+// - Read-only transactions (2026-09-19, real container): "SET TRANSACTION READ ONLY" genuinely
+//   works — CONFIRMED LIVE that a write attempted afterward fails with NativeError 129
+//   ("...please use \"SET TRANSACTION READ WRITE\" statement first"), while a read inside the
+//   same read-only transaction succeeds normally. Implemented via TryEnterReadOnlyTransaction/
+//   TryEnterReadOnlyTransactionAsync, the same TryExecuteReadOnlySql shared helper Oracle/
+//   Informix use. Do NOT assume this ANSI pattern transfers uniformly — it was a flat syntax
+//   error on both Db2 and Sybase ASE this same session.
+//   CRITICAL companion finding: the read-only flag is STICKY at the session level — it persists
+//   past COMMIT and affects the NEXT transaction on the same physical connection. CONFIRMED live
+//   by direct reproduction: mark a transaction read-only, commit it with no write, then start a
+//   brand-new transaction with no explicit SET statement at all — a write inside THAT transaction
+//   still fails with the identical NativeError 129. Left unaddressed, this would be a real
+//   pooled-connection-hygiene hazard (CLAUDE.md checklist item 12): a pooled physical connection
+//   marked read-only by one caller's transaction could reject an unrelated later caller's
+//   unrelated WRITE, unpredictably, depending on which pooled connection is handed out. Fixed via
+//   GetBaseSessionSettings() returning "SET TRANSACTION READ WRITE" as a per-checkout reset —
+//   CONFIRMED LIVE both that this statement is safe to run as a bare preamble with no active
+//   transaction (a no-op on an already-read-write session) and that running it after a stuck
+//   read-only commit correctly restores write access for the next transaction.
 // =============================================================================
 
 using System.Data;
@@ -231,6 +261,59 @@ internal sealed class HanaDialect : SqlDialect
         return "SELECT VERSION FROM SYS.M_DATABASE";
     }
 
+    // CONFIRMED live (2026-09-19, real container): no ApplicationName-equivalent keyword exists
+    // on the real Sap.Data.Hana.HanaConnectionStringBuilder (72 properties inspected via
+    // reflection). "ConnectionTimeout" was chosen and CONFIRMED LIVE via the actual production
+    // mechanism (ConnectionPoolingConfiguration.ApplyPoolDiscriminator's generic
+    // DbConnectionStringBuilder, NOT the HANA-specific typed builder — the typed builder
+    // canonicalizes away any property explicitly set to its own default value, which would
+    // silently produce an IDENTICAL connection string and defeat a discriminator built that
+    // way): the resulting string genuinely contains "ConnectionTimeout=15" as literal text, and
+    // HanaConnection connects successfully with it. 15 is this property's own compiled-in
+    // default, so setting it explicitly is guaranteed behaviorally inert by construction — the
+    // same bar InterBaseDialect's "fetch size=200" fix meets, stronger than Access's
+    // arbitrary-non-default-knob approach.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "ConnectionTimeout";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "15";
+
+    // CONFIRMED LIVE (2026-09-19, real container) — a genuine pooled-connection-hygiene hazard
+    // (CLAUDE.md checklist item 12), not a hypothetical one: HANA's "SET TRANSACTION READ ONLY"
+    // is STICKY at the session level. It persists past COMMIT and affects the NEXT transaction on
+    // the same physical connection — reproduced directly: mark a transaction read-only, commit it
+    // with no write at all, then start a brand-new transaction with NO explicit SET statement at
+    // all; a write inside that second transaction still fails with the exact same NativeError 129
+    // ("...please use \"SET TRANSACTION READ WRITE\" statement first"). Without this reset, a
+    // pooled physical connection that TryEnterReadOnlyTransaction below marked read-only could
+    // reject an unrelated caller's later WRITE operation, unpredictably, depending on which
+    // pooled connection happens to be handed out. Also CONFIRMED LIVE that "SET TRANSACTION READ
+    // WRITE" is safe to run as a bare preamble with no active transaction (a no-op on an
+    // already-read-write session), and that running it after a stuck read-only commit correctly
+    // restores write access for the next transaction.
+    public override string GetBaseSessionSettings()
+    {
+        return "SET TRANSACTION READ WRITE";
+    }
+
+    // CONFIRMED LIVE (2026-09-19, real container): "SET TRANSACTION READ ONLY" inside an active
+    // transaction is accepted (parses fine) and genuinely enforces read-only — a subsequent write
+    // fails with NativeError 129 (see TryClassifyProviderException below), while a read inside
+    // the same read-only transaction succeeds normally. Uses the same TryExecuteReadOnlySql
+    // shared helper Oracle/Informix use for their own identical mechanism. Do NOT assume the
+    // ANSI SET TRANSACTION READ ONLY pattern works uniformly across dialects without checking —
+    // it was a flat syntax error on both Db2 and Sybase ASE this same session.
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "SAP HANA");
+    }
+
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "SAP HANA", cancellationToken);
+    }
+
     // CONFIRMED live via HanaConnection.BeginTransaction(IsolationLevel) — see file-level AI
     // SUMMARY for the ReadUncommitted caveat.
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) => new()
@@ -287,6 +370,18 @@ internal sealed class HanaDialect : SqlDialect
         if (code == 131)
         {
             category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        // 129: "cannot change this transaction's access mode from read-only to update directly"
+        // — CONFIRMED LIVE (2026-09-19, real container) as the exact NativeError a write attempt
+        // gets when the current transaction (or a stuck-sticky prior one — see
+        // GetBaseSessionSettings' remarks) is marked SET TRANSACTION READ ONLY. Feeds
+        // HanaExceptionTranslator's shared TryCreateFromCategory path into a real
+        // ReadOnlyViolationException, mirroring Access/Sqlite/DuckDb's identical classification.
+        if (code == 129)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
             return true;
         }
 
