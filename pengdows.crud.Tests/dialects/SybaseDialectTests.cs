@@ -31,6 +31,23 @@ public class SybaseDialectTests
     }
 
     [Fact]
+    public void GetReadOnlyConnectionParameter_ReturnsNull_NoUsablePerConnectionMechanismExists()
+    {
+        // CONFIRMED LIVE (2026-09-18, real ASE 16.0 container): `SET TRANSACTION READ ONLY` is a
+        // flat syntax error on ASE ("Incorrect syntax near the keyword 'READ'.") — it doesn't
+        // even parse. `EXEC sp_dboption <db>, 'read only', true` IS real, confirmed-live
+        // enforcement (a subsequent write anywhere in that database fails with "Attempt to BEGIN
+        // TRANSACTION in database '<db>' failed because database is READ ONLY."), but it's a
+        // coarse, database-wide administrative toggle, not connection/session-scoped — wiring it
+        // into GetReadOnlyConnectionParameter() would make the WRITER connection unable to write
+        // too, breaking the whole point of a separate read-only connection string. No
+        // connection-string-level property exists either (confirmed via reflection over
+        // AdoNetCore.AseClient.Internal.ConnectionParameters's full property list). Deliberately
+        // left at the base null — see SybaseDialect.cs's file-level AI SUMMARY for the full trail.
+        Assert.Null(Dialect().GetReadOnlyConnectionParameter());
+    }
+
+    [Fact]
     public void CreateDialectForType_Sybase_ReturnsSybaseDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SybaseASE);

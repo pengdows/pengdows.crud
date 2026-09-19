@@ -33,6 +33,34 @@
 //   reflects over that shape as a fallback, and this dialect reuses it directly to
 //   override the Exception-typed exception-analysis entry points (the DbException-typed
 //   ones in the base class can never fire for AseException).
+// - Read-only connection/session mechanism: CONFIRMED LIVE (2026-09-18, against a real ASE
+//   16.0 container) that NO usable per-connection or per-transaction read-only mechanism
+//   exists, unlike SqliteDialect/DuckDbDialect/AccessDialect's GetReadOnlyConnectionParameter()
+//   overrides:
+//     * `SET TRANSACTION READ ONLY` (the ANSI pattern) is a flat SYNTAX ERROR on ASE
+//       ("Incorrect syntax near the keyword 'READ'.") — it doesn't even parse, let alone
+//       enforce anything. Worse than SQL Server's ApplicationIntent=ReadOnly, which at least
+//       parses (as a routing hint that isn't itself enforcement).
+//     * `EXEC sp_dboption <db>, 'read only', true` (run from `master`, then a `CHECKPOINT`
+//       issued while connected to the target database — the same two-step pattern
+//       SybaseTestContainer.cs already uses for 'allow nulls by default') IS real,
+//       confirmed-live enforcement: a subsequent write anywhere in that database fails with
+//       "Attempt to BEGIN TRANSACTION in database '<db>' failed because database is READ
+//       ONLY." But this is a coarse, DATABASE-WIDE administrative toggle, not a
+//       connection/session-scoped setting — turning it on would make EVERY connection to that
+//       database read-only, including whatever connection pengdows.crud's own writer context
+//       uses. That's the wrong shape entirely for GetReadOnlyConnectionParameter()'s contract
+//       (a read-only *connection string* alongside a separately-writable one against the same
+//       database) — wiring it up would silently break writes for the whole context, not just
+//       the read-only side. Deliberately NOT implemented; see
+//       SybaseDialectTests.GetReadOnlyConnectionParameter_ReturnsNull_NoUsablePerConnectionMechanismExists.
+//     * AdoNetCore.AseClient.Internal.ConnectionParameters has no read-only/intent/mode-named
+//       connection-string property at all (confirmed via reflection over its full property
+//       list — see ApplicationNameSettingName's own reflection note above for the same
+//       methodology).
+//   pengdows.crud's own ReadWriteMode.ReadOnly pre-flight check (SqlContainer's ReadOnlyContextException)
+//   still applies regardless of database — this is a gap in database-level defense-in-depth
+//   for Sybase specifically, not a correctness gap in pengdows.crud itself.
 // =============================================================================
 
 using System.Data;
@@ -63,6 +91,12 @@ internal class SybaseDialect : SqlDialect
     // property there, defaulting to the current process name when unset. Without this set,
     // reader/writer connection strings would be identical and collapse into one shared pool.
     public override string? ApplicationNameSettingName => "ApplicationName";
+
+    // Deliberately NOT overridden — stays at the base null. See the file-level AI SUMMARY's
+    // "Read-only connection/session mechanism" entry: CONFIRMED LIVE that no usable
+    // connection/session-scoped read-only mechanism exists for ASE. `SET TRANSACTION READ ONLY`
+    // is a syntax error; `sp_dboption <db>, 'read only'` is real but database-wide, which would
+    // break the writer connection too if wired up here.
 
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
