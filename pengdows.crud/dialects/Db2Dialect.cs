@@ -49,6 +49,13 @@ internal sealed class Db2Dialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Db2;
 
+    // Confirmed via reflection against the real IBM.Data.Db2.DB2ConnectionStringBuilder
+    // (Net.IBM.Data.Db2 8.0.0.400): ClientApplicationName is the property that surfaces in Db2's
+    // own connection-monitoring views (e.g. SYSIBMADM.APPLICATIONS) — a lower-level ProgramName
+    // property also exists, but this is the one operators actually query against. Without this
+    // set, reader/writer connection strings would be identical and collapse into one shared pool.
+    public override string? ApplicationNameSettingName => "ClientApplicationName";
+
     // Db2 SQLCODE -803 / SQLSTATE 23505. Falls back to the numeric SQLCODE magnitude when no
     // SqlState is available at all — IBM.Data.Db2's DB2Exception often doesn't populate SqlState
     // (see TryGetProviderSqlState's message-embedded-SQLSTATE fallback, which itself can miss if

@@ -20,6 +20,17 @@ public class SybaseDialectTests
         new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger<SybaseDialect>.Instance);
 
     [Fact]
+    public void ApplicationNameSettingName_IsSybasesRealKeyword()
+    {
+        // Confirmed via reflection against AdoNetCore.AseClient.Internal.ConnectionParameters
+        // (the driver's real parser — its public AseConnectionStringBuilder is a thin
+        // DbConnectionStringBuilder wrapper exposing nothing usable): ApplicationName is a real
+        // property there. Without this set, reader/writer connection strings collapse into one
+        // shared pool — the same bug class Access's fix addressed.
+        Assert.Equal("ApplicationName", Dialect().ApplicationNameSettingName);
+    }
+
+    [Fact]
     public void CreateDialectForType_Sybase_ReturnsSybaseDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SybaseASE);

@@ -103,6 +103,32 @@ internal class FlatFileDialect : SqlDialect
     public override bool IsEmbeddedSingleWriterEngine => true;
 
     /// <summary>
+    /// Confirmed via <c>pengdows.flatfile/FlatFileConnectionStringBuilder.cs</c>'s own
+    /// <c>KeyApplicationName</c> constant and <c>ApplicationName</c> property — a real, recognized
+    /// keyword, not a guess. Without this set, reader/writer connection strings would be
+    /// identical and collapse into one shared pool (the same bug class Access's
+    /// <c>ReadOnlyPoolDiscriminatorSettingName</c> fix addressed, but avoided here entirely since
+    /// FlatFile's own driver already supports the standard mechanism).
+    /// </summary>
+    public override string? ApplicationNameSettingName => "applicationName";
+
+    /// <summary>
+    /// pengdows.flatfile is a custom, in-process, file-based provider with no network handshake
+    /// and no real connection pool to configure — architecturally identical to why
+    /// <see cref="DuckDbDialect"/>'s equivalent is <see langword="false"/>.
+    /// </summary>
+    public override bool SupportsExternalPooling => false;
+
+    /// <summary>
+    /// Confirmed via <c>pengdows.flatfile/FlatFileConnectionStringBuilder.cs</c>'s own
+    /// <c>KeyReadOnly</c> constant and <c>ReadOnly</c> property
+    /// (<c>SetOrRemove(KeyReadOnly, value ? "true" : null)</c>) — a real, hard-enforced keyword:
+    /// any mutating statement (DML/DDL) against a connection carrying this is rejected
+    /// immediately by the provider itself, not just by pengdows.crud's own pre-flight checks.
+    /// </summary>
+    public override string? GetReadOnlyConnectionParameter() => "readonly=true";
+
+    /// <summary>
     /// Confirmed live against pengdows.flatfile (this session — see its
     /// TransactionIsolationTests.cs): all four standard levels are genuinely meaningful, not
     /// just accepted without differentiation.

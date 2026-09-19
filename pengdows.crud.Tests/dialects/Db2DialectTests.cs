@@ -27,6 +27,18 @@ public class Db2DialectTests
     }
 
     [Fact]
+    public void ApplicationNameSettingName_IsDb2sRealKeyword()
+    {
+        // Confirmed via reflection against the real IBM.Data.Db2.DB2ConnectionStringBuilder
+        // (Net.IBM.Data.Db2 8.0.0.400): ClientApplicationName is the property that surfaces in
+        // Db2's own connection-monitoring views (SYSIBMADM.APPLICATIONS), distinct from the
+        // lower-level ProgramName. Without this set, BuildReaderConnectionString's fallback never
+        // fires, and reader/writer connection strings collapse into one shared pool (the same bug
+        // class Access's ReadOnlyPoolDiscriminatorSettingName fix addressed).
+        Assert.Equal("ClientApplicationName", CreateDialect().ApplicationNameSettingName);
+    }
+
+    [Fact]
     public void CoreFeatures_AreSupportedUnconditionallyOnDb2()
     {
         var dialect = CreateDialect();

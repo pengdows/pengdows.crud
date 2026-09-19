@@ -1,5 +1,29 @@
 # Application Name / Pooling / Read-Only Audit — Databases Added Since 2.0.5 (`main`)
 
+## Status: partially applied
+
+The three findings that needed no live server connection (real, driver-confirmed
+`ApplicationNameSettingName` keywords for FlatFile/Db2/Sybase ASE) have been applied via TDD:
+`FlatFileDialect.ApplicationNameSettingName => "applicationName"` (plus
+`SupportsExternalPooling => false` and `GetReadOnlyConnectionParameter() => "readonly=true"`,
+both also fully confirmed via `pengdows.flatfile`'s own source, no live test needed),
+`Db2Dialect.ApplicationNameSettingName => "ClientApplicationName"`, and
+`SybaseDialect.ApplicationNameSettingName => "ApplicationName"`. See each dialect file for the
+locked-down test coverage (`FlatFileDialectTests.cs`, `Db2DialectTests.cs`,
+`SybaseDialectTests.cs`).
+
+While re-verifying these via independent reflection (not just trusting this document's own
+earlier pass), a real error in this document was caught and corrected: the original Sybase ASE
+row claimed no `MinPoolSize`/`MaxPoolSize`-equivalent property exists on
+`AdoNetCore.AseClient.Internal.ConnectionParameters` — false. Both exist (`Int16`, defaulting to
+`MinPoolSize=0`/`MaxPoolSize=100`, matching every other driver here), findable only by
+constructing the type and reading its defaults, not just enumerating property names as the
+original pass did. See the Sybase ASE section below for the corrected finding.
+
+The remaining gaps (four session-SQL read-only claims, three missing pool discriminators for
+HANA/Informix/InterBase, and the Db2 `MaxPoolSize=0` question) still require live server
+verification — see "Next steps" at the bottom for what's still open.
+
 ## Why this document exists
 
 The Access work in this session (see `docs/connection/access-concurrency-verification.md` and
@@ -128,7 +152,7 @@ confirms:
 | Capability | Real keyword | Status |
 |---|---|---|
 | Application Name | `ApplicationName` (string) | **Confirmed**, via the internal type. |
-| Pooling | `Pooling` (bool) only | **Confirmed** the switch exists, but **no `MinPoolSize`/`MaxPoolSize`-equivalent property was found anywhere in the assembly** — this driver may only support pooling as a binary on/off, with no configurable sizing. **Default value: `Pooling=True`** (also `LoginTimeout=15`, unrelated to pool sizing). |
+| Pooling | `Pooling` (bool), `MaxPoolSize`/`MinPoolSize` (`Int16`) | **CORRECTED** (this claim was wrong in the original pass — re-verified via direct reflection with default-value construction, not just a property-name scan, which is what missed it the first time): both exist on `ConnectionParameters`, same as every other driver here. **Default values: `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=100`** — matching the common convention, not an outlier. `ApplicationName` also confirmed to default to the current process name when unset. |
 | Read-only (connection string) | none found | No dedicated keyword. |
 | Read-only (session SQL) | uncertain — **not yet live-verified** | Sybase ASE is Transact-SQL family (closer to SQL Server than to ANSI-conformant engines like Db2/HANA/Informix); SQL Server itself has no real connection-string or session-level read-only enforcement (`ApplicationIntent=ReadOnly` is documented as a routing hint only, not enforcement) — ASE may be in the same position. This needs live confirmation more than any of the others; don't assume the ANSI `SET TRANSACTION READ ONLY` pattern transfers here. |
 
@@ -141,7 +165,7 @@ up.
 |---|---|---|---|---|---|---|---|
 | FlatFile | `applicationName` ✓ | n/a (no real pool concept) | n/a | n/a | `readonly=true` ✓ hard-enforced | — | No |
 | Db2 | `ClientApplicationName` ✓ | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / **`0`** ⚠️ outlier | none | `SET TRANSACTION READ ONLY` (plausible) | No |
-| Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | **none found** | n/a | none | uncertain — may be SQL-Server-like (hint only) | No |
+| Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | uncertain — may be SQL-Server-like (hint only) | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (high confidence, Firebird lineage) | **Yes — no safe candidate found yet** |

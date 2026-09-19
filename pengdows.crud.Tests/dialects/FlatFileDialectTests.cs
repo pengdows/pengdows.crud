@@ -16,6 +16,32 @@ public class FlatFileDialectTests
         new(new fakeDbFactory(SupportedDatabase.FlatFile), NullLogger<FlatFileDialect>.Instance);
 
     [Fact]
+    public void ApplicationNameSettingName_IsFlatFilesRealKeyword()
+    {
+        // Confirmed via pengdows.flatfile/FlatFileConnectionStringBuilder.cs's own
+        // KeyApplicationName constant — a real, recognized keyword, not a guess.
+        Assert.Equal("applicationName", Dialect().ApplicationNameSettingName);
+    }
+
+    [Fact]
+    public void SupportsExternalPooling_IsFalse()
+    {
+        // FlatFile is a custom, in-process, file-based provider with no network handshake and no
+        // real connection pool to configure — architecturally identical to why
+        // DuckDbDialect.SupportsExternalPooling is false.
+        Assert.False(Dialect().SupportsExternalPooling);
+    }
+
+    [Fact]
+    public void GetReadOnlyConnectionParameter_IsFlatFilesRealReadOnlyKeyword()
+    {
+        // Confirmed via pengdows.flatfile/FlatFileConnectionStringBuilder.cs's own KeyReadOnly
+        // constant and ReadOnly property (SetOrRemove(KeyReadOnly, value ? "true" : null)) — a
+        // real, hard-enforced keyword: "any mutating statement (DML/DDL) is rejected immediately".
+        Assert.Equal("readonly=true", Dialect().GetReadOnlyConnectionParameter());
+    }
+
+    [Fact]
     public void CreateDialectForType_FlatFile_ReturnsFlatFileDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.FlatFile);
