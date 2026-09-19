@@ -59,6 +59,14 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private ISqlContainer _deleteSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
+    // The fixed (non-varying) column values baked into _updateSc's DuckBenchEntity below —
+    // reused by Update_Dapper so its UPDATE statement sets the same 5 columns pengdows' full-
+    // entity BuildUpdateAsync generates, not just salary.
+    private const string UpdateFixedName = "Updated";
+    private const int UpdateFixedAge = 25;
+    private const bool UpdateFixedIsActive = true;
+    private DateTime _updateFixedCreatedAt;
+
     private bool _originalMatchNamesWithUnderscores;
 
     // pengdows.crud — SingleConnection mode (shared persistent connection).
@@ -167,14 +175,15 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         // Update: pre-build the full UPDATE statement once; vary salary + id per iteration
         // via SetParameterValue. Column param order: s0=name, s1=age, s2=salary,
         // s3=is_active, s4=created_at, k0=id (WHERE).
+        _updateFixedCreatedAt = DateTime.UtcNow;
         _updateSc = await _gateway.BuildUpdateAsync(new DuckBenchEntity
         {
             Id = 1,
-            Name = "Updated",
-            Age = 25,
+            Name = UpdateFixedName,
+            Age = UpdateFixedAge,
             Salary = 50000.0,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            IsActive = UpdateFixedIsActive,
+            CreatedAt = _updateFixedCreatedAt
         });
 
         _deleteSc = _gateway.BuildDelete(0);
@@ -380,18 +389,27 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         return count;
     }
 
+    // Sets the same 5 columns as Update_Pengdows (name, age, salary, is_active, created_at) —
+    // only salary and id vary per iteration, matching _updateSc's fixed values. See
+    // UpdateFixedName/UpdateFixedAge/UpdateFixedIsActive/_updateFixedCreatedAt.
+    private const string UpdateSql =
+        "UPDATE benchmark SET name = $Name, age = $Age, salary = $Salary, is_active = $IsActive, created_at = $CreatedAt WHERE id = $Id";
+
     [Benchmark]
     public async Task<int> Update_Dapper()
     {
-        const string sql = "UPDATE benchmark SET salary = $Salary WHERE id = $Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
             await conn.OpenAsync();
-            count += await conn.ExecuteAsync(sql, new
+            count += await conn.ExecuteAsync(UpdateSql, new
             {
+                Name = UpdateFixedName,
+                Age = UpdateFixedAge,
                 Salary = 60000.0 + i,
+                IsActive = UpdateFixedIsActive,
+                CreatedAt = _updateFixedCreatedAt,
                 Id = (i % SeedRows) + 1
             });
         }
@@ -596,12 +614,22 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<long> ConnectionHoldTime_Dapper()
     {
+        // Boundary matches Pengdows: the watch stops only after the connection has been
+        // released, not before disposal runs. An `await using` declaration defers
+        // DisposeAsync() to end-of-method, which would stop the watch before paying that cost.
         var sw = Stopwatch.StartNew();
-        await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
-        await conn.OpenAsync();
-        await conn.QueryFirstOrDefaultAsync<DuckBenchEntity>(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id",
-            new { Id = 1 });
+        var conn = new DuckDBConnection($"Data Source={_dbFile}");
+        try
+        {
+            await conn.OpenAsync();
+            await conn.QueryFirstOrDefaultAsync<DuckBenchEntity>(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id",
+                new { Id = 1 });
+        }
+        finally
+        {
+            await conn.DisposeAsync();
+        }
         sw.Stop();
         return sw.ElapsedTicks;
     }

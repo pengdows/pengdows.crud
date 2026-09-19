@@ -57,6 +57,14 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     private ISqlContainer _deleteSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
+    // The fixed (non-varying) column values baked into _updateSc's BenchEntity below — reused by
+    // Update_Dapper/Update_EntityFramework so their UPDATE statements set the same 5 columns
+    // pengdows' full-entity BuildUpdateAsync generates, not just salary.
+    private const string UpdateFixedName = "Updated";
+    private const int UpdateFixedAge = 25;
+    private const bool UpdateFixedIsActive = true;
+    private string _updateFixedCreatedAt = null!;
+
     [Params(1, 10, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
@@ -181,14 +189,15 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
 
         // Update — full entity UPDATE; loop sets SetParameterValue("s2", salary) + ("k0", id)
         // Column SET order: name=s0, age=s1, salary=s2, is_active=s3, created_at=s4; WHERE id=k0
+        _updateFixedCreatedAt = DateTime.UtcNow.ToString("O");
         _updateSc = await _gateway.BuildUpdateAsync(new BenchEntity
         {
             Id = 1,
-            Name = "Updated",
-            Age = 25,
+            Name = UpdateFixedName,
+            Age = UpdateFixedAge,
             Salary = 50000.0,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow.ToString("O")
+            IsActive = UpdateFixedIsActive,
+            CreatedAt = _updateFixedCreatedAt
         });
 
         // Delete — BuildDelete; loop sets SetParameterValue("k0", id)
@@ -214,7 +223,8 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         const string readListSql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age ORDER BY id OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
-        const string updateSql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
+        // Must match Update_Dapper/Update_EntityFramework's UpdateSql exactly.
+        const string updateSql = UpdateSql;
         const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
         const string filteredQuerySql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge ORDER BY id OFFSET 0 ROWS FETCH NEXT @Limit ROWS ONLY";
@@ -284,7 +294,15 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
                 await conn.QueryAsync<DapperBenchEntity>(readListSql, new { Age = 0, Limit = RecordCount });
                 await conn.QueryAsync<DapperBenchEntity>(filteredQuerySql,
                     new { IsActive = true, MinAge = 20, MaxAge = 60, Limit = RecordCount });
-                await conn.ExecuteAsync(updateSql, new { Salary = 60000.0 + pw, Id = (pw % SeedRows) + 1 });
+                await conn.ExecuteAsync(updateSql, new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + pw,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (pw % SeedRows) + 1
+                });
                 await conn.ExecuteScalarAsync<double>(aggregateSql);
             }
 
@@ -325,7 +343,11 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
                     .AsNoTracking()
                     .ToListAsync();
                 await efCtx.Database.ExecuteSqlRawAsync(updateSql,
+                    new SqlParameter("Name", UpdateFixedName),
+                    new SqlParameter("Age", UpdateFixedAge),
                     new SqlParameter("Salary", 60000.0 + pw),
+                    new SqlParameter("IsActive", UpdateFixedIsActive),
+                    new SqlParameter("CreatedAt", _updateFixedCreatedAt),
                     new SqlParameter("Id", (pw % SeedRows) + 1));
                 await efCtx.Database.SqlQueryRaw<double>(aggregateSql).FirstAsync();
             }
@@ -568,17 +590,30 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
         return count;
     }
 
+    // Sets the same 5 columns as Update_Pengdows (name, age, salary, is_active, created_at) —
+    // only salary and id vary per iteration, matching _updateSc's fixed values. See
+    // UpdateFixedName/UpdateFixedAge/UpdateFixedIsActive/_updateFixedCreatedAt.
+    private const string UpdateSql =
+        "UPDATE benchmark SET name = @Name, age = @Age, salary = @Salary, is_active = @IsActive, created_at = @CreatedAt WHERE id = @Id";
+
     [Benchmark]
     public async Task<int> Update_Dapper()
     {
-        const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             await using var conn = new SqlConnection(_connStr);
             await conn.OpenAsync();
-            count += await conn.ExecuteAsync(sql,
-                new { Salary = 60000.0 + i, Id = (i % SeedRows) + 1 });
+            count += await conn.ExecuteAsync(UpdateSql,
+                new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + i,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (i % SeedRows) + 1
+                });
         }
 
         return count;
@@ -587,13 +622,16 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<int> Update_EntityFramework()
     {
-        const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             await using var ctx = new EfSqlBenchContext(_efOptions);
-            count += await ctx.Database.ExecuteSqlRawAsync(sql,
+            count += await ctx.Database.ExecuteSqlRawAsync(UpdateSql,
+                new SqlParameter("Name", UpdateFixedName),
+                new SqlParameter("Age", UpdateFixedAge),
                 new SqlParameter("Salary", 60000.0 + i),
+                new SqlParameter("IsActive", UpdateFixedIsActive),
+                new SqlParameter("CreatedAt", _updateFixedCreatedAt),
                 new SqlParameter("Id", (i % SeedRows) + 1));
         }
 
@@ -854,12 +892,22 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<long> ConnectionHoldTime_Dapper()
     {
+        // Boundary matches Pengdows: the watch stops only after the connection has been
+        // released, not before disposal runs. An `await using` declaration defers
+        // DisposeAsync() to end-of-method, which would stop the watch before paying that cost.
         var sw = Stopwatch.StartNew();
-        await using var conn = new SqlConnection(_connStr);
-        await conn.OpenAsync();
-        await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
-            new { Id = 1 });
+        var conn = new SqlConnection(_connStr);
+        try
+        {
+            await conn.OpenAsync();
+            await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                new { Id = 1 });
+        }
+        finally
+        {
+            await conn.DisposeAsync();
+        }
         sw.Stop();
         return sw.ElapsedTicks;
     }
@@ -867,14 +915,22 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<long> ConnectionHoldTime_EntityFramework()
     {
+        // See ConnectionHoldTime_Dapper: same fix, same reason.
         var sw = Stopwatch.StartNew();
-        await using var ctx = new EfSqlBenchContext(_efOptions);
-        await ctx.Benchmarks
-            .FromSqlRaw(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
-                new SqlParameter("Id", 1))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
+        var ctx = new EfSqlBenchContext(_efOptions);
+        try
+        {
+            await ctx.Benchmarks
+                .FromSqlRaw(
+                    "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                    new SqlParameter("Id", 1))
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        }
+        finally
+        {
+            await ctx.DisposeAsync();
+        }
         sw.Stop();
         return sw.ElapsedTicks;
     }
