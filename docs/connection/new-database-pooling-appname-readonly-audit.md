@@ -56,6 +56,19 @@ explicit `Max Pool Size` a caller wrote into their own Db2 connection string was
 The driver itself was also confirmed to not enforce `Max Pool Size` as a real cap at any value —
 pengdows.crud's own in-process `PoolGovernor` is Db2's sole real admission-control safety net.
 
+**Firebird — a legacy database, NOT one of the "since main" databases this document was originally
+scoped to — was found to have the identical class of gap and resolved the same day (2026-09-18,
+live against a real `firebirdsql/firebird:5.0.2` container).** Prompted by a broader policy
+statement (every database needs real pool separation, in priority order: connection-string
+read-only > `ApplicationName`/similar > `Pooling=true` > session-SQL read-only fallback), a
+repo-wide grep found `FirebirdDialect` was the only long-established, non-embedded database with
+*zero* coverage on any of `ApplicationNameSettingName`/`GetReadOnlyConnectionParameter`/
+`ReadOnlyPoolDiscriminatorSettingName`/`TryEnterReadOnlyTransaction` — its reader and writer
+connections shared one physical pool with no database-level read-only enforcement at all. See its
+own section below for the full findings (real `ApplicationName`, no connection-string read-only,
+and a genuine-but-currently-unwireable TPB-level read-only transaction option — the same
+extension-point blocker InterBase hit).
+
 The only remaining gaps (HANA's session-SQL read-only claim and HANA/Informix's pool
 discriminators) still require live server verification — see "Next steps" at the bottom for what's
 still open.
@@ -208,6 +221,25 @@ confirms:
 Because `ApplicationName` is confirmed, no separate pool discriminator is needed once it's wired
 up.
 
+### Firebird (`FirebirdSql.Data.FirebirdClient.FbConnectionStringBuilder`, confirmed via `10.3.3`) — LEGACY DATABASE, not part of the original "since main" scope, RESOLVED 2026-09-18 (live, real `firebirdsql/firebird:5.0.2` container)
+
+Firebird predates every other database in this document — it's long-established and always part
+of the default testbed matrix, not one of the databases added since `main`. It's included here
+because a repo-wide grep (prompted by an explicit policy statement: every database needs real
+read/write pool separation, in priority order — connection-string read-only > `ApplicationName`/
+similar > `Pooling=true` > session-SQL read-only fallback) found it was the ONLY long-established,
+non-embedded, client/server-capable dialect with zero coverage on any of the four mechanisms this
+document tracks.
+
+| Capability | Real keyword | Status |
+|---|---|---|
+| Application Name | `ApplicationName` | **APPLIED.** CONFIRMED LIVE: a real, working property — round-trips to `application name=...` in the connection string, and a live connection with it set succeeds normally. Implemented as `FirebirdDialect.ApplicationNameSettingName`. |
+| Pooling | `Pooling` (bool), `MaxPoolSize`/`MinPoolSize` (int) | **Confirmed**, matches the `SqlDialect` base `"Pooling"` keyword exactly — no override needed. **Default values: `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=100`.** |
+| Read-only (connection string) | none found | `FbConnectionStringBuilder.IsReadOnly` is confirmed (via `DeclaredOnly` reflection) to be the INHERITED base `System.Data.Common.DbConnectionStringBuilder.IsReadOnly` (no setter, no effect on `ConnectionString` text) — not a real Firebird keyword. Same trap InterBase's identically-named property hit. |
+| Read-only (transaction level) | `FbTransactionOptions { TransactionBehavior = FbTransactionBehavior.Read \| Concurrency \| Wait }` via `FbConnection.BeginTransaction(FbTransactionOptions)` | **CONFIRMED LIVE the capability exists and works** (a write inside such a transaction throws `FbException: attempted update during read-only transaction`; reads succeed normally) — but **NOT integrated into pengdows.crud**, for the identical reason as InterBase: a mid-transaction `SET TRANSACTION READ ONLY` SQL statement was tried first and CONFIRMED to fail (`FbException: invalid transaction handle (expecting explicit transaction start)`) — Firebird's TPB model, like InterBase's, requires the read-only flag at transaction-*creation* time, which doesn't fit `ISqlDialect.TryEnterReadOnlyTransaction`'s post-begin hook. Blocked on the same new pengdows.crud extension point identified for InterBase (see "Next steps" item 5) — left open rather than forcing a broken partial implementation. |
+
+Since `ApplicationName` is confirmed, no separate pool discriminator is needed.
+
 ## Summary table
 
 | Database | App Name keyword | Pooling on/off | Min/Max pool size | Default MinPoolSize / MaxPoolSize | Read-only (conn string) | Read-only (session, unverified) | Discriminator needed? |
@@ -218,6 +250,7 @@ up.
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `IBTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — needs a new extension point | **Applied — `fetch size=200`** |
+| Firebird (legacy, not "since main") | `ApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`, no override needed) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `FbTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — same new extension point as InterBase | No — `ApplicationName` already covers it |
 
 **On default pool sizes**: all default values above were read directly off a freshly-constructed
 builder instance with no connection string set — the driver's actual compiled-in default, not a
@@ -233,7 +266,7 @@ unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` ove
 inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
 functionally different would be exactly the same class of unverified-assumption gap Access had.
 
-## Next steps (Db2, Sybase ASE, InterBase, and Informix resolved 2026-09-18 — see their sections above; only HANA remains open)
+## Next steps (Db2, Sybase ASE, InterBase, Informix, and Firebird resolved 2026-09-18 — see their sections above; only HANA remains open)
 
 1. Live-verify the remaining "plausible, not yet live-verified" session-SQL read-only claim
    (HANA) against a real server. (Db2 and Sybase ASE both REJECTED outright as syntax errors,
@@ -255,7 +288,8 @@ functionally different would be exactly the same class of unverified-assumption 
    (neither was ever set, so any caller-supplied `Max Pool Size` was silently ignored).**
 4. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
    how `AccessDialect.cs`/`Db2Dialect.cs`/`SybaseDialect.cs`/`InterBaseDialect.cs`/
-   `InformixDialect.cs` were fixed this session.
+   `InformixDialect.cs`/`FirebirdDialect.cs` were fixed this session.
 5. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
-   itself is created (not just what SQL runs after it begins)" — InterBase's confirmed-working
-   `IBTransactionOptions`-based read-only transaction is blocked on this, not on missing research.
+   itself is created (not just what SQL runs after it begins)" — InterBase's AND Firebird's
+   confirmed-working TPB-based (`IBTransactionOptions`/`FbTransactionOptions`) read-only
+   transactions are both blocked on this, not on missing research.
