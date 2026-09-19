@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
@@ -153,6 +154,47 @@ public class FirebirdDialectTests
         var ex = await Record.ExceptionAsync(async () => await container.ExecuteNonQueryAsync());
 
         Assert.Null(ex);
+    }
+
+    private sealed class PoolResetSpyFirebirdDialect : FirebirdDialect
+    {
+        public readonly List<string> ResetCalls = new();
+
+        public PoolResetSpyFirebirdDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
+
+        internal override void ResetConnectionPoolForDdl(string connectionString)
+        {
+            ResetCalls.Add(connectionString);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DdlStatement_ResetsBothReaderAndWriterPools()
+    {
+        // Regression: FirebirdDialect.ResetConnectionPoolForDdl clears exactly ONE ADO.NET pool,
+        // keyed by the exact connection string passed to FbConnection.ClearPool. Since
+        // ApplicationNameSettingName was wired up for Firebird (pool separation), the reader and
+        // writer connections use DISTINCT connection strings and therefore DISTINCT physical
+        // pools — a stale, idle connection sitting in the READER pool can still block a DDL
+        // commit issued over the WRITER connection with "object TABLE ... is in use", exactly the
+        // failure ResetConnectionPoolForDdl exists to prevent. Resetting only the writer's pool
+        // (the pre-pool-separation behavior, when reader/writer shared one pool/one string) no
+        // longer covers this — both pools must be cleared before a DDL statement.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var spyDialect = new PoolResetSpyFirebirdDialect(factory, NullLogger.Instance);
+        await using var context = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=Firebird", factory, new TypeMapRegistry(), spyDialect);
+        await using var container = context.CreateSqlContainer("CREATE TABLE \"ddl_probe\" (\"id\" INTEGER)");
+
+        await container.ExecuteNonQueryAsync();
+
+        var readerConnectionString = pengdows.crud.@internal.InternalConnectionStringAccess.GetRawReaderConnectionString(context);
+        var writerConnectionString = pengdows.crud.@internal.InternalConnectionStringAccess.GetRawConnectionString(context);
+        Assert.NotEqual(writerConnectionString, readerConnectionString);
+        Assert.Contains(writerConnectionString, spyDialect.ResetCalls);
+        Assert.Contains(readerConnectionString, spyDialect.ResetCalls);
     }
 
     [Fact]

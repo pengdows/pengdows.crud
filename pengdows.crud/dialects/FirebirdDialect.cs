@@ -117,6 +117,20 @@ internal class FirebirdDialect : SqlDialect
     // identical and collapse into one shared pool — the same bug class Access/Db2/Sybase/
     // InterBase/Informix's ApplicationNameSettingName fixes addressed this session. See the
     // "Read-only enforcement" remarks below for the companion finding.
+    //
+    // KNOWN INTERACTION, found and fixed the same session this was added: enabling this setting
+    // means reader and writer connections now use genuinely DISTINCT connection strings — and
+    // therefore genuinely DISTINCT physical ADO.NET pools — for the first time. RequiresConnection-
+    // PoolResetForDdl/ResetConnectionPoolForDdl below existed before this change but only ever
+    // cleared ONE pool (the DDL statement's own, i.e. the writer's), which was sufficient when
+    // reader and writer shared one pool. Once they diverged, a stale idle connection sitting in
+    // the now-separate READER pool could still block a DDL commit on the WRITER connection with
+    // the identical "object TABLE ... is in use" failure this hook exists to prevent — reproduced
+    // live via CompositeKeyTests failing on the very first DDL statement against a brand-new
+    // container (not an accumulation-over-many-operations effect). Fixed generically in
+    // SqlContainer.ExecuteNonQueryAsync's DDL-reset call site, which now resets both the writer's
+    // and reader's raw connection string whenever they differ — not a Firebird-specific patch,
+    // since the same divergence applies to any future RequiresConnectionPoolResetForDdl dialect.
     public override string? ApplicationNameSettingName => "Application Name";
 
     // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"

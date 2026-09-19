@@ -1192,7 +1192,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
                 ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
             {
-                ddlDialect.ResetConnectionPoolForDdl(InternalConnectionStringAccess.GetRawConnectionString(_context));
+                // A stale, idle connection sitting in EITHER pool (not just the writer's) can
+                // still block a DDL commit — reader and writer connections are, in general, two
+                // distinct physical ADO.NET pools (differentiated by ApplicationName/pool
+                // discriminator), so both must be cleared. When a dialect has no such
+                // differentiation the two strings are identical and this is a harmless repeat.
+                var writerConnectionString = InternalConnectionStringAccess.GetRawConnectionString(_context);
+                var readerConnectionString = InternalConnectionStringAccess.GetRawReaderConnectionString(_context);
+                ddlDialect.ResetConnectionPoolForDdl(writerConnectionString);
+                if (!string.Equals(readerConnectionString, writerConnectionString, StringComparison.Ordinal))
+                {
+                    ddlDialect.ResetConnectionPoolForDdl(readerConnectionString);
+                }
             }
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);

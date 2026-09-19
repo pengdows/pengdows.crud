@@ -13,4 +13,14 @@ internal static class InternalConnectionStringAccess
             _ => context.ConnectionString
         };
     }
+
+    internal static string GetRawReaderConnectionString(IDatabaseContext context)
+    {
+        return context switch
+        {
+            DatabaseContext databaseContext => databaseContext.RawReaderConnectionString,
+            TransactionContext transactionContext => transactionContext.RawReaderConnectionString,
+            _ => context.ConnectionString
+        };
+    }
 }
