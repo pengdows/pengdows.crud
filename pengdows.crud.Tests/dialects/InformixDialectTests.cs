@@ -38,6 +38,35 @@ public class InformixDialectTests
     }
 
     [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingName_IsLeaveTrailingSpaces()
+    {
+        // CONFIRMED LIVE (2026-09-19, real icr.io/informix/informix-developer-database
+        // container) — a follow-up to the earlier pass this session that investigated Optofc/
+        // DelimIdent and correctly declined both (neither was confirmed behaviorally inert).
+        // Systematically re-tested every property on the real live-connected
+        // IfxConnectionStringBuilder for one whose CHOSEN VALUE equals the driver's own already-
+        // implicit compiled-in default (the strongest inertness guarantee established this
+        // session, matching InterBaseDialect's "fetch size=200" fix) — LeaveTrailingSpaces
+        // defaults to False, so setting it explicitly to False is guaranteed to change nothing.
+        // Confirmed live: a connection with "LeaveTrailingSpaces=False" explicitly set opens
+        // and queries successfully. Deliberately NOT MaxPoolSize=100 (also default-matching and
+        // also confirmed to connect) — ApplyPoolDiscriminator skips setting the discriminator key
+        // if the caller's own connection string already contains it (see
+        // ConnectionPoolingConfiguration.ApplyPoolDiscriminator's "don't override" guard), and
+        // MaxPoolSize is exactly the kind of property a real caller is likely to have already
+        // configured themselves — silently defeating pool separation in precisely the case where
+        // a caller has customized their own pooling. LeaveTrailingSpaces is obscure enough that
+        // no real caller is expected to ever set it themselves.
+        Assert.Equal("LeaveTrailingSpaces", CreateDialect().ReadOnlyPoolDiscriminatorSettingName);
+    }
+
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingValue_MatchesLeaveTrailingSpacesOwnDefault()
+    {
+        Assert.Equal("False", CreateDialect().ReadOnlyPoolDiscriminatorSettingValue);
+    }
+
+    [Fact]
     public void DatabaseType_IsInformix()
     {
         Assert.Equal(SupportedDatabase.Informix, CreateDialect().DatabaseType);

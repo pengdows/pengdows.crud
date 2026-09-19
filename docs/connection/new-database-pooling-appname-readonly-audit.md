@@ -152,7 +152,7 @@ inert candidate keyword has been identified yet for HANA — needs either docume
 a live connection to test candidates the way Access's was verified (open, measure, confirm
 behaviorally inert).
 
-### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026)
+### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026) — FULLY RESOLVED 2026-09-19 (discriminator gap closed)
 
 **LIVE-VERIFIED (2026-09-18)** against a real `icr.io/informix/informix-developer-database`
 container (the prior pass here was reflection-only against the package DLL; this pass actually
@@ -167,19 +167,30 @@ never-configured instance still exposes identically.
 | Read-only (connection string) | none found | No dedicated keyword. |
 | Read-only (session SQL) | `SET TRANSACTION READ ONLY` | **CONFIRMED LIVE, real enforcement.** Requires being inside an active transaction first (`BEGIN WORK`, or a real ADO.NET `conn.BeginTransaction()` — both tested) — issued standalone it fails with `"Not in transaction."`, which is not a rejection of the statement itself. Inside a transaction it's accepted, and a subsequent write then fails with `"Invalid operation for a READ-ONLY transaction."` Implemented via `InformixDialect.TryEnterReadOnlyTransaction`/`TryEnterReadOnlyTransactionAsync` (the same `TryExecuteReadOnlySql` shared helper `OracleDialect` uses), not `GetReadOnlyConnectionParameter()` — this is transaction-scoped SQL, not a connection-string property. |
 
-**Discriminator: investigated, deliberately NOT implemented.** No `ApplicationName` keyword exists.
-Two candidates were found and confirmed to connect successfully when added to a live connection
-string — `Optofc=1` ("Optimize Open Cursor", a real CSDK cursor-handling switch) and
-`DelimIdent=true` — but neither meets the bar `AccessDialect`'s `Jet OLEDB:Database Locking
-Mode=1` or `OracleDialect`'s `Metadata Pooling=false` do: `DelimIdent` is already part of every
-connection string this dialect builds (setting it again wouldn't differentiate reader vs. writer
-pools at all), and `Optofc`'s actual behavioral effect (does it change real cursor semantics, or
-is `1` already the driver's implicit default?) was not confirmed — "connects without error" is
-not the same bar as "confirmed behaviorally inert," which is exactly the distinction Access's
-original `SupportsExternalPooling`/`PoolingSettingName` bug blurred (a property that connects
-fine is not automatically safe to use as a silent discriminator). `ReadOnlyPoolDiscriminatorSettingName`
-stays at the `SqlDialect` base default (`null`) until a genuinely inert candidate is found —
-reader and writer connections share one physical pool for this dialect for now.
+**Discriminator: RESOLVED 2026-09-19 (live, real Docker container, follow-up pass).** The prior
+pass correctly declined `Optofc=1`/`DelimIdent=true` (neither confirmed behaviorally inert — see
+below for why that bar matters). This pass systematically dumped every property's own compiled-in
+default off a live-connected `IfxConnectionStringBuilder`, then live-tested which ones can be set
+explicitly to their OWN default value without error (the `InterBaseDialect` "fetch size=200"
+pattern — guaranteed inert by construction, not just observed to look unchanged). Three qualify:
+`Exclusive=no`, `MaxPoolSize=100`, and `LeaveTrailingSpaces=False` — all connect successfully with
+their default value explicitly set. **`LeaveTrailingSpaces=False` was chosen** (a CHAR-column
+trailing-space read-behavior flag): `MaxPoolSize`, despite also qualifying on paper, was
+deliberately rejected because `ConnectionPoolingConfiguration.ApplyPoolDiscriminator` skips
+setting the discriminator key when the caller's own connection string already contains it — and
+`MaxPoolSize` is exactly the kind of property a real caller is plausible to have already
+configured themselves, which would silently defeat pool separation in precisely the case where a
+caller has customized their own pooling. `LeaveTrailingSpaces` is obscure enough that no real
+caller is expected to ever set it. Implemented as
+`InformixDialect.ReadOnlyPoolDiscriminatorSettingName => "LeaveTrailingSpaces"` /
+`ReadOnlyPoolDiscriminatorSettingValue => "False"`.
+
+Original finding, preserved for context: no `ApplicationName` keyword exists on
+`IfxConnectionStringBuilder` at all (confirmed absent, live, across all 51 properties) — this is
+why a discriminator (not `ApplicationNameSettingName`) was the right mechanism here in the first
+place. The earlier candidates `Optofc=1`/`DelimIdent=true` were rejected because "connects without
+error" is not the same bar as "confirmed behaviorally inert," which is exactly the distinction
+Access's original `SupportsExternalPooling`/`PoolingSettingName` bug blurred.
 
 ### InterBase (`InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder`, confirmed via `interbasesql.data.interbaseclient` 10.0.3) — RESOLVED 2026-09-18 (live, real Docker container)
 
@@ -216,7 +227,7 @@ up.
 | Db2 | `ClientApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`) | `Min Pool Size`/`Max Pool Size` ✓ APPLIED (setting name was never wired up — real bug, now fixed) | `0` / `0` — driver doesn't enforce it at ANY value, live-confirmed | none | `SET TRANSACTION READ ONLY` — **REJECTED live, syntax error** | No |
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | **RESOLVED**: `SET TRANSACTION READ ONLY` is a syntax error; `sp_dboption 'read only'` is real but database-wide, not usable here | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
-| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
+| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Applied — `LeaveTrailingSpaces=False`** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `IBTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — needs a new extension point | **Applied — `fetch size=200`** |
 
 **On default pool sizes**: all default values above were read directly off a freshly-constructed
@@ -240,12 +251,9 @@ functionally different would be exactly the same class of unverified-assumption 
    contradicting the original ANSI-plausibility assumption for both. InterBase's read-only claim
    is CONFIRMED LIVE to work at the driver level, but NOT wired into pengdows.crud. Informix's is
    CONFIRMED LIVE and implemented. See each database's section above for the full trail.)
-2. Live-verify (or find documentation for) a genuinely inert, driver-recognized discriminator
-   keyword for HANA and Informix — the same way `Jet OLEDB:Database Locking Mode=1` was verified
-   for Access and `fetch size=200` was verified for InterBase (open a connection with vs. without
-   it, confirm identical behavior, confirm the connection strings differ; prefer a candidate that
-   matches the driver's own compiled-in default over an arbitrary non-default knob, so the "inert"
-   claim doesn't rest only on empirical observation).
+2. ~~Live-verify (or find documentation for) a genuinely inert, driver-recognized discriminator
+   keyword for HANA and Informix~~ **Informix done (2026-09-19) — `LeaveTrailingSpaces=False`,
+   matching its own driver default. HANA remains open.**
 3. ~~Confirm what Db2's `MaxPoolSize=0` default actually means in practice~~ **Done (2026-09-18)
    — see the Db2 section above: pengdows.crud's own generic 0-handling logic was already safe,
    but the driver itself doesn't enforce ANY `MaxPoolSize` value as a real cap regardless (150

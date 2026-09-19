@@ -261,18 +261,27 @@ internal sealed class InformixDialect : SqlDialect
 
     // No ApplicationName-equivalent connection-string keyword exists on
     // Informix.Net.Core.IfxConnectionStringBuilder (CONFIRMED via reflection, 51 properties
-    // inspected — see docs/connection/new-database-pooling-appname-readonly-audit.md). Two
-    // candidates were found and confirmed to CONNECT successfully when added
-    // (Optofc=1, DelimIdent=true), but neither meets the bar this needs: DelimIdent is already
-    // part of every Informix connection string this dialect builds (it wouldn't differentiate
-    // reader vs. writer pools at all), and Optofc ("Optimize Open Cursor") is a real CSDK
-    // cursor-handling behavior switch, not confirmed to be a no-op matching the driver's
-    // already-implicit default the way Access's "Jet OLEDB:Database Locking Mode=1" or
-    // Oracle's "Metadata Pooling=false" are. Setting an unverified behavior-affecting property
-    // purely to split a pool key is exactly the class of mistake AccessDialect's original
-    // "Pooling=True" bug was (assumed safe without live-testing its actual effect, not just
-    // whether the driver accepts it) — deliberately NOT implemented here without further
-    // research into what Optofc actually changes. ReadOnlyPoolDiscriminatorSettingName stays at
-    // the SqlDialect base default (null); reader and writer connections share one pool for this
-    // dialect until a genuinely inert candidate is found.
+    // inspected — see docs/connection/new-database-pooling-appname-readonly-audit.md). An
+    // earlier pass this session found two candidates that CONNECT successfully (Optofc=1,
+    // DelimIdent=true) but correctly declined both: DelimIdent is already part of every
+    // connection string this dialect builds (wouldn't differentiate pools), and Optofc's actual
+    // cursor-handling effect was unconfirmed — a property that merely "connects without error"
+    // is not the same bar as "confirmed behaviorally inert" (the distinction Access's original
+    // Pooling=True bug blurred).
+    //
+    // RESOLVED (2026-09-19, live against a real icr.io/informix/informix-developer-database
+    // container): systematically dumped every property's own compiled-in default and tested
+    // which ones can be set explicitly, live, without error — three connect successfully with
+    // their value set to their OWN driver default (guaranteed inert by construction, the same
+    // pattern InterBaseDialect's "fetch size=200" fix uses): Exclusive=no, MaxPoolSize=100, and
+    // LeaveTrailingSpaces=False. MaxPoolSize was deliberately NOT chosen despite also qualifying:
+    // ConnectionPoolingConfiguration.ApplyPoolDiscriminator skips setting the discriminator key
+    // if the caller's own connection string already contains it, and MaxPoolSize is exactly the
+    // kind of property a real caller is plausible to have already configured themselves —
+    // silently defeating pool separation in precisely the case where a caller has customized
+    // their own pooling. LeaveTrailingSpaces (a CHAR-column trailing-space read behavior flag)
+    // is obscure enough that no real caller is expected to ever set it themselves, so it was
+    // chosen over the otherwise-equally-valid Exclusive=no.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "LeaveTrailingSpaces";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "False";
 }
