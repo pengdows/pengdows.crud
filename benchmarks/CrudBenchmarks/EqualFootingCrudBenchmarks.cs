@@ -11,8 +11,8 @@ using pengdows.crud.attributes;
 namespace CrudBenchmarks;
 
 /// <summary>
-/// Equal-footing CRUD benchmark proving three thesis points:
-///   #1 - EF Core is ALWAYS slower than pengdows.crud and Dapper
+/// Equal-footing CRUD benchmark measuring three thesis points:
+///   #1 - EF Core was slower across the workloads/configurations measured here
 ///   #2 - pengdows.crud performs within the same ballpark as Dapper
 ///   #5 - Server (SQLite) execution time is equal across all three frameworks
 ///
@@ -757,20 +757,23 @@ public class EqualFootingCrudBenchmarks : IDisposable
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
             {
-                await using var ctx = new EfBenchContext(_efOptions);
-                await ctx.Database.ExecuteSqlRawAsync(insertSql,
-                    new SqliteParameter("Id", id),
-                    new SqliteParameter("Name", "ToDelete"),
-                    new SqliteParameter("Age", 99),
-                    new SqliteParameter("Salary", 1.0),
-                    new SqliteParameter("IsActive", false),
-                    new SqliteParameter("CreatedAt", DateTime.UtcNow.ToString("O")));
+                await using var conn = new SqliteConnection(ConnStr);
+                await conn.OpenAsync();
+                await conn.ExecuteAsync(insertSql, new
+                {
+                    Id = id,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow.ToString("O")
+                });
             }
 
             {
-                await using var ctx = new EfBenchContext(_efOptions);
-                count += await ctx.Database.ExecuteSqlRawAsync(deleteSql,
-                    new SqliteParameter("Id", id));
+                await using var conn = new SqliteConnection(ConnStr);
+                await conn.OpenAsync();
+                count += await conn.ExecuteAsync(deleteSql, new { Id = id });
             }
         }
 
