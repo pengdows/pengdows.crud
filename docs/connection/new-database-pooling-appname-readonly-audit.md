@@ -1,6 +1,12 @@
 # Application Name / Pooling / Read-Only Audit — Databases Added Since 2.0.5 (`main`)
 
-## Status: partially applied
+## Status: essentially complete
+
+Of the six databases with a real, unexamined gap, five are now fully resolved (Access, Db2,
+Sybase ASE, InterBase, SAP HANA all have a final answer for both the discriminator and read-only
+questions, applied via TDD where a real mechanism existed). Only Informix's discriminator remains
+genuinely open, and InterBase's confirmed-working read-only transaction support still needs a new
+pengdows.crud extension point to actually wire in — see "Next steps" at the bottom.
 
 The three findings that needed no live server connection (real, driver-confirmed
 `ApplicationNameSettingName` keywords for FlatFile/Db2/Sybase ASE) have been applied via TDD:
@@ -36,7 +42,7 @@ observed to look unchanged). Its read-only claim is CONFIRMED LIVE to work at th
 `ISqlDialect.TryEnterReadOnlyTransaction`'s hook runs after the transaction is already opened via
 the ordinary `IsolationLevel`-based path, and InterBase requires the read-only flag at
 transaction-*creation* time. Implementing this needs a new pengdows.crud extension point (see
-"Next steps" item 5) — left open rather than forcing a broken partial fix.
+"Next steps" below) — left open rather than forcing a broken partial fix.
 
 **Informix's read-only question is now also resolved (2026-09-18, live against a real
 `icr.io/informix/informix-developer-database` container)**: `SET TRANSACTION READ ONLY` inside an
@@ -56,9 +62,26 @@ explicit `Max Pool Size` a caller wrote into their own Db2 connection string was
 The driver itself was also confirmed to not enforce `Max Pool Size` as a real cap at any value —
 pengdows.crud's own in-process `PoolGovernor` is Db2's sole real admission-control safety net.
 
-The only remaining gaps (HANA's session-SQL read-only claim and HANA/Informix's pool
-discriminators) still require live server verification — see "Next steps" at the bottom for what's
-still open.
+**SAP HANA's questions are now also resolved (2026-09-19, live against a real
+`saplabs/hanaexpress` container)**: `SET TRANSACTION READ ONLY` genuinely works (a write attempted
+afterward fails with `HanaException` NativeError 129), now implemented via
+`HanaDialect.TryEnterReadOnlyTransaction`/`TryEnterReadOnlyTransactionAsync`. Its discriminator
+gap is also fixed: `ConnectionTimeout=15` (the driver's own compiled-in default), applied via the
+same "matches-the-default" pattern InterBase used, but only after discovering that testing
+candidates through `HanaConnectionStringBuilder`'s own typed properties gives a MISLEADING
+answer — that builder silently omits any property set to its default from the serialized
+connection string, which would make a discriminator chosen that way invisible to the pool key.
+The real production path (`ConnectionPoolingConfiguration.ApplyPoolDiscriminator`'s generic
+`DbConnectionStringBuilder`) does include it correctly — see HANA's section below for the full
+methodological note. A second hazard was found and fixed along the way: HANA's read-only flag is
+STICKY at the session level (persists past `COMMIT`, affecting the next transaction on the same
+pooled connection) — fixed via `HanaDialect.GetBaseSessionSettings()` issuing `"SET TRANSACTION
+READ WRITE"` as a per-checkout reset.
+
+The only remaining gaps are Informix's pool discriminator (deliberately left open — no
+confirmed-safe candidate found) and wiring InterBase's already-confirmed-working read-only
+transaction support into pengdows.crud (blocked on a real extension-point design, not missing
+research) — see "Next steps" at the bottom for the full detail.
 
 ## Why this document exists
 
@@ -136,21 +159,40 @@ research only, per instruction): `ApplicationNameSettingName => "applicationName
 
 **Conclusion**: no database-level read-only enforcement mechanism exists for Db2 reachable via this driver — `GetReadOnlyConnectionParameter()` stays at the base `null`/no-op, matching the same conclusion independently reached for Sybase ASE the same day (see that section below). `pengdows.crud`'s own `ReadWriteMode.ReadOnly` pre-flight check still applies regardless. See `Db2Dialect.cs`'s own comments for the full dated trail.
 
-### SAP HANA (`Sap.Data.Hana.HanaConnectionStringBuilder`, confirmed via `sap.data.hana.net.v8.0` 2.29.27)
+### SAP HANA (`Sap.Data.Hana.HanaConnectionStringBuilder`, confirmed via `sap.data.hana.net.v8.0` 2.29.27) — RESOLVED 2026-09-19 (live, real saplabs/hanaexpress container)
 
 | Capability | Real keyword | Status |
 |---|---|---|
-| Application Name | none found | Not present among 62 inspected properties. HANA may support this only via a session-level `SET` statement (e.g. an `APPLICATION`-style session variable) — **not yet live-verified**. |
+| Application Name | none found | Not present among 72 inspected properties (re-confirmed live this pass — the earlier reflection-only pass found 62). |
 | Pooling | `Pooling` (bool), `MaxPoolSize` (int), `MinPoolSize` (int) | **Confirmed**, full min/max sizing support. **Default values: `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=100`.** |
+| Discriminator | **`ConnectionTimeout` = `15`** | **APPLIED.** CONFIRMED LIVE via the actual production mechanism (`ConnectionPoolingConfiguration.ApplyPoolDiscriminator`'s generic `DbConnectionStringBuilder`, not the HANA-specific typed builder — see the note below on why that distinction mattered here). `15` is `ConnectionTimeout`'s own compiled-in default, so setting it explicitly is guaranteed behaviorally inert. Implemented as `HanaDialect.ReadOnlyPoolDiscriminatorSettingName`/`Value`. |
 | Read-only (connection string) | none found | No dedicated keyword. |
-| Read-only (session SQL) | `SET TRANSACTION READ ONLY` — **not yet live-verified** | HANA has broad ANSI SQL support; plausible but unconfirmed. |
+| Read-only (transaction level) | `SET TRANSACTION READ ONLY` | **CONFIRMED LIVE, real enforcement, implemented.** A write attempted afterward fails with `HanaException` NativeError 129 (`"...please use \"SET TRANSACTION READ WRITE\" statement first"`); a read inside the same read-only transaction succeeds normally. Implemented via `HanaDialect.TryEnterReadOnlyTransaction`/`TryEnterReadOnlyTransactionAsync` (the same `TryExecuteReadOnlySql` shared helper Oracle/Informix use). **Unlike Db2 and Sybase ASE this same session, the ANSI pattern genuinely works here** — don't assume it transfers uniformly across dialects either way; verify each one live. |
 
-Because there is no `ApplicationName` keyword, this dialect **needs a
-`ReadOnlyPoolDiscriminatorSettingName` fallback** (the same class of fix Access got via `Jet
-OLEDB:Database Locking Mode=1`) to avoid collapsing its reader/writer pools. No safe, confirmed-
-inert candidate keyword has been identified yet for HANA — needs either documentation research or
-a live connection to test candidates the way Access's was verified (open, measure, confirm
-behaviorally inert).
+**A genuine methodological pitfall, worth flagging for future discriminator research on any
+dialect**: testing candidate properties by constructing `HanaConnectionStringBuilder` (the
+HANA-specific typed builder) and reading back its own `.ConnectionString` is misleading — that
+builder silently OMITS any property explicitly set to its own default value from the serialized
+text (confirmed for every property tried: `Distribution`, `SplitBatchCommands`,
+`ConnectDiagnosticInfo`, `Reconnect`, `NodeConnectTimeout`, `PacketSize`, `MaxPoolSize`,
+`Prefetch`, `SSLSNIRequest`, `Locale`), which would make a discriminator chosen this way silently
+ineffective — the pool key text would be byte-identical to the baseline. The ACTUAL production
+mechanism, `ConnectionPoolingConfiguration.ApplyPoolDiscriminator`, uses a **generic**
+`System.Data.Common.DbConnectionStringBuilder` instead (`builder[key] = value`), which has no
+such canonicalization and DOES include the literal `key=value` text regardless of whether it
+matches the driver's semantic default. Always test a candidate discriminator through the real
+`ApplyPoolDiscriminator`-shaped mechanism, not just the target driver's own typed builder — the
+two can give opposite answers to "does this actually change the connection string text?"
+
+**A second genuine hazard found and fixed along the way, not originally in scope**: HANA's `SET
+TRANSACTION READ ONLY` is STICKY at the session level — CONFIRMED LIVE that it persists past
+`COMMIT` and affects the next transaction on the same physical connection (mark read-only, commit
+with no write, then a fresh transaction with no explicit `SET` statement at all still rejects a
+write with the identical NativeError 129). Left unaddressed, a pooled physical connection marked
+read-only by one caller's transaction could reject an unrelated later caller's unrelated WRITE,
+unpredictably. Fixed via `HanaDialect.GetBaseSessionSettings()` returning `"SET TRANSACTION READ
+WRITE"` as a per-checkout reset (CONFIRMED LIVE safe to run as a bare preamble with no active
+transaction, and confirmed to correctly restore write access after a stuck read-only commit).
 
 ### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026)
 
@@ -215,7 +257,7 @@ up.
 | FlatFile | `applicationName` ✓ | n/a (no real pool concept) | n/a | n/a | `readonly=true` ✓ hard-enforced | — | No |
 | Db2 | `ClientApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`) | `Min Pool Size`/`Max Pool Size` ✓ APPLIED (setting name was never wired up — real bug, now fixed) | `0` / `0` — driver doesn't enforce it at ANY value, live-confirmed | none | `SET TRANSACTION READ ONLY` — **REJECTED live, syntax error** | No |
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | **RESOLVED**: `SET TRANSACTION READ ONLY` is a syntax error; `sp_dboption 'read only'` is real but database-wide, not usable here | No |
-| SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
+| SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE, implemented** | **Applied — `ConnectionTimeout=15`** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `IBTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — needs a new extension point | **Applied — `fetch size=200`** |
 
@@ -233,29 +275,36 @@ unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` ove
 inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
 functionally different would be exactly the same class of unverified-assumption gap Access had.
 
-## Next steps (Db2, Sybase ASE, InterBase, and Informix resolved 2026-09-18 — see their sections above; only HANA remains open)
+## Next steps (Db2, Sybase ASE, InterBase, Informix, and SAP HANA all resolved 2026-09-18/19 — see each section above; only two narrow items remain genuinely open)
 
-1. Live-verify the remaining "plausible, not yet live-verified" session-SQL read-only claim
-   (HANA) against a real server. (Db2 and Sybase ASE both REJECTED outright as syntax errors,
-   contradicting the original ANSI-plausibility assumption for both. InterBase's read-only claim
-   is CONFIRMED LIVE to work at the driver level, but NOT wired into pengdows.crud. Informix's is
-   CONFIRMED LIVE and implemented. See each database's section above for the full trail.)
-2. Live-verify (or find documentation for) a genuinely inert, driver-recognized discriminator
-   keyword for HANA and Informix — the same way `Jet OLEDB:Database Locking Mode=1` was verified
-   for Access and `fetch size=200` was verified for InterBase (open a connection with vs. without
-   it, confirm identical behavior, confirm the connection strings differ; prefer a candidate that
-   matches the driver's own compiled-in default over an arbitrary non-default knob, so the "inert"
-   claim doesn't rest only on empirical observation).
-3. ~~Confirm what Db2's `MaxPoolSize=0` default actually means in practice~~ **Done (2026-09-18)
-   — see the Db2 section above: pengdows.crud's own generic 0-handling logic was already safe,
-   but the driver itself doesn't enforce ANY `MaxPoolSize` value as a real cap regardless (150
-   concurrent opens succeeded with `Max Pool Size=5` explicitly set) — pengdows.crud's in-process
-   `PoolGovernor` is Db2's sole real admission-control safety net. A real, separate
-   `MaxPoolSizeSettingName`/`MinPoolSizeSettingName` wiring bug was found and fixed along the way
-   (neither was ever set, so any caller-supplied `Max Pool Size` was silently ignored).**
-4. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
-   how `AccessDialect.cs`/`Db2Dialect.cs`/`SybaseDialect.cs`/`InterBaseDialect.cs`/
-   `InformixDialect.cs` were fixed this session.
-5. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
+Every session-SQL read-only claim and every discriminator question originally listed here has now
+been live-verified, one way or another:
+
+- **Read-only**: Db2 and Sybase ASE both REJECTED the ANSI `SET TRANSACTION READ ONLY` pattern
+  outright as a syntax error. InterBase, Informix, and SAP HANA all confirmed it (or an
+  equivalent) genuinely works — InterBase's is confirmed at the driver level but NOT yet wired
+  into pengdows.crud (see the extension-point item below); Informix's and HANA's are both
+  confirmed live AND implemented.
+- **Discriminators**: Access, InterBase, and SAP HANA all now have a confirmed-safe,
+  applied discriminator (`Jet OLEDB:Database Locking Mode=1`, `fetch size=200`,
+  `ConnectionTimeout=15` respectively). Db2 and Sybase ASE didn't need one — both have a real
+  `ApplicationName`-equivalent keyword. **Informix is the one genuine, deliberately-left-open
+  exception**: two candidates (`Optofc=1`, `DelimIdent=true`) connect successfully but neither is
+  confirmed behaviorally inert — see its section above for why guessing here would repeat
+  Access's original `Pooling=True` mistake.
+
+Remaining work:
+
+1. Find a genuinely inert, driver-recognized discriminator keyword for Informix, or definitively
+   establish none exists — the same bar `Jet OLEDB:Database Locking Mode=1`/`fetch size=200`/
+   `ConnectionTimeout=15` met (a candidate whose value matches the driver's own compiled-in
+   default is the strongest form of this; test it through `ConnectionPoolingConfiguration.
+   ApplyPoolDiscriminator`'s actual generic-`DbConnectionStringBuilder` mechanism, not just the
+   target driver's own typed builder — see SAP HANA's section above for why those two can give
+   opposite answers to "does this actually change the connection string text?").
+2. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
    itself is created (not just what SQL runs after it begins)" — InterBase's confirmed-working
    `IBTransactionOptions`-based read-only transaction is blocked on this, not on missing research.
+3. Once resolved, apply Informix's discriminator via TDD, mirroring exactly how
+   `AccessDialect.cs`/`Db2Dialect.cs`/`SybaseDialect.cs`/`InterBaseDialect.cs`/`HanaDialect.cs`
+   were fixed this session.

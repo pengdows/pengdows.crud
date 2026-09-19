@@ -3,7 +3,10 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -297,6 +300,111 @@ public class HanaDialectTests
         var ex = new NativeErrorDbException(301, "unique constraint violated");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    [Fact]
+    public void TryClassifyProviderException_ReadOnlyViolation129_ClassifiesAsReadOnlyViolation()
+    {
+        // CONFIRMED LIVE (2026-09-19, real saplabs/hanaexpress container): a write attempted
+        // inside a transaction marked "SET TRANSACTION READ ONLY" fails with NativeError 129:
+        // "transaction rolled back by an internal error: cannot change this transaction's access
+        // mode from read-only to update directly: please use "SET TRANSACTION READ WRITE"
+        // statement first." Feeds AnalyzeException/HanaExceptionTranslator's shared
+        // TryCreateFromCategory path into a real ReadOnlyViolationException, mirroring Access/
+        // Sqlite/DuckDb's identical classification for their own read-only rejections.
+        using var ctx = CreateContext();
+        var ex = new NativeErrorDbException(129,
+            "transaction rolled back by an internal error: cannot change this transaction's " +
+            "access mode from read-only to update directly: please use \"SET TRANSACTION READ WRITE\" statement first");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.ReadOnlyViolation, info.Category);
+    }
+
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingName_IsConnectionTimeout()
+    {
+        // No ApplicationName-equivalent keyword exists on the real Sap.Data.Hana.
+        // HanaConnectionStringBuilder (confirmed via reflection, 72 properties inspected).
+        // "ConnectionTimeout" was chosen and CONFIRMED LIVE (real container, 2026-09-19) via the
+        // actual production mechanism (ConnectionPoolingConfiguration.ApplyPoolDiscriminator's
+        // generic DbConnectionStringBuilder, not the HANA-specific typed builder — the typed
+        // builder canonicalizes away any property set to its own default, which would silently
+        // defeat a discriminator built that way): the resulting connection string genuinely
+        // contains "ConnectionTimeout=15" as literal text, and HanaConnection connects
+        // successfully with it. 15 is HanaConnectionStringBuilder's own compiled-in default for
+        // this property, so setting it explicitly is guaranteed behaviorally inert by
+        // construction, the same bar InterBaseDialect's "fetch size=200" fix meets.
+        Assert.Equal("ConnectionTimeout", CreateDialect().ReadOnlyPoolDiscriminatorSettingName);
+        Assert.Equal("15", CreateDialect().ReadOnlyPoolDiscriminatorSettingValue);
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_ResetsReadOnlyTransactionMode()
+    {
+        // CONFIRMED LIVE (2026-09-19, real container): HANA's "SET TRANSACTION READ ONLY" is
+        // STICKY at the session level — it persists past COMMIT and affects the NEXT transaction
+        // on the same physical connection, requiring an explicit "SET TRANSACTION READ WRITE" to
+        // undo (reproduced directly: mark read-only, commit with no write, then a fresh
+        // transaction with NO explicit SET statement still rejected a write with the exact same
+        // NativeError 129). This is a genuine pooled-connection-hygiene hazard (CLAUDE.md
+        // checklist item 12): if TryEnterReadOnlyTransaction below ever marks a pooled physical
+        // connection read-only and that connection is later reused for an unrelated WRITE
+        // operation, the write could fail unpredictably depending on which pooled connection is
+        // handed out. Also CONFIRMED LIVE that "SET TRANSACTION READ WRITE" is safe to run as a
+        // bare preamble statement with no active transaction (on an already-read-write session,
+        // it is a no-op), and that running it after a stuck read-only commit correctly resets the
+        // session so a subsequent fresh transaction's write succeeds.
+        var sql = CreateDialect().GetBaseSessionSettings();
+        Assert.Contains("SET TRANSACTION READ WRITE", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
+    {
+        // CONFIRMED LIVE (2026-09-19, real container): "SET TRANSACTION READ ONLY" inside an
+        // active transaction is accepted (parses fine) and genuinely enforces read-only — a
+        // subsequent write fails with NativeError 129 (see TryClassifyProviderException test
+        // above), while a read inside the same read-only transaction succeeds normally. Uses the
+        // same TryExecuteReadOnlySql shared helper Oracle/Informix use for their own identical
+        // mechanism.
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text)).ReturnsAsync(0).Verifiable();
+        container.Setup(c => c.Dispose()).Verifiable();
+
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        dialect.TryEnterReadOnlyTransaction(transaction.Object);
+
+        container.Verify();
+        transaction.Verify();
+    }
+
+    [Fact]
+    public async Task TryEnterReadOnlyTransactionAsync_ExecutesSetTransactionReadOnly()
+    {
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        await dialect.TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
+
+        container.Verify();
+        transaction.Verify();
     }
 
     private sealed class NativeErrorDbException : DbException
