@@ -56,6 +56,64 @@ internal sealed class Db2Dialect : SqlDialect
     // set, reader/writer connection strings would be identical and collapse into one shared pool.
     public override string? ApplicationNameSettingName => "ClientApplicationName";
 
+    // CONFIRMED LIVE (2026-09-18, real ibmcom/db2:11.5.8.0 container): a real, previously-
+    // undiscovered gap, distinct from the "what does MaxPoolSize=0 mean" question this was
+    // originally investigating. Db2Dialect never set MaxPoolSizeSettingName at all (inherited
+    // the base null) — PoolingConfigReader.GetEffectivePoolConfig/GetExplicitMaxPoolSize both
+    // bail out immediately via `string.IsNullOrWhiteSpace(dialect.MaxPoolSizeSettingName)`, so
+    // pengdows.crud silently ignored ANY explicit MaxPoolSize a caller wrote into their own Db2
+    // connection string and always fell back to the dialect default (100), regardless of intent.
+    // "Max Pool Size" (with spaces) confirmed as the real, canonical keyword both by reflection
+    // over IBM.Data.Db2.DB2ConnectionStringBuilder AND by observing what that builder itself
+    // re-serializes a MaxPoolSize assignment as.
+    public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    public override string? MinPoolSizeSettingName => "Min Pool Size";
+
+    // CONFIRMED LIVE, separately from the wiring gap above: even when a caller DOES explicitly
+    // set Max Pool Size, IBM.Data.Db2-lnx 8.0.0.500 does not actually enforce it as a real
+    // client-side cap on physical connections at all. With Max Pool Size=5 explicitly set, 150
+    // concurrent opens all succeeded in ~0.01s (no throttling/queueing observed at any of
+    // 0/5/100/unset), and DB2's own SYSIBMADM.APPLICATIONS admin view confirmed 313 genuine
+    // concurrent server-side sessions while those 150 connections were held open simultaneously
+    // — proving these were real physical connections, not a client-side illusion. Unlike drivers
+    // that genuinely block callers once a pool is full (the assumption pengdows.crud's own
+    // PoolGovernor sizing logic is built around for defense-in-depth), this driver's pool-size
+    // setting is effectively decorative. This does NOT compromise pengdows.crud's own protection
+    // — PoolGovernor's semaphore-based admission control is enforced entirely in-process and
+    // never depended on the driver enforcing anything — but it means PoolGovernor is Db2's ONLY
+    // real safety net here, more so than for providers whose own driver also enforces a cap as a
+    // second line of defense. No dialect code responds to this fact specifically (there is
+    // nothing to configure differently), but future changes to this dialect's pooling behavior
+    // should not assume the connection string's Max Pool Size is doing any real work.
+    //
+    // Separately: PoolingConfigReader/DatabaseContext.ResolveEffectiveMaxPoolSize (see
+    // DatabaseContext.Initialization.cs) already special-cases an explicit `MaxPoolSize=0` in the
+    // connection string to mean "fall back to the dialect default" rather than "governor capacity
+    // is zero" — this is generic, dialect-agnostic logic, not something Db2Dialect needed to add.
+    // So Db2's own driver defaulting MaxPoolSize to 0 (an outlier vs. every other driver
+    // surveyed, which default to 100) was already handled correctly before this fix; the actual
+    // bug fixed here is narrower and different: MaxPoolSizeSettingName being unset meant that
+    // generic 0-handling logic could never even be reached for Db2, because the connection string
+    // was never being parsed for a Max Pool Size value in the first place.
+
+    // CONFIRMED LIVE (2026-09-18): Db2 LUW has NO database-level read-only enforcement mechanism
+    // reachable via this driver.
+    //   * `SET TRANSACTION READ ONLY` (the ANSI pattern this was expected to plausibly support,
+    //     given Db2 LUW's strong SQL-standard conformance) is a flat SYNTAX ERROR — SQL0104N,
+    //     "An unexpected token 'READ ONLY' was found following 'SET TRANSACTION'." It doesn't
+    //     even parse, let alone enforce anything — the ANSI assumption was wrong.
+    //   * No connection-string-level read-only property exists either. The only candidate found
+    //     during reflection, `IsReadOnly`, is DbConnectionStringBuilder's OWN base-class
+    //     "is this builder instance locked" indicator (present on every ADO.NET builder) — not a
+    //     Db2-specific connection property at all; the compiler refuses assigning to it, and it
+    //     has nothing to do with database access mode.
+    // GetReadOnlyConnectionParameter() and TryEnterReadOnlyTransaction stay at the SqlDialect
+    // base defaults (null / no-op) — deliberately, not an oversight. pengdows.crud's own
+    // ReadWriteMode.ReadOnly pre-flight check (SqlContainer's ReadOnlyContextException) still
+    // applies regardless of database — this is a gap in database-level defense-in-depth for Db2
+    // specifically, not a correctness gap in pengdows.crud itself. Mirrors SybaseDialect.cs's
+    // identical conclusion for ASE, reached the same day against a different real server.
+
     // Db2 SQLCODE -803 / SQLSTATE 23505. Falls back to the numeric SQLCODE magnitude when no
     // SqlState is available at all — IBM.Data.Db2's DB2Exception often doesn't populate SqlState
     // (see TryGetProviderSqlState's message-embedded-SQLSTATE fallback, which itself can miss if

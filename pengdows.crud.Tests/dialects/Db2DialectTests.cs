@@ -8,6 +8,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using Xunit;
 
 #endregion
@@ -24,6 +25,40 @@ public class Db2DialectTests
     private static IDatabaseContext CreateContext()
     {
         return new DatabaseContext("Data Source=test;EmulatedProduct=Db2", new fakeDbFactory(SupportedDatabase.Db2));
+    }
+
+    [Fact]
+    public void MaxPoolSizeSettingName_IsDb2sRealKeyword()
+    {
+        // Confirmed via reflection against the real IBM.Data.Db2.DB2ConnectionStringBuilder AND
+        // via live re-serialization through that builder ("Max Pool Size=0" is the canonical
+        // spelling it emits). Without this set, PoolingConfigReader.GetEffectivePoolConfig's own
+        // guard clause (string.IsNullOrWhiteSpace(dialect.MaxPoolSizeSettingName)) unconditionally
+        // falls back to the dialect default, silently ignoring ANY explicit MaxPoolSize a caller
+        // writes into their own Db2 connection string — a real, previously-undiscovered gap, not
+        // just the "what does MaxPoolSize=0 mean" question this was originally investigating.
+        Assert.Equal("Max Pool Size", CreateDialect().MaxPoolSizeSettingName);
+    }
+
+    [Fact]
+    public void MinPoolSizeSettingName_IsDb2sRealKeyword()
+    {
+        // Confirmed via reflection: MinPoolSize exists on the real builder alongside MaxPoolSize.
+        Assert.Equal("Min Pool Size", CreateDialect().MinPoolSizeSettingName);
+    }
+
+    [Fact]
+    public void GetEffectivePoolConfig_ReadsExplicitMaxPoolSizeFromDb2ConnectionString()
+    {
+        // End-to-end: before this fix, this returned PoolConfigSource.DialectDefault (100)
+        // regardless of what the connection string said, because MaxPoolSizeSettingName was null.
+        var dialect = CreateDialect();
+        var connStr = "Server=localhost:50000;Database=testdb;UID=x;PWD=y;Max Pool Size=42;";
+
+        var config = PoolingConfigReader.GetEffectivePoolConfig(dialect, connStr);
+
+        Assert.Equal(PoolConfigSource.ConnectionString, config.Source);
+        Assert.Equal(42, config.MaxPoolSize);
     }
 
     [Fact]
