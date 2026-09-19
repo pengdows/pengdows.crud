@@ -39,6 +39,27 @@ public class InterBaseDialectTests
         Assert.Equal(SupportedDatabase.InterBase, CreateDialect().DatabaseType);
     }
 
+    // Confirmed via reflection against the real InterBaseSql.Data.InterBaseClient.
+    // IBConnectionStringBuilder (10.0.3): no ApplicationName-equivalent keyword exists among its
+    // 33 properties, so this dialect needs a ReadOnlyPoolDiscriminatorSettingName fallback (same
+    // class of fix AccessDialect/OracleDialect already have) to avoid reader/writer connection
+    // strings collapsing into one shared pool. "fetch size" was chosen and CONFIRMED LIVE as the
+    // safe candidate: it is a real, recognized keyword (a connection opens successfully with it
+    // set), and setting it to 200 is behaviorally inert because 200 is FetchSize's own compiled-in
+    // default — an explicit value equal to the default can never change behavior, unlike picking
+    // an arbitrary non-default knob and only testing empirically that it "looks" unchanged.
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingName_IsFetchSize()
+    {
+        Assert.Equal("fetch size", CreateDialect().ReadOnlyPoolDiscriminatorSettingName);
+    }
+
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingValue_MatchesFetchSizesOwnDefault()
+    {
+        Assert.Equal("200", CreateDialect().ReadOnlyPoolDiscriminatorSettingValue);
+    }
+
     // Verified live via a real parameterized INSERT and a parameterized SELECT WHERE clause.
     [Fact]
     public void ParameterMarker_IsAtSign()

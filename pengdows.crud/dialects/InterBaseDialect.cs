@@ -134,6 +134,36 @@
 //   uses was CONFIRMED live to round-trip correctly. GuidFormat.Binary + the
 //   SerializeGuidAsBinary override below reuse that exact algorithm (a base SqlDialect member, not
 //   Firebird-specific).
+// - Pool discriminator (2026-09-18, real Docker container): CONFIRMED via reflection against the
+//   real IBConnectionStringBuilder (10.0.3, 33 properties) that no ApplicationName-equivalent
+//   keyword exists — see ReadOnlyPoolDiscriminatorSettingName below for the "fetch size=200"
+//   fix (a real, recognized keyword that matches the driver's own compiled-in default, so setting
+//   it explicitly is guaranteed behaviorally inert while still differentiating the pool key).
+// - Read-only transactions (2026-09-18, real Docker container): CONFIRMED LIVE that the driver
+//   genuinely supports read-only transactions — IBConnection.BeginTransaction(IBTransactionOptions)
+//   with TransactionBehavior including IBTransactionBehavior.Read correctly rejects a write
+//   ("IBException: attempted update during read-only transaction") while reads succeed normally.
+//   HOWEVER this is NOT wired into pengdows.crud's ISqlDialect.TryEnterReadOnlyTransaction hook,
+//   and could not safely be forced in during this investigation — that hook runs SQL AFTER
+//   TransactionContext has already opened the transaction via the ordinary
+//   IsolationLevel-based BeginTransaction() overload (see TransactionContext.cs's private
+//   constructor: CreateConnectionAndTransaction runs first, TryEnterReadOnlyTransaction second).
+//   CONFIRMED live that InterBase's read-only flag cannot be applied after the fact this way:
+//   executing "SET TRANSACTION READ ONLY" as a mid-transaction statement (Oracle's approach —
+//   see OracleDialect.TryEnterReadOnlyTransaction) fails with "IBException: invalid transaction
+//   handle (expecting explicit transaction start)" — InterBase/Firebird's TPB-based transaction
+//   model requires the read-only flag at the moment the physical transaction handle is created
+//   (the discrete BeginTransaction(IBTransactionOptions) overload), not as a follow-up statement.
+//   There is also no database-attach-level (connection-string) read-only keyword — the
+//   "IsReadOnly" property visible on IBConnectionStringBuilder is confirmed to be
+//   DbConnectionStringBuilder's own inherited base property (no setter, no effect on
+//   ConnectionString text), not a real InterBase keyword. Implementing this properly would
+//   require a new pengdows.crud extension point letting a dialect override how the transaction
+//   itself is created (not just what SQL runs afterward) — a real, scoped feature, not a
+//   drive-by fix; left unimplemented rather than forcing a broken TryEnterReadOnlyTransaction
+//   override that couldn't actually enforce anything. See
+//   docs/connection/new-database-pooling-appname-readonly-audit.md's InterBase section for the
+//   tracking entry.
 // =============================================================================
 
 using System.Data;
@@ -169,6 +199,19 @@ internal sealed class InterBaseDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.InterBase;
+
+    // CONFIRMED via reflection against the real InterBaseSql.Data.InterBaseClient.
+    // IBConnectionStringBuilder (10.0.3): no ApplicationName-equivalent keyword exists among its
+    // 33 properties, so this dialect needs a discriminator fallback (same class of fix
+    // AccessDialect/OracleDialect already have) to avoid reader/writer connection strings
+    // collapsing into one shared pool. "fetch size" was chosen and CONFIRMED LIVE (real Docker
+    // container, 2026-09-18): it is a real, recognized keyword (a connection opens successfully
+    // with it explicitly set), and 200 is FetchSize's own compiled-in default — an explicit value
+    // equal to the default can never change behavior, unlike picking an arbitrary non-default
+    // knob (Access's "Jet OLEDB:Database Locking Mode=1") and only testing empirically that
+    // behavior "looks" unchanged across a handful of runs.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "fetch size";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "200";
 
     // Named "@name" parameters, CONFIRMED live via a real parameterized INSERT/SELECT — see
     // file-level AI SUMMARY for the bare-SELECT type-inference caveat.
