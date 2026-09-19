@@ -199,7 +199,17 @@ public class PeakConnectionsBenchmarks : IAsyncDisposable
 
     // ── Benchmarks ───────────────────────────────────────────────────────────
 
+    // CorrectnessIdentity: these methods' bare names (Pengdows/Dapper/EntityFramework, no
+    // "_Pengdows"/"_Dapper"/"_EntityFramework" suffix) never matched CorrectnessColumn's
+    // name-suffix fallback (EndsWith requires a leading underscore before the framework name),
+    // so despite MarkInvalid recording real correctness issues under the "MatchedRateRead"
+    // scenario, the column had no way to resolve framework/scenario for these methods — exactly
+    // the silent-unresolved-identity gap this attribute exists to close. Found via an
+    // independent architecture review; confirmed live by the "[CorrectnessColumn] WARNING:
+    // 'Pengdows'/'Dapper'/'EntityFramework' has correctness fragments... but no
+    // CorrectnessIdentityAttribute" messages this class was already emitting.
     [Benchmark]
+    [CorrectnessIdentity(FrameworkPengdows, "MatchedRateRead")]
     public async Task Pengdows()
     {
         await RunMatchedRateAsync(FrameworkPengdows, async () =>
@@ -214,6 +224,7 @@ public class PeakConnectionsBenchmarks : IAsyncDisposable
     }
 
     [Benchmark]
+    [CorrectnessIdentity(FrameworkDapper, "MatchedRateRead")]
     public async Task Dapper()
     {
         await RunMatchedRateAsync(FrameworkDapper, async () =>
@@ -230,6 +241,7 @@ public class PeakConnectionsBenchmarks : IAsyncDisposable
     }
 
     [Benchmark]
+    [CorrectnessIdentity(FrameworkEntityFramework, "MatchedRateRead")]
     public async Task EntityFramework()
     {
         await RunMatchedRateAsync(FrameworkEntityFramework, async () =>

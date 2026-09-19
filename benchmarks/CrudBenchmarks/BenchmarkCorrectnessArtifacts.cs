@@ -96,16 +96,30 @@ internal static class BenchmarkCorrectnessArtifacts
         ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
 
     // Each [Benchmark] method (Pengdows/Dapper/EntityFramework) runs in its OWN separately
-    // spawned process with a fresh instance, so a single class-scoped file written with
-    // File.WriteAllText meant whichever process's Cleanup() ran (or completed) LAST silently
-    // overwrote every other framework's recorded issues — confirmed in practice on
-    // 2026-08-27: ConnectionPoolProtectionBenchmarks' correctness.json only ever contained
-    // whichever framework/scenario happened to run dead last across the whole class, so
-    // "Fails: 0" for every other row (including every Pengdows row) was unverified, not
-    // actually confirmed clean, even when Pengdows genuinely had zero issues. Fixed by giving
-    // each process its own fragment file (keyed by process ID, so concurrent/sequential
-    // processes never collide) and merging all fragments for a class at read time instead of
-    // relying on a single shared file surviving every process's turn to write it.
+    // spawned process with a fresh instance under BenchmarkDotNet's default out-of-process
+    // toolchain, so a single class-scoped file written with File.WriteAllText meant whichever
+    // process's Cleanup() ran (or completed) LAST silently overwrote every other framework's
+    // recorded issues — confirmed in practice on 2026-08-27: ConnectionPoolProtectionBenchmarks'
+    // correctness.json only ever contained whichever framework/scenario happened to run dead
+    // last across the whole class, so "Fails: 0" for every other row (including every Pengdows
+    // row) was unverified, not actually confirmed clean, even when Pengdows genuinely had zero
+    // issues. Originally fixed by giving each process its own fragment file (keyed by process
+    // ID, so concurrent/sequential processes never collide) and merging all fragments for a
+    // class at read time instead of relying on a single shared file surviving every process's
+    // turn to write it.
+    //
+    // That process-ID keying assumption breaks under CRUD_BENCH_INPROC=1 (a real, documented
+    // mode — see BenchmarkGuidParameters.cs's own usage comment — that runs every benchmark case
+    // in the SAME process via InProcessNoEmitToolchain instead of spawning one per case). Each
+    // case still gets its own fresh class instance and its own [GlobalCleanup]/Write() call, but
+    // all of them now share one PID, so they'd all resolve to the identical fragment path and
+    // reproduce the exact silent-overwrite bug this file exists to prevent — just within one
+    // process instead of across several. Found via an independent architecture review;
+    // confirmed via Write_CalledTwiceFromTheSameProcess_DoesNotOverwriteTheEarlierFragment.
+    // Appending a GUID makes every Write() call's filename unique regardless of process
+    // boundaries; the existing "{class}-*-correctness.json" glob used everywhere fragments are
+    // read still matches, since it doesn't care how many dash-separated segments the wildcard
+    // covers.
     private static string FragmentsDir => Path.Combine(ArtifactsDir, "correctness-fragments");
 
     public static void Write(string benchmarkClassName, IReadOnlyCollection<CorrectnessIssue> issues, long? totalAttempted = null)
@@ -235,7 +249,11 @@ internal static class BenchmarkCorrectnessArtifacts
 
     private static string GetFragmentPath(string benchmarkClassName, int processId)
     {
-        return Path.Combine(FragmentsDir, $"{benchmarkClassName}-{processId}{FileSuffix}");
+        // GUID suffix, not just processId: see the FragmentsDir comment above — under
+        // CRUD_BENCH_INPROC=1 every benchmark case in a class shares one PID, so processId alone
+        // is not unique per Write() call the way it is under the default out-of-process
+        // toolchain.
+        return Path.Combine(FragmentsDir, $"{benchmarkClassName}-{processId}-{Guid.NewGuid():N}{FileSuffix}");
     }
 
     private sealed record CorrectnessArtifact(

@@ -207,6 +207,40 @@ public sealed class BenchmarkCorrectnessArtifactsTests : IDisposable
         Assert.Contains("\"totalAttempted\": 4000", json);
     }
 
+    // Regression test for a real gap found in an independent architecture review of the 3.0
+    // benchmark suite: GetFragmentPath keys solely on Environment.ProcessId, on the documented
+    // assumption (see the comment above FragmentsDir) that "each [Benchmark] method runs in its
+    // OWN separately spawned process." That's true for BenchmarkDotNet's default out-of-process
+    // toolchain, but CRUD_BENCH_INPROC=1 (a real, documented mode — see
+    // BenchmarkGuidParameters.cs's own usage comment) runs every benchmark case in the SAME
+    // process via InProcessNoEmitToolchain. Multiple Write() calls from that one process
+    // (Pengdows/Dapper/EntityFramework, each still getting its own fresh class instance and its
+    // own [GlobalCleanup]) would all resolve to the identical "{class}-{pid}-correctness.json"
+    // path and overwrite each other via File.WriteAllText — reproducing, inside a single
+    // process, the exact silent-overwrite bug this whole fragment-per-writer design was built to
+    // eliminate across processes.
+    [Fact]
+    public void Write_CalledTwiceFromTheSameProcess_DoesNotOverwriteTheEarlierFragment()
+    {
+        BenchmarkCorrectnessArtifacts.Write("SomeBenchmark", new[]
+        {
+            new CorrectnessIssue(null, "WriteStorm", "Dapper", "Exception: SqliteException", 268),
+        });
+
+        BenchmarkCorrectnessArtifacts.Write("SomeBenchmark", new[]
+        {
+            new CorrectnessIssue(null, "WriteStorm", "EntityFramework", "Exception: SqliteException", 348),
+        });
+
+        var dapperCount = BenchmarkCorrectnessArtifacts.CountFailures(
+            "CrudBenchmarks.SomeBenchmark-20260101-000000", null!, "WriteStorm", "Dapper");
+        var efCount = BenchmarkCorrectnessArtifacts.CountFailures(
+            "CrudBenchmarks.SomeBenchmark-20260101-000000", null!, "WriteStorm", "EntityFramework");
+
+        Assert.Equal(268, dapperCount);
+        Assert.Equal(348, efCount);
+    }
+
     private void WriteRawFragment(string benchmarkClassName, int processId, CorrectnessIssue[] issues)
     {
         var fragmentsDir = Path.Combine(_tempDir, "correctness-fragments");
