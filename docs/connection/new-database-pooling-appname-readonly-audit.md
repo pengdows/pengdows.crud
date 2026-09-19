@@ -20,9 +20,20 @@ row claimed no `MinPoolSize`/`MaxPoolSize`-equivalent property exists on
 constructing the type and reading its defaults, not just enumerating property names as the
 original pass did. See the Sybase ASE section below for the corrected finding.
 
-The remaining gaps (four session-SQL read-only claims, three missing pool discriminators for
-HANA/Informix/InterBase, and the Db2 `MaxPoolSize=0` question) still require live server
-verification — see "Next steps" at the bottom for what's still open.
+**Sybase ASE's read-only question is now also resolved (2026-09-18, live against a real ASE 16.0
+container)**: no usable per-connection/per-session read-only mechanism exists. `SET TRANSACTION
+READ ONLY` is a flat syntax error (doesn't even parse); `sp_dboption <db>, 'read only', true` is
+real, confirmed-live enforcement but database-wide, not connection-scoped — wiring it into
+`GetReadOnlyConnectionParameter()` would break the writer connection too. Deliberately left
+unimplemented (stays at the base `null`); see `SybaseDialect.cs`'s file-level AI SUMMARY and
+`SybaseDialectTests.GetReadOnlyConnectionParameter_ReturnsNull_NoUsablePerConnectionMechanismExists`.
+
+The remaining gaps (session-SQL read-only claims for Db2/HANA/Informix/InterBase, pool
+discriminators for HANA/Informix/InterBase, and the Db2 `MaxPoolSize=0` question) still require
+live server verification — see "Next steps" at the bottom for what's still open. (InterBase's
+read-only/discriminator questions may be resolved by separate, concurrent work not reflected in
+this document yet — check InterBaseDialect.cs's own file header for the current, authoritative
+state before assuming this document is up to date on that database specifically.)
 
 ## Why this document exists
 
@@ -153,8 +164,8 @@ confirms:
 |---|---|---|
 | Application Name | `ApplicationName` (string) | **Confirmed**, via the internal type. |
 | Pooling | `Pooling` (bool), `MaxPoolSize`/`MinPoolSize` (`Int16`) | **CORRECTED** (this claim was wrong in the original pass — re-verified via direct reflection with default-value construction, not just a property-name scan, which is what missed it the first time): both exist on `ConnectionParameters`, same as every other driver here. **Default values: `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=100`** — matching the common convention, not an outlier. `ApplicationName` also confirmed to default to the current process name when unset. |
-| Read-only (connection string) | none found | No dedicated keyword. |
-| Read-only (session SQL) | uncertain — **not yet live-verified** | Sybase ASE is Transact-SQL family (closer to SQL Server than to ANSI-conformant engines like Db2/HANA/Informix); SQL Server itself has no real connection-string or session-level read-only enforcement (`ApplicationIntent=ReadOnly` is documented as a routing hint only, not enforcement) — ASE may be in the same position. This needs live confirmation more than any of the others; don't assume the ANSI `SET TRANSACTION READ ONLY` pattern transfers here. |
+| Read-only (connection string) | none found | Confirmed via the same reflection pass — no read-only/intent/mode-named property anywhere on `ConnectionParameters`. |
+| Read-only (session SQL) | **RESOLVED (2026-09-18, live against a real ASE 16.0 container)** — no usable per-connection mechanism exists | `SET TRANSACTION READ ONLY` is a flat SYNTAX ERROR on ASE (`"Incorrect syntax near the keyword 'READ'."`) — it doesn't even parse, worse than SQL Server's `ApplicationIntent=ReadOnly` (which at least parses as a non-enforcing hint). `EXEC sp_dboption <db>, 'read only', true` (run from `master`, then a `CHECKPOINT` against the target db) IS real, confirmed-live enforcement — a subsequent write anywhere in that database fails with `"Attempt to BEGIN TRANSACTION in database '<db>' failed because database is READ ONLY."` But it's a coarse, DATABASE-WIDE administrative toggle, not connection/session-scoped — wiring it into `GetReadOnlyConnectionParameter()` would make the writer connection unable to write too. Deliberately NOT implemented; `SybaseDialect.GetReadOnlyConnectionParameter()` stays at the base `null`. See `SybaseDialect.cs`'s file-level AI SUMMARY and `SybaseDialectTests.GetReadOnlyConnectionParameter_ReturnsNull_NoUsablePerConnectionMechanismExists`. |
 
 Because `ApplicationName` is confirmed, no separate pool discriminator is needed once it's wired
 up.
@@ -165,7 +176,7 @@ up.
 |---|---|---|---|---|---|---|---|
 | FlatFile | `applicationName` ✓ | n/a (no real pool concept) | n/a | n/a | `readonly=true` ✓ hard-enforced | — | No |
 | Db2 | `ClientApplicationName` ✓ | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / **`0`** ⚠️ outlier | none | `SET TRANSACTION READ ONLY` (plausible) | No |
-| Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | uncertain — may be SQL-Server-like (hint only) | No |
+| Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | **RESOLVED**: `SET TRANSACTION READ ONLY` is a syntax error; `sp_dboption 'read only'` is real but database-wide, not usable here | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (high confidence, Firebird lineage) | **Yes — no safe candidate found yet** |
@@ -192,11 +203,9 @@ functionally different would be exactly the same class of unverified-assumption 
    keyword for HANA, Informix, and InterBase — the same way `Jet OLEDB:Database Locking Mode=1`
    was verified for Access (open a connection with vs. without it, confirm identical behavior,
    confirm the connection strings differ).
-3. Confirm Sybase ASE's read-only situation one way or the other — don't assume either the ANSI
-   pattern or the SQL-Server-hint-only pattern without checking.
-4. Confirm what Db2's `MaxPoolSize=0` default actually means in practice (unbounded? provider-
+3. Confirm what Db2's `MaxPoolSize=0` default actually means in practice (unbounded? provider-
    internal default? something else?) — if it's not equivalent to `100`, `Db2Dialect` likely
    needs its own `DefaultMaxPoolSize` override instead of inheriting `SqlDialect`'s `100`
    fallback.
-5. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
+4. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
    how `AccessDialect.cs` was fixed this session.
