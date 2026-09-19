@@ -20,6 +20,12 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     public override bool SupportsOverridingSystemValue => false;
     public override bool SupportsSetValuedParameters => false;
 
+    // Verified live against a real Spanner Omni + PGAdapter instance: `ROW_NUMBER() OVER (...)`
+    // fails with "P0001: Statements with WINDOW clauses are not supported". PostgreSqlDialect's
+    // inherited, version-gated `true` wrongly assumes this capability transfers the way most of
+    // Spanner's PostgreSQL-interface SQL surface does.
+    public override bool SupportsWindowFunctions => false;
+
     // PostgreSqlDialect's optimized batch-update SQL ("UPDATE t SET ... FROM (VALUES (@b0, ...))
     // AS s(...) WHERE t.pk = s.pk") fails against real Spanner with "42883: operator does not
     // exist: bigint = text" — Spanner's query planner doesn't infer the VALUES-derived table's

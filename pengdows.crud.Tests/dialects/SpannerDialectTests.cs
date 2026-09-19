@@ -59,6 +59,16 @@ public class SpannerDialectTests
     }
 
     [Fact]
+    public void SupportsWindowFunctions_IsFalse()
+    {
+        // Verified live: `ROW_NUMBER() OVER (...)` against a real Spanner Omni + PGAdapter
+        // instance fails with "P0001: Statements with WINDOW clauses are not supported" —
+        // inherited from PostgreSqlDialect's version-gated `true`, which wrongly assumes this
+        // capability transfers from real PostgreSQL the way most of Spanner's SQL surface does.
+        Assert.False(CreateDialect().SupportsWindowFunctions);
+    }
+
+    [Fact]
     public void SupportsSavepoints_IsFalse()
     {
         Assert.False(CreateDialect().SupportsSavepoints);
