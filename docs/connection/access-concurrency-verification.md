@@ -1,5 +1,63 @@
 # Access (Jet/ACE) Concurrent-Write Verification Plan
 
+## RESOLVED (2026-09-18)
+
+This plan has been executed end-to-end on a real Windows machine (this repo's own dev machine),
+against a real `.accdb` file via `System.Data.OleDb` and the installed Access Database Engine
+Redistributable (ACE 16.0). All five phases below ran; the open question (Phase 3) is answered.
+See `AccessDialect.cs`'s file-level AI SUMMARY for the authoritative, dated findings. Headline
+results:
+
+- **Phase 1** (re-confirm original claim): reproduced — 3-8/20 failures across three runs of raw
+  `OleDb`, disjoint rows, same table.
+- **Phase 2** (classic same-row conflict): reproduced, and worse — 9-14/20 failures, plus genuine
+  lost-update anomalies (final counter value far below the expected 20 after all writers "commit").
+- **Phase 3, the open question** (disjoint rows, two different tables): **fails** — 3-6/20
+  failures, including failures in the table a given writer never touched itself. The conflict is
+  **not table-scoped**; the original "same table" framing in `AccessDialect.cs` undersold it, if
+  anything — it is at least file/page-scoped, matching (not narrower than) what was already
+  written, unlike DuckDB's confirmed row-scoped behavior.
+- **Phase 4** (the fix, through pengdows.crud): `DbMode.SingleWriter` — 20/20 succeeded, zero
+  conflicts, three runs in a row.
+- **Phase 5** (the hazard, through pengdows.crud's public API): this surfaced a **second, more
+  fundamental bug** before it could even test the hazard — `DbMode.Standard` failed to open a
+  connection at all (`OleDbException: Could not find installable ISAM`), on every attempt,
+  including a single non-concurrent `CREATE TABLE` with zero writers. Root cause: `AccessDialect`
+  never overrode `SupportsExternalPooling`/`PoolingSettingName`, so pengdows.crud was injecting an
+  ADO.NET-style `Pooling=True` keyword the Jet/ACE driver doesn't recognize (confirmed: ANY
+  unrecognized connection property throws this exact generic error). Fixed via TDD (see
+  `AccessDialectTests.cs`). Once fixed, Phase 5 ran as originally planned — and a **naive**
+  version (bare auto-committing `INSERT`s) misleadingly showed 20/20 success, because a
+  single-statement write holds its lock too briefly to collide even under real concurrency. Redone
+  fairly, with the same held-open-transaction contention pattern Phase 1/2 used (via
+  `Context.BeginTransaction()`, not raw `OleDb`): `DbMode.Standard` reproduced the hazard clearly
+  — 14-18/20 failures (`CommandTimeoutException`, "Could not update; currently locked.") — while
+  the identical workload under `DbMode.SingleWriter` stayed at 0/20 failures.
+
+A related gap found and fixed along the way, not originally in this plan's scope: `AccessDialect`
+had no `ReadOnlyPoolDiscriminatorSettingName`, so its reader and writer connection strings were
+identical, collapsing them into one shared physical `OleDb` pool (the same problem
+`OracleDialect` already solved for ODP.NET). Fixed using `"Jet OLEDB:Database Locking Mode"` =>
+`"1"` — confirmed live to be both a real, recognized ACE property and behaviorally inert (it's
+ACE's own documented default), so it only differentiates the connection-string text without
+changing real locking behavior.
+
+Also added, prompted by a follow-up question during this investigation (not originally in this
+plan): `GetReadOnlyConnectionParameter()` => `"Mode=Read"` — confirmed live to be a real,
+ACE-recognized property that genuinely enforces read-only at the driver level (a write against it
+fails with `"Operation must use an updateable query."`, correctly classified into
+`ReadOnlyViolationException`), and confirmed (3/3 trials) not to block a concurrent writer on the
+same file — unlike DuckDB, so no `ReadOnlyConnectionsCanBlockConcurrentWriters` override was
+needed.
+
+**Bottom line**: `DbMode.SingleWriter` is the only mode confirmed both correct and fully
+concurrent for Access. `DbMode.Standard` now at least *works* (after the pooling fix) but is
+confirmed unsafe for any workload that holds a transaction open across more than one round trip —
+consistent with, and stronger evidence for, the same class of gap SQLite-specific libraries exist
+to solve and general-purpose ORMs targeting client-server databases never had to.
+
+The original, unresolved plan is preserved below for reference and methodology.
+
 ## Why this document exists
 
 `AccessDialect.cs`'s file-level AI SUMMARY documents a "CONFIRMED live" finding: raw concurrent

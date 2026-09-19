@@ -49,15 +49,84 @@
 //   concurrent connections, and a caller who has read that documentation can choose to bypass the
 //   governor deliberately; DescribeStandardModeRisk surfaces the CONFIRMED-live failure above as
 //   a warning (not a block) when they do.
-//   CAVEAT: the script that produced the "CONFIRMED live" finding above was never committed and no
-//   longer exists (confirmed via full-repo/git-history search) — unlike DuckDbDialect.cs's
-//   equivalent finding, which was independently reproduced and locked into a permanent regression
-//   test this session (SerializationConflictTests.cs), this one rests on unreproduced prose. In
-//   particular, whether the conflict is scoped to "same table" (as documented here) or narrower
-//   ("same row", like DuckDB's confirmed behavior) was never actually tested — see
-//   docs/connection/access-concurrency-verification.md for the concrete test plan (Windows-only;
-//   this repo's environment can't run OleDb/ACE) to re-verify and, if the granularity turns out to
-//   be narrower than "same table", correct this wording.
+//   RE-VERIFIED LIVE end-to-end on a real Windows machine (see
+//   docs/connection/access-concurrency-verification.md for the full run): the earlier finding
+//   above was correct in substance but the connection-string bug just above (SupportsExternalPooling)
+//   meant DbMode.Standard couldn't even open a connection until that was fixed. Once fixed:
+//   (1) 20 concurrent single-statement auto-committing INSERTs into disjoint rows of the same
+//   table via DbMode.Standard all succeeded, 20/20, three runs in a row — a bare INSERT holds its
+//   implicit lock too briefly to collide even under real concurrency, so this alone is NOT
+//   sufficient evidence the hazard doesn't exist.
+//   (2) Rerun with the SAME contention shape the original raw-OleDb finding used — an explicitly
+//   held transaction (INSERT, then an artificial 200ms delay, then Commit) via
+//   Context.BeginTransaction() through the actual public API — reproduced the hazard clearly:
+//   18/20, 18/20, and 14/20 failures across three runs, all
+//   CommandTimeoutException("... Could not update; currently locked."), while the identical
+//   workload under DbMode.SingleWriter stayed at 0/20 failures across three runs. Raw OleDb
+//   (bypassing pengdows.crud) with the same disjoint-rows-same-table shape separately reproduced
+//   3-8/20 failures across three runs. Raw OleDb with disjoint rows across TWO DIFFERENT tables in
+//   the same file also failed (3-6/20 across three runs, including failures in a table no writer
+//   assigned to it ever touched) — confirming the conflict is NOT table-scoped, matching (not
+//   narrower than) this dialect's original "same table" framing; unlike DuckDB, no narrower
+//   same-row framing applies here.
+//   BOTTOM LINE (2026-09-18 re-verification): SingleWriter is the only DbMode confirmed both
+//   correct AND fully concurrent for Access. Standard is a real, working opt-in (after the
+//   connection-string fixes below) but is confirmed UNSAFE under any workload holding a
+//   transaction open across more than one round trip. SingleConnection would also be
+//   correctness-safe but serializes ALL access (including reads), so it is not a practical
+//   alternative — just a strictly worse option for this engine's use case.
+// - Connection-string bugs found and fixed this session (2026-09-18), all confirmed live on a
+//   real Windows machine against a real .accdb — none of these were caught by the fakeDb-backed
+//   unit-test suite, since fakeDb never constructs a real OleDbConnection:
+//   (1) SupportsExternalPooling/PoolingSettingName: the SqlDialect base defaults (true/"Pooling")
+//   caused ConnectionPoolingConfiguration.ApplyPoolingDefaults to inject an ADO.NET-style
+//   "Pooling=True" into the connection string under DbMode.Standard/PreventDatabaseUnload
+//   (SingleWriter's own StripPoolingSetting call was masking this). Jet/ACE has no such keyword
+//   and throws "OleDbException: Could not find installable ISAM" for ANY unrecognized connection
+//   property — confirmed both "Pooling=True" and "Pooling=False" fail identically, and separately
+//   that "Application Name" fails the exact same way (so ApplicationNameSettingName correctly
+//   stays at the base null). This was not a documented risk, it was a hard failure on EVERY
+//   DbMode.Standard connection, including a single non-concurrent CREATE TABLE with zero
+//   contention (5/5, then 7/7 reproductions across two isolated re-runs). Fixed by overriding both
+//   to false/null, architecturally matching DuckDbDialect's "in-process, no external pooling
+//   switch" rationale. CORRECTION (re-examined after a fair challenge to the original claim
+//   here): the original justification — "System.Data.OleDb pools connections transparently by
+//   default anyway, so nothing is lost" — was NOT actually supported by the evidence and has
+//   been retracted. Fast repeat opens (50 sequential opens averaging 1.56ms after warmup) do NOT
+//   by themselves prove pooling: a dedicated discriminating test (30 opens reusing one connection
+//   string vs. 30 opens each against a freshly-created, never-before-seen connection string) came
+//   back statistically indistinguishable (1.44ms vs. 1.64ms avg — a 1.14x ratio, not the multi-x
+//   difference real string-keyed pooling would produce), and explicitly disabling native OLE DB
+//   pooling/session services (OLE DB Services=-4) made opens marginally FASTER (0.93x), not
+//   slower. The honest conclusion: pooling isn't providing any measurable benefit here, not
+//   because it's transparently already happening, but because a local file attach with no
+//   network handshake or auth negotiation has nothing expensive for pooling to amortize in the
+//   first place — architecturally closer to why DuckDB/FlatFile treat external pooling as not a
+//   meaningful concept at all, not because ACE secretly pools under the hood. The fix
+//   (SupportsExternalPooling => false) is unchanged and still correct; only this reasoning was
+//   wrong. The real, native OLE DB lever for connection-time services is "OLE DB Services=-N"
+//   (confirmed recognized), a different mechanism entirely from ADO.NET's common "Pooling"
+//   keyword — but confirmed to make no measurable difference either way for this provider.
+//   (2) ReadOnlyPoolDiscriminatorSettingName/Value: without ApplicationNameSettingName, this
+//   dialect had no way to differentiate its reader and writer connection strings, so
+//   System.Data.OleDb's own pool (keyed by exact connection-string text) collapsed them into one
+//   shared physical pool — mirrors the exact problem OracleDialect already solved via
+//   ReadOnlyPoolDiscriminatorSettingName => "Metadata Pooling"/"false". Fixed using
+//   "Jet OLEDB:Database Locking Mode" => "1" — confirmed live to be both recognized by ACE and
+//   behaviorally inert (4 runs each of the same 20-writer held-transaction contention pattern
+//   showed statistically indistinguishable failure rates with vs. without it explicitly set,
+//   ~13-14/20 either way), because 1 (row-level locking) is already ACE's own documented default
+//   for Access 2000+/.accdb.
+// - Read-only connection mode: GetReadOnlyConnectionParameter() => "Mode=Read" — CONFIRMED live
+//   this is a real, recognized OLE DB/Jet property (distinct from the unrecognized ADO.NET
+//   keywords above) that genuinely enforces read-only at the driver level: a write against a
+//   Mode=Read connection fails with "Operation must use an updateable query." (classified as
+//   DbErrorCategory.ReadOnlyViolation below, producing a real ReadOnlyViolationException end to
+//   end — confirmed via a live TableGateway CRUD round trip, not just fakeDb unit tests), while a
+//   Mode=ReadWrite control connection succeeds normally. Also confirmed live (3/3 trials) that a
+//   held-open Mode=Read connection actively issuing reads does NOT block a concurrent writer on
+//   the same file — unlike DuckDbDialect.ReadOnlyConnectionsCanBlockConcurrentWriters (true), so
+//   Access correctly keeps the SqlDialect base default (false) with no override.
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."
@@ -132,10 +201,44 @@ internal sealed class AccessDialect : SqlDialect
     public override string QuoteSuffix => "]";
 
     // Embedded, file-based engine — not client-server. Coerced to SingleWriter the same way
-    // SqliteDialect/DuckDbDialect are; see file-level AI SUMMARY for the UNVERIFIED caveat on the
-    // real concurrent-write behavior this rests on.
+    // SqliteDialect/DuckDbDialect are; see file-level AI SUMMARY for the CONFIRMED-live
+    // concurrent-write numbers this rests on (re-verified 2026-09-18 — no longer unverified).
     public override bool IsClientServerDatabase => false;
     public override bool IsEmbeddedSingleWriterEngine => true;
+
+    // CONFIRMED LIVE (re-verified on a real Windows machine, this session): the SqlDialect base
+    // defaults (SupportsExternalPooling => true, PoolingSettingName => "Pooling") are wrong for
+    // Access and were an outright bug, not merely a documented risk. ApplyPoolingDefaults only
+    // runs for Standard/PreventDatabaseUnload/SingleWriter modes; SingleWriter's own
+    // StripPoolingSetting call was masking the bug by removing the injected keyword again, so
+    // every DbMode.Standard connection — including a single, non-concurrent CREATE TABLE with
+    // zero contention — reproducibly (5/5, then 7/7 across two isolated re-runs) failed with
+    // "OleDbException: Could not find installable ISAM" the instant it tried to open. Root cause,
+    // confirmed by direct reproduction with a raw connection string: ApplyPoolingDefaults injects
+    // an ADO.NET-style "Pooling=True" keyword that Jet/ACE's OLE DB provider does not recognize —
+    // Jet/ACE surfaces ANY unrecognized connection property through this exact generic
+    // ISAM-driver-selection error, unrelated to its literal meaning ("Pooling=False" reproduces
+    // the identical error). Access has no ADO.NET-style external pooling switch at all —
+    // architecturally identical to DuckDbDialect's SupportsExternalPooling => false ("in-process"),
+    // not a client-server provider concept — so both must be false/null here.
+    public override bool SupportsExternalPooling => false;
+    public override string? PoolingSettingName => null;
+
+    // ApplicationNameSettingName stays at the base default (null) — CONFIRMED live that
+    // "Application Name" is equally unrecognized by ACE as "Pooling" was, so no dialect could
+    // ever set it here without reproducing the same "Could not find installable ISAM" failure.
+    // Without an ApplicationNameSettingName, BuildReaderConnectionString's own fallback
+    // (DatabaseContext.Initialization.cs) never fires for this dialect, so reader and writer
+    // connection strings end up identical and System.Data.OleDb's own pool (keyed by exact
+    // connection-string text) collapses them into one shared physical pool. Mirrors
+    // OracleDialect.ReadOnlyPoolDiscriminatorSettingName's identical fix for ODP.NET — CONFIRMED
+    // live that "Jet OLEDB:Database Locking Mode=1" is both recognized by ACE and behaviorally
+    // inert (4 runs each of the same 20-writer contention pattern showed ~13-14/20 failures with
+    // or without it explicitly set), because 1 (row-level locking) is already ACE's own
+    // documented default for Access 2000+/.accdb — so setting it explicitly on the reader
+    // connection string only, differentiates the pool key without changing real behavior.
+    internal override string? ReadOnlyPoolDiscriminatorSettingName => "Jet OLEDB:Database Locking Mode";
+    internal override string? ReadOnlyPoolDiscriminatorSettingValue => "1";
 
     public override InMemoryKind DetectInMemoryKind(string? connectionString) => InMemoryKind.None;
 
@@ -148,17 +251,23 @@ internal sealed class AccessDialect : SqlDialect
         bool isLocalDb) =>
         CoerceEmbeddedSingleWriterMode(requested, InMemoryKind.None, allowStandard: true);
 
-    // CONFIRMED live (see file-level AI SUMMARY): raw OleDb concurrent writers against Access hit
-    // "OleDbException: Could not update; currently locked." — stronger evidence than DuckDB's
-    // (architecturally-reasoned but not reproduced) caution, so this names the actual failure.
+    // CONFIRMED LIVE, re-verified end-to-end through pengdows.crud's own public API (not just raw
+    // OleDb) — see file-level AI SUMMARY for the full numbers and the fair-comparison methodology
+    // (bare auto-committing INSERTs do NOT reproduce this; an explicitly held transaction does).
     internal override string DescribeStandardModeRisk() =>
         "Access documents support for multiple concurrent connections, but this was CONFIRMED LIVE " +
-        "to fail under concurrent writers: two connections writing to the same table outside " +
-        "pengdows.crud's governance produced \"OleDbException: Could not update; currently " +
-        "locked.\" pengdows.crud's SingleWriter mode prevents this (verified live: 20 concurrent " +
-        "write tasks through one shared DatabaseContext, zero lock-conflict exceptions). Standard " +
-        "mode is honored here because it was explicitly requested, but expect intermittent " +
-        "lock-conflict failures under real write concurrency unless you serialize writes yourself.";
+        "to fail under concurrent writers, reproduced through pengdows.crud's own transaction API " +
+        "(not just raw OleDb): 20 concurrent writers each holding an open transaction produced " +
+        "14-18/20 CommandTimeoutException failures (\"Could not update; currently locked.\") under " +
+        "DbMode.Standard, vs. 0/20 under DbMode.SingleWriter for the identical workload. Unlike " +
+        "DuckDB (whose Standard-mode risk has a genuine, confirmed safe zone — disjoint-row " +
+        "writers proceed cleanly, only same-row contention fails), Access has no safe zone here: " +
+        "concurrent writers touching completely disjoint rows in the same table, and even disjoint " +
+        "rows across two different tables in the same file, still failed. \"Just avoid writing " +
+        "the same row concurrently\" does not make Standard mode safe for Access the way it does " +
+        "for DuckDB. Standard mode is honored here because it was explicitly requested, but expect " +
+        "lock-conflict failures under real write concurrency (an open transaction spanning more " +
+        "than one round trip) unless you serialize writes yourself.";
 
     // No MERGE/ON CONFLICT/ON DUPLICATE KEY of any kind.
     public override bool SupportsMerge => false;
@@ -189,6 +298,19 @@ internal sealed class AccessDialect : SqlDialect
         [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
         [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
     };
+
+    // CONFIRMED live: "Mode=Read" is a real, recognized OLE DB/Jet connection-string property
+    // (distinct from ADO.NET's own "Pooling"/"Application Name" keywords, both confirmed
+    // unrecognized above) that genuinely enforces read-only at the driver level — a write
+    // attempted against a Mode=Read connection fails with "Operation must use an updateable
+    // query.", while a Mode=ReadWrite control connection succeeds normally. Mirrors
+    // SqliteDialect's "Mode=ReadOnly" (a different provider's spelling of the same idea).
+    public override string? GetReadOnlyConnectionParameter() => "Mode=Read";
+
+    // CONFIRMED live (3/3 trials): a held-open Mode=Read connection, actively issuing reads,
+    // does NOT block a concurrent writer on the same file — unlike DuckDbDialect's confirmed
+    // true here. Access stays at the SqlDialect base default (false); no override needed, but
+    // documented explicitly since the value matters and was verified, not assumed.
 
     // CONFIRMED live: SELECT @@IDENTITY works over OLE DB against a real .accdb COUNTER column,
     // and is still used by TableGateway.Core.cs's PopulateGeneratedIdAsync fallback path.
@@ -271,6 +393,17 @@ internal sealed class AccessDialect : SqlDialect
         if (ex.Message.Contains("currently locked", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        // CONFIRMED live: the exact message a real ACE connection opened with "Mode=Read"
+        // (GetReadOnlyConnectionParameter above) returns when a write is attempted against it.
+        // Feeds both the advisory AnalyzeException API and, via AccessExceptionTranslator's
+        // TryCreateFromCategory call, the actual thrown ReadOnlyViolationException — mirroring
+        // SqliteDialect/DuckDbDialect's identical ReadOnlyViolation classification.
+        if (ex.Message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
             return true;
         }
 

@@ -133,15 +133,48 @@ The mode opens one sentinel through the normal connection and session-initializa
   supporting concurrent connections/writers, so an explicit `Standard` request is allowed through
   (`Best` still resolves to `SingleWriter`). `DatabaseContext.WarnOnModeMismatch` logs an
   evidence-backed risk Warning when this happens instead — **both risks are CONFIRMED LIVE.**
-  Access's raw concurrent OleDb writers hit `OleDbException: Could not update; currently locked.`
   DuckDB's vendor claim genuinely holds for disjoint-row concurrent writers (verified: they don't
   conflict), but 20 concurrent writers updating the *same* row through pengdows.crud under
   `DbMode.Standard` threw `SerializationConflictException`
   (`"TransactionContext Error: Conflict on update!"`) for 8/20; the identical scenario under
   `DbMode.SingleWriter` succeeded 20/20 with zero conflicts — see
   `pengdows.crud.IntegrationTests/ErrorHandling/SerializationConflictTests.cs` for the checked-in
-  classification proof, `AccessDialect.cs`/`DuckDbDialect.cs`'s file-level AI SUMMARY for the full
-  trail, and each dialect's `DescribeStandardModeRisk()` override for the exact wording.
+  classification proof.
+
+  Access's risk was re-verified end-to-end on a real Windows machine (2026-09-18) and turned out
+  to rest on a real connection-string bug, not just an unverified risk: `AccessDialect` never
+  overrode `SupportsExternalPooling`/`PoolingSettingName`, so pengdows.crud injected an ADO.NET-
+  style `Pooling=True` into the OLE DB connection string, and Jet/ACE throws the generic
+  `"Could not find installable ISAM"` for *any* unrecognized connection property — this broke
+  every `DbMode.Standard` connection outright, not just under contention. Fixed by overriding both
+  to `false`/`null` (same rationale as DuckDB's "in-process, no external pooling switch"). The
+  original justification claimed the driver "pools transparently by default anyway" — that was
+  challenged and retracted: a dedicated test (same connection string repeated vs. a fresh
+  never-seen string each time) showed no meaningful timing difference, and disabling native
+  pooling services outright made opens marginally *faster*. A local file attach has no network
+  handshake to amortize, so pooling isn't a meaningful concept here — not that it's silently
+  already happening. The fix is unaffected; only the reasoning was corrected. Once fixed, the real hazard was re-confirmed
+  fairly: a naive test (bare auto-committing `INSERT`s) misleadingly showed 20/20 success under
+  `Standard`, because a single-statement write doesn't hold its lock long enough to collide even
+  under real concurrency. Redone with a genuinely held-open transaction (via
+  `Context.BeginTransaction()`, through the real public API): `DbMode.Standard` reproduced
+  14-18/20 failures (`CommandTimeoutException`, `"Could not update; currently locked."`), while
+  `DbMode.SingleWriter` stayed at 0/20 across every run — and the conflict is confirmed NOT
+  table-scoped (disjoint writes across two different tables in the same file still collided).
+
+  **Access's `Standard` risk is categorically worse than DuckDB's — not just "also risky."**
+  DuckDB's `Standard` risk has a genuine, confirmed safe zone: disjoint-row writers proceed
+  cleanly (matching the vendor's documentation), and the only confirmed failure is same-row
+  contention — so "avoid concurrent writers to the same row" is real, actionable, safe advice for
+  DuckDB. Access has no equivalent: the conflict spans disjoint rows in the same table AND
+  disjoint rows across different tables in the same file, so there is no "just don't touch the
+  same row" escape hatch. Being adventurous with `Standard` has a real working middle ground for
+  DuckDB and does not for Access — don't apply DuckDB's safe-zone framing to Access.
+
+  See `AccessDialect.cs`'s file-level AI SUMMARY and `docs/connection/access-concurrency-verification.md`
+  for the full trail, and each dialect's `DescribeStandardModeRisk()` override for the exact
+  wording surfaced to callers. **`SingleWriter` is the only mode confirmed both correct and fully
+  concurrent for Access.**
 
 ### LocalDb: `Best` and every other requested mode coerce to PreventDatabaseUnload, **except an
 explicit `Standard` request, which is honored.** PreventDatabaseUnload's sentinel only matters for

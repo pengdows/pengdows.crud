@@ -131,6 +131,24 @@ public class AccessTranslatorTests
     }
 
     [Fact]
+    public void ReadOnlyViolation_UpdateableQueryMessage_Maps_ReadOnlyViolationException()
+    {
+        // CONFIRMED live this session: opening a real .accdb with "Mode=Read" in the connection
+        // string (AccessDialect.GetReadOnlyConnectionParameter) genuinely enforces read-only at
+        // the driver level — an attempted write against that connection fails with exactly this
+        // message. Mirrors SqliteDialect/DuckDbDialect's ReadOnlyViolation classification, adapted
+        // to message-substring matching since OleDbException carries no discriminable error code.
+        var raw = new PlainMessageDbException("Operation must use an updateable query.");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Insert);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+        Assert.IsAssignableFrom<IReadOnlyViolation>(result);
+        Assert.False(result.IsTransient);
+        Assert.Equal(SupportedDatabase.Access, result.Database);
+    }
+
+    [Fact]
     public void UnrelatedException_MapsToFallback()
     {
         var raw = new PlainMessageDbException("Syntax error in query. Incomplete query clause.");
