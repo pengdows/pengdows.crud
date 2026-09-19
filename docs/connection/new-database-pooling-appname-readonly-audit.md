@@ -131,16 +131,15 @@ Same discriminator gap as HANA: no `ApplicationName` keyword means a
 `ReadOnlyPoolDiscriminatorSettingName` fallback is needed, with no confirmed-safe candidate
 identified yet.
 
-### InterBase (`InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder`, confirmed via `interbasesql.data.interbaseclient` 10.0.3)
+### InterBase (`InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder`, confirmed via `interbasesql.data.interbaseclient` 10.0.3) — RESOLVED 2026-09-18 (live, real Docker container)
 
 | Capability | Real keyword | Status |
 |---|---|---|
-| Application Name | none found | Not present among 28 inspected properties. |
+| Application Name | none found | Not present among 33 inspected properties (re-confirmed live this pass). |
 | Pooling | `Pooling` (bool), `MaxPoolSize` (int), `MinPoolSize` (int) | **Confirmed.** **Default values: `Pooling=True`, `MinPoolSize=0`, `MaxPoolSize=100`.** |
-| Read-only (connection string) | none found | No dedicated keyword. |
-| Read-only (session/transaction level) | `SET TRANSACTION READ ONLY` — **not yet live-verified, but high confidence** | InterBase's direct descendant Firebird genuinely supports transaction-level `READ ONLY` as a core TPB (Transaction Parameter Block) option going back decades; InterBase, as Firebird's ancestor, almost certainly has the equivalent. Check whether `FirebirdDialect.cs` already implements something analogous to mirror the exact API shape (`ITransactionContext`-level, not connection-string). |
-
-Same discriminator gap: no `ApplicationName` keyword, no confirmed-safe candidate identified yet.
+| Discriminator | **`fetch size` = `200`** | **APPLIED.** CONFIRMED LIVE (real container): `fetch size` is a real, recognized keyword — a connection opens successfully with it explicitly set — and `200` is `FetchSize`'s own compiled-in default, so setting it explicitly is guaranteed behaviorally inert while differentiating the pool key text. Implemented as `InterBaseDialect.ReadOnlyPoolDiscriminatorSettingName`/`Value`. |
+| Read-only (connection string) | none found | Re-confirmed live: the `IsReadOnly` property visible on the builder is `DbConnectionStringBuilder`'s own inherited base property (no setter, no effect on `ConnectionString` text) — not a real InterBase keyword. |
+| Read-only (transaction level) | `IBTransactionOptions { TransactionBehavior = IBTransactionBehavior.Read \| Concurrency \| Wait }` via `IBConnection.BeginTransaction(IBTransactionOptions)` | **CONFIRMED LIVE the capability exists and works** (a write inside such a transaction throws `IBException: attempted update during read-only transaction`; reads succeed normally) — but **NOT integrated into pengdows.crud**. The originally-guessed `SET TRANSACTION READ ONLY` mid-transaction SQL statement (Oracle's approach) was tried and CONFIRMED to fail (`IBException: invalid transaction handle (expecting explicit transaction start)`) — InterBase's TPB-based transaction model requires the read-only flag at transaction-creation time, not as a follow-up statement, which doesn't fit `ISqlDialect.TryEnterReadOnlyTransaction`'s hook (runs after `TransactionContext` already opened the transaction via the ordinary `IsolationLevel`-based overload — see `TransactionContext.cs`'s private constructor). Implementing this for real requires a new pengdows.crud extension point letting a dialect override transaction *creation* itself, not just post-begin SQL — a genuine feature request, left open rather than forcing a broken partial implementation. See `InterBaseDialect.cs`'s file-level AI SUMMARY for the full trail. |
 
 ### Sybase ASE (`AdoNetCore.AseClient`) — the public builder is a thin wrapper; real keywords live in `AdoNetCore.AseClient.Internal.ConnectionParameters`
 
@@ -168,7 +167,7 @@ up.
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | uncertain — may be SQL-Server-like (hint only) | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
 | Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
-| InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (high confidence, Firebird lineage) | **Yes — no safe candidate found yet** |
+| InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `IBTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — needs a new extension point | **Applied — `fetch size=200`** |
 
 **On default pool sizes**: all default values above were read directly off a freshly-constructed
 builder instance with no connection string set — the driver's actual compiled-in default, not a
@@ -184,14 +183,18 @@ unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` ove
 inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
 functionally different would be exactly the same class of unverified-assumption gap Access had.
 
-## Next steps (not yet done — research only, per instruction)
+## Next steps (InterBase resolved 2026-09-18 — see its section above; the rest still open)
 
-1. Live-verify the four "plausible, not yet live-verified" session-SQL read-only claims (Db2,
-   HANA, Informix, InterBase) against real servers.
+1. Live-verify the three remaining "plausible, not yet live-verified" session-SQL read-only
+   claims (Db2, HANA, Informix) against real servers. (InterBase's read-only claim is now
+   CONFIRMED LIVE to work at the driver level, but NOT wired into pengdows.crud — see its section
+   above; this is a distinct, separately-tracked gap from "unverified.")
 2. Live-verify (or find documentation for) a genuinely inert, driver-recognized discriminator
-   keyword for HANA, Informix, and InterBase — the same way `Jet OLEDB:Database Locking Mode=1`
-   was verified for Access (open a connection with vs. without it, confirm identical behavior,
-   confirm the connection strings differ).
+   keyword for HANA and Informix — the same way `Jet OLEDB:Database Locking Mode=1` was verified
+   for Access and `fetch size=200` was verified for InterBase (open a connection with vs. without
+   it, confirm identical behavior, confirm the connection strings differ; prefer a candidate that
+   matches the driver's own compiled-in default over an arbitrary non-default knob, so the "inert"
+   claim doesn't rest only on empirical observation).
 3. Confirm Sybase ASE's read-only situation one way or the other — don't assume either the ANSI
    pattern or the SQL-Server-hint-only pattern without checking.
 4. Confirm what Db2's `MaxPoolSize=0` default actually means in practice (unbounded? provider-
@@ -199,4 +202,7 @@ functionally different would be exactly the same class of unverified-assumption 
    needs its own `DefaultMaxPoolSize` override instead of inheriting `SqlDialect`'s `100`
    fallback.
 5. Once verified, apply the dialect overrides via TDD, one database at a time, mirroring exactly
-   how `AccessDialect.cs` was fixed this session.
+   how `AccessDialect.cs`/`InterBaseDialect.cs` were fixed this session.
+6. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
+   itself is created (not just what SQL runs after it begins)" — InterBase's confirmed-working
+   `IBTransactionOptions`-based read-only transaction is blocked on this, not on missing research.
