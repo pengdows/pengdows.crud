@@ -322,13 +322,24 @@ guess. Four of five (HANA, Informix, InterBase, and implicitly Sybase which has 
 at all) default to `MinPoolSize=0`/`MaxPoolSize=100`, matching the common ADO.NET-ecosystem
 convention (SqlClient/Npgsql/MySqlConnector all default the same way) — and matching
 pengdows.crud's own `SqlDialect.FallbackMaxPoolSize = 100` fallback used when a value can't be
-discovered from the connection string. **Db2 is the outlier**: its default is `MaxPoolSize=0`,
-not `100`. This needs live confirmation before drawing a conclusion — `0` most plausibly means
-"no explicit .NET-side cap, defer to the provider's own internal default" rather than literally
-zero pooled connections (since `Pooling=True` is still the default), but that interpretation is
-unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` override rather than
-inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
-functionally different would be exactly the same class of unverified-assumption gap Access had.
+discovered from the connection string. **Db2 is the outlier**: its default is `MaxPoolSize=0`, not
+`100`. **RESOLVED (2026-09-18, live against a real `ibmcom/db2:11.5.8.0` container)**: `0` does NOT
+mean "unbounded" in any way that matters — `IBM.Data.Db2-lnx` 8.0.0.500 doesn't enforce
+`Max Pool Size` as a real client-side cap on physical connections at *any* value, `0` included. 150
+concurrent opens all succeeded in ~0.01s even with `Max Pool Size=5` explicitly set (no
+throttling/queueing observed at 0/5/100/unset), and Db2's own `SYSIBMADM.APPLICATIONS` admin view
+confirmed 313 genuine concurrent server-side sessions while those connections were held open
+simultaneously — proving these were real physical connections, not a client-side illusion.
+Conclusion: **`Db2Dialect` does NOT need a `DefaultMaxPoolSize` override** — inheriting
+`SqlDialect`'s `100` fallback is fine precisely because it's advisory/decorative for this driver
+either way; `PoolGovernor`'s in-process semaphore (which never depended on the driver enforcing
+anything) is Db2's only real admission-control safety net, more so than for providers whose driver
+also enforces a cap as a second line of defense. See `Db2Dialect.cs`'s file-level AI SUMMARY for
+the full trail. A real, separate bug WAS found and fixed here: `Db2Dialect` never set
+`MaxPoolSizeSettingName`/`MinPoolSizeSettingName` at all, so `PoolingConfigReader` silently ignored
+any explicit `Max Pool Size` a caller wrote into their own connection string, always falling back
+to the dialect default regardless of intent — see `Db2Dialect.MaxPoolSizeSettingName`/
+`MinPoolSizeSettingName` and `Db2DialectTests.GetEffectivePoolConfig_ReadsExplicitMaxPoolSizeFromDb2ConnectionString`.
 
 ## Next steps (Db2, Sybase ASE, InterBase, Informix, Firebird, and SAP HANA all resolved 2026-09-18/19 — only one item remains genuinely open, and it's an engineering task, not research)
 
