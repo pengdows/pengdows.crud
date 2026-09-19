@@ -34,6 +34,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
+using testbed.Access;
 using testbed.Cockroach;
 using testbed.Db2;
 using testbed.DuckDb;
@@ -99,6 +100,7 @@ public static class ProviderMatrixReport
     private static readonly IReadOnlyDictionary<SupportedDatabase, Type> TestbedContainers =
         new Dictionary<SupportedDatabase, Type>
         {
+            [SupportedDatabase.Access] = typeof(AccessTestContainer),
             [SupportedDatabase.Sqlite] = typeof(SqliteTestContainer),
             [SupportedDatabase.FlatFile] = typeof(FlatFileTestContainer),
             [SupportedDatabase.PostgreSql] = typeof(PostgreSqlTestContainer),
@@ -128,6 +130,7 @@ public static class ProviderMatrixReport
     private static readonly IReadOnlyDictionary<SupportedDatabase, string> LiveRoundTripProviderNames =
         new Dictionary<SupportedDatabase, string>
         {
+            [SupportedDatabase.Access] = "Access",
             [SupportedDatabase.Sqlite] = "SQLite",
             [SupportedDatabase.DuckDB] = "DuckDB",
             [SupportedDatabase.FlatFile] = "FlatFile",
@@ -150,15 +153,22 @@ public static class ProviderMatrixReport
             [SupportedDatabase.InterBase] = "InterBase"
         };
 
-    // Snowflake, SAP HANA, and InterBase are the three databases CLAUDE.md documents under
+    // Snowflake, SAP HANA, InterBase, and Access are the four databases CLAUDE.md documents under
     // "Opt-in exceptions (require env var)" — each one's testbed container constructor validates
     // real external state eagerly (SnowflakeTestContainer throws immediately without
     // SNOWFLAKE_ACCOUNT/USER/PASSWORD/WAREHOUSE/DATABASE set, even just to be enumerated), so
     // their orchestrator-entry presence is confirmed structurally here rather than by actually
     // constructing them — matching what GetTestConfigurations() itself does (each is only added
-    // when its own _includeXxx flag is true).
+    // when its own _includeXxx flag is true). Access's reason is distinct from the other three
+    // (no Docker image exists at all — the ACE OLE DB provider and ADOX COM interop it needs are
+    // Windows-only) but the opt-in-gated registration shape in ParallelTestOrchestrator is
+    // identical, so it belongs in this same set.
     private static readonly IReadOnlySet<SupportedDatabase> OptInLiveRoundTripConfigurations =
-        new HashSet<SupportedDatabase> { SupportedDatabase.Snowflake, SupportedDatabase.SapHana, SupportedDatabase.InterBase };
+        new HashSet<SupportedDatabase>
+        {
+            SupportedDatabase.Snowflake, SupportedDatabase.SapHana, SupportedDatabase.InterBase,
+            SupportedDatabase.Access
+        };
 
     private static readonly Lazy<HashSet<string>> LiveRoundTripConfiguredProviders = new(() =>
     {

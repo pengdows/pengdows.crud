@@ -101,6 +101,8 @@ public class ProviderMatrixCompletenessTests
     // The 15 databases DatabaseTypeCatalog.cs's own file header documents as "deliberately left
     // unpopulated rather than guessed" (14 named there) plus FlatFile, which that header doesn't
     // mention at all — a genuine gap in the catalog's own scope statement, not a duplicate entry.
+    // Access is the same kind of gap: it isn't named in that header either, and has no populated
+    // entry — not yet sourced/verified, same sourcing-discipline reason as the other 15.
     private static readonly IReadOnlySet<SupportedDatabase> KnownMissingTypeCatalogEntries =
         new HashSet<SupportedDatabase>
         {
@@ -119,6 +121,7 @@ public class ProviderMatrixCompletenessTests
             SupportedDatabase.AuroraMySql,
             SupportedDatabase.AuroraPostgreSql,
             SupportedDatabase.FlatFile,
+            SupportedDatabase.Access,
         };
 
     [Fact]
