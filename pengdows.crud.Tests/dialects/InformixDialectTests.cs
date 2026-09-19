@@ -3,10 +3,14 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 #endregion
@@ -37,6 +41,54 @@ public class InformixDialectTests
     public void DatabaseType_IsInformix()
     {
         Assert.Equal(SupportedDatabase.Informix, CreateDialect().DatabaseType);
+    }
+
+    [Fact]
+    public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
+    {
+        // CONFIRMED LIVE (2026-09-18) against a real icr.io/informix/informix-developer-database
+        // container: "SET TRANSACTION READ ONLY" inside an active transaction genuinely enforces
+        // read-only — a subsequent write fails with "Invalid operation for a READ-ONLY
+        // transaction.", confirmed both via raw BEGIN WORK/SQL text and via a real ADO.NET
+        // conn.BeginTransaction(). Same mechanism OracleDialect uses.
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text)).ReturnsAsync(0).Verifiable();
+        container.Setup(c => c.Dispose()).Verifiable();
+
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        dialect.TryEnterReadOnlyTransaction(transaction.Object);
+
+        container.Verify();
+        transaction.Verify();
+    }
+
+    [Fact]
+    public async Task TryEnterReadOnlyTransactionAsync_ExecutesSetTransactionReadOnly()
+    {
+        var dialect = CreateDialect();
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        await dialect.TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
+
+        container.Verify();
+        transaction.Verify();
     }
 
     [Fact]

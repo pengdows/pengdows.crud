@@ -118,18 +118,34 @@ inert candidate keyword has been identified yet for HANA — needs either docume
 a live connection to test candidates the way Access's was verified (open, measure, confirm
 behaviorally inert).
 
-### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026 — Linux-targeted package; loaded here via pure reflection only, not executed)
+### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026)
+
+**LIVE-VERIFIED (2026-09-18)** against a real `icr.io/informix/informix-developer-database`
+container (the prior pass here was reflection-only against the package DLL; this pass actually
+connected and ran SQL). The live builder dump found 51 properties, not 45 — the earlier
+reflection pass likely missed the "1"/"2"-suffixed HDR/RSS-failover variants that a fresh,
+never-configured instance still exposes identically.
 
 | Capability | Real keyword | Status |
 |---|---|---|
-| Application Name | none found | Not present among 45 inspected properties. |
-| Pooling | `Pooling` (bool), `MaxPoolSize`/`MaxPoolSize1` (int), `MinPoolSize`/`MinPoolSize1` (int) | **Confirmed.** The "1"-suffixed variants are almost certainly for a secondary/failover server endpoint (Informix HDR/RSS pattern), not a second pool tier. **Default values: `Pooling=True`, `MinPoolSize`/`MinPoolSize1=0`, `MaxPoolSize`/`MaxPoolSize1=100`.** |
-| Read-only (connection string) | none found | No dedicated keyword; `Exclusive`/`Exclusive1` exist but relate to exclusive access mode, not read-only. |
-| Read-only (session SQL) | `SET TRANSACTION READ ONLY` or Informix's own `SET ISOLATION`/lock-mode statements — **not yet live-verified** | Plausible (Informix has standard-SQL transaction support) but unconfirmed. |
+| Application Name | none found | Confirmed absent, live: 51 properties inspected on `IfxConnectionStringBuilder`, no `ApplicationName`-shaped keyword among them. |
+| Pooling | `Pooling` (bool), `MaxPoolSize`/`MaxPoolSize1` (int), `MinPoolSize`/`MinPoolSize1` (int) | **Confirmed**, live defaults match the earlier reflection-only pass exactly: `Pooling=True`, `MinPoolSize`/`MinPoolSize1=0`, `MaxPoolSize`/`MaxPoolSize1=100`. |
+| Read-only (connection string) | none found | No dedicated keyword. |
+| Read-only (session SQL) | `SET TRANSACTION READ ONLY` | **CONFIRMED LIVE, real enforcement.** Requires being inside an active transaction first (`BEGIN WORK`, or a real ADO.NET `conn.BeginTransaction()` — both tested) — issued standalone it fails with `"Not in transaction."`, which is not a rejection of the statement itself. Inside a transaction it's accepted, and a subsequent write then fails with `"Invalid operation for a READ-ONLY transaction."` Implemented via `InformixDialect.TryEnterReadOnlyTransaction`/`TryEnterReadOnlyTransactionAsync` (the same `TryExecuteReadOnlySql` shared helper `OracleDialect` uses), not `GetReadOnlyConnectionParameter()` — this is transaction-scoped SQL, not a connection-string property. |
 
-Same discriminator gap as HANA: no `ApplicationName` keyword means a
-`ReadOnlyPoolDiscriminatorSettingName` fallback is needed, with no confirmed-safe candidate
-identified yet.
+**Discriminator: investigated, deliberately NOT implemented.** No `ApplicationName` keyword exists.
+Two candidates were found and confirmed to connect successfully when added to a live connection
+string — `Optofc=1` ("Optimize Open Cursor", a real CSDK cursor-handling switch) and
+`DelimIdent=true` — but neither meets the bar `AccessDialect`'s `Jet OLEDB:Database Locking
+Mode=1` or `OracleDialect`'s `Metadata Pooling=false` do: `DelimIdent` is already part of every
+connection string this dialect builds (setting it again wouldn't differentiate reader vs. writer
+pools at all), and `Optofc`'s actual behavioral effect (does it change real cursor semantics, or
+is `1` already the driver's implicit default?) was not confirmed — "connects without error" is
+not the same bar as "confirmed behaviorally inert," which is exactly the distinction Access's
+original `SupportsExternalPooling`/`PoolingSettingName` bug blurred (a property that connects
+fine is not automatically safe to use as a silent discriminator). `ReadOnlyPoolDiscriminatorSettingName`
+stays at the `SqlDialect` base default (`null`) until a genuinely inert candidate is found —
+reader and writer connections share one physical pool for this dialect for now.
 
 ### InterBase (`InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder`, confirmed via `interbasesql.data.interbaseclient` 10.0.3)
 
@@ -167,7 +183,7 @@ up.
 | Db2 | `ClientApplicationName` ✓ | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / **`0`** ⚠️ outlier | none | `SET TRANSACTION READ ONLY` (plausible) | No |
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | uncertain — may be SQL-Server-like (hint only) | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
-| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` (plausible) | **Yes — no safe candidate found yet** |
+| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` (high confidence, Firebird lineage) | **Yes — no safe candidate found yet** |
 
 **On default pool sizes**: all default values above were read directly off a freshly-constructed

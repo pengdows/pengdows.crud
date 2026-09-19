@@ -44,6 +44,28 @@
 //   Firebird's ExecuteProcedureWrappingStrategy does, or whether EXECUTE PROCEDURE is used
 //   unconditionally for both read and write. Do not guess a style — verify live, then either
 //   reuse an existing strategy or add a new one, before setting this to anything but None.
+// - Read-only transaction enforcement: CONFIRMED LIVE (2026-09-18) against a real
+//   icr.io/informix/informix-developer-database container. "SET TRANSACTION READ ONLY" issued
+//   inside an active transaction (BEGIN WORK, or a real ADO.NET conn.BeginTransaction() —
+//   both tested) is accepted, and a subsequent write then fails with "Invalid operation for a
+//   READ-ONLY transaction." Issued standalone (no active transaction) it instead fails with
+//   "Not in transaction." — not a rejection of the statement itself, just confirming it must
+//   run inside a transaction, which is always true when pengdows.crud calls
+//   TryEnterReadOnlyTransaction (only ever invoked from within an already-open
+//   TransactionContext). Implemented via the same TryExecuteReadOnlySql/TryExecuteReadOnlySqlAsync
+//   shared helper OracleDialect uses for its own identical SET TRANSACTION READ ONLY support.
+// - ApplicationName/pool discriminator: CONFIRMED via reflection against a real, live-connected
+//   IfxConnectionStringBuilder (51 properties) that no ApplicationName-equivalent keyword
+//   exists. Two connection-string candidates were found and confirmed to CONNECT successfully
+//   (Optofc=1, DelimIdent=true), but neither was confirmed BEHAVIORALLY INERT — DelimIdent is
+//   already part of every connection string this dialect builds (wouldn't differentiate
+//   reader/writer pools at all), and Optofc ("Optimize Open Cursor") is a real CSDK
+//   cursor-handling switch whose actual effect was not verified. "Connects without error" is
+//   not the same bar as "confirmed inert" (the distinction Access's original
+//   SupportsExternalPooling/PoolingSettingName bug blurred) — deliberately left unimplemented
+//   rather than guessing. ReadOnlyPoolDiscriminatorSettingName stays at the SqlDialect base
+//   default (null); reader and writer connections share one physical pool for now. See
+//   docs/connection/new-database-pooling-appname-readonly-audit.md's Informix section.
 // =============================================================================
 
 using System.Data;
@@ -214,4 +236,43 @@ internal sealed class InformixDialect : SqlDialect
         // way to query the engine version string from within a connected session.
         return "SELECT DBINFO('version', 'full') FROM systables WHERE tabid = 1";
     }
+
+    // CONFIRMED LIVE (2026-09-18) against a real icr.io/informix/informix-developer-database
+    // container: "SET TRANSACTION READ ONLY" issued inside an active transaction genuinely
+    // enforces read-only — a subsequent write fails with "Invalid operation for a READ-ONLY
+    // transaction.", confirmed both via raw BEGIN WORK/SQL text and via a real ADO.NET
+    // conn.BeginTransaction(). Outside an active transaction it fails with "Not in transaction"
+    // instead — matching the requirement that pengdows.crud only calls this from within
+    // TransactionContext's already-open transaction, so that's never reached in practice. Same
+    // mechanism (and same shared helper) OracleDialect uses for its own confirmed
+    // SET TRANSACTION READ ONLY support.
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
+
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "Informix");
+    }
+
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "Informix", cancellationToken);
+    }
+
+    // No ApplicationName-equivalent connection-string keyword exists on
+    // Informix.Net.Core.IfxConnectionStringBuilder (CONFIRMED via reflection, 51 properties
+    // inspected — see docs/connection/new-database-pooling-appname-readonly-audit.md). Two
+    // candidates were found and confirmed to CONNECT successfully when added
+    // (Optofc=1, DelimIdent=true), but neither meets the bar this needs: DelimIdent is already
+    // part of every Informix connection string this dialect builds (it wouldn't differentiate
+    // reader vs. writer pools at all), and Optofc ("Optimize Open Cursor") is a real CSDK
+    // cursor-handling behavior switch, not confirmed to be a no-op matching the driver's
+    // already-implicit default the way Access's "Jet OLEDB:Database Locking Mode=1" or
+    // Oracle's "Metadata Pooling=false" are. Setting an unverified behavior-affecting property
+    // purely to split a pool key is exactly the class of mistake AccessDialect's original
+    // "Pooling=True" bug was (assumed safe without live-testing its actual effect, not just
+    // whether the driver accepts it) — deliberately NOT implemented here without further
+    // research into what Optofc actually changes. ReadOnlyPoolDiscriminatorSettingName stays at
+    // the SqlDialect base default (null); reader and writer connections share one pool for this
+    // dialect until a genuinely inert candidate is found.
 }
