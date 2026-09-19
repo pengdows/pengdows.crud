@@ -1,12 +1,15 @@
 # Application Name / Pooling / Read-Only Audit — Databases Added Since 2.0.5 (`main`)
 
-## Status: essentially complete
+## Status: complete
 
-Of the six databases with a real, unexamined gap, five are now fully resolved (Access, Db2,
-Sybase ASE, InterBase, SAP HANA all have a final answer for both the discriminator and read-only
-questions, applied via TDD where a real mechanism existed). Only Informix's discriminator remains
-genuinely open, and InterBase's confirmed-working read-only transaction support still needs a new
-pengdows.crud extension point to actually wire in — see "Next steps" at the bottom.
+Every database originally in scope (Access, Db2, Sybase ASE, InterBase, Informix, SAP HANA), plus
+the legacy Firebird gap found along the way, now has a final answer for both the discriminator
+and read-only questions, applied via TDD where a real mechanism existed. The only remaining item
+is a design/engineering task, not a research gap: InterBase's and Firebird's confirmed-working
+read-only transaction support both need a new pengdows.crud extension point to actually wire in
+(the read-only flag must be set at transaction-*creation* time, which
+`ISqlDialect.TryEnterReadOnlyTransaction`'s post-begin hook can't express) — see "Next steps" at
+the bottom.
 
 The three findings that needed no live server connection (real, driver-confirmed
 `ApplicationNameSettingName` keywords for FlatFile/Db2/Sybase ASE) have been applied via TDD:
@@ -91,11 +94,18 @@ STICKY at the session level (persists past `COMMIT`, affecting the next transact
 pooled connection) — fixed via `HanaDialect.GetBaseSessionSettings()` issuing `"SET TRANSACTION
 READ WRITE"` as a per-checkout reset.
 
+**Informix's discriminator gap is now also resolved (2026-09-19, a focused follow-up pass, live
+against the same real Informix container)**: `LeaveTrailingSpaces=False` (the driver's own
+compiled-in default, guaranteed inert by construction — the same pattern as InterBase's `fetch
+size=200` and HANA's `ConnectionTimeout=15`). Deliberately not `MaxPoolSize=100` (also
+default-matching) since `ApplyPoolDiscriminator` skips setting the discriminator key if the
+caller's own connection string already contains it, and `MaxPoolSize` is exactly the property a
+real caller is plausible to have already customized — which would silently defeat pool separation
+in precisely that case.
+
 The only remaining gap is wiring InterBase's (and Firebird's) already-confirmed-working read-only
 transaction support into pengdows.crud, blocked on a real extension-point design, not missing
-research — see "Next steps" at the bottom for the full detail. (Informix's pool discriminator gap
-may be resolved by separate, concurrent work not reflected in this paragraph yet — check
-`InformixDialect.cs`'s own file header for the current, authoritative state.)
+research — see "Next steps" at the bottom for the full detail.
 
 ## Why this document exists
 
@@ -208,7 +218,7 @@ unpredictably. Fixed via `HanaDialect.GetBaseSessionSettings()` returning `"SET 
 WRITE"` as a per-checkout reset (CONFIRMED LIVE safe to run as a bare preamble with no active
 transaction, and confirmed to correctly restore write access after a stuck read-only commit).
 
-### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026)
+### Informix (`Informix.Net.Core.IfxConnectionStringBuilder`, confirmed via `informix.net.core-lnx` 4.1501.2.2026) — FULLY RESOLVED 2026-09-19 (discriminator gap closed)
 
 **LIVE-VERIFIED (2026-09-18)** against a real `icr.io/informix/informix-developer-database`
 container (the prior pass here was reflection-only against the package DLL; this pass actually
@@ -223,19 +233,30 @@ never-configured instance still exposes identically.
 | Read-only (connection string) | none found | No dedicated keyword. |
 | Read-only (session SQL) | `SET TRANSACTION READ ONLY` | **CONFIRMED LIVE, real enforcement.** Requires being inside an active transaction first (`BEGIN WORK`, or a real ADO.NET `conn.BeginTransaction()` — both tested) — issued standalone it fails with `"Not in transaction."`, which is not a rejection of the statement itself. Inside a transaction it's accepted, and a subsequent write then fails with `"Invalid operation for a READ-ONLY transaction."` Implemented via `InformixDialect.TryEnterReadOnlyTransaction`/`TryEnterReadOnlyTransactionAsync` (the same `TryExecuteReadOnlySql` shared helper `OracleDialect` uses), not `GetReadOnlyConnectionParameter()` — this is transaction-scoped SQL, not a connection-string property. |
 
-**Discriminator: investigated, deliberately NOT implemented.** No `ApplicationName` keyword exists.
-Two candidates were found and confirmed to connect successfully when added to a live connection
-string — `Optofc=1` ("Optimize Open Cursor", a real CSDK cursor-handling switch) and
-`DelimIdent=true` — but neither meets the bar `AccessDialect`'s `Jet OLEDB:Database Locking
-Mode=1` or `OracleDialect`'s `Metadata Pooling=false` do: `DelimIdent` is already part of every
-connection string this dialect builds (setting it again wouldn't differentiate reader vs. writer
-pools at all), and `Optofc`'s actual behavioral effect (does it change real cursor semantics, or
-is `1` already the driver's implicit default?) was not confirmed — "connects without error" is
-not the same bar as "confirmed behaviorally inert," which is exactly the distinction Access's
-original `SupportsExternalPooling`/`PoolingSettingName` bug blurred (a property that connects
-fine is not automatically safe to use as a silent discriminator). `ReadOnlyPoolDiscriminatorSettingName`
-stays at the `SqlDialect` base default (`null`) until a genuinely inert candidate is found —
-reader and writer connections share one physical pool for this dialect for now.
+**Discriminator: RESOLVED 2026-09-19 (live, real Docker container, follow-up pass).** The prior
+pass correctly declined `Optofc=1`/`DelimIdent=true` (neither confirmed behaviorally inert — see
+below for why that bar matters). This pass systematically dumped every property's own compiled-in
+default off a live-connected `IfxConnectionStringBuilder`, then live-tested which ones can be set
+explicitly to their OWN default value without error (the `InterBaseDialect` "fetch size=200"
+pattern — guaranteed inert by construction, not just observed to look unchanged). Three qualify:
+`Exclusive=no`, `MaxPoolSize=100`, and `LeaveTrailingSpaces=False` — all connect successfully with
+their default value explicitly set. **`LeaveTrailingSpaces=False` was chosen** (a CHAR-column
+trailing-space read-behavior flag): `MaxPoolSize`, despite also qualifying on paper, was
+deliberately rejected because `ConnectionPoolingConfiguration.ApplyPoolDiscriminator` skips
+setting the discriminator key when the caller's own connection string already contains it — and
+`MaxPoolSize` is exactly the kind of property a real caller is plausible to have already
+configured themselves, which would silently defeat pool separation in precisely the case where a
+caller has customized their own pooling. `LeaveTrailingSpaces` is obscure enough that no real
+caller is expected to ever set it. Implemented as
+`InformixDialect.ReadOnlyPoolDiscriminatorSettingName => "LeaveTrailingSpaces"` /
+`ReadOnlyPoolDiscriminatorSettingValue => "False"`.
+
+Original finding, preserved for context: no `ApplicationName` keyword exists on
+`IfxConnectionStringBuilder` at all (confirmed absent, live, across all 51 properties) — this is
+why a discriminator (not `ApplicationNameSettingName`) was the right mechanism here in the first
+place. The earlier candidates `Optofc=1`/`DelimIdent=true` were rejected because "connects without
+error" is not the same bar as "confirmed behaviorally inert," which is exactly the distinction
+Access's original `SupportsExternalPooling`/`PoolingSettingName` bug blurred.
 
 ### InterBase (`InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder`, confirmed via `interbasesql.data.interbaseclient` 10.0.3) — RESOLVED 2026-09-18 (live, real Docker container)
 
@@ -291,7 +312,7 @@ Since `ApplicationName` is confirmed, no separate pool discriminator is needed.
 | Db2 | `ClientApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`) | `Min Pool Size`/`Max Pool Size` ✓ APPLIED (setting name was never wired up — real bug, now fixed) | `0` / `0` — driver doesn't enforce it at ANY value, live-confirmed | none | `SET TRANSACTION READ ONLY` — **REJECTED live, syntax error** | No |
 | Sybase ASE | `ApplicationName` ✓ (internal type) | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (corrected — see below) | `0` / `100` | none | **RESOLVED**: `SET TRANSACTION READ ONLY` is a syntax error; `sp_dboption 'read only'` is real but database-wide, not usable here | No |
 | SAP HANA | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE, implemented** | **Applied — `ConnectionTimeout=15`** |
-| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Investigated, deliberately unimplemented — see Informix section (candidates connect but not confirmed inert)** |
+| Informix | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ (+ secondary-endpoint `1`-suffixed variants) | `0` / `100` | none | `SET TRANSACTION READ ONLY` ✓ **CONFIRMED LIVE (2026-09-18), implemented** | **Applied — `LeaveTrailingSpaces=False`** |
 | InterBase | none | `Pooling` ✓ (default `True`) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `IBTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — needs a new extension point | **Applied — `fetch size=200`** |
 | Firebird (legacy, not "since main") | `ApplicationName` ✓ APPLIED | `Pooling` ✓ (default `True`, no override needed) | `MinPoolSize`/`MaxPoolSize` ✓ | `0` / `100` | none | Confirmed works via `FbTransactionOptions` (not `SET TRANSACTION READ ONLY`) but NOT wired into pengdows.crud — same new extension point as InterBase | No — `ApplicationName` already covers it |
 
@@ -309,7 +330,7 @@ unverified. If confirmed, `Db2Dialect` may need its own `DefaultMaxPoolSize` ove
 inheriting `SqlDialect`'s `100` fallback, since assuming `100` when the driver's own default is
 functionally different would be exactly the same class of unverified-assumption gap Access had.
 
-## Next steps (Db2, Sybase ASE, InterBase, Informix, Firebird, and SAP HANA all resolved 2026-09-18/19 — see each section above; only one item remains genuinely open)
+## Next steps (Db2, Sybase ASE, InterBase, Informix, Firebird, and SAP HANA all resolved 2026-09-18/19 — only one item remains genuinely open, and it's an engineering task, not research)
 
 Every session-SQL read-only claim and every discriminator question originally listed here has now
 been live-verified, one way or another:
@@ -317,26 +338,16 @@ been live-verified, one way or another:
 - **Read-only**: Db2 and Sybase ASE both REJECTED the ANSI `SET TRANSACTION READ ONLY` pattern
   outright as a syntax error. InterBase, Firebird, Informix, and SAP HANA all confirmed it (or an
   equivalent) genuinely works — InterBase's and Firebird's are confirmed at the driver level but
-  NOT yet wired into pengdows.crud (both blocked on the same extension-point item below);
+  NOT yet wired into pengdows.crud (both blocked on the extension-point item below);
   Informix's and HANA's are both confirmed live AND implemented.
-- **Discriminators**: Access, InterBase, SAP HANA, and (per a separate, concurrent follow-up —
-  check `InformixDialect.cs`'s own file header for the authoritative current state)
-  possibly Informix now all have a confirmed-safe, applied discriminator
-  (`Jet OLEDB:Database Locking Mode=1`, `fetch size=200`, `ConnectionTimeout=15` respectively).
-  Db2, Sybase ASE, and Firebird didn't need one — each has a real `ApplicationName`-equivalent
-  keyword.
+- **Discriminators**: Access, InterBase, SAP HANA, and Informix all now have a confirmed-safe,
+  applied discriminator (`Jet OLEDB:Database Locking Mode=1`, `fetch size=200`,
+  `ConnectionTimeout=15`, `LeaveTrailingSpaces=False` respectively). Db2, Sybase ASE, and Firebird
+  didn't need one — each has a real `ApplicationName`-equivalent keyword.
 
-Remaining work:
+The one remaining item:
 
 1. Design a real pengdows.crud extension point for "a dialect needs to control how a transaction
    itself is created (not just what SQL runs after it begins)" — InterBase's AND Firebird's
    confirmed-working TPB-based (`IBTransactionOptions`/`FbTransactionOptions`) read-only
    transactions are both blocked on this, not on missing research.
-2. If Informix's discriminator search above did not resolve it, find a genuinely inert,
-   driver-recognized discriminator keyword for Informix, or definitively establish none exists —
-   the same bar `Jet OLEDB:Database Locking Mode=1`/`fetch size=200`/`ConnectionTimeout=15` met (a
-   candidate whose value matches the driver's own compiled-in default is the strongest form of
-   this; test it through `ConnectionPoolingConfiguration.ApplyPoolDiscriminator`'s actual
-   generic-`DbConnectionStringBuilder` mechanism, not just the target driver's own typed builder —
-   see SAP HANA's section above for why those two can give opposite answers to "does this actually
-   change the connection string text?").
