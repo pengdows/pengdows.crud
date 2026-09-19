@@ -17,6 +17,24 @@ namespace pengdows.crud.Tests;
 public class FirebirdDialectTests
 {
     [Fact]
+    public void ApplicationNameSettingName_IsFirebirdsRealKeyword()
+    {
+        // CONFIRMED via reflection against the real FirebirdSql.Data.FirebirdClient.
+        // FbConnectionStringBuilder (10.3.3): ApplicationName is a real, working property —
+        // round-trips to "application name=..." in the connection string, and a live connection
+        // with it set succeeds normally (confirmed against a real firebirdsql/firebird:5.0.2
+        // container). Without this set, reader/writer connection strings would be identical and
+        // collapse into one shared pool — the same bug class Access/Db2/Sybase/InterBase/
+        // Informix's ApplicationNameSettingName fixes addressed this session. Firebird was the
+        // only long-established, non-embedded database with literally zero coverage on any of
+        // ApplicationNameSettingName/GetReadOnlyConnectionParameter/
+        // ReadOnlyPoolDiscriminatorSettingName/TryEnterReadOnlyTransaction before this fix.
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        Assert.Equal("Application Name", dialect.ApplicationNameSettingName);
+    }
+
+    [Fact]
     public void QuotePrefixSuffix_AreDoubleQuotes()
     {
         var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),

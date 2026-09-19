@@ -14,6 +14,38 @@
 // - RETURNING clause for getting generated IDs.
 // - Generator (sequence) based ID generation.
 // - Embedded and server modes supported.
+// - Pool separation / read-only enforcement (2026-09-18, CONFIRMED LIVE against a real
+//   firebirdsql/firebird:5.0.2 container): this dialect previously had ZERO coverage on
+//   ApplicationNameSettingName, GetReadOnlyConnectionParameter, ReadOnlyPoolDiscriminatorSettingName,
+//   or TryEnterReadOnlyTransaction, unlike every other long-established client-server dialect —
+//   meaning Firebird's reader and writer connections shared one physical pool with no database-
+//   level read-only enforcement at all (only pengdows.crud's own SqlContainer pre-flight check).
+//     * ApplicationName IS real and confirmed (see ApplicationNameSettingName below) — fixes pool
+//       separation.
+//     * Pooling: FbConnectionStringBuilder.Pooling (bool, default True) matches SqlDialect's base
+//       "Pooling" keyword exactly (confirmed via reflection) — no PoolingSettingName override
+//       needed, this was already correct by inheritance.
+//     * No connection-string-level read-only property exists — FbConnectionStringBuilder.IsReadOnly
+//       is confirmed (via DeclaredOnly reflection) to be the INHERITED base
+//       System.Data.Common.DbConnectionStringBuilder.IsReadOnly (the "is this builder locked"
+//       indicator, no setter, no effect on ConnectionString text), not a real Firebird keyword —
+//       the same trap InterBaseDialect's "IsReadOnly" investigation hit.
+//     * A genuine session/transaction-level read-only mechanism DOES exist at the driver level —
+//       CONFIRMED LIVE: FbConnection.BeginTransaction(new FbTransactionOptions { TransactionBehavior
+//       = FbTransactionBehavior.Read | FbTransactionBehavior.Concurrency | FbTransactionBehavior.Wait })
+//       correctly rejects a write ("FbException: attempted update during read-only transaction")
+//       while reads succeed normally. The Oracle/Informix-style mid-transaction SQL statement
+//       ("SET TRANSACTION READ ONLY" issued after BeginTransaction) was tried first and CONFIRMED
+//       to fail ("FbException: invalid transaction handle (expecting explicit transaction start)")
+//       — Firebird's TPB (Transaction Parameter Block) model, like InterBase's identical one,
+//       requires the read-only flag at transaction-CREATION time, not as a follow-up statement.
+//       This does NOT fit ISqlDialect.TryEnterReadOnlyTransaction's hook, which only runs after
+//       TransactionContext has already opened the transaction via the ordinary IsolationLevel-based
+//       BeginTransaction() overload. Implementing this for real needs the same new pengdows.crud
+//       extension point already identified for InterBaseDialect (a dialect controlling transaction
+//       *creation* itself, not just post-begin SQL) — left unimplemented here for the identical
+//       reason, rather than forcing a broken partial fix. See
+//       docs/connection/new-database-pooling-appname-readonly-audit.md's Firebird section.
 // =============================================================================
 
 using System.Data;
@@ -77,6 +109,15 @@ internal class FirebirdDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
+
+    // CONFIRMED LIVE (2026-09-18, real firebirdsql/firebird:5.0.2 container): ApplicationName is
+    // a real, working property on FirebirdSql.Data.FirebirdClient.FbConnectionStringBuilder —
+    // round-trips to "application name=..." in the connection string, and a live connection with
+    // it set succeeds normally. Without this set, reader/writer connection strings would be
+    // identical and collapse into one shared pool — the same bug class Access/Db2/Sybase/
+    // InterBase/Informix's ApplicationNameSettingName fixes addressed this session. See the
+    // "Read-only enforcement" remarks below for the companion finding.
+    public override string? ApplicationNameSettingName => "Application Name";
 
     // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"
     public override bool IsUniqueViolation(DbException ex) =>
