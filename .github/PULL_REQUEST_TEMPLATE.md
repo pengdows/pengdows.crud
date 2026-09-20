@@ -15,7 +15,7 @@
 - [ ] **No `else` after `return/throw`**.
 - [ ] **Hot paths use `ValueTask`** (minimize allocations).
 - [ ] **Public APIs are in `.abstractions`**.
-- [ ] **13 DBs verified**: changes tested/verified against all supported providers.
+- [ ] **23 DBs verified**: changes tested/verified against all supported providers.
 - [ ] **TDD First**: Tests included to reproduce fix or verify feature.
 
 ## DB Impact Notes

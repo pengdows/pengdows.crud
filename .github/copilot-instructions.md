@@ -1,61 +1,60 @@
-All Copilot code reviews for this repository MUST adhere to the standards defined in the canonical review policy.
+All Copilot code reviews for this repository MUST adhere to the standards defined in the canonical review policy at [REVIEW_POLICY.md](../REVIEW_POLICY.md). This file is a condensed operational summary of that policy for use as a review system prompt; if the two ever disagree, REVIEW_POLICY.md is authoritative.
 
-The full review policy is embedded below:
+## 1) Scope
 
----
-# REVIEW_POLICY.md (canonical)
+Review the PR diff, plus any code, config, schema, test, or doc directly affected by it, and the callers/contracts/operational paths needed to evaluate it. Do not turn the review into an unrelated refactor, review untouched code unless the diff activates a latent defect there, demand a different-but-equally-correct pattern, or flag formatting already enforced by a linter/formatter.
 
-Use this as the single source of truth for Claude/Codex/Gemini/Copilot reviews.
+## 2) Review output format
 
----
+Always produce, in this order:
 
-## 1) Scope rules
+1. **Blockers (P0):** list or "None"
+2. **Majors (P1):** list or "None"
+3. **Minors (P2):** list or "None" (cap at 5 individually listed; summarize the rest by category/count)
+4. **Missing evidence:** specific tests/measurements/compatibility checks/threat analysis still needed, or "None"
+5. **Impact notes:** only the affected domains (API/contract, data/database, security/privacy, concurrency/resources, performance, operations, platform/provider)
+6. **Minimal patch guidance:** concrete correction, not a redesign
+7. **REVIEW STATUS:** COMPLETE / PARTIAL
+8. **MERGE:** YES / NO / UNDETERMINED
+9. **Confidence:** HIGH / MEDIUM / LOW
 
-* Review **only the PR diff** plus any code directly referenced by the diff.
-* Do not propose unrelated refactoring, "cleanup," or cosmetic changes outside the diff.
-* Be concise. Focus on P0 (Blockers) and P1 (Majors).
+Generate findings before the verdict, never the reverse. A supported P0 always means `MERGE: NO`. With no P0, a PARTIAL status or an unresolved high-impact Missing evidence entry means `MERGE: UNDETERMINED`, not YES. `MERGE: YES` requires a COMPLETE review of the applicable scope, no P0, and no unresolved high-impact Missing evidence. Each finding needs Location, Defect (falsifiable claim), Impact, Evidence, Correction, and Confidence (HIGH/MEDIUM/LOW — a P0 needs at least MEDIUM with real evidence).
 
-## 2) Severity Levels
+## 3) P0 blockers — hard "DO NOT MERGE"
 
-| Level | Definition |
-|-------|------------|
-| **P0: Blocker** | Hard-ban violations, incorrect transaction semantics, connection leaks, or security vulnerabilities. Must be fixed before merge. |
-| **P1: Major** | Significant performance regressions on hot paths, non-idiomatic public API changes, or poor test coverage. |
-| **P2: Minor** | Naming improvements, documentation typos, or small optimization opportunities. |
+**Project-specific hard bans:**
+* `TransactionScope` is forbidden — use `BeginTransaction`.
+* No string interpolation for SQL values — use `SqlContainer`/`AddParameterWithValue`.
+* No unquoted identifiers in custom SQL — use `WrapObjectName`.
+* Leaking connections — every checkout must be deterministically disposed (prefer `await using`); no `DbConnection`/`ITrackedReader` lifetime escaping its scope; no transactions stored as long-lived fields.
+* Secrets in code or logs — no hardcoded keys, passwords, real connection strings, or secrets reaching logs/exceptions/metrics/traces.
 
-## 3) The Hard Bans (P0)
+**General P0 categories (see REVIEW_POLICY.md Section 5 for full detail):**
+* Correctness/state integrity — wrong results, partially-applied state, duplicated/lost side effects on retry, a failed op reported as success.
+* Security/privacy — unvalidated input crossing a trust boundary, auth bypass/confusion, injection (SQL, deserialization, command, path, template), failure handling that leaks context.
+* Resource ownership/concurrency — leaks on any exit path, deadlock/starvation risk, hidden blocking on an async required path, cancellation leaving corrupt/orphaned state.
+* Contracts/compatibility — accidental breaking change to a public API, schema, serialized form, or config/deployment expectation without an explicit migration plan.
+* Tests/proof — behavior changed with no corresponding test, a bug fix with no regression test, a weakened/disabled test, or evidence verified absent.
+* Performance claims/regressions — an unmeasured change to a required hot path, or a measured regression on one without an accepted tradeoff.
+* Observability/operational truth — logs/metrics/traces/health reporting materially false state.
+* Startup configuration validation — a required setting that can stay missing/invalid past startup, or startup that accepts work before validation completes.
 
-If you see these, it is a hard "DO NOT MERGE":
+## 4) P1 majors — pengdows.crud invariants
 
-* **TransactionScope is forbidden** — use `BeginTransaction`.
-* **String Interpolation in SQL** — use `SqlContainer` or `AddParameterWithValue`.
-* **Missing Braces** — `if`, `else`, `while`, `for` must ALWAYS use braces `{}`.
-* **One Statement per Line** — do not use `if (cond) return;` on a single line.
-* **Else after Return/Throw** — if the `if` block returns or throws, do not use `else`. Just continue the method.
-* **Leaking Connections** — every connection checkout must be disposed (prefer `await using`).
-* **Secrets in Code** — no hardcoded keys, passwords, or real connection strings.
+* `ValueTask`/`ValueTask<T>` on hot-path execution methods — do not regress to `Task`.
+* No public constructors on implementation types except `DatabaseContext`.
+* Interface-first — public APIs live in `pengdows.crud.abstractions`; consumers depend on abstractions, not concrete types.
+* Extend `TableGateway` for custom query methods; do not wrap it in a separate service layer.
+* `[Id]` and `[PrimaryKey]` are mutually exclusive on one property; preserve documented upsert key priority.
+* SQL/dialect changes must consider quoting, parameter-marker rules, upsert behavior, and transaction/isolation semantics per database; don't duplicate the same SQL concept across dialect paths.
+* Multi-dialect correctness — SQL generation changes must work across all supported providers; call out any DB family at risk and require a targeted integration test.
 
-## 4) Engineering Standards
+Also flag (see REVIEW_POLICY.md Section 6 for full detail): control flow that's hard to trace to its cause, functions/classes with unrelated mixed responsibilities, "ask then act" patterns that leak an owner's invariant to a caller, hidden allocation/IO/blocking not obvious from the call site, swallowed or context-free exception handling, and comments that restate code or have gone stale.
 
-* **TDD First** — Every bug fix or feature must have a corresponding test that reproduces the issue or verifies the feature.
-* **ValueTask on Hot Paths** — Hot-path methods (hydration, reader loops) must return `ValueTask` to minimize allocations.
-* **Interface-First** — Public APIs must be in `pengdows.crud.abstractions`.
-* **Multi-Dialect Correctness** — Changes to SQL generation must work correctly across all 13 supported providers.
+## 5) DB impact notes
 
-## 5) The Review Format
+When SQL/dialect behavior changes, state: affected DB families (Postgres-like, MySQL-like, SQL Server-like, embedded, warehouse), expected behavior differences, and which integration test covers it (or what new one is required).
 
-Always use this exact template for the summary:
+## 6) Philosophical alignment
 
-1. **MERGE:** YES/NO
-2. **Blockers (P0):** List violations or "None"
-3. **Majors (P1):** List issues or "None"
-4. **Minors (P2):** List suggestions or "None"
-5. **Missing evidence:** List missing tests/benchmarks
-6. **DB impact notes:** Brief summary of performance or provider-specific impacts
-7. **Minimal patch guidance:** Clear, concise instructions for the developer to fix blockers
-8. **Confidence:** LOW/MEDIUM/HIGH
-
-## 6) Philosophical Alignment
-
-Always align with these experts:
-Hoare (null safety, type safety), Goetz (concurrency safety, immutability, thread-safety), Hickman (explicit ownership, every resource has a single clear owner), Martin (small cohesive functions, single responsibility, clean contracts, dependency direction), Schneier (hostile inputs, explicit boundaries, fail loudly, secrets stay secret).
+Carmack (explicit state/control flow, local reasoning, direct mechanisms), Abrash (measure the actual runtime cost, don't infer it from source appearance), Schneier (hostile inputs, explicit trust boundaries, fail loudly, secrets stay secret), Martin (cohesive responsibilities, narrow contracts, intentional dependency direction), Holub (behavior lives with the invariant it protects, design for testability), Lampson (every resource/state transition has one clear, explicit owner).

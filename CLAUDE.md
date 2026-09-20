@@ -165,7 +165,7 @@ await gateway.BatchDeleteAsync(new[] { item });
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
 - Audit fields via `[CreatedBy]`/`[CreatedOn]`, `[LastUpdatedBy]`/`[LastUpdatedOn]` attributes
-- SQL dialect abstraction supports 22 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, Db2, FlatFile, SingleStore, Sybase ASE, Spanner, Informix, SAP HANA, InterBase) across 20 concrete dialect classes — Aurora MySQL/PostgreSQL and SingleStore reuse the MySQL/PostgreSQL dialect tagged with their own `SupportedDatabase` value rather than getting a dedicated class; TimescaleDB/Citus/Fujitsu/Percona delegate to the MySQL/PostgreSQL dialect with no separate dialect or enum value at all
+- SQL dialect abstraction supports 23 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, Db2, FlatFile, SingleStore, Sybase ASE, Spanner, Informix, SAP HANA, InterBase, Access) across 20 concrete dialect classes — Aurora MySQL/PostgreSQL and SingleStore reuse the MySQL/PostgreSQL dialect tagged with their own `SupportedDatabase` value rather than getting a dedicated class; TimescaleDB/Citus/Fujitsu/Percona delegate to the MySQL/PostgreSQL dialect with no separate dialect or enum value at all
 - Connection strategies: Standard, PreventDatabaseUnload, SingleWriter, SingleConnection (`KeepAlive` is an obsolete compatibility alias)
 - Multi-tenancy via context-per-tenant (not query filtering)
 

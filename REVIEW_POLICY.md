@@ -1,288 +1,778 @@
-# REVIEW_POLICY.md (canonical)
+REVIEW_POLICY.md (canonical)
 
-Use this as the single source of truth for Claude/Codex/Gemini/Copilot reviews.
+Use this as the default review policy for human and automated code reviews. Repository-specific rules may extend it through a documented project overlay, but may not weaken its P0 requirements.
 
----
+1) Purpose and scope
 
-## 1) Scope rules
+A review must determine whether a change is correct, safe, maintainable, and supported by enough evidence to merge.
 
-* Review **only the PR diff** plus any code directly referenced by the diff.
-* Do not propose large refactors unless a **P0 blocker** requires it.
-* Do not propose new architectural patterns, wrappers, service layers, or abstractions unless required to resolve a P0 blocker.
-* Ignore unrelated files, formatting-only changes, and generated code unless the diff changes runtime behavior or public contracts.
-* Prefer smallest changes that preserve existing public contracts.
+Review:
 
----
+The proposed diff.
 
-## 2) Review output contract
+Code, configuration, schemas, tests, and documentation directly affected by the diff.
 
-Every review must output, in this order:
+Callers, implementations, contracts, and operational paths needed to evaluate the change.
 
-1. **MERGE:** YES/NO
-2. **Blockers (P0)** — must fix
-3. **Majors (P1)** — should fix before merge; waivers only for confirmed false positives
-4. **Minors (P2)** — optional/nits
-5. **Missing evidence** — tests/profiling/threat note required
-6. **DB impact notes** — only if SQL/dialect/DDL/transaction behavior changed
-7. **Minimal patch guidance** — concrete steps, no handwaving
-8. **Confidence:** HIGH / MEDIUM / LOW
-   * **HIGH** — directly evidenced by diff or tests
-   * **MEDIUM** — strongly indicated but needs confirmation
-   * **LOW** — plausible concern, limited evidence
+Do not:
 
----
+Turn the review into an unrelated refactor.
 
-## 3) Foundational principles (inform all review decisions)
+Review untouched code unless the change activates or depends on an existing defect.
 
-These are not checklist items — they are the lens through which every finding is evaluated.
+Require a preferred pattern when the submitted design is correct and no material risk exists.
 
-**The Boundary Rule** — Systems fail at boundaries. Every boundary must be explicit and controlled: DB connections, thread pools, network calls, memory ownership, authentication context. A change that makes a boundary implicit or uncontrolled is a defect regardless of whether it manifests immediately.
+Comment on generated code unless the generator, generated contract, or runtime behavior changed.
 
-**The Lampson Rule** — Ownership must be explicit. Every resource must have a single clear owner: connections, readers, transactions, memory, and execution contexts. Shared resources without explicit ownership eventually leak, corrupt state, or deadlock. Ask: who owns this resource? Who releases it? Can ownership escape the scope where it is controlled? Can two components believe they own it? If the answer is unclear, the design is wrong. *(Lampson, Hints for Computer System Design, 1983.)*
+Report formatting-only concerns already enforced by an automated formatter or linter.
 
-**The Abrash Rule** — Know what the machine is actually doing. If it looks simple and cheap, verify that it actually is. Optimization by belief is forbidden. Hidden costs are design defects.
+Prefer the smallest change that fixes the problem, preserves valid contracts, and leaves the system easier to reason about.
 
-**The Schneier Rule** — Assume hostile inputs at every trust boundary. Fail loudly — silent failure is a security defect. Secrets must never appear in logs, exceptions, metrics, or telemetry.
+2) Review output contract
 
-**The Holub/Martin Rule** — If it is hard to test, the design is wrong. Complexity is the enemy. Favor small, cohesive units whose behavior is easy to reason about and verify.
+Every review must contain, in this generation order:
 
-**The Simplicity Rule** — Prefer the simplest design that solves the problem correctly. Complexity must justify its existence. Solve the problem you have, not the one you imagine.
+Blockers (P0) — defects that prohibit merge
 
----
+Majors (P1) — material defects that should be fixed before merge
 
-## 4) P0 blockers (no merge)
+Minors (P2) — optional improvements and local clarity issues
 
-### A. Tests (TDD enforcement)
+Missing evidence — tests, measurements, compatibility checks, or threat analysis still required
 
-* Any new behavior or bug fix **must include unit tests**.
-* Any change affecting DB behavior, SQL generation, transactions, pooling, or dialects **must include integration coverage**.
-* No skipped tests.
-* **Block if** behavior changed but tests did not change.
+Impact notes — only for affected technical or operational domains
 
-### B. Security invariants
+Minimal patch guidance — concrete correction, not a redesign
 
-Block if any of these occur:
+REVIEW STATUS: COMPLETE / PARTIAL
 
-* Unvalidated input crosses a trust boundary (SQL, file paths, serialization, network calls, logging, connection strings).
-* Authentication/authorization logic changes without explicit tests.
-* Secrets or sensitive values can appear in logs, exceptions, metrics, or telemetry.
-* Custom crypto/token schemes introduced or modified without clear invariants and tests.
-* A failure path is silent — swallowed exceptions, unchecked return codes, or missing error logging are security defects, not merely quality issues.
-* A boundary (connection, pool, auth context, thread) becomes implicit or uncontrolled.
+MERGE: YES / NO / UNDETERMINED
 
-### C. Performance evidence (Abrash rule)
+Confidence: HIGH / MEDIUM / LOW
 
-* If PR claims perf improvement, includes optimization, or touches known hot paths in a way that could affect runtime cost: require evidence.
-  * Acceptable evidence: BenchmarkDotNet output, profiler summary, or before/after timing numbers.
-  * Benchmarks must demonstrate correct warmup methodology. Cold-path and steady-state results must be distinguished where relevant.
-  * Microbenchmarks must isolate the code under test. Benchmarking a surrounding pipeline is not acceptable evidence.
-  * The measured delta must exceed the noise floor — overlapping confidence intervals is not evidence.
-* Block "optimization by belief."
-* Block "it looks simple and cheap therefore it is" reasoning without verification.
+The verdict must not be the first conclusion generated. An automated reviewer may reason before producing visible output, generate the findings before the verdict, or let tooling construct and place a summary header after analysis. A reviewer that streams its first generated conclusion directly must generate findings before the verdict.
 
-### D. API contract safety (interface-first)
+Review status is scope-relative:
 
-* Public API surface must remain stable unless explicitly intended.
-* All public APIs live in `pengdows.crud.abstractions`.
-* Concrete types must not cross module or service boundaries where an interface exists.
-* Changes to interfaces require baseline verification updates.
+COMPLETE — the reviewer accessed and evaluated everything that Section 1 places in scope. This does not require a repository-wide review. A diff-only review may be complete when the change does not require external callers, contracts, configuration, generated output, or operational context to evaluate it.
 
-### E. Resource lifetime violations
+PARTIAL — one or more artifacts required by Section 1 were inaccessible, omitted, or intentionally sampled.
 
-Block if:
+Verdict precedence is:
 
-* `DbConnection` lifetime escapes execution scope.
-* `IDataReader` / `ITrackedReader` is not deterministically disposed.
-* Transactions are stored in long-lived fields.
-* Async paths allow connection or reader leaks.
+A supported P0 produces MERGE: NO, regardless of review status.
 
-Resource leaks are architecture violations, not just bugs. The entire pool governance design exists to prevent this class of failure.
+If no P0 is established, PARTIAL status, an unresolved credible high-impact risk, or inaccessible evidence required to decide safely produces MERGE: UNDETERMINED.
 
-### F. Project hard bans
+MERGE: YES requires a complete review of the applicable scope, no P0, and no unresolved high-impact Missing evidence entry.
 
-These rules are not stylistic preferences. They exist because violations create conditions where correctness defects become invisible in diffs, debugging sessions, and code review. They are therefore treated as correctness safeguards and enforced as P0 blockers.
+A partial review cannot produce MERGE: YES.
 
-* **TransactionScope is forbidden** — use `BeginTransaction`.
-* No string interpolation for SQL values.
-* No unquoted identifiers in custom SQL — use `WrapObjectName`.
-* Where available, use `pengdows.crud.analyzers` to machine-enforce review invariants. Current analyzer coverage includes raw SQL predicate/join value injection (`PGC008`).
-* **One statement per line, always.** `if (something) break;` on one line is forbidden. The break is invisible in a diff and makes debugger breakpoints ambiguous. This is how correctness defects hide.
-* **Braces are required for all control flow blocks without exception.** Brace-free single-line blocks are forbidden regardless of brevity. Braces and parentheses compile to nothing — file length is not a valid reason to omit them. An unbraced block is one added line away from a silent correctness bug.
-* **After any scope-exiting statement — `return`, `break`, `continue`, or `throw` — do not use `else`.** The else branch is already implied by the exit. An else after a scope exit is logically redundant and adds indentation that obscures control flow.
-* **Parentheses must make expression intent explicit.** Do not rely on operator precedence rules where parentheses would remove ambiguity. `(a && b) || c` is required; `a && b || c` is not acceptable.
+Each finding must include:
 
-### G. Metrics integrity
+Location — file and line or the narrowest applicable scope.
 
-* If behavior changes, verify that metrics still tell the truth.
-* A change that silently breaks a metric is equivalent to a change that breaks a query.
+Defect — what is wrong, stated as a falsifiable claim.
 
-### H. Correctness regressions
+Impact — the concrete failure, risk, or maintenance cost.
 
-Block if a change introduces any of the following:
+Evidence — code path, contract, test result, measurement, or documented invariant.
 
-* Error paths that leave state inconsistent.
-* Retries that can duplicate side effects.
-* Exception handling that changes observable behavior without tests.
-* Logic changes that can produce incorrect results for valid, boundary, or adversarial inputs.
+Correction — the smallest viable fix.
 
----
+Confidence — HIGH, MEDIUM, or LOW.
 
-## 5) P1 majors (fix or justify with false-positive evidence)
+Confidence means:
 
-### A. pengdows.crud core invariants
+HIGH — directly demonstrated by the diff, contract, test, or reproducible behavior.
 
-* **ValueTask in hot paths** — execution methods return `ValueTask`/`ValueTask<T>`; do not regress to `Task`.
-* **No public constructors** on implementation types except `DatabaseContext`.
-* **Interface-first** — consumers depend on abstractions, not implementation types.
-* **TableGateway extension rule** — extend TableGateway; do not wrap it with service layers.
-* **[Id] vs [PrimaryKey]** — never apply both to the same property; preserve documented upsert key priority.
+MEDIUM — strongly indicated, but one relevant fact remains unverified.
 
-### B. Function and method design (Holub/Martin)
+LOW — plausible but insufficiently supported. Put low-confidence concerns under Missing evidence. A P0 finding must have at least MEDIUM confidence and evidence establishing the defect.
 
-* A function must do one conceptual thing. If a meaningful sub-operation obscures the main flow, extract it into a named function.
-* A function must be small enough to understand without losing the control flow in mental paging.
-* Parameter count should normally be fewer than four. When more are required, consider whether a parameter object, richer domain type, or decomposition is the correct resolution.
-* Constructor parameter count is a class responsibility signal. Many constructor dependencies usually indicate the class is doing too much or sitting at the wrong level of abstraction.
-* Inheritance is a form of coupling. Flag new inheritance hierarchies where composition would serve.
+Every Missing evidence entry must name the specific artifact, test, observation, or measurement needed to resolve it. If the unresolved question represents a credible high-impact risk, the verdict must be UNDETERMINED, not YES.
 
-### C. Behavior locality (Holub)
+Do not report a finding merely because code could be written differently. If no failure mode, violated invariant, measurable cost, or material maintenance problem can be stated, omit it.
 
-* Behavior must live with the structure that owns the data or invariant it manipulates.
-* Flag when business logic is implemented in service layers that simply wrap TableGateway calls.
-* Flag when SQL logic is implemented outside the gateway responsible for the table.
-* Flag "ask then act" patterns — code that retrieves state only to make decisions on it elsewhere. That decision belongs with the object that owns the state.
-* Objects should expose capabilities, not data. Flag getters whose primary purpose is to allow outside code to enforce invariants that should live with the owning type. Do not flag simple data carriers, value objects, DTOs, or read models solely for exposing state.
+3) Severity model
 
-### D. Hidden cost violations (Abrash rule — extended)
+Severity follows impact, not reviewer preference.
 
-Flag methods that introduce hidden work not obvious from the call site: hidden allocations, implicit IO, hidden SQL generation, hidden blocking in async paths, or expensive LINQ pipelines.
+P0 — blocker
 
-Hidden cost violations are P1 unless they affect a known hot path or introduce blocking behavior in async code — in which case report them under P0 instead.
+Use P0 when the change can cause one or more of the following:
 
-### E. Deterministic resource ownership
+Incorrect results or corrupted, lost, or irrecoverable data.
 
-* Dispose readers promptly — `ITrackedReader` is a lease.
-* No async leaks, no undisposed containers/readers/transactions.
-* No long-lived transactions stored as fields.
-* Every error path must be explicitly handled and tested — assume things will go wrong.
-* Never silently ignore errors.
+A security, privacy, authorization, or secret-exposure failure.
 
-### F. SQL correctness and multi-dialect awareness
+A deadlock, race, leak, unbounded resource use, or uncontrolled resource lifetime.
 
-* Changes to dialects/SQL generation must consider: quoting rules, parameter marker rules, upsert behavior per DB, transaction/isolation semantics.
-* If a change risks a specific DB family, call it out and require a targeted integration test.
-* Do not represent the same SQL concept in two different ways simultaneously — duplicate dialect code paths are a correctness and maintenance hazard.
+A broken public contract or incompatible deployment without an explicit migration plan.
 
-### G. Move errors left
+A material reliability or availability regression.
 
-* Move errors from runtime to compile time wherever possible.
-* Prefer type safety, compiler checks, and static guarantees over runtime validation when feasible.
-* If a design choice converts a compile-time guarantee into a runtime check, flag it.
+An unmeasured change to a required hot path where performance is part of the contract, or a demonstrated material performance regression on a required path.
 
-### H. Comments
+Verified absence of tests or evidence required to establish safety or correctness.
 
-* Code must be understandable without comments. If a comment is needed, consider renaming or decomposing first.
-* A comment is only justified to explain something the code is structurally incapable of expressing — a known bug workaround, a regulatory constraint, a non-obvious invariant.
-* Bad comments are worse than no comments.
-* Ceremonial header comments are forbidden — authorship and change history belong in source control.
-* **Exception:** AI context headers are permitted where necessary to establish hot-path status or invariants that cannot be inferred from the diff alone.
+P0 means MERGE: NO. P0 findings cannot be waived within the normal review process.
 
----
+Emergency change authority belongs in a separate documented procedure. It must identify the approving authority, accepted risks, rollback plan, tracked remediation, expiration, and post-incident review. Emergency authority may override the normal merge process; it does not downgrade the finding or change the review verdict.
 
-## 6) P2 minors (nice to fix)
+P1 — major
 
-* Naming, local clarity, consistent style with the repo.
-* Minor allocations or micro-optimizations in non-hot paths.
-* Small simplifications that do not alter behavior.
+Use P1 for a material design, testability, operability, performance, or maintenance defect that is unlikely to cause immediate catastrophic failure but substantially raises future defect cost or obscures correctness.
 
----
+A P1 may be dismissed only when evidence shows that the finding is a false positive. Deferring valid work requires a tracked follow-up; it does not make the finding false.
 
-## 7) Evidence requirements ("prove it")
+P2 — minor
 
-### Tests
+Use P2 for naming, local clarity, consistency, or small non-critical improvements. P2 findings do not block merge.
 
-* Unit tests for behavior changes.
-* Integration tests for DB-facing changes.
-* Regression tests for bug fixes.
-* Tests should primarily verify observable behavior, not internal implementation. Tests that assert internal method calls or internal structure instead of observable outcomes are fragile and should be flagged.
-* **Adversarial and boundary inputs are required** for any test touching string handling, identifier generation, SQL building, or type mapping.
-  * Make no assumptions about input size or content. Where a developer puts `"foo"`, a user will put `"supercalifragilisticexpialidocious"` — or a 64KB string, a null, a reserved word in one or more dialects, a string containing a parameter marker, a Unicode edge case, or a value at the boundary of the underlying type.
-  * Minimum bar: test with values that are longer, stranger, and more hostile than any example in the implementation.
-* Test names must express intent. A well-named test is documentation that cannot go stale. `Test1` is not a test name.
+Never inflate severity to force a preference.
 
-### Performance
+4) Foundational rules
 
-Required when:
+These rules are review lenses, not slogans. A finding must still identify a concrete defect or missing proof.
 
-* PR claims perf improvement.
-* PR changes pooling, container execution, mapping, or dialect hot paths.
+Boundary control
 
-Requirements:
+Systems fail at boundaries. Every transfer of data, control, authority, ownership, or execution must be explicit and controlled.
 
-* BenchmarkDotNet with correct warmup.
-* Cold-path and steady-state distinguished where relevant.
-* Microbenchmarks must isolate the code under test.
-* Delta must exceed noise floor.
+Relevant boundaries include:
 
-### Threat note (security changes)
+Processes, services, networks, queues, files, and databases.
 
-Required when touching: authn/authz, token handling, SQL building, deserialization, filesystem paths, logging, connection string handling.
+Authentication and authorization contexts.
 
-Threat note format (5 bullets):
+Threads, tasks, callbacks, event handlers, and schedulers.
 
-* Entry points
-* Trust boundaries
-* Assets at risk
-* Attacker goals
-* Mitigations and tests
+Parsers, serializers, native calls, plugins, and third-party libraries.
 
----
+Memory, handles, streams, connections, transactions, and other resources.
 
-## 8) Waivers
+Ask what crosses the boundary, who validates it, what failures are possible, and how those failures become visible.
 
-* **P1 majors** may only be waived when the PR author demonstrates the finding is a **false positive** — the rule does not apply given the actual context. Deferral is not a waiver; deferred concerns require a follow-up issue.
-* **P0 blockers cannot be waived.**
+Configuration validity
 
----
+Configuration is an input boundary. An application must validate its complete effective configuration during startup, before it opens listeners, starts schedulers, consumes messages, or accepts other work.
 
-## 9) DB impact notes
+The startup check must:
 
-If SQL/dialect behavior changes, reviewers must state:
+Evaluate the final configuration after files, environment variables, command-line arguments, secret stores, and other overrides have been applied.
 
-* Affected DBs (at least by family: Postgres-like, MySQL-like, SQL Server-like, embedded, warehouse)
-* Expected behavior differences
-* Which integration tests cover it, or what new test is required
+Validate every setting required by the enabled features and selected operating mode.
 
----
+Check presence, parsing, type, range, format, mutually exclusive choices, and cross-setting invariants as applicable.
 
-## 10) Reviewer personas (how to think)
+Collect and report all independently detectable configuration errors in one startup attempt instead of failing on the first missing value.
 
-* **Boundary:** Where does control transfer? Where does ownership transfer? Is every boundary explicit and controlled?
-* **Ownership:** Who owns this resource? Who releases it? Can ownership escape the scope where it is controlled? Can two components believe they own it?
-* **Security:** Assume hostile inputs. Insist on invariants and tests. Silence is failure. Secrets go nowhere.
-* **Runtime reality:** What does this actually do at runtime? Are there hidden allocations, blocking calls, implicit IO, or other invisible costs?
-* **Behavior locality:** Does behavior live with the structure that owns the invariant? Are objects exposing capabilities or leaking data?
-* **Design/Testability:** If it is hard to test, the design is wrong.
-* **Clarity:** Code should read like an executable spec. One statement per line. Braces everywhere. Explicit parentheses. If you cannot say it in English, you cannot say it in code.
+Identify each missing or invalid setting and explain the constraint that failed.
 
----
+Log setting names or stable configuration paths, never secret values or sensitive derived data.
 
-## Notes (repo-specific)
+Terminate startup with a non-zero result when any required setting is missing or invalid.
 
-This policy aligns with existing repo mandates:
+Optional settings must have explicit safe defaults or documented absence semantics. A default must not conceal configuration required for correct behavior.
 
-* TDD required, integration suite required, ValueTask hot paths, TransactionScope ban, interface-first, multi-dialect correctness constraints.
+Configuration validity and dependency availability are different checks. Validate everything that can be established locally at startup. Use readiness or an explicit dependency policy for transient network or service availability unless the application cannot initialize safely without that dependency.
 
-Influences: Abrash (measure everything, know the machine, expose hidden costs), Holub (behavior lives with the owning structure, design for testability, interfaces over concrete types), Lampson (explicit ownership, every resource has a single clear owner), Martin (small cohesive functions, single responsibility, clean contracts, dependency direction), Schneier (hostile inputs, explicit boundaries, fail loudly, secrets stay secret).
+Ownership — Lampson influence
 
----
+Every resource and mutable state transition must have a clear owner.
 
-## 11) Enforcement Mechanisms
+Ask:
+
+Who creates it?
+
+Who may mutate it?
+
+Who releases or completes it?
+
+Can ownership escape its controlled scope?
+
+Can two components believe they own it?
+
+What happens when execution fails halfway through?
+
+Unclear ownership is a design defect. Shared ownership requires an explicit protocol.
+
+Reasonability — Carmack influence
+
+State, control flow, and failure modes must remain obvious enough that a developer can trace cause to effect.
+
+Prefer:
+
+Direct mechanisms over clever indirection.
+
+Local state over ambient or widely shared mutable state.
+
+Explicit transitions over lifecycle magic.
+
+Immediate invariant checks over delayed corruption.
+
+Concrete implementations over speculative generalization.
+
+Flag hidden callbacks, surprising mutation, implicit framework behavior, invalid state combinations, and abstractions that make the actual execution harder to explain. Do not introduce generalized machinery until multiple concrete cases demonstrate the common abstraction.
+
+Runtime reality — Abrash influence
+
+Know what the machine actually does. Verify execution, allocation, copying, blocking, I/O, queries, contention, and complexity instead of inferring cost from source appearance.
+
+Optimization by belief is not evidence. Abstractions do not erase runtime costs.
+
+Adversarial correctness — Schneier influence
+
+Treat external input, timing, state, dependencies, and callers as potentially hostile or malformed. Validate at trust boundaries. Use established cryptographic and security mechanisms. Fail safely and visibly without exposing secrets.
+
+Structural clarity — Martin influence
+
+Keep responsibilities cohesive, dependencies intentional, contracts narrow, and functions focused. Dependency direction should protect policy from volatile implementation details. Complexity must have a specific justification.
+
+Behavioral locality and testability — Holub influence
+
+Place behavior with the type or component that owns the invariant. Expose capabilities rather than leaking state for callers to interpret and modify. Prefer designs whose observable behavior can be tested without reproducing their internal implementation.
+
+Simplicity
+
+Use the simplest design that correctly handles the known requirements and failure modes. Do not solve hypothetical future problems at the cost of present clarity. Simple does not mean incomplete, implicit, or naive.
+
+5) P0 blockers
+
+A. Correctness and state integrity
+
+Block when a change can:
+
+Produce incorrect results for valid, boundary, or adversarial inputs.
+
+Leave state partially applied or internally inconsistent.
+
+Duplicate or lose side effects during retries, cancellation, or partial failure.
+
+Hide a failed operation behind a success result.
+
+Change observable behavior accidentally.
+
+Permit impossible state combinations without enforcing valid transitions.
+
+Check success, failure, cancellation, retry, timeout, and cleanup paths—not only the happy path.
+
+B. Security and privacy
+
+Block when:
+
+Unvalidated data crosses a trust boundary.
+
+Authentication or authorization can be bypassed, confused, or applied inconsistently.
+
+Secrets or sensitive data can reach logs, exceptions, metrics, traces, caches, URLs, or client-visible output.
+
+The change introduces custom cryptography, token formats, signature rules, or security protocols without a compelling requirement and expert review.
+
+Deserialization, query construction, path handling, command execution, templating, or logging allows injection.
+
+Failure handling leaks sensitive context or fails open.
+
+A security-relevant change lacks explicit tests and a threat note.
+
+C. Resource ownership and concurrency
+
+Block when:
+
+A resource can leak on success, failure, timeout, or cancellation.
+
+A resource or transaction outlives the scope that controls it without an explicit ownership transfer.
+
+Shared mutable state lacks synchronization or a documented single-owner rule.
+
+Lock ordering, reentrancy, blocking, or task scheduling can deadlock or starve required work.
+
+Async code performs hidden blocking on a required path.
+
+Cancellation leaves state corrupt or work silently running without an owner.
+
+D. Contracts and compatibility
+
+Block accidental breaking changes to:
+
+Public APIs, protocols, serialized forms, file formats, schemas, or command-line contracts.
+
+Database schemas, migrations, or stored data.
+
+Configuration, environment variables, deployment order, or infrastructure expectations.
+
+Supported platforms, runtimes, providers, clients, or versions.
+
+Intentional breaking changes require explicit scope, migration instructions, versioning where applicable, compatibility evidence, and release documentation.
+
+E. Tests and proof
+
+Behavior changes and bug fixes require tests at the lowest level that proves the observable contract.
+
+Block when:
+
+Behavior changed but no test changed and existing coverage does not demonstrably exercise the new behavior.
+
+A bug fix lacks a regression test that fails without the fix.
+
+Boundary or integration behavior changed without appropriate integration coverage.
+
+A test is disabled, weakened, or rewritten to accept the defect.
+
+Required test failures are ignored or treated as unrelated without evidence.
+
+Required evidence is verified to be absent and the change therefore cannot establish safety or correctness.
+
+Do not demand a unit test for a mechanically verifiable non-behavioral edit. Do demand proof appropriate to the risk.
+
+Reviewer-side blindness is not proof that evidence is absent. When a required artifact cannot be accessed, identify it under Missing evidence, mark the review PARTIAL, and use UNDETERMINED only when that missing artifact prevents a safe verdict. Do not manufacture a P0 from lack of access.
+
+F. Performance claims and regressions
+
+Require measurement when a change:
+
+Claims a performance improvement.
+
+Changes a known hot path.
+
+Alters algorithms, allocation patterns, batching, caching, pooling, serialization, I/O, queries, or concurrency in a way likely to affect cost.
+
+Block when:
+
+A change to a required hot path lacks the measurements necessary to establish that it preserves its performance contract.
+
+The benchmark measures the wrong scope, omits warmup where relevant, mixes cold and steady-state behavior, or reports a delta within noise.
+
+A required path shows a material regression without an accepted tradeoff.
+
+Complexity or memory use becomes unbounded for supported input.
+
+An unsupported performance statement that is not tied to a performance-sensitive change is P1: correct or remove the claim. Unsupported prose alone is not a P0.
+
+G. Observability and operational truth
+
+Block when a change causes logs, metrics, traces, health checks, or status results to report materially false success, failure, latency, counts, or ownership state.
+
+Silent failure is a correctness and security defect. Observability must not expose secrets or become a correctness dependency unless explicitly designed as one.
+
+H. Startup configuration validation
+
+Block an application change when:
+
+A required setting can remain missing or invalid until a later execution path reads it.
+
+The application can begin accepting work before configuration validation completes successfully.
+
+Validation stops at the first independent error when additional configuration errors can be reported safely in the same startup attempt.
+
+Invalid configuration is replaced with a misleading default, ignored, or allowed to produce a later null reference, parse failure, authorization error, data error, or dependency failure.
+
+Startup failure does not identify every detected setting that requires correction and the reason it is invalid.
+
+Configuration diagnostics expose passwords, keys, tokens, connection-string secrets, personal data, or other sensitive values.
+
+Configuration validation behavior lacks tests for valid, missing, malformed, out-of-range, conflicting, and conditionally required settings as applicable.
+
+6) P1 majors
+
+A. Reasonability and control flow (Carmack)
+
+Flag:
+
+State mutations whose source is difficult to locate.
+
+Control flow governed by implicit hooks, callbacks, reflection, interception, or lifecycle behavior when a direct mechanism would be clearer.
+
+Boolean combinations that represent a state machine but permit invalid states.
+
+Shared mutable state with a wider scope or lifetime than required.
+
+Speculative abstractions supported by only one concrete use case.
+
+Indirection that does not remove duplication, protect a boundary, or enforce an invariant.
+
+Missing assertions or invariant checks where corruption would otherwise propagate far from its source.
+
+B. Responsibilities and dependencies (Martin)
+
+Flag:
+
+A function that performs unrelated conceptual operations.
+
+A class or module with multiple independent reasons to change.
+
+Excessive parameters or dependencies that reveal a missing concept or misplaced responsibility.
+
+Dependency direction that couples stable policy to volatile infrastructure.
+
+Inheritance introduced where composition would reduce coupling and preserve clearer contracts.
+
+Public surface area larger than consumers require.
+
+Function length alone is not a defect. Flag size when it obscures control flow, mixes abstraction levels, duplicates policy, or prevents focused testing.
+
+C. Behavioral locality and testability (Holub)
+
+Flag:
+
+"Ask then act" code that retrieves state so another component can enforce the owner's invariant.
+
+Getters or data exposure used primarily to let callers manipulate internal state.
+
+Domain behavior placed in orchestration layers that merely shuttle data between an anemic model and storage.
+
+Tests coupled to private structure, internal call order, or mocks rather than observable behavior.
+
+Designs that require global state, real time, nondeterminism, or external infrastructure when a narrow boundary could make behavior deterministic.
+
+Do not apply this rule mechanically to DTOs, value objects, read models, serialization types, or deliberately procedural code.
+
+D. Hidden runtime costs (Abrash)
+
+Flag work not apparent from the call site, including:
+
+Hidden allocation, copying, parsing, reflection, or materialization.
+
+Accidental repeated I/O, queries, serialization, or enumeration.
+
+Expensive convenience APIs used on hot or high-volume paths.
+
+Unbounded caching, buffering, fan-out, retries, or parallelism.
+
+Algorithmic complexity inconsistent with supported input sizes.
+
+Escalate to P0 when the cost affects a required hot path, blocks async execution, is unbounded, or produces a demonstrated material regression.
+
+E. Error handling and recovery
+
+Flag:
+
+Exceptions caught without adding recovery, translation, or necessary context.
+
+Loss of the original error or stack information.
+
+Retry policies without idempotency, limits, backoff, jitter, or cancellation as appropriate.
+
+Cleanup paths that are complex, duplicated, or untested.
+
+Error messages that prevent diagnosis or incorrectly assign blame.
+
+Fallbacks that conceal degraded behavior.
+
+F. Move errors left
+
+Prefer compile-time constraints, types, schemas, static analysis, and construction-time validation over repeated runtime checks. Flag changes that replace an existing static guarantee with a runtime convention without a concrete benefit.
+
+G. Comments and documentation
+
+Code should express structure, behavior, and intent directly. Comments should explain facts the code cannot express: rationale, external constraints, non-obvious invariants, protocol requirements, or temporary workarounds linked to tracked work.
+
+Flag:
+
+Comments that restate the code.
+
+Stale or contradicted comments.
+
+Ceremonial authorship and change history that belong in source control.
+
+Public contract or operational changes without corresponding documentation.
+
+7) Source clarity rules
+
+Apply these rules where the language supports them. A repository overlay may strengthen them.
+
+Do not report violations already covered by an active formatter, linter, or analyzer unless the automated control failed or the violation exposes a defect the tool does not capture.
+
+Use one executable statement per line.
+
+Use braces or the language's explicit block form for control flow; do not compress control flow until a state-changing statement becomes easy to miss.
+
+After an unconditional scope exit (return, break, continue, or throw), avoid a redundant else when removing it makes the main flow clearer.
+
+Use parentheses when they materially clarify mixed operators or non-obvious precedence.
+
+Prefer early validation and explicit failure over deeply nested happy paths.
+
+Keep names precise enough that comments are not needed to decode ordinary behavior.
+
+Treat an uncovered mechanical violation as P2 by default. Escalate to P1 only when it materially obscures control flow, state mutation, ownership, or intent. Escalate to P0 only when the obscurity creates or conceals a concrete correctness, security, concurrency, or ownership defect.
+
+8) P2 minors
+
+P2 includes:
+
+Naming and local clarity improvements.
+
+Small simplifications that preserve behavior.
+
+Consistency with established repository conventions.
+
+Minor allocations or micro-optimizations outside hot paths.
+
+Documentation or test-name improvements that do not obscure the contract.
+
+Report no more than five individual P2 findings. Summarize additional P2 issues by category and count. P0 and P1 findings have no numerical cap, but consolidate repeated symptoms under their root cause.
+
+9) Evidence requirements
+
+Tests
+
+Require as applicable:
+
+Unit or component tests for behavior and invariants.
+
+Regression tests for bug fixes.
+
+Integration tests for boundaries such as databases, filesystems, networks, queues, providers, frameworks, and external processes.
+
+Contract or compatibility tests for public interfaces and serialized forms.
+
+Concurrency tests for synchronization, cancellation, ordering, retry, and lifetime changes.
+
+Migration and rollback tests for persistent data or deployment changes.
+
+Startup tests proving that valid configuration starts successfully and all independently detectable missing or invalid required settings are reported together before the application accepts work.
+
+Tests should verify observable behavior rather than mirror the implementation. Test names must state the condition and expected result.
+
+Boundary-sensitive code must include hostile and unusual inputs appropriate to the domain, such as:
+
+Empty, null, minimum, maximum, and overflow-adjacent values.
+
+Long strings, Unicode, reserved words, delimiters, control characters, and malformed encodings.
+
+Duplicate, reordered, delayed, partial, and repeated operations.
+
+Timeouts, cancellation, dependency failure, and concurrent access.
+
+Unauthorized, cross-tenant, or privilege-boundary cases.
+
+Performance
+
+Performance evidence must:
+
+Compare the change against a relevant baseline.
+
+Use representative data sizes and workloads.
+
+Isolate the code or subsystem claimed to improve.
+
+Distinguish cold-start and steady-state costs where relevant.
+
+Account for warmup, variance, outliers, and the measurement noise floor.
+
+Include allocation, throughput, latency distribution, I/O, or contention data as appropriate—not only mean elapsed time.
+
+Threat note
+
+Require a threat note for changes to authentication, authorization, identity, tokens, cryptography, query construction, deserialization, command execution, filesystem paths, uploads, secrets, logging, or tenant isolation.
+
+Use this format:
+
+Entry points
+
+Trust boundaries
+
+Assets at risk
+
+Attacker goals and plausible abuse cases
+
+Mitigations and tests
+
+Compatibility and operations
+
+Require explicit evidence when a change affects supported versions, providers, platforms, deployment order, schemas, configuration, feature flags, rollback, monitoring, or capacity.
+
+For application configuration changes, require evidence covering precedence and overrides, enabled-feature requirements, invalid combinations, secret-safe diagnostics, aggregate error reporting, and non-zero startup failure.
+
+10) Impact notes
+
+Include only the affected sections:
+
+API/contract — affected consumers, compatibility, versioning, migration.
+
+Data/database — affected engines or schemas, transaction semantics, migration, rollback, integration coverage.
+
+Security/privacy — trust boundaries, authorization, secrets, retained data, audit behavior.
+
+Concurrency/resources — ownership, synchronization, cancellation, cleanup, capacity limits.
+
+Performance — workload, baseline, measurements, tradeoffs.
+
+Operations — deployment order, configuration and startup validation, observability, rollback, failure recovery.
+
+Platform/provider — affected runtimes, operating systems, architectures, vendors, or versions.
+
+For any affected domain, state expected behavior differences and the evidence that covers them.
+
+11) Repository-specific overlays
+
+Project rules belong in a short repository overlay, such as REVIEW_POLICY.local.md, CONTRIBUTING.md, or an equivalent documented file. The overlay should contain only rules that are genuinely specific to that codebase.
+
+Good overlay content includes:
+
+Supported platforms, runtimes, providers, and versions.
+
+Public API locations and compatibility policy.
+
+Required test suites and commands.
+
+Resource-lifetime or concurrency invariants unique to the architecture.
+
+Forbidden APIs with the reason and approved replacement.
+
+Performance-critical paths and required benchmarks.
+
+Database dialect, schema, migration, or transaction rules.
+
+Generated-code and analyzer policies.
+
+An overlay may raise the severity of a project-specific invariant. It may not downgrade a core P0 or replace evidence with convention.
+
+Example overlay rules—not universal policy—include:
+
+A required async return type on established hot paths.
+
+A ban on ambient transactions in favor of explicit transactions.
+
+A required quoting or parameterization API for generated SQL.
+
+A rule that implementation types remain internal and public consumers use abstractions.
+
+A required integration matrix for supported database engines or providers.
+
+12) Five review passes
+
+Run these as distinct passes. Their overlap is intentional, but their primary questions differ.
+
+Reasonability — Carmack influence
+Can a developer trace state, control flow, failure, and cause to effect without guessing?
+
+Runtime reality — Abrash influence
+What does this actually execute, allocate, copy, block on, query, or retain under a representative workload?
+
+Adversarial correctness — Schneier influence
+What happens when input, timing, state, dependencies, or callers are hostile?
+
+Structural clarity — Martin influence
+Are responsibilities, dependencies, functions, and contracts coherent and appropriately narrow?
+
+Behavioral locality and testability — Holub influence
+Does behavior live with the invariant it protects, and can observable behavior be proved without coupling tests to implementation?
+
+Apply two system-wide checks across every pass:
+
+Boundary: Where do data, control, authority, ownership, and execution cross?
+
+Ownership: Who owns each resource and state transition through success, failure, cancellation, and cleanup?
+
+Assign each finding to exactly one lens according to its primary failure mode. Other lenses may strengthen the evidence but must not produce duplicate findings. Consolidate related symptoms into their common root cause before generating output.
+
+13) Review discipline
+
+Verify before asserting. Read the relevant contract and call path.
+
+Separate demonstrated defects from questions and missing evidence.
+
+Do not invent requirements that the repository does not have.
+
+Do not confuse unfamiliar code with incorrect code.
+
+Do not approve code solely because tests pass; tests may be incomplete or assert the wrong contract.
+
+Do not reject code solely because a different design is possible.
+
+Prefer one root-cause finding over many symptoms.
+
+Avoid duplicate findings from multiple review lenses.
+
+State uncertainty directly and lower confidence when evidence is incomplete.
+
+Declare a partial review explicitly. Identify both the reviewed scope and the required scope that was not reviewed.
+
+Re-review the corrected path, not only the lines changed in response.
+
+14) Enforcement
+
+Enforce what can be enforced mechanically:
+
+Formatters and linters for syntax and style.
+
+Static analyzers for prohibited APIs, unsafe patterns, dependency rules, and contract violations.
+
+Unit, integration, contract, migration, and performance tests for behavior.
+
+CI policy checks for required evidence and supported matrices.
+
+Human review for architecture, ownership, threat modeling, operational behavior, and whether the evidence proves the intended contract.
+
+Automation should prevent known invalid states, not generate review noise. Every automated rule should identify a real invariant, explain the failure it prevents, and provide a practical correction.
+
+15) Influences
+
+John Carmack — explicit state and control flow, local reasoning, direct mechanisms, invariant checks.
+
+Michael Abrash — measurement, machine-level reality, and visible runtime cost.
+
+Bruce Schneier — hostile inputs, trust boundaries, failure analysis, and conservative security design.
+
+Robert C. Martin — cohesive responsibilities, dependency direction, narrow contracts, and structural clarity.
+
+Allen Holub — behavioral locality, capability-oriented objects, and testable design.
+
+Butler Lampson — explicit ownership, interfaces, and practical system-design boundaries.
+
+These influences provide questions, not appeals to authority. Findings still require evidence.
+
+16) Repository-specific rules (pengdows.crud)
+
+This is the repository overlay described in Section 11, kept in this file rather than a separate document. Nothing here weakens a Section 5 P0; several entries raise severity or add project-specific evidence requirements, which Section 11 permits.
+
+16.1 Hard bans (P0)
+
+TransactionScope is forbidden — use BeginTransaction.
+
+No string interpolation for SQL values — use parameterization.
+
+No unquoted identifiers in custom SQL — use WrapObjectName.
+
+Where available, use pengdows.crud.analyzers to machine-enforce review invariants. Current analyzer coverage includes raw SQL predicate/join value injection (PGC008).
+
+16.2 Core invariants (P1)
+
+ValueTask in hot paths — execution methods return ValueTask/ValueTask<T>; do not regress to Task.
+
+No public constructors on implementation types except DatabaseContext.
+
+Interface-first — consumers depend on abstractions in pengdows.crud.abstractions, not implementation types.
+
+TableGateway extension rule — extend TableGateway to add custom query methods; do not wrap it with a separate service layer.
+
+[Id] vs [PrimaryKey] — never apply both to the same property; preserve documented upsert key priority ([PrimaryKey] first, then writable [Id]).
+
+Dispose readers promptly — ITrackedReader is a lease. No async leaks, no undisposed containers/readers/transactions. No long-lived transactions stored as fields.
+
+SQL correctness and multi-dialect awareness — changes to dialects or SQL generation must consider quoting rules, parameter marker rules, upsert behavior per database, and transaction/isolation semantics. Do not represent the same SQL concept in two different ways simultaneously — duplicate dialect code paths are a correctness and maintenance hazard.
+
+16.3 DB impact notes
+
+If SQL or dialect behavior changes, reviewers must state:
+
+Affected databases, at least by family (Postgres-like, MySQL-like, SQL Server-like, embedded, warehouse).
+
+Expected behavior differences.
+
+Which integration tests cover it, or what new test is required.
+
+16.4 Enforcement mechanisms
 
 Compliance with this policy is enforced via:
 
-1. **GitHub PR Template (`.github/PULL_REQUEST_TEMPLATE.md`)**: Reminds contributors of the P0 hard-bans and required standards.
-2. **Copilot Instructions (`.github/copilot-instructions.md`)**: Configures GitHub Copilot Code Review to use this policy as its primary system prompt for PR analysis.
-3. **CI Checks (`.github/workflows/deploy.yml`)**: Automated `grep` checks in the build pipeline to catch P0 violations like `TransactionScope` usage before merge.
-4. **Manual Peer Review**: All PRs require approval from a maintainer who verifies adherence to this policy and project-specific invariants.
+GitHub PR Template (.github/PULL_REQUEST_TEMPLATE.md) — reminds contributors of the P0 hard-bans and required standards.
 
+Copilot Instructions (.github/copilot-instructions.md) — configures GitHub Copilot Code Review to use this policy as its primary system prompt for PR analysis.
+
+CI Checks (.github/workflows/deploy.yml) — automated grep checks in the build pipeline to catch P0 violations such as TransactionScope usage before merge.
+
+Manual peer review — all PRs require approval from a maintainer who verifies adherence to this policy and the project-specific invariants above.
