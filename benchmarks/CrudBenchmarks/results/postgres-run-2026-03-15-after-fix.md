@@ -5,6 +5,26 @@
 This is the publishable equal-footing baseline. See [postgres-run-2026-03-04.md](postgres-run-2026-03-04.md)
 for the prior biased run and its methodology note.
 
+**Note (2026-09-19): the `Update` and `ConnectionHoldTime` rows below are superseded.** An
+independent architecture review found two further methodology asymmetries in
+`PostgreSqlEqualFootingBenchmarks.cs` beyond the auto-prepare fix above, both confirmed and fixed
+the same day (see the "fix(bench): correct two equal-footing methodology asymmetries" commit):
+
+- **Update** ran a single-column `UPDATE ... SET salary = @Salary` for Dapper/EF Core, while
+  pengdows' `BuildUpdateAsync` generated a full 5-column `UPDATE` — materially less work per call
+  for Dapper/EF Core, biasing the comparison in their favor. Fixed to set the same 5 columns for
+  all three frameworks.
+- **ConnectionHoldTime** stopped Dapper/EF Core's stopwatch before their `await using`
+  connection/context disposal ran, excluding that cost; pengdows has no equivalent separate
+  disposal step to exclude, so its measurement always included pool-release work theirs didn't.
+  Fixed so all three measure the same boundary.
+
+A live re-run after the fix (RecordCount=1) showed `Update_Pengdows` (357.7 μs) essentially on par
+with `Update_Dapper` (360.0 μs) — not the ~1.03-1.10x-slower spread recorded below. Treat every
+`Update`/`ConnectionHoldTime` row in this file as superseded pending a full re-run; every other
+row (ReadSingle, ReadList, FilteredQuery, Aggregate, Create, DeleteOnly, DeleteInsertCycle) is
+unaffected by this note.
+
 ### Cross-Framework Ratios
 
 `P÷D` = pengdows Mean ÷ Dapper Mean — values < 1.0 mean pengdows is faster.

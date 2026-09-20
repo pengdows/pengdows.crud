@@ -55,6 +55,42 @@ internal class SqlServerDialect : SqlDialect
 
     // Single source of truth for session settings; both the SET script and the
     // expected-state dictionary are derived from this array.
+    //
+    // Cost and why it's paid unconditionally, on every open, not just once per physical
+    // connection (investigated live against a real SQL Server 2022 container, 2026-09-19):
+    //
+    // - Under DbMode.Standard AND DbMode.SingleWriter (ConnectionStrategyFactory maps
+    //   SingleWriter to the same StandardConnectionStrategy, adding only a write-concurrency
+    //   governor on top — it does not pin a connection), every operation opens and closes its
+    //   own ephemeral connection, so this SET batch executes as a real, separate round trip on
+    //   every single operation. Only DbMode.SingleConnection pins one connection for the
+    //   context's lifetime, so only there does this cost get paid once, not per-operation.
+    // - Measured cost on Standard mode: ~300 us/op (DatabaseContext.Metrics.AvgSessionInitMs),
+    //   roughly matching the entire pengdows-vs-Dapper ConnectionHoldTime/Update gap seen in
+    //   SqlServerEqualFootingBenchmarks — this IS the "session settings/guarantees" tradeoff,
+    //   not a hidden inefficiency.
+    // - Live-verified that 6 of these 7 settings are already the default SqlClient login
+    //   establishes AND already what sp_reset_connection restores on pool-reuse (deliberately
+    //   deviated ANSI_NULLS/QUOTED_IDENTIFIER mid-session, then opened a new logical connection
+    //   on the same pooled physical connection — SPID matched, deviation was gone). Only
+    //   ARITHABORT differs from the SqlClient default (OFF) and has no connection-string
+    //   keyword equivalent (checked every real SqlConnectionStringBuilder property).
+    // - Two optimizations were considered and REJECTED, not overlooked:
+    //   1. Trust the driver/reset defaults for the 6 that already match, only assert ARITHABORT.
+    //      Rejected: this is a correctness bet on state pengdows does not control — a caller's
+    //      own connection-string tweak, a different driver version, a connection-resiliency
+    //      reconnect path, or another library sharing the same pool could all silently
+    //      invalidate the assumption. The failure mode is not an exception; it's wrong NULL
+    //      comparison semantics or an indexed-view DML rejection (SQL Server error 1934) that
+    //      looks unrelated to the cause. That is a categorically worse risk than the
+    //      caller-verifiable tradeoffs behind this project's other opt-in knobs (e.g.
+    //      PreventDatabaseUnload, DbMode.Standard on DuckDB/Access) — it does not clear the same
+    //      bar, so it was not built even as an opt-in.
+    //   2. Prepend the SET batch to the caller's first command on a freshly-opened connection,
+    //      collapsing two round trips into one. Rejected: every captured statement (Profiler,
+    //      Extended Events, query store, app logs) would carry this boilerplate prefix forever,
+    //      undermining "the SQL you see is the SQL that ran" for a SQL-first library, for a
+    //      narrow win that only applies to the first command per connection open.
     private static readonly (string Name, string Value)[] SessionSettingsDef =
     {
         ("ANSI_NULLS", "ON"),
