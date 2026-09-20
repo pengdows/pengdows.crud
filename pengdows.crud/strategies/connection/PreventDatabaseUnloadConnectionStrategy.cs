@@ -449,6 +449,18 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
             }
         }
     }
+
+    protected override void DisposeUnmanaged()
+    {
+        _sentinelRepairAsyncLock.Dispose();
+        base.DisposeUnmanaged();
+    }
+
+    protected override ValueTask DisposeUnmanagedAsync()
+    {
+        _sentinelRepairAsyncLock.Dispose();
+        return base.DisposeUnmanagedAsync();
+    }
 }
 
 internal static class PreventDatabaseUnloadConnectionStrategyTestExtensions

@@ -1,6 +1,8 @@
 #region
 
 using System;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -13,6 +15,25 @@ namespace pengdows.crud.Tests;
 
 public class PreventDatabaseUnloadConnectionStrategyTests
 {
+    // _sentinelRepairAsyncLock (added alongside the async sentinel-repair fix) is never disposed
+    // when the strategy itself is disposed — an IDisposable-pattern completeness gap, not a real
+    // leak in practice (this code path never touches AvailableWaitHandle, so no OS wait handle is
+    // ever lazily created), but SemaphoreSlim is itself IDisposable and the strategy already
+    // derives from SafeAsyncDisposableBase, so it should participate in the strategy's own
+    // disposal like any other owned disposable field.
+    [Fact]
+    public void Dispose_DisposesSentinelRepairAsyncLock()
+    {
+        var strategy = new PreventDatabaseUnloadConnectionStrategy();
+        var field = typeof(PreventDatabaseUnloadConnectionStrategy).GetField(
+            "_sentinelRepairAsyncLock", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var semaphore = (SemaphoreSlim)field.GetValue(strategy)!;
+
+        strategy.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => semaphore.Wait(0));
+    }
+
     [Fact]
     public void Constructor_Should_Initialize_Strategy()
     {
