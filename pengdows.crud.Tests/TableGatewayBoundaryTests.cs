@@ -76,78 +76,77 @@ public class TableGatewayBoundaryTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task TableGateway_WithByteArrays_ExercisesByteComparison()
+    public async Task TableGateway_WithByteArrays_UpdateChangedByteArray_PersistsNewValue()
     {
         await BuildByteTestTable();
         TypeMap.Register<ByteTestEntity>();
         var helper = new TableGateway<ByteTestEntity, int>(Context);
 
-        // Create entity with byte array
-        var entity = new ByteTestEntity { Name = "Test", Data = new byte[] { 1, 2, 3 } };
-        await helper.CreateAsync(entity, Context);
+        // Create entity with byte array. Id is explicitly assigned (rather than left at the
+        // default 0) so loadOriginal's later lookup is unambiguous regardless of how the
+        // writable-but-unfetched generated-key path behaves for a default-valued id.
+        var entity = new ByteTestEntity { Id = 1, Name = "Test", Data = new byte[] { 1, 2, 3 } };
+        var created = await helper.CreateAsync(entity, Context);
+        Assert.True(created);
 
-        // Try to update (exercises byte array comparison paths)
+        // Update the byte array via loadOriginal so the byte[] comparison path decides it changed.
         entity.Data = new byte[] { 1, 2, 4 };
-        try
-        {
-            var result = await helper.BuildUpdateAsync(entity, true, Context);
-        }
-        catch
-        {
-            // Expected - but we've exercised the byte comparison paths
-        }
+        using var container = await helper.BuildUpdateAsync(entity, true, Context);
+        var rowsAffected = await container.ExecuteNonQueryAsync();
+        Assert.Equal(1, rowsAffected);
 
-        Assert.True(true);
+        var reloaded = await helper.RetrieveOneAsync(entity.Id, Context);
+        Assert.NotNull(reloaded);
+        Assert.Equal(new byte[] { 1, 2, 4 }, reloaded!.Data);
     }
 
     [Fact]
-    public async Task TableGateway_WithDecimalTypes_ExercisesDecimalComparison()
+    public async Task TableGateway_WithDecimalTypes_UpdateChangedAmount_PersistsNewValue()
     {
         await BuildDecimalTestTable();
         TypeMap.Register<DecimalTestEntity>();
         var helper = new TableGateway<DecimalTestEntity, int>(Context);
 
-        // Create entity with decimal
-        var entity = new DecimalTestEntity { Name = "Test", Amount = 123.45m };
-        await helper.CreateAsync(entity, Context);
+        // Create entity with decimal. Id is explicitly assigned (see the byte-array test above
+        // for why) so loadOriginal's later lookup is unambiguous.
+        var entity = new DecimalTestEntity { Id = 1, Name = "Test", Amount = 123.45m };
+        var created = await helper.CreateAsync(entity, Context);
+        Assert.True(created);
 
-        // Try to update (exercises decimal comparison paths)
+        // Update the decimal via loadOriginal so the decimal comparison path decides it changed.
         entity.Amount = 678.90m;
-        try
-        {
-            var result = await helper.BuildUpdateAsync(entity, true, Context);
-        }
-        catch
-        {
-            // Expected - but we've exercised the decimal comparison paths
-        }
+        using var container = await helper.BuildUpdateAsync(entity, true, Context);
+        var rowsAffected = await container.ExecuteNonQueryAsync();
+        Assert.Equal(1, rowsAffected);
 
-        Assert.True(true);
+        var reloaded = await helper.RetrieveOneAsync(entity.Id, Context);
+        Assert.NotNull(reloaded);
+        Assert.Equal(678.90m, reloaded!.Amount);
     }
 
     [Fact]
-    public async Task TableGateway_WithDateTimes_ExercisesDateTimeComparison()
+    public async Task TableGateway_WithDateTimes_UpdateChangedCreated_PersistsNewValue()
     {
         await BuildDateTimeTestTable();
         TypeMap.Register<DateTimeTestEntity>();
         var helper = new TableGateway<DateTimeTestEntity, int>(Context);
 
-        // Create entity with DateTime
-        var entity = new DateTimeTestEntity { Name = "Test", Created = DateTime.Now };
-        await helper.CreateAsync(entity, Context);
+        // Create entity with DateTime. Id is explicitly assigned (see the byte-array test above
+        // for why) so loadOriginal's later lookup is unambiguous.
+        var entity = new DateTimeTestEntity { Id = 1, Name = "Test", Created = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
+        var created = await helper.CreateAsync(entity, Context);
+        Assert.True(created);
 
-        // Try to update (exercises DateTime comparison paths)
-        entity.Created = DateTime.Now.AddMinutes(1);
-        try
-        {
-            var result = await helper.BuildUpdateAsync(entity, true, Context);
-        }
-        catch
-        {
-            // Expected - but we've exercised the DateTime comparison paths
-        }
+        // Update the DateTime via loadOriginal so the DateTime comparison path decides it changed.
+        var updatedCreated = new DateTime(2024, 1, 1, 0, 1, 0, DateTimeKind.Utc);
+        entity.Created = updatedCreated;
+        using var container = await helper.BuildUpdateAsync(entity, true, Context);
+        var rowsAffected = await container.ExecuteNonQueryAsync();
+        Assert.Equal(1, rowsAffected);
 
-        Assert.True(true);
+        var reloaded = await helper.RetrieveOneAsync(entity.Id, Context);
+        Assert.NotNull(reloaded);
+        Assert.Equal(updatedCreated, reloaded!.Created);
     }
 
     [Fact]

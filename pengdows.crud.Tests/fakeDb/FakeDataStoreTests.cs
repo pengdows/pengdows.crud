@@ -119,6 +119,36 @@ public class FakeDataStoreTests
         Assert.True(reader.Read()); // 'keep' row unchanged
     }
 
+    // Every real ISqlDialect quotes column identifiers by default (WrapObjectName's ANSI
+    // double-quote policy — see CLAUDE.md's "Do not hardcode identifier quoting" section), so an
+    // UPDATE generated through the real pengdows.crud SQL-building path always looks like
+    // UPDATE "table" SET "col" = @p0 WHERE "id" = @p1, never the bare `SET col = ...` shape every
+    // other UPDATE test in this file uses. EvaluateWhereClause's regex already tolerates quoted
+    // identifiers (its character class includes `[]"'), but ApplySetClause's did not — so a
+    // real dialect-generated UPDATE reported the correct affected-row count while silently never
+    // writing the new value, a "hide a failed operation behind a success result" defect that
+    // every existing bare-column-name test here was structurally unable to catch.
+    [Fact]
+    public async Task Update_WithQuotedColumnNames_ActuallyPersistsNewValue()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO quoted_things (\"name\") VALUES ('old')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var updateCmd = conn.CreateCommand();
+        updateCmd.CommandText = "UPDATE \"quoted_things\" SET \"name\" = 'new' WHERE \"name\" = 'old'";
+        var affected = await updateCmd.ExecuteNonQueryAsync();
+        Assert.Equal(1, affected);
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM quoted_things";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+        Assert.True(reader.Read());
+        Assert.Equal("new", reader["name"]?.ToString());
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     [Fact]

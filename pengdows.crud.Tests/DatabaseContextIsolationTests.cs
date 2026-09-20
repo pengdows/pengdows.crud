@@ -105,6 +105,32 @@ public class DatabaseContextIsolationTests
         Assert.NotNull(tx);
     }
 
+    // CockroachDbDialect.GetSupportedIsolationLevels() returns only {Serializable}. This used to
+    // be masked for the native IsolationLevel overload by a hardcoded silent upgrade in
+    // TransactionContext's constructor (`if (context.Product == SupportedDatabase.CockroachDb)
+    // isolationLevel = IsolationLevel.Serializable`) — removed when IsolationResolver's
+    // per-database switches were replaced with dialect-owned data, so an unsupported native
+    // level is now rejected like any other database's unsupported level instead of silently
+    // substituted. Locks down that this is the actual, current, intentional behavior.
+    [Fact]
+    public void BeginTransaction_NativeIsolationLevel_CockroachDb_UnsupportedLevel_Throws()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
+            new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
+
+        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationLevel.ReadCommitted));
+    }
+
+    [Fact]
+    public void BeginTransaction_NativeIsolationLevel_CockroachDb_Serializable_Succeeds()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
+            new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
+
+        using var tx = context.BeginTransaction(IsolationLevel.Serializable);
+        Assert.NotNull(tx);
+    }
+
     [Fact]
     public void BeginTransaction_ProfileSupported_CockroachDb_And_DuckDB()
     {

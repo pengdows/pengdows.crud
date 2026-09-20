@@ -633,7 +633,32 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             }
             else if (!faulted)
             {
-                ScheduleBackgroundShutdownDisposal(entry, useAsyncDisposal: true);
+                // DisposeManagedAsync is already asynchronous, so it can WAIT for in-flight
+                // construction to finish and dispose inline instead of firing the wait off and
+                // forgetting it — preserving IAsyncDisposable's usual "resources are released by
+                // the time DisposeAsync returns" guarantee, which the old fire-and-forget hand-off
+                // silently weakened. But entry.LazyContext.Value's getter itself
+                // (LazyThreadSafetyMode.ExecutionAndPublication) can block SYNCHRONOUSLY if
+                // another thread is still evaluating it for the first time — exactly the case
+                // here, where the original GetContext caller is mid-evaluation — so it must never
+                // be accessed directly on the thread running DisposeAsync (the same hazard
+                // ScheduleBackgroundShutdownDisposal's remarks already document for the sync
+                // path). Farm the .Value access out to a thread-pool thread via Task.Run so it can
+                // block there instead, but await that work here rather than fire-and-forgetting.
+                IDatabaseContext completedContext;
+                try
+                {
+                    completedContext = await Task.Run(() => entry.LazyContext.Value).ConfigureAwait(false);
+                }
+                catch
+                {
+                    continue; // Construction faulted — nothing to dispose.
+                }
+
+                if (entry.TryClaimDisposal())
+                {
+                    await DisposeShutdownContextAsync(completedContext).ConfigureAwait(false);
+                }
             }
         }
     }

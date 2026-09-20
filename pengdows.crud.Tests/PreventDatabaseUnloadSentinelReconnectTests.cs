@@ -165,6 +165,38 @@ public class KeepAliveSentinelReconnectTests
         Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
     }
 
+    // EnsureSentinelHealthy/RepairSentinel is shared by both GetConnection and GetConnectionAsync,
+    // but RepairSentinel itself only ever called the blocking Connection.Open() — never
+    // OpenAsync() — regardless of which caller triggered the repair. That means an async caller
+    // hitting a broken sentinel blocks a thread-pool thread on the replacement's Open(), exactly
+    // the hazard GetConnectionAsync's own doc comment says this class must avoid. fakeDbConnection
+    // tracks OpenCount (sync Open()) and OpenAsyncCount (OpenAsync()) as genuinely distinct
+    // counters for exactly this kind of regression test (see its OpenCore doc comment).
+    [Fact]
+    public async Task GetConnectionAsync_SentinelBroken_RepairsUsingOpenAsyncNotBlockingOpen()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var ctx = CreateKeepAliveContext(factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+        Assert.Equal(ConnectionState.Broken, originalSentinel.State);
+
+        var opConnection = await ctx.GetConnectionAsync(ExecutionType.Read);
+
+        var newSentinel = ctx.PersistentConnection;
+        Assert.NotSame(originalSentinel, newSentinel);
+        Assert.NotNull(newSentinel);
+        Assert.Equal(ConnectionState.Open, newSentinel!.State);
+
+        var replacementFake = Unwrap(newSentinel);
+        Assert.True(replacementFake.OpenAsyncCount > 0,
+            "Sentinel repair triggered from an async caller must open the replacement via OpenAsync, not Open().");
+        Assert.Equal(0, replacementFake.OpenCount);
+
+        await ctx.CloseAndDisposeConnectionAsync(opConnection);
+    }
+
     // Narrower residual case the test above cannot reach: AttachPinnedSlotIfNeeded's early-return
     // branch (governance disabled/forbidden for this context) has no disposed-context check of its
     // own — the ObjectDisposedException the repair sequence relies on is purely incidental to the

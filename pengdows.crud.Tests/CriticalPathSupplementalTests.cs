@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
@@ -199,12 +200,16 @@ public class CriticalPathSupplementalTests
         };
 
         var context = new DatabaseContext(config, factory);
+        Assert.False(context.IsDisposed);
 
-        // Force disposal with potential errors
         await context.DisposeAsync();
 
-        // Should complete without throwing
-        Assert.True(true);
+        // Disposal must actually take effect, not just "not throw" — a swallowed disposal error
+        // could otherwise leave IsDisposed false while resources were never released.
+        Assert.True(context.IsDisposed);
+
+        // Disposal must be idempotent: a second DisposeAsync must not throw.
+        await context.DisposeAsync();
     }
 
     /// <summary>
@@ -270,21 +275,33 @@ public class CriticalPathSupplementalTests
             DbMode = DbMode.Standard
         };
 
-        // Create multiple contexts concurrently
-        var tasks = new Task[10];
+        // Create multiple contexts concurrently, sharing one factory — the scenario the
+        // initialization-locking mechanism under test actually guards against.
+        var tasks = new Task<DatabaseContext>[10];
         for (var i = 0; i < 10; i++)
         {
-            tasks[i] = Task.Run(() =>
-            {
-                using var context = new DatabaseContext(config, factory);
-                return context;
-            });
+            tasks[i] = Task.Run(() => new DatabaseContext(config, factory));
         }
 
-        await Task.WhenAll(tasks);
-
-        // All should complete successfully
-        Assert.True(true);
+        var contexts = await Task.WhenAll(tasks);
+        try
+        {
+            // Each concurrent construction must produce its own fully-initialized, independent
+            // context — not a shared/corrupted instance from racing initialization.
+            Assert.Equal(10, contexts.Distinct().Count());
+            Assert.All(contexts, c =>
+            {
+                Assert.NotNull(c);
+                Assert.NotEqual(SupportedDatabase.Unknown, c.Product);
+            });
+        }
+        finally
+        {
+            foreach (var c in contexts)
+            {
+                c.Dispose();
+            }
+        }
     }
 
     /// <summary>

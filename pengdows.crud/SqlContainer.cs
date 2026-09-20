@@ -2033,24 +2033,41 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     /// <summary>
+    /// Known non-<see cref="DbException"/> provider exception types that must still be routed
+    /// through translation. Checked by full type name rather than a hard type reference so this
+    /// project never takes a compile-time dependency on the provider assembly.
+    /// </summary>
+    private static readonly string[] KnownNonDbExceptionProviderExceptionTypeNames =
+    {
+        // AdoNetCore.AseClient's AseException (Sybase ASE) derives from SystemException
+        // directly, not DbException — see SybaseExceptionTranslator.cs.
+        "AdoNetCore.AseClient.AseException"
+    };
+
+    /// <summary>
     /// Whether an exception looks like a database provider error worth translating into the
     /// typed <see cref="DatabaseException"/> hierarchy, as opposed to an unrelated application
     /// exception that happened to be thrown during command execution.
     /// </summary>
     /// <remarks>
-    /// Almost every ADO.NET provider's exception type derives from <see cref="DbException"/>,
-    /// but AdoNetCore.AseClient's <c>AseException</c> (used for Sybase ASE) does not — it derives
-    /// from <see cref="SystemException"/> directly and exposes its error number only via an
-    /// "Errors" collection. <see cref="DbExceptionTranslationSupport"/> already reflects over
-    /// that shape as a fallback for error-code/SQLSTATE extraction; reusing it here lets a
-    /// provider exception shaped like that be recognized as translatable without hardcoding the
-    /// concrete AseException type (and without pulling a dependency on it into this project).
+    /// This deliberately checks type identity, not structural shape: an earlier version treated
+    /// any exception exposing a property named "Number"/"SqlState"/"NativeError" (or an "Errors"
+    /// collection with one) as provider-originated, which could misclassify an unrelated
+    /// application exception that merely happens to expose a similarly-named property — silently
+    /// discarding its real type and mistaking an application bug for a database failure to a
+    /// caller doing <c>catch (DatabaseException)</c>-based retry/handling. Almost every real
+    /// ADO.NET provider's exception type derives from <see cref="DbException"/>; the only known
+    /// exception is checked explicitly via <see cref="KnownNonDbExceptionProviderExceptionTypeNames"/>.
     /// </remarks>
     private static bool LooksLikeProviderException(Exception exception)
     {
-        return exception is DbException ||
-               DbExceptionTranslationSupport.TryGetErrorCode(exception).HasValue ||
-               DbExceptionTranslationSupport.TryGetSqlState(exception) != null;
+        if (exception is DbException)
+        {
+            return true;
+        }
+
+        var typeName = exception.GetType().FullName;
+        return typeName != null && Array.IndexOf(KnownNonDbExceptionProviderExceptionTypeNames, typeName) >= 0;
     }
 
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
@@ -2067,6 +2084,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             SerializationConflictException => DbErrorCategory.SerializationFailure,
             ConstraintViolationException => DbErrorCategory.ConstraintViolation,
             CommandTimeoutException => DbErrorCategory.Timeout,
+            AmbiguousResultException => DbErrorCategory.AmbiguousResult,
             _ => DbErrorCategory.Unknown
         };
     }

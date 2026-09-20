@@ -789,14 +789,18 @@ public class FakeDataStore
 
     private void ApplySetClause(Dictionary<string, object?> row, string setClause, DbParameterCollection? parameters)
     {
-        // Simple SET clause parsing - handles "column = value, column2 = value2"
+        // Simple SET clause parsing - handles "column = value, column2 = value2". The column-name
+        // character class matches EvaluateWhereClause's (backtick/bracket/double-quote/single-quote
+        // plus word chars) so a real dialect-generated UPDATE — every dialect quotes identifiers by
+        // default, e.g. "column" = @p0 — is recognized here too, not just a bare, unquoted name.
         var assignments = setClause.Split(',');
         foreach (var assignment in assignments)
         {
-            var match = Regex.Match(assignment, @"(\w+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
+            var match = Regex.Match(assignment, @"([`\[\]""'\w.]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
-                var column = match.Groups[1].Value.Trim();
+                var column = ResolveRowKey(row, CleanIdentifier(match.Groups[1].Value.Trim())) ??
+                             CleanIdentifier(match.Groups[1].Value.Trim());
                 var valueExpression = match.Groups[2].Value.Trim();
                 var value = GetCompareValue(valueExpression, parameters);
                 row[column] = value;

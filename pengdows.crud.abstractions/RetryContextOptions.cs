@@ -3,9 +3,9 @@ using System;
 namespace pengdows.crud;
 
 /// <summary>
-/// Per-context retry policy for a <see cref="RetryContext"/>, supplied once at
-/// <c>IDatabaseContext.CreateRetryContext(RetryContextType, RetryContextOptions)</c> call time
-/// and never mutated afterward — consistent with everything else about this design being fixed
+/// Per-context retry policy for a <see cref="RetryContext"/>, supplied once via the
+/// <c>RetryContext(IDatabaseContext, RetryContextType, RetryContextOptions?)</c> constructor and
+/// never mutated afterward — consistent with everything else about this design being fixed
 /// before <c>StartAsync()</c> runs.
 /// </summary>
 /// <remarks>

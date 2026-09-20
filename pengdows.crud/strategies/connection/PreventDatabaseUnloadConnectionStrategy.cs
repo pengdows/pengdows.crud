@@ -62,6 +62,7 @@ namespace pengdows.crud.strategies.connection;
 internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrategy
 {
     private readonly object _sentinelRepairLock = new();
+    private readonly SemaphoreSlim _sentinelRepairAsyncLock = new(1, 1);
 
     // Test-only hook: fires synchronously right after the disposed-context re-check inside
     // EnsureSentinelHealthy, before the replacement is installed. Lets a
@@ -125,7 +126,7 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     public override async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType,
         bool isShared, CancellationToken cancellationToken = default)
     {
-        EnsureSentinelHealthy();
+        await EnsureSentinelHealthyAsync(cancellationToken).ConfigureAwait(false);
 
         var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
         try
@@ -205,6 +206,96 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         try
         {
             replacement.Open();
+
+            if (_context.IsDisposed)
+            {
+                replacement.Dispose();
+                return;
+            }
+
+            PostDisposedCheckHook?.Invoke();
+
+            if (!_context.ReplaceSentinel(current, replacement, executionType))
+            {
+                replacement.Dispose();
+            }
+        }
+        catch
+        {
+            replacement.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="EnsureSentinelHealthy"/> — same detect/lock/re-check
+    /// shape, but awaits <see cref="RepairSentinelAsync"/> (which uses OpenAsync) under a
+    /// SemaphoreSlim instead of taking a monitor lock and blocking on Open(). Kept as a fully
+    /// separate lock from <see cref="_sentinelRepairLock"/> rather than unifying them: a sync and
+    /// async caller racing to repair the same broken sentinel concurrently is already safe
+    /// (<see cref="DatabaseContext.ReplaceSentinel"/> is a compare-and-swap against the broken
+    /// connection reference; the loser's replacement is simply disposed), so the only cost of
+    /// two locks is a rare extra connection open+dispose, never a leak or incorrect state.
+    /// </summary>
+    private async ValueTask EnsureSentinelHealthyAsync(CancellationToken cancellationToken)
+    {
+        var snapshot = _context.GetSentinelSnapshot();
+        if (snapshot.Count == 0 || snapshot.All(s => IsHealthy(s.Connection)))
+        {
+            return;
+        }
+
+        await _sentinelRepairAsyncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var (current, executionType) in _context.GetSentinelSnapshot())
+            {
+                if (IsHealthy(current))
+                {
+                    continue;
+                }
+
+                await RepairSentinelAsync(current, executionType, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _sentinelRepairAsyncLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="RepairSentinel"/> — identical sequence, but opens the
+    /// replacement via OpenAsync so an async caller repairing a broken sentinel never blocks a
+    /// thread-pool thread on the blocking Open() call.
+    /// </summary>
+    private async ValueTask RepairSentinelAsync(ITrackedConnection current, ExecutionType executionType,
+        CancellationToken cancellationToken)
+    {
+        if (_context.IsDisposed)
+        {
+            return;
+        }
+
+        _context.Logger.LogWarning(
+            "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+
+        try
+        {
+            current.Dispose();
+        }
+        catch
+        {
+            // Already broken — best-effort cleanup, nothing meaningful to do with a failure here.
+        }
+
+        var connectionString = executionType == ExecutionType.Read
+            ? _context.RawReaderConnectionString
+            : _context.RawConnectionString;
+        var replacement = _context.FactoryCreateConnection(executionType, connectionString, true);
+        try
+        {
+            await replacement.OpenAsync(cancellationToken).ConfigureAwait(false);
 
             if (_context.IsDisposed)
             {
