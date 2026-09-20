@@ -56,41 +56,59 @@ internal class SqlServerDialect : SqlDialect
     // Single source of truth for session settings; both the SET script and the
     // expected-state dictionary are derived from this array.
     //
-    // Cost and why it's paid unconditionally, on every open, not just once per physical
-    // connection (investigated live against a real SQL Server 2022 container, 2026-09-19):
+    // === Investigation trail (2026-09-19/20, live against real SQL Server 2017 AND 2022
+    // engines, plus one 2022 instance with database compatibility level manually varied) ===
     //
-    // - Under DbMode.Standard AND DbMode.SingleWriter (ConnectionStrategyFactory maps
-    //   SingleWriter to the same StandardConnectionStrategy, adding only a write-concurrency
-    //   governor on top — it does not pin a connection), every operation opens and closes its
-    //   own ephemeral connection, so this SET batch executes as a real, separate round trip on
-    //   every single operation. Only DbMode.SingleConnection pins one connection for the
-    //   context's lifetime, so only there does this cost get paid once, not per-operation.
-    // - Measured cost on Standard mode: ~300 us/op (DatabaseContext.Metrics.AvgSessionInitMs),
-    //   roughly matching the entire pengdows-vs-Dapper ConnectionHoldTime/Update gap seen in
-    //   SqlServerEqualFootingBenchmarks — this IS the "session settings/guarantees" tradeoff,
-    //   not a hidden inefficiency.
-    // - Live-verified that 6 of these 7 settings are already the default SqlClient login
-    //   establishes AND already what sp_reset_connection restores on pool-reuse (deliberately
-    //   deviated ANSI_NULLS/QUOTED_IDENTIFIER mid-session, then opened a new logical connection
-    //   on the same pooled physical connection — SPID matched, deviation was gone). Only
-    //   ARITHABORT differs from the SqlClient default (OFF) and has no connection-string
-    //   keyword equivalent (checked every real SqlConnectionStringBuilder property).
-    // - Two optimizations were considered and REJECTED, not overlooked:
-    //   1. Trust the driver/reset defaults for the 6 that already match, only assert ARITHABORT.
-    //      Rejected: this is a correctness bet on state pengdows does not control — a caller's
-    //      own connection-string tweak, a different driver version, a connection-resiliency
-    //      reconnect path, or another library sharing the same pool could all silently
-    //      invalidate the assumption. The failure mode is not an exception; it's wrong NULL
-    //      comparison semantics or an indexed-view DML rejection (SQL Server error 1934) that
-    //      looks unrelated to the cause. That is a categorically worse risk than the
-    //      caller-verifiable tradeoffs behind this project's other opt-in knobs (e.g.
-    //      PreventDatabaseUnload, DbMode.Standard on DuckDB/Access) — it does not clear the same
-    //      bar, so it was not built even as an opt-in.
-    //   2. Prepend the SET batch to the caller's first command on a freshly-opened connection,
-    //      collapsing two round trips into one. Rejected: every captured statement (Profiler,
-    //      Extended Events, query store, app logs) would carry this boilerplate prefix forever,
-    //      undermining "the SQL you see is the SQL that ran" for a SQL-first library, for a
-    //      narrow win that only applies to the first command per connection open.
+    // Original cost analysis: under DbMode.Standard AND DbMode.SingleWriter
+    // (ConnectionStrategyFactory maps SingleWriter to the same StandardConnectionStrategy,
+    // adding only a write-concurrency governor — it does not pin a connection), every operation
+    // opens and closes its own ephemeral connection, so this SET batch used to execute as a real,
+    // separate round trip on every single operation (~300us/op via
+    // DatabaseContext.Metrics.AvgSessionInitMs — roughly the entire pengdows-vs-Dapper
+    // ConnectionHoldTime/Update gap seen in SqlServerEqualFootingBenchmarks). Only
+    // DbMode.SingleConnection pins one connection for the context's lifetime, so only there did
+    // this cost get paid once, not per-operation.
+    //
+    // Two optimizations were first considered and rejected: (1) trusting driver/reset defaults
+    // for the settings that already match, asserting only the one that didn't (ARITHABORT) —
+    // rejected as a correctness bet on state pengdows doesn't control; (2) prepending the SET
+    // batch to the caller's first command to collapse two round trips into one — rejected because
+    // it would pollute every captured statement (Profiler/Extended Events/query store/app logs)
+    // forever, undermining "the SQL you see is the SQL that ran" for a marginal win.
+    //
+    // Then the actual ARITHABORT requirement was investigated directly, because indexed views
+    // were the whole reason this setting was in the list in the first place:
+    //   - Microsoft's indexed-view documentation lists ARITHABORT ON as required, but ALSO
+    //     documents that ANSI_WARNINGS ON implicitly promotes ARITHABORT to effectively ON at
+    //     database compatibility level >= 90 — meaning ARITHABORT's own session flag can read
+    //     OFF while its functional effect is already ON.
+    //   - Confirmed with a live 2x2 matrix (ANSI_WARNINGS x ARITHABORT, each ON/OFF) against a
+    //     real schema-bound indexed view: ANSI_WARNINGS is the setting SQL Server actually
+    //     enforces — the DML rejection (error 1934) names 'ANSI_WARNINGS' specifically, never
+    //     ARITHABORT, and ARITHABORT's own value made zero observable difference to indexed-view
+    //     substitution, DML success, or divide-by-zero/overflow handling, as long as
+    //     ANSI_WARNINGS stayed ON (which the SqlClient login default already guarantees).
+    //   - Confirmed the compat-level threshold is unreachable on any SQL Server version this
+    //     dialect targets: SQL Server 2017 AND 2022 both reject
+    //     ALTER DATABASE ... SET COMPATIBILITY_LEVEL = 80/90 outright (error 15048, "Valid values
+    //     ... are 100, 110, ..."), and the matrix above produced identical results at the lowest
+    //     level each engine will accept (100) as at each engine's own current default.
+    //   - Confirmed pool-poisoning self-heals regardless: deliberately setting each of the seven
+    //     settings to its wrong value mid-session, then opening a new logical connection on the
+    //     SAME pooled physical connection (verified via matching ServerProcessId), showed
+    //     sp_reset_connection restoring every one of the seven to its own login default, with no
+    //     exceptions — not just the ones already investigated.
+    //
+    // Net conclusion: for every SQL Server version/compatibility level this dialect can actually
+    // reach (2017+, compat >= 100), the driver's login sequence plus sp_reset_connection already
+    // guarantee all seven settings unconditionally — no explicit SET script is needed at all, and
+    // GetSqlServerSessionSettings below skips it entirely once a live compatibility-level check
+    // confirms this. The full legacy baseline is kept as a deliberate, narrow safety net — not
+    // because it's proven necessary for any officially supported target, but on the chance
+    // someone points this dialect at a genuinely old, unsupported SQL Server/database where it
+    // still might not hold (this dialect's own documented scope is 2017+; a real SQL Server
+    // 2000/2005/2008-era ENGINE, as opposed to an old compat level emulated on a modern engine,
+    // was not available to test here — no Docker image exists for anything that old).
     private static readonly (string Name, string Value)[] SessionSettingsDef =
     {
         ("ANSI_NULLS", "ON"),
@@ -520,11 +538,13 @@ internal class SqlServerDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        // Always enforce the full baseline on every connection checkout.
-        // A cached empty diff means the first sampled connection was already compliant,
-        // but pooled connections can drift if external code mutates session state.
+        // null means detection never ran (e.g. DetectDatabaseInfoAsync was never called before
+        // checkout) — safe default is the full baseline. An empty string, by contrast, is a
+        // DELIBERATE outcome of GetSqlServerSessionSettings' live compatibility-level check
+        // (modern engine confirmed, no SET script needed) and must be honored as-is here, not
+        // coerced back to the baseline — see SessionSettingsDef's investigation trail comment.
         // SQL Server uses ApplicationIntent=ReadOnly in the connection string for read-only.
-        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
+        return _sessionSettings ?? DefaultSessionSettings;
     }
 
     public override string? GetReadOnlyConnectionParameter()
@@ -658,13 +678,33 @@ internal class SqlServerDialect : SqlDialect
         return productInfo;
     }
 
+    // Threshold below which ANSI_WARNINGS ON no longer implicitly promotes ARITHABORT to
+    // effectively ON (see SessionSettingsDef's investigation trail comment above). Unreachable on
+    // any SQL Server version this dialect targets — kept only as the gate for the defensive
+    // fallback below.
+    private const int MinimumCompatibilityLevelForImplicitArithAbort = 90;
+
+    private const string CompatibilityLevelQuery =
+        "SELECT compatibility_level FROM sys.databases WHERE database_id = DB_ID()";
+
     private SessionSettingsResult GetSqlServerSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
             connection,
             conn =>
             {
-                // Always set the full baseline to ensure deterministic state in pooled connections.
+                var compatibilityLevel = TryGetCompatibilityLevel(conn);
+
+                // Modern compatibility level: the driver's login sequence and
+                // sp_reset_connection already guarantee everything this baseline would assert —
+                // see the investigation trail above SessionSettingsDef. No SET script needed.
+                if (compatibilityLevel is >= MinimumCompatibilityLevelForImplicitArithAbort)
+                {
+                    return new SessionSettingsResult(string.Empty, ExpectedSessionSettings, false);
+                }
+
+                // Compatibility level could not be determined, or is genuinely pre-2005: fall
+                // back to the full legacy baseline — exactly the scenario it exists to protect.
                 return new SessionSettingsResult(DefaultSessionSettings, ExpectedSessionSettings, false);
             },
             () => new SessionSettingsResult(
@@ -672,6 +712,27 @@ internal class SqlServerDialect : SqlDialect
                 new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
                 true),
             "Failed to configure SQL Server session settings");
+    }
+
+    private static int? TryGetCompatibilityLevel(IDbConnection connection)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = CompatibilityLevelQuery;
+            return cmd.ExecuteScalar() switch
+            {
+                byte b => b,
+                short s => s,
+                int i => i,
+                long l => (int)l,
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // Connection pooling properties for SQL Server

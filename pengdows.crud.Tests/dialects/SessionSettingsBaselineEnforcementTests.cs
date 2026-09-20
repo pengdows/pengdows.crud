@@ -16,6 +16,16 @@ namespace pengdows.crud.Tests.dialects;
 ///
 /// Without this guarantee, a subsequent pooled connection whose session state was
 /// mutated by external code would silently drift from the expected baseline.
+///
+/// SQL SERVER IS A DELIBERATE EXCEPTION to this invariant (see SqlServerDialect.cs's
+/// SessionSettingsDef investigation-trail comment): live testing against real SQL Server 2017
+/// and 2022 engines confirmed the driver's login sequence plus sp_reset_connection already
+/// guarantee all seven settings unconditionally at database compatibility level >= 90 — a level
+/// no SQL Server version this dialect targets can even fall below. GetSqlServerSessionSettings
+/// now produces a genuinely empty cached diff only after a live compatibility-level check
+/// confirms this, and GetBaseSessionSettings honors that empty result instead of coercing it
+/// back to the baseline. The other dialects here (PostgreSQL, Firebird) have not been
+/// re-investigated and keep the original "always enforce" contract.
 /// </summary>
 public class SessionSettingsBaselineEnforcementTests
 {
@@ -77,8 +87,15 @@ public class SessionSettingsBaselineEnforcementTests
     //  SQL Server
     // ──────────────────────────────────────────────
 
+    // SQL Server deliberately diverges here: an empty cached diff is only ever produced by
+    // GetSqlServerSessionSettings after a live compatibility-level check confirms >= 90 (see
+    // SqlServerDialectSettingsTests.GetConnectionSessionSettings_ModernCompatibilityLevel_
+    // ReturnsNoSessionSettings for the production-path test). GetBaseSessionSettings must honor
+    // that, not coerce it back to the baseline — the NULL case (detection never ran) is the one
+    // that still falls back, covered below by SqlServer_GetBaseSessionSettings_WhenCacheIsNull_
+    // ReturnsFallbackBaseline.
     [Fact]
-    public void SqlServer_GetBaseSessionSettings_WhenCacheIsEmpty_StillReturnsFullBaseline()
+    public void SqlServer_GetBaseSessionSettings_WhenCacheIsEmpty_HonorsIntentionalEmptyResult()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
@@ -88,15 +105,13 @@ public class SessionSettingsBaselineEnforcementTests
 
         var settings = dialect.GetBaseSessionSettings();
 
-        Assert.False(string.IsNullOrWhiteSpace(settings),
-            "GetBaseSessionSettings must return a non-empty baseline even when cached diff is empty");
-        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SET ANSI_NULLS ON", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("SET ARITHABORT ON", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.True(string.IsNullOrWhiteSpace(settings),
+            "An intentionally empty cached diff (modern compatibility level confirmed) must not " +
+            "be coerced back into the full baseline");
     }
 
     [Fact]
-    public void SqlServer_GetConnectionSessionSettings_WhenCacheIsEmpty_EnforcesBaseline()
+    public void SqlServer_GetConnectionSessionSettings_WhenCacheIsEmpty_ProducesNoSettings()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
@@ -113,9 +128,8 @@ public class SessionSettingsBaselineEnforcementTests
 
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
 
-        Assert.False(string.IsNullOrWhiteSpace(settings),
-            "GetConnectionSessionSettings must return enforcement SQL even when diff cache is empty");
-        Assert.Contains("QUOTED_IDENTIFIER", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.True(string.IsNullOrWhiteSpace(settings),
+            "An intentionally empty cached diff must propagate through to GetConnectionSessionSettings");
     }
 
     // ──────────────────────────────────────────────

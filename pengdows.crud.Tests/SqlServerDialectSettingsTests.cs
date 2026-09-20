@@ -99,6 +99,76 @@ public class SqlServerDialectSettingsTests
         return new TrackedConnection(inner);
     }
 
+    // Backs the compatibility-level probe (GetSqlServerSessionSettings's TryGetCompatibilityLevel):
+    // returns a configurable scalar value for ANY command, modeling
+    // "SELECT compatibility_level FROM sys.databases WHERE database_id = DB_ID()".
+    private sealed class CompatibilityLevelCommand : DbCommand
+    {
+        private readonly DbConnection _connection;
+        private readonly object _scalarResult;
+
+        public CompatibilityLevelCommand(DbConnection connection, object scalarResult)
+        {
+            _connection = connection;
+            _scalarResult = scalarResult;
+        }
+
+        [AllowNull] public override string CommandText { get; set; } = string.Empty;
+        public override int CommandTimeout { get; set; }
+        public override CommandType CommandType { get; set; }
+        public override bool DesignTimeVisible { get; set; }
+        public override UpdateRowSource UpdatedRowSource { get; set; }
+
+        [AllowNull]
+        protected override DbConnection DbConnection
+        {
+            get => _connection;
+            set { }
+        }
+
+        protected override DbParameterCollection DbParameterCollection { get; } = new FakeParameterCollection();
+
+        protected override DbTransaction? DbTransaction { get; set; }
+
+        public override void Cancel() { }
+        public override int ExecuteNonQuery() => 0;
+        public override object ExecuteScalar() => _scalarResult;
+        public override void Prepare() { }
+
+        protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+        {
+            return new fakeDbDataReader(Array.Empty<Dictionary<string, object>>());
+        }
+
+        protected override DbParameter CreateDbParameter() => new fakeDbParameter();
+    }
+
+    private sealed class CompatibilityLevelConnection : fakeDbConnection
+    {
+        private readonly object _scalarResult;
+
+        public CompatibilityLevelConnection(object scalarResult)
+        {
+            EmulatedProduct = SupportedDatabase.SqlServer;
+            _scalarResult = scalarResult;
+        }
+
+        protected override DbCommand CreateDbCommand()
+        {
+            return new CompatibilityLevelCommand(this, _scalarResult);
+        }
+    }
+
+    private static ITrackedConnection BuildCompatibilityLevelConnection(object scalarResult)
+    {
+        var inner = new CompatibilityLevelConnection(scalarResult)
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={SupportedDatabase.SqlServer}"
+        };
+        inner.Open();
+        return new TrackedConnection(inner);
+    }
+
     [Fact]
     public void QuotePrefix_IsDoubleQuotes()
     {
@@ -181,5 +251,62 @@ public class SqlServerDialectSettingsTests
         var settings = dialect.GetConnectionSessionSettings(ctx, false);
         Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
         Assert.DoesNotContain("NOCOUNT", settings);
+    }
+
+    // Live-verified (2026-09-20, real SQL Server 2017 and 2022 engines) that at compatibility
+    // level >= 90, ANSI_WARNINGS ON implicitly promotes ARITHABORT to effectively ON, and the
+    // driver's own login sequence + sp_reset_connection already guarantee every one of the
+    // seven settings unconditionally — no explicit SET script is needed at all. See
+    // SqlServerDialect.cs's SessionSettingsDef comment for the full investigation trail.
+    [Fact]
+    public async Task GetConnectionSessionSettings_ModernCompatibilityLevel_ReturnsNoSessionSettings()
+    {
+        await using var conn = BuildCompatibilityLevelConnection((byte)150);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+
+        Assert.True(string.IsNullOrWhiteSpace(settings),
+            $"Expected no session settings at compatibility level 150, got: {settings}");
+    }
+
+    // No SQL Server version this dialect targets (2017+) can even be CREATEd below
+    // compatibility level 100 (confirmed live: ALTER DATABASE ... SET COMPATIBILITY_LEVEL = 80/90
+    // is rejected outright on both a real SQL Server 2017 and 2022 engine). This test exists for
+    // the deliberately-kept defensive fallback: a database somehow reporting a pre-2005
+    // compatibility level still gets the full legacy baseline, on the off chance a genuinely old,
+    // unsupported SQL Server/database ends up connected anyway.
+    [Fact]
+    public async Task GetConnectionSessionSettings_LegacyCompatibilityLevel_EnforcesFullBaseline()
+    {
+        await using var conn = BuildCompatibilityLevelConnection((byte)80);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+
+        Assert.Contains("SET ANSI_NULLS ON", settings);
+        Assert.Contains("SET ARITHABORT ON", settings);
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+    }
+
+    // If the compatibility level genuinely cannot be determined (query fails, returns an
+    // unexpected type, etc.), the safe default is to enforce the full baseline rather than
+    // silently assume a modern engine.
+    [Fact]
+    public async Task GetConnectionSessionSettings_CompatibilityLevelUnavailable_FallsBackToFullBaseline()
+    {
+        await using var conn = BuildCompatibilityLevelConnection(DBNull.Value);
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var dialect = new SqlServerDialect(factory, NullLogger<SqlServerDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(conn);
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
+        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+
+        Assert.Contains("SET ANSI_NULLS ON", settings);
+        Assert.Contains("SET ARITHABORT ON", settings);
     }
 }
