@@ -1,0 +1,182 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Multi-targeted net8.0;net10.0 with one deliberate exception: Pomelo.EntityFrameworkCore.MySql
+    does not yet support EF Core 10 (tracked upstream, still open as of Aug 2026) — its latest
+    stable release (9.0.0) only ships a net8.0 dependency group. Every other provider referenced
+    below has a confirmed EF10-compatible release (verified against each package's own nuspec
+    dependency groups, not assumed from version numbers alone), so only the Pomelo/MySQL/MariaDB
+    PackageReference and its corresponding EfProviders.cs test wiring are net8.0-only — see
+    EfProviders.cs's IsMySqlProviderAvailable field for where MySql/MariaDb drop out of the
+    net10.0 MemberData lists entirely rather than trying to run them against a Pomelo build that
+    was never validated against EF Core 10.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>../TestResults/stormgate-efcore-multiprovider-coverage/</CoverletOutput>
+    <Threshold>0</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <!-- This project's own coverage target is pengdows.stormgate.EntityFrameworkCore (does
+         provider X accept an externally-supplied fakeDb connection at all) — pengdows.stormgate
+         itself is only reached transitively and was never meant to be measured here. Left
+         uninstrumented, coverlet still records it (one extra project-hop away from
+         pengdows.stormgate.Tests), but under a different relative source path for the same
+         StormGate.cs file. ReportGenerator's CI merge keys files by that path string, so the two
+         reports get treated as different files instead of unioned — and the narrower coverage
+         from this project (which only exercises StormGate through the EF interceptor) silently
+         wins over pengdows.stormgate.Tests's real ~96% run, sinking the pengdows.stormgate
+         coverage ratchet even though nothing regressed. Exclude it here instead of chasing path
+         normalization in coverlet/reportgenerator. -->
+    <Exclude>[pengdows.stormgate]*</Exclude>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="coverlet.msbuild" Version="8.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="log4net" Version="3.4.0" />
+  </ItemGroup>
+
+  <!-- Every net8.0-only PackageReference lives in this one ItemGroup — the net8.0 counterpart of
+       the net10.0 group below. Providers with a confirmed EF10-compatible release (nuspec
+       dependencyGroups checked directly, not inferred from version numbers) appear in both
+       groups at their respective EF-major version; Pomelo and EnergyExemplar's DuckDB package
+       need per-TFM version/package differences beyond that, explained inline below. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+    <PackageReference Include="Oracle.EntityFrameworkCore" Version="8.23.60" />
+    <!-- FirebirdSql's own package major version does not track EF Core's version number the way
+         other providers' do — verified via the NuGet registration API's dependencyGroups: 10.0.0
+         depends on Microsoft.EntityFrameworkCore.Relational [7.0.10, ), not EF Core 8; 11.0.0 is
+         the first version depending on [8.0.4, ) and the first to target net8.0. -->
+    <PackageReference Include="FirebirdSql.EntityFrameworkCore.Firebird" Version="11.0.0" />
+    <PackageReference Include="EFCore.Snowflake" Version="8.0.8" />
+    <PackageReference Include="Snowflake.Data" Version="5.6.0" />
+    <!-- Db2: IBM's older 8.0.0.300 has a reported EF Core 9 break, but 8.0.0.400 targets
+         Microsoft.EntityFrameworkCore.Relational [8.0.12, ) on net8.0 specifically (verified via
+         the NuGet registration API) and does expose a UseDb2(DbContextOptionsBuilder,
+         DbConnection, Action<Db2DbContextOptionsBuilder>) overload — worth actually trying
+         against EF Core 8 rather than assuming the community report generalizes to every
+         version — it does work at EF Core 8, confirmed by EfProviderCompatibilityTests. -->
+    <PackageReference Include="IBM.EntityFrameworkCore" Version="8.0.0.400" />
+    <!-- Pomelo.EntityFrameworkCore.MySql (MySQL and MariaDB, which both go through it) has no
+         EF Core 10-compatible release — its latest stable (9.0.0) has only a net8.0 dependency
+         group. Referenced net8.0-only; EfProviders.cs's IsMySqlProviderAvailable field excludes
+         SupportedDatabase.MySql/MariaDb from its net10.0 MemberData lists to match. -->
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.2" />
+    <!-- DuckDB: EnergyExemplar.EntityFrameworkCore.DuckDb's nuspec carries dependency groups for
+         both net8.0 and net10.0, but that does NOT mean one package version ships usable binaries
+         for both — 10.0.1 (referenced in the net10.0 group below) only actually ships a net10.0
+         lib asset (confirmed by NU1202 when tried under net8.0: "supports: net10.0" only), so
+         this net8.0 leg needs the older 1.0.2 release instead, same as before this project was
+         multi-targeted. Its UseDuckDb still has no overload accepting an arbitrary DbConnection —
+         only a DuckDbConnectionOptions/connection-string object — so fakeDb cannot plug into it
+         the way it does every other provider here, and it is absent from EfProviders' fakeDb-
+         driven MemberData lists for that reason alone (on both TFMs). That is NOT evidence
+         StormGateConnectionInterceptor is incompatible with DuckDB: reflection over this package
+         shows UseDuckDb is a thin layer over Microsoft.EntityFrameworkCore.Sqlite — the
+         DbConnection object EF Core actually opens/closes is a real
+         Microsoft.Data.Sqlite.SqliteConnection (confirmed by inspecting
+         DbContext.Database.GetDbConnection().GetType() against a real in-memory DuckDB), with
+         DuckDB's own engine substituted in only via its native SQLite-ABI-compatible library.
+         DbConnectionInterceptor fires on that same SqliteConnection's real Open/Close exactly as
+         it does for the already-fully-proven SQLite provider — confirmed directly, not assumed,
+         by DuckDbInterceptorRealProviderTests, which uses a real embedded DuckDB engine (no
+         Docker, no fakeDb) and proves saturation actually blocks a second concurrent open. See
+         that file's header comment for the full "fakeDb-injectable vs. StormGate-compatible are
+         two different questions" reasoning. -->
+    <PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="1.0.2" />
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.4.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Oracle.EntityFrameworkCore" Version="10.23.26300" />
+    <PackageReference Include="FirebirdSql.EntityFrameworkCore.Firebird" Version="13.0.0" />
+    <PackageReference Include="EFCore.Snowflake" Version="10.0.8" />
+    <!-- Db2: 10.0.0.100 targets Microsoft.EntityFrameworkCore.Relational 10.0.6 on net10.0
+         (verified via the package's own nuspec dependencyGroups). -->
+    <PackageReference Include="IBM.EntityFrameworkCore" Version="10.0.0.100" />
+    <!-- No Pomelo.EntityFrameworkCore.MySql reference here — see the net8.0 group above. -->
+    <!-- See the net8.0 group's DuckDB comment above for why EnergyExemplar's package needs a
+         different version per TFM, and why it's absent from EfProviders' fakeDb-driven
+         MemberData lists on both TFMs regardless of version. -->
+    <PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="10.0.1" />
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.5" />
+    <!-- A second, independent DuckDB EF Core provider (github.com/denis-ivanov/DuckDB.EFCore,
+         unrelated to EnergyExemplar's package above) — net10.0-only (its nuspec has no net8.0
+         dependency group at all, so no net8.0 leg is possible here). Unlike EnergyExemplar's
+         UseDuckDb, its UseDuckDB(DbContextOptionsBuilder, DbConnection, bool, ...) DOES accept an
+         arbitrary DbConnection at the API level (confirmed via ilspycmd decompilation of
+         DuckDBDbContextOptionsBuilderExtensions, not assumed) — so it was actually TRIED against
+         EfProviders' fakeDb-driven MemberData lists, and failed: DuckDBRelationalConnection.
+         OpenDbConnectionAsync casts the incoming connection to concrete DuckDBConnection
+         unconditionally, throwing InvalidCastException on Open() itself. It is therefore NOT
+         wired into those MemberData lists (see EfProviders.cs's class doc comment and its
+         Configure() switch, which deliberately has no DuckDB case). Referenced here only so
+         DuckDBEFCoreInterceptorRealProviderTests can prove StormGateConnectionInterceptor governs
+         a genuine DuckDBConnection directly, bypassing fakeDb entirely. -->
+    <PackageReference Include="DuckDB.EFCore" Version="1.0.4" />
+    <!-- A THIRD, independent DuckDB EF Core provider (github.com/skuirrels/DuckDB.EFCoreProvider,
+         unrelated to both EnergyExemplar's package and denis-ivanov's DuckDB.EFCore above) —
+         net10.0-only (its nuspec has only a net10.0 dependency group). As of 1.25.0 it added
+         support for a caller-registered DbProviderFactory: AddEntityFrameworkDuckDB() now calls
+         serviceCollection.TryAddSingleton<DbProviderFactory>(DuckDBClientFactory.Instance), so a
+         caller-registered factory (TryAddSingleton losing to an already-registered one) wins, and
+         UseDuckDB(DbConnection) accepts an arbitrary substituted connection end-to-end through
+         queries, SaveChanges, and EnsureCreated (confirmed by reading the package's own public
+         GitHub source/CHANGELOG for 1.25.0 — not assumed from the NuGet listing alone, since its
+         README hadn't caught up at the time this was added). Its own functional-test suite as of
+         1.25.0 depends directly on pengdows.crud.fakeDb (pengdows.crud.fakeDb.CapturingFakeDbConnection
+         in DuckDB.EFCoreProvider.FunctionalTests/TestUtilities/CapturingFakeDbConnection.cs) to
+         validate the substitution — the strongest possible external confirmation that fakeDb
+         injection actually works against this provider, from the provider author's own test code
+         rather than from testing here first. See EfProviders.cs for how this is wired into the
+         Tier 1/Tier 2 MemberData lists and Configure().
+
+         Dependency note, verified live rather than assumed: DuckDB.EFCoreProvider depends on
+         Skuirrels.DuckDB.NET.Data.Full/Skuirrels.DuckDB.NET.Bindings.Full — a performance fork of
+         DuckDB.NET.Data.Full/DuckDB.NET.Bindings.Full that ships its assemblies at the exact same
+         path (lib/net10.0/DuckDB.NET.Data.dll etc.), so it cannot coexist as a SEPARATE assembly
+         alongside the official package this project already references (for EnergyExemplar's
+         package and DuckDB.EFCore above) — its own changelog says as much ("must not be installed
+         alongside the official packages"). In practice this project doesn't end up with two
+         assemblies at all: NuGet's own conflict resolution picks one physical DuckDB.NET.Data.dll
+         for the whole project (confirmed via project.assets.json and the copied output DLL's file
+         version — Skuirrels' 1.5.5.4 wins over the official 1.5.5), and every DuckDB-related test
+         in this project — EnergyExemplar's real-provider test, DuckDB.EFCore's real-provider test,
+         and this package's own fakeDb Tier 1/Tier 2 theories — passed against that single resolved
+         assembly. Worth re-checking if a future version bump of either package changes which one
+         wins, or introduces an actual behavioral difference between the fork and the official
+         build. -->
+    <PackageReference Include="DuckDB.EFCoreProvider" Version="1.26.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\pengdows.stormgate.EntityFrameworkCore\pengdows.stormgate.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\pengdows.crud.fakeDb\pengdows.crud.fakeDb.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <PackageId>pengdows.stormgate.EntityFrameworkCore</PackageId>
+    <Title>pengdows.stormgate.EntityFrameworkCore</Title>
+    <Description>Entity Framework Core connection admission control via a DbConnectionInterceptor, composing with AddDbContext, AddDbContextPool, and IDbContextFactory.</Description>
+    <Authors>Pengdows</Authors>
+    <Company>Pengdows</Company>
+    <PackageTags>crud,nuget,connection-storm,admission-control,entity-framework-core,efcore</PackageTags>
+    <RepositoryUrl>https://github.com/pengdows/pengdows.crud</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/pengdows/pengdows.crud/wiki</PackageProjectUrl>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
+    <SignAssembly>true</SignAssembly>
+    <PublicSign>true</PublicSign>
+    <AssemblyOriginatorKeyFile>$(SNK_PATH)</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="[8.0.11,10.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="[10.0.8,11.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath=""/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj" />
+  </ItemGroup>
+
+</Project>
