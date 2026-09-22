@@ -15,6 +15,7 @@
 // - Skips raw connection strings like ":memory:" or file paths.
 // =============================================================================
 
+using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
 using pengdows.crud.enums;
@@ -167,31 +168,15 @@ internal static class ConnectionPoolingConfiguration
                     "or switch to DbMode.SingleConnection if you need a single persistent connection.");
             }
 
-            var modified = false;
-
             // Set Pooling=true if not present
-            if (!string.IsNullOrEmpty(poolingSettingName) &&
-                !builder.ContainsKey(poolingSettingName))
-            {
-                builder[poolingSettingName] = true;
-                modified = true;
-            }
-
-            if (!modified)
+            if (string.IsNullOrEmpty(poolingSettingName) ||
+                builder.ContainsKey(poolingSettingName))
             {
                 return connectionString;
             }
 
-            var result = builder.ConnectionString;
-
-            // Check if the builder stripped sensitive values (e.g., PersistSecurityInfo=false)
-            if (SensitiveValuesStripped(connectionString, result))
-            {
-                // Re-apply the modifications to a generic builder that preserves all values
-                return ReapplyModifications(connectionString, builder);
-            }
-
-            return result;
+            builder[poolingSettingName] = true;
+            return SetSingleKey(connectionString, poolingSettingName, true);
         }
         catch (Exception ex) when (ex is not InvalidOperationException)
         {
@@ -248,16 +233,7 @@ internal static class ConnectionPoolingConfiguration
             }
 
             builder[applicationNameSettingName] = applicationName;
-            var result = builder.ConnectionString;
-
-            // Check if the builder stripped sensitive values (e.g., PersistSecurityInfo=false)
-            if (SensitiveValuesStripped(connectionString, result))
-            {
-                // Re-apply the modifications to a generic builder that preserves all values
-                return ReapplyModifications(connectionString, builder);
-            }
-
-            return result;
+            return SetSingleKey(connectionString, applicationNameSettingName, applicationName);
         }
         catch
         {
@@ -307,16 +283,9 @@ internal static class ConnectionPoolingConfiguration
                 var current = Convert.ToString(value) ?? string.Empty;
                 if (!current.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
-                    builder[applicationNameSettingName] = current + suffix;
-                    var result = builder.ConnectionString;
-
-                    // Check if the builder stripped sensitive values
-                    if (SensitiveValuesStripped(connectionString, result))
-                    {
-                        return ReapplyModifications(connectionString, builder);
-                    }
-
-                    return result;
+                    var newValue = current + suffix;
+                    builder[applicationNameSettingName] = newValue;
+                    return SetSingleKey(connectionString, applicationNameSettingName, newValue);
                 }
 
                 return connectionString;
@@ -324,16 +293,9 @@ internal static class ConnectionPoolingConfiguration
 
             if (!string.IsNullOrWhiteSpace(fallbackApplicationName))
             {
-                builder[applicationNameSettingName] = $"{fallbackApplicationName}{suffix}";
-                var result = builder.ConnectionString;
-
-                // Check if the builder stripped sensitive values
-                if (SensitiveValuesStripped(connectionString, result))
-                {
-                    return ReapplyModifications(connectionString, builder);
-                }
-
-                return result;
+                var newValue = $"{fallbackApplicationName}{suffix}";
+                builder[applicationNameSettingName] = newValue;
+                return SetSingleKey(connectionString, applicationNameSettingName, newValue);
             }
 
             return connectionString;
@@ -379,14 +341,7 @@ internal static class ConnectionPoolingConfiguration
             }
 
             builder[discriminatorSettingName] = discriminatorSettingValue;
-            var result = builder.ConnectionString;
-
-            if (SensitiveValuesStripped(connectionString, result))
-            {
-                return ReapplyModifications(connectionString, builder);
-            }
-
-            return result;
+            return SetSingleKey(connectionString, discriminatorSettingName, discriminatorSettingValue);
         }
         catch
         {
@@ -432,14 +387,7 @@ internal static class ConnectionPoolingConfiguration
             }
 
             builder[maxPoolSizeSettingName] = maxPoolSize;
-            var result = builder.ConnectionString;
-
-            if (SensitiveValuesStripped(connectionString, result))
-            {
-                return ReapplyModifications(connectionString, builder);
-            }
-
-            return result;
+            return SetSingleKey(connectionString, maxPoolSizeSettingName, maxPoolSize);
         }
         catch
         {
@@ -448,7 +396,7 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
-    /// Silently corrects Min Pool Size in the connection string to a valid range.
+    /// Corrects Min Pool Size in the connection string to a required floor and valid range.
     /// <list type="bullet">
     /// <item>Step 1: clamp to &gt;= 0 (negative values become 0)</item>
     /// <item>Step 2: clamp to &lt;= MaxPoolSize (when MaxPoolSize is known)</item>
@@ -488,15 +436,54 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
-            builder[minPoolSizeSettingName] = clamped;
-            var result = builder.ConnectionString;
+            return SetSingleKey(connectionString, minPoolSizeSettingName, clamped);
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
 
-            if (SensitiveValuesStripped(connectionString, result))
+    internal static string EnsureMinimumPoolSize(
+        string connectionString,
+        string? minPoolSizeSettingName,
+        int? rawMin,
+        int? rawMax,
+        int requiredMinimum)
+    {
+        if (string.IsNullOrWhiteSpace(minPoolSizeSettingName) ||
+            string.IsNullOrWhiteSpace(connectionString) ||
+            requiredMinimum < 0)
+        {
+            return connectionString;
+        }
+
+        if (requiredMinimum == 0 && !rawMin.HasValue)
+        {
+            // No enforced minimum and the caller didn't set one — nothing to add or preserve.
+            return connectionString;
+        }
+
+        var target = Math.Max(rawMin ?? 0, requiredMinimum);
+        if (rawMax.HasValue)
+        {
+            target = Math.Min(target, rawMax.Value);
+        }
+
+        if (rawMin.HasValue && target == rawMin.Value)
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (RepresentsRawConnectionString(builder, connectionString))
             {
-                return ReapplyModifications(connectionString, builder);
+                return connectionString;
             }
 
-            return result;
+            return SetSingleKey(connectionString, minPoolSizeSettingName, target);
         }
         catch
         {
@@ -527,28 +514,26 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
-            var modified = false;
+            var keysToRemove = new List<string>();
             foreach (var key in MaxPoolKeyCandidates)
             {
                 if (builder.ContainsKey(key))
                 {
-                    builder.Remove(key);
-                    modified = true;
+                    keysToRemove.Add(key);
                 }
             }
 
-            if (!modified)
+            if (keysToRemove.Count == 0)
             {
                 return connectionString;
             }
 
-            var result = builder.ConnectionString;
-            if (SensitiveValuesStripped(connectionString, result))
+            foreach (var key in keysToRemove)
             {
-                return ReapplyModifications(connectionString, builder);
+                builder.Remove(key);
             }
 
-            return result;
+            return RemoveKeys(connectionString, keysToRemove);
         }
         catch
         {
@@ -573,62 +558,6 @@ internal static class ConnectionPoolingConfiguration
         return string.Equals(Convert.ToString(raw), original, StringComparison.Ordinal);
     }
 
-    private static readonly string[] SensitiveKeys =
-    {
-        "password", "pwd", "user id", "uid", "user", "username"
-    };
-
-    // Substrings that, when found anywhere in a key name (case-insensitive), mark it as sensitive.
-    private static readonly string[] SensitiveKeySubstrings =
-    {
-        "password", "secret", "token", "access"
-    };
-
-    /// <summary>
-    /// Checks if sensitive values (like password) were stripped when converting the connection string.
-    /// Many providers have PersistSecurityInfo=false by default, stripping passwords on read.
-    /// </summary>
-    private static bool SensitiveValuesStripped(string original, string modified)
-    {
-        if (string.IsNullOrWhiteSpace(original) || string.IsNullOrWhiteSpace(modified))
-        {
-            return false;
-        }
-
-        if (string.Equals(original, modified, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        try
-        {
-            var originalBuilder = new DbConnectionStringBuilder { ConnectionString = original };
-            var modifiedBuilder = new DbConnectionStringBuilder { ConnectionString = modified };
-
-            foreach (var sensitiveKey in SensitiveKeys)
-            {
-                // Check if original had this sensitive key with a value
-                if (originalBuilder.TryGetValue(sensitiveKey, out var originalValue) &&
-                    !string.IsNullOrWhiteSpace(originalValue?.ToString()))
-                {
-                    // Check if it was stripped or emptied in the modified version
-                    if (!modifiedBuilder.TryGetValue(sensitiveKey, out var modifiedValue) ||
-                        string.IsNullOrWhiteSpace(modifiedValue?.ToString()))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-        catch
-        {
-            // If we can't parse, assume potential stripping for safety
-            return true;
-        }
-    }
-
     /// <summary>
     /// Removes provider pooling settings from the connection string.
     /// </summary>
@@ -648,21 +577,19 @@ internal static class ConnectionPoolingConfiguration
                 return connectionString;
             }
 
-            var modified = false;
+            var keysToRemove = new List<string>();
             if (!string.IsNullOrWhiteSpace(poolingSettingName) && builder.ContainsKey(poolingSettingName))
             {
-                builder.Remove(poolingSettingName);
-                modified = true;
+                keysToRemove.Add(poolingSettingName);
             }
 
             if (!string.Equals(poolingSettingName, DefaultPoolingKey, StringComparison.OrdinalIgnoreCase) &&
                 builder.ContainsKey(DefaultPoolingKey))
             {
-                builder.Remove(DefaultPoolingKey);
-                modified = true;
+                keysToRemove.Add(DefaultPoolingKey);
             }
 
-            return modified ? builder.ConnectionString : connectionString;
+            return keysToRemove.Count == 0 ? connectionString : RemoveKeys(connectionString, keysToRemove);
         }
         catch
         {
@@ -671,66 +598,38 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
-    /// Re-applies modifications from a provider-specific builder to a generic builder
-    /// that preserves all values including sensitive ones.
+    /// Applies a single key/value change to a connection string using a plain, provider-agnostic
+    /// <see cref="DbConnectionStringBuilder"/> seeded from the original text.
     /// </summary>
-    private static string ReapplyModifications(string original, DbConnectionStringBuilder providerBuilder)
+    /// <remarks>
+    /// Deliberately never uses a caller-supplied provider-typed builder's own <c>ConnectionString</c>
+    /// getter to produce output — some typed builders (e.g. IBM.Data.Db2's DB2ConnectionStringBuilder)
+    /// unconditionally re-serialize their entire known property schema, including dozens of
+    /// unrelated, empty-valued keys nobody set. Feeding that exhaustive string back to the same
+    /// driver's connection constructor can be rejected outright. A plain, untyped builder only ever
+    /// echoes back the keys it was actually given, so the result always matches "the original string,
+    /// plus this one change" — never more.
+    /// </remarks>
+    private static string SetSingleKey(string originalConnectionString, string key, object value)
     {
-        try
+        var generic = new DbConnectionStringBuilder { ConnectionString = originalConnectionString };
+        generic[key] = value;
+        return generic.ConnectionString;
+    }
+
+    /// <summary>
+    /// Removes one or more keys from a connection string using a plain, provider-agnostic
+    /// <see cref="DbConnectionStringBuilder"/> seeded from the original text. See
+    /// <see cref="SetSingleKey"/> for why a caller-supplied typed builder is never used here.
+    /// </summary>
+    private static string RemoveKeys(string originalConnectionString, List<string> keys)
+    {
+        var generic = new DbConnectionStringBuilder { ConnectionString = originalConnectionString };
+        foreach (var key in keys)
         {
-            // Start with the original connection string (which has all values)
-            var genericBuilder = new DbConnectionStringBuilder { ConnectionString = original };
-
-            // Apply all values from the provider builder that may have been added/modified
-            foreach (var keyObj in providerBuilder.Keys)
-            {
-                var key = keyObj?.ToString();
-                if (string.IsNullOrEmpty(key))
-                {
-                    continue;
-                }
-
-                // Skip sensitive keys - we want to keep the originals from the source connection string
-                var isSensitive = false;
-                foreach (var sensitiveKey in SensitiveKeys)
-                {
-                    if (string.Equals(key, sensitiveKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        isSensitive = true;
-                        break;
-                    }
-                }
-
-                if (!isSensitive)
-                {
-                    foreach (var substring in SensitiveKeySubstrings)
-                    {
-                        if (key.Contains(substring, StringComparison.OrdinalIgnoreCase))
-                        {
-                            isSensitive = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (isSensitive)
-                {
-                    continue;
-                }
-
-                // Copy non-sensitive values that may have been added (Pooling, MinPoolSize, Application Name, etc.)
-                if (providerBuilder.TryGetValue(key, out var value))
-                {
-                    genericBuilder[key] = value;
-                }
-            }
-
-            return genericBuilder.ConnectionString;
+            generic.Remove(key);
         }
-        catch
-        {
-            // If re-application fails, return original to preserve credentials
-            return original;
-        }
+
+        return generic.ConnectionString;
     }
 }

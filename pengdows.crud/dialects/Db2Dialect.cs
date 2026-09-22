@@ -51,6 +51,25 @@ internal sealed class Db2Dialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 
+    // Confirmed via reflection against the real IBM.Data.Db2.DB2ConnectionStringBuilder
+    // (Net.IBM.Data.Db2 8.0.0.400): ClientApplicationName is the property that surfaces in Db2's
+    // own connection-monitoring views (e.g. SYSIBMADM.APPLICATIONS) — a lower-level ProgramName
+    // property also exists, but this is the one operators actually query against. Without this
+    // set, reader/writer connection strings would be identical and collapse into one shared pool.
+    public override string? ApplicationNameSettingName => "ClientApplicationName";
+
+    // CONFIRMED LIVE (real ibmcom/db2:11.5.8.0 container): Db2Dialect never set
+    // MaxPoolSizeSettingName at all (inherited the base null) — PoolingConfigReader.
+    // GetEffectivePoolConfig/GetExplicitMaxPoolSize both bail out immediately via
+    // string.IsNullOrWhiteSpace(dialect.MaxPoolSizeSettingName), so pengdows.crud silently
+    // ignored any explicit MaxPoolSize a caller wrote into their own Db2 connection string and
+    // always fell back to the dialect default, regardless of intent. "Max Pool Size" (with
+    // spaces) confirmed as the real, canonical keyword both by reflection over
+    // IBM.Data.Db2.DB2ConnectionStringBuilder AND by observing what that builder itself
+    // re-serializes a MaxPoolSize assignment as.
+    public override string? MaxPoolSizeSettingName => "Max Pool Size";
+    public override string? MinPoolSizeSettingName => "Min Pool Size";
+
     // Db2's four isolation levels (UR/CS/RS/RR) are mapped to ADO.NET's IsolationLevel in
     // IsolationResolver.BuildSupportedIsolationLevels/BuildProfileMapping — this dialect layer
     // has no per-database isolation customization hook (unlike the 3.0 branch this was ported
@@ -90,8 +109,12 @@ internal sealed class Db2Dialect : SqlDialect
     }
 
     // Db2 LUW supports ANSI MERGE regardless of detected version (supported since Db2 v8) — matches Oracle's
-    // pattern of not gating this behind MaxSupportedStandard/IsInitialized.
+    // pattern of not gating this behind MaxSupportedStandard/IsInitialized. Same reasoning applies
+    // to window functions and CTEs below: real, unconditional Db2 LUW 8+ capabilities that
+    // shouldn't depend on MaxSupportedStandard's runtime-detected StandardCompliance value.
     public override bool SupportsMerge => true;
+    public override bool SupportsWindowFunctions => true;
+    public override bool SupportsCommonTableExpressions => true;
 
     public override bool SupportsSavepoints => true;
 
