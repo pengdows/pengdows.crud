@@ -471,6 +471,12 @@ internal class SqlServerDialect : SqlDialect
     public override bool SupportsCommonTableExpressions => !IsInitialized || IsVersionAtLeast(9);
     public override bool SupportsMerge => IsVersionAtLeast(10);
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
+
+    // Native xml column type and CLR/T-SQL user-defined types both shipped in SQL Server 2005
+    // (major version 9). System-versioned temporal tables shipped in SQL Server 2016 (major 13).
+    public override bool SupportsXmlTypes => IsVersionAtLeast(9);
+    public override bool SupportsUserDefinedTypes => IsVersionAtLeast(9);
+    public override bool SupportsTemporalData => IsVersionAtLeast(13);
     public override bool SupportsSavepoints => true;
 
     // T-SQL's SAVE TRANSACTION has no explicit release statement at all — a savepoint is

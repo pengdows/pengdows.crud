@@ -160,6 +160,9 @@ internal class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsMerge => false;
+
+    // SQLite has no TRUNCATE TABLE statement at all; callers must use DELETE FROM instead.
+    public override bool SupportsTruncateTable => false;
     public override bool SupportsSavepoints => true;
 
     // SQLite does not enforce FK constraints by default (PRAGMA foreign_keys = ON is required).

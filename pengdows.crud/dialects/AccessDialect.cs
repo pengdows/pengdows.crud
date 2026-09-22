@@ -272,6 +272,9 @@ internal sealed class AccessDialect : SqlDialect
     // No MERGE/ON CONFLICT/ON DUPLICATE KEY of any kind.
     public override bool SupportsMerge => false;
 
+    // Jet/ACE SQL has no TRUNCATE TABLE statement; a caller must DELETE FROM the table instead.
+    public override bool SupportsTruncateTable => false;
+
     // No ADO.NET-invocable stored procedures. Deliberate decision, not an unexamined default.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
