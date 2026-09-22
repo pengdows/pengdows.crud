@@ -9,6 +9,18 @@ namespace pengdows.crud.Tests.tenant;
 public class TenantConfigurationTests
 {
     [Fact]
+    public void ITenantConfiguration_IsNotPartOfThePublicCoreContract()
+    {
+        var type = typeof(pengdows.crud.DatabaseContext).Assembly.GetType(
+            "pengdows.crud.tenant.ITenantConfiguration",
+            throwOnError: false,
+            ignoreCase: false);
+
+        Assert.NotNull(type);
+        Assert.False(type.IsPublic || type.IsNestedPublic);
+    }
+
+    [Fact]
     public void Constructor_InitializesWithDefaults()
     {
         var config = new TenantConfiguration();
