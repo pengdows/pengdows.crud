@@ -329,11 +329,13 @@ internal class SqlServerDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        // Always enforce the full baseline on every connection checkout.
-        // A cached empty diff means the first sampled connection was already compliant,
-        // but pooled connections can drift if external code mutates session state.
+        // null means detection never ran (e.g. DetectDatabaseInfoAsync was never called before
+        // checkout) — safe default is the full baseline. An empty string, by contrast, is a
+        // DELIBERATE outcome of GetSqlServerSessionSettings' live compatibility-level check
+        // (modern engine confirmed, no SET script needed) and must be honored as-is here, not
+        // coerced back to the baseline — see SessionSettingsDef's investigation trail comment.
         // SQL Server uses ApplicationIntent=ReadOnly in the connection string for read-only.
-        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSessionSettings : _sessionSettings;
+        return _sessionSettings ?? DefaultSessionSettings;
     }
 
     public override string? GetReadOnlyConnectionParameter()
@@ -391,13 +393,33 @@ internal class SqlServerDialect : SqlDialect
         return productInfo;
     }
 
+    // Threshold below which ANSI_WARNINGS ON no longer implicitly promotes ARITHABORT to
+    // effectively ON (see SessionSettingsDef's investigation trail comment above). Unreachable on
+    // any SQL Server version this dialect targets — kept only as the gate for the defensive
+    // fallback below.
+    private const int MinimumCompatibilityLevelForImplicitArithAbort = 90;
+
+    private const string CompatibilityLevelQuery =
+        "SELECT compatibility_level FROM sys.databases WHERE database_id = DB_ID()";
+
     private SessionSettingsResult GetSqlServerSessionSettings(IDbConnection connection)
     {
         return EvaluateSessionSettings(
             connection,
             conn =>
             {
-                // Always set the full baseline to ensure deterministic state in pooled connections.
+                var compatibilityLevel = TryGetCompatibilityLevel(conn);
+
+                // Modern compatibility level: the driver's login sequence and
+                // sp_reset_connection already guarantee everything this baseline would assert —
+                // see the investigation trail above SessionSettingsDef. No SET script needed.
+                if (compatibilityLevel is >= MinimumCompatibilityLevelForImplicitArithAbort)
+                {
+                    return new SessionSettingsResult(string.Empty, ExpectedSessionSettings, false);
+                }
+
+                // Compatibility level could not be determined, or is genuinely pre-2005: fall
+                // back to the full legacy baseline — exactly the scenario it exists to protect.
                 return new SessionSettingsResult(DefaultSessionSettings, ExpectedSessionSettings, false);
             },
             () => new SessionSettingsResult(
@@ -405,6 +427,27 @@ internal class SqlServerDialect : SqlDialect
                 new Dictionary<string, string>(ExpectedSessionSettings, StringComparer.OrdinalIgnoreCase),
                 true),
             "Failed to configure SQL Server session settings");
+    }
+
+    private static int? TryGetCompatibilityLevel(IDbConnection connection)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = CompatibilityLevelQuery;
+            return cmd.ExecuteScalar() switch
+            {
+                byte b => b,
+                short s => s,
+                int i => i,
+                long l => (int)l,
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
