@@ -358,16 +358,21 @@ public class AdvancedTypeRegistryExtensiveTests
     [Fact]
     public void MacAddress_PostgreSql_SixByteAddress_ConfiguresMacAddrType()
     {
+        // Goes through the real production entry point (TryConfigureParameter), not
+        // mapping.ConfigureParameter directly - the registered MacAddressConverter unwraps
+        // MacAddress to a raw PhysicalAddress before ConfigureParameter ever sees the value,
+        // so calling ConfigureParameter with a bare MacAddress wouldn't exercise the same path.
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(MacAddress), SupportedDatabase.PostgreSql);
-
         Assert.NotNull(mapping);
         Assert.Equal(DbType.String, mapping.DbType);
-        Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
-        mapping.ConfigureParameter(param, new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55")));
+        var configured = registry.TryConfigureParameter(
+            param, typeof(MacAddress), new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55")),
+            SupportedDatabase.PostgreSql);
 
+        Assert.True(configured);
         // 6-byte EUI-48 address -> PostgreSQL macaddr, not macaddr8.
         Assert.Equal(MockNpgsqlDbType.MacAddr, param.NpgsqlDbType);
     }
@@ -377,12 +382,14 @@ public class AdvancedTypeRegistryExtensiveTests
     {
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(MacAddress), SupportedDatabase.PostgreSql);
-
         Assert.NotNull(mapping);
-        Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
-        mapping.ConfigureParameter(param, new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55-66-77")));
+        var configured = registry.TryConfigureParameter(
+            param, typeof(MacAddress), new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55-66-77")),
+            SupportedDatabase.PostgreSql);
+
+        Assert.True(configured);
 
         // 8-byte EUI-64 address -> PostgreSQL macaddr8.
         Assert.Equal(MockNpgsqlDbType.MacAddr8, param.NpgsqlDbType);

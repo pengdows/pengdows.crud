@@ -192,6 +192,48 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
             Assert.Equal("has, special=>chars", actual.HStoreValue["needs quoting"]);
         });
     }
+
+    [SkippableFact]
+    public async Task MacAddress_EightByteAddress_RoundTripsThroughMacAddr8ColumnAndWherePredicate()
+    {
+        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        {
+            await using var table = context.CreateSqlContainer($"""
+                CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(context, "macaddr8_roundtrip")} (
+                    id          INTEGER PRIMARY KEY,
+                    mac8_value  MACADDR8 NOT NULL
+                )
+                """);
+            await table.ExecuteNonQueryAsync();
+
+            var eightByte = MacAddress.Parse("08:00:2B:01:02:03:04:05");
+            var expected = new Macaddr8Entity { Id = 1, Mac8Value = eightByte };
+
+            var gateway = new TableGateway<Macaddr8Entity, int>(context);
+            await gateway.CreateAsync(expected, context);
+
+            var actual = await gateway.RetrieveOneAsync(expected.Id, context);
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Mac8Value, actual!.Mac8Value);
+
+            // Prove operator resolution works too, not just assignment/coercion on INSERT -
+            // a mismatched NpgsqlDbType (e.g. macaddr instead of macaddr8) can fail here even
+            // when a plain INSERT succeeds.
+            await using var predicate = context.CreateSqlContainer(
+                $"SELECT id FROM {IntegrationObjectNameHelper.Table(context, "macaddr8_roundtrip")} WHERE mac8_value = ");
+            var p = predicate.AddParameterWithValue("mac8", DbType.Object, eightByte);
+            predicate.Query.Append(predicate.MakeParameterName(p));
+            var foundId = await predicate.ExecuteScalarOrNullAsync<int>();
+            Assert.Equal(expected.Id, foundId);
+        });
+    }
+}
+
+[Table("macaddr8_roundtrip")]
+internal sealed class Macaddr8Entity
+{
+    [Id][Column("id", DbType.Int32)] public int Id { get; set; }
+    [Column("mac8_value", DbType.Object)] public MacAddress Mac8Value { get; set; }
 }
 
 [Table("advanced_type_roundtrip")]

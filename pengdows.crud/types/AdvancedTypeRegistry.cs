@@ -24,6 +24,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.enums;
@@ -568,12 +569,16 @@ internal class AdvancedTypeRegistry
 
         // PostgreSQL macaddr (6-byte EUI-48) / macaddr8 (8-byte EUI-64) - dispatch on the actual
         // address width rather than assuming one fixed type, since MacAddress supports both.
+        // By the time this callback runs, CoercionRegistry.TryConfigureLegacyParameter has
+        // already run the registered MacAddressConverter and replaced `value` with the raw
+        // PhysicalAddress it unwraps to (see MacAddressConverter.ConvertToProvider) - so this
+        // must check PhysicalAddress, not MacAddress, or the width check is always false.
         var pgMac = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                var isEui64 = value is MacAddress mac && mac.Address.GetAddressBytes().Length == 8;
+                var isEui64 = value is PhysicalAddress address && address.GetAddressBytes().Length == 8;
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty,
                     isEui64 ? NpgsqlNames.MacAddr8 : NpgsqlNames.MacAddr);
             }
