@@ -95,6 +95,7 @@ public static class DataSourceTestData
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
             SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
+            SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -163,6 +164,9 @@ public class DataSourceInformationTests
             // FlatFile's own SQL grammar supports only positional ? parameters (see
             // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
             SupportedDatabase.FlatFile => "?",
+            // Informix's ADO.NET driver has no named-parameter support at all - positional "?"
+            // only (see InformixDialect.SupportsNamedParameters).
+            SupportedDatabase.Informix => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -224,9 +228,10 @@ public class DataSourceInformationTests
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
-            // FlatFile has no named parameters at all (positional ? only) and no stored-procedure
-            // support (ProcWrappingStyle.None), so there is nothing to name-match against.
-            SupportedDatabase.FlatFile => false,
+            // FlatFile and Informix both have no named parameters at all (positional ? only) and
+            // no stored-procedure support (ProcWrappingStyle.None), so there is nothing to
+            // name-match against.
+            SupportedDatabase.FlatFile or SupportedDatabase.Informix => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -244,7 +249,9 @@ public class DataSourceInformationTests
         // Assert: named parameters flags
         // FlatFile's own SQL grammar supports only positional ? parameters (see
         // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
-        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile;
+        // Informix's ADO.NET driver likewise has no named-parameter support at all (see
+        // InformixDialect.SupportsNamedParameters).
+        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile && db != SupportedDatabase.Informix;
         Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 

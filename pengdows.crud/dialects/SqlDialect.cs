@@ -3046,6 +3046,33 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
                 break;
+
+            case SupportedDatabase.Informix:
+                // -143: deadlock (IBM performance-tuning docs). -244: "Could not do a
+                // physical-order read to fetch next row" - the closest documented analog to a
+                // serialization/lock conflict under Repeatable Read isolation (UNVERIFIED: no
+                // distinct SQLSTATE found, category assignment not confirmed live). Matches
+                // InformixExceptionTranslator's classification.
+                var informixCode = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
+
+                if (informixCode == 143)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (informixCode == 244)
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
         }
 
         category = DbErrorCategory.Unknown;

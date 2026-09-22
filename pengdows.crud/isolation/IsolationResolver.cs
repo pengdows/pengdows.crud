@@ -235,6 +235,21 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
+            // Informix's own terminology (Dirty Read/Committed Read/Cursor Stability/
+            // Repeatable Read) maps to ADO.NET's IsolationLevel as: Dirty Read =
+            // ReadUncommitted, Committed Read (the default) = ReadCommitted, Repeatable Read =
+            // BOTH RepeatableRead and Serializable (a single, stricter underlying lock mode
+            // satisfies both requests). Source: IBM "Informix Isolation Levels", 14.10.
+            // UNVERIFIED: whether the driver's BeginTransaction(IsolationLevel) actually issues
+            // the correct native SET ISOLATION text for each of these has not been confirmed
+            // live.
+            SupportedDatabase.Informix => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -335,6 +350,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+            },
+            SupportedDatabase.Informix => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // Committed Read, Informix's default
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // Repeatable Read
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // Dirty Read
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

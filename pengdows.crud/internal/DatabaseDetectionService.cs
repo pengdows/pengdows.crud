@@ -48,7 +48,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.DuckDB, new[] { "duckdb", "duck db" }),
         (SupportedDatabase.FlatFile, new[] { "flatfile", "flat file" }),
         (SupportedDatabase.Sybase, new[] { "adaptive server enterprise", "sybase" }),
-        (SupportedDatabase.Db2, new[] { "db2" })
+        (SupportedDatabase.Db2, new[] { "db2" }),
+        (SupportedDatabase.Informix, new[] { "informix" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
@@ -66,7 +67,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Snowflake, new[] { "snowflake", "net.snowflake" }),
         (SupportedDatabase.FlatFile, new[] { "flatfile" }),
         (SupportedDatabase.Sybase, new[] { "aseclient", "adonetcore" }),
-        (SupportedDatabase.Db2, new[] { "db2" })
+        (SupportedDatabase.Db2, new[] { "db2" }),
+        (SupportedDatabase.Informix, new[] { "informix" })
     };
 
     /// <summary>
