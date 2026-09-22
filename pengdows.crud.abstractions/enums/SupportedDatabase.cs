@@ -41,7 +41,7 @@ public enum SupportedDatabase
     Db2 = 16384, // IBM enterprise RDBMS with strong SQL standard compliance
     FlatFile = 32768, // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
     SingleStore = 65536, // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
-    SybaseASE = 131072 // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database.
-                        // Named SybaseASE, not bare Sybase, to disambiguate from Sybase IQ (a distinct
+    Sybase = 131072 // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database.
+                        // Named Sybase, not bare Sybase, to disambiguate from Sybase IQ (a distinct
                         // product this dialect does not target) — matches 3.0's naming (same bit value).
 }

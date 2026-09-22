@@ -31,7 +31,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// </remarks>
     private static readonly HashSet<SupportedDatabase> ProductsWithoutSchemaSupport = new()
     {
-        SupportedDatabase.SybaseASE
+        SupportedDatabase.Sybase
     };
 
     private string? _connectionString;

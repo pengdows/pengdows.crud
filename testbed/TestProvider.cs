@@ -394,7 +394,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "BOOLEAN",
             SupportedDatabase.TiDb => "BOOLEAN",
             SupportedDatabase.SqlServer => "BIT",
-            SupportedDatabase.SybaseASE => "BIT",
+            SupportedDatabase.Sybase => "BIT",
             _ => "BOOLEAN"
         };
     }
@@ -414,7 +414,7 @@ CREATE TABLE {tableName} (
         return product switch
         {
             SupportedDatabase.SqlServer => "VARBINARY(64)",
-            SupportedDatabase.SybaseASE => "VARBINARY(64)",
+            SupportedDatabase.Sybase => "VARBINARY(64)",
             SupportedDatabase.PostgreSql => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
@@ -813,7 +813,7 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
-            case SupportedDatabase.SybaseASE:
+            case SupportedDatabase.Sybase:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
                     // ASE lacks SQL Server's "CREATE OR ALTER" shorthand — drop first if present,
@@ -1365,7 +1365,7 @@ INSERT INTO {table} (
                     }
                 }
                 else if (actualEmpty != emptyText &&
-                         !(_context.Product == SupportedDatabase.SybaseASE && actualEmpty == " "))
+                         !(_context.Product == SupportedDatabase.Sybase && actualEmpty == " "))
                 {
                     throw new Exception(
                         $"[RoundTrip] Empty string mismatch: expected '{emptyText}', got '{actualEmpty}'");
@@ -1373,7 +1373,7 @@ INSERT INTO {table} (
                 if (!actualNullIsDbNull)
                     throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
                 if (actualPadded != paddedText &&
-                    !(_context.Product == SupportedDatabase.SybaseASE && actualPadded == paddedText.TrimEnd()))
+                    !(_context.Product == SupportedDatabase.Sybase && actualPadded == paddedText.TrimEnd()))
                     throw new Exception(
                         $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
                 if (actualDecimal != decimalValue)

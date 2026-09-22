@@ -1124,7 +1124,7 @@ public class PengdowsMetricsObserverTests
     [InlineData(SupportedDatabase.CockroachDb, "cockroachdb")]
     [InlineData(SupportedDatabase.DuckDB, "duckdb")]
     [InlineData(SupportedDatabase.Db2, "ibm.db2")]
-    [InlineData(SupportedDatabase.SybaseASE, "sap.ase")]
+    [InlineData(SupportedDatabase.Sybase, "sap.ase")]
     [InlineData(SupportedDatabase.SingleStore, "singlestore")]
     [InlineData(SupportedDatabase.FlatFile, "flatfile")]
     [InlineData(SupportedDatabase.Unknown, "other_sql")]

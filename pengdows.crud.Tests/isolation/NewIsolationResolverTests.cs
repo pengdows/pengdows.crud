@@ -59,7 +59,7 @@ public class NewIsolationResolverTests
     }
 
     [Fact]
-    public void Resolve_SybaseASE_Mappings()
+    public void Resolve_Sybase_Mappings()
     {
         // Verified live against ASE 16.0 SP02 (session cited in SybaseDialect.cs): AseConnection
         // .BeginTransaction accepts all four standard IsolationLevel values, and a subsequent
@@ -68,7 +68,7 @@ public class NewIsolationResolverTests
         // just a client-side no-op. Without an explicit entry here, this fell back to the generic
         // default ({ReadCommitted, RepeatableRead, Serializable}), which wrongly omitted
         // ReadUncommitted — a real, supported level on this engine.
-        var resolver = new IsolationResolver(SupportedDatabase.SybaseASE, false, false);
+        var resolver = new IsolationResolver(SupportedDatabase.Sybase, false, false);
 
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));

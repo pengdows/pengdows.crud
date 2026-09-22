@@ -228,7 +228,7 @@ internal sealed class IsolationResolver : IIsolationResolver
             // each transaction confirms the server genuinely applied it — 0/1/2/3 map exactly to
             // ReadUncommitted/ReadCommitted/RepeatableRead/Serializable, not just a client-side
             // no-op.
-            SupportedDatabase.SybaseASE => new HashSet<IsolationLevel>
+            SupportedDatabase.Sybase => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted,
@@ -330,7 +330,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
             },
-            SupportedDatabase.SybaseASE => new Dictionary<IsolationProfile, IsolationLevel>
+            SupportedDatabase.Sybase => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,

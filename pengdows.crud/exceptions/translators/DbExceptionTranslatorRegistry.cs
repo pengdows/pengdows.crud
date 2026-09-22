@@ -20,7 +20,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
         return database switch
         {
             SupportedDatabase.SqlServer => SqlServer,
-            SupportedDatabase.SybaseASE => Sybase,
+            SupportedDatabase.Sybase => Sybase,
             SupportedDatabase.Db2 => Db2,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
                 SupportedDatabase.AuroraPostgreSql => Postgres,
