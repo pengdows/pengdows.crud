@@ -19,7 +19,7 @@ means as a product.
 
 | Doc | Covers |
 |---|---|
-| [`migration-2.x-to-3.0.md`](./migration-2.x-to-3.0.md) | Breaking changes in `3.0` vs `main`/2.x: removed/internalized public API, new interface members, and the CockroachDB isolation-level behavior change |
+| [`migration-2.x-to-3.0.md`](./migration-2.x-to-3.0.md) | Breaking changes in `3.0` vs `main`/2.x: removed/internalized public API, concrete setter visibility, signature/record-shape changes, enum changes, packaging changes, and observable behavior changes (isolation resolution, session-init failure mode, pool timeout defaults) |
 | [`architecture.md`](./architecture.md) | Internals deep-dive: locking, connection lifecycle, lease model, concurrency contracts |
 | [`core-invariants.md`](./core-invariants.md) | Condensed cheat-sheet of the invariants in `architecture.md` |
 | [`overview.md`](./overview.md) | Public API surface at a glance |
