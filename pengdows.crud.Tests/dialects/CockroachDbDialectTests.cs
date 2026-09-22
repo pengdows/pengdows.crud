@@ -20,6 +20,26 @@ public class CockroachDbDialectTests
         new(new fakeDbFactory(SupportedDatabase.CockroachDb), NullLogger.Instance);
 
     [Fact]
+    public void SupportsXmlTypes_IsFalse()
+    {
+        // CockroachDB does not implement PostgreSQL's xml column type - confirmed live against a
+        // real CockroachDB v26.1.1 container: `CREATE TABLE t (x xml)` fails with
+        // "syntax error: unimplemented: this syntax". Must be overridden here rather than left to
+        // inherit PostgreSqlDialect's true (CockroachDB genuinely supports xml since 8.3), or this
+        // dialect would silently claim a capability it doesn't have.
+        Assert.False(CreateDialect().SupportsXmlTypes);
+    }
+
+    [Fact]
+    public void SupportsUserDefinedTypes_IsTrue()
+    {
+        // Unlike xml, CockroachDB does support CREATE TYPE composite types - confirmed live
+        // (`CREATE TYPE my_udt AS (a int, b text)` succeeded). Correctly inherited from
+        // PostgreSqlDialect with no override needed.
+        Assert.True(CreateDialect().SupportsUserDefinedTypes);
+    }
+
+    [Fact]
     public void PrepareConnectionStringForDataSource_BakesBasePostgreSqlSettings()
     {
         var dialect = CreateDialect();

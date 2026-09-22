@@ -37,6 +37,14 @@ internal class CockroachDbDialect : PostgreSqlDialect
     // parameters for reliable CRUD behavior.
     public override bool SupportsSetValuedParameters => false;
 
+    // Unlike real PostgreSQL (which PostgreSqlDialect.SupportsXmlTypes now claims for 8.3+),
+    // CockroachDB does not implement the xml column type at all - confirmed live against a real
+    // CockroachDB v26.1.1 container: `CREATE TABLE t (x xml)` fails with "syntax error:
+    // unimplemented: this syntax". Must override to false or this dialect would silently inherit
+    // a capability claim CockroachDB doesn't meet. SupportsUserDefinedTypes is correctly left
+    // inherited as true - CockroachDB does support CREATE TYPE composite types (confirmed live).
+    public override bool SupportsXmlTypes => false;
+
     // CockroachDB only supports SERIALIZABLE isolation; READ COMMITTED is not available.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 

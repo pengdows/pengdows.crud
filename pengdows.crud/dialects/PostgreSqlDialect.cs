@@ -400,6 +400,15 @@ internal class PostgreSqlDialect : SqlDialect
     };
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
     public override bool SupportsSavepoints => true;
+
+    // Native xml column type shipped in PostgreSQL 8.3. Confirmed live against a real 16.13
+    // container. CockroachDbDialect overrides this back to false - it does not implement xml.
+    public override bool SupportsXmlTypes => IsVersionAtLeast(8, 3);
+
+    // CREATE TYPE (composite types) has existed since long before any version this library
+    // targets. Confirmed live against real PostgreSQL, CockroachDB, and YugabyteDB containers -
+    // all three support it, so no per-dialect override is needed.
+    public override bool SupportsUserDefinedTypes => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
     public override bool SupportsJsonTable => IsVersionAtLeast(18);

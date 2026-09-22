@@ -86,6 +86,26 @@ public class MariaDbDialectTests
     }
 
     [Fact]
+    public void SupportsTemporalData_DependsOnVersion()
+    {
+        // MariaDB's system-versioned tables (CREATE TABLE ... WITH SYSTEM VERSIONING) shipped in
+        // 10.3 - confirmed live against a real 10.11 container (INSERT, UPDATE, then
+        // SELECT ... FOR SYSTEM_TIME ALL returned both row versions). MySQL itself has no
+        // equivalent, so this override must live on MariaDbDialect only, not the shared
+        // MySqlDialect base - MySqlDialect.SupportsTemporalData must stay false.
+        var d = CreateDialect();
+
+        SetVersion(d, new Version(10, 2));
+        Assert.False(d.SupportsTemporalData);
+
+        SetVersion(d, new Version(10, 3));
+        Assert.True(d.SupportsTemporalData);
+
+        SetVersion(d, new Version(10, 11));
+        Assert.True(d.SupportsTemporalData);
+    }
+
+    [Fact]
     public async Task GetProductNameAsync_Rewrites_MySql_To_MariaDb()
     {
         var d = CreateDialect();

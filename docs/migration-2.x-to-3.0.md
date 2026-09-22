@@ -45,20 +45,34 @@ unconditional base-class constants (`false`, `false`, `false`, `true`) for every
 explicit override — this was a real regression for `SqlServerDialect` (which had version-gated
 `true` values on `main` for modern SQL Server) and a real bug for `SqliteDialect`/`AccessDialect`
 (neither engine has a `TRUNCATE TABLE` statement, but the new `true` default applied to them
-too). Fixed in this release: `SqlServerDialect` now restores `SupportsXmlTypes`/
-`SupportsUserDefinedTypes` (SQL Server 2005+) and `SupportsTemporalData` (SQL Server 2016+) via
-version checks; `SqliteDialect`/`AccessDialect` now override `SupportsTruncateTable => false`.
-**Not independently re-verified for every other dialect** — on `main`, only `SqlServerDialect` and
-`SnowflakeDialect` ever contributed a real version-based `SqlStandardLevel` mapping; every other
-dialect (PostgreSQL, MySQL, MariaDB, Oracle, Firebird, CockroachDB, YugabyteDB, TiDB, DuckDB, Db2,
-and the rest added in 3.0) already fell back to the `Sql92` default on `main` too, so `3.0`'s flat
-constants are *not* a regression for those — they're the same wrong-or-right value main already
-had, just expressed directly instead of through a broken derivation. `SnowflakeDialect`'s old
-`true` value for these three flags was itself only a side effect of its `Sql2016` default-level
-fallback, never a deliberately verified per-capability claim, so it was deliberately **not**
-restored on unverified confidence. If you rely on `SupportsXmlTypes`/`SupportsUserDefinedTypes`/
-`SupportsTemporalData`/`SupportsTruncateTable` for a dialect other than SQL Server/SQLite/Access,
-verify it against the real engine before trusting it.
+too). Fixed in this release, each verified against a real container (not assumed from
+documentation):
+- `SqlServerDialect`: `SupportsXmlTypes`/`SupportsUserDefinedTypes` (SQL Server 2005+) and
+  `SupportsTemporalData` (SQL Server 2016+), via version checks.
+- `SqliteDialect`/`AccessDialect`: `SupportsTruncateTable => false` (neither has that statement).
+- `PostgreSqlDialect`: `SupportsXmlTypes` (8.3+, confirmed live against 16.13) and
+  `SupportsUserDefinedTypes => true` (`CREATE TYPE` composite types, confirmed live).
+- `CockroachDbDialect` (inherits `PostgreSqlDialect`): explicitly overrides
+  `SupportsXmlTypes => false` — confirmed live that CockroachDB rejects an `xml` column
+  (`"syntax error: unimplemented: this syntax"`) even though it inherits the new PostgreSQL
+  `true`; `SupportsUserDefinedTypes` is correctly left inherited (`CREATE TYPE` confirmed live).
+- `YugabyteDbDialect` (inherits `PostgreSqlDialect`): both flags correctly inherited as `true` —
+  confirmed live that YSQL's genuine PostgreSQL query-layer heritage supports both `xml` columns
+  and `CREATE TYPE`, unlike CockroachDB's reimplementation.
+- `MariaDbDialect`: `SupportsTemporalData` (10.3+, system-versioned tables — confirmed live
+  against 10.11 with an actual `INSERT`/`UPDATE`/`SELECT ... FOR SYSTEM_TIME ALL` round trip).
+  `MySqlDialect` itself has no equivalent and stays `false`.
+
+**Still not independently verified**: Oracle, MySQL (XML/UDT — well-established as unsupported,
+just not container-verified this pass), Firebird, TiDB, DuckDB (already had explicit `false`
+overrides pre-3.0, unaffected), Db2, Snowflake, SAP HANA, Informix, InterBase, Sybase ASE, Spanner,
+FlatFile (already had explicit overrides, unaffected). `SnowflakeDialect`'s old `true` value for
+these flags on `main` was itself only a side effect of its `Sql2016` default-level fallback, never
+a deliberately verified per-capability claim, so it was deliberately **not** restored on unverified
+confidence. If you rely on `SupportsXmlTypes`/`SupportsUserDefinedTypes`/`SupportsTemporalData`/
+`SupportsTruncateTable` for a dialect not listed as fixed above, verify it against the real engine
+before trusting it — this is not a 3.0 regression for those dialects (`main` had the same
+unverified `Sql92`-derived value), just still-open verification debt.
 
 ### `pengdows.crud.connection.ConnectionLocalState` (concrete class)
 
@@ -278,24 +292,34 @@ and `...Serializable_Succeeds`.
 
 ### PostgreSQL/CockroachDB/YugabyteDB `IsolationProfile.SafeNonBlockingReads` now succeeds instead of throwing
 
-The mirror image of the CockroachDB change above, in the opposite direction. `main` explicitly threw
-`TransactionModeNotSupportedException` for `BeginTransaction(IsolationProfile.SafeNonBlockingReads)`
-against PostgreSQL/YugabyteDB ("requires read-committed snapshot semantics, which PostgreSQL does
-not provide"). That guard is gone in 3.0; `PostgreSqlDialect.GetIsolationProfileMapping()` now maps
-`SafeNonBlockingReads` directly to `IsolationLevel.RepeatableRead`. The same call that used to throw
-now succeeds and runs at `RepeatableRead`.
+The mirror image of the CockroachDB change above, in the opposite direction — and, unlike the
+framing this document originally gave it, a deliberate, well-tested correctness fix rather than an
+unverified behavior change. `main` threw `TransactionModeNotSupportedException` for
+`BeginTransaction(IsolationProfile.SafeNonBlockingReads)` against PostgreSQL/YugabyteDB, on the
+premise that PostgreSQL has no non-blocking-safe-reads equivalent. That premise was wrong:
+PostgreSQL's `REPEATABLE READ` takes a transaction-start MVCC snapshot, is fully non-blocking, and
+(unlike the ANSI baseline) also prevents phantom reads for the transaction's lifetime — see
+[PostgreSQL's own docs](https://www.postgresql.org/docs/current/transaction-iso.html#XACT-REPEATABLE-READ).
+`PostgreSqlDialect.GetIsolationProfileMapping()` now maps `SafeNonBlockingReads` directly to
+`IsolationLevel.RepeatableRead` through the same generic resolution path every other database uses
+— there is no separate product-switch special case anymore. Covered by
+`DatabaseContextIsolationTests.BeginTransaction_SafeNonBlockingReads_ResolvesForPostgresCompatibleDatabases`
+and `IsolationResolverTest.Resolve_SafeNonBlockingReads_PostgresCompatibleDatabases_ResolvesToRepeatableRead`.
 
 **Migration:** if you branched on `TransactionModeNotSupportedException` for this profile/database
 combination, or deliberately chose a different profile because this one was rejected, review that
-logic — it now silently gets a `RepeatableRead` transaction instead.
+logic — it now gets a genuinely correct `RepeatableRead` transaction instead.
 
-**Related cleanup still outstanding:** with this change, `TransactionModeNotSupportedException` has
-**zero throw sites anywhere in 3.0** — it's a live public exception type nothing can produce.
-`README.md` still documents it as covering "savepoint or read-only tx on unsupported dialect,"
-neither of which is accurate on 3.0 (both throw `ReadOnlyContextException`/`NotSupportedException`
-instead). Any `catch (TransactionModeNotSupportedException)` is now dead code. This should be
-resolved (keep-and-redocument, deprecate, or remove) before release; it is not resolved as of this
-writing.
+**`TransactionModeNotSupportedException` removed.** This change left it with zero throw sites
+anywhere in 3.0 — a public exception type nothing could produce, misdescribing the runtime contract
+(`README.md` still called it "savepoint or read-only tx on unsupported dialect," neither of which
+throws it). Removed outright rather than kept-and-redocumented or deprecated, consistent with this
+release's other removals of unreferenced public surface (`IEphemeralSecureString`,
+`WeirdTypeAttributes.cs`, the concrete `ConnectionLocalState`). If you had a
+`catch (TransactionModeNotSupportedException)`, it no longer compiles; catch `NotSupportedException`
+(or the more specific `ReadOnlyContextException`/`InvalidOperationException` the two former call
+sites now throw) instead. Locked down by
+`CompleteExceptionTests.TransactionModeNotSupportedException_NoLongerExists`.
 
 ### Read-only contexts fail closed on session-initialization failure by default
 
@@ -374,9 +398,9 @@ today, verify whether `PGC027` is active for you before assuming it is or isn't.
 
 ## Known follow-up needed (not yet resolved as of this writing)
 
-- **`TransactionModeNotSupportedException` has zero throw sites** (see above) — decide whether to
-  redocument-and-keep, deprecate, or remove it, and fix `README.md`'s stale description either way.
-- **Non-SQL-Server/SQLite/Access dialects' `SupportsXmlTypes`/`SupportsUserDefinedTypes`/
-  `SupportsTemporalData`/`SupportsTruncateTable`** are unverified against their real engines (see
-  above) — not a 3.0 regression, but worth closing out with real per-dialect verification rather
-  than leaving them on inherited base-class constants indefinitely.
+- **`SupportsXmlTypes`/`SupportsUserDefinedTypes`/`SupportsTemporalData`/`SupportsTruncateTable`**
+  are still unverified against their real engines for Oracle, Firebird, TiDB, Db2, Snowflake, SAP
+  HANA, Informix, InterBase, Sybase ASE, and Spanner (see "The SQL-standard-level abstraction"
+  above for what's already been fixed and container-verified: SQL Server, SQLite, Access,
+  PostgreSQL, CockroachDB, YugabyteDB, MariaDB). Not a 3.0 regression for the remaining dialects —
+  `main` had the same unverified value — but worth closing out with real per-dialect verification.

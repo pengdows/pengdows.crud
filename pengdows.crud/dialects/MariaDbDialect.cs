@@ -104,6 +104,12 @@ internal class MariaDbDialect : MySqlDialect
     public override bool SupportsWindowFunctions => IsInitialized && IsAtLeast(10, 2);
     public override bool SupportsCommonTableExpressions => IsInitialized && IsAtLeast(10, 2);
 
+    // System-versioned tables (CREATE TABLE ... WITH SYSTEM VERSIONING) shipped in MariaDB 10.3 -
+    // confirmed live against a real 10.11 container: INSERT, UPDATE, then
+    // SELECT ... FOR SYSTEM_TIME ALL returned both row versions. MySQL has no equivalent feature,
+    // so this must live here on MariaDbDialect, not the shared MySqlDialect base.
+    public override bool SupportsTemporalData => IsInitialized && IsAtLeast(10, 3);
+
     // MariaDB does not support INSERT ... AS alias for ON DUPLICATE KEY UPDATE.
     public override string? UpsertIncomingAlias => null;
 

@@ -606,6 +606,36 @@ public class PostgreSqlDialectTests
         Assert.Equal(expected, dialect.SupportsOverridingSystemValue);
     }
 
+    [Theory]
+    [InlineData("PostgreSQL 8.2.23", false)]
+    [InlineData("PostgreSQL 8.3.23", true)]
+    [InlineData("PostgreSQL 16.4", true)]
+    public async Task SupportsXmlTypes_Depends_On_Version(string versionString, bool expected)
+    {
+        // PostgreSQL's native xml column type shipped in 8.3 - confirmed live against a real
+        // 16.13 container (CREATE TABLE t(x xml); INSERT; SELECT all round-tripped correctly).
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql.ToString());
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = "Host=localhost;EmulatedProduct=PostgreSql";
+        var versionSql = "SELECT version()";
+        var scalars = new Dictionary<string, object> { { versionSql, versionString } };
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "PostgreSQL", "9.5", "@p[0-9]+", "@{0}", 63, @"@\\w+", @"@\\w+", true);
+        var tracked = new FakeTrackedConnection(conn, schema, scalars);
+        var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql, factory, NullLogger<PostgreSqlDialect>.Instance);
+        await dialect.DetectDatabaseInfoAsync(tracked);
+        Assert.Equal(expected, dialect.SupportsXmlTypes);
+    }
+
+    [Fact]
+    public void SupportsUserDefinedTypes_IsTrue()
+    {
+        // PostgreSQL's CREATE TYPE (composite types) has existed since long before any version
+        // this library targets - confirmed live against a real 16.13 container
+        // (CREATE TYPE my_udt AS (a int, b text); worked without error).
+        Assert.True(_dialect.SupportsUserDefinedTypes);
+    }
+
     [Fact]
     public void JsonHandling_Should_Work_With_PostgreSql()
     {
