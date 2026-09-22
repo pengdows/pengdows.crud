@@ -60,7 +60,11 @@ public class SupportedDatabaseTests
                 "Db2",
                 "FlatFile",
                 "SingleStore",
-                "Sybase"
+                "Sybase",
+                "Spanner",
+                "Informix",
+                "SapHana",
+                "InterBase"
             },
             names);
     }
@@ -82,8 +86,24 @@ public class SupportedDatabaseTests
     [InlineData(SupportedDatabase.FlatFile, 32768)]
     [InlineData(SupportedDatabase.SingleStore, 65536)]
     [InlineData(SupportedDatabase.Sybase, 131072)]
+    [InlineData(SupportedDatabase.Spanner, 262144)]
+    [InlineData(SupportedDatabase.Informix, 524288)]
+    [InlineData(SupportedDatabase.SapHana, 1048576)]
+    [InlineData(SupportedDatabase.InterBase, 2097152)]
     public void SupportedDatabase_LateAddedMembers_MatchCanonical3_0Values(SupportedDatabase value, int expected)
     {
         Assert.Equal(expected, (int)value);
+    }
+
+    [Fact]
+    public void SupportedDatabase_UnderlyingType_StaysInt()
+    {
+        // 3.0 widened this enum to `: ulong` to make room for even more members - a real
+        // ABI/reflection-shape break (Enum.GetUnderlyingType changes, any (int) cast or
+        // int-typed serializer/config binder round-trip breaks). 2.0.6 is the strict
+        // non-breaking patch line, and every member value added here (through Access = 4194304,
+        // bit 22) comfortably fits well within `int`'s 31 usable flag bits, so there is no need
+        // to widen the type to add these 5 databases.
+        Assert.Equal(typeof(int), Enum.GetUnderlyingType(typeof(SupportedDatabase)));
     }
 }

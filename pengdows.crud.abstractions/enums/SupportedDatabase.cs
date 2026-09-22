@@ -41,7 +41,24 @@ public enum SupportedDatabase
     Db2 = 16384, // IBM enterprise RDBMS with strong SQL standard compliance
     FlatFile = 32768, // pengdows.flatfile: embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files
     SingleStore = 65536, // SingleStore (formerly MemSQL): distributed MySQL-wire-compatible database
-    Sybase = 131072 // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database.
+    Sybase = 131072, // Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database.
                         // Named Sybase, not bare Sybase, to disambiguate from Sybase IQ (a distinct
                         // product this dialect does not target) — matches 3.0's naming (same bit value).
+    Spanner = 262144, // Google Cloud Spanner, connected via its PostgreSQL interface — same bit
+                        // value as 3.0's SupportedDatabase.Spanner.
+    Informix = 524288, // IBM Informix Dynamic Server — same bit value as 3.0.
+    SapHana = 1048576, // SAP HANA — same bit value as 3.0.
+    InterBase = 2097152 // Embarcadero InterBase, Firebird's proprietary commercial ancestor —
+                        // same bit value as 3.0.
+
+    // Access = 4194304 is deliberately NOT defined here (unlike Spanner/Informix/SapHana/
+    // InterBase above, which need no changes to ISqlDialect). AccessDialect on 3.0 genuinely
+    // implements 4 of the members ISqlDialect gained there (IsClientServerDatabase,
+    // IsEmbeddedSingleWriterEngine, DetectInMemoryKind, CoerceConnectionMode) - adding it would
+    // mean either breaking ISqlDialect on this non-breaking patch line or reimplementing Access's
+    // mode-coercion against 2.0.6's older hardcoded-switch mechanism as a one-off. The bit value
+    // 4194304 (1 << 22) stays reserved/unused here — being an explicit [Flags] literal rather
+    // than an auto-numbered enum is exactly what makes this safe: whenever Access is added on
+    // this branch, it can still take the same numeric value 3.0 uses, with no renumbering of
+    // anything added after it.
 }
