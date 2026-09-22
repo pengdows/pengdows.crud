@@ -3018,6 +3018,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 break;
 
             case SupportedDatabase.Firebird:
+                // Firebird cannot distinguish a true lock-cycle deadlock from an optimistic update
+                // conflict — confirmed against a live container, both scenarios produce the
+                // identical SQLSTATE 40001 / "update conflicts with concurrent update" signature.
+                // Classified as SerializationFailure here, matching the same ambiguous-40001
+                // precedent used for Db2 below.
+                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.SerializationFailure;
+                    return true;
+                }
+
                 // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations
                 if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
                 {

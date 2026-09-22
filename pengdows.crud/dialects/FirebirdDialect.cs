@@ -93,6 +93,14 @@ internal class FirebirdDialect : SqlDialect
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 
+    // CONFIRMED LIVE (real firebirdsql/firebird:5.0.2 container): ApplicationName is a real,
+    // working property on FirebirdSql.Data.FirebirdClient.FbConnectionStringBuilder — round-trips
+    // to "application name=..." in the connection string, and a live connection with it set
+    // succeeds normally. Without this set, reader/writer connection strings would be identical
+    // and collapse into one shared pool — the same bug class Access/Db2/Sybase/InterBase/
+    // Informix's ApplicationNameSettingName fixes addressed.
+    public override string? ApplicationNameSettingName => "Application Name";
+
     public override bool SupportsSavepoints => true;
 
     // IMMUTABLE: Firebird theoretical parameter limit - do not change without extensive testing
@@ -167,13 +175,20 @@ internal class FirebirdDialect : SqlDialect
 
     // Confirmed against a live container: Firebird's DDL commit additionally requires that no
     // OTHER connection — even one holding only cleanly-committed transactions — still be sitting
-    // idle in the ADO.NET connection pool referencing the table's current metadata generation.
-    // After enough prior round trips reuse pooled connections, a later CREATE/DROP/ALTER can fail
-    // with "object TABLE ... is in use" even though nothing is actually still running or
-    // uncommitted. FbConnection.ClearPool(connectionString) before the DDL statement resolves
-    // this immediately — verified live, no retry/backoff needed once the pool is cleared. Called
-    // via reflection (no hard package reference from pengdows.crud to
-    // FirebirdSql.Data.FirebirdClient) — same pattern as OracleDialect's StatementCacheSize hook.
+    // idle in ANY ADO.NET pool referencing the table's current metadata generation, regardless of
+    // which DatabaseContext instance (or connection string) that connection came from.
+    // FbConnection.ClearPool(connectionString) — this method's original implementation — only
+    // clears the ONE pool keyed by that exact string, which is sufficient for the issuing
+    // context's own reader/writer pools (SqlContainer.cs resets both when they differ) but cannot
+    // reach a genuinely DIFFERENT DatabaseContext instance's pools, e.g. a second, independent
+    // context created to simulate a concurrent client. Confirmed live: a concurrent-update
+    // conflict test doing exactly that still hit "object TABLE ... is in use" under load even
+    // after both of the issuing context's own pools were being reset correctly.
+    // FbConnection.ClearAllPools() (no parameters, confirmed present via reflection) clears every
+    // pool for this provider process-wide, closing that gap — the connectionString parameter
+    // becomes irrelevant to which pools get cleared, not merely unused. Called via reflection (no
+    // hard package reference from pengdows.crud to FirebirdSql.Data.FirebirdClient) — same pattern
+    // as OracleDialect's StatementCacheSize hook.
     internal override void ResetConnectionPoolForDdl(string connectionString)
     {
         try
@@ -185,13 +200,13 @@ internal class FirebirdDialect : SqlDialect
             }
 
             var connectionType = sampleConnection.GetType();
-            var clearPoolMethod = connectionType.GetMethod(
-                "ClearPool",
+            var clearAllPoolsMethod = connectionType.GetMethod(
+                "ClearAllPools",
                 BindingFlags.Public | BindingFlags.Static,
                 null,
-                new[] { typeof(string) },
+                Type.EmptyTypes,
                 null);
-            clearPoolMethod?.Invoke(null, new object[] { connectionString });
+            clearAllPoolsMethod?.Invoke(null, null);
         }
         catch
         {
