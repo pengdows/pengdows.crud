@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using pengdows.crud.exceptions;
 using Xunit;
 
@@ -6,6 +7,23 @@ namespace pengdows.crud.Tests.exceptions;
 
 public class CompleteExceptionTests
 {
+    [Fact]
+    public void TransactionModeNotSupportedException_NoLongerExists()
+    {
+        // Both throw sites that ever produced this exception (CockroachDB native-isolation
+        // rejection, PostgreSQL/YugabyteDB SafeNonBlockingReads) have been replaced: CockroachDB
+        // now throws InvalidOperationException from dialect-driven isolation validation, and
+        // SafeNonBlockingReads on PostgreSQL/YugabyteDB was found to have a valid RepeatableRead
+        // mapping and no longer throws at all (see DatabaseContextIsolationTests and
+        // IsolationResolverTest's regression comments). A public exception type with zero
+        // production throw sites misdescribes the runtime contract - it should not exist.
+        var type = typeof(InvalidValueException).Assembly
+            .GetTypes()
+            .FirstOrDefault(t => t.Name == "TransactionModeNotSupportedException");
+
+        Assert.Null(type);
+    }
+
     [Fact]
     public void InvalidValueException_WithMessage_CreatesExceptionWithMessage()
     {
@@ -98,42 +116,17 @@ public class CompleteExceptionTests
     }
 
     [Fact]
-    public void TransactionModeNotSupportedException_WithMessage_CreatesExceptionWithMessage()
-    {
-        const string message = "Transaction mode not supported";
-
-        var exception = new TransactionModeNotSupportedException(message);
-
-        Assert.Equal(message, exception.Message);
-        Assert.IsType<TransactionModeNotSupportedException>(exception);
-        Assert.IsAssignableFrom<NotSupportedException>(exception);
-    }
-
-    [Fact]
-    public void TransactionModeNotSupportedException_CanBeThrown()
-    {
-        const string message = "Test transaction mode not supported";
-
-        var exception = Assert.Throws<TransactionModeNotSupportedException>(
-            new Action(() => throw new TransactionModeNotSupportedException(message)));
-
-        Assert.Equal(message, exception.Message);
-    }
-
-    [Fact]
     public void AllExceptions_InheritFromException()
     {
         var invalidValueException = new InvalidValueException("test");
         var noColumnsException = new NoColumnsFoundException("test");
         var tooManyColumnsException = new TooManyColumns("test");
         var connectionFailedException = new ConnectionFailedException("test");
-        var transactionModeNotSupportedException = new TransactionModeNotSupportedException("test");
 
         Assert.IsAssignableFrom<Exception>(invalidValueException);
         Assert.IsAssignableFrom<Exception>(noColumnsException);
         Assert.IsAssignableFrom<Exception>(tooManyColumnsException);
         Assert.IsAssignableFrom<Exception>(connectionFailedException);
-        Assert.IsAssignableFrom<Exception>(transactionModeNotSupportedException);
     }
 
     [Fact]
@@ -143,13 +136,11 @@ public class CompleteExceptionTests
         var noColumnsException = new NoColumnsFoundException("");
         var tooManyColumnsException = new TooManyColumns("");
         var connectionFailedException = new ConnectionFailedException("");
-        var transactionModeNotSupportedException = new TransactionModeNotSupportedException("");
 
         Assert.Equal("", invalidValueException.Message);
         Assert.Equal("", noColumnsException.Message);
         Assert.Equal("", tooManyColumnsException.Message);
         Assert.Equal("", connectionFailedException.Message);
-        Assert.Equal("", transactionModeNotSupportedException.Message);
     }
 
     // -------------------------------------------------------------------------

@@ -251,7 +251,6 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — SingleWriter/SingleConnection lock timed out
 - `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
 - `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
-- `TransactionModeNotSupportedException : NotSupportedException` — savepoint or read-only tx on unsupported dialect
 - `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
 
 ```csharp
