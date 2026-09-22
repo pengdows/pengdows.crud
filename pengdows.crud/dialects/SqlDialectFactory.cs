@@ -98,6 +98,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.Informix => new InformixDialect(factory, logger),
             SupportedDatabase.SapHana => new HanaDialect(factory, logger),
             SupportedDatabase.InterBase => new InterBaseDialect(factory, logger),
+            SupportedDatabase.Spanner => new SpannerDialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
         };
     }

@@ -1,0 +1,212 @@
+#region
+
+using System.Collections.Generic;
+using System.Data;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
+using pengdows.crud.isolation;
+using Xunit;
+
+#endregion
+
+namespace pengdows.crud.Tests.dialects;
+
+/// <summary>
+/// Locks down <see cref="SpannerDialect"/>'s capability overrides — each one verified live
+/// against a real Spanner Omni + PGAdapter instance (backported from pengdows.crud 3.0; see
+/// SpannerDialect.cs's file-level summary for the full research trail). Spanner's PostgreSQL
+/// interface shares most of its SQL surface with real PostgreSQL (it extends
+/// <see cref="PostgreSqlDialect"/>), but diverges on several specific capabilities this file
+/// exists to pin down.
+/// </summary>
+public class SpannerDialectTests
+{
+    private static SpannerDialect CreateDialect() =>
+        new(new fakeDbFactory(SupportedDatabase.Spanner), NullLogger.Instance);
+
+    [Fact]
+    public void DatabaseType_IsSpanner()
+    {
+        Assert.Equal(SupportedDatabase.Spanner, CreateDialect().DatabaseType);
+    }
+
+    [Fact]
+    public void SupportsMerge_IsFalse()
+    {
+        // Verified live: `MERGE INTO ...` against a real Spanner Omni + PGAdapter instance fails
+        // with "ERROR: Unknown statement: MERGE INTO ..." — unimplemented, not version-gated.
+        Assert.False(CreateDialect().SupportsMerge);
+    }
+
+    [Fact]
+    public void SupportsBatchUpdate_IsFalse()
+    {
+        // Verified live: PostgreSqlDialect's optimized batch-update SQL
+        // ("UPDATE t SET ... FROM (VALUES (@b0, ...)) AS s(...) WHERE t.pk = s.pk") fails against
+        // real Spanner with "42883: operator does not exist: bigint = text" — Spanner's query
+        // planner doesn't infer the VALUES-derived table's column types from the joined column
+        // the way real PostgreSQL does, so the untyped VALUES parameter stays "text" and the
+        // comparison to a typed key column is rejected outright. Falls back to one BuildUpdate
+        // container per entity instead (the same safe fallback SQLite/MySQL/MariaDB/Firebird use).
+        Assert.False(CreateDialect().SupportsBatchUpdate);
+    }
+
+    [Fact]
+    public void SupportsInsertOnConflict_IsTrue()
+    {
+        // Verified live: `INSERT ... ON CONFLICT (id) DO UPDATE`/`DO NOTHING` both execute
+        // correctly against real Spanner — inherited from PostgreSqlDialect, not overridden here,
+        // because the inherited `true` is actually correct (unlike SupportsMerge above).
+        Assert.True(CreateDialect().SupportsInsertOnConflict);
+    }
+
+    [Fact]
+    public void SupportsWindowFunctions_IsFalse()
+    {
+        // Verified live: `ROW_NUMBER() OVER (...)` against a real Spanner Omni + PGAdapter
+        // instance fails with "P0001: Statements with WINDOW clauses are not supported" —
+        // inherited from PostgreSqlDialect's version-gated `true`, which wrongly assumes this
+        // capability transfers from real PostgreSQL the way most of Spanner's SQL surface does.
+        Assert.False(CreateDialect().SupportsWindowFunctions);
+    }
+
+    [Fact]
+    public void SupportsSavepoints_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsSavepoints);
+    }
+
+    // SupportsOverridingSystemValue doesn't exist on this branch's ISqlDialect at all - 2.0.6
+    // predates that 3.0 capability flag. 2.0.6's TableGateway.Upsert.cs decides whether to emit
+    // "OVERRIDING SYSTEM VALUE" via a direct product-type switch matching only PostgreSql/
+    // AuroraPostgreSql, so Spanner (a distinct SupportedDatabase value) is already correctly
+    // excluded with no dialect override needed.
+
+    [Fact]
+    public void SupportsSetValuedParameters_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsSetValuedParameters);
+    }
+
+    [Fact]
+    public void ProcWrappingStyle_IsNone()
+    {
+        // Spanner has no stored-procedure support at all — StoredProcedureTests' SkippableFact
+        // checks skip cleanly on ProcWrappingStyle.None rather than attempting CALL/EXEC syntax.
+        Assert.Equal(ProcWrappingStyle.None, CreateDialect().ProcWrappingStyle);
+    }
+
+    [Fact]
+    public void ReadCommittedCompatibleIsolationLevel_IsSerializable()
+    {
+        Assert.Equal(IsolationLevel.Serializable, CreateDialect().ReadCommittedCompatibleIsolationLevel);
+    }
+
+    // Isolation-level data (GetSupportedIsolationLevels/GetIsolationProfileMapping on 3.0) lives
+    // in IsolationResolver.cs's central switch on this branch instead of a dialect-owned override
+    // - 2.0.6 predates that 3.0 refactor. Same pattern InterBaseDialectTests/HanaDialectTests use.
+    [Fact]
+    public void IsolationResolver_SupportsRepeatableReadAndSerializableOnly()
+    {
+        // Spanner has no distinct READ COMMITTED level — its PostgreSQL interface only exposes
+        // RepeatableRead and Serializable, unlike plain PostgreSqlDialect's three-level set.
+        var resolver = new IsolationResolver(SupportedDatabase.Spanner, false, false);
+        var levels = resolver.GetSupportedLevels();
+        Assert.Equal(new HashSet<IsolationLevel> { IsolationLevel.RepeatableRead, IsolationLevel.Serializable },
+            levels);
+    }
+
+    [Fact]
+    public void IsolationResolver_MapsAllThreeProfiles()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.Spanner, false, false);
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    [Fact]
+    public void GetBaseSessionSettings_IsEmpty()
+    {
+        // PostgreSqlDialect's base session settings (standard_conforming_strings,
+        // client_min_messages, default_transaction_read_only) are PGAdapter-incompatible SET
+        // targets for Spanner, hence the override to an empty baseline rather than inheriting them.
+        Assert.Equal(string.Empty, CreateDialect().GetBaseSessionSettings());
+    }
+
+    [Fact]
+    public void MaxOutputParameters_InheritsPostgreSqlValue()
+    {
+        // Not overridden — Spanner has no stored procedures at all (ProcWrappingStyle.None
+        // above), so this inherited PostgreSQL-family value is moot in practice but should stay
+        // consistent with the rest of the Postgres-wire family rather than silently drift.
+        Assert.Equal(100, CreateDialect().MaxOutputParameters);
+    }
+
+    // ── IsForeignKeyViolation ────────────────────────────────────────────────
+    // Verified live against a real Spanner Omni + PGAdapter instance: an INSERT referencing a
+    // nonexistent parent row uses the real ANSI SqlState "23503" (inherited PostgreSqlDialect
+    // check already handles it), but a DELETE blocked by a still-referencing child row instead
+    // returns the generic "P0001" code with a distinct message — without the message-pattern
+    // override, that DELETE case surfaced as a generic DatabaseOperationException instead of
+    // ForeignKeyViolationException.
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_SqlState23503_ReturnsTrue()
+    {
+        // The INSERT-side shape — confirms the inherited PostgreSqlDialect SqlState check still
+        // applies; this override must not narrow it.
+        var ex = new SqlStateDbException("23503", "Foreign key constraint `fk_x` is violated on table `t`.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_DeleteBlockedMessage_ReturnsTrue()
+    {
+        // Real captured message (SqlState "P0001", not 23503).
+        var ex = new PlainDbException(
+            "P0001: Foreign key constraint violation when deleting or updating referenced row(s): " +
+            "referencing row(s) found in table `test_related`.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_Spanner_UnrelatedMessage_ReturnsFalse()
+    {
+        var ex = new PlainDbException("P0001: Check constraint `t`.`chk_x` is violated for key (1)");
+        Assert.False(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsNotNullViolation_Spanner_MustNotBeNullMessage_ReturnsTrue()
+    {
+        var ex = new PlainDbException("P0001: NULL value must not be NULL for column `x`.");
+        Assert.True(CreateDialect().IsNotNullViolation(ex));
+    }
+
+    [Fact]
+    public void IsCheckConstraintViolation_Spanner_CheckConstraintMessage_ReturnsTrue()
+    {
+        var ex = new PlainDbException("P0001: Check constraint `t`.`chk_x` is violated for key (1)");
+        Assert.True(CreateDialect().IsCheckConstraintViolation(ex));
+    }
+
+    private sealed class PlainDbException : System.Data.Common.DbException
+    {
+        public PlainDbException(string message) : base(message)
+        {
+        }
+    }
+
+    private sealed class SqlStateDbException : System.Data.Common.DbException
+    {
+        public SqlStateDbException(string sqlState, string message) : base(message)
+        {
+            SqlState = sqlState;
+        }
+
+        public override string? SqlState { get; }
+    }
+}

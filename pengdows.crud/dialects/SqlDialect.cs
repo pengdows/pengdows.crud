@@ -3117,6 +3117,23 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
                 break;
+
+            case SupportedDatabase.Spanner:
+                // ClassifyException's own generic message-keyword fallback only recognizes a
+                // constraint violation via keywords like "constraint"/"violates" — Spanner's real
+                // NotNull message ("... must not be NULL in table ...") contains neither, so
+                // without this case it would silently classify as Unknown even though
+                // IsNotNullViolation below already correctly recognizes it. Reuses the same four
+                // predicates the constraint-kind checks use (virtual dispatch resolves to
+                // SpannerDialect's own overrides), so this can't drift from them - verified live
+                // against a real Spanner Omni + PGAdapter instance.
+                if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) ||
+                    IsCheckConstraintViolation(ex))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
         }
 
         category = DbErrorCategory.Unknown;

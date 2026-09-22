@@ -269,6 +269,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.Serializable,
                 IsolationLevel.Snapshot
             },
+            // Verified live against a real Spanner Omni + PGAdapter instance.
+            SupportedDatabase.Spanner => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -387,6 +393,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+            },
+            SupportedDatabase.Spanner => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.RepeatableRead
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

@@ -40,6 +40,7 @@ internal static class DbSystemNameMapper
         SupportedDatabase.Informix => "ibm.informix",
         SupportedDatabase.SapHana => "sap.hana",
         SupportedDatabase.InterBase => "interbase",
+        SupportedDatabase.Spanner => "gcp.spanner",
         // Not present in the OTel registry as of this writing; best-effort custom values.
         SupportedDatabase.Sybase => "sap.ase",
         SupportedDatabase.SingleStore => "singlestore",

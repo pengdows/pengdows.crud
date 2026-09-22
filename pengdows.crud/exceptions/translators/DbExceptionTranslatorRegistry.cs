@@ -29,7 +29,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.SapHana => SapHana,
             SupportedDatabase.InterBase => InterBase,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
-                SupportedDatabase.AuroraPostgreSql => Postgres,
+                SupportedDatabase.AuroraPostgreSql or SupportedDatabase.Spanner => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or
                 SupportedDatabase.TiDb or SupportedDatabase.SingleStore => MySql,
             SupportedDatabase.Sqlite => Sqlite,

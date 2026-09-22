@@ -51,7 +51,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Db2, new[] { "db2" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
         (SupportedDatabase.SapHana, new[] { "hana" }),
-        (SupportedDatabase.InterBase, new[] { "interbase" })
+        (SupportedDatabase.InterBase, new[] { "interbase" }),
+        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
@@ -72,7 +73,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Db2, new[] { "db2" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
         (SupportedDatabase.SapHana, new[] { "hana" }),
-        (SupportedDatabase.InterBase, new[] { "interbase" })
+        (SupportedDatabase.InterBase, new[] { "interbase" }),
+        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" })
     };
 
     /// <summary>
@@ -310,6 +312,31 @@ internal static class DatabaseDetectionService
                 {
                     /* version() not available */
                     attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
+                }
+            }
+
+            // Spanner PostgreSQL interface discriminator; ordinary PostgreSQL rejects this
+            // Spanner-specific setting. Must run before the YugabyteDB pg_settings probe below —
+            // on live Spanner this SHOW returns an empty string (verified against a real Spanner
+            // Omni + PGAdapter instance), not null, so `is string` (no length check, unlike the
+            // other probes here) matches even that empty-string case. Gated on isPgFamily (not
+            // just `detected == PostgreSql`) so a connection whose schema-based classification
+            // landed on Unknown still gets Spanner-probed.
+            if (isPgFamily)
+            {
+                try
+                {
+                    cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
+                    if (cmd.ExecuteScalar() is string)
+                    {
+                        attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                        return (SupportedDatabase.Spanner, attempts);
+                    }
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
+                }
+                catch (Exception ex)
+                {
+                    attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", false, ex.Message));
                 }
             }
 

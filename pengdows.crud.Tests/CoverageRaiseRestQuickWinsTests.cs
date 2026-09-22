@@ -259,7 +259,7 @@ public class CoverageRaiseRestQuickWinsTests
         public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotSupportedException();
         public void ChangeDatabase(string databaseName) { }
         public void Close() { }
-        public IDbCommand CreateCommand() => new ScalarCommand(string.Empty);
+        public IDbCommand CreateCommand() => new ScalarCommand(null, throwOnExecute: true);
         public void Open() { }
         public void Dispose() { }
     }
@@ -333,7 +333,12 @@ public class CoverageRaiseRestQuickWinsTests
 
         private readonly DbParameterCollection _parameters = new EmptyParameterCollection();
         private readonly object? _result;
-        public ScalarCommand(object? result) => _result = result;
+        private readonly bool _throwOnExecute;
+        public ScalarCommand(object? result, bool throwOnExecute = false)
+        {
+            _result = result;
+            _throwOnExecute = throwOnExecute;
+        }
 
         [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
@@ -346,10 +351,12 @@ public class CoverageRaiseRestQuickWinsTests
         protected override DbTransaction? DbTransaction { get; set; }
         public override void Cancel() { }
         public override int ExecuteNonQuery() => 0;
-        public override object? ExecuteScalar() => _result;
+        public override object? ExecuteScalar() =>
+            _throwOnExecute ? throw new InvalidOperationException("Unsupported command.") : _result;
         public override void Prepare() { }
         protected override DbParameter CreateDbParameter() => new fakeDbParameter();
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
-        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken) => Task.FromResult(_result);
+        public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken) =>
+            _throwOnExecute ? Task.FromException<object?>(new InvalidOperationException("Unsupported command.")) : Task.FromResult(_result);
     }
 }
