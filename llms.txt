@@ -231,8 +231,8 @@ database-agnostic policy decoupled from connection identity — is in
   text yourself; the per-provider-family error-code/SQLSTATE table; the relationship to the typed
   `DatabaseException` subclasses pengdows.crud actually throws; the explicit note that this and
   `IDbExceptionTranslator` are two independently-maintained classification systems that can
-  disagree; and the retry-policy boundary (`IsRetryable` tells you whether to retry, it does not
-  retry for you — the designed-but-unbuilt `RetryContext` subsystem would be that layer; see
+  disagree; and the retry-policy boundary (`IsRetryable` tells you whether retrying might help,
+  while the shipped `RetryContext` provides governor-aware retry coordination; see
   `docs/planning/retry-context-design.md`).
 - [`docs/observability-guide.md`](docs/observability-guide.md) — maps operational questions
   ("is my app slow because of the database, the pool, or a lock?", "is this reader slow because of
@@ -322,10 +322,11 @@ for the resolution order, the `Instance` property-vs-field convention it support
 - [`docs/planning/future-work.md`](docs/planning/future-work.md) — living backlog of
   open/planned work; do not treat items here as shipped.
 - [`docs/planning/retry-context-design.md`](docs/planning/retry-context-design.md) — FEAT-001
-  `RetryContext` subsystem: full design, concrete shortcomings/open gaps found by tracing what it
-  assumes exists (e.g. `PoolGovernor` being `internal sealed`, the audit-rollback primitive being
-  per-entity not per-delegate), and comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories.
-  Designed, not implemented.
+  `RetryContext` subsystem: shipped implementation and its design history, including concrete
+  shortcomings/open gaps found by tracing what it assumes exists (e.g. `PoolGovernor` being
+  `internal sealed`, the audit-rollback primitive being per-entity not per-delegate), and
+  comparison to Polly/EF Core/Dapper/jOOQ/Go/Rust retry stories. The document records the
+  implementation's current scope and deliberate boundaries.
 - [`docs/planning/bulk-loading-design.md`](docs/planning/bulk-loading-design.md) — FEAT-005
   (Oracle array binding, **shipped** — `SqlDialect.SupportsArrayBinding`/`ConfigureArrayBinding`,
   verified live against a real Oracle server) and FEAT-013 (batch upsert via a single multi-row

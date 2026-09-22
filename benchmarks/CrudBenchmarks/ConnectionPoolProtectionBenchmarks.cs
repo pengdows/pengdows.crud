@@ -116,7 +116,9 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             DbMode = DbMode.Standard, // overridden to SingleWriter by SQLite dialect
             ReadWriteMode = ReadWriteMode.ReadWrite,
             PoolAcquireTimeout = TimeSpan.FromMinutes(5),
+#if !BASELINE_2X
             MaxQueuedWrites = WriteStormConcurrency,
+#endif
             EnableMetrics = true
         };
 
