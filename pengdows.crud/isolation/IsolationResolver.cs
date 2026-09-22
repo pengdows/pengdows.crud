@@ -259,6 +259,16 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
+            // CONFIRMED live via IBTransaction.BeginTransaction(IsolationLevel): all five
+            // accepted, including Snapshot (broader than HANA, which rejects it).
+            SupportedDatabase.InterBase => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable,
+                IsolationLevel.Snapshot
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -371,6 +381,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+            },
+            SupportedDatabase.InterBase => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

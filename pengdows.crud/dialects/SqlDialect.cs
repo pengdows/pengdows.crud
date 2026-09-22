@@ -2771,6 +2771,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
             // Db2 has no LIMIT syntax; the ANSI equivalent is FETCH FIRST n ROWS ONLY.
             query += " FETCH FIRST 1 ROWS ONLY";
         }
+        else if (DatabaseType == SupportedDatabase.InterBase)
+        {
+            // InterBase's own paging idiom is ROWS n, not LIMIT n - CONFIRMED live (see
+            // InterBaseDialect.cs's file-level AI SUMMARY). Same hook Firebird/Oracle use for
+            // their own non-default first-row clauses via GetNaturalKeyFirstRowOnlyClause on
+            // 3.0; inlined here since that hook doesn't exist on this branch.
+            query += " ROWS 1";
+        }
         else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase)
         {
             query += " LIMIT 1";

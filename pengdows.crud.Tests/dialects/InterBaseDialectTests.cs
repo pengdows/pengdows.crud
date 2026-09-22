@@ -1,0 +1,380 @@
+#region
+
+using System;
+using System.Data;
+using System.Data.Common;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
+using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
+using pengdows.crud.isolation;
+using Xunit;
+
+#endregion
+
+namespace pengdows.crud.Tests.dialects;
+
+/// <summary>
+/// Locks down <see cref="InterBaseDialect"/>'s capability overrides. Every fact asserted here was
+/// verified live against a real InterBase 15.1.0.42 (development) server running in Docker, using
+/// the real InterBaseSql.Data.InterBaseClient 10.0.3 ADO.NET driver — see InterBaseDialect.cs's
+/// file-level summary for the full research trail, including two corrections to this session's
+/// own earlier (pre-dialect-file) research on savepoints and NOT NULL error codes.
+/// </summary>
+public class InterBaseDialectTests
+{
+    private static InterBaseDialect CreateDialect()
+    {
+        return new InterBaseDialect(new fakeDbFactory(SupportedDatabase.InterBase), NullLogger<InterBaseDialect>.Instance);
+    }
+
+    private static IDatabaseContext CreateContext()
+    {
+        return new DatabaseContext("Data Source=test;EmulatedProduct=InterBase", new fakeDbFactory(SupportedDatabase.InterBase));
+    }
+
+    [Fact]
+    public void DatabaseType_IsInterBase()
+    {
+        Assert.Equal(SupportedDatabase.InterBase, CreateDialect().DatabaseType);
+    }
+
+    // Confirmed via reflection against the real InterBaseSql.Data.InterBaseClient.
+    // IBConnectionStringBuilder (10.0.3): no ApplicationName-equivalent keyword exists among its
+    // 33 properties, so this dialect needs a ReadOnlyPoolDiscriminatorSettingName fallback (same
+    // class of fix AccessDialect/OracleDialect already have) to avoid reader/writer connection
+    // strings collapsing into one shared pool. "fetch size" was chosen and CONFIRMED LIVE as the
+    // safe candidate: it is a real, recognized keyword (a connection opens successfully with it
+    // set), and setting it to 200 is behaviorally inert because 200 is FetchSize's own compiled-in
+    // default — an explicit value equal to the default can never change behavior, unlike picking
+    // an arbitrary non-default knob and only testing empirically that it "looks" unchanged.
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingName_IsFetchSize()
+    {
+        Assert.Equal("fetch size", CreateDialect().ReadOnlyPoolDiscriminatorSettingName);
+    }
+
+    [Fact]
+    public void ReadOnlyPoolDiscriminatorSettingValue_MatchesFetchSizesOwnDefault()
+    {
+        Assert.Equal("200", CreateDialect().ReadOnlyPoolDiscriminatorSettingValue);
+    }
+
+    // Verified live via a real parameterized INSERT and a parameterized SELECT WHERE clause.
+    [Fact]
+    public void ParameterMarker_IsAtSign()
+    {
+        Assert.Equal("@", CreateDialect().ParameterMarker);
+    }
+
+    [Fact]
+    public void SupportsNamedParameters_IsTrue()
+    {
+        Assert.True(CreateDialect().SupportsNamedParameters);
+    }
+
+    [Fact]
+    public void ParameterNameMaxLength_Is128()
+    {
+        Assert.Equal(128, CreateDialect().ParameterNameMaxLength);
+    }
+
+    [Fact]
+    public void QuotePrefix_And_Suffix_AreAnsiDoubleQuotes()
+    {
+        var d = CreateDialect();
+        Assert.Equal("\"", d.QuotePrefix);
+        Assert.Equal("\"", d.QuoteSuffix);
+    }
+
+    // Verified live: neither SQL:2008 OFFSET/FETCH nor MySQL/PostgreSQL-style LIMIT/OFFSET is
+    // accepted — InterBase's own idiom is ROWS n / ROWS m TO n (see AppendPaging below).
+    [Fact]
+    public void SupportsOffsetFetch_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsOffsetFetch);
+    }
+
+    [Fact]
+    public void SupportsLimitOffset_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsLimitOffset);
+    }
+
+    // Verified live: "SELECT id FROM t ROWS 1" returns exactly one row.
+    [Fact]
+    public void AppendPaging_ZeroOffset_UsesBareRowsLimit()
+    {
+        var d = CreateDialect();
+        var query = new SqlQueryBuilder();
+        d.AppendPaging(query, 0, 5);
+        Assert.Equal(" ROWS 5", query.ToString());
+    }
+
+    // Verified live: "SELECT id FROM t ORDER BY id ROWS 1 TO 5" — 1-based, inclusive range.
+    [Fact]
+    public void AppendPaging_NonZeroOffset_UsesRowsToRange()
+    {
+        var d = CreateDialect();
+        var query = new SqlQueryBuilder();
+        d.AppendPaging(query, 10, 5);
+        Assert.Equal(" ROWS 11 TO 15", query.ToString());
+    }
+
+    [Fact]
+    public void AppendPaging_NegativeOffset_Throws()
+    {
+        var d = CreateDialect();
+        var query = new SqlQueryBuilder();
+        Assert.Throws<ArgumentOutOfRangeException>(() => d.AppendPaging(query, -1, 5));
+    }
+
+    [Fact]
+    public void AppendPaging_ZeroOrNegativeLimit_Throws()
+    {
+        var d = CreateDialect();
+        var query = new SqlQueryBuilder();
+        Assert.Throws<ArgumentOutOfRangeException>(() => d.AppendPaging(query, 0, 0));
+    }
+
+    // Verified live: MERGE is rejected outright at the keyword itself (SQLCODE -104). Base class
+    // default (false) is correct as-is — no override needed.
+    [Fact]
+    public void SupportsMerge_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsMerge);
+    }
+
+    // Verified live: the ANSI multi-row VALUES clause is rejected (SQLCODE -104 at the comma).
+    [Fact]
+    public void SupportsBatchInsert_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsBatchInsert);
+    }
+
+    // Verified live: "SELECT * FROM proc(args)" (read) / "EXECUTE PROCEDURE proc(args)" (write)
+    // both execute correctly against a real SUSPEND-based procedure.
+    [Fact]
+    public void ProcWrappingStyle_IsExecuteProcedure()
+    {
+        Assert.Equal(ProcWrappingStyle.ExecuteProcedure, CreateDialect().ProcWrappingStyle);
+    }
+
+    // Verified live: "GENERATED BY DEFAULT AS IDENTITY" is rejected (SQLCODE -104 at GENERATED).
+    [Fact]
+    public void SupportsIdentityColumns_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsIdentityColumns);
+    }
+
+    // Verified live: "DROP TABLE IF EXISTS" is rejected outright (SQLCODE -104 at IF).
+    [Fact]
+    public void SupportsDropTableIfExists_IsFalse()
+    {
+        Assert.False(CreateDialect().SupportsDropTableIfExists);
+    }
+
+    // CORRECTION to this session's own earlier research: an earlier pass concluded savepoints
+    // were broken. Re-verified live with a real before/after row-survival check (insert, savepoint,
+    // insert, rollback-to-savepoint, insert, commit) — the rolled-back row was gone and both others
+    // survived. See InterBaseDialect.cs's file-level summary for the full correction note.
+    [Fact]
+    public void SupportsSavepoints_IsTrue()
+    {
+        Assert.True(CreateDialect().SupportsSavepoints);
+    }
+
+    // SavepointCapabilities (granular Create/Rollback/Release flags) doesn't exist on this
+    // branch's ISqlDialect - 2.0.6 predates that 3.0 addition and only has the single
+    // SupportsSavepoints bool asserted above.
+
+    // Verified live: none of IDENTITY, CREATE SEQUENCE, or INSERT ... RETURNING is supported — the
+    // classic CREATE GENERATOR + GEN_ID mechanism is InterBase's real, working generated-key path.
+    [Fact]
+    public void GetGeneratedKeyPlan_IsPrefetchSequence()
+    {
+        Assert.Equal(GeneratedKeyPlan.PrefetchSequence, CreateDialect().GetGeneratedKeyPlan());
+    }
+
+    // Verified live: GEN_ID(name, 1) against a real CREATE GENERATOR returns the expected
+    // sequential value.
+    [Fact]
+    public void GetSequenceNextValQuery_RendersGenId()
+    {
+        var d = CreateDialect();
+        var sql = d.GetSequenceNextValQuery("orders_seq");
+        Assert.Equal("SELECT GEN_ID(\"orders_seq\", 1) FROM RDB$DATABASE", sql);
+    }
+
+    // Verified live via IBTransaction.BeginTransaction(IsolationLevel): all five are accepted,
+    // broader than HANA (which rejects Snapshot).
+    [Fact]
+    public void IsolationResolver_SupportsAllFiveLevels()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.InterBase, false, false);
+        var levels = resolver.GetSupportedLevels();
+        Assert.Contains(IsolationLevel.ReadUncommitted, levels);
+        Assert.Contains(IsolationLevel.ReadCommitted, levels);
+        Assert.Contains(IsolationLevel.RepeatableRead, levels);
+        Assert.Contains(IsolationLevel.Serializable, levels);
+        Assert.Contains(IsolationLevel.Snapshot, levels);
+    }
+
+    [Fact]
+    public void IsolationResolver_MapsSafeAndStrictAndFast()
+    {
+        var resolver = new IsolationResolver(SupportedDatabase.InterBase, false, false);
+        Assert.Equal(IsolationLevel.Snapshot, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
+    }
+
+    // GUIDs: CONFIRMED live that the driver reads a CHAR(16) CHARACTER SET OCTETS column back as a
+    // native Guid using RFC 4122 big-endian byte order — round-trip test verifies the write side
+    // produces that same big-endian layout (Firebird's exact swap algorithm, independently
+    // reconfirmed for this driver).
+    [Fact]
+    public void CreateDbParameter_Guid_SerializesAsBigEndianBinary()
+    {
+        var d = CreateDialect();
+        var guid = Guid.Parse("92edd240-9ebe-4a58-ac13-97c587f8859f");
+        var param = d.CreateDbParameter("p", DbType.Guid, guid);
+
+        Assert.Equal(DbType.Binary, param.DbType);
+        var stored = Assert.IsType<byte[]>(param.Value);
+        Assert.Equal(16, stored.Length);
+
+        // Reconstruct by re-applying the same big-endian interpretation the live driver used.
+        var reconstructed = new Guid(new byte[]
+        {
+            stored[3], stored[2], stored[1], stored[0],
+            stored[5], stored[4],
+            stored[7], stored[6],
+            stored[8], stored[9], stored[10], stored[11],
+            stored[12], stored[13], stored[14], stored[15]
+        });
+        Assert.Equal(guid, reconstructed);
+    }
+
+    // CONFIRMED live: InterBaseSql.Data.InterBaseClient rejects a raw DbType.DateTimeOffset
+    // parameter outright at the driver level ("Invalid data type: 27") — there is no time-zone-
+    // aware temporal type in InterBase's type catalog at all ("TIMESTAMP WITH TIME ZONE"/"TIME
+    // WITH TIME ZONE" both fail as genuine syntax errors). CreateDbParameter coerces to UTC
+    // DateTime before the parameter ever reaches the driver — confirmed live (through the full
+    // pengdows.crud stack, not just the raw driver) to round-trip correctly once coerced.
+    [Fact]
+    public void CreateDbParameter_DateTimeOffset_CoercesToUnspecifiedUtcDateTime()
+    {
+        var d = CreateDialect();
+        var dto = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(-5));
+        var param = d.CreateDbParameter("p", DbType.DateTimeOffset, dto);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        var stored = Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(DateTimeKind.Unspecified, stored.Kind);
+        Assert.Equal(dto.UtcDateTime, DateTime.SpecifyKind(stored, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void CreateDbParameter_NonDateTimeOffsetTypes_PassThroughUnmodified()
+    {
+        var d = CreateDialect();
+        var param = d.CreateDbParameter("p", DbType.Int32, 42);
+        Assert.Equal(DbType.Int32, param.DbType);
+        Assert.Equal(42, param.Value);
+    }
+
+    // ── Exception classification ────────────────────────────────────────────
+    // Every code below was captured live from a real InterBaseSql.Data.InterBaseClient.IBException
+    // thrown against a real InterBase 15 server. Unlike HANA, IBException.ErrorCode reliably
+    // carries the real ISC status code — confirmed by enumerating IBException's public properties
+    // live (no "Number"/"SqliteErrorCode"/"NativeError" property exists to shadow it), so these
+    // fakes set ErrorCode directly rather than a NativeError-shaped property.
+    [Fact]
+    public void IsUniqueViolation_ErrorCode335544665_ReturnsTrue()
+    {
+        using var ctx = CreateContext();
+        var ex = new ErrorCodeDbException(335544665, "violation of PRIMARY or UNIQUE KEY constraint");
+        Assert.True(ctx.GetDialect().IsUniqueViolation(ex));
+    }
+
+    // CONFIRMED live for BOTH directions (insert referencing a missing parent, and delete of a
+    // still-referenced parent) — same code both ways.
+    [Fact]
+    public void IsForeignKeyViolation_ErrorCode335544466_ReturnsTrue()
+    {
+        using var ctx = CreateContext();
+        var ex = new ErrorCodeDbException(335544466, "violation of FOREIGN KEY constraint");
+        Assert.True(ctx.GetDialect().IsForeignKeyViolation(ex));
+    }
+
+    // CORRECTION to this session's own earlier research, which claimed NOT NULL shared CHECK's
+    // code (335544558). Re-verified live: NOT NULL is a DISTINCT code, 335544347.
+    [Fact]
+    public void IsNotNullViolation_ErrorCode335544347_ReturnsTrue()
+    {
+        using var ctx = CreateContext();
+        var ex = new ErrorCodeDbException(335544347, "validation error for column X, value \"*** null ***\"");
+        Assert.True(ctx.GetDialect().IsNotNullViolation(ex));
+    }
+
+    [Fact]
+    public void IsCheckConstraintViolation_ErrorCode335544558_ReturnsTrue()
+    {
+        using var ctx = CreateContext();
+        var ex = new ErrorCodeDbException(335544558, "Operation violates CHECK constraint");
+        Assert.True(ctx.GetDialect().IsCheckConstraintViolation(ex));
+    }
+
+    [Fact]
+    public void AnalyzeException_UniqueViolation_ClassifiesAsConstraintViolation()
+    {
+        using var ctx = CreateContext();
+        var ex = new ErrorCodeDbException(335544665, "violation of PRIMARY or UNIQUE KEY constraint");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    // Verified live: ServerVersion is populated directly by the driver from the wire handshake —
+    // "LI-V15.1.0.42/tcp (development)/P15" is the exact real string captured. Note this shape is
+    // actually already handled by the base class's own generic dotted-version regex (it picks
+    // "15.1.0.42" as the dot-separated run in the string, giving Major=15/Minor=1/Build=0/
+    // Revision=42 per System.Version's own Major.Minor.Build.Revision layout) — this dialect's
+    // ParseVersion override tries base first and only falls through to its own legacy LI-V regex
+    // otherwise, exactly like FirebirdDialect's identical defensive ordering. Any string matching
+    // "LI-V(\d+)\.(\d+)\.(\d+)" necessarily also matches base's more general pattern first, so (as
+    // with Firebird's own equivalent override) the legacy regex branch is structurally redundant
+    // for every real version string seen so far — kept only as defensive symmetry with Firebird,
+    // not because a live case has ever required it.
+    [Fact]
+    public void ParseVersion_ParsesRealCapturedServerVersionString()
+    {
+        var version = CreateDialect().ParseVersion("LI-V15.1.0.42/tcp (development)/P15");
+        Assert.NotNull(version);
+        Assert.Equal(15, version!.Major);
+        Assert.Equal(1, version.Minor);
+    }
+
+    [Fact]
+    public void ParseVersion_InvalidFormat_ReturnsNull()
+    {
+        Assert.Null(CreateDialect().ParseVersion("not a version string"));
+    }
+
+    [Fact]
+    public void ExtractProductNameFromVersion_ReturnsInterBase()
+    {
+        Assert.Equal("InterBase", CreateDialect().ExtractProductNameFromVersion("LI-V15.1.0.42/tcp (development)/P15"));
+    }
+
+    private sealed class ErrorCodeDbException : DbException
+    {
+        public ErrorCodeDbException(int errorCode, string message) : base(message)
+        {
+            ErrorCode = errorCode;
+        }
+
+        public override int ErrorCode { get; }
+    }
+}

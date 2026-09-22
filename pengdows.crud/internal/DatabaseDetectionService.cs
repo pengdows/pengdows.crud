@@ -50,7 +50,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Sybase, new[] { "adaptive server enterprise", "sybase" }),
         (SupportedDatabase.Db2, new[] { "db2" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
-        (SupportedDatabase.SapHana, new[] { "hana" })
+        (SupportedDatabase.SapHana, new[] { "hana" }),
+        (SupportedDatabase.InterBase, new[] { "interbase" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =
@@ -70,7 +71,8 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Sybase, new[] { "aseclient", "adonetcore" }),
         (SupportedDatabase.Db2, new[] { "db2" }),
         (SupportedDatabase.Informix, new[] { "informix" }),
-        (SupportedDatabase.SapHana, new[] { "hana" })
+        (SupportedDatabase.SapHana, new[] { "hana" }),
+        (SupportedDatabase.InterBase, new[] { "interbase" })
     };
 
     /// <summary>
