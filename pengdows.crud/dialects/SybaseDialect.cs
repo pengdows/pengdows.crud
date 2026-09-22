@@ -43,6 +43,14 @@ internal class SybaseDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Sybase;
+
+    // Confirmed via reflection against AdoNetCore.AseClient.Internal.ConnectionParameters (the
+    // driver's real connection-string parser — its public AseConnectionStringBuilder is a thin
+    // DbConnectionStringBuilder wrapper exposing nothing usable): ApplicationName is a real
+    // property there, defaulting to the current process name when unset. Without this set,
+    // reader/writer connection strings would be identical and collapse into one shared pool.
+    public override string? ApplicationNameSettingName => "ApplicationName";
+
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Exec;
