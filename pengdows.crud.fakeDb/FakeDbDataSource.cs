@@ -67,15 +67,40 @@ public sealed class FakeDbDataSource : DbDataSource
         }
     }
 
+    /// <summary>
+    /// Observable disposal flag for tests that need to prove whether disposal was
+    /// attempted/skipped (e.g. deferred cleanup while in-flight leases are still outstanding).
+    /// </summary>
+    public bool WasDisposed { get; private set; }
+
+    /// <summary>
+    /// TEST-017: when set, disposal throws this exception instead of completing normally —
+    /// simulates cleanup itself failing (e.g. during a construction-failure catch block), so
+    /// tests can prove the original exception still propagates rather than being replaced by
+    /// this one. <see cref="WasDisposed"/> is still set first, so the attempt is observable even
+    /// though it did not complete normally.
+    /// </summary>
+    public Exception? ThrowOnDispose { get; set; }
+
     protected override void Dispose(bool disposing)
     {
-        // No resources to dispose in fake implementation
+        WasDisposed = true;
+        if (ThrowOnDispose != null)
+        {
+            throw ThrowOnDispose;
+        }
+
         base.Dispose(disposing);
     }
 
     protected override ValueTask DisposeAsyncCore()
     {
-        // No resources to dispose in fake implementation
+        WasDisposed = true;
+        if (ThrowOnDispose != null)
+        {
+            throw ThrowOnDispose;
+        }
+
         return base.DisposeAsyncCore();
     }
 }

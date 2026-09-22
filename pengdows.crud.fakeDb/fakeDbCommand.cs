@@ -17,6 +17,26 @@ public class fakeDbCommand : DbCommand
     public bool WasDisposed { get; private set; }
 
     /// <summary>
+    /// When true, the synchronous ExecuteNonQuery/ExecuteScalar/ExecuteReader entry points throw
+    /// instead of running — while their ...Async counterparts still run normally, with their own
+    /// call counts. Lets a test prove production code went through the genuinely async path
+    /// (rather than a sync-wrapped-in-Task.FromResult one) without hand-rolling a DbConnection.
+    /// </summary>
+    public bool BlockSynchronousExecution { get; set; }
+
+    public int SyncExecuteCount { get; private set; }
+    public int AsyncExecuteCount { get; private set; }
+
+    private void EnforceAsyncOnly(string operation)
+    {
+        if (BlockSynchronousExecution)
+        {
+            throw new InvalidOperationException(
+                $"Synchronous {operation}() is blocked on this fakeDbCommand — use the async overload.");
+        }
+    }
+
+    /// <summary>
     /// Simulates MySqlCommand.LastInsertedId populated from the MySQL OK packet.
     /// When set, MySqlDialect.GetLastInsertedIdFromCommand returns this value via reflection.
     /// Default null triggers the fallback path (SELECT LAST_INSERT_ID()).
@@ -77,9 +97,29 @@ public class fakeDbCommand : DbCommand
 
     public override int ExecuteNonQuery()
     {
+        EnforceAsyncOnly(nameof(ExecuteNonQuery));
+        SyncExecuteCount++;
+        return ExecuteNonQueryCore();
+    }
+
+    private int ExecuteNonQueryCore()
+    {
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
+
+        // An exact-command-text failure (SetCommandFailure) names a specific SQL string, so it
+        // must win even when that string happens to be a SET/PRAGMA session-setting command — the
+        // test chose that exact text on purpose. This does NOT apply to the queued
+        // NonQueryExecuteException dequeue below: that primes "the next non-query call(s)"
+        // generically, and session-setting commands routinely run before the real DML the test is
+        // actually targeting, so checking it here would let an incidental SET statement consume a
+        // queued exception before the intended call ever runs.
+        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
+        {
+            throw exNonQuery!;
+        }
+
         // Treat session-setting commands as no-op and do not consume queued NonQueryResults,
         // so tests that seed rows-affected for subsequent DML remain stable.
         if (!string.IsNullOrWhiteSpace(CommandText))
@@ -91,27 +131,22 @@ public class fakeDbCommand : DbCommand
                 if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
                 {
                     conn.ExecutedNonQueryTexts.Add(CommandText);
+                    conn.ExecutedNonQueryCommands.Add(CaptureCommand());
                 }
 
                 return 0;
             }
         }
 
-        if (conn != null && conn.NonQueryExecuteException != null)
+        if (conn != null && conn.TryDequeueNonQueryExecuteException(out var exTransient))
         {
-            var ex = conn.NonQueryExecuteException;
-            conn.SetNonQueryExecuteException(null);
-            throw ex;
-        }
-
-        if (TryGetCommandFailure(conn, CommandText, out var exNonQuery))
-        {
-            throw exNonQuery!;
+            throw exTransient;
         }
 
         if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
         {
             conn.ExecutedNonQueryTexts.Add(CommandText);
+            conn.ExecutedNonQueryCommands.Add(CaptureCommand());
         }
 
         // Apply output parameter values if queued
@@ -135,6 +170,13 @@ public class fakeDbCommand : DbCommand
 
     public override object? ExecuteScalar()
     {
+        EnforceAsyncOnly(nameof(ExecuteScalar));
+        SyncExecuteCount++;
+        return ExecuteScalarCore();
+    }
+
+    private object? ExecuteScalarCore()
+    {
         ThrowIfShouldFail(nameof(ExecuteScalar));
 
         var conn = FakeConnection;
@@ -156,6 +198,19 @@ public class fakeDbCommand : DbCommand
             if (TryGetCommandFailure(conn, CommandText, out var exScalar))
             {
                 throw exScalar!;
+            }
+
+            if (!string.IsNullOrWhiteSpace(CommandText))
+            {
+                conn.ExecutedScalarTexts.Add(CommandText);
+            }
+
+            // A resolver takes full, exclusive control over every scalar response by command
+            // text — including throwing for a command the test didn't expect — which is exactly
+            // what version/flavor-detection tests need instead of the canned defaults below.
+            if (conn.ScalarResolver != null)
+            {
+                return conn.ScalarResolver(CommandText);
             }
 
             // Apply output parameter values if queued
@@ -282,11 +337,21 @@ public class fakeDbCommand : DbCommand
             SupportedDatabase.DuckDB when normalizedCommand == "PRAGMA VERSION"
                 => "v0.9.2",
 
+            SupportedDatabase.Db2 when normalizedCommand.Contains("SYSPROC.ENV_GET_INST_INFO")
+                => "11.05.0800",
+
             _ => null
         };
     }
 
-    protected override DbDataReader ExecuteDbDataReader(CommandBehavior _)
+    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
+    {
+        EnforceAsyncOnly(nameof(ExecuteDbDataReader));
+        SyncExecuteCount++;
+        return ExecuteDbDataReaderCore(behavior);
+    }
+
+    private DbDataReader ExecuteDbDataReaderCore(CommandBehavior _)
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
@@ -306,6 +371,7 @@ public class fakeDbCommand : DbCommand
         if (conn != null)
         {
             conn.ExecutedReaderTexts.Add(CommandText);
+            conn.ExecutedReaderCommands.Add(CaptureCommand());
         }
 
         // Apply output parameter values if queued
@@ -336,20 +402,88 @@ public class fakeDbCommand : DbCommand
     }
 
     // **Async overrides**
+    //
+    // BlockSynchronousExecution == false (the default, used by every pre-existing caller):
+    // delegate to the *virtual* sync method exactly as before this class gained
+    // BlockSynchronousExecution/*Core split, so a subclass overriding ExecuteNonQuery()/
+    // ExecuteScalar()/ExecuteDbDataReader() (e.g. to record command text) still gets invoked
+    // through the async path, unchanged.
+    //
+    // BlockSynchronousExecution == true (opt-in): the virtual sync method throws by design, so
+    // call the private *Core method directly instead — this is the path that lets a test prove
+    // production code used the genuinely async overload.
     public override Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
-        return Task.FromResult(ExecuteNonQuery());
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
+        }
+
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
-        return Task.FromResult(ExecuteScalar());
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+
+        object? RunScalar()
+        {
+            if (FakeConnection != null && FakeConnection.TryGetAsyncOnlyScalarFailure(CommandText, out var asyncOnlyEx))
+            {
+                throw asyncOnlyEx;
+            }
+
+            return BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar();
+        }
+
+        // The async-only-scalar-failure check must happen after the gate wait (not before it),
+        // so a connection configured with both an execute gate and an async-only failure still
+        // blocks in flight until the gate is released/cancelled, rather than the failure
+        // bypassing the gate and returning immediately.
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteWithGateAsync(gate, ct, RunScalar);
+        }
+
+        try
+        {
+            return Task.FromResult(RunScalar());
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<object?>(ex);
+        }
     }
 
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
         CommandBehavior behavior, CancellationToken ct)
     {
-        return Task.FromResult<DbDataReader>(ExecuteDbDataReader(behavior));
+        ct.ThrowIfCancellationRequested();
+        AsyncExecuteCount++;
+
+        var gate = FakeConnection?.ExecuteGate;
+        if (gate != null)
+        {
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
+        }
+
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
+    }
+
+    /// <summary>
+    /// Shared implementation behind every gated async execute path: awaits the test-controlled
+    /// gate (see <see cref="fakeDbConnection.SetExecuteGate"/>), then runs <paramref name="execute"/>.
+    /// </summary>
+    private static async Task<T> ExecuteWithGateAsync<T>(TaskCompletionSource<bool> gate, CancellationToken ct, Func<T> execute)
+    {
+        await gate.Task.WaitAsync(ct).ConfigureAwait(false);
+        return execute();
     }
 
     public override Task PrepareAsync(CancellationToken ct)
@@ -367,6 +501,21 @@ public class fakeDbCommand : DbCommand
     {
         WasDisposed = true;
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Snapshots command text and bound parameter values right now, before disposal (or a later
+    /// mutation of this same command instance) can erase them.
+    /// </summary>
+    private CapturedCommand CaptureCommand()
+    {
+        var parameters = new List<CapturedParameter>(_parameterCollection.Count);
+        foreach (DbParameter parameter in _parameterCollection)
+        {
+            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value));
+        }
+
+        return new CapturedCommand(CommandText, parameters);
     }
 
     private static bool TryGetCommandFailure(fakeDbConnection? conn, string? commandText, out Exception? failure)

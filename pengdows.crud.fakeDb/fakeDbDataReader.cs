@@ -64,7 +64,41 @@ public class fakeDbDataReader : DbDataReader
 
     // Stubs for unused members
     public override int Depth => 0;
-    public override int RecordsAffected => 0;
+
+    /// <summary>
+    /// Defaults to 0 (ADO.NET's convention for a reader with no applicable affected-row count,
+    /// e.g. a SELECT). Some EF Core providers' modification-command-batch implementations read
+    /// this directly to determine SaveChanges rows-affected (e.g. Snowflake's
+    /// SnowflakeModificationCommandBatch.ConsumeResultSetWithRowsAffectedOnlyAsync reads
+    /// reader.DbDataReader.RecordsAffected), rather than reading a row/column value the way
+    /// SQLite's/SQL Server's provider-generated "SELECT changes()" pattern does.
+    /// </summary>
+    public int RecordsAffectedOverride { get; set; }
+
+    /// <summary>
+    /// When set, accessing <see cref="RecordsAffected"/> throws this exception instead of
+    /// returning <see cref="RecordsAffectedOverride"/> — cleared after throwing once. Needed to
+    /// simulate a raw provider failure for a provider whose rows-affected check reads
+    /// <c>DbDataReader.RecordsAffected</c> directly and never calls <see cref="Read"/>/
+    /// <see cref="ReadAsync"/> at all, so <see cref="FailException"/> (which only fires from
+    /// those) can never reach it.
+    /// </summary>
+    public Exception? RecordsAffectedException { get; set; }
+
+    public override int RecordsAffected
+    {
+        get
+        {
+            if (RecordsAffectedException != null)
+            {
+                var ex = RecordsAffectedException;
+                RecordsAffectedException = null;
+                throw ex;
+            }
+
+            return RecordsAffectedOverride;
+        }
+    }
 
     public override object this[int i] => GetValue(i);
 
@@ -90,14 +124,66 @@ public class fakeDbDataReader : DbDataReader
         return Task.FromResult((T)Convert.ChangeType(value, typeof(T)));
     }
 
+    /// <summary>
+    /// When set together with <see cref="FailException"/>, the read that would advance past this
+    /// many successfully-returned rows throws instead — simulating a reader that fails partway
+    /// through enumeration (e.g. a dropped connection mid-stream) rather than one that fails to
+    /// open at all.
+    /// </summary>
+    public int? FailAfterReadCount { get; set; }
+
+    /// <summary>See <see cref="FailAfterReadCount"/>. Cleared after throwing once.</summary>
+    public Exception? FailException { get; set; }
+
+    /// <summary>
+    /// When set together with <see cref="CancelSource"/>, the read that would advance past this
+    /// many successfully-returned rows cancels that source first — simulating a caller
+    /// cancelling the ambient token mid-stream. Requires the real, ambient
+    /// <see cref="CancellationToken"/> passed to <see cref="ReadAsync"/> to actually be
+    /// <see cref="CancelSource"/>'s token (or a token derived from it), since only that token's
+    /// cancellation is honored — a canned/injected exception like <see cref="FailException"/>
+    /// would prove nothing about whether real cancellation-token propagation works.
+    /// </summary>
+    public int? CancelAfterReadCount { get; set; }
+
+    /// <summary>See <see cref="CancelAfterReadCount"/>.</summary>
+    public CancellationTokenSource? CancelSource { get; set; }
+
     public override bool Read()
     {
+        if (FailException != null && FailAfterReadCount.HasValue && _index + 1 >= FailAfterReadCount.Value)
+        {
+            var ex = FailException;
+            FailException = null;
+            throw ex;
+        }
+
         return ++_index < CurrentRows.Count;
     }
 
-    public override Task<bool> ReadAsync(CancellationToken _)
+    public override Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
-        return Task.FromResult(Read());
+        if (CancelSource != null
+            && CancelAfterReadCount.HasValue
+            && _index + 1 >= CancelAfterReadCount.Value
+            && !CancelSource.IsCancellationRequested)
+        {
+            CancelSource.Cancel();
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<bool>(cancellationToken);
+        }
+
+        try
+        {
+            return Task.FromResult(Read());
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<bool>(ex);
+        }
     }
 
     public override object GetValue(int i)

@@ -39,6 +39,18 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private DataTable? _schemaTable;
     private ConnectionState _state = ConnectionState.Closed;
     private string _serverVersion = "1.0";
+
+    /// <summary>
+    /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
+    /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
+    /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
+    /// real emulated product.
+    /// </summary>
+    public DataTable? SchemaTable
+    {
+        get => _schemaTable;
+        set => _schemaTable = value;
+    }
     private int? _maxParameterLimit;
     private bool _shouldFailOnOpen;
     private bool _shouldFailOnCommand;
@@ -65,13 +77,33 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public readonly Queue<object?> ScalarResults = new();
     public readonly Queue<int> NonQueryResults = new();
     internal readonly Dictionary<string, object?> ScalarResultsByCommand = new();
-    internal Exception? NonQueryExecuteException { get; private set; }
+    private readonly Queue<Exception> _nonQueryExecuteExceptions = new();
     internal Exception? ScalarExecuteException { get; private set; }
     internal Exception? PersistentScalarException { get; private set; }
     internal object? DefaultScalarResultOnce { get; private set; }
     internal readonly Dictionary<string, Exception> CommandFailuresByText = new();
     public readonly List<string> ExecutedNonQueryTexts = new();
     public readonly List<string> ExecutedReaderTexts = new();
+
+    /// <summary>
+    /// Command text for every ExecuteScalar/ExecuteScalarAsync call this connection instance has
+    /// run — the scalar-path equivalent of <see cref="ExecutedNonQueryTexts"/>/<see cref="ExecutedReaderTexts"/>,
+    /// which the scalar path lacked until TEST-010's connection-affinity investigation needed it to
+    /// prove which physical connection instance actually ran a given scalar query.
+    /// </summary>
+    public readonly List<string> ExecutedScalarTexts = new();
+
+    /// <summary>
+    /// Command text paired with the exact parameter names/values bound at execution time,
+    /// captured before the command is disposed. EF Core (and other callers) dispose the
+    /// DbCommand — clearing its Parameters collection — before an await on the executing
+    /// call returns, so this is the only place a test can observe the real bound value rather
+    /// than just the parameter's name token in the captured SQL text.
+    /// </summary>
+    public readonly List<CapturedCommand> ExecutedNonQueryCommands = new();
+
+    /// <summary>See <see cref="ExecutedNonQueryCommands"/> — the reader-execution equivalent.</summary>
+    public readonly List<CapturedCommand> ExecutedReaderCommands = new();
     public readonly List<fakeDbCommand> CreatedCommands = new();
     public fakeDbCommand? LastCreatedCommand { get; private set; }
 
@@ -81,6 +113,59 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// Used to simulate the MySqlConnector OK-packet LastInsertedId for the ReaderInsertedId plan.
     /// </summary>
     public object? NextCommandLastInsertedId { get; set; }
+
+    /// <summary>
+    /// When set, every command created by this connection is constructed via this factory instead
+    /// of a plain <see cref="fakeDbCommand"/>. Lets a test supply a subclass whose type name
+    /// satisfies a dialect's reflection-based provider-type check (e.g. a fake command exposing
+    /// Oracle's <c>ArrayBindCount</c>), without needing a per-provider fake command hierarchy in
+    /// this project for every such hook.
+    /// </summary>
+    public Func<fakeDbConnection, fakeDbCommand>? CommandFactory { get; set; }
+
+    /// <summary>
+    /// When set, every command created by this connection has its
+    /// <see cref="fakeDbCommand.BlockSynchronousExecution"/> pre-set to this value — lets a test
+    /// prove production code used the async execution path without knowing in advance which
+    /// command instance will be created.
+    /// </summary>
+    public bool BlockSynchronousCommandExecution { get; set; }
+
+    /// <summary>
+    /// When set, every ExecuteScalar/ExecuteScalarAsync call on this connection's commands is
+    /// answered exclusively by invoking this resolver with the command text — bypassing every
+    /// other canned/default scalar response below. Letting the resolver throw for an unexpected
+    /// command text is intentional: it catches production code probing something a test didn't
+    /// anticipate, which a fixed dictionary of responses can't express.
+    /// </summary>
+    public Func<string, object?>? ScalarResolver { get; set; }
+
+    private readonly Dictionary<string, Exception> _asyncOnlyScalarFailures = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Configures ExecuteScalarAsync (and only ExecuteScalarAsync — the synchronous ExecuteScalar
+    /// for the same command text is unaffected) to throw <paramref name="exception"/> when a
+    /// command's text exactly matches <paramref name="commandText"/>. Lets a test prove a sync
+    /// entry point never accidentally routes through the async overload for a specific probe,
+    /// while every other command (sync or async) keeps working normally.
+    /// </summary>
+    public void SetAsyncOnlyScalarFailure(string commandText, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+        ArgumentNullException.ThrowIfNull(exception);
+        _asyncOnlyScalarFailures[commandText] = exception;
+    }
+
+    internal bool TryGetAsyncOnlyScalarFailure(string commandText, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (string.IsNullOrEmpty(commandText))
+        {
+            exception = null;
+            return false;
+        }
+
+        return _asyncOnlyScalarFailures.TryGetValue(commandText, out exception);
+    }
 
     /// <summary>
     /// Queue of output parameter values to apply after command execution.
@@ -106,9 +191,82 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         DataStore = sharedDataStore ?? new FakeDataStore();
     }
 
+    /// <summary>
+    /// Enqueues an already-constructed, fully-configured reader as-is — an escape hatch for
+    /// combining multiple fakeDbDataReader settings (e.g. both <see cref="fakeDbDataReader.FailException"/>
+    /// and <see cref="fakeDbDataReader.RecordsAffectedException"/> on one instance) that the
+    /// narrower convenience overloads below don't compose, without proliferating further
+    /// parameter combinations here.
+    /// </summary>
+    public void EnqueueReaderResult(fakeDbDataReader reader)
+    {
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
+    /// Enqueues a reader whose <see cref="fakeDbDataReader.RecordsAffected"/> reports
+    /// <paramref name="recordsAffected"/> instead of the default 0 — needed for providers whose
+    /// modification-command-batch implementation reads that property directly rather than a
+    /// row/column value (see <see cref="fakeDbDataReader.RecordsAffectedOverride"/>).
+    /// </summary>
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows, int recordsAffected)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows)) { RecordsAffectedOverride = recordsAffected };
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
+    /// Enqueues a reader whose <see cref="fakeDbDataReader.RecordsAffected"/> access throws
+    /// <paramref name="recordsAffectedException"/> — simulates a raw provider failure for a
+    /// provider whose rows-affected check reads that property directly and never calls
+    /// Read()/ReadAsync() at all (see <see cref="fakeDbDataReader.RecordsAffectedException"/>).
+    /// </summary>
+    public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows, Exception recordsAffectedException)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows)) { RecordsAffectedException = recordsAffectedException };
+        ReaderResults.Enqueue(reader);
+    }
+
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object?>> rows)
     {
         ReaderResults.Enqueue(new fakeDbDataReader(ConvertRows(rows)));
+    }
+
+    /// <summary>
+    /// Enqueues a reader that returns <paramref name="rows"/> successfully up to
+    /// <paramref name="failAfterRowCount"/> rows, then throws <paramref name="exception"/> on the
+    /// next read attempt — simulating a stream that fails partway through enumeration.
+    /// </summary>
+    public void EnqueueReaderResult(
+        IEnumerable<Dictionary<string, object?>> rows,
+        int failAfterRowCount,
+        Exception exception)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows))
+        {
+            FailAfterReadCount = failAfterRowCount,
+            FailException = exception
+        };
+        ReaderResults.Enqueue(reader);
+    }
+
+    /// <summary>
+    /// Enqueues a reader that returns <paramref name="rows"/> successfully up to
+    /// <paramref name="cancelAfterRowCount"/> rows, then cancels <paramref name="cancellationTokenSource"/>
+    /// on the next read attempt and honors that cancellation — simulating a caller cancelling the
+    /// real, ambient <see cref="CancellationToken"/> mid-stream rather than a canned failure.
+    /// </summary>
+    public void EnqueueReaderResult(
+        IEnumerable<Dictionary<string, object?>> rows,
+        int cancelAfterRowCount,
+        CancellationTokenSource cancellationTokenSource)
+    {
+        var reader = new fakeDbDataReader(ConvertRows(rows))
+        {
+            CancelAfterReadCount = cancelAfterRowCount,
+            CancelSource = cancellationTokenSource
+        };
+        ReaderResults.Enqueue(reader);
     }
 
     /// <summary>
@@ -162,7 +320,38 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public void SetNonQueryExecuteException(Exception? exception)
     {
-        NonQueryExecuteException = exception;
+        _nonQueryExecuteExceptions.Clear();
+        if (exception != null)
+        {
+            _nonQueryExecuteExceptions.Enqueue(exception);
+        }
+    }
+
+    /// <summary>
+    /// Queues exceptions to throw on the next N ExecuteNonQuery(Async) calls, one per call and in
+    /// order, after which execution proceeds normally. Lets a test prove a real EF Core execution
+    /// strategy (e.g. a custom retrying <c>ExecutionStrategy</c>) actually retries a transient
+    /// failure through StormGate-gated fakeDb connections, rather than surfacing on the first
+    /// attempt — unlike <see cref="SetNonQueryExecuteException"/>, which only primes a single call.
+    /// </summary>
+    public void EnqueueTransientNonQueryFailures(params Exception[] exceptions)
+    {
+        foreach (var exception in exceptions)
+        {
+            _nonQueryExecuteExceptions.Enqueue(exception);
+        }
+    }
+
+    internal bool TryDequeueNonQueryExecuteException([NotNullWhen(true)] out Exception? exception)
+    {
+        if (_nonQueryExecuteExceptions.Count > 0)
+        {
+            exception = _nonQueryExecuteExceptions.Dequeue();
+            return true;
+        }
+
+        exception = null;
+        return false;
     }
 
     public void SetScalarExecuteException(Exception? exception)
@@ -274,6 +463,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     {
         _transactionRollbackException = exception;
     }
+
+    /// <summary>
+    /// The most recently created <see cref="fakeDbTransaction"/> on this connection (null if none
+    /// has been created yet), so a test can assert on it directly (e.g. CommitCallCount,
+    /// RollbackCallCount) rather than only observing its side effects indirectly.
+    /// </summary>
+    public fakeDbTransaction? LastTransaction { get; private set; }
 
     /// <summary>
     /// Sets a custom exception to throw instead of the default InvalidOperationException
@@ -484,6 +680,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             SupportedDatabase.Firebird => "4.0.0",
             SupportedDatabase.CockroachDb => "v23.1.0",
             SupportedDatabase.DuckDB => "DuckDB 0.9.2",
+            SupportedDatabase.Db2 => "DB2 11.05.0800",
+            // Access intentionally excluded: SupportedDatabase.Access's bit value is reserved
+            // but not defined on this branch (see SupportedDatabase.cs) - no Access dialect is
+            // enabled on 2.0.6 yet, so there is no case to add here.
             _ => "1.0"
         };
     }
@@ -504,11 +704,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
+    /// <summary>
+    /// Every value ever assigned to <see cref="ConnectionString"/>, in order — lets a test verify
+    /// what connection string(s) production code actually built and assigned (e.g. a read-only
+    /// variant with extra parameters) without needing its own recording DbConnection subclass.
+    /// </summary>
+    public List<string> ConnectionStringHistory { get; } = new();
+
     [AllowNull]
     public override string ConnectionString
     {
         get => _connectionString ?? string.Empty;
-        set => _connectionString = value;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            ConnectionStringHistory.Add(normalized);
+            _connectionString = normalized;
+        }
     }
 
     // Parsed from the connection string, matching real ADO.NET provider behavior (SqlConnection,
@@ -584,7 +796,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     {
         if (_state == ConnectionState.Open)
         {
-            return; // Already open, don't change state again
+            // Matches real ADO.NET providers (SqlConnection, NpgsqlConnection, SqliteConnection):
+            // calling Open() while already Open throws InvalidOperationException, it does not
+            // silently no-op. A fakeDb that silently allowed this let a real double-open bug in
+            // application code pass every fakeDb-based unit test and only surface against a real
+            // provider in production.
+            throw new InvalidOperationException(
+                "Connection is already open. The connection's current state is open.");
         }
 
         if (_isBroken)
@@ -593,6 +811,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
 
         _openCallCount++;
+
+        if (_factoryRef != null && _factoryRef.TryGetFailOnOpenForConnectionString(ConnectionString, out var csFailure))
+        {
+            var originalCsState = _state;
+            _state = ConnectionState.Broken;
+            _isBroken = true;
+            RaiseStateChangedEvent(originalCsState);
+            throw csFailure;
+        }
 
         // Check if we should use shared factory counter
         if (_sharedFactory != null && _sharedFailAfterOpenCount.HasValue)
@@ -731,6 +958,46 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         return Task.CompletedTask;
     }
 
+    private TaskCompletionSource<bool>? _openGate;
+
+    /// <summary>
+    /// Makes OpenAsync await a test-controlled gate before performing the physical open, instead
+    /// of completing immediately. Lets a test hold a connection's open "in flight" indefinitely
+    /// and release it deterministically by completing the returned TaskCompletionSource — used to
+    /// prove genuine concurrent-open behavior (e.g. an admission-control semaphore actually
+    /// permitting N simultaneous opens, not serializing them) against real overlapping async
+    /// calls, without relying on a fixed delay.
+    /// </summary>
+    public TaskCompletionSource<bool> SetOpenGate()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _openGate = tcs;
+        return tcs;
+    }
+
+    private TaskCompletionSource<bool>? _executeGate;
+
+    /// <summary>
+    /// The command-execution analogue of <see cref="SetOpenGate"/>: makes the next async execute
+    /// call on any <see cref="fakeDbCommand"/> created against this connection
+    /// (ExecuteNonQueryAsync, ExecuteScalarAsync, or the reader's ExecuteDbDataReaderAsync) await
+    /// this test-controlled gate before running the fake execution logic, instead of completing
+    /// immediately. Lets a test hold an async command execution "in flight" and then cancel or
+    /// release it deterministically, proving genuine mid-flight cancellation (the fake execution
+    /// never actually runs) rather than a completed-then-discarded result. Stays set for every
+    /// subsequent command on this connection, same as <see cref="SetOpenGate"/> does for opens —
+    /// callers targeting a single operation should use <see cref="DbMode.SingleConnection"/> (or
+    /// otherwise ensure this connection instance is only used once) so the gate is unambiguous.
+    /// </summary>
+    public TaskCompletionSource<bool> SetExecuteGate()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _executeGate = tcs;
+        return tcs;
+    }
+
+    internal TaskCompletionSource<bool>? ExecuteGate => _executeGate;
+
     public override Task OpenAsync(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -740,15 +1007,33 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
         OpenAsyncCount++;
 
-        try
+        var gate = _openGate;
+        if (gate == null && _factoryRef != null &&
+            _factoryRef.TryGetOpenGateForConnectionString(ConnectionString, out var csGate))
         {
-            OpenCore(countAsSyncOpen: false);
-            return Task.CompletedTask;
+            gate = csGate;
         }
-        catch (Exception ex)
+
+        if (gate == null)
         {
-            return Task.FromException(ex);
+            try
+            {
+                OpenCore(countAsSyncOpen: false);
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
         }
+
+        return OpenAsyncWithGate(gate, cancellationToken);
+    }
+
+    private async Task OpenAsyncWithGate(TaskCompletionSource<bool> gate, CancellationToken cancellationToken)
+    {
+        await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        OpenCore(countAsSyncOpen: false);
     }
 
     private SupportedDatabase ParseEmulatedProduct(string? connStr)
@@ -817,6 +1102,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             tx.RollbackException = _transactionRollbackException;
         }
 
+        LastTransaction = tx;
         return tx;
     }
 
@@ -835,11 +1121,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Invoke custom command behavior if set
         _customCommandBehavior?.Invoke();
 
-        var command = new fakeDbCommand(this);
+        var command = CommandFactory?.Invoke(this) ?? new fakeDbCommand(this);
         if (NextCommandLastInsertedId != null)
         {
             command.LastInsertedId = NextCommandLastInsertedId;
         }
+
+        command.BlockSynchronousExecution = BlockSynchronousCommandExecution;
 
         CreatedCommands.Add(command);
         LastCreatedCommand = command;

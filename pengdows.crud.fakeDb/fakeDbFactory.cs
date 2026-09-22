@@ -23,10 +23,52 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private bool _hasOpenedOnce;
     private readonly List<fakeDbConnection> _connections = new();
     private readonly List<fakeDbConnection> _createdConnections = new();
+    private readonly List<FakeDbDataSource> _createdDataSources = new();
     private Exception? _globalPersistentScalarException;
     private Exception? _globalTransactionCommitException;
     private Exception? _globalTransactionRollbackException;
     public bool EnableDataPersistence { get; set; } = false;
+
+    /// <summary>
+    /// When set, propagated to every <see cref="fakeDbConnection.CommandFactory"/> this factory
+    /// creates (or hands back from the pre-enqueued queue) — see that property's remarks.
+    /// </summary>
+    public Func<fakeDbConnection, fakeDbCommand>? CommandFactory { get; set; }
+
+    /// <summary>
+    /// When true, <see cref="CreateDataSource"/> returns a <see cref="FakeDbDataSource"/> wrapping
+    /// this factory instead of throwing <see cref="NotSupportedException"/> — opt-in so tests that
+    /// specifically need to exercise DatabaseContext's provider-native-DataSource path don't have
+    /// to hand-roll their own DbProviderFactory/DbDataSource pair. Defaults to false so every
+    /// existing caller keeps falling back to GenericDbDataSource, unchanged.
+    /// </summary>
+    public bool SupportsNativeDataSource { get; set; } = false;
+
+    /// <summary>
+    /// TEST-017: when set, every <see cref="FakeDbDataSource"/> this factory creates via
+    /// <see cref="CreateDataSource"/> has its <see cref="FakeDbDataSource.ThrowOnDispose"/> set to
+    /// this exception — lets a test make an INTERNALLY-created data source (one the test never
+    /// gets a direct handle to before construction fails) throw during cleanup, to prove the
+    /// original construction exception still propagates rather than being replaced by the
+    /// cleanup failure.
+    /// </summary>
+    public Exception? ThrowOnDataSourceDispose { get; set; }
+
+    /// <summary>
+    /// When set, <see cref="CreateConnection"/> throws this exception immediately instead of
+    /// returning a connection — lets a test exercise a caller's handling of a factory-level
+    /// failure (e.g. a misconfigured provider registration) without a bespoke DbProviderFactory
+    /// subclass.
+    /// </summary>
+    public Exception? ThrowOnCreateConnection { get; set; }
+
+    /// <summary>
+    /// When true, <see cref="CreateConnection"/> returns null instead of a connection —
+    /// DbProviderFactory.CreateConnection is documented nullable, and some callers (e.g. a
+    /// best-effort pool-reset hook probing for a sample connection) must tolerate a provider that
+    /// genuinely can't produce one.
+    /// </summary>
+    public bool ReturnNullConnection { get; set; }
 
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
@@ -36,6 +78,69 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     private readonly Dictionary<string, Exception> _sharedCommandFailures =
         new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly Dictionary<string, Exception> _failOnOpenByConnectionString =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// TEST-017: makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/>
+    /// equals <paramref name="connectionString"/> fail on <c>Open()</c>/<c>OpenAsync()</c> — unlike
+    /// the factory-wide <see cref="ConnectionFailureMode.FailOnOpen"/>, this lets a test fail one
+    /// specific connection-string role (e.g. <c>DatabaseContext</c>'s distinct read-only validation
+    /// connection string) without also breaking earlier connections built from a different
+    /// connection string (the writer connection string, or a dialect-detection probe).
+    /// </summary>
+    public void SetFailOnOpenForConnectionString(string connectionString, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(connectionString);
+        ArgumentNullException.ThrowIfNull(exception);
+        _failOnOpenByConnectionString[connectionString] = exception;
+    }
+
+    internal bool TryGetFailOnOpenForConnectionString(string connectionString, [NotNullWhen(true)] out Exception? exception)
+    {
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            exception = null;
+            return false;
+        }
+
+        return _failOnOpenByConnectionString.TryGetValue(connectionString, out exception);
+    }
+
+    private readonly Dictionary<string, System.Threading.Tasks.TaskCompletionSource<bool>> _openGateByConnectionString =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/> equals
+    /// <paramref name="connectionString"/> await a test-controlled gate before completing
+    /// <c>OpenAsync</c>, instead of completing immediately — the connection-string-scoped analog of
+    /// <see cref="fakeDbConnection.SetOpenGate"/>. Lets a test cancel the token passed to
+    /// <c>OpenAsync</c> for one specific connection-string role (e.g. a distinct read-only
+    /// validation connection string) while earlier connections built from a different connection
+    /// string (the writer string, or a dialect-detection probe) open normally and unblocked.
+    /// </summary>
+    public System.Threading.Tasks.TaskCompletionSource<bool> SetOpenGateForConnectionString(string connectionString)
+    {
+        ArgumentNullException.ThrowIfNull(connectionString);
+        var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        _openGateByConnectionString[connectionString] = tcs;
+        return tcs;
+    }
+
+    internal bool TryGetOpenGateForConnectionString(
+        string connectionString,
+        [NotNullWhen(true)] out System.Threading.Tasks.TaskCompletionSource<bool>? gate)
+    {
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            gate = null;
+            return false;
+        }
+
+        return _openGateByConnectionString.TryGetValue(connectionString, out gate);
+    }
 
     private fakeDbFactory()
     {
@@ -82,6 +187,20 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbConnection CreateConnection()
     {
+        if (ThrowOnCreateConnection != null)
+        {
+            throw ThrowOnCreateConnection;
+        }
+
+        if (ReturnNullConnection)
+        {
+            // DbProviderFactory.CreateConnection() is declared non-nullable, matching every real
+            // provider's factory — but ReturnNullConnection exists specifically to test a
+            // caller's defensive handling of a provider that misbehaves at runtime despite the
+            // contract, so the null-forgiving operator here is a deliberate, narrow lie.
+            return null!;
+        }
+
         if (_connections.Count > 0)
         {
             var pre = _connections[0];
@@ -93,6 +212,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
+            pre.CommandFactory ??= CommandFactory;
             pre.SetFactoryReference(this);
             _createdConnections.Add(pre);
             return pre;
@@ -146,6 +266,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
         // Apply data persistence setting from factory
         c.EnableDataPersistence = EnableDataPersistence;
+        c.CommandFactory = CommandFactory;
 
         c.SetFactoryReference(this);
         _createdConnections.Add(c);
@@ -198,6 +319,37 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     {
         return new fakeDbParameter();
     }
+
+    public override DbDataSource CreateDataSource(string connectionString)
+    {
+        if (!SupportsNativeDataSource)
+        {
+            // DbProviderFactory's own base implementation does NOT throw (it returns a
+            // DefaultDataSource) — but DatabaseContext's reflection-based provider-native probe
+            // (TryCreateProviderDataSource) treats a caught NotSupportedException as "provider
+            // explicitly opts out" and falls back to GenericDbDataSource. Throwing here, rather
+            // than delegating to base, is what actually preserves the pre-existing fallback
+            // behavior for every caller that hasn't opted into SupportsNativeDataSource.
+            throw new NotSupportedException(
+                $"{nameof(fakeDbFactory)} does not support {nameof(CreateDataSource)} unless {nameof(SupportsNativeDataSource)} is set to true.");
+        }
+
+        var dataSource = new FakeDbDataSource(connectionString, this);
+        if (ThrowOnDataSourceDispose != null)
+        {
+            dataSource.ThrowOnDispose = ThrowOnDataSourceDispose;
+        }
+
+        _createdDataSources.Add(dataSource);
+        return dataSource;
+    }
+
+    /// <summary>
+    /// Every FakeDbDataSource this factory has created via CreateDataSource, in creation order.
+    /// Lets tests verify disposal of internally-created data sources they never received a
+    /// direct handle to (e.g. ones DatabaseContext creates itself during construction).
+    /// </summary>
+    public IReadOnlyList<FakeDbDataSource> CreatedDataSources => _createdDataSources;
 
     /// <summary>
     /// Increments the shared open count and returns the new value, optionally skipping the first open
