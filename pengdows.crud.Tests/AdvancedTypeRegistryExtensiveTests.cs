@@ -300,7 +300,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new Range<int>(1, 10));
 
-        Assert.Equal(MockNpgsqlDbType.Int4Range, param.NpgsqlDbType);
+        Assert.Equal(MockNpgsqlDbType.IntegerRange, param.NpgsqlDbType);
     }
 
     [Fact]
@@ -316,7 +316,7 @@ public class AdvancedTypeRegistryExtensiveTests
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new Range<DateTime>(DateTime.Today, DateTime.Today.AddDays(1)));
 
-        Assert.Equal(MockNpgsqlDbType.TsRange, param.NpgsqlDbType);
+        Assert.Equal(MockNpgsqlDbType.TimestampRange, param.NpgsqlDbType);
     }
 
     #endregion
@@ -356,7 +356,7 @@ public class AdvancedTypeRegistryExtensiveTests
     }
 
     [Fact]
-    public void MacAddress_PostgreSql_ConfiguresMacAddrType()
+    public void MacAddress_PostgreSql_SixByteAddress_ConfiguresMacAddrType()
     {
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(MacAddress), SupportedDatabase.PostgreSql);
@@ -368,6 +368,23 @@ public class AdvancedTypeRegistryExtensiveTests
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55")));
 
+        // 6-byte EUI-48 address -> PostgreSQL macaddr, not macaddr8.
+        Assert.Equal(MockNpgsqlDbType.MacAddr, param.NpgsqlDbType);
+    }
+
+    [Fact]
+    public void MacAddress_PostgreSql_EightByteAddress_ConfiguresMacAddr8Type()
+    {
+        var registry = AdvancedTypeRegistry.Shared;
+        var mapping = registry.GetMapping(typeof(MacAddress), SupportedDatabase.PostgreSql);
+
+        Assert.NotNull(mapping);
+        Assert.NotNull(mapping.ConfigureParameter);
+
+        var param = new PostgreSqlLikeParameter();
+        mapping.ConfigureParameter(param, new MacAddress(PhysicalAddress.Parse("00-11-22-33-44-55-66-77")));
+
+        // 8-byte EUI-64 address -> PostgreSQL macaddr8.
         Assert.Equal(MockNpgsqlDbType.MacAddr8, param.NpgsqlDbType);
     }
 
@@ -750,8 +767,8 @@ public class AdvancedTypeRegistryExtensiveTests
         Inet = 16,
         Uuid = 32,
         Interval = 64,
-        Int4Range = 128,
-        TsRange = 256,
+        IntegerRange = 128,
+        TimestampRange = 256,
         MacAddr = 512,
         MacAddr8 = 4096,
         Jsonb = 1024,

@@ -83,12 +83,13 @@ internal class AdvancedTypeRegistry
         public const string Integer = "Integer";
         public const string Text = "Text";
         public const string Array = "Array";
-        public const string Int4Range = "Int4Range";
+        public const string Int4Range = "IntegerRange";
         public const string Int8Range = "BigIntRange";
-        public const string TsRange = "TsRange";
+        public const string TsRange = "TimestampRange";
         public const string Inet = "Inet";
         public const string Cidr = "Cidr";
-        public const string MacAddr = "MacAddr8";
+        public const string MacAddr = "MacAddr";
+        public const string MacAddr8 = "MacAddr8";
         public const string Interval = "Interval";
         public const string Uuid = "Uuid";
         public const string TimestampTz = "TimestampTz";
@@ -565,13 +566,16 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Cidr>(SupportedDatabase.CockroachDb, pgCidr);
         RegisterMapping<Cidr>(SupportedDatabase.YugabyteDb, pgCidr);
 
-        // PostgreSQL macaddr
+        // PostgreSQL macaddr (6-byte EUI-48) / macaddr8 (8-byte EUI-64) - dispatch on the actual
+        // address width rather than assuming one fixed type, since MacAddress supports both.
         var pgMac = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr);
+                var isEui64 = value is MacAddress mac && mac.Address.GetAddressBytes().Length == 8;
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty,
+                    isEui64 ? NpgsqlNames.MacAddr8 : NpgsqlNames.MacAddr);
             }
         };
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, pgMac);
