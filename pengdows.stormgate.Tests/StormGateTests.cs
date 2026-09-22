@@ -183,6 +183,81 @@ public class StormGateTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
     }
 
+    // Regression: Dispose()/DisposeAsync() disposed the DbDataSource and (once drained) the
+    // semaphore based solely on already-registered leases, ignoring an acquire attempt that had
+    // already committed to taking a slot (or was still waiting for one) but hadn't finished
+    // registering itself as an active lease yet. A concurrent Dispose() could see "zero active
+    // leases" and tear down shared state while another AcquirePermitAsync/AcquirePermit call was
+    // still in flight — corrupting or crashing that call's use of the now-disposed
+    // DbDataSource/SemaphoreSlim, and potentially masking the caller's real exception with an
+    // unrelated ObjectDisposedException from the cleanup path.
+    //
+    // Deterministic without any Task.Delay/Thread.Sleep: calling (not awaiting) AcquirePermitAsync
+    // runs its body synchronously on the calling thread up to its first genuine await. Since the
+    // semaphore has no available slot here, that first await (on _semaphore.WaitAsync) suspends —
+    // meaning by the time this line returns a (still-pending) Task, every synchronous statement
+    // preceding that await, including the fix's reservation bookkeeping, has already run.
+    [Fact]
+    public async Task Dispose_WhileAnotherAcquireAttemptIsStillOutstanding_DefersDisposalUntilThatAttemptAlsoCompletes()
+    {
+        var ds = new TestDataSource();
+        var gate = new StormGate(ds, 1, _timeout);
+
+        var heldPermit = await gate.AcquirePermitAsync();
+
+        var waitingAcquireTask = gate.AcquirePermitAsync();
+        Assert.False(waitingAcquireTask.IsCompleted);
+
+        gate.Dispose();
+        Assert.False(ds.Disposed);
+
+        heldPermit.Dispose();
+
+        // The critical assertion: releasing the held permit must NOT trigger disposal while the
+        // waiting acquire's own reservation is still outstanding.
+        Assert.False(ds.Disposed);
+
+        var wonPermit = await waitingAcquireTask;
+        Assert.False(ds.Disposed);
+
+        // Only once every outstanding acquire attempt/lease is done does the fully-drained gate
+        // actually dispose.
+        wonPermit.Dispose();
+        Assert.True(ds.Disposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhileAnotherAcquireAttemptIsStillOutstanding_DefersDisposalUntilThatAttemptAlsoCompletes()
+    {
+        var ds = new TestDataSource();
+        var gate = new StormGate(ds, 1, _timeout);
+
+        var heldPermit = await gate.AcquirePermitAsync();
+        var waitingAcquireTask = gate.AcquirePermitAsync();
+        Assert.False(waitingAcquireTask.IsCompleted);
+
+        await gate.DisposeAsync();
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        heldPermit.Dispose();
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        var wonPermit = await waitingAcquireTask;
+        Assert.False(ds.DisposedAsync);
+        Assert.False(ds.Disposed);
+
+        // The deferred drain, whenever it finally happens, always disposes synchronously —
+        // matching the pre-existing precedent for the semaphore's own deferred disposal — because
+        // the release that finally drains _outstandingAttempts to zero can come from either a sync or
+        // async permit release (StormGatePermit.DisposeAsync() itself calls the same sync
+        // ReleaseLease()), so there is no single "was the original Dispose call async" thread to
+        // honor by the time the drain actually happens.
+        wonPermit.Dispose();
+        Assert.True(ds.Disposed);
+    }
+
     [Fact]
     public async Task Dispose_WithActiveLease_DoesNotBreakLeaseDisposal()
     {
@@ -200,6 +275,51 @@ public class StormGateTests
 
         Assert.Null(ex);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.OpenAsync());
+    }
+
+    // Regression: StormGatePermit.Dispose() called _owner?.ReleaseLease() unconditionally, with
+    // no idempotence guard. A second Dispose() call on the same permit released the underlying
+    // semaphore slot a second time, which either throws SemaphoreFullException (when the gate is
+    // otherwise fully available, as here) or — with other permits outstanding — silently hands
+    // out an extra slot beyond the configured concurrency limit.
+    [Fact]
+    public async Task StormGatePermit_Dispose_CalledTwice_ReleasesOnlyOneSlot()
+    {
+        var ds = new TestDataSource();
+        using var gate = new StormGate(ds, 1, _timeout);
+
+        var permit = await gate.AcquirePermitAsync();
+        permit.Dispose();
+
+        var ex = Record.Exception(() => permit.Dispose());
+        Assert.Null(ex);
+
+        // Only one slot was ever genuinely released — a concurrent second acquire must still
+        // time out, proving the redundant Dispose() didn't hand out an extra slot.
+        var held = await gate.AcquirePermitAsync();
+        await Assert.ThrowsAsync<TimeoutException>(() => gate.AcquirePermitAsync());
+        held.Dispose();
+    }
+
+    // Regression: StormGatePermit is a struct. Copying it (assignment, passing by value) yields a
+    // second independent value sharing the same owner reference, so disposing both copies is
+    // indistinguishable from calling Dispose() twice on the original — same corruption as above.
+    [Fact]
+    public async Task StormGatePermit_CopiedStruct_DisposingBothCopies_ReleasesOnlyOnce()
+    {
+        var ds = new TestDataSource();
+        using var gate = new StormGate(ds, 1, _timeout);
+
+        var permit = await gate.AcquirePermitAsync();
+        var copy = permit;
+
+        permit.Dispose();
+        var ex = Record.Exception(() => copy.Dispose());
+        Assert.Null(ex);
+
+        var held = await gate.AcquirePermitAsync();
+        await Assert.ThrowsAsync<TimeoutException>(() => gate.AcquirePermitAsync());
+        held.Dispose();
     }
 
     [Fact]
@@ -251,5 +371,105 @@ public class StormGateTests
     {
         public override DbConnection CreateConnection() => new Mock<DbConnection>().Object;
         public override DbConnectionStringBuilder CreateConnectionStringBuilder() => new DbConnectionStringBuilder();
+    }
+
+    // ── PermitTransaction savepoint delegation ──────────────────────────────
+
+    [Fact]
+    public async Task PermitTransaction_Savepoints_DelegateToInnerTransaction()
+    {
+        // Regression: PermitTransaction only overrode Commit/Rollback/IsolationLevel/Dispose —
+        // Save(string)/Rollback(string)/Release(string)/SupportsSavepoints were never forwarded to
+        // Inner, so callers using a StormGate-gated connection's transaction got DbTransaction's
+        // base (unsupported) behavior instead of the wrapped provider transaction's real savepoint
+        // support.
+        var innerConnection = new SavepointCapableFakeConnection();
+        innerConnection.Open();
+        _mockDataSource.Protected()
+            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(innerConnection);
+
+        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var permitConnection = await gate.OpenAsync();
+        using var tx = permitConnection.BeginTransaction();
+
+        Assert.True(tx.SupportsSavepoints);
+
+        tx.Save("sp1");
+        tx.Rollback("sp2");
+        tx.Release("sp3");
+        await tx.SaveAsync("sp4");
+        await tx.RollbackAsync("sp5");
+        await tx.ReleaseAsync("sp6");
+
+        var innerTx = innerConnection.LastTransaction;
+        Assert.NotNull(innerTx);
+        Assert.Equal("sp1", innerTx!.SavedSavepointName);
+        Assert.Equal("sp2", innerTx.RolledBackSavepointName);
+        Assert.Equal("sp3", innerTx.ReleasedSavepointName);
+        Assert.Equal("sp4", innerTx.SavedSavepointNameAsync);
+        Assert.Equal("sp5", innerTx.RolledBackSavepointNameAsync);
+        Assert.Equal("sp6", innerTx.ReleasedSavepointNameAsync);
+    }
+
+    private sealed class SavepointCapableFakeConnection : fakeDbConnection
+    {
+        public new SavepointTrackingTransaction? LastTransaction { get; private set; }
+
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        {
+            LastTransaction = new SavepointTrackingTransaction(this);
+            return LastTransaction;
+        }
+    }
+
+    private sealed class SavepointTrackingTransaction : DbTransaction
+    {
+        private readonly DbConnection _connection;
+
+        public SavepointTrackingTransaction(DbConnection connection)
+        {
+            _connection = connection;
+        }
+
+        protected override DbConnection DbConnection => _connection;
+        public override IsolationLevel IsolationLevel => IsolationLevel.Unspecified;
+        public override bool SupportsSavepoints => true;
+        public string? SavedSavepointName { get; private set; }
+        public string? RolledBackSavepointName { get; private set; }
+        public string? ReleasedSavepointName { get; private set; }
+        public string? SavedSavepointNameAsync { get; private set; }
+        public string? RolledBackSavepointNameAsync { get; private set; }
+        public string? ReleasedSavepointNameAsync { get; private set; }
+
+        public override void Commit()
+        {
+        }
+
+        public override void Rollback()
+        {
+        }
+
+        public override void Save(string savepointName) => SavedSavepointName = savepointName;
+        public override void Rollback(string savepointName) => RolledBackSavepointName = savepointName;
+        public override void Release(string savepointName) => ReleasedSavepointName = savepointName;
+
+        public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            SavedSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
+
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            RolledBackSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
+
+        public override Task ReleaseAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            ReleasedSavepointNameAsync = savepointName;
+            return Task.CompletedTask;
+        }
     }
 }
