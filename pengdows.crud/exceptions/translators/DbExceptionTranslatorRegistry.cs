@@ -14,6 +14,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator Sybase = new SybaseExceptionTranslator();
     private static readonly IDbExceptionTranslator Db2 = new Db2ExceptionTranslator();
     private static readonly IDbExceptionTranslator Informix = new InformixExceptionTranslator();
+    private static readonly IDbExceptionTranslator SapHana = new HanaExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
     public IDbExceptionTranslator Get(SupportedDatabase database)
@@ -24,6 +25,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
             SupportedDatabase.Sybase => Sybase,
             SupportedDatabase.Db2 => Db2,
             SupportedDatabase.Informix => Informix,
+            SupportedDatabase.SapHana => SapHana,
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
                 SupportedDatabase.AuroraPostgreSql => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or

@@ -250,6 +250,15 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
+            // CONFIRMED live via HanaConnection.BeginTransaction(IsolationLevel): all four
+            // accepted without error (Snapshot correctly rejected by the driver itself).
+            SupportedDatabase.SapHana => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -356,6 +365,12 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // Committed Read, Informix's default
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // Repeatable Read
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // Dirty Read
+            },
+            SupportedDatabase.SapHana => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

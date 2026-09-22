@@ -1,5 +1,3 @@
-using System;
-using System.Data.Common;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
@@ -149,25 +147,5 @@ public class InformixTranslatorTests
         var registry = new DbExceptionTranslatorRegistry();
 
         Assert.IsType<InformixExceptionTranslator>(registry.Get(SupportedDatabase.Informix));
-    }
-
-    private sealed class NumberedDbException : DbException
-    {
-        public int Number { get; }
-
-        public NumberedDbException(int number, string message) : base(message)
-        {
-            Number = number;
-        }
-    }
-
-    private sealed class SqlStateDbException : DbException
-    {
-        public SqlStateDbException(string sqlState, string message) : base(message)
-        {
-            SqlState = sqlState;
-        }
-
-        public override string? SqlState { get; }
     }
 }

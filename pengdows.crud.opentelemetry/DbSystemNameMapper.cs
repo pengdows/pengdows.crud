@@ -38,6 +38,7 @@ internal static class DbSystemNameMapper
         // (https://opentelemetry.io/docs/specs/semconv/registry/attributes/db/).
         SupportedDatabase.Db2 => "ibm.db2",
         SupportedDatabase.Informix => "ibm.informix",
+        SupportedDatabase.SapHana => "sap.hana",
         // Not present in the OTel registry as of this writing; best-effort custom values.
         SupportedDatabase.Sybase => "sap.ase",
         SupportedDatabase.SingleStore => "singlestore",

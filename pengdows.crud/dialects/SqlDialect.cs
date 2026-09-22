@@ -3073,6 +3073,42 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     return true;
                 }
                 break;
+
+            case SupportedDatabase.SapHana:
+                // All three codes captured live from a real Sap.Data.Hana.HanaException.
+                // HanaException.ErrorCode is always the generic COM HRESULT -2147467259
+                // regardless of violation kind, and SqlState is empty for these three - the only
+                // reliable discriminator is HanaException.NativeError, which the local
+                // TryGetProviderErrorCode(ex) above does NOT probe for (it only checks "Number"
+                // then DbException.ErrorCode) - use DbExceptionTranslationSupport's fuller
+                // reflection-based extraction instead, same reasoning as the Db2 case above.
+                // 133: "transaction rolled back by detected deadlock" (SAP KBA 1999998/2658020,
+                // not live-reproduced - requires two contending sessions). 131: "transaction
+                // rolled back by lock wait timeout" (same KBA, not live-reproduced). 129:
+                // "cannot change this transaction's access mode from read-only to update
+                // directly" - CONFIRMED LIVE as the exact NativeError a write attempt gets when
+                // the current (or a stuck-sticky prior - see HanaDialect.GetBaseSessionSettings)
+                // transaction is marked SET TRANSACTION READ ONLY.
+                var hanaNativeError = DbExceptionTranslationSupport.TryGetErrorCode(ex);
+
+                if (hanaNativeError == 133)
+                {
+                    category = DbErrorCategory.Deadlock;
+                    return true;
+                }
+
+                if (hanaNativeError == 131)
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                if (hanaNativeError == 129)
+                {
+                    category = DbErrorCategory.ReadOnlyViolation;
+                    return true;
+                }
+                break;
         }
 
         category = DbErrorCategory.Unknown;

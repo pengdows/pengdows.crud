@@ -96,6 +96,7 @@ public static class DataSourceTestData
             SupportedDatabase.Sybase => new SybaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SapHana => new HanaDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -165,8 +166,9 @@ public class DataSourceInformationTests
             // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
             SupportedDatabase.FlatFile => "?",
             // Informix's ADO.NET driver has no named-parameter support at all - positional "?"
-            // only (see InformixDialect.SupportsNamedParameters).
-            SupportedDatabase.Informix => "?",
+            // only (see InformixDialect.SupportsNamedParameters). SAP HANA likewise (confirmed
+            // live via DataSourceInformation.ParameterMarkerFormat == "?").
+            SupportedDatabase.Informix or SupportedDatabase.SapHana => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -183,7 +185,8 @@ public class DataSourceInformationTests
                        || ((db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) && info.ParsedVersion?.Major > 14)
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14)
                        || db == SupportedDatabase.Sybase
-                       || db == SupportedDatabase.Db2;
+                       || db == SupportedDatabase.Db2
+                       || db == SupportedDatabase.SapHana;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -219,7 +222,8 @@ public class DataSourceInformationTests
             SupportedDatabase.Oracle => ProcWrappingStyle.Oracle,
             SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.SingleStore or SupportedDatabase.Db2 => ProcWrappingStyle.Call,
+                or SupportedDatabase.SingleStore or SupportedDatabase.Db2
+                or SupportedDatabase.SapHana => ProcWrappingStyle.Call,
             SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,
@@ -230,8 +234,10 @@ public class DataSourceInformationTests
         {
             // FlatFile and Informix both have no named parameters at all (positional ? only) and
             // no stored-procedure support (ProcWrappingStyle.None), so there is nothing to
-            // name-match against.
-            SupportedDatabase.FlatFile or SupportedDatabase.Informix => false,
+            // name-match against. SAP HANA has no named parameters either, even though it DOES
+            // support stored procedures (ProcWrappingStyle.Call) - same "nothing to name-match"
+            // conclusion for a different reason.
+            SupportedDatabase.FlatFile or SupportedDatabase.Informix or SupportedDatabase.SapHana => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -250,8 +256,10 @@ public class DataSourceInformationTests
         // FlatFile's own SQL grammar supports only positional ? parameters (see
         // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
         // Informix's ADO.NET driver likewise has no named-parameter support at all (see
-        // InformixDialect.SupportsNamedParameters).
-        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile && db != SupportedDatabase.Informix;
+        // InformixDialect.SupportsNamedParameters), nor does SAP HANA's (confirmed live via
+        // DataSourceInformation.ParameterMarkerFormat == "?").
+        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile
+            && db != SupportedDatabase.Informix && db != SupportedDatabase.SapHana;
         Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
