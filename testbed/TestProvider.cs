@@ -358,6 +358,11 @@ CREATE TABLE {tableName} (
             // Informix's DATETIME type requires an explicit precision qualifier - a bare
             // "DATETIME" is not valid syntax (IBM docs, DATETIME data type reference).
             SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            // CONFIRMED live: InterBase has no DATETIME type at all - "DATETIME" is parsed as an
+            // (unresolvable) domain/column reference, not a type keyword, and fails with SQLCODE
+            // -607 "Specified domain or source column ... does not exist". Same lineage/limitation
+            // as Firebird, which hardcodes TIMESTAMP in its own dedicated CreateTable override.
+            SupportedDatabase.InterBase => "TIMESTAMP",
             _ => "DATETIME"
         };
     }
@@ -380,6 +385,15 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             SupportedDatabase.Firebird => "BIGINT",
+            // CONFIRMED live: unlike Firebird (which added a native BIGINT keyword in 3.0),
+            // InterBase's classic type system has no BIGINT/INT64/LARGEINT keyword at all - "id
+            // BIGINT" fails with the same "Specified domain or source column does not exist"
+            // (SQLCODE -607) as an unrecognized type name resolving as a domain reference.
+            // NUMERIC(18,0) is InterBase's real 64-bit-integer syntax: confirmed by inspecting an
+            // existing live table's actual column metadata (RDB$FIELD_TYPE=16, the internal
+            // INT64 storage code, with RDB$FIELD_PRECISION=18/scale 0) and reproducing the exact
+            // same declaration directly.
+            SupportedDatabase.InterBase => "NUMERIC(18,0)",
             _ => "BIGINT"
         };
     }
@@ -406,6 +420,9 @@ CREATE TABLE {tableName} (
             // column as Informix's native BOOLEAN then breaks comparison — "Routine (equal) can
             // not be resolved", since IDS has no "=" operator between BOOLEAN and SMALLINT.
             SupportedDatabase.Informix => "SMALLINT",
+            // CONFIRMED live: InterBase has no native BOOLEAN type at all (same lineage/
+            // limitation as Firebird, which uses the identical SMALLINT fallback).
+            SupportedDatabase.InterBase => "SMALLINT",
             _ => "BOOLEAN"
         };
     }
@@ -508,6 +525,14 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Oracle => true,
             _ => false
         };
+    }
+
+    // CONFIRMED live: InterBase rejects "WHERE blob_col = ?" outright ("BLOB and array data types
+    // are not supported for compare operation") — a genuine restriction on InterBase's BLOB type
+    // specifically, NOT shared by Firebird despite both calling the column type BLOB.
+    private static bool SupportsBinaryEquality(SupportedDatabase product)
+    {
+        return product != SupportedDatabase.InterBase;
     }
 
 
@@ -837,6 +862,55 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.InterBase:
+                {
+                    var interBaseProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // CONFIRMED live via isql: unlike Firebird, InterBase rejects "CREATE OR ALTER
+                    // PROCEDURE" outright (SQLCODE -104), so a bare DROP-then-CREATE is required.
+                    // DROP PROCEDURE IF EXISTS isn't supported either (SupportsDropTableIfExists
+                    // covers tables only, and the same IF-EXISTS limitation applies to procedures),
+                    // so failure here is expected/harmless on a fresh database.
+                    sc.Query.Append($"DROP PROCEDURE {interBaseProcName}");
+                    try
+                    {
+                        await sc.ExecuteNonQueryAsync();
+                    }
+                    catch
+                    {
+                        // Procedure did not exist yet — expected on a fresh database.
+                    }
+
+                    // Otherwise identical to Firebird: selectable proc (SUSPEND) → SELECT * FROM
+                    // "proc_name" via the Read path (same ProcWrappingStyle.ExecuteProcedure).
+                    sc.Clear();
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {interBaseProcName}\n" +
+                        "RETURNS (result_val INTEGER)\n" +
+                        "AS\n" +
+                        "BEGIN\n" +
+                        "  result_val = 42;\n" +
+                        "  SUSPEND;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    // SELECT * FROM "sp_pengdows_test" — returns one row, result_val = 42.
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var ibWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(ibWrapped);
+                    var ibResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (ibResult != 42)
+                    {
+                        throw new Exception($"[InterBase proc] Expected 42 but got {ibResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {interBaseProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             case SupportedDatabase.Sybase:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
@@ -1111,7 +1185,15 @@ INSERT INTO {table} (
                 CheckSkip($"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
             }
 
-            await AssertBindingCount("bin_val", DbType.Binary, binVal);
+            if (SupportsBinaryEquality(_context.Product))
+            {
+                await AssertBindingCount("bin_val", DbType.Binary, binVal);
+            }
+            else
+            {
+                CheckSkip($"  [ParamBinding] Binary equality comparison: not supported by {_context.Product} — skip");
+            }
+
             CheckOk("  [ParamBinding] Type matrix (int/long/decimal/bool/string/dto/guid/binary): OK");
         }
         finally
