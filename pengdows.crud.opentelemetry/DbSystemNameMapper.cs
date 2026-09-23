@@ -45,6 +45,10 @@ internal static class DbSystemNameMapper
         SupportedDatabase.Sybase => "sap.ase",
         SupportedDatabase.SingleStore => "singlestore",
         SupportedDatabase.FlatFile => "flatfile",
+        // Not present in the OTel registry as of this writing; best-effort custom value,
+        // vendor-qualified like SqlServer's "microsoft.sql_server" since Access is also
+        // a Microsoft product.
+        SupportedDatabase.Access => "microsoft.access",
         _ => "other_sql"
     };
 }

@@ -374,6 +374,9 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(10)",
             SupportedDatabase.Firebird => "INTEGER",
+            // CONFIRMED live on pengdows.crud 3.0 via a real CREATE TABLE + INSERT + SELECT round
+            // trip against a real .accdb: Jet/ACE's LONG type covers both int and long columns.
+            SupportedDatabase.Access => "LONG",
             _ => "INT"
         };
     }
@@ -385,6 +388,9 @@ CREATE TABLE {tableName} (
             SupportedDatabase.Sqlite => "INTEGER",
             SupportedDatabase.Oracle => "NUMBER(19)",
             SupportedDatabase.Firebird => "BIGINT",
+            // CONFIRMED live on pengdows.crud 3.0: Jet/ACE has no distinct 64-bit integer type —
+            // LONG (32-bit) is used for both int and long columns.
+            SupportedDatabase.Access => "LONG",
             // CONFIRMED live: unlike Firebird (which added a native BIGINT keyword in 3.0),
             // InterBase's classic type system has no BIGINT/INT64/LARGEINT keyword at all - "id
             // BIGINT" fails with the same "Specified domain or source column does not exist"
@@ -423,6 +429,8 @@ CREATE TABLE {tableName} (
             // CONFIRMED live: InterBase has no native BOOLEAN type at all (same lineage/
             // limitation as Firebird, which uses the identical SMALLINT fallback).
             SupportedDatabase.InterBase => "SMALLINT",
+            // CONFIRMED live on pengdows.crud 3.0: Jet/ACE's native boolean type is YESNO.
+            SupportedDatabase.Access => "YESNO",
             _ => "BOOLEAN"
         };
     }
@@ -460,6 +468,12 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "BLOB",
             SupportedDatabase.TiDb => "BLOB",
             SupportedDatabase.Snowflake => "VARBINARY",
+            // CONFIRMED live (this session, via a real .accdb): Jet/ACE's "BLOB" is not a valid
+            // field-type keyword at all ("Syntax error in field definition") — LONGBINARY is the
+            // real Jet SQL type for binary data. "OLE OBJECT" (the type Access's own GUI shows
+            // for this column kind) was also confirmed to fail as DDL text the same way; only
+            // LONGBINARY works via a text CREATE TABLE statement.
+            SupportedDatabase.Access => "LONGBINARY",
             _ => "BLOB"
         };
     }
@@ -475,6 +489,10 @@ CREATE TABLE {tableName} (
             // ("Maximum varchar size has been exceeded" for anything longer) — LVARCHAR
             // supports up to 32739 bytes and is the correct type for longer text columns.
             SupportedDatabase.Informix when length > 255 => $"LVARCHAR({length})",
+            // CONFIRMED live on pengdows.crud 3.0: Jet/ACE's TEXT type is capped at 255
+            // characters; MEMO is the correct type for longer text columns.
+            SupportedDatabase.Access when length > 255 => "MEMO",
+            SupportedDatabase.Access => $"TEXT({length})",
             _ => $"VARCHAR({length})"
         };
     }
@@ -597,6 +615,10 @@ CREATE TABLE {tableName} (
             // CONFIRMED live: HANA's driver reports ParameterMarkerFormat == "?" and uses bare
             // positional binding, same as Informix (see HanaDialect.SupportsNamedParameters).
             SupportedDatabase.SapHana => "?",
+            // CONFIRMED live (this session, via a real .accdb): Access's OLE DB provider reports
+            // ParameterMarkerFormat == "?" and uses bare positional binding, same as Informix/HANA
+            // (see AccessDialect.SupportsNamedParameters).
+            SupportedDatabase.Access => "?",
             _ => "@"
         };
     }
@@ -1136,7 +1158,11 @@ CREATE TABLE {table} (
 
         var id = Interlocked.Increment(ref _nextId);
         const int intVal = 123;
-        const long longVal = 9_876_543_210L;
+        // CONFIRMED live (this session, via a real .accdb): Jet/ACE has no native 64-bit integer
+        // type at all — LONG is a genuine 32-bit type (see GetLongType's Access case) — so a value
+        // outside Int32 range overflows on INSERT ("Overflow"). Every other provider here keeps
+        // the real >Int32.MaxValue value to exercise genuine 64-bit round-tripping.
+        var longVal = _context.Product == SupportedDatabase.Access ? 987_654_321L : 9_876_543_210L;
         const decimal decVal = 12345.678901m;
         const bool boolVal = true;
         const string textVal = "bind-test";

@@ -28,6 +28,7 @@
         <PackageReference Include="Npgsql" Version="9.0.3"/>
         <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.8.0"/>
         <PackageReference Include="Snowflake.Data" Version="4.*"/>
+        <PackageReference Include="System.Data.OleDb" Version="8.0.1"/>
         <PackageReference Include="Testcontainers" Version="4.4.0"/>
     </ItemGroup>
 

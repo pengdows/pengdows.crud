@@ -64,7 +64,8 @@ public class SupportedDatabaseTests
                 "Spanner",
                 "Informix",
                 "SapHana",
-                "InterBase"
+                "InterBase",
+                "Access"
             },
             names);
     }

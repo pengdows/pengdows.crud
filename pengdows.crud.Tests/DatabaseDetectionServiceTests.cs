@@ -277,4 +277,26 @@ public class DatabaseDetectionServiceTests
     }
 
     #endregion
+
+    #region Detection from Name — Access
+
+    // CONFIRMED live: GetSchema("DataSourceInformation").DataSourceProductName returns "MS Jet"
+    // for a real .accdb via System.Data.OleDb — see AccessDialect.cs's file-level AI SUMMARY.
+    [Fact]
+    public void DetectFromName_MsJet_ReturnsAccess()
+    {
+        var result = DatabaseDetectionService.DetectFromName("MS Jet");
+        Assert.Equal(SupportedDatabase.Access, result);
+    }
+
+    // Deliberately no FactoryTypeTokens entry for Access — OleDbFactory's type name is shared by
+    // every OLE DB provider (SQL Server, Oracle, etc. via OLE DB), so matching on it would
+    // misdetect every other OLE DB connection as Access. fakeDbFactory can't exercise this claim
+    // at the unit level (DetectFromFactory special-cases any "fake"-named factory type via its
+    // PretendToBe property, bypassing FactoryTypeTokens matching entirely for every
+    // SupportedDatabase, Access included). The real proof against the actual
+    // System.Data.OleDb.OleDbFactory type lives in the opt-in testbed
+    // (AccessTestProvider.TestOleDbFactoryAloneDoesNotImplyAccess).
+
+    #endregion
 }

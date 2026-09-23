@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using testbed.Access;
 using testbed.Cockroach;
 using testbed.DuckDb;
 using testbed.Firebird;
@@ -28,14 +29,16 @@ public class ParallelTestOrchestrator
     private readonly bool _includeSnowflake;
     private readonly bool _includeSapHana;
     private readonly bool _includeInterBase;
+    private readonly bool _includeAccess;
 
     public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false,
-        bool includeSapHana = false, bool includeInterBase = false)
+        bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
         _includeSapHana = includeSapHana;
         _includeInterBase = includeInterBase;
+        _includeAccess = includeAccess;
     }
 
     /// <summary>
@@ -63,6 +66,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
             SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
+            SupportedDatabase.Access when _includeAccess => new AccessTestContainer(),
             _ => null
         };
 
@@ -395,6 +399,21 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "InterBase",
                 Container = new InterBaseTestContainer(),
                 TestProviderFactory = (db, sp) => new InterBaseTestProvider(db, sp)
+            });
+        }
+
+        // Access (Jet/ACE) — no Docker image at all (a fourth, distinct opt-in justification
+        // alongside Snowflake/SAP HANA/InterBase above — see AccessTestContainer.cs's class
+        // remarks), Windows-only, and requires the Microsoft Access Database Engine
+        // Redistributable installed on the host; opt-in via INCLUDE_ACCESS=true
+        if (_includeAccess)
+        {
+            configurations.Add(new TestConfiguration
+            {
+                ContainerName = "Access",
+                DatabaseProvider = "Access",
+                Container = new AccessTestContainer(),
+                TestProviderFactory = (db, sp) => new AccessTestProvider(db, sp)
             });
         }
 

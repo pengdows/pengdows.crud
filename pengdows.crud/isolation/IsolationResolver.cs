@@ -275,6 +275,15 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.RepeatableRead,
                 IsolationLevel.Serializable
             },
+            // CONFIRMED live against a real .accdb (see AccessDialect.cs's file-level AI
+            // SUMMARY): only ReadUncommitted/ReadCommitted are accepted by
+            // OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw
+            // "Neither the isolation level nor a strengthening of it is supported."
+            SupportedDatabase.Access => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -399,6 +408,14 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.RepeatableRead
+            },
+            // Serializable is unavailable for Access — ReadCommitted is the strictest level
+            // genuinely accepted (see BuildSupportedIsolationLevels' Access case above).
+            SupportedDatabase.Access => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
             {

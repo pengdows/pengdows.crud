@@ -52,7 +52,13 @@ internal static class DatabaseDetectionService
         (SupportedDatabase.Informix, new[] { "informix" }),
         (SupportedDatabase.SapHana, new[] { "hana" }),
         (SupportedDatabase.InterBase, new[] { "interbase" }),
-        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" })
+        (SupportedDatabase.Spanner, new[] { "spanner", "pgadapter" }),
+        // CONFIRMED live: GetSchema("DataSourceInformation").DataSourceProductName returns
+        // "MS Jet" for a real .accdb via System.Data.OleDb. Deliberately no FactoryTypeTokens
+        // entry below — factory.GetType().FullName is "System.Data.OleDb.OleDbFactory" for ANY
+        // OLE DB provider (SQLOLEDB, OraOLEDB, etc.), so matching on it would misdetect every
+        // other OLE DB connection as Access.
+        (SupportedDatabase.Access, new[] { "ms jet" })
     };
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] FactoryTypeTokens =

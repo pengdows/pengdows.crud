@@ -1,0 +1,82 @@
+<?xml version="1.0" standalone="yes"?>
+<NewDataSet>
+    <xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+               xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:MainDataTable="DataSourceInformation"
+                    msdata:UseCurrentLocale="true">
+            <xs:complexType>
+                <xs:choice minOccurs="0" maxOccurs="unbounded">
+                    <xs:element name="DataSourceInformation">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="CompositeIdentifierSeparatorPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductName" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductVersion" type="xs:string" minOccurs="0"/>
+                                <xs:element name="DataSourceProductVersionNormalized" type="xs:string" minOccurs="0"/>
+                                <xs:element name="GroupByBehavior"
+                                            msdata:DataType="System.Data.Common.GroupByBehavior, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="IdentifierPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="IdentifierCase"
+                                            msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="OrderByColumnsInSelect" type="xs:boolean" minOccurs="0"/>
+                                <xs:element name="ParameterMarkerFormat" type="xs:string" minOccurs="0"/>
+                                <xs:element name="ParameterMarkerPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="ParameterNameMaxLength" type="xs:int" minOccurs="0"/>
+                                <xs:element name="QuotedIdentifierPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="QuotedIdentifierCase"
+                                            msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                                <xs:element name="ParameterNamePattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="StatementSeparatorPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="StringLiteralPattern" type="xs:string" minOccurs="0"/>
+                                <xs:element name="SupportedJoinOperators"
+                                            msdata:DataType="System.Data.Common.SupportedJoinOperators, System.Data.Common, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
+                                            type="xs:anyType" minOccurs="0"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                </xs:choice>
+            </xs:complexType>
+        </xs:element>
+    </xs:schema>
+    <!--
+      Every value below was captured LIVE from conn.GetSchema("DataSourceInformation") against a
+      real Microsoft Access .accdb file, via System.Data.OleDb.OleDbConnection and the Microsoft
+      Access Database Engine 2016 Redistributable (Provider=Microsoft.ACE.OLEDB.16.0) — there is
+      no native ADO.NET Jet/ACE client, so this is the real provider pengdows.crud uses in
+      production for Access. Several fields (CompositeIdentifierSeparatorPattern,
+      ParameterNamePattern, StatementSeparatorPattern, StringLiteralPattern,
+      SupportedJoinOperators) come back genuinely empty from this driver — recorded as empty here,
+      not omitted, since that emptiness is itself real, verified behavior. Notably
+      QuotedIdentifierPattern reports a backtick-delimited pattern, which is surprising for
+      Access/Jet (real Access SQL uses bracket identifiers); do not trust this driver-reported
+      metadata field over live verification of what the parser actually accepts — see
+      AccessDialect.cs for the resolved WrapObjectName behavior.
+    -->
+    <DataSourceInformation>
+        <CompositeIdentifierSeparatorPattern></CompositeIdentifierSeparatorPattern>
+        <DataSourceProductName>MS Jet</DataSourceProductName>
+        <DataSourceProductVersion>04.00.0000</DataSourceProductVersion>
+        <DataSourceProductVersionNormalized>04.00.0000</DataSourceProductVersionNormalized>
+        <GroupByBehavior>3</GroupByBehavior>
+        <IdentifierPattern>[^ ][^\.!`\[\]]*</IdentifierPattern>
+        <IdentifierCase>1</IdentifierCase>
+        <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
+        <ParameterMarkerFormat>?</ParameterMarkerFormat>
+        <ParameterMarkerPattern>\?</ParameterMarkerPattern>
+        <ParameterNameMaxLength>0</ParameterNameMaxLength>
+        <ParameterNamePattern></ParameterNamePattern>
+        <QuotedIdentifierPattern>`(([^`]|``)*)`</QuotedIdentifierPattern>
+        <QuotedIdentifierCase>1</QuotedIdentifierCase>
+        <StatementSeparatorPattern></StatementSeparatorPattern>
+        <StringLiteralPattern></StringLiteralPattern>
+        <!-- SupportedJoinOperators element deliberately omitted (minOccurs="0" above): the real
+             driver returns DBNull for this int-backed enum column, and DataTable.ReadXml cannot
+             parse an empty string into it (Int32Storage.ConvertXmlToObject throws on ""). Omitting
+             the element is the correct way to represent a null value for a strongly-typed column
+             here, unlike the plain xs:string columns above where an empty tag is a real, valid
+             empty string. -->
+    </DataSourceInformation>
+</NewDataSet>

@@ -50,6 +50,11 @@ public static class DataSourceTestData
             SupportedDatabase.Oracle => "Oracle Database",
             SupportedDatabase.Snowflake => "Snowflake",
             SupportedDatabase.Sybase => "Adaptive Server Enterprise",
+            // CONFIRMED live: GetSchema("DataSourceInformation").DataSourceProductName returns
+            // "MS Jet" for a real .accdb — see AccessDialect.cs's file-level AI SUMMARY.
+            // SchemaProductTokens matches on "ms jet", not "access", so the generic db.ToString()
+            // fallback below ("Access") would not resolve detection to AccessDialect here.
+            SupportedDatabase.Access => "MS Jet",
             _ => db.ToString()
         };
 
@@ -99,6 +104,7 @@ public static class DataSourceTestData
             SupportedDatabase.SapHana => new HanaDialect(factory, NullLogger.Instance),
             SupportedDatabase.InterBase => new InterBaseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Spanner => new SpannerDialect(factory, NullLogger.Instance),
+            SupportedDatabase.Access => new AccessDialect(factory, NullLogger.Instance),
             _ => new Sql92Dialect(factory, NullLogger.Instance)
         };
 
@@ -179,8 +185,9 @@ public class DataSourceInformationTests
             SupportedDatabase.FlatFile => "?",
             // Informix's ADO.NET driver has no named-parameter support at all - positional "?"
             // only (see InformixDialect.SupportsNamedParameters). SAP HANA likewise (confirmed
-            // live via DataSourceInformation.ParameterMarkerFormat == "?").
-            SupportedDatabase.Informix or SupportedDatabase.SapHana => "?",
+            // live via DataSourceInformation.ParameterMarkerFormat == "?"). Access's OLE DB
+            // provider is positional-only too (confirmed live: ParameterMarkerFormat == "?").
+            SupportedDatabase.Informix or SupportedDatabase.SapHana or SupportedDatabase.Access => "?",
             _ => "@"
         };
         Assert.Equal(expectedMarker, info.ParameterMarker);
@@ -252,8 +259,10 @@ public class DataSourceInformationTests
             // no stored-procedure support (ProcWrappingStyle.None), so there is nothing to
             // name-match against. SAP HANA has no named parameters either, even though it DOES
             // support stored procedures (ProcWrappingStyle.Call) - same "nothing to name-match"
-            // conclusion for a different reason.
-            SupportedDatabase.FlatFile or SupportedDatabase.Informix or SupportedDatabase.SapHana => false,
+            // conclusion for a different reason. Access matches FlatFile/Informix's reasoning
+            // exactly: positional ? only, no ADO.NET-invocable stored procedures at all.
+            SupportedDatabase.FlatFile or SupportedDatabase.Informix or SupportedDatabase.SapHana
+                or SupportedDatabase.Access => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer
                 or SupportedDatabase.MySql or SupportedDatabase.AuroraMySql
                 or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
@@ -273,9 +282,11 @@ public class DataSourceInformationTests
         // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
         // Informix's ADO.NET driver likewise has no named-parameter support at all (see
         // InformixDialect.SupportsNamedParameters), nor does SAP HANA's (confirmed live via
-        // DataSourceInformation.ParameterMarkerFormat == "?").
+        // DataSourceInformation.ParameterMarkerFormat == "?"). Access's OLE DB provider is
+        // positional-only too (confirmed live: ParameterMarkerFormat == "?").
         var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile
-            && db != SupportedDatabase.Informix && db != SupportedDatabase.SapHana;
+            && db != SupportedDatabase.Informix && db != SupportedDatabase.SapHana
+            && db != SupportedDatabase.Access;
         Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);
 
@@ -312,13 +323,15 @@ public class DataSourceInformationTests
 
         var result = dialect.GetDatabaseVersion(tracked);
 
-        // FlatFile and InterBase have no version()-style SQL function at all — their dialects
-        // read ADO.NET's standard ServerVersion property directly instead of executing a canned
-        // scalar query (see FlatFileDialect.GetDatabaseVersionAsync; InterBaseDialect.cs's
+        // FlatFile, InterBase, and Access have no version()-style SQL function at all — their
+        // dialects read ADO.NET's standard ServerVersion property directly instead of executing a
+        // canned scalar query (see FlatFileDialect.GetDatabaseVersionAsync; InterBaseDialect.cs's
         // ServerVersion-based override — confirmed live that neither Firebird's rdb$get_context
-        // nor a mon$-table equivalent exists in InterBase 15). Every other dialect still executes
-        // a dialect-specific SQL version query, matched against the canned scalar below.
-        var expected = db is SupportedDatabase.FlatFile or SupportedDatabase.InterBase
+        // nor a mon$-table equivalent exists in InterBase 15; AccessDialect.cs's identical
+        // ServerVersion-based override — confirmed live that Jet SQL has no version()-style
+        // function either). Every other dialect still executes a dialect-specific SQL version
+        // query, matched against the canned scalar below.
+        var expected = db is SupportedDatabase.FlatFile or SupportedDatabase.InterBase or SupportedDatabase.Access
             ? tracked.ServerVersion
             : scalars.Values.First().ToString();
         Assert.Equal(expected, result);

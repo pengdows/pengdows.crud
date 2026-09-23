@@ -283,14 +283,26 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
-    /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB): isolated
-    /// in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the most
-    /// functional safe mode (Best selects it, and the unsafe Standard/PreventDatabaseUnload modes coerce to
-    /// it), while SingleConnection/SingleWriter explicit requests are honored as-is. Factored out
-    /// so SqliteDialect and DuckDbDialect — which only differ in how they recognize an in-memory
-    /// connection string — don't duplicate this decision.
+    /// Shared coercion policy for embedded, single-writer engines (SQLite, DuckDB, Access):
+    /// isolated in-memory requires SingleConnection unconditionally; otherwise SingleWriter is the
+    /// most functional safe mode (Best selects it, and PreventDatabaseUnload always coerces to
+    /// it), while SingleConnection/SingleWriter explicit requests are honored as-is.
+    /// <para>
+    /// <paramref name="allowStandard"/> lets a dialect opt an explicit <see cref="DbMode.Standard"/>
+    /// request out of the Standard-unsafe coercion below and have it honored instead (Best still
+    /// resolves to SingleWriter either way) — Access opts in, since it is documented by its own
+    /// vendor as supporting concurrent connections/writers, and a caller who has read that
+    /// documentation should be able to choose it deliberately. SQLite/DuckDB leave this false and
+    /// stay hard-coerced. See each opting-in dialect's <see cref="DescribeStandardModeRisk"/>
+    /// override for the evidence <c>DatabaseContext.WarnOnModeMismatch</c> surfaces when this
+    /// happens.
+    /// </para>
+    /// Factored out so SqliteDialect, DuckDbDialect, and AccessDialect — which only differ in how
+    /// they recognize an in-memory connection string (Access has none) and whether they opt into
+    /// <paramref name="allowStandard"/> — don't duplicate this decision.
     /// </summary>
-    protected static (DbMode Mode, string Reason) CoerceEmbeddedSingleWriterMode(DbMode requested, InMemoryKind kind)
+    protected static (DbMode Mode, string Reason) CoerceEmbeddedSingleWriterMode(DbMode requested, InMemoryKind kind,
+        bool allowStandard = false)
     {
         if (kind == InMemoryKind.Isolated)
         {
@@ -302,6 +314,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return (DbMode.SingleWriter, "SQLite/DuckDB: Best selects SingleWriter");
         }
 
+        if (allowStandard && requested == DbMode.Standard)
+        {
+            return (DbMode.Standard, string.Empty);
+        }
+
         if (requested == DbMode.Standard || requested == DbMode.PreventDatabaseUnload)
         {
             return (DbMode.SingleWriter, "SQLite/DuckDB: Standard/PreventDatabaseUnload unsafe, using SingleWriter");
@@ -309,6 +326,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         return (requested, string.Empty);
     }
+
+    /// <summary>
+    /// Risk description surfaced by <c>DatabaseContext.WarnOnModeMismatch</c> (Pattern 2) when an
+    /// embedded single-writer engine is actually running with an explicitly-honored
+    /// <see cref="DbMode.Standard"/> — only reachable for a dialect that opts into
+    /// <c>allowStandard</c> on <see cref="CoerceEmbeddedSingleWriterMode"/>; SQLite/DuckDB never
+    /// reach this, since they stay hard-coerced. Generic fallback text; override with
+    /// engine-specific evidence (see <c>AccessDialect</c>).
+    /// </summary>
+    internal virtual string DescribeStandardModeRisk() =>
+        "This engine documents support for concurrent connections, but pengdows.crud has not " +
+        "independently verified safe concurrent-writer behavior under Standard mode; it may cause " +
+        "intermittent lock-contention or transaction-conflict errors under real write concurrency. " +
+        "Consider SingleWriter mode unless you have verified your workload's concurrency safety.";
 
     public virtual string ParameterMarker => "?";
 
@@ -2809,7 +2840,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         var selectClause = DatabaseType switch
         {
-            SupportedDatabase.SqlServer or SupportedDatabase.Sybase => $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
+            // Access: CONFIRMED live (see AccessDialect.cs's file-level AI SUMMARY) — SELECT TOP
+            // n, mirroring SqlServer/Sybase, not the generic LIMIT-based fallback below.
+            SupportedDatabase.SqlServer or SupportedDatabase.Sybase or SupportedDatabase.Access =>
+                $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
             _ => $"SELECT {WrapObjectName(idColumnName)}"
         };
 
@@ -2841,7 +2875,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
             // 3.0; inlined here since that hook doesn't exist on this branch.
             query += " ROWS 1";
         }
-        else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase)
+        else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase &&
+                 DatabaseType != SupportedDatabase.Access)
         {
             query += " LIMIT 1";
         }
@@ -3201,6 +3236,44 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 // predicates the constraint-kind checks use (virtual dispatch resolves to
                 // SpannerDialect's own overrides), so this can't drift from them - verified live
                 // against a real Spanner Omni + PGAdapter instance.
+                if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) ||
+                    IsCheckConstraintViolation(ex))
+                {
+                    category = DbErrorCategory.ConstraintViolation;
+                    return true;
+                }
+                break;
+
+            case SupportedDatabase.Access:
+                // CONFIRMED live against a real .accdb (see AccessDialect.cs's file-level AI
+                // SUMMARY): a second connection writing to a row/page held by another
+                // connection's open transaction blocks, then fails outright with this exact
+                // message once contention resolves — a genuine lock-WAIT scenario, not a detected
+                // circular-wait deadlock.
+                if (ex.Message.Contains("currently locked", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.Timeout;
+                    return true;
+                }
+
+                // CONFIRMED live: the exact message a real ACE connection opened with
+                // "Mode=Read" (AccessDialect.GetReadOnlyConnectionParameter) returns when a
+                // write is attempted against it — mirrors SqliteDialect/DuckDbDialect's identical
+                // ReadOnlyViolation classification.
+                if (ex.Message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
+                {
+                    category = DbErrorCategory.ReadOnlyViolation;
+                    return true;
+                }
+
+                // ClassifyException's own generic message-keyword fallback only recognizes a
+                // constraint violation via keywords like "constraint"/"unique "/"foreign
+                // key"/"not-null"/"violates" — none of Access's real constraint messages contain
+                // any of those (e.g. "...create duplicate values in the index, primary key, or
+                // relationship."), so without this case it would silently classify as Unknown even
+                // though the four IsXxxViolation overrides below already correctly recognize them.
+                // Same fix as the Spanner case above; reuses the same four predicates so this
+                // can't drift from them.
                 if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) ||
                     IsCheckConstraintViolation(ex))
                 {

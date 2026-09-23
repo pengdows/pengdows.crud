@@ -1808,21 +1808,25 @@ public partial class DatabaseContext
             }
         }
 
-        // Pattern 2: SQLite/DuckDB-like embedded engine, file-based, with Standard (potential lock
-        // contention). Deliberately checks IsEmbeddedSingleWriterEngine rather than
-        // !IsClientServerDatabase — the latter is also true for the Unknown-database fallback,
-        // which would wrongly get this SQLite/DuckDB-specific "SQLITE_BUSY" wording.
+        // Pattern 2: an embedded single-writer engine (Access — SQLite/DuckDB stay hard-coerced
+        // and never reach this: see SqlDialect.CoerceEmbeddedSingleWriterMode's allowStandard
+        // parameter) explicitly running Standard mode against a file-based database. The engine's
+        // own documentation claims concurrent-connection/writer support; pengdows.crud honors the
+        // explicit choice but surfaces the dialect's own evidence-backed risk description
+        // (DescribeStandardModeRisk) instead of silently trusting that documentation. Deliberately
+        // checks IsEmbeddedSingleWriterEngine rather than !IsClientServerDatabase — the latter is
+        // also true for the Unknown-database fallback, which should not get this wording.
         if (dialect.IsEmbeddedSingleWriterEngine &&
             resolved == DbMode.Standard &&
             dialect.DetectInMemoryKind(_connectionString) == InMemoryKind.None)
         {
+            var risk = (dialect as SqlDialect)?.DescribeStandardModeRisk() ??
+                "This engine has single-writer constraints; concurrent writers may cause lock contention.";
             _logger.LogWarning(
                 diagnostics.EventIds.ModeMismatch,
-                "Standard mode used with file-based {Database}. " +
-                "File-based SQLite has single-writer constraints which may cause lock contention (SQLITE_BUSY errors). " +
-                "Consider SingleWriter mode for better write coordination, or enable WAL mode (PRAGMA journal_mode=WAL) " +
-                "for improved read/write concurrency.",
-                product
+                "Standard mode used with file-based {Database}. {Risk}",
+                product,
+                risk
             );
         }
     }

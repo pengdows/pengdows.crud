@@ -132,6 +132,13 @@ internal class AdvancedTypeRegistry
         public const string Json = "JSON";
     }
 
+    private static class OleDbNames
+    {
+        public const string DbTypeProperty = "OleDbType";
+        public const string Date = "Date";
+        public const string Boolean = "Boolean";
+    }
+
     public static AdvancedTypeRegistry Shared { get; } = new(true);
 
     private readonly ConcurrentDictionary<MappingKey, ProviderTypeMapping> _mappings = new();
@@ -351,6 +358,9 @@ internal class AdvancedTypeRegistry
         // Oracle-specific types
         RegisterOracleMappings();
 
+        // Access-specific types
+        RegisterAccessMappings();
+
         // Fallback mappings for Unknown/SQL-92
         RegisterFallbackMappings();
     }
@@ -444,6 +454,30 @@ internal class AdvancedTypeRegistry
 
         // Oracle Guid: handled by OracleDialect.GuidFormat (GuidStorageFormat.String).
         // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
+    }
+
+    private void RegisterAccessMappings()
+    {
+        // Microsoft Access (Jet/ACE): CONFIRMED live (this session, via a real .accdb) that the
+        // generic positional-dialect bool->Int16(1/0) conversion (SqlDialect's
+        // NeedsCommonConversions path, driven by !SupportsNamedParameters — Access is positional,
+        // same as Informix/SAP HANA) does NOT round-trip correctly here: Jet's native YESNO type
+        // stores True as -1 (classic Access/VBA convention: True = -1, all bits set), not 1 — a
+        // parameterized "WHERE bool_val = ?" bound as Int16(1) matched zero rows against a stored
+        // True value (COUNT: 0), while Int16(-1) and the native OleDbType.Boolean both matched
+        // correctly (COUNT: 1). Rather than re-deriving Jet's internal -1/0 storage convention by
+        // hand, this binds the real native OleDbType.Boolean directly via reflection (same
+        // SetEnumProperty mechanism as the DateTime->OleDbType.Date fix above), which round-trips
+        // correctly for both INSERT and equality comparison without the framework needing to know
+        // Jet's specific boolean encoding at all.
+        RegisterMapping<bool>(SupportedDatabase.Access, new ProviderTypeMapping
+        {
+            DbType = DbType.Boolean,
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OleDbNames.DbTypeProperty, OleDbNames.Boolean);
+            }
+        });
     }
 
     private void RegisterDefaultConverters()
@@ -656,6 +690,22 @@ internal class AdvancedTypeRegistry
 
     private void RegisterTemporalMappings()
     {
+        // Microsoft Access (Jet/ACE): CONFIRMED live (see AccessDialect.cs's file-level AI
+        // SUMMARY) that OleDbParameter's own automatic DbType-to-OleDbType mapping for
+        // DbType.DateTime does not produce a type Access accepts — every INSERT into a DATETIME
+        // column failed with "Data type mismatch in criteria expression" until OleDbType.Date was
+        // set explicitly. Reflection-based (SetEnumProperty), not a CreateDbParameter override, to
+        // avoid a hard System.Data.OleDb reference in this library — matching SqliteDialect's own
+        // reflection-based provider-namespace check for the same reason.
+        RegisterMapping<DateTime>(SupportedDatabase.Access, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, OleDbNames.DbTypeProperty, OleDbNames.Date);
+            }
+        });
+
         // PostgreSQL interval
         var pgInterval = new ProviderTypeMapping
         {
