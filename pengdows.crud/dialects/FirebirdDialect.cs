@@ -53,14 +53,16 @@ public class FirebirdDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        // Firebird doesn't have separate read-only session settings like other databases
-        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+        // Keep transaction behavior on a consistent baseline.
+        // SQL dialect selection is a connection/client compatibility concern and should not be
+        // toggled as a runtime session command.
+        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;";
     }
 
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;";
+        return "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;";
     }
 
 

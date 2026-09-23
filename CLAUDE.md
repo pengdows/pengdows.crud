@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Mandatory Workflow And Reviews
+
+- TDD is mandatory for every behavior change, bug fix, regression fix, and public-contract change.
+- Start by writing or updating an automated test that fails for the intended reason before changing implementation.
+- Do not start implementation until the test is red; after implementation, rerun the relevant automated tests and do not consider the work complete until they pass with no skipped tests introduced.
+- If automated coverage is genuinely not possible, say so explicitly and document the verification gap.
+- All reviews are done against [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- Review output, merge guidance, blocker/major/minor classification, required evidence, and minimal patch guidance must follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- If instructions overlap, follow the more stringent requirement. If this file conflicts with [REVIEW_POLICY.md](./REVIEW_POLICY.md) on review behavior, follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+
 ## Project Overview
 
 pengdows.crud is a SQL-first, strongly-typed, testable data access layer for .NET 8. It's designed for developers who want full control over SQL without ORM magic. The project consists of multiple components:

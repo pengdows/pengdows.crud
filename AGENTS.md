@@ -1,5 +1,14 @@
 # Repository Guidelines
 
+## Mandatory Workflow And Reviews
+- TDD is mandatory for every behavior change, bug fix, regression fix, and public-contract change.
+- Start by writing or updating an automated test that fails for the intended reason before changing implementation.
+- Do not start implementation until the test is red; after implementation, rerun the relevant automated tests and do not consider the work complete until they pass with no skipped tests introduced.
+- If automated coverage is genuinely not possible, say so explicitly and document the verification gap.
+- All reviews are done against [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- Review output, merge guidance, blocker/major/minor classification, required evidence, and minimal patch guidance must follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+- If instructions overlap, follow the more stringent requirement. If this file conflicts with [REVIEW_POLICY.md](./REVIEW_POLICY.md) on review behavior, follow [REVIEW_POLICY.md](./REVIEW_POLICY.md).
+
 ## Project Structure & Module Organization
 - Source: `pengdows.crud/` (core), `pengdows.crud.abstractions/` (interfaces), `pengdows.crud.fakeDb/` (in-memory provider), `testbed/` (integration suite via Testcontainers).
 - Tests: `pengdows.crud.Tests/` (xUnit). Coverage and TRX under `TestResults/`.

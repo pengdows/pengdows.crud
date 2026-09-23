@@ -417,6 +417,8 @@ public class OracleDialectAdvancedTests
         var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'", settings);
         Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
     }
 
@@ -428,6 +430,8 @@ public class OracleDialectAdvancedTests
         var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'", settings);
         Assert.Contains("ALTER SESSION SET READ ONLY", settings);
     }
 
@@ -439,6 +443,8 @@ public class OracleDialectAdvancedTests
 #pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.Contains("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF'", settings);
+        Assert.Contains("ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM'", settings);
         Assert.DoesNotContain("ALTER SESSION SET READ ONLY", settings);
     }
 

@@ -57,7 +57,10 @@ public class OracleDialect : SqlDialect
 
     public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        const string baseSettings = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+        const string baseSettings =
+            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';\n" +
+            "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';\n" +
+            "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM';";
 
         if (readOnly)
         {
@@ -70,7 +73,10 @@ public class OracleDialect : SqlDialect
     [Obsolete]
     public override string GetConnectionSessionSettings()
     {
-        return "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';";
+        return
+            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';\n" +
+            "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF';\n" +
+            "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF TZH:TZM';";
     }
 
     public override void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)

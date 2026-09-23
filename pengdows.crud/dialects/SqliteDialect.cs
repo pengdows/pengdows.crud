@@ -57,6 +57,20 @@ public class SqliteDialect : SqlDialect
         return "PRAGMA foreign_keys = ON;";
     }
 
+    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
+    {
+        var baseSettings = GetBaseSessionSettings();
+
+        // WAL is relevant for file-backed SQLite, and should not be toggled when opening
+        // read-only connections.
+        if (!readOnly && !IsMemoryDatabase(context.ConnectionString))
+        {
+            baseSettings += "\nPRAGMA journal_mode = WAL;";
+        }
+
+        return BuildSessionSettings(baseSettings, GetReadOnlySessionSettings(), readOnly);
+    }
+
     public override string GetReadOnlySessionSettings()
     {
         return "PRAGMA query_only = ON;";

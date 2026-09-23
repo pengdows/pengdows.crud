@@ -265,13 +265,13 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Should_Return_Transaction_And_Dialect_Settings()
+    public void GetConnectionSessionSettings_Should_Return_ReadCommitted_Baseline()
     {
         var context = new DatabaseContext("test", _factory);
         
         var settings = _dialect.GetConnectionSessionSettings(context, readOnly: true);
 
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;", settings);
     }
 
     [Fact]
@@ -281,7 +281,7 @@ public class FirebirdDialectAdvancedTests
         
         var settings = _dialect.GetConnectionSessionSettings(context, readOnly: false);
 
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;", settings);
     }
 
     [Fact]
@@ -317,13 +317,13 @@ public class FirebirdDialectAdvancedTests
     }
 
     [Fact]
-    public void GetConnectionSessionSettings_Obsolete_Should_Return_Transaction_And_Dialect_Settings()
+    public void GetConnectionSessionSettings_Obsolete_Should_Return_ReadCommitted_Baseline()
     {
 #pragma warning disable CS0618 // Type or member is obsolete
         var settings = _dialect.GetConnectionSessionSettings();
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;\nSET SQL DIALECT 3;", settings);
+        Assert.Equal("SET TRANSACTION ISOLATION LEVEL READ COMMITTED;", settings);
     }
 
     [Fact]

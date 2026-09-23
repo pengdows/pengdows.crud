@@ -33,5 +33,44 @@ public class SqliteReadOnlyConnectionStringTests
 
         Assert.Contains("Mode=ReadOnly", conn.ConnectionString);
     }
-}
 
+    [Fact]
+    public void GetConnectionSessionSettings_FileDb_ReadWrite_IncludesWal()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=file.db;EmulatedProduct=Sqlite", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", settings);
+        Assert.Contains("PRAGMA journal_mode = WAL;", settings);
+    }
+
+    [Fact]
+    public void GetConnectionSessionSettings_InMemory_ReadWrite_DoesNotIncludeWal()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", settings);
+        Assert.DoesNotContain("PRAGMA journal_mode = WAL;", settings);
+    }
+
+    [Fact]
+    public void GetConnectionSessionSettings_FileDb_ReadOnly_DoesNotIncludeWal()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        using var ctx = new DatabaseContext("Data Source=file.db;EmulatedProduct=Sqlite", factory);
+
+        var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: true);
+
+        Assert.Contains("PRAGMA foreign_keys = ON;", settings);
+        Assert.Contains("PRAGMA query_only = ON;", settings);
+        Assert.DoesNotContain("PRAGMA journal_mode = WAL;", settings);
+    }
+}

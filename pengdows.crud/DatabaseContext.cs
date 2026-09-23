@@ -613,6 +613,11 @@ public class DatabaseContext : SafeAsyncDisposableBase, IDatabaseContext, IConte
                         else if (lower.Contains("sqlite"))
                         {
                             settings = "PRAGMA foreign_keys = ON;";
+                            var sqliteMemory = DetectInMemoryKind(SupportedDatabase.Sqlite, ConnectionString) != InMemoryKind.None;
+                            if (!readOnly && !sqliteMemory)
+                            {
+                                settings += "\nPRAGMA journal_mode = WAL;";
+                            }
                             if (readOnly)
                             {
                                 settings += "\nPRAGMA query_only = ON;";
