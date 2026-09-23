@@ -5,14 +5,18 @@ using pengdows.crud.infrastructure;
 using testbed.Cockroach;
 using testbed.DuckDb;
 using testbed.Firebird;
+using testbed.Informix;
 using testbed.mariaDb;
 using testbed.MySQL;
 using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
+using testbed.SapHana;
+using testbed.InterBase;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Snowflake;
+using testbed.Spanner;
 using testbed.Yugabyte;
 
 namespace testbed;
@@ -22,11 +26,16 @@ public class ParallelTestOrchestrator
     private readonly IServiceProvider _services;
     private readonly ConcurrentBag<TestResult> _results = new();
     private readonly bool _includeSnowflake;
+    private readonly bool _includeSapHana;
+    private readonly bool _includeInterBase;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false,
+        bool includeSapHana = false, bool includeInterBase = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
+        _includeSapHana = includeSapHana;
+        _includeInterBase = includeInterBase;
     }
 
     /// <summary>
@@ -50,6 +59,10 @@ public class ParallelTestOrchestrator
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
             SupportedDatabase.Sybase => new SybaseTestContainer(),
+            SupportedDatabase.Informix => new InformixTestContainer(),
+            SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
+            SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
+            SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
             _ => null
         };
 
@@ -323,6 +336,28 @@ public class ParallelTestOrchestrator
                 Container = new SybaseTestContainer(),
                 TestProviderFactory = (db, sp) => new SybaseTestProvider(db, sp)
             },
+            // Confirmed live end-to-end against icr.io/informix/informix-developer-database
+            // (pulls anonymously, no registry credentials required): full CRUD, transactions,
+            // concurrency, error mapping, and capability probes all pass — see
+            // InformixDialect.cs's SupportsMerge/SupportsOffsetFetch comments for the two
+            // confirmed-unsupported capabilities and TestProvider.cs's Informix-specific skips
+            // for the rest. Unconditional like Sybase above — not opt-in.
+            new()
+            {
+                ContainerName = "Informix",
+                DatabaseProvider = "Informix",
+                Container = new InformixTestContainer(),
+                TestProviderFactory = (db, sp) => new InformixTestProvider(db, sp)
+            },
+            // Spanner Omni + PGAdapter sidecar — no registry credentials beyond a standard
+            // gcr.io/us-docker.pkg.dev anonymous pull. Unconditional like Informix above.
+            new()
+            {
+                ContainerName = "Spanner",
+                DatabaseProvider = "Spanner",
+                Container = new SpannerOmniTestContainer(),
+                TestProviderFactory = (db, sp) => new SpannerTestProvider(db, sp)
+            },
         };
 
         // Snowflake — requires cloud credentials; no Docker image; opt-in via INCLUDE_SNOWFLAKE=true
@@ -334,6 +369,32 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Snowflake",
                 Container = new SnowflakeTestContainer(),
                 TestProviderFactory = (db, sp) => new SnowflakeTestProvider(db, sp)
+            });
+        }
+
+        // SAP HANA — real Docker image, but needs 16-32GB RAM; opt-in via INCLUDE_SAPHANA=true
+        if (_includeSapHana)
+        {
+            configurations.Add(new TestConfiguration
+            {
+                ContainerName = "SAP HANA",
+                DatabaseProvider = "SAP HANA",
+                Container = new HanaTestContainer(),
+                TestProviderFactory = (db, sp) => new HanaTestProvider(db, sp)
+            });
+        }
+
+        // InterBase — a personal, non-shareable, already-running, externally-managed container
+        // (see InterBaseTestContainer.cs's class remarks for why it can't be created fresh per
+        // run like every other database here); opt-in via INCLUDE_INTERBASE=true
+        if (_includeInterBase)
+        {
+            configurations.Add(new TestConfiguration
+            {
+                ContainerName = "InterBase",
+                DatabaseProvider = "InterBase",
+                Container = new InterBaseTestContainer(),
+                TestProviderFactory = (db, sp) => new InterBaseTestProvider(db, sp)
             });
         }
 

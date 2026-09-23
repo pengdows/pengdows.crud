@@ -7,8 +7,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
+using testbed.Informix;
 
 #endregion
+
+// Must run before ANY access to InformixClientFactory — including the reflection-based
+// discovery in DbProviderFactoryFinder.FindAllFactories() below, which triggers the driver's
+// native initialization merely by reading InformixClientFactory.Instance. See
+// InformixNativeLibraryBootstrap.cs's class remarks for why this can't be done mid-process.
+InformixNativeLibraryBootstrap.Register();
 
 // Enable Npgsql legacy timestamp behaviour so that "timestamp without time zone" columns
 // can be read as DateTime. Npgsql 6+ made this strict by default; the switch restores the pre-v6 behaviour.
@@ -30,9 +37,15 @@ await StormGateIntegrationTests.RunAsync();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true)
+// Use the new parallel orchestrator. Snowflake is opt-in via INCLUDE_SNOWFLAKE=true (requires
+// cloud credentials, no Docker image); SAP HANA is opt-in via INCLUDE_SAPHANA=true (real Docker
+// image, but needs 16-32GB RAM); InterBase is opt-in via INCLUDE_INTERBASE=true (a personal,
+// non-shareable, already-running, externally-managed container — see
+// testbed/InterBase/InterBaseTestContainer.cs's class remarks).
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake);
+var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
+var includeInterBase = Environment.GetEnvironmentVariable("INCLUDE_INTERBASE")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)
