@@ -221,6 +221,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Core properties with SQL-92 defaults; override for database-specific behavior
     public abstract SupportedDatabase DatabaseType { get; }
 
+    /// <summary>
+    /// Set by SqlDialectFactory immediately after it already ran a full, live detection pass to
+    /// pick THIS dialect subclass in the first place (e.g. it found "Spanner" and built a
+    /// SpannerDialect) — that answer is authoritative, so DetectDatabaseInfoAsync trusts it
+    /// outright rather than asking the same question again via a weaker version-string heuristic.
+    /// Null when this dialect was constructed directly (e.g. via SqlDialectFactory.
+    /// CreateDialectForType with only a coarse guess, or in a unit test that calls
+    /// DetectDatabaseInfoAsync standalone) — in that case the original inference/redetection
+    /// behavior applies. See DetectDatabaseInfoAsync's use of this for the full rationale
+    /// (a real Spanner connection's version string says "PostgreSQL 15.x" with no distinguishing
+    /// marker, so re-inferring from it here would silently overwrite the already-correct answer
+    /// back to PostgreSql).
+    /// </summary>
+    internal SupportedDatabase? PreDeterminedDatabaseType { get; set; }
+
     /// <inheritdoc cref="ISqlDialect.IsClientServerDatabase"/>
     /// <remarks>
     /// Defaults to true: most engines added here are real client-server RDBMSes. Override to
@@ -1996,13 +2011,41 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 ? $"{versionString} {schemaProductVersion}"
                 : versionString;
 
-            // Use dialect's virtual method first so subclasses can express their own intent.
-            // If it falls through to DatabaseType (the default), fall back to the centralized
-            // detection service which uses factory type names and schema metadata.
-            var databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
-            if (databaseType == DatabaseType)
+            // PreDeterminedDatabaseType short-circuits this whole inference/redetection dance:
+            // SqlDialectFactory sets it immediately after it already ran a full, live detection
+            // pass to pick THIS dialect subclass in the first place (e.g. it found "Spanner" and
+            // built a SpannerDialect) — that answer is authoritative, so trust it outright rather
+            // than asking the same question again. Re-asking is not just redundant: confirmed
+            // live, for a real Spanner connection, an unconditional re-inference here (via
+            // InferDatabaseTypeFromInfo's version-string text matching) silently overwrote
+            // ProductInfo.DatabaseType (and thus IDatabaseContext.Product) back to PostgreSql —
+            // Spanner's PGAdapter reports its version as literally "PostgreSQL 15.x" with no
+            // distinguishing marker, so InferDatabaseTypeFromInfo's "postgres" text match fires
+            // and returns PostgreSql directly, which is DIFFERENT from DatabaseType (Spanner for
+            // a SpannerDialect instance) — so the `databaseType == DatabaseType` fallback below
+            // (designed to catch "no specific marker found, ask the live-probe-based detection
+            // service instead") never triggers, even though the dialect instance itself
+            // (SpannerDialect, still used for all actual SQL generation) remained correct — a
+            // "two independent systems can disagree" bug, the same class CLAUDE.md documents for
+            // exception classification, but for product detection instead.
+            //
+            // When there is no pre-determined hint (this dialect was constructed directly, e.g.
+            // via SqlDialectFactory.CreateDialectForType with only a coarse guess, or in a unit
+            // test that calls this method standalone), fall back to the original behavior: infer
+            // from version/name text, and if that can't tell a flavor apart from the dialect's
+            // own assumed base type, ask the detection service to look deeper.
+            SupportedDatabase databaseType;
+            if (PreDeterminedDatabaseType is { } known)
             {
-                databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+                databaseType = known;
+            }
+            else
+            {
+                databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
+                if (databaseType == DatabaseType)
+                {
+                    databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+                }
             }
 
             var standardCompliance = DetermineStandardCompliance(parsedVersion);

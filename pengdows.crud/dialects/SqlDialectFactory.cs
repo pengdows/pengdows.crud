@@ -49,6 +49,13 @@ internal static class SqlDialectFactory
             throw new InvalidOperationException("Dialect must support internal detection operations.");
         }
 
+        // Trust the detection pass we just ran instead of letting DetectDatabaseInfoAsync
+        // independently re-derive (and potentially disagree with) the same answer.
+        if (dialect is SqlDialect concreteDialect)
+        {
+            concreteDialect.PreDeterminedDatabaseType = inferredType;
+        }
+
         await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
     }
