@@ -8,7 +8,6 @@
 // - Shared by all gateway variants.
 // =============================================================================
 
-using System.Buffers;
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -23,15 +22,6 @@ namespace pengdows.crud;
 /// </summary>
 public abstract partial class BaseTableGateway<TEntity>
 {
-    private const int FieldPoolMaxLength = 64;
-    private const int FieldPoolArraysPerBucket = 32;
-
-    private static readonly ArrayPool<string> FieldNamePool =
-        ArrayPool<string>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
-
-    private static readonly ArrayPool<Type> FieldTypePool =
-        ArrayPool<Type>.Create(FieldPoolMaxLength, FieldPoolArraysPerBucket);
-
     // Hot path cache: most recently used plan to avoid hash/dictionary overhead
     private HybridRecordsetPlan? _hotPlan;
     private long _hotHash;
@@ -53,8 +43,8 @@ public abstract partial class BaseTableGateway<TEntity>
     {
         var fieldCount = reader.FieldCount;
 
-        var names = RentStringArray(fieldCount);
-        var fieldTypes = RentTypeArray(fieldCount);
+        var names = RecordsetFieldArrayPool.RentStringArray(fieldCount);
+        var fieldTypes = RecordsetFieldArrayPool.RentTypeArray(fieldCount);
 
         try
         {
@@ -95,46 +85,8 @@ public abstract partial class BaseTableGateway<TEntity>
         }
         finally
         {
-            ReturnStringArray(names, fieldCount);
-            ReturnTypeArray(fieldTypes, fieldCount);
-        }
-    }
-
-    private static string[] RentStringArray(int size)
-    {
-        return size <= FieldPoolMaxLength
-            ? FieldNamePool.Rent(size)
-            : ArrayPool<string>.Shared.Rent(size);
-    }
-
-    private static void ReturnStringArray(string[] array, int size)
-    {
-        if (size <= FieldPoolMaxLength)
-        {
-            FieldNamePool.Return(array, clearArray: true);
-        }
-        else
-        {
-            ArrayPool<string>.Shared.Return(array, clearArray: true);
-        }
-    }
-
-    private static Type[] RentTypeArray(int size)
-    {
-        return size <= FieldPoolMaxLength
-            ? FieldTypePool.Rent(size)
-            : ArrayPool<Type>.Shared.Rent(size);
-    }
-
-    private static void ReturnTypeArray(Type[] array, int size)
-    {
-        if (size <= FieldPoolMaxLength)
-        {
-            FieldTypePool.Return(array, clearArray: false);
-        }
-        else
-        {
-            ArrayPool<Type>.Shared.Return(array, clearArray: false);
+            RecordsetFieldArrayPool.ReturnStringArray(names, fieldCount);
+            RecordsetFieldArrayPool.ReturnTypeArray(fieldTypes, fieldCount);
         }
     }
 
