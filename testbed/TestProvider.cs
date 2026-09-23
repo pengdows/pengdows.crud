@@ -416,6 +416,11 @@ CREATE TABLE {tableName} (
         {
             SupportedDatabase.Sqlite => "NUMERIC(18,6)",
             SupportedDatabase.Oracle => "NUMBER(18,6)",
+            // CONFIRMED live: Spanner's PostgreSQL interface rejects a precision/scale modifier
+            // on NUMERIC outright ("Type modifier is not supported for type <numeric>") - its
+            // NUMERIC type is a fixed PG_NUMERIC(precision=76, scale=38) with no custom modifier
+            // support at all.
+            SupportedDatabase.Spanner => "NUMERIC",
             _ => "DECIMAL(18,6)"
         };
     }
@@ -429,6 +434,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.PostgreSql => "BYTEA",
             SupportedDatabase.CockroachDb => "BYTEA",
             SupportedDatabase.YugabyteDb => "BYTEA",
+            SupportedDatabase.Spanner => "BYTEA",
             SupportedDatabase.Oracle => "RAW(64)",
             SupportedDatabase.Firebird => "BLOB",
             SupportedDatabase.Sqlite => "BLOB",
@@ -2210,7 +2216,14 @@ INSERT INTO {table} (
         var wrappedOrder = _context.WrapObjectName("order"); // reserved word
         var wrappedUser = _context.WrapObjectName("user"); // reserved word
         var wrappedDefault = _context.WrapObjectName("default"); // reserved word
-        var wrappedDisplay = _context.WrapObjectName("display name"); // space
+        // CONFIRMED live: Cloud Spanner's column-name validation rejects a space in an
+        // identifier at the backend/gRPC level ("Column name not valid: ... display name")
+        // regardless of quoting — a stricter rule than typical ANSI SQL double-quoted-identifier
+        // support, which every other database this test runs against honors. Substitutes a
+        // space-free name for Spanner specifically so the rest of this test (reserved words,
+        // mixed case) still runs and proves real coverage, rather than skipping the whole method.
+        var displayColumnName = _context.Product == SupportedDatabase.Spanner ? "display_name" : "display name";
+        var wrappedDisplay = _context.WrapObjectName(displayColumnName); // space (except Spanner)
         var wrappedCamel = _context.WrapObjectName("CamelCase"); // mixed case
         var textType = GetTextType(_context.Product, 100);
 
