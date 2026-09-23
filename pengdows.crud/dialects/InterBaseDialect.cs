@@ -164,6 +164,18 @@ internal sealed class InterBaseDialect : SqlDialect
     // CONFIRMED REJECTED live: "DROP TABLE IF EXISTS" fails with SQLCODE -104 at IF.
     public override bool SupportsDropTableIfExists => false;
 
+    // Same architecture/limitation as Firebird (InterBase's own fork lineage) - a failed write's
+    // implicit transaction otherwise leaves a server-side lock that persists on the pooled
+    // connection (not released by Dispose/Close alone), blocking later DDL/DML on the same table
+    // from other connections with "lock conflict" / "object ... is in use" until that specific
+    // pooled connection happens to be reset or the process exits. Not independently reproduced
+    // against a live InterBase server (Firebird's own copy of this flag was); kept in sync with
+    // Firebird on architectural grounds given the shared lineage, since testbed's CreateTable()
+    // routinely issues a DROP TABLE (which fails, since SupportsDropTableIfExists is false)
+    // immediately followed by a CREATE TABLE on the same table - exactly the sequence this flag
+    // protects against.
+    internal override bool RequiresExplicitRollbackAfterFailedWrite => true;
+
     // CONFIRMED live: SAVEPOINT / ROLLBACK TO SAVEPOINT / RELEASE SAVEPOINT all succeed, via both
     // raw SQL and the typed DbTransaction API, with a verified before/after row-survival check.
     public override bool SupportsSavepoints => true;
