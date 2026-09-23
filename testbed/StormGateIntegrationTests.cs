@@ -24,6 +24,16 @@ public static class StormGateIntegrationTests
         }
         finally
         {
+            // Microsoft.Data.Sqlite pools connections by default (Pooling=true unless the
+            // connection string says otherwise) — disposing a SqliteConnection returns its native
+            // handle to the pool rather than closing the underlying file. On Windows, an open
+            // handle blocks File.Delete outright (unlike Linux, which allows deleting an
+            // open/locked file); reproduced deterministically here: every connection opened via
+            // gate.OpenAsync() above wraps a real SqliteConnection, and by the time this finally
+            // block runs, the pool is still holding at least one of them open. Clearing every pool
+            // forces Microsoft.Data.Sqlite to actually close its cached native connections before
+            // the delete is attempted.
+            SqliteConnection.ClearAllPools();
             if (File.Exists(dbPath)) File.Delete(dbPath);
         }
     }
