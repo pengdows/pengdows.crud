@@ -530,9 +530,14 @@ CREATE TABLE {tableName} (
     // CONFIRMED live: InterBase rejects "WHERE blob_col = ?" outright ("BLOB and array data types
     // are not supported for compare operation") — a genuine restriction on InterBase's BLOB type
     // specifically, NOT shared by Firebird despite both calling the column type BLOB.
+    //
+    // CONFIRMED live: SAP HANA rejects the same comparison too, with its own distinct error
+    // ("general error: = Cannot compare BLocator and BLocator") — HANA's BLOB column is backed
+    // by a LOB locator, and locators can't be compared with a plain "=" any more than InterBase's
+    // BLOB can, even though the two databases fail for unrelated underlying reasons.
     private static bool SupportsBinaryEquality(SupportedDatabase product)
     {
-        return product != SupportedDatabase.InterBase;
+        return product != SupportedDatabase.InterBase && product != SupportedDatabase.SapHana;
     }
 
 
@@ -589,6 +594,9 @@ CREATE TABLE {tableName} (
             // Informix's ADO.NET driver has no named-parameter support at all - positional "?"
             // only (see InformixDialect.SupportsNamedParameters). Confirmed live.
             SupportedDatabase.Informix => "?",
+            // CONFIRMED live: HANA's driver reports ParameterMarkerFormat == "?" and uses bare
+            // positional binding, same as Informix (see HanaDialect.SupportsNamedParameters).
+            SupportedDatabase.SapHana => "?",
             _ => "@"
         };
     }
@@ -764,6 +772,40 @@ CREATE TABLE {tableName} (
 
                     sc.Clear();
                     sc.Query.Append($"DROP PROCEDURE {singleStoreProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
+            case SupportedDatabase.SapHana:
+                {
+                    var hanaProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // HANA SQLSCRIPT: a bare SELECT inside the procedure body returns its result
+                    // set to the caller on invocation — same CALL-returns-a-result-set shape as
+                    // the MySQL/SingleStore cases above, confirmed against HanaDialect's own
+                    // ProcWrappingStyle.Call (CALL "proc"()).
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {hanaProcName} ()\n" +
+                        "LANGUAGE SQLSCRIPT\n" +
+                        "AS\n" +
+                        "BEGIN\n" +
+                        "  SELECT 42 AS RESULT_VAL FROM DUMMY;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    // CALL "sp_pengdows_test"() — result set contains one row with value 42.
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var hanaWrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(hanaWrapped);
+                    var hanaResult = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (hanaResult != 42)
+                    {
+                        throw new Exception($"[SAP HANA proc] Expected 42 but got {hanaResult}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {hanaProcName}");
                     await sc.ExecuteNonQueryAsync();
                     break;
                 }
