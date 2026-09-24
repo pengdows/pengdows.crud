@@ -495,7 +495,17 @@ internal sealed class DataReaderMapper : IDataReaderMapper
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         Expression valueExpression;
-        if (key.RequiresCoercion)
+        if (underlyingTarget == typeof(types.valueobjects.PostgreSqlInterval))
+        {
+            // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
+            // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
+            var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
+            var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
+        else if (key.RequiresCoercion)
         {
             if (!TryBuildDirectReadExpression(key, readerParam, targetType, underlyingTarget, out valueExpression))
             {

@@ -29,6 +29,8 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Diagnostics.CodeAnalysis;
+using pengdows.crud.enums;
+using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.coercion;
@@ -97,11 +99,18 @@ internal class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
             case TimeSpan ts:
                 value = PostgreSqlInterval.FromTimeSpan(ts);
                 return true;
+            case not null when raw.GetType().FullName == "NpgsqlTypes.NpgsqlInterval":
+                // Npgsql's full-fidelity interval (months/days/microseconds) — same conversion the
+                // gateway's hydration path uses, so both read paths agree. Strings are not accepted
+                // here: the converter's ISO parser treats unrecognized text as zero (backlog D01).
+                return IntervalConverter.TryConvertFromProvider(raw, SupportedDatabase.PostgreSql, out value);
             default:
                 value = default;
                 return false;
         }
     }
+
+    private static readonly PostgreSqlIntervalConverter IntervalConverter = new();
 
     public override bool TryWrite([AllowNull] PostgreSqlInterval value, DbParameter parameter)
     {

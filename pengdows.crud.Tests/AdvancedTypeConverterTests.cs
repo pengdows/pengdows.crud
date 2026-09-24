@@ -311,6 +311,21 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
+    public void PostgreSqlIntervalConverter_YugabyteDb_ConvertsLikePostgreSql()
+    {
+        // YugabyteDB uses Npgsql and the same interval mapping; handing Npgsql the raw
+        // PostgreSqlInterval struct is rejected at write time.
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(0, 2, 90_000_000);
+
+        var yugabyte = converter.ToProviderValue(interval, SupportedDatabase.YugabyteDb);
+        var postgres = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+
+        Assert.IsNotType<PostgreSqlInterval>(yugabyte);
+        Assert.Equal(postgres, yugabyte);
+    }
+
+    [Fact]
     public void PostgreSqlIntervalConverter_ShouldConvertFromTimeSpan()
     {
         var converter = new PostgreSqlIntervalConverter();

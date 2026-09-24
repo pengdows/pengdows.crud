@@ -149,6 +149,14 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     valueReadExpr = Expression.TryCatch(finalEnumExpr, catchBlock);
                 }
             }
+            else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.PostgreSqlInterval))
+            {
+                // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
+                // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
+                var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
+                var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType);
+            }
             else
             {
                 var getMethod = GetReaderMethod(fieldType);

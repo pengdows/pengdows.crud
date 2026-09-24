@@ -8008,8 +8008,10 @@ registered implementation.
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object
-type and a `[Column]` attribute giving the storage `DbType`; the coercion pipeline does the rest
-based on the CLR type:
+type and a `[Column]` attribute with `DbType.Object`; the coercion pipeline does the rest based on
+the CLR type. (`DbType.String` and the other string `DbType`s only accept `string`, `char`,
+`char[]` and `Guid` properties, so a value-object property declared with them fails when the
+gateway builds its SQL templates.)
 
 ```csharp
 [Table("hosts")]
@@ -8017,12 +8019,12 @@ public class Host
 {
     [Id(false)] [Column("id", DbType.Int32)] public int Id { get; set; }
 
-    [Column("address", DbType.String)] public Inet Address { get; set; }
-    [Column("subnet", DbType.String)] public Cidr Subnet { get; set; }
-    [Column("mac", DbType.String)] public MacAddress Mac { get; set; }
-    [Column("tags", DbType.String)] public HStore Tags { get; set; }
-    [Column("uptime", DbType.String)] public PostgreSqlInterval Uptime { get; set; }
-    [Column("metadata", DbType.String)] public JsonValue Metadata { get; set; }
+    [Column("address", DbType.Object)] public Inet Address { get; set; }
+    [Column("subnet", DbType.Object)] public Cidr Subnet { get; set; }
+    [Column("mac", DbType.Object)] public MacAddress Mac { get; set; }
+    [Column("tags", DbType.Object)] public HStore Tags { get; set; }
+    [Column("uptime", DbType.Object)] public PostgreSqlInterval Uptime { get; set; }
+    [Column("metadata", DbType.Object)] public JsonValue Metadata { get; set; }
 }
 ```
 

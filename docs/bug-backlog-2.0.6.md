@@ -63,7 +63,7 @@ These are the rules the code is being brought in line with.
 - [x] **B05 — Interval parse drops years.** *(fixed; also weeks)* `types/converters/PostgreSqlIntervalConverter.cs:224-246`:
   the ISO-8601 parser ignores `Y` (and `W`), so `P1Y2M` → 2 months. `AdvancedTypeConverterTests.cs:294`
   locks in the bug. **Fix:** `Y` adds 12 months, `W` adds 7 days, `M` accumulates. **3.0:** same bug.
-- [ ] **B06 — PostgreSQL interval writes are rejected.**
+- [x] **B06 — PostgreSQL interval writes are rejected.** *(fixed: writes send `NpgsqlInterval`; entity hydration — `CompiledMapperFactory` and `DataReaderMapper` — reads interval columns as `NpgsqlInterval` so months and the days/time split round-trip; ISO fallback formatter fixed; live-verified on PostgreSQL/CockroachDB/YugabyteDB, net8.0 and net10.0. Also found: `docs/advanced-types.md` declared value-object columns as `DbType.String`, which the validator rejects — corrected to `DbType.Object`.)*
   `PostgreSqlIntervalConverter.cs:89-197` sends an ISO string with `NpgsqlDbType.Interval` (Npgsql
   rejects that combination); the formatter also drops whole days held in the time part and
   sub-millisecond precision; YugabyteDB is missing from the provider check. **Fix:** send an
@@ -176,7 +176,17 @@ These are the rules the code is being brought in line with.
 
 ## To investigate
 
-- **Intermittent failure:** `SingleConnectionConcurrencyTortureTests.MixedReadWriteTransactionLoad_SerializesCorrectly_RealSqliteSingleConnection` failed once on net8.0 while net8.0 and net10.0 ran in parallel; it passed 3/3 alone and in two further full runs. The failure message wasn't captured — capture it the next time it fails.
+- **Intermittent timing failures, only when net8.0 and net10.0 run in parallel:**
+  `SingleConnectionConcurrencyTortureTests.MixedReadWriteTransactionLoad_SerializesCorrectly_RealSqliteSingleConnection`
+  and `PoolGovernorSyncAcquireTests.Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait`
+  each failed once in a combined run and passed alone and in later full runs. Capture the failure
+  message next time; likely timing margins under double load.
+- **`PostgreSqlIntervalCoercion.TryWrite` writes `value.ToTimeSpan()`**, dropping months, for any
+  provider without an `AdvancedTypeRegistry` interval mapping (the PostgreSQL family has one, so it
+  isn't affected).
+- **`TypeCoercionHelper.ConvertWithCache` returns a default value** when it can't convert a struct,
+  instead of failing — this is how `DataReaderMapper` produced all-zero intervals during B06. Silent
+  defaults hide conversion bugs.
 - **Oracle `RETURNING … INTO`:** the gateway's SQL says `:1` but the output parameter is named `o0`;
   it only works through positional binding. Same on 3.0. Check against live Oracle.
 - **SQLite `[Version]` upserts get no concurrency check:** `SqliteDialect` doesn't set
@@ -199,6 +209,10 @@ These are the rules the code is being brought in line with.
   `AnsiString`/fixed-length columns; isolation fail-up (profiles degrade with a warning, and an
   unsupported explicit level throws instead of resolving up); `ProviderParameterFactory` numbers
   (live on 3.0).
+- Intervals: 3.0 writes `ToTimeSpan()` (drops months) and can't read an interval with months
+  (Npgsql throws reading it as `TimeSpan`); port B06's `NpgsqlInterval` write and
+  `IntervalFieldReader` read. `docs/advanced-types.md` on 3.0 also shows `DbType.String` for
+  value-object columns (use `DbType.Object`).
 - `TotalConnectionsReused`: remove. `ConnectionPoolEfficiency` is computed from it (reused ÷
   created), so it is always 0 on both branches too — decide whether it goes with it.
 - Stale comments that 2.0.6 has corrected but 3.0 still carries: the Oracle, PostgreSQL,
