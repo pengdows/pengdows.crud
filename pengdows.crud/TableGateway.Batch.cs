@@ -6,6 +6,7 @@
 // - BuildBatchCreate() - Generates multi-row INSERT INTO t (cols) VALUES (...), (...)
 // - BatchCreateAsync() - Executes batch insert, returns total affected rows
 // - BuildBatchUpdate() - Dialect-built multi-row UPDATE, or per-entity BuildUpdate fallback
+//   (always per-entity for [Version] entities, so each row increments and checks its version)
 // - BuildBatchUpsert() - Generates dialect-specific batch upsert (ON CONFLICT preferred over MERGE):
 //   * ON CONFLICT dialects (e.g. PostgreSQL/CockroachDB/SQLite): multi-row INSERT ... ON CONFLICT
 //     DO UPDATE [WHERE ver = EXCLUDED.ver when supported]
@@ -183,6 +184,21 @@ public partial class TableGateway<TEntity, TRowID>
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
+        // A multi-row UPDATE can neither increment nor check a [Version] per row, so versioned
+        // entities are updated one by one: each increments its version, checks it, and throws
+        // ConcurrencyConflictException on a mismatch (without re-reading the row first).
+        if (_versionColumn != null)
+        {
+            var affected = 0;
+            foreach (var entity in entities)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                affected += await UpdateAsync(entity, false, ctx, cancellationToken).ConfigureAwait(false);
+            }
+
+            return affected;
+        }
+
         var auditSnapshots = _hasAuditColumns
             ? entities.Select(SnapshotAuditFields).ToArray()
             : Array.Empty<AuditFieldSnapshot>();
@@ -227,7 +243,9 @@ public partial class TableGateway<TEntity, TRowID>
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
-        if (!dialect.SupportsBatchUpdate)
+        // Versioned entities always use the per-row UPDATE, which increments the version and checks
+        // it in the WHERE clause; the multi-row form can do neither.
+        if (!dialect.SupportsBatchUpdate || _versionColumn != null)
         {
             // Fallback: one-by-one BuildUpdate per entity
             var fallback = new List<ISqlContainer>(entities.Count);
@@ -336,7 +354,10 @@ public partial class TableGateway<TEntity, TRowID>
         var updateable = new List<IColumnInfo>(_tableInfo.OrderedColumns.Count);
         foreach (var c in _tableInfo.OrderedColumns)
         {
-            if (!c.IsNonUpdateable && !c.IsId && !_tableInfo.PrimaryKeys.Contains(c))
+            // Creation audit and the version are never rewritten by a batch UPDATE (the single-row
+            // UPDATE excludes them the same way).
+            if (!c.IsNonUpdateable && !c.IsId && !_tableInfo.PrimaryKeys.Contains(c)
+                && !c.IsVersion && !c.IsCreatedBy && !c.IsCreatedOn)
             {
                 updateable.Add(c);
             }

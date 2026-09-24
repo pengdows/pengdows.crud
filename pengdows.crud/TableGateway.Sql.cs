@@ -210,7 +210,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Pre-build ON CONFLICT WHERE version predicate for PostgreSQL/CockroachDB batch upsert.
         string? upsertOnConflictVersionWhere = null;
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[])
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn()
             && dialect.SupportsOnConflictWhere)
         {
             var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
@@ -220,7 +220,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Cache version increment clause; null for byte[] (rowversion/timestamp — DB handles increment)
         string? versionIncrementClause = null;
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
         {
             versionIncrementClause =
                 $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
@@ -270,7 +270,7 @@ public partial class TableGateway<TEntity, TRowID>
                         frag.Append(dialect.WrapSimpleName(col.Name));
                     }
 
-                    if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                    if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
                     {
                         var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                         frag.Append(", ");
@@ -321,7 +321,7 @@ public partial class TableGateway<TEntity, TRowID>
                             frag.Append(dialect.UpsertIncomingColumn(col.Name));
                         }
 
-                        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
                         {
                             var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                             frag.Append(", ");

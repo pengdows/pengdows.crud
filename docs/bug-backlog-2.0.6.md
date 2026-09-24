@@ -116,7 +116,7 @@ These are the rules the code is being brought in line with.
 
 ## Fix — changes observable behavior (decide first)
 
-- [ ] **B20 — Batch update overwrites audit/version columns and never checks the version.**
+- [x] **B20 — Batch update overwrites audit/version columns and never checks the version.** *(fixed without 3.0's `ISqlDialect.BuildBatchUpdateSql` signature change: the batch SET excludes `[Version]`/`CreatedBy`/`CreatedOn`; `[Version]` entities are updated row by row via `UpdateAsync(entity, loadOriginal: false)` and `BuildBatchUpdate` returns per-row containers for them. `PrimaryKeyTableGateway` already did both. Tests: `TableGatewayBatchUpdateVersionAuditTests`. *Release note:* a batch update containing a stale `[Version]` row now throws `ConcurrencyConflictException` instead of silently overwriting; rows before it in the batch are already updated unless the caller uses a transaction.)*
   `TableGateway.Batch.cs:329-344` (`GetCachedUpdateableColumns`) includes `CreatedBy`, `CreatedOn` and
   the `[Version]` column, so a multi-row UPDATE writes creation audit from the in-memory entity and
   copies the client's version verbatim (no `+ 1`, no `WHERE version = …`) — silent lost updates. No
@@ -161,7 +161,7 @@ These are the rules the code is being brought in line with.
   `TableGateway.Update.cs:37-48` reloads the original and throws "Original record not found for
   update." Options: keep it, or report `ConcurrencyConflictException` (a deleted row is a
   concurrency conflict from the caller's point of view).
-- [ ] **D05 — `RowVersion` as `[Version]`: the two validators disagree.** `TypeMapRegistry.cs:457`
+- [x] **D05 — `RowVersion` as `[Version]`: the two validators disagree.** *(ported from 3.0 `21ccbca`: `ValidateVersionType` accepts `RowVersion`; internal `IsOpaqueVersionColumn()` treats `byte[]` and `RowVersion` alike (no `+ 1`, WHERE-only); `SqlDialect.CreateDbParameter` binds a `RowVersion` as its bytes. Tests: `TableGatewayByteArrayVersionTests`; live `SqlServerRowVersionTests` (real `rowversion`, stale update → `ConcurrencyConflictException`).)* `TypeMapRegistry.cs:457`
   (`ValidateVersionColumn`) accepts `RowVersion`, but `:605` (`ValidateVersionType`, which also runs)
   rejects it, so registration throws. The UPDATE paths would also treat it as an integer (`SET v = v
   + 1`, invalid on SQL Server). Options: support it (port 3.0's `IsOpaqueVersionColumn` handling from
@@ -174,7 +174,7 @@ These are the rules the code is being brought in line with.
   `Prepare()` fails stops preparing, for both `Auto` and `Always` (`SqlContainer.cs:1857-1899`).
 - [x] **C02 — `DecimalHelpers.cs:25`:** the new "not currently called by library code" is false
   (`SqlDialect.cs:1441`, `AdvancedTypeRegistry.cs:384, 417`); revert to the old remark.
-- [ ] **C03 — `VersionAttribute`:** says `RowVersion` is accepted; resolve together with D05.
+- [x] **C03 — `VersionAttribute`:** *(comment now states byte[]/RowVersion are compared, not incremented; docs updated.)* says `RowVersion` is accepted; resolve together with D05.
 
 ## Testbed and tooling
 

@@ -153,7 +153,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
         {
             return;
         }
@@ -177,7 +177,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false, cachedAuditValues);
         }
 
-        if (_versionColumn == null || _versionColumn.PropertyInfo.PropertyType == typeof(byte[]))
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
         {
             return;
         }
@@ -376,7 +376,7 @@ public partial class TableGateway<TEntity, TRowID>
         // which likewise leaves a stale row untouched.
         var whenMatchedClause = " WHEN MATCHED THEN UPDATE SET ";
         string? matchedUpdateWhere = null;
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
         {
             var v = dialect.WrapSimpleName(_versionColumn.Name);
             if (dialect.MergeMatchedConditionAsUpdateWhere())

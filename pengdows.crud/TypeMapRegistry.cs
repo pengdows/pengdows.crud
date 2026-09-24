@@ -611,7 +611,7 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
 
         var propertyType = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ??
                            column.PropertyInfo.PropertyType;
-        if (propertyType == typeof(byte[]))
+        if (propertyType == typeof(byte[]) || propertyType == typeof(RowVersion))
         {
             return;
         }
@@ -629,7 +629,7 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
                 return;
             default:
                 throw new SqlGenerationException(
-                    $"Property {entityType.FullName}.{column.PropertyInfo.Name} marked with [Version] must be an integer or byte array.",
+                    $"Property {entityType.FullName}.{column.PropertyInfo.Name} marked with [Version] must be an integer, byte array, or RowVersion.",
                     SupportedDatabase.Unknown);
         }
     }

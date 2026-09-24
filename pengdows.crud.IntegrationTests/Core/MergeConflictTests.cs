@@ -102,6 +102,37 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
+    // A batch update that contains a stale [Version] row must throw and leave that row alone,
+    // on every provider (multi-row UPDATE dialects included).
+    [SkippableFact]
+    public Task VersionedEntity_BatchUpdateWithStaleRow_DetectsConflict()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            await RecreateTableAsync(context, "versioned_entities", BuildVersionedEntityTableSql(provider, context));
+
+            var helper = new TableGateway<VersionedEntity, long>(context);
+            await helper.CreateAsync(new VersionedEntity { Id = 1, Name = "one", Version = 1 }, context);
+            await helper.CreateAsync(new VersionedEntity { Id = 2, Name = "two", Version = 1 }, context);
+
+            var rowOne = await helper.RetrieveOneAsync(1, context);
+            var staleTwo = await helper.RetrieveOneAsync(2, context);
+
+            var freshTwo = await helper.RetrieveOneAsync(2, context);
+            freshTwo!.Name = "two-updated";
+            Assert.Equal(1, await helper.UpdateAsync(freshTwo, context));
+
+            rowOne!.Name = "one-batch";
+            staleTwo!.Name = "two-stale";
+            await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+                await helper.BatchUpdateAsync(new List<VersionedEntity> { rowOne, staleTwo }, context));
+
+            var finalTwo = await helper.RetrieveOneAsync(2, context);
+            Assert.Equal("two-updated", finalTwo!.Name);
+            Assert.Equal(2, finalTwo.Version);
+        });
+    }
+
     [SkippableFact]
     public Task MergeRecord_UpsertAfterRemoteChange_ProducesCombinedValue()
     {

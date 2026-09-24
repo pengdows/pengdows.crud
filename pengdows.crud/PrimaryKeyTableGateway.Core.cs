@@ -116,7 +116,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         var updateSqlPrefix = $"UPDATE {BuildWrappedTableName(dialect)} SET ";
 
         string? versionIncrementClause = null;
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
         {
             versionIncrementClause =
                 $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
@@ -134,7 +134,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         string? upsertMergeVersionCondition = null;
         string? upsertMergeUpdateWhere = null;
         string? upsertOnConflictVersionWhere = null;
-        if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
         {
             var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
             // Oracle has no "WHEN MATCHED AND"; its check is a WHERE on the UPDATE branch.
@@ -191,7 +191,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                 frag.Append(dialect.WrapSimpleName(col.Name));
             }
 
-            if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+            if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
             {
                 frag.Append(", ");
                 frag.Append(tp);
@@ -235,7 +235,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                     frag.Append(dialect.UpsertIncomingColumn(col.Name));
                 }
 
-                if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+                if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
                 {
                     frag.Append(", ");
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));

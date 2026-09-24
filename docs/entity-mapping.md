@@ -128,16 +128,15 @@ public int Version { get; set; }
 
 At most one `[Version]` per entity (`TooManyColumns` on a second). The property type must be an
 integral type (`byte`/`sbyte`/`short`/`ushort`/`int`/`uint`/`long`/`ulong`), `byte[]`, or the
-library's `RowVersion` value type — anything else throws `SqlGenerationException`. `byte[]` models
-an **opaque, database-generated version token** (e.g. SQL Server `rowversion`) rather than a
-numeric counter the library increments itself. (`RowVersion` passes this validation, but the
-gateway UPDATE builders only special-case `byte[]` as opaque — a `RowVersion`-typed `[Version]`
-gets the numeric `+ 1` increment. Use `byte[]` for a `[Version]` rowversion column; see
-`docs/advanced-types.md`.)
+library's `RowVersion` value type — anything else throws `SqlGenerationException`. `byte[]` and
+`RowVersion` model an **opaque, database-generated version token** (e.g. SQL Server `rowversion`)
+rather than a numeric counter the library increments itself: they are compared in the WHERE clause
+and never incremented. Mark such a column `[NonInsertable]`/`[NonUpdateable]` too, since the
+database assigns it; see `docs/advanced-types.md`.
 
 - **CREATE:** if the numeric version is null/zero, the library sets it to `1` before INSERT.
-  (Opaque `byte[]` versions are simply whatever the database assigns — there's nothing for the
-  library to default.)
+  (Opaque `byte[]`/`RowVersion` versions are simply whatever the database assigns — there's nothing
+  for the library to default.)
 - **UPDATE:** for numeric versions, the SET clause increments it by 1 and the WHERE clause adds
   `version = @currentVersion` — on **both** `TableGateway<T,TId>` and `PrimaryKeyTableGateway<T>`.
   What happens when that predicate matches zero rows (stale version or the row was deleted)

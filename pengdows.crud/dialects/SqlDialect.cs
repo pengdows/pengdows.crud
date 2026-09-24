@@ -33,6 +33,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.types.valueobjects;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
@@ -1310,6 +1311,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
+        // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
+        // payload every provider already accepts for a byte[] [Version] column.
+        if (value is RowVersion rowVersion)
+        {
+            return CreateDbParameter(name, type, rowVersion.ToArray());
+        }
+
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
         var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
         var parameter = GetPooledParameter(out var pooled);

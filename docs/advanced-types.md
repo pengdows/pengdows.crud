@@ -50,15 +50,18 @@ public class Host
 }
 ```
 
-**`RowVersion` and `[Version]`:** `TypeMapRegistry` accepts a `RowVersion`-typed `[Version]`
-property, but on this release the gateway UPDATE/upsert builders only recognize `byte[]` as a
-server-generated version token. A `byte[]` `[Version]` column is excluded from the SET clause and
-used only in the optimistic-concurrency WHERE match — it is **not** incremented by the library;
-SQL Server generates the new value server-side, so the caller's in-memory value goes stale after a
-successful write unless reloaded. A `RowVersion`-typed `[Version]` property is instead treated like
-a numeric counter (`SET row_version = row_version + 1`), which SQL Server rejects for a
-`rowversion` column. **Use `byte[]` for a `[Version]` rowversion column**; `RowVersion` is fine as
-the CLR type of an ordinary (read-only, non-`[Version]`) mapped rowversion column.
+**`RowVersion` and `[Version]`:** a `RowVersion`- or `byte[]`-typed `[Version]` column is a
+server-generated version token. It is excluded from the SET clause and used only in the
+optimistic-concurrency WHERE match — it is **not** incremented by the library; SQL Server generates
+the new value server-side, so the caller's in-memory value goes stale after a successful write
+unless reloaded. A stale value makes `UpdateAsync` throw `ConcurrencyConflictException`. Mark the
+property `[NonInsertable]` and `[NonUpdateable]` as well, since the database assigns it:
+
+```csharp
+[Version, NonInsertable, NonUpdateable]
+[Column("rv", DbType.Binary)]
+public RowVersion Rv { get; set; }
+```
 
 ## Type reference
 

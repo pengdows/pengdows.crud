@@ -7,9 +7,9 @@
 // - UPDATE includes WHERE version = @currentVersion for conflict detection.
 // - If UPDATE returns 0 rows, another process modified the row (conflict).
 // - Typically used with an int or long property; byte[] and RowVersion are also accepted.
-//   byte[] columns are database-maintained (TableGateway does not increment them).
+//   byte[] and RowVersion columns are database-maintained (TableGateway does not increment them).
 // - On CREATE: If null/0, automatically set to 1 (numeric versions).
-// - On UPDATE: SET version = version + 1 (every type except byte[]).
+// - On UPDATE: SET version = version + 1 (numeric versions only).
 // =============================================================================
 
 namespace pengdows.crud.attributes;
@@ -25,8 +25,9 @@ namespace pengdows.crud.attributes;
 /// <strong>Behavior:</strong>
 /// </para>
 /// <list type="bullet">
-/// <item><description>On CREATE: Set to 1 if null or zero</description></item>
-/// <item><description>On UPDATE: Incremented by 1 in SET clause</description></item>
+/// <item><description>On CREATE: Set to 1 if null or zero (numeric versions)</description></item>
+/// <item><description>On UPDATE: Incremented by 1 in SET clause (numeric versions; <c>byte[]</c> and
+/// <c>RowVersion</c> are database-maintained and only compared)</description></item>
 /// <item><description>UPDATE WHERE clause includes version check</description></item>
 /// </list>
 /// <para>
