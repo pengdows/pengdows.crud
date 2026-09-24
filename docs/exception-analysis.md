@@ -62,20 +62,35 @@ never wrapped into a `DatabaseException` (see CLAUDE.md's Exception Hierarchy se
 
 ## How classification actually works, per provider family
 
-`ClassifyException` matches on the connected `DatabaseType` against the provider's raw error code
-or SQLSTATE (`SqlDialect.TryClassifyProviderException`, a single method with one `switch` per
-database family — not per-dialect virtual overrides). Concrete examples from the current mapping:
+`SqlDialect.ClassifyException` checks, in order:
 
-| Database family | Deadlock | Serialization failure | Timeout | Constraint violation |
+1. `OperationCanceledException` → `None`.
+2. A `DbException` that any of the dialect's four `Is*Violation` checks recognizes →
+   `ConstraintViolation`.
+3. The dialect's own `TryClassifyProviderException` override (protected virtual; the base returns
+   no match) → a provider-specific category from the raw error code or SQLSTATE.
+4. `DbExceptionTranslationSupport.LooksLikeTimeout`, which walks the `InnerException` chain and
+   checks exception type names as well as messages → `Timeout`.
+5. Message-text heuristics (deadlock, serialization, constraint keywords) → the matching
+   category, else `Unknown`.
+
+`PostgreSqlDialect` covers CockroachDB, YugabyteDB, Aurora PostgreSQL and Spanner by
+inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseDialect`
+overrides `ClassifyException` itself (it classifies off `AseException`'s message number).
+Concrete examples from the current mapping:
+
+| Database family | Deadlock | Serialization failure | Timeout | Other |
 |---|---|---|---|---|
-| SQL Server | error `1205` | error `3960` | error `-2` | errors `515`, `547`, `2601`, `2627` |
-| PostgreSQL / CockroachDB / YugabyteDB / Aurora PostgreSQL | SQLSTATE `40P01` | SQLSTATE `40001` | SQLSTATE `55P03` or `57014` | any SQLSTATE class `23xxx` |
-| MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | errors `1048`, `1062`, `1169`, `1216`, `1451`, `1452`, `3819`, `4025` |
+| SQL Server | error `1205` | error `3960` | error `-2` | — |
+| PostgreSQL / CockroachDB / YugabyteDB / Aurora PostgreSQL | SQLSTATE `40P01` | SQLSTATE `40001` | SQLSTATE `55P03` or `57014` | SQLSTATE `40003` → `AmbiguousResult` (CockroachDB's "result is ambiguous"); any other class `23xxx` → `ConstraintViolation` |
+| MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | — |
 
-Every dialect not in this table (Oracle, SQLite, Firebird, DuckDB, Db2, Snowflake, SAP HANA,
-InterBase, Access) has its own entries in the same `switch` — check `SqlDialect.cs`'s
-`TryClassifyProviderException` directly for the exact codes if you're targeting one of those
-specifically; the shape (numeric code vs. SQLSTATE, per family) follows the same pattern. Access
+Constraint kinds come from each dialect's `Is*Violation` overrides — e.g. MySQL `1062`/`1169`
+unique, `1216`/`1451`/`1452` foreign key, `1048` not-null, `3819`/`4025` check. Oracle, SQLite,
+DuckDB, Firebird, Db2, Informix, SAP HANA, Spanner and Access have their own
+`TryClassifyProviderException` overrides; check the dialect file directly for the exact codes if
+you're targeting one of those specifically. Snowflake, InterBase and FlatFile override only the
+`Is*Violation` checks and fall through to steps 4–5 for other categories. Access
 is the most extreme case of the "no numeric signal at all" shape: `OleDbException.ErrorCode` is
 always the identical generic COM HRESULT (`-2147467259`) and `Errors` is empty for every
 violation kind, including connection failures — classification (constraint kinds, a lock-wait

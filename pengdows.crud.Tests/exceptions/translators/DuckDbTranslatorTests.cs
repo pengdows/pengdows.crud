@@ -281,4 +281,16 @@ public class DuckDbTranslatorTests
         Assert.IsAssignableFrom<ConnectionException>(result); // still catchable as a generic connection failure
         Assert.Equal(false, result.IsTransient);
     }
+
+    // Kept from 2.0.6 (not in 3.0): a conflict message must not be misclassified as a timeout just
+    // because "timeout" appears in accompanying context.
+    [Fact]
+    public void WriteWriteConflict_WithTimeoutKeywordInMessage_ClassifiesAsConflict_NotTimeout()
+    {
+        var raw = new PlainMessageDbException("TransactionContext Error: Conflict on update! (session_timeout_job)");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
 }

@@ -118,25 +118,21 @@ public class InformixTranslatorTests
         Assert.IsType<SerializationConflictException>(result);
     }
 
-    // -908/-27001/-27002 are documented connection/communication failure codes, but this
-    // translator only special-cases connection failure via the SQLSTATE "08" prefix check at the
-    // top of Translate() (see SqlState08004 test above) — reaching these purely through the
-    // numeric error code (no SqlState set) exercises InformixDialect.TryClassifyProviderException's
-    // own branch for them, which assigns DbErrorCategory.Unknown rather than a specific category.
-    // TryCreateFromCategory has no case for Unknown, so this falls through to the generic
-    // DatabaseOperationException fallback rather than a typed ConnectionException — documenting
-    // that behavior explicitly rather than assuming these codes produce a ConnectionException.
+    // -908/-27001/-27002 are documented connection/communication failure codes (IBM docs). 2.0.6's
+    // translator checks them directly alongside the SQLSTATE "08" prefix — not every provider
+    // populates SqlState reliably — so they map to ConnectionException. (3.0 lets them fall
+    // through to the generic DatabaseOperationException; kept 2.0.6's stronger behavior.)
     [Theory]
     [InlineData(-908)]
     [InlineData(-27001)]
     [InlineData(-27002)]
-    public void CommunicationFailureCodes_WithoutSqlState_FallThroughToGenericDatabaseOperationException(int code)
+    public void CommunicationFailureCodes_MapTo_ConnectionException(int code)
     {
         var raw = new NumberedDbException(code, "communication failure");
 
         var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
 
-        Assert.IsType<DatabaseOperationException>(result);
+        Assert.IsType<ConnectionException>(result);
     }
 
     [Fact]

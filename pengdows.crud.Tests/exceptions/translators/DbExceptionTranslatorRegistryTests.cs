@@ -346,4 +346,13 @@ public class DbExceptionTranslatorRegistryTests
 
         Assert.IsType<DatabaseOperationException>(result);
     }
+
+    // Kept from 2.0.6 (not in 3.0).
+    [Fact]
+    public void Registry_Routes_Access_To_AccessExceptionTranslator()
+    {
+        var registry = new DbExceptionTranslatorRegistry();
+
+        Assert.IsType<AccessExceptionTranslator>(registry.Get(SupportedDatabase.Access));
+    }
 }

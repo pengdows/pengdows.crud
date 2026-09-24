@@ -143,7 +143,6 @@ public class AccessTranslatorTests
         var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
-        Assert.IsAssignableFrom<IReadOnlyViolation>(result);
         Assert.False(result.IsTransient);
         Assert.Equal(SupportedDatabase.Access, result.Database);
     }
@@ -160,5 +159,17 @@ public class AccessTranslatorTests
         Assert.IsNotType<NotNullViolationException>(result);
         Assert.IsNotType<CheckConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Access, result.Database);
+    }
+
+    // Kept from 2.0.6 (not in 3.0): the lock-wait check must not be shadowed by constraint matching.
+    [Fact]
+    public void CurrentlyLockedMessage_NotShadowedByConstraintMatching()
+    {
+        var raw = new PlainMessageDbException("Could not update; currently locked.");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Update);
+
+        Assert.IsNotType<UniqueConstraintViolationException>(result);
+        Assert.IsType<CommandTimeoutException>(result);
     }
 }

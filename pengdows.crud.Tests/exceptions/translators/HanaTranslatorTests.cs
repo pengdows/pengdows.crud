@@ -107,4 +107,17 @@ public class HanaTranslatorTests
 
         Assert.IsType<HanaExceptionTranslator>(registry.Get(SupportedDatabase.SapHana));
     }
+
+    // Kept from 2.0.6 (not in 3.0): 129 is the live-confirmed NativeError for a write on a
+    // read-only HANA transaction.
+    [Fact]
+    public void NativeError129_MapsTo_ReadOnlyViolationException()
+    {
+        var raw = new NumberedDbException(129,
+            "cannot change this transaction's access mode from read-only to update directly");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Update);
+
+        Assert.IsType<ReadOnlyViolationException>(result);
+    }
 }

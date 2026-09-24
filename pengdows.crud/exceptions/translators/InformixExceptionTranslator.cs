@@ -37,7 +37,11 @@ internal sealed class InformixExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
-        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
+        // The documented communication-failure codes are checked directly as well as the SQLSTATE
+        // "08" class: not every provider populates SqlState reliably.
+        var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
+        if (code is 908 or 27001 or 27002 ||
+            sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
