@@ -50,6 +50,10 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 
 ### SingleConnection
 * All work — reads and writes — is funneled through a single pinned connection.
+* While a transaction is open, it owns the connection: writes through the context wait for it to
+  finish, and a read through the context throws `InvalidOperationException` (read through the
+  transaction instead). An open plain reader holds the connection until disposed, so a
+  transaction waits for it.
 * Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise create its own databa
 se (see Connection Pooling).
 

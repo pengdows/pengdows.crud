@@ -4727,6 +4727,12 @@ Isolation **fails up, never down**:
 
 ## Connection sharing inside transactions
 
+In `DbMode.SingleConnection` the transaction's connection is the context's only connection. Until
+the transaction completes, a read through the context (not the transaction) throws
+`InvalidOperationException` — on that connection it would otherwise run outside the transaction or
+be silently enlisted in it, depending on the provider — and a write through the context waits for
+the transaction to finish.
+
 All commands issued with the same `ITransactionContext` share the single physical connection pinned when the transaction started, regardless of `DbMode`. Reads and writes inside the transaction are not split across read/write pools.
 
 ## Source: `docs/batch-operations.md`

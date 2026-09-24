@@ -834,7 +834,9 @@ public class PengdowsMetricsObserverTests
 
         using (var txn = ctx.BeginTransaction())
         {
-            await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
+            // Read through the transaction: in DbMode.SingleConnection a read through the plain
+            // context while the transaction is open is rejected.
+            await txn.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
             txn.Commit();
         }
         // Second command fires MetricsUpdated with the post-commit snapshot
@@ -884,7 +886,9 @@ public class PengdowsMetricsObserverTests
 
         using (var txn = ctx.BeginTransaction())
         {
-            await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
+            // Read through the transaction: in DbMode.SingleConnection a read through the plain
+            // context while the transaction is open is rejected.
+            await txn.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
             txn.Rollback();
         }
         await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();

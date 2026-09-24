@@ -36,6 +36,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     private readonly ITrackedConnection _connection;
     private readonly IAsyncDisposable _connectionLocker;
     private readonly IAsyncDisposable? _contextLocker;
+    // DbMode.SingleConnection transaction gate held by an ordinary reader for its lifetime.
+    private readonly IAsyncDisposable? _singleConnectionTransactionGate;
     private DbCommand? _command;
     private readonly DbDataReader _reader;
     private readonly bool _shouldCloseConnection;
@@ -52,12 +54,14 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         DbCommand? command = null,
         MetricsCollector? metricsCollector = null,
         IReaderLifetimeListener? lifetimeListener = null,
-        IAsyncDisposable? contextLocker = null)
+        IAsyncDisposable? contextLocker = null,
+        IAsyncDisposable? singleConnectionTransactionGate = null)
     {
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
         _contextLocker = contextLocker;
+        _singleConnectionTransactionGate = singleConnectionTransactionGate;
         _shouldCloseConnection = shouldCloseConnection;
         _command = command;
         _metricsCollector = metricsCollector;
@@ -94,7 +98,14 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
         finally
         {
-            DisposeLockerSynchronously(_contextLocker);
+            try
+            {
+                DisposeLockerSynchronously(_contextLocker);
+            }
+            finally
+            {
+                DisposeLockerSynchronously(_singleConnectionTransactionGate);
+            }
         }
 
         _lifetimeListener?.OnReaderDisposed();
@@ -302,9 +313,19 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
         finally
         {
-            if (_contextLocker != null)
+            try
             {
-                await _contextLocker.DisposeAsync().ConfigureAwait(false);
+                if (_contextLocker != null)
+                {
+                    await _contextLocker.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (_singleConnectionTransactionGate != null)
+                {
+                    await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
+                }
             }
         }
 

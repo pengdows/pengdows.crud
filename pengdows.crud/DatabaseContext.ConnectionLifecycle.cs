@@ -143,6 +143,98 @@ public partial class DatabaseContext
         return new RealAsyncLocker(_singleConnectionTransactionGate, _modeContentionStats, ConnectionMode, _modeLockTimeout);
     }
 
+    /// <summary>
+    /// The same gate, taken by a transaction for its whole lifetime: while held it marks the
+    /// connection as having an open transaction, so an ordinary read through this context is
+    /// rejected (<see cref="ThrowIfSingleConnectionTransactionOpen"/>) instead of reaching the
+    /// provider outside — or silently inside — that transaction.
+    /// </summary>
+    internal ILockerAsync GetSingleConnectionTransactionGateForTransaction()
+    {
+        var gate = GetSingleConnectionTransactionGate();
+        return gate == NoOpAsyncLocker.Instance ? gate : new TransactionGateLocker(this, gate);
+    }
+
+    /// <summary>
+    /// DbMode.SingleConnection: throws when a transaction is open on the shared connection. A read
+    /// through the context at that point would run on the transaction's connection without it
+    /// (providers either reject that or silently enlist the command), so it is rejected instead.
+    /// </summary>
+    internal void ThrowIfSingleConnectionTransactionOpen()
+    {
+        if (Volatile.Read(ref _singleConnectionTransactionOpen) != 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot read through the context while a transaction is open on its single shared " +
+                "connection (DbMode.SingleConnection). Read through the transaction instead, or " +
+                "complete the transaction first.");
+        }
+    }
+
+    private int _singleConnectionTransactionOpen;
+
+    private sealed class TransactionGateLocker : ILockerAsync
+    {
+        private readonly DatabaseContext _owner;
+        private readonly ILockerAsync _inner;
+        private int _held;
+
+        public TransactionGateLocker(DatabaseContext owner, ILockerAsync inner)
+        {
+            _owner = owner;
+            _inner = inner;
+        }
+
+        public void Lock()
+        {
+            _inner.Lock();
+            MarkHeld();
+        }
+
+        public async ValueTask LockAsync(CancellationToken cancellationToken = default)
+        {
+            await _inner.LockAsync(cancellationToken).ConfigureAwait(false);
+            MarkHeld();
+        }
+
+        public async ValueTask<bool> TryLockAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            var acquired = await _inner.TryLockAsync(timeout, cancellationToken).ConfigureAwait(false);
+            if (acquired)
+            {
+                MarkHeld();
+            }
+
+            return acquired;
+        }
+
+        private void MarkHeld()
+        {
+            Volatile.Write(ref _held, 1);
+            Volatile.Write(ref _owner._singleConnectionTransactionOpen, 1);
+        }
+
+        private void ClearHeld()
+        {
+            if (Interlocked.Exchange(ref _held, 0) == 1)
+            {
+                Volatile.Write(ref _owner._singleConnectionTransactionOpen, 0);
+            }
+        }
+
+        public void Dispose()
+        {
+            ClearHeld();
+            _inner.Dispose();
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            ClearHeld();
+            return _inner.DisposeAsync();
+        }
+    }
+
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
         bool isShared = false)
     {

@@ -1513,6 +1513,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         DbCommand? cmd = null;
         ILockerAsync? connectionLocker = null;
         ILockerAsync? contextLocker = null;
+        ILockerAsync? singleConnectionTxGate = null;
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         using var activity = StartActivity("ExecuteReader");
@@ -1520,13 +1521,30 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var commandFailed = false;
         try
         {
+            var isTransaction = _context is ITransactionContext;
+
+            // DbMode.SingleConnection: a read through the context while a transaction is open on
+            // the shared connection is rejected (it would run outside that transaction, or be
+            // silently enlisted in it). Otherwise the reader holds the gate for its lifetime, so
+            // a transaction can't begin underneath it; writes through this path wait their turn
+            // exactly as ExecuteNonQueryAsync's do.
+            singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
+            if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
+            {
+                if (_context is DatabaseContext singleConnectionContext)
+                {
+                    singleConnectionContext.ThrowIfSingleConnectionTransactionOpen();
+                }
+
+                await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             contextLocker = _context.GetLock();
             if (contextLocker != NoOpAsyncLocker.Instance)
             {
                 await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
             connectionLocker = conn.GetLock();
@@ -1545,15 +1563,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
                     : CommandBehavior.CloseConnection);
 
-            // Reads deliberately do NOT wait on the single-connection transaction gate: an
-            // existing, intentional pattern (see TransactionStreamingTests
-            // .LoadStreamAsync_TransactionContext_PassedExplicitly_UsesCorrectConnection) reads via
-            // the plain context while a transaction is open on the same DbMode.SingleConnection
-            // connection, and asserts the read observes the connection without the transaction
-            // having to complete first. Making reads wait here would deadlock that pattern (the
-            // transaction can't complete until code after the read commits it). The absorption/
-            // rollback risk this gate exists for is write-specific (see ExecuteNonQueryAsync) — a
-            // read has no side effect to lose.
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
             Interlocked.Increment(ref _activeReaders);
@@ -1565,8 +1574,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 cmd,
                 metrics,
                 this,
-                contextLocker);
+                contextLocker,
+                singleConnectionTxGate == NoOpAsyncLocker.Instance ? null : singleConnectionTxGate);
             cmd = null;
+            singleConnectionTxGate = null; // TrackedReader owns it until the reader is disposed
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
             // A transaction's context lock now guards a reader that stays open for as long as
@@ -1657,6 +1668,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 try
                 {
                     await contextLocker.DisposeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            if (singleConnectionTxGate != null && singleConnectionTxGate != NoOpAsyncLocker.Instance)
+            {
+                try
+                {
+                    await singleConnectionTxGate.DisposeAsync().ConfigureAwait(false);
                 }
                 catch
                 {
@@ -2070,11 +2093,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// DbMode.SingleConnection shares one physical connection across the entire context. A
     /// transaction holds this gate for its whole lifetime (see
     /// <c>TransactionContext.AcquireSingleConnectionTransactionGate</c>); an ordinary
-    /// non-transactional <b>write</b> must acquire it too, briefly, so it correctly waits behind
-    /// an active transaction instead of risking silent absorption into its uncommitted scope and
-    /// being rolled back with it. Deliberately not applied to reads — no side effect to lose, and
-    /// an existing, intentional pattern relies on reads observing the connection without waiting
-    /// for an open transaction to complete first (see the read path's own comment). A no-op for
+    /// non-transactional write acquires it briefly, so it waits behind an active transaction
+    /// instead of being absorbed into its uncommitted scope, and an ordinary reader holds it for
+    /// the reader's lifetime (a read while a transaction is open is rejected instead — see
+    /// <c>DatabaseContext.ThrowIfSingleConnectionTransactionOpen</c>). A no-op for
     /// transaction-scoped calls (the transaction already holds it — re-acquiring the same
     /// non-reentrant semaphore would deadlock) and for every other mode.
     /// </summary>

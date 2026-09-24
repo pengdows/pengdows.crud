@@ -26,6 +26,10 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
+- While a transaction is open, it owns the connection: writes through the context wait for it to
+  finish, and a read through the context throws `InvalidOperationException` (read through the
+  transaction instead). An open plain reader holds the connection until disposed, so a
+  transaction waits for it.
 - Used for: SQLite/DuckDB `:memory:` and Firebird embedded.
 - Not suitable for production concurrency.
 
@@ -99,7 +103,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
   - Standard / PreventDatabaseUnload: `BeginTransaction()` creates a pinned connection for that scope.
   - Write tx → acquires the single write permit and reuses the transaction connection for the scope.
   - Read-only tx → ephemeral read-only connection that still respects governor fairness when writes queue.
-  - SingleConnection: all tx use the single pinned connection.
+  - SingleConnection: all tx use the single pinned connection; while one is open, plain reads
+    through the context are rejected and plain writes wait.
 
 ## 6. Failure Behavior
 

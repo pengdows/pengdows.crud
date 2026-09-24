@@ -265,7 +265,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return NoOpAsyncLocker.Instance;
         }
 
-        var gate = dbContext.GetSingleConnectionTransactionGate();
+        var gate = dbContext.GetSingleConnectionTransactionGateForTransaction();
         gate.Lock();
         return gate;
     }
@@ -278,7 +278,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             return NoOpAsyncLocker.Instance;
         }
 
-        var gate = dbContext.GetSingleConnectionTransactionGate();
+        var gate = dbContext.GetSingleConnectionTransactionGateForTransaction();
         await gate.LockAsync(cancellationToken).ConfigureAwait(false);
         return gate;
     }
